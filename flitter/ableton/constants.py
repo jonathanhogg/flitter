@@ -37,21 +37,21 @@ class Command(enum.IntEnum):
 
 class Animation(enum.IntEnum):
     NONE             = 0
-    ONE_SHOT_24TH    = 1
-    ONE_SHOT_16TH    = 2
-    ONE_SHOT_8TH     = 3
-    ONE_SHOT_QUARTER = 4
-    ONE_SHOT_HALF    = 5
-    PULSING_24TH     = 6
-    PULSING_16TH     = 7
-    PULSING_8TH      = 8
-    PULSING_QUARTER  = 9
-    PULSING_HALF     = 10
-    BLINKING_24TH    = 11
-    BLINKING_16TH    = 12
-    BLINKING_8TH     = 13
-    BLINKING_QUARTER = 14
-    BLINKING_HALF    = 15
+    ONE_SHOT_SIXTH   = 1
+    ONE_SHOT_QUARTER = 2
+    ONE_SHOT_HALF    = 3
+    ONE_SHOT_ONE     = 4
+    ONE_SHOT_TWO     = 5
+    PULSING_SIXTH    = 6
+    PULSING_QUARTER  = 7
+    PULSING_HALF     = 8
+    PULSING_ONE      = 9
+    PULSING_TWO      = 10
+    BLINKING_SIXTH   = 11
+    BLINKING_QUARTER = 12
+    BLINKING_HALF    = 13
+    BLINKING_ONE     = 14
+    BLINKING_TWO     = 15
 
 
 class Note(enum.IntEnum):

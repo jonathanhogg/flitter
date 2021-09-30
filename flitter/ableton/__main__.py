@@ -19,7 +19,7 @@ async def test():
     push.start()
     for n in range(64):
         push.set_pad_color(n, 0, 0, 255)
-        push.set_pad_color(n, 255, 0, 0, Animation.BLINKING_HALF)
+        push.set_pad_color(n, 255, 0, 0, Animation.BLINKING_TWO)
     for n in range(16):
         push.set_menu_button_color(n, 0, 0, 255)
     for n in BUTTONS:
@@ -35,22 +35,7 @@ async def test():
     tap_tempo = False
     taps = []
     while True:
-        with push.screen_context() as ctx:
-            ctx.set_source_rgb(0, 0, 0.25)
-            ctx.paint()
-            ctx.set_source_rgb(1, 0, 0)
-            ctx.set_font_size(60)
-            ctx.move_to(100, 100)
-            ctx.show_text("Hello world!")
-            ctx.set_source_rgb(1, 1, 1)
-            ctx.set_font_size(30)
-            ctx.move_to(700, 50)
-            ctx.show_text(f"BPM: {push.counter.tempo:5.1f}")
-            ctx.move_to(700, 90)
-            ctx.show_text(f"Beat: {int(push.counter.beat*10)/10:7.1f}")
-            ctx.move_to(700, 130)
-            ctx.show_text(f"Phase: {int(push.counter.phase*10)/10:4.1f}")
-        event = await push.get_event(1/25)
+        event = await push.get_event(1/60)
         if event:
             print(event)
             if isinstance(event, ButtonPressed) and event.number == Control.SHIFT:
@@ -61,15 +46,18 @@ async def test():
                 push.set_touch_strip_position(event.position)
             elif isinstance(event, PadPressed):
                 if not tap_tempo:
-                    push.set_pad_color(event.number, 0, 255, 0, Animation.ONE_SHOT_24TH)
+                    push.set_pad_color(event.number, 0, 255, 0, Animation.ONE_SHOT_SIXTH)
                 else:
                     taps.append(event.timestamp)
             elif isinstance(event, PadReleased):
                 if not tap_tempo:
                     push.set_pad_color(event.number, 0, 0, 255)
-                    push.set_pad_color(event.number, 255, 0, 0, Animation.BLINKING_HALF)
+                    push.set_pad_color(event.number, 255, 0, 0, Animation.BLINKING_TWO)
             elif isinstance(event, EncoderTurned) and event.number == Encoder.TEMPO:
-                push.counter.set_tempo((round(push.counter.tempo * 2) + event.amount) / 2, timestamp=event.timestamp)
+                if shift_pressed:
+                    push.counter.quantum = max(2, push.counter.quantum + event.amount)
+                else:
+                    push.counter.set_tempo((round(push.counter.tempo * 2) + event.amount) / 2, timestamp=event.timestamp)
             elif isinstance(event, ButtonPressed) and event.number == Control.TAP_TEMPO:
                 tap_tempo = True
             elif isinstance(event, ButtonReleased) and event.number == Control.TAP_TEMPO:
@@ -80,16 +68,26 @@ async def test():
                     push.counter.set_phase(0, timestamp=taps[0], backslip_limit=1)
                 taps = []
                 tap_tempo = False
-            elif isinstance(event, ButtonReleased) and event.number == Control.DOUBLE_LOOP:
-                if shift_pressed:
-                    if push.counter.quantum % 2 == 0:
-                        push.counter.quantum //= 2
-                else:
-                    push.counter.quantum *= 2
             elif isinstance(event, EncoderTurned) and event.number == Encoder.MASTER:
                 brightness = min(max(0, brightness + event.amount / 200), 1)
                 push.set_led_brightness(brightness)
                 push.set_display_brightness(brightness)
+        else:
+            async with push.screen_context() as ctx:
+                ctx.set_source_rgb(0, 0, 0.25)
+                ctx.paint()
+                ctx.set_source_rgb(1, 0, 0)
+                ctx.set_font_size(60)
+                ctx.move_to(100, 100)
+                ctx.show_text("Hello world!")
+                ctx.set_source_rgb(1, 1, 1)
+                ctx.set_font_size(30)
+                ctx.move_to(700, 50)
+                ctx.show_text(f"BPM: {push.counter.tempo:5.1f}")
+                ctx.move_to(700, 90)
+                ctx.show_text(f"Beat: {int(push.counter.beat*10)/10:7.1f}")
+                ctx.move_to(700, 130)
+                ctx.show_text(f"Phase: {int(push.counter.phase*10)/10:4.1f}")
 
 
 parser = argparse.ArgumentParser(description="Flight Server")

@@ -5,7 +5,7 @@ Ableton Push API
 # pylama:ignore=C0103,R0911,R0912,R0903,R0902,W0401,R0913,W0703
 
 import asyncio
-from contextlib import contextmanager
+from contextlib import asynccontextmanager
 import logging
 
 import cairo
@@ -56,7 +56,7 @@ class Push:
         self._screen_array = np.ndarray(buffer=self._screen_data, shape=(self.SCREEN_HEIGHT, self.SCREEN_STRIDE), dtype='uint16')
         self._screen_image = cairo.ImageSurface(cairo.Format.ARGB32, self.SCREEN_WIDTH, self.SCREEN_HEIGHT)
         self._image_array = np.ndarray(buffer=self._screen_image.get_data(), shape=(self.SCREEN_HEIGHT, self.SCREEN_WIDTH, 4), dtype='uint8')
-        self._screen_ready = asyncio.Event()
+        self._screen_update = asyncio.Condition()
         self._usb_device = usb.core.find(idVendor=0x2982, idProduct=0x1967)
         if self._usb_device is None:
             raise RuntimeError("Cannot locate USB device")
@@ -199,45 +199,48 @@ class Push:
             return TouchStripDragged(timestamp=timestamp, position=position)
         Log.warning("Unrecognised MIDI - %s", " ".join(f"{b:02x}" for b in message))
 
-    @contextmanager
-    def screen_context(self):
-        yield cairo.Context(self._screen_image)
-        self._screen_image.flush()
-        self._screen_ready.set()
+    @asynccontextmanager
+    async def screen_context(self):
+        async with self._screen_update:
+            yield cairo.Context(self._screen_image)
+            self._screen_image.flush()
+            self._screen_update.notify()
 
     async def _run_clock(self):
-        self._send_midi([MIDI.START])
-        tick = int(self._counter.beat * 24)
         try:
+            tick = int(self._counter.beat * 24)
             while True:
-                await self._counter.wait_for_beat((tick + 1) / 24)
-                tick = int(self._counter.beat * 24)
-                if int(self._counter.phase * 24) == 0:
+                if tick % (self._counter.quantum * 24) == 0:
                     self._send_midi([MIDI.START])
                 else:
                     self._send_midi([MIDI.CLOCK])
+                tick += 1
+                await self._counter.wait_for_beat(tick / 24)
         except Exception:
             Log.exception("Unexpected exception")
 
+    def _update_screen(self):
+        self._screen_array[:, :] = 0
+        pixels = self._screen_array[:, :self._image_array.shape[1]]
+        pixels += self._image_array[:, :, 0] >> 3
+        pixels <<= 6
+        pixels += self._image_array[:, :, 1] >> 2
+        pixels <<= 5
+        pixels += self._image_array[:, :, 2] >> 3
+        self._screen_array[:, 0::2] ^= 0xF3E7
+        self._screen_array[:, 1::2] ^= 0xFFE7
+        self._screen_endpoint.write(self.FRAME_HEADER)
+        self._screen_endpoint.write(self._screen_data)
+
     async def _run_screen(self):
         try:
-            while True:
-                self._screen_array[:, :] = 0
-                pixels = self._screen_array[:, :self._image_array.shape[1]]
-                pixels += self._image_array[:, :, 0] >> 3
-                pixels <<= 6
-                pixels += self._image_array[:, :, 1] >> 2
-                pixels <<= 5
-                pixels += self._image_array[:, :, 2] >> 3
-                self._screen_array[:, 0::2] ^= 0xF3E7
-                self._screen_array[:, 1::2] ^= 0xFFE7
-                self._screen_endpoint.write(self.FRAME_HEADER)
-                self._screen_endpoint.write(self._screen_data)
-                self._screen_ready.clear()
-                await asyncio.sleep(1/60)
-                try:
-                    await asyncio.wait_for(self._screen_ready.wait(), timeout=59/60)
-                except asyncio.TimeoutError:
-                    pass
+            loop = asyncio.get_event_loop()
+            async with self._screen_update:
+                while True:
+                    await loop.run_in_executor(None, self._update_screen)
+                    try:
+                        await asyncio.wait_for(self._screen_update.wait(), timeout=1)
+                    except asyncio.TimeoutError:
+                        pass
         except Exception:
             Log.exception("Unexpected exception")
