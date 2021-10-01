@@ -9,6 +9,7 @@ import asyncio
 import logging
 import sys
 
+from ..clock import TapTempo
 from .constants import Animation, Encoder, Control, BUTTONS, COLOR_BUTTONS
 from .events import ButtonPressed, ButtonReleased, TouchStripDragged, PadPressed, PadReleased, EncoderTurned
 from .push import Push
@@ -32,8 +33,8 @@ async def test():
     push.set_display_brightness(brightness)
     push.set_touch_strip_position(0)
     shift_pressed = False
-    tap_tempo = False
-    taps = []
+    tap_tempo_pressed = False
+    tap_tempo = TapTempo(rounding=1)
     while True:
         event = await push.get_event(1/60)
         if event:
@@ -45,12 +46,12 @@ async def test():
             elif isinstance(event, TouchStripDragged):
                 push.set_touch_strip_position(event.position)
             elif isinstance(event, PadPressed):
-                if not tap_tempo:
+                if not tap_tempo_pressed:
                     push.set_pad_color(event.number, 0, 255, 0, Animation.ONE_SHOT_SIXTH)
                 else:
-                    taps.append(event.timestamp)
+                    tap_tempo.tap(event.timestamp)
             elif isinstance(event, PadReleased):
-                if not tap_tempo:
+                if not tap_tempo_pressed:
                     push.set_pad_color(event.number, 0, 0, 255)
                     push.set_pad_color(event.number, 255, 0, 0, Animation.BLINKING_TWO)
             elif isinstance(event, EncoderTurned) and event.number == Encoder.TEMPO:
@@ -59,15 +60,10 @@ async def test():
                 else:
                     push.counter.set_tempo((round(push.counter.tempo * 2) + event.amount) / 2, timestamp=event.timestamp)
             elif isinstance(event, ButtonPressed) and event.number == Control.TAP_TEMPO:
-                tap_tempo = True
+                tap_tempo_pressed = True
             elif isinstance(event, ButtonReleased) and event.number == Control.TAP_TEMPO:
-                if taps:
-                    if len(taps) > 1:
-                        period = (taps[-1] - taps[0]) / (len(taps) - 1)
-                        push.counter.set_tempo(round(120 / period) / 2)
-                    push.counter.set_phase(0, timestamp=taps[0], backslip_limit=1)
-                taps = []
-                tap_tempo = False
+                tap_tempo.apply(push.counter, event.timestamp, backslip_limit=1)
+                tap_tempo_pressed = False
             elif isinstance(event, EncoderTurned) and event.number == Encoder.MASTER:
                 brightness = min(max(0, brightness + event.amount / 200), 1)
                 push.set_led_brightness(brightness)

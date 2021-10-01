@@ -10,6 +10,8 @@ Provides a monotonically(*) increasing beat counter with a given tempo.
 import asyncio
 import time
 
+from numpy.polynomial.polynomial import polyfit
+
 
 class BeatCounter:
     @staticmethod
@@ -106,3 +108,33 @@ class BeatCounter:
                     resync_event.clear()
         finally:
             self._resync_events.remove(resync_event)
+
+
+class TapTempo:
+    def __init__(self, rounding=2):
+        self._rounding = rounding
+        self._taps = []
+
+    def __len__(self):
+        return len(self._taps)
+
+    def tap(self, timestamp):
+        self._taps.append(timestamp)
+
+    def reset(self):
+        self._taps = []
+
+    def apply(self, counter, timestamp=None, backslip_limit=0):
+        if timestamp is None:
+            timestamp = counter.clock()
+        if self._taps:
+            if len(self._taps) > 1:
+                tzero, period = polyfit(range(len(self._taps)), self._taps, 1)
+                tempo = 60 / period
+                if self._rounding:
+                    tempo = round(tempo * self._rounding) / self._rounding
+                counter.set_tempo(tempo, timestamp)
+                counter.set_phase(0, timestamp=tzero, backslip_limit=backslip_limit)
+            else:
+                counter.set_phase(0, timestamp=self._taps[0], backslip_limit=backslip_limit)
+        self._taps = []
