@@ -1,0 +1,81 @@
+
+%import common.ESCAPED_STRING
+%import common.WS_INLINE
+%ignore WS_INLINE
+%declare _INDENT _DEDENT
+
+
+_NL: /(\r?\n[\t ]*)+/
+
+NAME : /[a-z][_a-z0-9]*/i
+TRUE : "true"
+FALSE : "false"
+SIGNED_NUMBER : /[-+]?([0-9]+(\.[0-9]+)?|\.[0-9]+)(e[-+]?[0-9]+)?/i
+
+
+sequence : _NL? expression+
+
+?expression : node _NL [_INDENT sequence _DEDENT] -> graph
+             | "for" NAME "<-" range _NL _INDENT sequence _DEDENT -> loop
+             | "let" binding+ _NL -> let
+             | "if" tests ["else" _NL _INDENT sequence _DEDENT] -> if_else
+
+tests : test ("elif" test)*
+
+test : composition _NL _INDENT sequence _DEDENT
+
+binding : NAME "=" composition
+
+?node : composition
+      | kind tags -> node
+      | node NAME "=" composition -> attribute
+
+?composition : comprehension
+             | composition ";" comprehension -> compose
+
+?comprehension : comparison
+               | "for" NAME "<-" comparison "|" comprehension -> comprehension
+
+?comparison : range
+            | comparison "==" range -> eq
+            | comparison "!=" range -> ne
+            | comparison "<" range -> lt
+            | comparison ">" range -> gt
+            | comparison "<=" range -> le
+            | comparison ">=" range -> ge
+
+?range : sum
+       | [sum] ".." [sum] [":" sum] -> range
+
+?sum : product
+     | sum "+" product -> add
+     | sum "-" product -> subtract
+
+?product : power
+         | product "*" power -> multiply
+         | product "/" power -> divide
+         | product "%" power -> modulo
+
+?power : atom
+       | atom "**" power -> power
+
+?atom : SIGNED_NUMBER -> number
+      | ESCAPED_STRING -> string
+      | bool
+      | "null" -> null
+      | NAME -> name
+      | "-" atom -> neg
+      | atom "(" args ")" -> call
+      | atom "[" node "]" -> index
+      | "{" [kind] tags "}" -> search
+      | "(" node ")"
+
+args : (node ("," node)*)?
+
+!bool: TRUE | FALSE
+
+?kind: "!" NAME
+
+tags: tag*
+
+?tag: "#" NAME
