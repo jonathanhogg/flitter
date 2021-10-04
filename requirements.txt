@@ -1,0 +1,7 @@
+numpy
+lark
+pycairo
+python-rtmidi
+pyusb
+regex
+cython

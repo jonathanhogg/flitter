@@ -10,13 +10,14 @@ _NL: /(\r?\n[\t ]*)+/
 NAME : /[a-z][_a-z0-9]*/i
 TRUE : "true"
 FALSE : "false"
+NULL : "null"
 SIGNED_NUMBER : /[-+]?([0-9]+(\.[0-9]+)?|\.[0-9]+)(e[-+]?[0-9]+)?/i
 
 
 sequence : _NL? expression+
 
 ?expression : node _NL [_INDENT sequence _DEDENT] -> graph
-             | "for" NAME "<-" range _NL _INDENT sequence _DEDENT -> loop
+             | "for" NAME "in" range _NL _INDENT sequence _DEDENT -> loop
              | "let" binding+ _NL -> let
              | "if" tests ["else" _NL _INDENT sequence _DEDENT] -> if_else
 
@@ -59,10 +60,7 @@ binding : NAME "=" composition
 ?power : atom
        | atom "**" power -> power
 
-?atom : SIGNED_NUMBER -> number
-      | ESCAPED_STRING -> string
-      | bool
-      | "null" -> null
+?atom : literal
       | NAME -> name
       | "-" atom -> neg
       | atom "(" args ")" -> call
@@ -70,9 +68,12 @@ binding : NAME "=" composition
       | "{" [kind] tags "}" -> search
       | "(" node ")"
 
-args : (node ("," node)*)?
+literal : SIGNED_NUMBER
+        | ESCAPED_STRING
+        | TRUE | FALSE
+        | NULL
 
-!bool: TRUE | FALSE
+args : (node ("," node)*)?
 
 ?kind: "!" NAME
 

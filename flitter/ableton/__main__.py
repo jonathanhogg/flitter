@@ -2,7 +2,7 @@
 Ableton Push API test
 """
 
-# pylama:ignore=W0601,C0103
+# pylama:ignore=W0601,C0103,R0912,R0915
 
 import argparse
 import asyncio

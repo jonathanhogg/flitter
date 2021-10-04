@@ -4,41 +4,22 @@ Flitter language AST
 
 # pylama:ignore=R0903
 
-
 from dataclasses import dataclass
-from typing import Tuple
+from typing import Tuple, Any
 
 
 class Expression:
     pass
 
 
+@dataclass(frozen=True)
 class Literal(Expression):
-    pass
-
-
-@dataclass(frozen=True)
-class Number(Literal):
-    value: float
-
-
-@dataclass(frozen=True)
-class String(Literal):
-    value: str
-
-
-@dataclass(frozen=True)
-class Boolean(Literal):
-    value: bool
+    value: Any
 
 
 @dataclass(frozen=True)
 class Name(Expression):
     name: str
-
-
-class Null(Literal):
-    pass
 
 
 @dataclass(frozen=True)
@@ -157,6 +138,11 @@ class Search(Expression):
     kind: str
     tags: Tuple[str, ...]
 
+    def __repr__(self):
+        if self.kind:
+            return f"{{!{self.kind}{''.join(f'#{tag}' for tag in self.tags)}}}"
+        return '{{' + ''.join(f'#{tag}' for tag in self.tags) + '}}'
+
 
 @dataclass(frozen=True)
 class Comprehension(Expression):
@@ -169,6 +155,13 @@ class Comprehension(Expression):
 class Graph(Expression):
     node: Expression
     children: Tuple[Expression, ...]
+
+    def __repr__(self):
+        text = repr(self.node) + '\n'
+        if self.children:
+            for child in self.children:
+                text += '\n'.join('    ' + line for line in repr(child).rstrip('\n').split('\n')) + '\n'
+        return text
 
 
 @dataclass(frozen=True)

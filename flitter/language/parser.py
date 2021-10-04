@@ -11,6 +11,7 @@ from lark.indenter import Indenter
 from lark.visitors import v_args
 
 from . import ast
+from ..model.values import Vector
 
 
 class FlitterIndenter(Indenter):
@@ -25,22 +26,27 @@ class FlitterIndenter(Indenter):
 @v_args(inline=True)
 class FlitterTransformer(Transformer):
     NAME = str
-    SIGNED_NUMBER = float
 
-    def TRUE(self, _):
-        return True
-
-    def FALSE(self, _):
-        return False
+    def SIGNED_NUMBER(self, token):
+        return Vector((float(token),))
 
     def ESCAPED_STRING(self, token):
-        return token[1:-1].encode('utf-8').decode('unicode_escape')
+        return Vector((token[1:-1].encode('utf-8').decode('unicode_escape'),))
+
+    def TRUE(self, _):
+        return Vector((True,))
+
+    def FALSE(self, _):
+        return Vector((False,))
+
+    def NULL(self):
+        return Vector()
 
     add = ast.Add
     args = v_args(inline=False)(tuple)
     attribute = ast.Attribute
     binding = ast.Binding
-    bool = ast.Boolean
+    bool = ast.Literal
     call = ast.Call
     compose = ast.Compose
     comprehension = ast.Comprehension
@@ -53,18 +59,16 @@ class FlitterTransformer(Transformer):
     sequence = v_args(inline=False)(tuple)
     le = ast.LessThanOrEqualTo
     let = v_args(inline=False)(ast.Let)
+    literal = ast.Literal
     loop = ast.For
     lt = ast.LessThan
     multiply = ast.Multiply
     name = ast.Name
     ne = ast.NotEqualTo
     node = ast.Node
-    null = ast.Null
-    number = ast.Number
     power = ast.Power
     range = ast.Range
-    seach = ast.Search
-    string = ast.String
+    search = ast.Search
     subtract = ast.Subtract
     tags = v_args(inline=False)(tuple)
     test = ast.Test
