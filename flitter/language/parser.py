@@ -11,7 +11,7 @@ from lark.indenter import Indenter
 from lark.visitors import v_args
 
 from . import ast
-from ..model.values import Vector
+from ..model import values
 
 
 class FlitterIndenter(Indenter):
@@ -28,35 +28,40 @@ class FlitterTransformer(Transformer):
     NAME = str
 
     def SIGNED_NUMBER(self, token):
-        return Vector((float(token),))
+        return values.Vector((float(token),))
 
     def ESCAPED_STRING(self, token):
-        return Vector((token[1:-1].encode('utf-8').decode('unicode_escape'),))
+        return values.Vector((token[1:-1].encode('utf-8').decode('unicode_escape'),))
+
+    def QUERY(self, token):
+        return token[1:-1].strip()
 
     def TRUE(self, _):
-        return Vector((True,))
+        return values.Vector((1.,))
 
     def FALSE(self, _):
-        return Vector((False,))
+        return values.Vector((0.,))
 
-    def NULL(self):
-        return Vector()
+    def NULL(self, _):
+        return values.null
+
+    def range(self, start, stop, step):
+        return ast.Range(ast.Literal(values.null) if start is None else start, stop, ast.Literal(values.null) if step is None else step)
 
     add = ast.Add
+    append = ast.Append
     args = v_args(inline=False)(tuple)
     attribute = ast.Attribute
     binding = ast.Binding
     bool = ast.Literal
     call = ast.Call
-    compose = ast.Compose
-    comprehension = ast.Comprehension
     divide = ast.Divide
     eq = ast.EqualTo
+    floordivide = ast.FloorDivide
     ge = ast.GreaterThanOrEqualTo
-    graph = ast.Graph
     gt = ast.GreaterThan
     if_else = ast.IfElse
-    sequence = v_args(inline=False)(tuple)
+    sequence = v_args(inline=False)(ast.Sequence)
     le = ast.LessThanOrEqualTo
     let = v_args(inline=False)(ast.Let)
     literal = ast.Literal
@@ -67,7 +72,6 @@ class FlitterTransformer(Transformer):
     ne = ast.NotEqualTo
     node = ast.Node
     power = ast.Power
-    range = ast.Range
     search = ast.Search
     subtract = ast.Subtract
     tags = v_args(inline=False)(tuple)

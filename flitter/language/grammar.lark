@@ -7,19 +7,21 @@
 
 _NL: /(\r?\n[\t ]*)+/
 
-NAME : /[a-z][_a-z0-9]*/i
+NAME : /[_a-z][_a-z0-9]*/i
 TRUE : "true"
 FALSE : "false"
 NULL : "null"
 SIGNED_NUMBER : /[-+]?([0-9]+(\.[0-9]+)?|\.[0-9]+)(e[-+]?[0-9]+)?/i
+QUERY : /{[^}]+}/
 
 
 sequence : _NL? expression+
 
-?expression : node _NL [_INDENT sequence _DEDENT] -> graph
-             | "for" NAME "in" range _NL _INDENT sequence _DEDENT -> loop
-             | "let" binding+ _NL -> let
-             | "if" tests ["else" _NL _INDENT sequence _DEDENT] -> if_else
+?expression : node _NL
+            | node _NL _INDENT sequence _DEDENT -> append
+            | "for" NAME "in" range _NL _INDENT sequence _DEDENT -> loop
+            | "let" binding+ _NL -> let
+            | "if" tests ["else" _NL _INDENT sequence _DEDENT] -> if_else
 
 tests : test ("elif" test)*
 
@@ -28,14 +30,14 @@ test : composition _NL _INDENT sequence _DEDENT
 binding : NAME "=" composition
 
 ?node : composition
-      | kind tags -> node
+      | "!" NAME tags -> node
       | node NAME "=" composition -> attribute
 
 ?composition : comprehension
-             | composition ";" comprehension -> compose
+             | comprehension (";" comprehension)+ -> sequence
 
 ?comprehension : comparison
-               | "for" NAME "<-" comparison "|" comprehension -> comprehension
+               | "for" NAME "in" comparison "|" comprehension -> loop
 
 ?comparison : range
             | comparison "==" range -> eq
@@ -46,7 +48,7 @@ binding : NAME "=" composition
             | comparison ">=" range -> ge
 
 ?range : sum
-       | [sum] ".." [sum] [":" sum] -> range
+       | [sum] ".." sum [":" sum] -> range
 
 ?sum : product
      | sum "+" product -> add
@@ -55,6 +57,7 @@ binding : NAME "=" composition
 ?product : power
          | product "*" power -> multiply
          | product "/" power -> divide
+         | product "//" power -> floordivide
          | product "%" power -> modulo
 
 ?power : atom
@@ -65,7 +68,7 @@ binding : NAME "=" composition
       | "-" atom -> neg
       | atom "(" args ")" -> call
       | atom "[" node "]" -> index
-      | "{" [kind] tags "}" -> search
+      | QUERY -> search
       | "(" node ")"
 
 literal : SIGNED_NUMBER
@@ -74,8 +77,6 @@ literal : SIGNED_NUMBER
         | NULL
 
 args : (node ("," node)*)?
-
-?kind: "!" NAME
 
 tags: tag*
 

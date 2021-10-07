@@ -13,6 +13,11 @@ class Expression:
 
 
 @dataclass(frozen=True)
+class Sequence(Expression):
+    expressions: Tuple[Expression, ...]
+
+
+@dataclass(frozen=True)
 class Literal(Expression):
     value: Any
 
@@ -48,10 +53,6 @@ class BinaryOperation(Expression):
     right: Expression
 
 
-class Compose(BinaryOperation):
-    pass
-
-
 class Add(BinaryOperation):
     pass
 
@@ -68,6 +69,10 @@ class Divide(BinaryOperation):
     pass
 
 
+class FloorDivide(BinaryOperation):
+    pass
+
+
 class Modulo(BinaryOperation):
     pass
 
@@ -76,27 +81,31 @@ class Power(BinaryOperation):
     pass
 
 
-class EqualTo(BinaryOperation):
+class Comparison(BinaryOperation):
     pass
 
 
-class NotEqualTo(BinaryOperation):
+class EqualTo(Comparison):
     pass
 
 
-class LessThan(BinaryOperation):
+class NotEqualTo(Comparison):
     pass
 
 
-class GreaterThan(BinaryOperation):
+class LessThan(Comparison):
     pass
 
 
-class LessThanOrEqualTo(BinaryOperation):
+class GreaterThan(Comparison):
     pass
 
 
-class GreaterThanOrEqualTo(BinaryOperation):
+class LessThanOrEqualTo(Comparison):
+    pass
+
+
+class GreaterThanOrEqualTo(Comparison):
     pass
 
 
@@ -135,33 +144,13 @@ class Attribute(Expression):
 
 @dataclass(frozen=True)
 class Search(Expression):
-    kind: str
-    tags: Tuple[str, ...]
-
-    def __repr__(self):
-        if self.kind:
-            return f"{{!{self.kind}{''.join(f'#{tag}' for tag in self.tags)}}}"
-        return '{{' + ''.join(f'#{tag}' for tag in self.tags) + '}}'
+    query: str
 
 
 @dataclass(frozen=True)
-class Comprehension(Expression):
-    name: str
-    source: Expression
-    expr: Expression
-
-
-@dataclass(frozen=True)
-class Graph(Expression):
+class Append(Expression):
     node: Expression
     children: Tuple[Expression, ...]
-
-    def __repr__(self):
-        text = repr(self.node) + '\n'
-        if self.children:
-            for child in self.children:
-                text += '\n'.join('    ' + line for line in repr(child).rstrip('\n').split('\n')) + '\n'
-        return text
 
 
 @dataclass(frozen=True)
