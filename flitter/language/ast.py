@@ -28,6 +28,11 @@ class Name(Expression):
 
 
 @dataclass(frozen=True)
+class Lookup(Expression):
+    key: Expression
+
+
+@dataclass(frozen=True)
 class Range(Expression):
     start: Expression
     stop: Expression
@@ -173,7 +178,7 @@ class For(Expression):
 
 @dataclass(frozen=True)
 class Test:
-    test: Expression
+    condition: Expression
     then: Tuple[Expression, ...]
 
 

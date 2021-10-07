@@ -26,6 +26,8 @@ BUILTINS = {
     'linear': model.Vector((model.linear,)),
     'quad': model.Vector((model.quad,)),
     'shuffle': model.Vector((model.shuffle,)),
+    'hsl': model.Vector((model.hsl,)),
+    'hsv': model.Vector((model.hsv,)),
 }
 
 
@@ -70,6 +72,12 @@ def simplify(expression, context):
             if name in BUILTINS:
                 return ast.Literal(BUILTINS[name])
             return expression
+
+        case ast.Lookup(key=key):
+            key = simplify(key, context)
+            if isinstance(key, ast.Literal) and isinstance(key.value, model.Vector) and key.value in context.state:
+                return ast.Literal(context.state[key.value])
+            return ast.Lookup(key=key)
 
         case ast.Let(bindings=bindings):
             remaining = []
@@ -130,6 +138,18 @@ def simplify(expression, context):
                 context.variables[name] = model.Vector((value,))
                 remaining.append(simplify(body, context))
             return sequence_pack(remaining)
+
+        case ast.IfElse(tests=tests, else_=else_):
+            remaining = []
+            for test in tests:
+                condition = simplify(test.condition, context)
+                if isinstance(condition, ast.Literal) and condition.value.istrue():
+                    return simplify(test.then, context)
+                remaining.append(ast.Test(condition=condition, then=simplify(test.then, context)))
+            else_ = simplify(else_, context) if else_ is not None else None
+            if remaining:
+                return ast.IfElse(tests=remaining, else_=else_)
+            return model.null if else_ is None else else_
 
         case ast.UnaryOperation(expr=expr):
             expr = simplify(expr, context)
@@ -222,6 +242,12 @@ def evaluate(expression, context):
                 return BUILTINS[name]
             return model.null
 
+        case ast.Lookup(key=key):
+            key = evaluate(key, context)
+            if key in context.state:
+                return context.state[key]
+            return model.null
+
         case ast.Let(bindings=bindings):
             for binding in bindings:
                 context.variables[binding.name] = evaluate(binding.expr, context)
@@ -260,6 +286,12 @@ def evaluate(expression, context):
                 context.variables[name] = model.Vector((value,))
                 results.append(evaluate(body, context))
             return model.Vector.compose(*results)
+
+        case ast.IfElse(tests=tests, else_=else_):
+            for test in tests:
+                if evaluate(test.condition, context).istrue():
+                    return evaluate(test.then, context)
+            return evaluate(else_, context) if else_ is not None else model.null
 
         case ast.UnaryOperation(expr=expr):
             value = evaluate(expr, context)

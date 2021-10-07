@@ -8,6 +8,11 @@ DEF PI = 3.141592653589793
 DEF TwoPI = 6.283185307179586
 
 
+cdef union float_long:
+    double f
+    unsigned long long l
+
+
 @cython.final
 @cython.freelist(16)
 cdef class Vector:
@@ -24,13 +29,13 @@ cdef class Vector:
 
     @staticmethod
     def range(startv, stopv, stepv):
-        cdef float start = float(startv) if startv is not None else float("nan")
+        cdef double start = float(startv) if startv is not None else float("nan")
         if isnan(start):
             start = 0
-        cdef float stop = float(stopv) if stopv is not None else float("nan")
+        cdef double stop = float(stopv) if stopv is not None else float("nan")
         if isnan(stop):
             return null_
-        cdef float step = float(stepv) if stepv is not None else float("nan")
+        cdef double step = float(stepv) if stepv is not None else float("nan")
         if isnan(step):
             step = 1
         elif step == 0:
@@ -63,25 +68,66 @@ cdef class Vector:
             return float(self.values[0])
         return float("nan")
 
-    def __eq__(self, other):
-        return self.compare(other) == 0
+    cdef unsigned long long _hash(self, bint floor_floats):
+        # Compute a hash value using the SplitMix64 algorithm [http://xoshiro.di.unimi.it/splitmix64.c]
+        cdef unsigned long long y, hash = 0xe220a8397b1dcdaf
+        cdef float_long fl
+        for value in self.values:
+            if isinstance(value, str):
+                # FNV-1a hash algorithm [https://en.wikipedia.org/wiki/Fowler–Noll–Vo_hash_function#FNV-1a_hash]
+                y = <unsigned long long>(0xcbf29ce484222325)
+                for c in <str>value:
+                    y = (y ^ ord(c)) * <unsigned long long>(0x100000001b3)
+            elif isinstance(value, float):
+                if floor_floats:
+                    y = <unsigned long long>(<long long>floor(value))
+                else:
+                    fl.f = value
+                    y = fl.l
+            elif isinstance(value, int):
+                y = <unsigned long long>(<long long>value)
+            else:
+                raise TypeError("Unhashable value")
+            hash ^= y
+            hash += <unsigned long long>(0x9e3779b97f4a7c15)
+            hash ^= hash >> 30
+            hash *= <unsigned long long>(0xbf58476d1ce4e5b9)
+            hash ^= hash >> 27
+            hash *= <unsigned long long>(0x94d049bb133111eb)
+            hash ^= hash >> 31
+        return hash
 
-    cpdef bint istrue_(self):
-        for i in range(len(self.values)):
-            if self.values[i]:
+    def __hash__(self):
+        return self._hash(False)
+
+    def __eq__(self, other):
+        return isinstance(other, Vector) and self.compare(other) == 0
+
+    cpdef bint istrue(self):
+        for value in self.values:
+            if isinstance(value, int):
+                if <int>value != 0:
+                    return True
+            if isinstance(value, float):
+                if <double>value != 0.:
+                    return True
+            elif isinstance(value, str):
+                if <str>value != "":
+                    return True
+            else:
                 return True
         return False
 
     def isinstance(self, t):
-        for i in range(len(self.values)):
-            if not isinstance(self.values[i], t):
+        for value in self.values:
+            if not isinstance(value, t):
                 return False
         return True
 
     def copynodes(self):
         cdef int n = len(self.values)
-        for i in range(n):
-            if isinstance(self.values[i], Node):
+        for value in self.values:
+            if isinstance(value, Node):
                 break
         else:
             return self
@@ -94,14 +140,26 @@ cdef class Vector:
                 result.values[i] = node.copy()
         return result
 
+    cpdef Vector withlen(self, int n):
+        cdef int m = len(self.values)
+        if n == m:
+            return self
+        if m != 1:
+            return null_
+        cdef Vector result = Vector.__new__(Vector)
+        value = self.values[0]
+        for i in range(n):
+            result.values.append(value)
+        return result
+
     def neg(self):
         cdef Vector result = Vector.__new__(Vector)
-        for i in range(len(self.values)):
-            result.values.append(-self.values[i])
+        for value in self.values:
+            result.values.append(-value)
         return result
 
     def not_(self):
-        return false_ if self.istrue_() else true_
+        return false_ if self.istrue() else true_
 
     def add(self, Vector other not None):
         cdef Vector result = Vector.__new__(Vector)
@@ -216,10 +274,10 @@ cdef class Vector:
         return result
 
     def and_(self, Vector other not None):
-        return true_ if self.istrue_() and other.istrue_() else false_
+        return true_ if self.istrue() and other.istrue() else false_
 
     def or_(self, Vector other not None):
-        return true_ if self.istrue_() or other.istrue_() else false_
+        return true_ if self.istrue() or other.istrue() else false_
 
     def compare(self, Vector other not None):
         cdef int n = len(self.values), m = len(other.values)
@@ -239,8 +297,7 @@ cdef class Vector:
     def slice(self, Vector index):
         cdef Vector result = Vector.__new__(Vector)
         cdef int j, n = len(self.values)
-        for i in range(len(index.values)):
-            value = index.values[i]
+        for value in index.values:
             if isinstance(value, (float, int)):
                 j = <int>floor(value)
                 if j >= 0 and j < n:
@@ -266,27 +323,8 @@ cdef class Uniform:
     cdef unsigned long long seed
 
     def __cinit__(self, Vector keys not None):
-        cdef unsigned long long y, seed = 0xe220a8397b1dcdaf
-        for i in range(len(keys.values)):
-            key = keys.values[i]
-            if isinstance(key, str):
-                # FNV-1a hash algorithm [https://en.wikipedia.org/wiki/Fowler–Noll–Vo_hash_function#FNV-1a_hash]
-                y = <unsigned long long>(0xcbf29ce484222325)
-                for c in <str>key:
-                    y = (y ^ ord(c)) * <unsigned long long>(0x100000001b3)
-            elif isinstance(key, float):
-                y = <unsigned long long>(<long long>floor(key))
-            elif isinstance(key, int):
-                y = <unsigned long long>(<long long>key)
-            seed ^= y
-            seed += <unsigned long long>(0x9e3779b97f4a7c15)
-            seed ^= seed >> 30
-            seed *= <unsigned long long>(0xbf58476d1ce4e5b9)
-            seed ^= seed >> 27
-            seed *= <unsigned long long>(0x94d049bb133111eb)
-            seed ^= seed >> 31
-        self.seed = seed
         self.keys = keys
+        self.seed = keys._hash(True)
 
     cdef double item(self, unsigned long long i):
         cdef unsigned long long x, y, z
@@ -719,3 +757,45 @@ def shuffle(Uniform source, Vector xs not None):
         n -= 1
         xs.values[i], xs.values[j] = xs.values[j], xs.values[i]
     return xs
+
+
+cdef double hue_to_rgb(double m1, double m2, double h):
+    h = h % 6
+    if h < 1:
+        return m1 + (m2 - m1) * h
+    if h < 3:
+        return m2
+    if h < 4:
+        return m1 + (m2 - m1) * (4 - h)
+    return m1
+
+cdef Vector hsl_to_rgb(double h, double s, double l):
+    cdef double m2 = l * (s + 1) if l <= 0.5 else l + s - l*s
+    cdef double m1 = l * 2 - m2
+    h *= 6
+    cdef Vector rgb = Vector.__new__(Vector)
+    rgb.values.append(hue_to_rgb(m1, m2, h + 2))
+    rgb.values.append(hue_to_rgb(m1, m2, h))
+    rgb.values.append(hue_to_rgb(m1, m2, h - 2))
+    return rgb
+
+def hsl(Vector c):
+    c = c.withlen(3)
+    if c is null_:
+        return null_
+    cdef double h = c.values[0], s = c.values[1], l = c.values[2]
+    h = min(max(0, h), 1)
+    s = min(max(0, s), 1)
+    l = min(max(0, l), 1)
+    return hsl_to_rgb(h, s, l)
+
+def hsv(Vector c):
+    c = c.withlen(3)
+    if c is null_:
+        return null_
+    cdef double h = c.values[0], s = c.values[1], v = c.values[2]
+    h = min(max(0, h), 1)
+    s = min(max(0, s), 1)
+    v = min(max(0, v), 1)
+    cdef double l = v * (1 - s / 2)
+    return hsl_to_rgb(h, 0 if l == 0 or l == 1 else (v - l) / min(l, 1 - l), l)

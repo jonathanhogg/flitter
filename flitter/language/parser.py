@@ -59,6 +59,7 @@ class FlitterTransformer(Transformer):
     logical_and = ast.And
     logical_not = ast.Not
     logical_or = ast.Or
+    lookup = ast.Lookup
     loop = ast.For
     lt = ast.LessThan
     multiply = ast.Multiply

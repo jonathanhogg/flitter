@@ -2,6 +2,7 @@
 %import common.ESCAPED_STRING
 %import common.WS_INLINE
 %ignore WS_INLINE
+%ignore /\\$\n/m
 %declare _INDENT _DEDENT
 
 
@@ -75,6 +76,7 @@ binding : NAME "=" composition
       | atom "(" args ")" -> call
       | atom "[" node "]" -> slice
       | QUERY -> search
+      | "$" atom -> lookup
       | "(" node ")"
 
 literal : SIGNED_NUMBER
