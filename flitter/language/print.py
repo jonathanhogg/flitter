@@ -20,7 +20,7 @@ def pretty(expression):
             if step is not None:
                 text += f':{pretty(step)}'
             return text
-        case ast.Node(kind-kind, tags=tags):
+        case ast.Node(kind=kind, tags=tags):
             return f"!{kind}{''.join(f'#{tag}' for tag in tags)}"
         case ast.Attribute(node=node, name=name, expr=expr):
             return f"{pretty(node)} {name}={pretty(expr)}"

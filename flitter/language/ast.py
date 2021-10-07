@@ -118,9 +118,9 @@ class Or(BinaryOperation):
 
 
 @dataclass(frozen=True)
-class Index(Expression):
+class Slice(Expression):
     expr: Expression
-    item: Expression
+    index: Expression
 
 
 @dataclass(frozen=True)

@@ -8,9 +8,6 @@
 _NL: /(\r?\n[\t ]*)+/
 
 NAME : /[_a-z][_a-z0-9]*/i
-TRUE : "true"
-FALSE : "false"
-NULL : "null"
 SIGNED_NUMBER : /[-+]?([0-9]+(\.[0-9]+)?|\.[0-9]+)(e[-+]?[0-9]+)?/i
 QUERY : /{[^}]+}/
 
@@ -36,8 +33,17 @@ binding : NAME "=" composition
 ?composition : comprehension
              | comprehension (";" comprehension)+ -> sequence
 
-?comprehension : comparison
-               | "for" NAME "in" comparison "|" comprehension -> loop
+?comprehension : or
+               | "for" NAME "in" or "|" comprehension -> loop
+
+?or : and
+    | or "or" and -> logical_or
+
+?and : not
+     | and "and" not -> logical_and
+
+?not : comparison
+     | "not" not -> logical_not
 
 ?comparison : range
             | comparison "==" range -> eq
@@ -57,7 +63,7 @@ binding : NAME "=" composition
 ?product : power
          | product "*" power -> multiply
          | product "/" power -> divide
-         | product "//" power -> floordivide
+         | product "//" power -> floor_divide
          | product "%" power -> modulo
 
 ?power : atom
@@ -67,14 +73,12 @@ binding : NAME "=" composition
       | NAME -> name
       | "-" atom -> neg
       | atom "(" args ")" -> call
-      | atom "[" node "]" -> index
+      | atom "[" node "]" -> slice
       | QUERY -> search
       | "(" node ")"
 
 literal : SIGNED_NUMBER
         | ESCAPED_STRING
-        | TRUE | FALSE
-        | NULL
 
 args : (node ("," node)*)?
 

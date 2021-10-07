@@ -11,7 +11,7 @@ from lark.indenter import Indenter
 from lark.visitors import v_args
 
 from . import ast
-from ..model import values
+from .. import model
 
 
 class FlitterIndenter(Indenter):
@@ -28,25 +28,16 @@ class FlitterTransformer(Transformer):
     NAME = str
 
     def SIGNED_NUMBER(self, token):
-        return values.Vector((float(token),))
+        return model.Vector((float(token),))
 
     def ESCAPED_STRING(self, token):
-        return values.Vector((token[1:-1].encode('utf-8').decode('unicode_escape'),))
+        return model.Vector((token[1:-1].encode('utf-8').decode('unicode_escape'),))
 
     def QUERY(self, token):
         return token[1:-1].strip()
 
-    def TRUE(self, _):
-        return values.Vector((1.,))
-
-    def FALSE(self, _):
-        return values.Vector((0.,))
-
-    def NULL(self, _):
-        return values.null
-
     def range(self, start, stop, step):
-        return ast.Range(ast.Literal(values.null) if start is None else start, stop, ast.Literal(values.null) if step is None else step)
+        return ast.Range(ast.Literal(model.null) if start is None else start, stop, ast.Literal(model.null) if step is None else step)
 
     add = ast.Add
     append = ast.Append
@@ -57,7 +48,7 @@ class FlitterTransformer(Transformer):
     call = ast.Call
     divide = ast.Divide
     eq = ast.EqualTo
-    floordivide = ast.FloorDivide
+    floor_divide = ast.FloorDivide
     ge = ast.GreaterThanOrEqualTo
     gt = ast.GreaterThan
     if_else = ast.IfElse
@@ -65,6 +56,9 @@ class FlitterTransformer(Transformer):
     le = ast.LessThanOrEqualTo
     let = v_args(inline=False)(ast.Let)
     literal = ast.Literal
+    logical_and = ast.And
+    logical_not = ast.Not
+    logical_or = ast.Or
     loop = ast.For
     lt = ast.LessThan
     multiply = ast.Multiply
@@ -73,6 +67,7 @@ class FlitterTransformer(Transformer):
     node = ast.Node
     power = ast.Power
     search = ast.Search
+    slice = ast.Slice
     subtract = ast.Subtract
     tags = v_args(inline=False)(tuple)
     test = ast.Test
