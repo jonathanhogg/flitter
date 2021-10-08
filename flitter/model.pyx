@@ -1,4 +1,4 @@
-# cython: language_level=3
+# cython: language_level=3, profile=True
 
 import cython
 from libc.math cimport isnan, floor, sin, cos
@@ -100,7 +100,7 @@ cdef class Vector:
     def __hash__(self):
         return self._hash(False)
 
-    def __eq__(self, other):
+    def __eq__(Node self, other):
         return isinstance(other, Vector) and self.compare(other) == 0
 
     cpdef bint istrue(self):
@@ -125,17 +125,12 @@ cdef class Vector:
         return True
 
     def copynodes(self):
-        cdef int n = len(self.values)
-        for value in self.values:
-            if isinstance(value, Node):
-                break
-        else:
-            return self
-        cdef Vector result = Vector.__new__(Vector, self.values)
+        cdef Vector result = self
         cdef Node node
-        for i in range(n):
-            value = result.values[i]
+        for i, value in enumerate(self.values):
             if isinstance(value, Node):
+                if result is self:
+                    result = Vector.__new__(Vector, self.values)
                 node = value
                 result.values[i] = node.copy()
         return result
@@ -273,13 +268,7 @@ cdef class Vector:
                 result.values.append(self.values[i] ** y)
         return result
 
-    def and_(self, Vector other not None):
-        return true_ if self.istrue() and other.istrue() else false_
-
-    def or_(self, Vector other not None):
-        return true_ if self.istrue() or other.istrue() else false_
-
-    def compare(self, Vector other not None):
+    cpdef bint compare(self, Vector other):
         cdef int n = len(self.values), m = len(other.values)
         for i in range(min(n, m)):
             x = self.values[i]
@@ -456,7 +445,7 @@ cdef class Query:
 
 
 @cython.final
-@cython.freelist(16)
+@cython.freelist(100)
 cdef class Node:
     cdef readonly str kind
     cdef readonly frozenset tags
@@ -468,29 +457,29 @@ cdef class Node:
     @staticmethod
     def from_dict(d):
         d = d.copy()
-        cdef str kind = d.pop('kind')
-        cdef str tags = d.pop('tags', '')
-        cdef list children = d.pop('children', [])
-        cdef Node node = Node(kind=kind, id=id, tags=tags, parent=None)
+        cdef str kind = d.pop('_kind')
+        cdef str tags = d.pop('_tags', '')
+        cdef list children = d.pop('_children', [])
+        cdef Node node = Node(kind, tags)
         for key, value in d.items():
-            node.attributes[key] = value
+            node.attributes[key] = Vector(value)
         cdef Node child
         for d in children:
             child = Node.from_dict(d)
             node.append(child)
         return node
 
-    def __cinit__(self, str kind, tags, **attributes):
+    def __cinit__(self, str kind, tags, /, **attributes):
+        cdef str tag_str
         self.kind = kind
         if isinstance(tags, str):
-            self.tags = frozenset(tags.split())
+            tag_str = tags
+            self.tags = frozenset(tag_str.split())
         elif isinstance(tags, frozenset):
             self.tags = tags
         else:
             self.tags = frozenset(tags)
-        self.attributes = {}
-        for key, value in attributes.items():
-            self.attributes[key] = value
+        self.attributes = attributes
 
     @property
     def children(self):
@@ -504,13 +493,14 @@ cdef class Node:
         if self.tags:
             d['_tags'] = ' '.join(self.tags)
         for key, value in self.attributes.items():
-            d[key] = value.to_dict() if hasattr(value, 'to_dict') else value
+            d[key] = list(value)
         if self.first_child is not None:
             d['_children'] = [node.to_dict() for node in self.children]
         return d
 
     cpdef Node copy(self):
-        cdef Node node = Node(self.kind, self.tags, **self.attributes)
+        cdef Node node = Node.__new__(Node, self.kind, self.tags)
+        node.attributes = self.attributes.copy()
         cdef Node child = self.first_child
         while child is not None:
             node.append(child.copy())
@@ -655,6 +645,48 @@ cdef class Node:
                 text += "\n    " + line
             node = node.next_sibling
         return text
+
+
+cdef class Context:
+    cdef dict variables
+    cdef readonly dict state
+    cdef readonly Node graph
+    cdef list _stack
+
+    def __cinit__(self, dict variables=None, dict state=None, Node graph=None):
+        self.variables = variables if variables is not None else {}
+        self.state = state if state is not None else {}
+        self.graph = graph if graph is not None else Node.__new__(Node, 'root', ())
+        self._stack = []
+
+    def __enter__(self):
+        self._stack.append(None)
+        return self
+
+    def __exit__(self, *args):
+        cdef dict variables = self._stack.pop()
+        if variables is not None:
+            self.variables = variables
+
+    def __contains__(self, name):
+        return name in self.variables
+
+    def __getitem__(self, name):
+        return self.variables[name]
+
+    cdef void set_variable(self, str name, value):
+        if self._stack[-1] is None:
+            self._stack[-1] = self.variables
+            self.variables = self.variables.copy()
+        self.variables[name] = value
+
+    def __setitem__(self, str name, value):
+        self.set_variable(name, value)
+
+    def merge_under(self, Node node):
+        for attr in node.attributes:
+            if attr not in self.variables:
+                self.set_variable(attr, node.attributes[attr])
 
 
 def sine(Vector xs not None):
