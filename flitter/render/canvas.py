@@ -5,7 +5,6 @@ Flitter renderer
 import enum
 
 import cairo
-import ctypes
 import numpy as np
 
 
@@ -52,29 +51,42 @@ class Antialias(enum.IntEnum):
     BEST = cairo.Antialias.BEST
 
 
-class Screen:
-    def __init__(self, width=1920, height=1080):
-        self.width = width
-        self.height = height
-        self.create_buffer()
+class Canvas:
+    def __init__(self, glctx):
+        self.glctx = glctx
+        self.texture = None
+        self.width = None
+        self.height = None
 
-    def create_buffer(self):
-        self.data = (ctypes.c_ubyte * (self.width * self.height * 4))()
-        self.array = np.ndarray(buffer=self.data, shape=(self.height, self.width), dtype='uint32')
-        self.surface = cairo.ImageSurface.create_for_data(self.data, cairo.FORMAT_ARGB32, self.width, self.height, self.width * 4)
+    def destroy(self):
+        if self.texture is not None:
+            self.texture.release()
+            self.texture = None
 
     def render(self, node):
+        assert node.kind == 'canvas'
         width, height = node.get('size', 2, int, (self.width, self.height))
-        if width != self.width or height != self.height:
+        if self.texture is None or width != self.width or height != self.height:
             self.width = width
             self.height = height
-            self.create_buffer()
+            self.surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, self.width, self.height)
+            self.array = np.ndarray(buffer=self.surface.get_data(), shape=(self.height, self.width), dtype='uint32')
+            if self.texture is not None:
+                self.texture.release()
+            self.texture = self.glctx.texture((self.width, self.height), 4)
+            self.texture.swizzle = 'BGRA'
         else:
             self.array[:,:] = 0
         ctx = cairo.Context(self.surface)
-        self._render(node, ctx)
+        # GL and Cairo worlds are upside-down vs each other
+        ctx.translate(0, self.height)
+        ctx.scale(1, -1)
+        self._set_styles(node, ctx)
+        for child in node.children:
+            self._render(child, ctx)
+        self.texture.write(self.surface.get_data())
 
-    def _set_style(self, node, ctx):
+    def _set_styles(self, node, ctx):
         rgb = node.get('color', 3, float)
         if rgb is not None:
             ctx.set_source_rgb(*rgb)
@@ -109,10 +121,6 @@ class Screen:
 
     def _render(self, node, ctx):
         match node.kind:
-            case "screen":
-                for child in node.children:
-                    self._render(child, ctx)
-
             case "group":
                 alpha = node.get('alpha', 1, float, 1)
                 if alpha == 0:
@@ -120,7 +128,7 @@ class Screen:
                 ctx.save()
                 if alpha < 1:
                     ctx.push_group()
-                self._set_style(node, ctx)
+                self._set_styles(node, ctx)
                 for child in node.children:
                     self._render(child, ctx)
                 if alpha < 1:
@@ -136,7 +144,6 @@ class Screen:
                     ctx.show_text(text)
 
             case "path":
-                self._set_style(node, ctx)
                 ctx.new_path()
                 for child in node.children:
                     self._render(child, ctx)
@@ -162,12 +169,12 @@ class Screen:
                 point = node.get('point', 2, float)
                 radius = node.get('radius', 2, float)
                 if point is not None and radius is not None:
-                    start = node.get('start', 1, float, 0) * TWOPI
-                    end = node.get('end', 1, float, 1) * TWOPI
+                    start = node.get('start', 1, float, 0)
+                    end = node.get('end', 1, float, 1)
                     ctx.save()
                     ctx.translate(*point)
                     ctx.scale(*radius)
-                    ctx.arc(0., 0., 1., start, end)
+                    ctx.arc(0., 0., 1., start * TWOPI, end * TWOPI)
                     ctx.restore()
 
             case "close":
@@ -191,7 +198,7 @@ class Screen:
                     ctx.restore()
 
             case "fill":
-                ctx.fill()
+                ctx.fill_preserve()
 
             case "stroke":
-                ctx.stroke()
+                ctx.stroke_preserve()

@@ -510,7 +510,7 @@ cdef class Node:
 
     cpdef void append(self, Node node):
         if node.parent is not None:
-            node.parent.remove(self)
+            node.parent.remove(node)
         node.parent = self
         if self.last_child is not None:
             self.last_child.next_sibling = node
