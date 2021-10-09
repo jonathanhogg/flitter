@@ -1,11 +1,10 @@
 """
-Flitter renderer
+Flitter drawing canvas based on cairo
 """
 
 import enum
 
 import cairo
-import numpy as np
 
 
 TWOPI = 6.283185307179586
@@ -51,154 +50,125 @@ class Antialias(enum.IntEnum):
     BEST = cairo.Antialias.BEST
 
 
-class Canvas:
-    def __init__(self, glctx):
-        self.glctx = glctx
-        self.texture = None
-        self.width = None
-        self.height = None
+def set_styles(node, ctx):
+    rgb = node.get('color', 3, float)
+    if rgb is not None:
+        ctx.set_source_rgb(*rgb)
+    else:
+        rgba = node.get('color', 4, float)
+        if rgba is not None:
+            ctx.set_source_rgba(*rgba)
+    translate = node.get('translate', 2, float)
+    if translate is not None:
+        ctx.translate(*translate)
+    rotate = node.get('rotate', 1, float)
+    if rotate is not None:
+        ctx.rotate(rotate * TWOPI)
+    scale = node.get('scale', 2, float)
+    if scale is not None:
+        ctx.scale(*scale)
+    line_width = node.get('line_width', 1, float)
+    if line_width is not None:
+        ctx.set_line_width(line_width)
+    composite = node.get('composite', 1, str)
+    if composite is not None and composite.upper() in Composite.__members__:
+        ctx.set_operator(Composite.__members__[composite.upper()])
+    antialias = node.get('antialias', 1, str)
+    if antialias is not None and antialias.upper() in Antialias.__members__:
+        ctx.set_antialias(Antialias.__members__[antialias.upper()])
+    font_size = node.get('font_size', 1, float)
+    if font_size is not None:
+        ctx.set_font_size(font_size)
+    font_face = node.get('font_face', 1, str)
+    if font_face is not None:
+        ctx.select_font_face(font_face)
 
-    def destroy(self):
-        if self.texture is not None:
-            self.texture.release()
-            self.texture = None
 
-    def render(self, node):
-        assert node.kind == 'canvas'
-        width, height = node.get('size', 2, int, (self.width, self.height))
-        if self.texture is None or width != self.width or height != self.height:
-            self.width = width
-            self.height = height
-            self.surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, self.width, self.height)
-            self.array = np.ndarray(buffer=self.surface.get_data(), shape=(self.height, self.width), dtype='uint32')
-            if self.texture is not None:
-                self.texture.release()
-            self.texture = self.glctx.texture((self.width, self.height), 4)
-            self.texture.swizzle = 'BGRA'
-        else:
-            self.array[:,:] = 0
-        ctx = cairo.Context(self.surface)
-        # GL and Cairo worlds are upside-down vs each other
-        ctx.translate(0, self.height)
-        ctx.scale(1, -1)
-        self._set_styles(node, ctx)
-        for child in node.children:
-            self._render(child, ctx)
-        self.texture.write(self.surface.get_data())
+def draw(node, ctx):
+    match node.kind:
+        case "canvas":
+            set_styles(node, ctx)
+            for child in node.children:
+                draw(child, ctx)
 
-    def _set_styles(self, node, ctx):
-        rgb = node.get('color', 3, float)
-        if rgb is not None:
-            ctx.set_source_rgb(*rgb)
-        else:
-            rgba = node.get('color', 4, float)
-            if rgba is not None:
-                ctx.set_source_rgba(*rgba)
-        translate = node.get('translate', 2, float)
-        if translate is not None:
-            ctx.translate(*translate)
-        rotate = node.get('rotate', 1, float)
-        if rotate is not None:
-            ctx.rotate(rotate * TWOPI)
-        scale = node.get('scale', 2, float)
-        if scale is not None:
-            ctx.scale(*scale)
-        line_width = node.get('line_width', 1, float)
-        if line_width is not None:
-            ctx.set_line_width(line_width)
-        composite = node.get('composite', 1, str)
-        if composite is not None and composite.upper() in Composite.__members__:
-            ctx.set_operator(Composite.__members__[composite.upper()])
-        antialias = node.get('antialias', 1, str)
-        if antialias is not None and antialias.upper() in Antialias.__members__:
-            ctx.set_antialias(Antialias.__members__[antialias.upper()])
-        font_size = node.get('font_size', 1, float)
-        if font_size is not None:
-            ctx.set_font_size(font_size)
-        font_face = node.get('font_face', 1, str)
-        if font_face is not None:
-            ctx.select_font_face(font_face)
+        case "group":
+            alpha = node.get('alpha', 1, float, 1)
+            if alpha == 0:
+                return
+            ctx.save()
+            if alpha < 1:
+                ctx.push_group()
+            set_styles(node, ctx)
+            for child in node.children:
+                draw(child, ctx)
+            if alpha < 1:
+                ctx.pop_group_to_source()
+                ctx.paint_with_alpha(alpha)
+            ctx.restore()
 
-    def _render(self, node, ctx):
-        match node.kind:
-            case "group":
-                alpha = node.get('alpha', 1, float, 1)
-                if alpha == 0:
-                    return
+        case "text":
+            point = node.get('point', 2, float)
+            text = node.get('text', 1, str)
+            if point is not None and text is not None:
+                ctx.move_to(*point)
+                ctx.show_text(text)
+
+        case "path":
+            ctx.new_path()
+            for child in node.children:
+                draw(child, ctx)
+
+        case "move_to":
+            point = node.get('point', 2, float)
+            if point is not None:
+                ctx.move_to(*point)
+
+        case "line_to":
+            point = node.get('point', 2, float)
+            if point is not None:
+                ctx.line_to(*point)
+
+        case "curve_to":
+            point = node.get('point', 2, float)
+            c1 = node.get('c1', 2, float)
+            c2 = node.get('c2', 2, float)
+            if point is not None and c1 is not None and c2 is not None:
+                ctx.curve_to(*c1, *c2, *point)
+
+        case "arc":
+            point = node.get('point', 2, float)
+            radius = node.get('radius', 2, float)
+            if point is not None and radius is not None:
+                start = node.get('start', 1, float, 0)
+                end = node.get('end', 1, float, 1)
                 ctx.save()
-                if alpha < 1:
-                    ctx.push_group()
-                self._set_styles(node, ctx)
-                for child in node.children:
-                    self._render(child, ctx)
-                if alpha < 1:
-                    ctx.pop_group_to_source()
-                    ctx.paint_with_alpha(alpha)
+                ctx.translate(*point)
+                ctx.scale(*radius)
+                ctx.arc(0., 0., 1., start * TWOPI, end * TWOPI)
                 ctx.restore()
 
-            case "text":
-                point = node.get('point', 2, float)
-                text = node.get('text', 1, str)
-                if point is not None and text is not None:
-                    ctx.move_to(*point)
-                    ctx.show_text(text)
+        case "close":
+            ctx.close_path()
 
-            case "path":
-                ctx.new_path()
-                for child in node.children:
-                    self._render(child, ctx)
+        case "rect":
+            size = node.get('size', 2, float)
+            if size is not None:
+                point = node.get('point', 2, float, (0, 0))
+                ctx.rectangle(*point, *size)
 
-            case "move_to":
-                point = node.get('point', 2, float)
-                if point is not None:
-                    ctx.move_to(*point)
+        case "ellipse":
+            radius = node.get('radius', 2, float)
+            if radius is not None:
+                point = node.get('point', 2, float, (0, 0))
+                ctx.save()
+                ctx.translate(*point)
+                ctx.scale(*radius)
+                ctx.move_to(1, 0)
+                ctx.arc(0, 0, 1, 0, TWOPI)
+                ctx.restore()
 
-            case "line_to":
-                point = node.get('point', 2, float)
-                if point is not None:
-                    ctx.line_to(*point)
+        case "fill":
+            ctx.fill_preserve()
 
-            case "curve_to":
-                point = node.get('point', 2, float)
-                c1 = node.get('c1', 2, float)
-                c2 = node.get('c2', 2, float)
-                if point is not None and c1 is not None and c2 is not None:
-                    ctx.curve_to(*c1, *c2, *point)
-
-            case "arc":
-                point = node.get('point', 2, float)
-                radius = node.get('radius', 2, float)
-                if point is not None and radius is not None:
-                    start = node.get('start', 1, float, 0)
-                    end = node.get('end', 1, float, 1)
-                    ctx.save()
-                    ctx.translate(*point)
-                    ctx.scale(*radius)
-                    ctx.arc(0., 0., 1., start * TWOPI, end * TWOPI)
-                    ctx.restore()
-
-            case "close":
-                ctx.close_path()
-
-            case "rect":
-                size = node.get('size', 2, float)
-                if size is not None:
-                    point = node.get('point', 2, float, (0, 0))
-                    ctx.rectangle(*point, *size)
-
-            case "ellipse":
-                radius = node.get('radius', 2, float)
-                if radius is not None:
-                    point = node.get('point', 2, float, (0, 0))
-                    ctx.save()
-                    ctx.translate(*point)
-                    ctx.scale(*radius)
-                    ctx.move_to(1, 0)
-                    ctx.arc(0, 0, 1, 0, TWOPI)
-                    ctx.restore()
-
-            case "fill":
-                ctx.fill_preserve()
-
-            case "stroke":
-                ctx.stroke_preserve()
+        case "stroke":
+            ctx.stroke_preserve()

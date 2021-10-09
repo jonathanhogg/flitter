@@ -350,28 +350,3 @@ def evaluate(expression, context):
             return expr.slice(index)
 
     raise NotImplementedError(expression.__class__.__name__)
-
-
-class Interpreter:
-    def __init__(self, tree):
-        assert isinstance(tree, ast.Sequence)
-        self.state = {}
-        self.tree = simplify(tree, model.Context())
-        self._simplified = None
-
-    def run(self, variables):
-        if self._simplified is None:
-            with model.Context(state=self.state) as context:
-                self._simplified = simplify(self.tree, context)
-        with model.Context(variables=variables, state=self.state) as context:
-            for expr in self._simplified.expressions:
-                result = evaluate(expr, context)
-                for value in result:
-                    if isinstance(value, model.Node) and value.parent is None:
-                        context.graph.append(value)
-        return context.graph
-
-    def set_state(self, key, value):
-        if key not in self.state or value != self.state[key]:
-            self.state[key] = value
-            self._simplified = None

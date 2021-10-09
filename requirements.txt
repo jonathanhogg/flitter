@@ -6,3 +6,4 @@ pyusb
 regex
 cython==3.0.0a9
 pyglet
+moderngl
