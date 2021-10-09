@@ -1,6 +1,7 @@
 # cython: language_level=3, profile=True
 
 import cython
+import enum
 from libc.math cimport isnan, floor, sin, cos
 
 
@@ -628,6 +629,22 @@ cdef class Node:
 
     def items(self):
         return self.attributes.items()
+
+    def get(self, str name, int n, type t, default=None, /):
+        cdef Vector vector
+        if name in self.attributes:
+            vector = (<Vector>self.attributes[name]).withlen(n)
+            if vector:
+                try:
+                    for i in range(n):
+                        vector.values[i] = t(vector.values[i])
+                except:
+                    pass
+                else:
+                    if n == 1:
+                        return vector.values[0]
+                    return vector
+        return default
 
     def __iter__(self):
         return iter(self.attributes)
