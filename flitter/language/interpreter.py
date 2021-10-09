@@ -133,9 +133,13 @@ def simplify(expression, context):
             remaining = []
             for test in tests:
                 condition = simplify(test.condition, context)
+                then = simplify(test.then, context)
                 if isinstance(condition, ast.Literal) and condition.value.istrue():
-                    return simplify(test.then, context)
-                remaining.append(ast.Test(condition=condition, then=simplify(test.then, context)))
+                    if not remaining:
+                        return then
+                    else:
+                        return ast.IfElse(tests=remaining, else_=then)
+                remaining.append(ast.Test(condition=condition, then=then))
             else_ = simplify(else_, context) if else_ is not None else None
             if remaining:
                 return ast.IfElse(tests=remaining, else_=else_)
