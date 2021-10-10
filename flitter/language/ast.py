@@ -48,6 +48,10 @@ class Negative(UnaryOperation):
     pass
 
 
+class Positive(UnaryOperation):
+    pass
+
+
 class Not(UnaryOperation):
     pass
 
@@ -155,7 +159,7 @@ class Search(Expression):
 @dataclass(frozen=True)
 class Append(Expression):
     node: Expression
-    children: Tuple[Expression, ...]
+    children: Expression
 
 
 @dataclass(frozen=True)
@@ -170,19 +174,26 @@ class Let(Expression):
 
 
 @dataclass(frozen=True)
+class InlineLet(Expression):
+    name: str
+    expr: Expression
+    body: Expression
+
+
+@dataclass(frozen=True)
 class For(Expression):
     name: str
     source: Expression
-    body: Tuple[Expression, ...]
+    body: Expression
 
 
 @dataclass(frozen=True)
 class Test:
     condition: Expression
-    then: Tuple[Expression, ...]
+    then: Expression
 
 
 @dataclass(frozen=True)
 class IfElse(Expression):
     tests: Tuple[Test, ...]
-    else_: Tuple[Expression, ...]
+    else_: Expression

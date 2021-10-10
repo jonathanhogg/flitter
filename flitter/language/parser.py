@@ -52,6 +52,7 @@ class FlitterTransformer(Transformer):
     ge = ast.GreaterThanOrEqualTo
     gt = ast.GreaterThan
     if_else = ast.IfElse
+    inline_let = ast.InlineLet
     sequence = v_args(inline=False)(ast.Sequence)
     le = ast.LessThanOrEqualTo
     let = v_args(inline=False)(ast.Let)
@@ -62,11 +63,14 @@ class FlitterTransformer(Transformer):
     lookup = ast.Lookup
     loop = ast.For
     lt = ast.LessThan
+    modulo = ast.Modulo
     multiply = ast.Multiply
     name = ast.Name
     ne = ast.NotEqualTo
+    neg = ast.Negative
     node = ast.Node
     power = ast.Power
+    pos = ast.Positive
     search = ast.Search
     slice = ast.Slice
     subtract = ast.Subtract

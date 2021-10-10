@@ -26,6 +26,10 @@ BUILTINS = {
     'linear': model.Vector((model.linear,)),
     'quad': model.Vector((model.quad,)),
     'shuffle': model.Vector((model.shuffle,)),
+    'round': model.Vector((model.roundv,)),
+    'min': model.Vector((model.minv,)),
+    'max': model.Vector((model.maxv,)),
+    'map': model.Vector((model.mapv,)),
     'hsl': model.Vector((model.hsl,)),
     'hsv': model.Vector((model.hsv,)),
 }
@@ -117,6 +121,15 @@ def simplify(expression, context):
             expr = simplify(expr, context)
             return ast.Attribute(node=node, name=name, expr=expr)
 
+        case ast.InlineLet(name=name, expr=expr, body=body):
+            expr = simplify(expr, context)
+            if not isinstance(expr, ast.Literal):
+                body = simplify(body, context)
+                return ast.InlineLet(name=name, expr=expr, body=body)
+            with context:
+                context[name] = expr.value
+                return simplify(body, context)
+
         case ast.For(name=name, source=source, body=body):
             source = simplify(source, context)
             if not isinstance(source, ast.Literal):
@@ -153,6 +166,8 @@ def simplify(expression, context):
                 match expression:
                     case ast.Negative():
                         return ast.Literal(expr.value.neg())
+                    case ast.Positive():
+                        return ast.Literal(expr.value.pos())
                     case ast.Not():
                         return ast.Literal(expr.value.not_())
             return type(expression)(expr=expr)
@@ -197,10 +212,10 @@ def simplify(expression, context):
                     case ast.Power():
                         return ast.Literal(left.value.pow(right.value))
                     case ast.And():
-                        if isinstance(left.Literal):
+                        if isinstance(left, ast.Literal):
                             return right if left.value.istrue() else left
                     case ast.Or():
-                        if isinstance(left.Literal):
+                        if isinstance(left, ast.Literal):
                             return left if left.value.istrue() else right
             return type(expression)(left=left, right=right)
 
@@ -219,6 +234,7 @@ def simplify(expression, context):
                 return ast.Literal(expr.value.slice(index.value))
             return ast.Slice(expr=expr, index=index)
 
+    print(expression)
     raise NotImplementedError(expression.__class__.__name__)
 
 
@@ -277,6 +293,12 @@ def evaluate(expression, context):
                     n[name] = evaluate(expr, context)
             return node
 
+        case ast.InlineLet(name=name, expr=expr, body=body):
+            expr = evaluate(expr, context)
+            with context:
+                context[name] = expr
+                return evaluate(body, context)
+
         case ast.For(name=name, source=source, body=body):
             source = evaluate(source, context)
             with context:
@@ -297,6 +319,8 @@ def evaluate(expression, context):
             match expression:
                 case ast.Negative():
                     return value.neg()
+                case ast.Positive():
+                    return value.pos()
                 case ast.Not():
                     return value.not_()
 

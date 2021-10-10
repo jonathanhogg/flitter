@@ -9,7 +9,7 @@
 _NL: /(\r?\n[\t ]*)+/
 
 NAME : /[_a-z][_a-z0-9]*/i
-SIGNED_NUMBER : /[-+]?([0-9]+(\.[0-9]+)?|\.[0-9]+)(e[-+]?[0-9]+)?/i
+SIGNED_NUMBER : /([0-9]+(\.[0-9]+)?|\.[0-9]+)(e[-+]?[0-9]+)?/i
 QUERY : /{[^}]+}/
 
 
@@ -36,6 +36,7 @@ binding : NAME "=" composition
 
 ?comprehension : or
                | "for" NAME "in" or "|" comprehension -> loop
+               | "let" NAME "=" or "|" comprehension -> inline_let
 
 ?or : and
     | or "or" and -> logical_or

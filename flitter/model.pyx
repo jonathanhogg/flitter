@@ -2,7 +2,7 @@
 
 import cython
 import enum
-from libc.math cimport isnan, floor, sin, cos
+from libc.math cimport isnan, floor, round, sin, cos
 
 
 DEF PI = 3.141592653589793
@@ -136,10 +136,10 @@ cdef class Vector:
                 result.values[i] = node.copy()
         return result
 
-    cpdef Vector withlen(self, int n):
+    cpdef Vector withlen(self, int n, bint force_copy=False):
         cdef int m = len(self.values)
         if n == m:
-            return self
+            return Vector.__new__(Vector, self.values) if force_copy else self
         if m != 1:
             return null_
         cdef Vector result = Vector.__new__(Vector)
@@ -154,10 +154,16 @@ cdef class Vector:
             result.values.append(-value)
         return result
 
+    def pos(self):
+        cdef Vector result = Vector.__new__(Vector)
+        for value in self.values:
+            result.values.append(+value)
+        return result
+
     def not_(self):
         return false_ if self.istrue() else true_
 
-    def add(self, Vector other not None):
+    cpdef Vector add(self, Vector other):
         cdef Vector result = Vector.__new__(Vector)
         cdef int n = len(self.values), m = len(other.values)
         if n == m:
@@ -173,7 +179,7 @@ cdef class Vector:
                 result.values.append(self.values[i] + y)
         return result
 
-    def sub(self, Vector other not None):
+    cpdef sub(self, Vector other):
         cdef Vector result = Vector.__new__(Vector)
         cdef int n = len(self.values), m = len(other.values)
         if n == m:
@@ -189,7 +195,7 @@ cdef class Vector:
                 result.values.append(self.values[i] - y)
         return result
 
-    def mul(self, Vector other not None):
+    cpdef mul(self, Vector other):
         cdef Vector result = Vector.__new__(Vector)
         cdef int n = len(self.values), m = len(other.values)
         if n == m:
@@ -205,7 +211,7 @@ cdef class Vector:
                 result.values.append(self.values[i] * y)
         return result
 
-    def truediv(self, Vector other not None):
+    cpdef truediv(self, Vector other):
         cdef Vector result = Vector.__new__(Vector)
         cdef int n = len(self.values), m = len(other.values)
         if n == m:
@@ -221,7 +227,7 @@ cdef class Vector:
                 result.values.append(self.values[i] / y)
         return result
 
-    def floordiv(self, Vector other not None):
+    cpdef floordiv(self, Vector other):
         cdef Vector result = Vector.__new__(Vector)
         cdef int n = len(self.values), m = len(other.values)
         if n == m:
@@ -237,7 +243,7 @@ cdef class Vector:
                 result.values.append(self.values[i] // y)
         return result
 
-    def mod(self, Vector other not None):
+    cpdef mod(self, Vector other):
         cdef Vector result = Vector.__new__(Vector)
         cdef int n = len(self.values), m = len(other.values)
         if n == m:
@@ -253,7 +259,7 @@ cdef class Vector:
                 result.values.append(self.values[i] % y)
         return result
 
-    def pow(self, Vector other not None):
+    cpdef pow(self, Vector other):
         cdef Vector result = Vector.__new__(Vector)
         cdef int n = len(self.values), m = len(other.values)
         if n == m:
@@ -633,7 +639,7 @@ cdef class Node:
     def get(self, str name, int n, type t, default=None, /):
         cdef Vector vector
         if name in self.attributes:
-            vector = (<Vector>self.attributes[name]).withlen(n)
+            vector = (<Vector>self.attributes[name]).withlen(n, True)
             if vector:
                 try:
                     for i in range(n):
@@ -806,6 +812,56 @@ def shuffle(Uniform source, Vector xs not None):
         n -= 1
         xs.values[i], xs.values[j] = xs.values[j], xs.values[i]
     return xs
+
+
+def roundv(Vector xs not None):
+    cdef Vector ys = Vector.__new__(Vector)
+    cdef double x, y
+    for i in range(len(xs.values)):
+        x = xs.values[i]
+        y = round(x)
+        ys.values.append(y)
+    return ys
+
+
+def minv(Vector xs not None, *args):
+    cdef Vector ys = null_
+    if not args:
+        y = None
+        for x in xs.values:
+            if y is None or x < y:
+                y = x
+        if y is not None:
+            ys = Vector.__new__(Vector)
+            ys.values.append(y)
+    else:
+        ys = xs
+        for xs in args:
+            if xs.compare(ys) == -1:
+                ys = xs
+    return ys
+
+
+def maxv(Vector xs not None, *args):
+    cdef Vector ys = null_
+    if not args:
+        y = None
+        for x in xs.values:
+            if y is None or x > y:
+                y = x
+        if y is not None:
+            ys = Vector.__new__(Vector)
+            ys.values.append(y)
+    else:
+        ys = xs
+        for xs in args:
+            if xs.compare(ys) == 1:
+                ys = xs
+    return ys
+
+
+def mapv(Vector x not None, Vector a not None, Vector b not None):
+    return a.mul(true_.sub(x)).add(b.mul(x))
 
 
 cdef double hue_to_rgb(double m1, double m2, double h):
