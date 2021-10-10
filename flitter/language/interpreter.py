@@ -134,16 +134,18 @@ def simplify(expression, context):
             for test in tests:
                 condition = simplify(test.condition, context)
                 then = simplify(test.then, context)
-                if isinstance(condition, ast.Literal) and condition.value.istrue():
-                    if not remaining:
-                        return then
-                    else:
-                        return ast.IfElse(tests=remaining, else_=then)
-                remaining.append(ast.Test(condition=condition, then=then))
+                if isinstance(condition, ast.Literal):
+                    if condition.value.istrue():
+                        if not remaining:
+                            return then
+                        else:
+                            return ast.IfElse(tests=remaining, else_=then)
+                else:
+                    remaining.append(ast.Test(condition=condition, then=then))
             else_ = simplify(else_, context) if else_ is not None else None
             if remaining:
-                return ast.IfElse(tests=remaining, else_=else_)
-            return model.null if else_ is None else else_
+                return ast.IfElse(tests=tuple(remaining), else_=else_)
+            return ast.Literal(model.null) if else_ is None else else_
 
         case ast.UnaryOperation(expr=expr):
             expr = simplify(expr, context)
