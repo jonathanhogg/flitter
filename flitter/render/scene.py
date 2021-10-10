@@ -172,7 +172,6 @@ class Shader(SceneNode):
     DEFAULT_VERTEX_SHADER = """#version 410
 in vec2 position;
 out vec2 coord;
-
 void main() {
     gl_Position = vec4(position, 0.0, 1.0);
     coord = (position + 1.0) / 2.0;
@@ -182,9 +181,7 @@ void main() {
 precision highp float;
 in vec2 coord;
 out vec4 color;
-
 uniform sample2D texture0;
-
 void main() {
     color = texture(texture0, coord);
 }
@@ -277,19 +274,21 @@ void main() {
                         self.glctx.copy_framebuffer(self._last, self._framebuffer)
                         textures['last'] = self._last
                     elif name.startswith('texture'):
-                        textures[name] = self.children[int(name[7:])].texture
+                        index = int(name[7:])
+                        if index < len(self.children):
+                            textures[name] = self.children[index].texture
                     elif name in node:
                         value = node.get(name, member.dimension, float)
                         if value is not None:
                             values[name] = value if member.dimension == 1 else tuple(value)
             self._framebuffer.use()
             self._framebuffer.clear()
-            repeat = node.get('repeat', 1, bool, False)
+            repeat_x, repeat_y = node.get('repeat', 2, bool, (False, False))
             samplers = []
             unit = 0
             for name, texture in textures.items():
                 if name in self._program:
-                    sampler = self.glctx.sampler(repeat_x=repeat, repeat_y=repeat, texture=texture)
+                    sampler = self.glctx.sampler(repeat_x=repeat_x, repeat_y=repeat_y, texture=texture)
                     sampler.use(location=unit)
                     self._program[name] = unit
                     unit += 1
