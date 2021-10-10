@@ -130,7 +130,6 @@ class Window(SceneNode):
             self.program = self.glctx.program(vertex_shader=self.VERTEX_SHADER, fragment_shader=self.FRAGMENT_SHADER)
             vertices = self.glctx.buffer(array.array('f', [-1, 1, -1, -1, 1, 1, 1, -1]))
             self.screen_rectangle = self.glctx.vertex_array(self.program, [(vertices, '2f', 'position')])
-            print(self.glctx.screen.width, self.glctx.screen.height)
         else:
             fullscreen = node.get('fullscreen', 1, bool, False)
             width, height = node.get('size', 2, int, (1920, 1080))
@@ -158,7 +157,7 @@ class Window(SceneNode):
                 self.glctx.screen.viewport = (0, (height - view_height) // 2, width, view_height)
         self.window.clear()
         for child in self.children:
-            child.texture.use(location=0)
+            child.texture.use(location=self.program['image'].location)
             self.screen_rectangle.render(mode=moderngl.TRIANGLE_STRIP)
         self.window.flip()
         self.window.dispatch_events()
@@ -170,26 +169,24 @@ class Window(SceneNode):
 
 
 class Shader(SceneNode):
-    VERTEX_PREAMBLE = """#version 410
+    DEFAULT_VERTEX_SHADER = """#version 410
 in vec2 position;
 out vec2 coord;
 
-"""
-    DEFAULT_VERTEX_SHADER = """
 void main() {
     gl_Position = vec4(position, 0.0, 1.0);
     coord = (position + 1.0) / 2.0;
 }
 """
-    FRAGMENT_PREAMBLE = """#version 410
+    DEFAULT_FRAGMENT_SHADER = """#version 410
 precision highp float;
 in vec2 coord;
 out vec4 color;
 
-"""
-    DEFAULT_FRAGMENT_SHADER = """
+uniform sample2D texture0;
+
 void main() {
-    color = vec4(1.0, 0.0, 0.0, 1.0);
+    color = texture(texture0, coord);
 }
 """
 
@@ -260,40 +257,33 @@ void main() {
 
     def render(self, node):
         now = time.clock_gettime(time.CLOCK_MONOTONIC_RAW)
-        uniforms = {'delta': 0.0 if self._timestamp is None else now - self._timestamp}
+        delta = 0.0 if self._timestamp is None else now - self._timestamp
         self._timestamp = now
-        uniform_declarations = 'uniform float delta;\n'
-        last = node.get('last', 1, bool, False)
-        if last:
-            uniform_declarations += 'uniform sampler2D last;\n'
-        for i, _ in enumerate(self.children):
-            uniform_declarations += f'uniform sampler2D texture{i};\n'
-        for name in node:
-            if name not in {'vertex', 'fragment', 'repeat', 'last'} and not name.startswith('_'):
-                vector = node[name]
-                size = len(vector)
-                if 1 <= size <= 4 and vector.isinstance((float, int)):
-                    uniforms[name] = vector[0] if size == 1 else tuple(vector)
-                    uniform_type = 'float' if size == 1 else f'vec{size}'
-                    uniform_declarations += f'uniform {uniform_type} {name};\n'
-        vertex_source = self.VERTEX_PREAMBLE + node.get('vertex', 1, str, self.DEFAULT_VERTEX_SHADER)
-        fragment_source = self.FRAGMENT_PREAMBLE + uniform_declarations + node.get('fragment', 1, str, self.DEFAULT_FRAGMENT_SHADER)
+        vertex_source = node.get('vertex', 1, str, self.DEFAULT_VERTEX_SHADER)
+        fragment_source = node.get('fragment', 1, str, self.DEFAULT_FRAGMENT_SHADER)
         if vertex_source != self.vertex_source or fragment_source != self.fragment_source:
             self.compile(vertex_source, fragment_source)
         if self._rectangle is not None:
+            values = {}
             textures = {}
-            if last:
-                if self._last is None:
-                    self._last = self.glctx.texture((self.width, self.height), 4)
-                self.glctx.copy_framebuffer(self._last, self._framebuffer)
-                textures['last'] = self._last
+            for name in self._program:
+                member = self._program[name]
+                if isinstance(member, moderngl.Uniform):
+                    if name == 'delta':
+                        values['delta'] = delta
+                    elif name == 'last':
+                        if self._last is None:
+                            self._last = self.glctx.texture((self.width, self.height), 4)
+                        self.glctx.copy_framebuffer(self._last, self._framebuffer)
+                        textures['last'] = self._last
+                    elif name.startswith('texture'):
+                        textures[name] = self.children[int(name[7:])].texture
+                    elif name in node:
+                        value = node.get(name, member.dimension, float)
+                        if value is not None:
+                            values[name] = value if member.dimension == 1 else tuple(value)
             self._framebuffer.use()
             self._framebuffer.clear()
-            for i, child in enumerate(self.children):
-                textures[f'texture{i}'] = child.texture
-            for name, value in uniforms.items():
-                if name in self._program:
-                    self._program[name] = value
             repeat = node.get('repeat', 1, bool, False)
             samplers = []
             unit = 0
@@ -304,6 +294,9 @@ void main() {
                     self._program[name] = unit
                     unit += 1
                     samplers.append(sampler)
+            for name, value in values.items():
+                if name in self._program:
+                    self._program[name] = value
             self._rectangle.render(mode=moderngl.TRIANGLE_STRIP)
             for sampler in samplers:
                 sampler.clear()
