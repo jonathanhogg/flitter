@@ -50,6 +50,12 @@ class Antialias(enum.IntEnum):
     BEST = cairo.Antialias.BEST
 
 
+class LineJoin(enum.IntEnum):
+    MITER = cairo.LineJoin.MITER
+    ROUND = cairo.LineJoin.ROUND
+    BEVEL = cairo.LineJoin.BEVEL
+
+
 def set_styles(node, ctx):
     rgb = node.get('color', 3, float)
     if rgb is not None:
@@ -70,6 +76,9 @@ def set_styles(node, ctx):
     line_width = node.get('line_width', 1, float)
     if line_width is not None:
         ctx.set_line_width(line_width)
+    line_width = node.get('line_join', 1, str)
+    if line_width is not None and line_width.upper() in LineJoin.__members__:
+        ctx.set_line_join(LineJoin.__members__[line_width.upper()])
     composite = node.get('composite', 1, str)
     if composite is not None and composite.upper() in Composite.__members__:
         ctx.set_operator(Composite.__members__[composite.upper()])
