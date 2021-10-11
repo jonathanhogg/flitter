@@ -11,6 +11,7 @@ from .interface.controls import Pad, Encoder
 from .interface.osc import OSCReceiver, OSCSender, OSCMessage, OSCBundle
 from .language.interpreter import simplify, evaluate
 from .language.parser import parse
+from .language.ast import Literal
 from .model import Context, Vector, Node, null
 from .render.scene import Window
 
@@ -64,7 +65,7 @@ class Controller:
         self.simplified = None
         self.current_mtime = self.current_filename.stat().st_mtime
         self.pages[self.current_page] = self.current_filename, self.current_mtime, self.tree
-        Log.info("Reoaded page %i: %s", self.current_page, self.current_filename)
+        Log.info("Reloaded page %i: %s", self.current_page, self.current_filename)
 
     def get(self, key, default=None):
         return self.state.get(key, default)
@@ -104,7 +105,8 @@ class Controller:
                      'clock': Vector((self.counter.time_at_beat(beat),)),
                      'read': Vector((self.read,))}
         with Context(variables=variables, state=self.state) as context:
-            for expr in self.simplified.expressions:
+            expressions = [self.simplified] if isinstance(self.simplified, Literal) else self.simplified.expressions
+            for expr in expressions:
                 result = evaluate(expr, context)
                 for value in result:
                     if isinstance(value, Node) and value.parent is None:
