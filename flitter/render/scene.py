@@ -5,6 +5,7 @@ Flitter window management
 # pylama:ignore=C0413,E402,W0703,R0914,R0902,R0912,R0201,R1702
 
 import array
+import asyncio
 import logging
 import time
 
@@ -145,9 +146,7 @@ void main() {{
                 vertices = self.glctx.buffer(array.array('f', [-1, 1, -1, -1, 1, 1, 1, -1]))
                 self._rectangle = self.glctx.vertex_array(self._program, [(vertices, '2f', 'position')])
             except Exception:
-                Log.exception("Unable to compile shader")
-            print(self, self.children)
-            print(self._fragment_source)
+                Log.exception("Unable to compile shader:\n%s", self._fragment_source)
 
     @property
     def framebuffer(self):
@@ -212,10 +211,12 @@ class Window(ProgramNode):
         def on_draw(self):
             pass
 
+        def on_close(self):
+            pass
+
     def __init__(self):
         super().__init__(None)
         self.window = None
-        self.fullscreen = None
 
     def release(self):
         if self.window is not None:
@@ -231,43 +232,39 @@ class Window(ProgramNode):
         super().create(resized)
         if self.window is None:
             vsync = self.node.get('vsync', 1, bool, True)
-            self.fullscreen = self.node.get('fullscreen', 1, bool, False)
             screen = self.node.get('screen', 1, int, 0)
             title = self.node.get('title', 1, str, "Flitter")
+            fullscreen = self.node.get('fullscreen', 1, bool, False)
             screens = pyglet.canvas.get_display().get_screens()
             screen = screens[screen] if screen < len(screens) else screens[0]
             config = pyglet.gl.Config(major_version=self.GL_VERSION[0], minor_version=self.GL_VERSION[1], forward_compatible=True,
                                       depth_size=24, double_buffer=True, sample_buffers=1, samples=0)
-            if self.fullscreen:
-                self.window = self.WindowWrapper(fullscreen=True, caption=title, screen=screen, vsync=vsync, config=config)
-            else:
-                self.window = self.WindowWrapper(width=self.width, height=self.height, resizable=False, caption=title, screen=screen, vsync=vsync, config=config)
+            self.window = self.WindowWrapper(width=self.width, height=self.height, resizable=True, caption=title, screen=screen, vsync=vsync, config=config)
+            self.window.event(self.on_resize)
+            self.window.event(self.on_close)
             self.glctx = moderngl.create_context(require=self.GL_VERSION[0] * 100 + self.GL_VERSION[1])
-        else:
-            fullscreen = self.node.get('fullscreen', 1, bool, False)
-            if resized:
-                if not self.fullscreen:
-                    self.window.set_size(self.width, self.height)
-            if fullscreen != self.fullscreen:
-                self.window.set_fullscreen(fullscreen)
-                if self.fullscreen:
-                    self.window.set_size(self.width, self.height)
-                self.fullscreen = fullscreen
+            if fullscreen:
+                self.window._nswindow.enterFullScreenMode_(self.window._nswindow.screen())  # noqa
 
     @property
     def framebuffer(self):
         return self.glctx.screen
 
+    def on_resize(self, width, height):
+        aspect_ratio = self.width / self.height
+        width, height = self.window.get_framebuffer_size()
+        if width / height > aspect_ratio:
+            view_width = int(height * aspect_ratio)
+            viewport = ((width - view_width) // 2, 0, view_width, height)
+        else:
+            view_height = int(width / aspect_ratio)
+            viewport = (0, (height - view_height) // 2, width, view_height)
+        self.glctx.screen.viewport = viewport
+
+    def on_close(self):
+        asyncio.get_event_loop().stop()
+
     def render(self):
-        if self.fullscreen:
-            aspect_ratio = self.width / self.height
-            width, height = self.glctx.screen.width, self.glctx.screen.height
-            if width / height > aspect_ratio:
-                view_width = int(height * aspect_ratio)
-                self.glctx.screen.viewport = ((width - view_width) // 2, 0, view_width, height)
-            else:
-                view_height = int(width / aspect_ratio)
-                self.glctx.screen.viewport = (0, (height - view_height) // 2, width, view_height)
         super().render()
         self.window.flip()
         self.window.dispatch_events()
