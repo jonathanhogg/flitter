@@ -290,7 +290,9 @@ def evaluate(expression, context):
             for n in node:
                 with context:
                     context.merge_under(n)
-                    n[name] = evaluate(expr, context)
+                    value = evaluate(expr, context)
+                    if value != model.null:
+                        n[name] = value
             return node
 
         case ast.InlineLet(name=name, expr=expr, body=body):

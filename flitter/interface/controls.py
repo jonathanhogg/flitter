@@ -4,6 +4,8 @@ Flitter user interface controls
 
 # pylama:ignore=R0902,R0903
 
+import math
+
 from ..model import Vector, true, false
 
 
@@ -61,6 +63,7 @@ class Pad(TouchControl):
     def __init__(self, number):
         super().__init__(number)
         self._prefix = None
+        self.toggle = None
         self.toggled = None
         self._toggled_beat = None
         self.pressure = None
@@ -71,6 +74,14 @@ class Pad(TouchControl):
     def update(self, node, controller):
         self._prefix = node['state'] if 'state' in node else Vector(("pad", *self.number))
         changed = super().update(node, controller)
+        toggle = node.get('toggle', 1, bool, False)
+        if toggle != self.toggle:
+            self.toggle = toggle
+            if not self.toggle and self.toggled:
+                self.toggled = False
+                self._toggled_beat = controller.counter.beat
+            self._can_toggle = False
+            changed = True
         self._toggle_threshold = node.get('threshold', 1, float, self.DEFAULT_THRESHOLD)
         if self.pressure is not None:
             controller[Vector((*self._prefix, "pressure"))] = Vector((self.pressure,))
@@ -82,7 +93,7 @@ class Pad(TouchControl):
 
     def on_touched(self, beat):
         super().on_touched(beat)
-        self._can_toggle = True
+        self._can_toggle = self.toggle
 
     def on_released(self, beat):
         super().on_released(beat)
@@ -95,7 +106,7 @@ class Pad(TouchControl):
             self.toggled = not self.toggled
             self._toggled_beat = beat
             self._can_toggle = False
-        self._changed = True
+            self._changed = True
 
 
 class Encoder(TouchControl):
@@ -110,14 +121,14 @@ class Encoder(TouchControl):
         self.upper = None
         self.value = None
         self._value_beat = None
+        self._clock = None
 
     def update(self, node, controller):
+        now = controller.counter.clock()
+        delta = 0.0 if self._clock is None else now - self._clock
+        self._clock = now
         self._prefix = node['state'] if 'state' in node else Vector(("encoder", *self.number))
         changed = super().update(node, controller)
-        initial = node.get('initial', 1, float, self.DEFAULT_LOWER)
-        if initial != self.initial:
-            self.initial = initial
-            changed = True
         lower = node.get('lower', 1, float, self.DEFAULT_LOWER)
         if lower != self.lower:
             self.lower = lower
@@ -125,6 +136,10 @@ class Encoder(TouchControl):
         upper = node.get('upper', 1, float, self.DEFAULT_UPPER)
         if upper != self.upper:
             self.upper = upper
+            changed = True
+        initial = node.get('initial', 1, float, self.lower)
+        if initial != self.initial:
+            self.initial = initial
             changed = True
         value_key = Vector((*self._prefix, "value"))
         value_beat_key = Vector((*self._prefix, "value", "beat"))
@@ -135,7 +150,14 @@ class Encoder(TouchControl):
             else:
                 self.value = self.initial
                 self._value_beat = controller.counter.beat
-        controller[value_key] = Vector((self.value,))
+        value = self.value
+        if value_key in controller:
+            alpha = math.exp(10 * -delta)
+            current_value = controller[value_key][0]
+            value = value * (1-alpha) + current_value * alpha
+            if value > self.value * 0.999 and value < self.value * 1.001:
+                value = self.value
+        controller[value_key] = Vector((value,))
         controller[value_beat_key] = Vector((self._value_beat,))
         return changed
 

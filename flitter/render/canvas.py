@@ -172,3 +172,22 @@ def draw(node, ctx):
 
         case "stroke":
             ctx.stroke_preserve()
+
+        case "gradient":
+            start = node.get('start', 2, float)
+            end = node.get('end', 2, float)
+            if start is not None and end is not None:
+                gradient = cairo.LinearGradient(*start, *end)
+                for child in node.children:
+                    match child.kind:
+                        case "stop":
+                            offset = child.get('offset', 1, float)
+                            if offset is not None:
+                                rgb = child.get('color', 3, float)
+                                if rgb is not None:
+                                    gradient.add_color_stop_rgb(offset, *rgb)
+                                else:
+                                    rgba = child.get('color', 4, float)
+                                    if rgba is not None:
+                                        gradient.add_color_stop_rgba(offset, *rgba)
+                ctx.set_source(gradient)

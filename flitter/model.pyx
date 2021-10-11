@@ -889,7 +889,6 @@ def hsl(Vector c):
     if c is null_:
         return null_
     cdef double h = c.values[0], s = c.values[1], l = c.values[2]
-    h = min(max(0, h), 1)
     s = min(max(0, s), 1)
     l = min(max(0, l), 1)
     return hsl_to_rgb(h, s, l)
@@ -899,7 +898,6 @@ def hsv(Vector c):
     if c is null_:
         return null_
     cdef double h = c.values[0], s = c.values[1], v = c.values[2]
-    h = min(max(0, h), 1)
     s = min(max(0, s), 1)
     v = min(max(0, v), 1)
     cdef double l = v * (1 - s / 2)
