@@ -275,7 +275,7 @@ cdef class Vector:
                 result.values.append(self.values[i] ** y)
         return result
 
-    cpdef bint compare(self, Vector other):
+    cpdef int compare(self, Vector other):
         cdef int n = len(self.values), m = len(other.values)
         for i in range(min(n, m)):
             x = self.values[i]
