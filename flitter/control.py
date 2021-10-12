@@ -47,12 +47,13 @@ class Controller:
         with open(filename, encoding='utf8') as file, Context() as context:
             tree = simplify(parse(file.read()), context)
         Log.info("Loaded page %i: %s", page_number, filename)
-        self.pages.append((filename, filename.stat().st_mtime, tree))
+        self.pages.append((filename, filename.stat().st_mtime, tree, {}))
 
     def switch_to_page(self, page_number):
         if self.pages is not None and 0 <= page_number < len(self.pages):
-            filename, mtime, tree = self.pages[page_number]
+            filename, mtime, tree, state = self.pages[page_number]
             self.tree = tree
+            self.state = state
             self.simplified = None
             self.current_page = page_number
             self.current_filename = filename
@@ -64,7 +65,7 @@ class Controller:
             self.tree = simplify(parse(file.read()), context)
         self.simplified = None
         self.current_mtime = self.current_filename.stat().st_mtime
-        self.pages[self.current_page] = self.current_filename, self.current_mtime, self.tree
+        self.pages[self.current_page] = self.current_filename, self.current_mtime, self.tree, self.state
         Log.info("Reloaded page %i: %s", self.current_page, self.current_filename)
 
     def get(self, key, default=None):
