@@ -673,14 +673,16 @@ cdef class Node:
 
 cdef class Context:
     cdef dict variables
+    cdef readonly dict pragmas
     cdef readonly dict state
     cdef readonly Node graph
     cdef list _stack
 
-    def __cinit__(self, dict variables=None, dict state=None, Node graph=None):
+    def __cinit__(self, dict variables=None, dict state=None, Node graph=None, dict pragmas=None):
         self.variables = variables if variables is not None else {}
         self.state = state if state is not None else {}
         self.graph = graph if graph is not None else Node.__new__(Node, 'root', ())
+        self.pragmas = pragmas if pragmas is not None else {}
         self._stack = []
 
     def __enter__(self):
@@ -711,6 +713,9 @@ cdef class Context:
         for attr in node.attributes:
             if attr not in self.variables:
                 self.set_variable(attr, node.attributes[attr])
+
+    def pragma(self, str name, value):
+        self.pragmas[name] = value
 
 
 def sine(Vector xs not None):

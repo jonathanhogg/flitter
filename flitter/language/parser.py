@@ -71,6 +71,7 @@ class FlitterTransformer(Transformer):
     node = ast.Node
     power = ast.Power
     pos = ast.Positive
+    pragma = ast.Pragma
     search = ast.Search
     slice = ast.Slice
     subtract = ast.Subtract

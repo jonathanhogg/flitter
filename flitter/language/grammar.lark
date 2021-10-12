@@ -20,6 +20,7 @@ sequence : _NL? expression+
             | "for" NAME "in" range _NL _INDENT sequence _DEDENT -> loop
             | "let" binding+ _NL -> let
             | "if" tests ["else" _NL _INDENT sequence _DEDENT] -> if_else
+            | "%pragma" NAME node _NL -> pragma
 
 tests : test ("elif" test)*
 

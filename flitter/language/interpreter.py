@@ -234,6 +234,10 @@ def simplify(expression, context):
                 return ast.Literal(expr.value.slice(index.value))
             return ast.Slice(expr=expr, index=index)
 
+        case ast.Pragma(name=name, expr=expr):
+            expr = simplify(expr, context)
+            return ast.Pragma(name=name, expr=expr)
+
     print(expression)
     raise NotImplementedError(expression.__class__.__name__)
 
@@ -380,5 +384,10 @@ def evaluate(expression, context):
             expr = evaluate(expr, context)
             index = evaluate(index, context)
             return expr.slice(index)
+
+        case ast.Pragma(name=name, expr=expr):
+            expr = evaluate(expr, context)
+            context.pragma(name, expr)
+            return model.null
 
     raise NotImplementedError(expression.__class__.__name__)

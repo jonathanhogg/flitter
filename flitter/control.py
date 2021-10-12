@@ -4,6 +4,7 @@ The main Flitter engine
 
 import asyncio
 import logging
+import math
 from pathlib import Path
 
 from .clock import BeatCounter
@@ -26,6 +27,7 @@ class Controller:
     def __init__(self, root_dir):
         self.root_dir = Path(root_dir)
         self.state = {}
+        self.pragmas = {}
         self.tree = None
         self.simplified = None
         self.windows = []
@@ -105,7 +107,7 @@ class Controller:
                      'quantum': Vector((self.counter.quantum,)),
                      'clock': Vector((self.counter.time_at_beat(beat),)),
                      'read': Vector((self.read,))}
-        with Context(variables=variables, state=self.state) as context:
+        with Context(variables=variables, state=self.state, pragmas=self.pragmas) as context:
             expressions = [self.simplified] if isinstance(self.simplified, Literal) else self.simplified.expressions
             for expr in expressions:
                 result = evaluate(expr, context)
@@ -252,6 +254,13 @@ class Controller:
                 except Exception:
                     Log.exception("Syntax error")
             graph = self.execute()
+            if 'tempo' in self.pragmas:
+                tempo = self.pragmas['tempo']
+                if len(tempo) == 1 and tempo.isinstance(float):
+                    tempo = tempo[0]
+                    if not math.isclose(tempo, self.counter.tempo):
+                        self.counter.tempo = tempo
+                        self.enqueue_tempo()
             self.update_windows(graph)
             self.update_controls(graph)
             if self.queue:

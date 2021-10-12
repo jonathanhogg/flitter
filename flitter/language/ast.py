@@ -13,6 +13,12 @@ class Expression:
 
 
 @dataclass(frozen=True)
+class Pragma(Expression):
+    name: str
+    expr: Expression
+
+
+@dataclass(frozen=True)
 class Sequence(Expression):
     expressions: Tuple[Expression, ...]
 
