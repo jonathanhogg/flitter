@@ -543,6 +543,7 @@ cdef class Node:
         if node is self.last_child:
             self.last_child = previous
         node.parent = None
+        node.next_sibling = None
 
     def delete(self):
         if self.parent is None:
