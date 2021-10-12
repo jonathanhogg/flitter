@@ -12,7 +12,8 @@ import sys
 
 from ..clock import TapTempo
 from .constants import Animation, Encoder, Control, BUTTONS
-from .events import ButtonPressed, ButtonReleased, TouchStripDragged, PadPressed, PadHeld, PadReleased, EncoderTurned, EncoderTouched, EncoderReleased
+from .events import (ButtonPressed, ButtonReleased, TouchStripDragged, PadPressed, PadHeld, PadReleased,
+                     EncoderTurned, EncoderTouched, EncoderReleased, MenuButtonReleased)
 from .push import Push
 from ..interface.osc import OSCSender, OSCReceiver, OSCBundle
 
@@ -98,26 +99,26 @@ class Controller:
                     elif isinstance(event, PadPressed):
                         if not tap_tempo_pressed:
                             address = f'/pad/{event.column}/{event.row}/touched'
-                            await self.osc_sender.send_message(address, self.push.counter.clock(), event.pressure)
+                            await self.osc_sender.send_message(address, event.timestamp, event.pressure)
                         else:
                             tap_tempo.tap(event.timestamp)
                     elif isinstance(event, PadHeld):
                         if not tap_tempo_pressed:
                             address = f'/pad/{event.column}/{event.row}/held'
-                            await self.osc_sender.send_message(address, self.push.counter.clock(), event.pressure)
+                            await self.osc_sender.send_message(address, event.timestamp, event.pressure)
                     elif isinstance(event, PadReleased):
                         if not tap_tempo_pressed:
                             address = f'/pad/{event.column}/{event.row}/released'
-                            await self.osc_sender.send_message(address, self.push.counter.clock())
+                            await self.osc_sender.send_message(address, event.timestamp)
                     elif isinstance(event, EncoderTouched) and event.number < 8:
                         address = f'/encoder/{event.number}/touched'
-                        await self.osc_sender.send_message(address, self.push.counter.clock())
+                        await self.osc_sender.send_message(address, event.timestamp)
                     elif isinstance(event, EncoderTurned) and event.number < 8:
                         address = f'/encoder/{event.number}/turned'
-                        await self.osc_sender.send_message(address, self.push.counter.clock(), event.amount / 400)
+                        await self.osc_sender.send_message(address, event.timestamp, event.amount / 400)
                     elif isinstance(event, EncoderReleased) and event.number < 8:
                         address = f'/encoder/{event.number}/released'
-                        await self.osc_sender.send_message(address, self.push.counter.clock())
+                        await self.osc_sender.send_message(address, event.timestamp)
                     elif isinstance(event, EncoderTurned) and event.number == Encoder.TEMPO:
                         if shift_pressed:
                             self.push.counter.quantum = max(2, self.push.counter.quantum + event.amount)
@@ -134,6 +135,8 @@ class Controller:
                         brightness = min(max(0, brightness + event.amount / 200), 1)
                         self.push.set_led_brightness(brightness)
                         self.push.set_display_brightness(brightness)
+                    elif isinstance(event, MenuButtonReleased) and event.row == 1:
+                        await self.osc_sender.send_message(f'/encoder/{event.column}/reset', event.timestamp)
                     elif isinstance(event, ButtonReleased) and event.number == Control.PAGE_LEFT:
                         await self.osc_sender.send_message('/page_left')
                     elif isinstance(event, ButtonReleased) and event.number == Control.PAGE_RIGHT:

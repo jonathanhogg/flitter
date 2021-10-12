@@ -214,15 +214,17 @@ class Controller:
         elif parts[0] == 'encoder':
             number = Vector(float(n) for n in parts[1:-1])
             if number in self.encoders:
-                pad = self.encoders[number]
+                encoder = self.encoders[number]
                 timestamp, *args = message.args
                 beat = self.counter.beat_at_time(timestamp)
                 if parts[-1] == 'touched':
-                    pad.on_touched(beat)
+                    encoder.on_touched(beat)
                 elif parts[-1] == 'turned':
-                    pad.on_turned(beat, *args)
+                    encoder.on_turned(beat, *args)
                 elif parts[-1] == 'released':
-                    pad.on_released(beat)
+                    encoder.on_released(beat)
+                elif parts[-1] == 'reset':
+                    encoder.on_reset(beat)
         elif parts == ['page_left']:
             if self.current_page > 0:
                 self.switch_to_page(self.current_page - 1)

@@ -17,20 +17,34 @@ class Control:
         self.number = number
         self.name = self.DEFAULT_NAME
         self.color = self.DEFAULT_COLOR
+        self.state = None
         self._changed = False
 
     def update(self, node, _):
         changed = self._changed
         self._changed = False
-        name = node.get('name', 1, str, self.DEFAULT_NAME)
-        if name != self.name:
-            self.name = name
-            changed = True
-        color = tuple(node.get('color', 3, float, self.DEFAULT_COLOR))
-        if color != self.color:
-            self.color = color
-            changed = True
-        return changed
+        if 'state' in node:
+            state = node['state']
+            if state != self.state:
+                self.state = state
+                self.reset()
+                changed = True
+            name = node.get('name', 1, str, self.DEFAULT_NAME)
+            if name != self.name:
+                self.name = name
+                changed = True
+            color = tuple(node.get('color', 3, float, self.DEFAULT_COLOR))
+            if color != self.color:
+                self.color = color
+                changed = True
+            return changed
+        elif self.state is not None:
+            self.reset()
+            return True
+
+    def reset(self):
+        self.name = self.DEFAULT_NAME
+        self.color = self.DEFAULT_COLOR
 
 
 class TouchControl(Control):
@@ -42,8 +56,8 @@ class TouchControl(Control):
     def update(self, node, controller):
         changed = super().update(node, controller)
         if self.touched is not None:
-            controller[Vector((*self._prefix, "touched"))] = true if self.touched else false
-            controller[Vector((*self._prefix, "touched", "beat"))] = Vector((self._touched_beat,))
+            controller[Vector((*self.state, "touched"))] = true if self.touched else false
+            controller[Vector((*self.state, "touched", "beat"))] = Vector((self._touched_beat,))
         return changed
 
     def on_touched(self, beat):
@@ -56,13 +70,17 @@ class TouchControl(Control):
         self._touched_beat = beat
         self._changed = True
 
+    def reset(self):
+        super().reset()
+        self.touched = None
+        self._touched_beat = None
+
 
 class Pad(TouchControl):
     DEFAULT_THRESHOLD = 0.4
 
     def __init__(self, number):
         super().__init__(number)
-        self._prefix = None
         self.toggle = None
         self.toggled = None
         self._toggled_beat = None
@@ -72,23 +90,28 @@ class Pad(TouchControl):
         self._can_toggle = False
 
     def update(self, node, controller):
-        self._prefix = node['state'] if 'state' in node else Vector(("pad", *self.number))
         changed = super().update(node, controller)
-        toggle = node.get('toggle', 1, bool, False)
-        if toggle != self.toggle:
-            self.toggle = toggle
-            if not self.toggle and self.toggled:
-                self.toggled = False
-                self._toggled_beat = controller.counter.beat
-            self._can_toggle = False
-            changed = True
-        self._toggle_threshold = node.get('threshold', 1, float, self.DEFAULT_THRESHOLD)
-        if self.pressure is not None:
-            controller[Vector((*self._prefix, "pressure"))] = Vector((self.pressure,))
-            controller[Vector((*self._prefix, "pressure", "beat"))] = Vector((self._pressure_beat,))
-        if self.toggled is not None:
-            controller[Vector((*self._prefix, "toggled"))] = true if self.toggled else false
-            controller[Vector((*self._prefix, "toggled", "beat"))] = Vector((self._toggled_beat,))
+        if self.state is not None:
+            toggle = node.get('toggle', 1, bool, False)
+            toggled_key = Vector((*self.state, "toggled"))
+            toggled_beat_key = Vector((*self.state, "toggled", "beat"))
+            if toggle != self.toggle:
+                self.toggle = toggle
+                if not self.toggle and self.toggled:
+                    self.toggled = False
+                    self._toggled_beat = controller.counter.beat
+                self._can_toggle = False
+                changed = True
+            if self.toggled is None and toggled_key in controller:
+                self.toggled = controller[toggled_key].istrue()
+                self._toggled_beat = controller[toggled_beat_key][0]
+            self._toggle_threshold = node.get('threshold', 1, float, self.DEFAULT_THRESHOLD)
+            if self.pressure is not None:
+                controller[Vector((*self.state, "pressure"))] = Vector((self.pressure,))
+                controller[Vector((*self.state, "pressure", "beat"))] = Vector((self._pressure_beat,))
+            if self.toggled is not None:
+                controller[toggled_key] = true if self.toggled else false
+                controller[toggled_beat_key] = Vector((self._toggled_beat,))
         return changed
 
     def on_touched(self, beat):
@@ -108,6 +131,16 @@ class Pad(TouchControl):
             self._can_toggle = False
             self._changed = True
 
+    def reset(self):
+        super().reset()
+        self.toggle = None
+        self.toggled = None
+        self._toggled_beat = None
+        self.pressure = None
+        self._pressure_beat = None
+        self._toggle_threshold = self.DEFAULT_THRESHOLD
+        self._can_toggle = False
+
 
 class Encoder(TouchControl):
     DEFAULT_LOWER = 0.0
@@ -115,7 +148,6 @@ class Encoder(TouchControl):
 
     def __init__(self, number):
         super().__init__(number)
-        self._prefix = None
         self.initial = None
         self.lower = None
         self.upper = None
@@ -124,44 +156,57 @@ class Encoder(TouchControl):
         self._clock = None
 
     def update(self, node, controller):
-        now = controller.counter.clock()
-        delta = 0.0 if self._clock is None else now - self._clock
-        self._clock = now
-        self._prefix = node['state'] if 'state' in node else Vector(("encoder", *self.number))
         changed = super().update(node, controller)
-        lower = node.get('lower', 1, float, self.DEFAULT_LOWER)
-        if lower != self.lower:
-            self.lower = lower
-            changed = True
-        upper = node.get('upper', 1, float, self.DEFAULT_UPPER)
-        if upper != self.upper:
-            self.upper = upper
-            changed = True
-        initial = node.get('initial', 1, float, self.lower)
-        if initial != self.initial:
-            self.initial = initial
-            changed = True
-        value_key = Vector((*self._prefix, "value"))
-        value_beat_key = Vector((*self._prefix, "value", "beat"))
-        if self.value is None:
+        if self.state is not None:
+            now = controller.counter.clock()
+            delta = 0.0 if self._clock is None else now - self._clock
+            self._clock = now
+            lower = node.get('lower', 1, float, self.DEFAULT_LOWER)
+            if lower != self.lower:
+                self.lower = lower
+                changed = True
+            upper = node.get('upper', 1, float, self.DEFAULT_UPPER)
+            if upper != self.upper:
+                self.upper = upper
+                changed = True
+            initial = node.get('initial', 1, float, self.lower)
+            if initial != self.initial:
+                self.initial = initial
+                changed = True
+            value_key = Vector((*self.state, "value"))
+            value_beat_key = Vector((*self.state, "value", "beat"))
+            if self.value is None:
+                if value_key in controller:
+                    self.value = controller[value_key][0]
+                    self._value_beat = controller[value_beat_key][0]
+                else:
+                    self.value = self.initial
+                    self._value_beat = controller.counter.beat
+            value = self.value
             if value_key in controller:
-                self.value = controller[value_key][0]
-                self._value_beat = controller[value_beat_key][0]
-            else:
-                self.value = self.initial
-                self._value_beat = controller.counter.beat
-        value = self.value
-        if value_key in controller:
-            alpha = math.exp(10 * -delta)
-            current_value = controller[value_key][0]
-            value = value * (1-alpha) + current_value * alpha
-            if value > self.value * 0.999 and value < self.value * 1.001:
-                value = self.value
-        controller[value_key] = Vector((value,))
-        controller[value_beat_key] = Vector((self._value_beat,))
+                alpha = math.exp(10 * -delta)
+                current_value = controller[value_key][0]
+                value = value * (1-alpha) + current_value * alpha
+                if value > self.value * 0.999 and value < self.value * 1.001:
+                    value = self.value
+            controller[value_key] = Vector((value,))
+            controller[value_beat_key] = Vector((self._value_beat,))
         return changed
 
     def on_turned(self, beat, amount):
         self.value = min(max(self.lower, self.value + amount * (self.upper - self.lower)), self.upper)
         self._value_beat = beat
         self._changed = True
+
+    def on_reset(self, beat):
+        self.value = self.initial
+        self._value_beat = beat
+        self._changed = True
+
+    def reset(self):
+        self.initial = None
+        self.lower = None
+        self.upper = None
+        self.value = None
+        self._value_beat = None
+        self._clock = None
