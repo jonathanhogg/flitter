@@ -71,7 +71,7 @@ def set_styles(node, ctx):
     if rotate is not None:
         ctx.rotate(rotate * TWOPI)
     scale = node.get('scale', 2, float)
-    if scale is not None:
+    if scale is not None and scale[0] != 0 and scale[1] != 0:
         ctx.scale(*scale)
     line_width = node.get('line_width', 1, float)
     if line_width is not None:

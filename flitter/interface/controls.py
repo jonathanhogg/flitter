@@ -38,9 +38,10 @@ class Control:
                 self.color = color
                 changed = True
             return changed
-        elif self.state is not None:
+        if self.state is not None:
             self.reset()
             return True
+        return False
 
     def reset(self):
         self.name = self.DEFAULT_NAME
@@ -88,10 +89,14 @@ class Pad(TouchControl):
         self._pressure_beat = None
         self._toggle_threshold = self.DEFAULT_THRESHOLD
         self._can_toggle = False
+        self._clock = None
 
     def update(self, node, controller):
         changed = super().update(node, controller)
         if self.state is not None:
+            now = controller.counter.clock()
+            delta = 0.0 if self._clock is None else now - self._clock
+            self._clock = now
             toggle = node.get('toggle', 1, bool, False)
             toggled_key = Vector((*self.state, "toggled"))
             toggled_beat_key = Vector((*self.state, "toggled", "beat"))
@@ -107,8 +112,17 @@ class Pad(TouchControl):
                 self._toggled_beat = controller[toggled_beat_key][0]
             self._toggle_threshold = node.get('threshold', 1, float, self.DEFAULT_THRESHOLD)
             if self.pressure is not None:
-                controller[Vector((*self.state, "pressure"))] = Vector((self.pressure,))
-                controller[Vector((*self.state, "pressure", "beat"))] = Vector((self._pressure_beat,))
+                pressure_key = Vector((*self.state, "pressure"))
+                pressure_beat_key = Vector((*self.state, "pressure", "beat"))
+                pressure = self.pressure
+                if pressure_key in controller:
+                    alpha = math.exp(20 * -delta)
+                    current_pressure = controller[pressure_key][0]
+                    pressure = pressure * (1-alpha) + current_pressure * alpha
+                    if self.pressure * 0.999 < pressure < self.pressure * 1.001:
+                        pressure = self.pressure
+                controller[pressure_key] = Vector((pressure,))
+                controller[pressure_beat_key] = Vector((self._pressure_beat,))
             if self.toggled is not None:
                 controller[toggled_key] = true if self.toggled else false
                 controller[toggled_beat_key] = Vector((self._toggled_beat,))
@@ -187,7 +201,7 @@ class Encoder(TouchControl):
                 alpha = math.exp(10 * -delta)
                 current_value = controller[value_key][0]
                 value = value * (1-alpha) + current_value * alpha
-                if value > self.value * 0.999 and value < self.value * 1.001:
+                if self.value * 0.999 < value < self.value * 1.001:
                     value = self.value
             controller[value_key] = Vector((value,))
             controller[value_beat_key] = Vector((self._value_beat,))
