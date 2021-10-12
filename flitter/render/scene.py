@@ -117,11 +117,13 @@ void main() {
 
     def get_fragment_source(self):
         samplers = '\n'.join(f"uniform sampler2D texture{i};" for i in range(len(self.children)))
-        textures = '\n'.join(f"    color += texture(texture{i}, coord);" for i in range(len(self.children)))
+        textures = '\n'.join(f"""    merge = texture(texture{i}, coord);
+    color = color * (1.0 - merge.a) + merge;""" for i in range(len(self.children)))
         return f"""#version 410
 precision highp float;
 in vec2 coord;
 out vec4 color;
+vec4 merge;
 {samplers}
 void main() {{
     color = vec4(0.0, 0.0, 0.0, 0.0);

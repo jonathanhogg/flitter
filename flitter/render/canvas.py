@@ -90,7 +90,11 @@ def set_styles(node, ctx):
         ctx.set_font_size(font_size)
     font_face = node.get('font_face', 1, str)
     if font_face is not None:
-        ctx.select_font_face(font_face)
+        font_face = font_face.lower()
+        if font_face.endswith(' bold'):
+            ctx.select_font_face(font_face[:5], cairo.FontSlant.NORMAL, cairo.FontWeight.BOLD)
+        else:
+            ctx.select_font_face(font_face)
 
 
 def draw(node, ctx):
@@ -118,9 +122,16 @@ def draw(node, ctx):
         case "text":
             point = node.get('point', 2, float)
             text = node.get('text', 1, str)
+            center = node.get('center', 1, bool, True)
             if point is not None and text is not None:
-                ctx.move_to(*point)
+                ctx.save()
+                if center:
+                    extents = ctx.text_extents(text)
+                    ctx.move_to(point[0]-extents.width/2, point[1]+extents.height/2)
+                else:
+                    ctx.move_to(*point)
                 ctx.show_text(text)
+                ctx.restore()
 
         case "path":
             ctx.new_path()
