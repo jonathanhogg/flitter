@@ -61,6 +61,12 @@ class Controller:
             self.current_filename = filename
             self.current_mtime = mtime
             Log.info("Switched to page %i: %s", page_number, filename)
+            for pad in self.pads.values():
+                self.enqueue_pad_status(pad, deleted=True)
+            self.pads = {}
+            for encoder in self.encoders.values():
+                self.enqueue_encoder_status(encoder, deleted=True)
+            self.encoders = {}
 
     def reload_current_page(self):
         with open(self.current_filename, encoding='utf8') as file, Context() as context:

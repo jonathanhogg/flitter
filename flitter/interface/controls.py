@@ -178,10 +178,14 @@ class Encoder(TouchControl):
             lower = node.get('lower', 1, float, self.DEFAULT_LOWER)
             if lower != self.lower:
                 self.lower = lower
+                if self.value is not None:
+                    self.value = max(self.lower, self.value)
                 changed = True
             upper = node.get('upper', 1, float, self.DEFAULT_UPPER)
             if upper != self.upper:
                 self.upper = upper
+                if self.value is not None:
+                    self.value = min(self.value, self.upper)
                 changed = True
             initial = node.get('initial', 1, float, self.lower)
             if initial != self.initial:

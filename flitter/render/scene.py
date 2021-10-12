@@ -156,7 +156,7 @@ void main() {{
 
     def render(self):
         now = time.clock_gettime(time.CLOCK_MONOTONIC_RAW)
-        delta = 0.0 if self._timestamp is None else now - self._timestamp
+        delta = 0.0 if self._timestamp is None else min(now - self._timestamp, 1/25)
         self._timestamp = now
         self.compile()
         if self._rectangle is not None:
