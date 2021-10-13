@@ -119,7 +119,7 @@ class Pad(TouchControl):
                     alpha = math.exp(20 * -delta)
                     current_pressure = controller[pressure_key][0]
                     pressure = pressure * (1-alpha) + current_pressure * alpha
-                    if self.pressure * 0.999 < pressure < self.pressure * 1.001:
+                    if math.isclose(pressure, self.pressure, rel_tol=1e-3, abs_tol=1e-3):
                         pressure = self.pressure
                 controller[pressure_key] = Vector((pressure,))
                 controller[pressure_beat_key] = Vector((self._pressure_beat,))
@@ -205,7 +205,7 @@ class Encoder(TouchControl):
                 alpha = math.exp(10 * -delta)
                 current_value = controller[value_key][0]
                 value = value * (1-alpha) + current_value * alpha
-                if self.value * 0.999 < value < self.value * 1.001:
+                if math.isclose(value, self.value, rel_tol=1e-3, abs_tol=1e-3):
                     value = self.value
             controller[value_key] = Vector((value,))
             controller[value_beat_key] = Vector((self._value_beat,))
