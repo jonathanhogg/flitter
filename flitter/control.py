@@ -29,7 +29,6 @@ class Controller:
         self.state = {}
         self.pragmas = {}
         self.tree = None
-        self.simplified = None
         self.windows = []
         self.counter = BeatCounter()
         self.pads = {}
@@ -54,9 +53,8 @@ class Controller:
     def switch_to_page(self, page_number):
         if self.pages is not None and 0 <= page_number < len(self.pages):
             filename, mtime, tree, state = self.pages[page_number]
-            self.tree = tree
             self.state = state
-            self.simplified = None
+            self.tree = tree
             self.current_page = page_number
             self.current_filename = filename
             self.current_mtime = mtime
@@ -71,7 +69,6 @@ class Controller:
     def reload_current_page(self):
         with open(self.current_filename, encoding='utf8') as file, Context() as context:
             self.tree = simplify(parse(file.read()), context)
-        self.simplified = None
         self.current_mtime = self.current_filename.stat().st_mtime
         self.pages[self.current_page] = self.current_filename, self.current_mtime, self.tree, self.state
         Log.info("Reloaded page %i: %s", self.current_page, self.current_filename)
@@ -88,7 +85,6 @@ class Controller:
     def __setitem__(self, key, value):
         if key not in self.state or value != self.state[key]:
             self.state[key] = value
-            self.simplified = None
             Log.debug("State changed: %r = %r", key, value)
 
     def read(self, filename):
@@ -105,16 +101,13 @@ class Controller:
         return null
 
     def execute(self):
-        if self.simplified is None:
-            with Context(state=self.state) as context:
-                self.simplified = simplify(self.tree, context)
         beat = self.counter.beat
         variables = {'beat': Vector((beat,)),
                      'quantum': Vector((self.counter.quantum,)),
                      'clock': Vector((self.counter.time_at_beat(beat),)),
                      'read': Vector((self.read,))}
         with Context(variables=variables, state=self.state, pragmas=self.pragmas) as context:
-            expressions = [self.simplified] if isinstance(self.simplified, Literal) else self.simplified.expressions
+            expressions = [self.tree] if isinstance(self.tree, Literal) else self.tree.expressions
             for expr in expressions:
                 result = evaluate(expr, context)
                 for value in result:
