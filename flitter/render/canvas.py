@@ -211,3 +211,30 @@ def draw(node, ctx):
                                     if rgba is not None:
                                         gradient.add_color_stop_rgba(offset, *rgba)
                 ctx.set_source(gradient)
+
+        case "image":
+            filename = node.get('filename', 1, str)
+            size = node.get('size', 2, float)
+            if filename is not None and size is not None:
+                point = node.get('point', 2, float, (0, 0))
+                image = load_png(filename)
+                if image is not None:
+                    ctx.save()
+                    ctx.set_source_surface(image)
+                    ctx.rectangle(*point, *size)
+                    ctx.fill()
+                    ctx.restore()
+
+
+_ImageCache = {}
+
+def load_png(filename):
+    if filename in _ImageCache:
+        return _ImageCache[filename]
+    try:
+        image = cairo.ImageSurface.create_from_png(filename)
+    except Exception as exc:
+        print(exc)
+        image = None
+    _ImageCache[filename] = image
+    return image
