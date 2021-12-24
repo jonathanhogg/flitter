@@ -115,12 +115,12 @@ class Controller:
                         context.graph.append(value)
         return context.graph
 
-    def update_windows(self, graph):
+    async def update_windows(self, graph):
         count = 0
         for i, node in enumerate(graph.select_below('window.')):
             if i == len(self.windows):
                 self.windows.append(Window())
-            self.windows[i].update(node)
+            await self.windows[i].update(node)
             count += 1
         while len(self.windows) > count:
             self.windows.pop().destroy()
@@ -260,7 +260,7 @@ class Controller:
                     if not math.isclose(tempo, self.counter.tempo):
                         self.counter.tempo = tempo
                         self.enqueue_tempo()
-            self.update_windows(graph)
+            await self.update_windows(graph)
             self.update_controls(graph)
             if self.queue:
                 await self.osc_sender.send_bundle_from_queue(self.queue)

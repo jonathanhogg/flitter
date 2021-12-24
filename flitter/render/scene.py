@@ -48,7 +48,7 @@ class SceneNode:
         while self.children:
             self.children.pop().destroy()
 
-    def update(self, node):
+    async def update(self, node):
         self.node = node
         resized = False
         width, height = self.node.get('size', 2, int, (512, 512))
@@ -57,10 +57,10 @@ class SceneNode:
             self.height = height
             resized = True
         self.create(resized)
-        self.descend()
-        self.render()
+        await self.descend()
+        await self.render()
 
-    def descend(self):
+    async def descend(self):
         count = 0
         for i, child in enumerate(self.node.children):
             cls = SCENE_CLASSES[child.kind]
@@ -69,7 +69,7 @@ class SceneNode:
             elif type(self.children[i]) != cls:  # noqa
                 self.children[i].destroy()
                 self.children[i] = cls(self.glctx)
-            self.children[i].update(child)
+            await self.children[i].update(child)
             count += 1
         while len(self.children) > count:
             self.children.pop().destroy()
@@ -77,7 +77,7 @@ class SceneNode:
     def create(self, resized):
         pass
 
-    def render(self):
+    async def render(self):
         raise NotImplementedError()
 
     def release(self):
@@ -154,7 +154,7 @@ void main() {{
     def framebuffer(self):
         raise NotImplementedError()
 
-    def render(self):
+    async def render(self):
         now = time.clock_gettime(time.CLOCK_MONOTONIC_RAW)
         delta = 0.0 if self._timestamp is None else min(now - self._timestamp, 1/25)
         self._timestamp = now
@@ -266,8 +266,8 @@ class Window(ProgramNode):
     def on_close(self):
         asyncio.get_event_loop().stop()
 
-    def render(self):
-        super().render()
+    async def render(self):
+        await super().render()
         self.window.flip()
         self.window.dispatch_events()
 
@@ -347,17 +347,17 @@ class Canvas(SceneNode):
         else:
             self._array[:, :] = 0
 
-    def descend(self):
+    async def descend(self):
         # A canvas is a leaf node from the perspective of the OpenGL world
         pass
 
-    def render(self):
+    async def render(self):
         if self._texture is not None:
             ctx = cairo.Context(self._surface)
             # OpenGL and Cairo worlds are upside-down vs each other
             ctx.translate(0, self.height)
             ctx.scale(1, -1)
-            canvas.draw(self.node, ctx)
+            await asyncio.get_event_loop().run_in_executor(None, canvas.draw, self.node, ctx)
             self.texture.write(self._surface.get_data())
 
 
