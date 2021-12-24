@@ -78,7 +78,7 @@ def simplify(expression, context):
                 if isinstance(expr, ast.Literal):
                     context[binding.name] = expr.value
                 else:
-                    remaining.append(binding)
+                    remaining.append(ast.Binding(binding.name, expr))
             if remaining:
                 return ast.Let(bindings=tuple(remaining))
             return ast.Literal(model.null)
