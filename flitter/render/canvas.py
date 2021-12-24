@@ -5,6 +5,8 @@ Flitter drawing canvas based on cairo
 import enum
 
 import cairo
+import numpy as np
+from PIL import Image
 
 
 TWOPI = 6.283185307179586
@@ -214,27 +216,34 @@ def draw(node, ctx):
 
         case "image":
             filename = node.get('filename', 1, str)
-            size = node.get('size', 2, float)
-            if filename is not None and size is not None:
-                point = node.get('point', 2, float, (0, 0))
-                image = load_png(filename)
+            if filename is not None:
+                image = load_image(filename)
                 if image is not None:
+                    width, height = node.get('size', 2, float, (image.get_width(), image.get_height()))
+                    x, y = node.get('point', 2, float, (0, 0))
+                    matrix = cairo.Matrix()
+                    matrix.scale(image.get_width() / width, image.get_height() / height)
+                    matrix.translate(-x, -y)
+                    pattern = cairo.SurfacePattern(image)
+                    pattern.set_matrix(matrix)
                     ctx.save()
-                    ctx.set_source_surface(image)
-                    ctx.rectangle(*point, *size)
+                    ctx.set_source(pattern)
+                    ctx.rectangle(x, y, width, height)
                     ctx.fill()
                     ctx.restore()
 
 
 _ImageCache = {}
 
-def load_png(filename):
+def load_image(filename):
     if filename in _ImageCache:
         return _ImageCache[filename]
     try:
-        image = cairo.ImageSurface.create_from_png(filename)
+        image = Image.open(filename).convert(mode='RGBA')
+        data = np.array(image)[..., [2,1,0,3]].copy().data
+        surface = cairo.ImageSurface.create_for_data(data, cairo.FORMAT_ARGB32, image.width, image.height, image.width * 4)
     except Exception as exc:
         print(exc)
         image = None
-    _ImageCache[filename] = image
-    return image
+    _ImageCache[filename] = surface
+    return surface
