@@ -2,6 +2,8 @@
 The main Flitter engine
 """
 
+# pylama:ignore=W0703,R0902,R0912
+
 import asyncio
 import logging
 import math
@@ -237,6 +239,7 @@ class Controller:
                 self.enqueue_page_status()
 
     async def receive_messages(self):
+        Log.info("Listening for OSC control messages on port %d", self.RECEIVE_PORT)
         while True:
             message = await self.osc_receiver.receive()
             self.process_message(message)
