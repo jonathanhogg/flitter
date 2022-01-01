@@ -29,6 +29,7 @@ BUILTINS = {
     'round': model.Vector((model.roundv,)),
     'min': model.Vector((model.minv,)),
     'max': model.Vector((model.maxv,)),
+    'hypot': model.Vector((model.hypot,)),
     'map': model.Vector((model.mapv,)),
     'hsl': model.Vector((model.hsl,)),
     'hsv': model.Vector((model.hsv,)),

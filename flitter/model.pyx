@@ -2,7 +2,7 @@
 
 import cython
 import enum
-from libc.math cimport isnan, floor, round, sin, cos
+from libc.math cimport isnan, floor, round, sin, cos, sqrt
 
 
 DEF PI = 3.141592653589793
@@ -863,6 +863,16 @@ def maxv(Vector xs not None, *args):
         for xs in args:
             if xs.compare(ys) == 1:
                 ys = xs
+    return ys
+
+
+def hypot(Vector xs not None):
+    cdef double x, s = 0.0
+    for x in xs.values:
+        s += x * x
+    s = sqrt(s)
+    cdef Vector ys = Vector.__new__(Vector)
+    ys.values.append(s)
     return ys
 
 
