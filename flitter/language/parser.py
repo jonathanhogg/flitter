@@ -34,7 +34,7 @@ class FlitterTransformer(Transformer):
         return model.Vector((token[1:-1].encode('utf-8').decode('unicode_escape'),))
 
     def QUERY(self, token):
-        return token[1:-1].strip()
+        return model.Query(token[1:-1])
 
     def range(self, start, stop, step):
         return ast.Range(ast.Literal(model.null) if start is None else start, stop, ast.Literal(model.null) if step is None else step)
