@@ -105,6 +105,16 @@ class ProgramNode(SceneNode):
             self._rectangle.release()
             self._rectangle = None
 
+    @property
+    def framebuffer(self):
+        raise NotImplementedError()
+
+    def create(self, resized):
+        super().create(resized)
+        if resized and self._last is not None:
+            self._last.release()
+            self._last = None
+
     def get_vertex_source(self):
         return """#version 410
 in vec2 position;
@@ -149,10 +159,6 @@ void main() {{
                 self._rectangle = self.glctx.vertex_array(self._program, [(vertices, '2f', 'position')])
             except Exception:
                 Log.exception("Unable to compile shader:\n%s", self._fragment_source)
-
-    @property
-    def framebuffer(self):
-        raise NotImplementedError()
 
     async def render(self):
         now = time.clock_gettime(time.CLOCK_MONOTONIC_RAW)
@@ -230,6 +236,10 @@ class Window(ProgramNode):
     def texture(self):
         return None
 
+    @property
+    def framebuffer(self):
+        return self.glctx.screen
+
     def create(self, resized):
         super().create(resized)
         if self.window is None:
@@ -247,10 +257,6 @@ class Window(ProgramNode):
             self.glctx = moderngl.create_context(require=self.GL_VERSION[0] * 100 + self.GL_VERSION[1])
             if fullscreen:
                 self.window._nswindow.enterFullScreenMode_(self.window._nswindow.screen())  # noqa
-
-    @property
-    def framebuffer(self):
-        return self.glctx.screen
 
     def on_resize(self, width, height):
         aspect_ratio = self.width / self.height
@@ -282,6 +288,10 @@ class Shader(ProgramNode):
     def texture(self):
         return self._texture
 
+    @property
+    def framebuffer(self):
+        return self._framebuffer
+
     def release(self):
         if self._framebuffer is not None:
             self._framebuffer.release()
@@ -307,10 +317,6 @@ class Shader(ProgramNode):
 
     def get_fragment_source(self):
         return self.node.get('fragment', 1, str, super().get_fragment_source())
-
-    @property
-    def framebuffer(self):
-        return self._framebuffer
 
 
 class Canvas(SceneNode):
@@ -345,20 +351,20 @@ class Canvas(SceneNode):
             self._texture = self.glctx.texture((self.width, self.height), 4)
             self._texture.swizzle = 'BGRA'
         else:
-            self._array[:, :] = 0
+            self._array[...] = 0
 
     async def descend(self):
         # A canvas is a leaf node from the perspective of the OpenGL world
         pass
 
     async def render(self):
-        if self._texture is not None:
-            ctx = cairo.Context(self._surface)
-            # OpenGL and Cairo worlds are upside-down vs each other
-            ctx.translate(0, self.height)
-            ctx.scale(1, -1)
-            await asyncio.get_event_loop().run_in_executor(None, canvas.draw, self.node, ctx)
-            self.texture.write(self._surface.get_data())
+        ctx = cairo.Context(self._surface)
+        # OpenGL and Cairo worlds are upside-down vs each other
+        ctx.translate(0, self.height)
+        ctx.scale(1, -1)
+        # await asyncio.get_event_loop().run_in_executor(None, canvas.draw, self.node, ctx)
+        canvas.draw(self.node, ctx)
+        self.texture.write(self._surface.get_data())
 
 
 SCENE_CLASSES = {'shader': Shader, 'canvas': Canvas}
