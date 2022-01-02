@@ -256,8 +256,8 @@ def evaluate(expression, context):
             return model.null
 
         case ast.MathsBinaryOperation(left=left, right=right):
-            left = evaluate(left, context)
-            right = evaluate(right, context)
+            left = left.value if isinstance(left, ast.Literal) else evaluate(left, context)
+            right = right.value if isinstance(right, ast.Literal) else evaluate(right, context)
             match expression:
                 case ast.Add():
                     return left.add(right)
@@ -387,7 +387,7 @@ def evaluate(expression, context):
             return left if left.istrue() else evaluate(right, context)
 
         case ast.Call(function=function, args=args):
-            function = evaluate(function, context)
+            function = function.value if isinstance(function, ast.Literal) else evaluate(function, context)
             args = tuple(evaluate(arg, context) for arg in args)
             return model.Vector.compose(*(func(*args) for func in function))
 
