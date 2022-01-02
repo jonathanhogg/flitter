@@ -68,31 +68,35 @@ class BinaryOperation(Expression):
     right: Expression
 
 
-class Add(BinaryOperation):
+class MathsBinaryOperation(BinaryOperation):
     pass
 
 
-class Subtract(BinaryOperation):
+class Add(MathsBinaryOperation):
     pass
 
 
-class Multiply(BinaryOperation):
+class Subtract(MathsBinaryOperation):
     pass
 
 
-class Divide(BinaryOperation):
+class Multiply(MathsBinaryOperation):
     pass
 
 
-class FloorDivide(BinaryOperation):
+class Divide(MathsBinaryOperation):
     pass
 
 
-class Modulo(BinaryOperation):
+class FloorDivide(MathsBinaryOperation):
     pass
 
 
-class Power(BinaryOperation):
+class Modulo(MathsBinaryOperation):
+    pass
+
+
+class Power(MathsBinaryOperation):
     pass
 
 

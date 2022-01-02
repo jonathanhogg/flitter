@@ -125,17 +125,6 @@ cdef class Vector:
                 return False
         return True
 
-    def copynodes(self):
-        cdef Vector result = self
-        cdef Node node
-        for i, value in enumerate(self.values):
-            if isinstance(value, Node):
-                if result is self:
-                    result = Vector.__new__(Vector, self.values)
-                node = value
-                result.values[i] = node.copy()
-        return result
-
     cpdef Vector withlen(self, int n, bint force_copy=False):
         cdef int m = len(self.values)
         if n == m:

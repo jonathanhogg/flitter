@@ -245,20 +245,61 @@ def simplify(expression, context):
 
 def evaluate(expression, context):
     match expression:
+        case ast.Literal(value=value):
+            return value
+
+        case ast.Name(name=name):
+            if name in context:
+                return context[name]
+            if name in BUILTINS:
+                return BUILTINS[name]
+            return model.null
+
+        case ast.MathsBinaryOperation(left=left, right=right):
+            left = evaluate(left, context)
+            right = evaluate(right, context)
+            match expression:
+                case ast.Add():
+                    return left.add(right)
+                case ast.Multiply():
+                    return left.mul(right)
+                case ast.Subtract():
+                    return left.sub(right)
+                case ast.Divide():
+                    return left.truediv(right)
+                case ast.FloorDivide():
+                    return left.floordiv(right)
+                case ast.Modulo():
+                    return left.mod(right)
+                case ast.Power():
+                    return left.pow(right)
+
+        case ast.Attribute(node=node, name=name, expr=expr):
+            nodes = []
+            for n in evaluate(node, context):
+                with context:
+                    context.merge_under(n)
+                    value = evaluate(expr, context)
+                    if value != model.null:
+                        if n.parent is None:
+                            n = n.copy()
+                        n[name] = value
+                    nodes.append(n)
+            return model.Vector(nodes)
+
         case ast.Sequence(expressions=expressions):
             with context:
                 return model.Vector.compose(*(evaluate(expr, context) for expr in expressions))
 
-        case ast.Literal(value=value):
-            return value.copynodes() if isinstance(value, model.Vector) else value
-
-        case ast.Name(name=name):
-            if name in context:
-                value = context[name]
-                return value.copynodes() if isinstance(value, model.Vector) else value
-            if name in BUILTINS:
-                return BUILTINS[name]
-            return model.null
+        case ast.Append(node=node, children=children):
+            nodes = []
+            children = evaluate(children, context)
+            for n in evaluate(node, context):
+                if n.parent is None:
+                    n = n.copy()
+                n.extend(children)
+                nodes.append(n)
+            return model.Vector(nodes)
 
         case ast.Lookup(key=key):
             key = evaluate(key, context)
@@ -271,34 +312,22 @@ def evaluate(expression, context):
                 context[binding.name] = evaluate(binding.expr, context)
             return model.null
 
+        case ast.Slice(expr=expr, index=index):
+            expr = evaluate(expr, context)
+            index = evaluate(index, context)
+            return expr.slice(index)
+
         case ast.Range(start=start, stop=stop, step=step):
             start = evaluate(start, context)
             stop = evaluate(stop, context)
             step = evaluate(step, context)
             return model.Vector.range(start, stop, step)
 
-        case ast.Search(query=query):
-            return model.Vector(context.graph.select_below(query))
-
         case ast.Node(kind=kind, tags=tags):
             return model.Vector((model.Node(kind, tags),))
 
-        case ast.Append(node=node, children=children):
-            node = evaluate(node, context)
-            children = evaluate(children, context)
-            for n in node:
-                n.extend(children)
-            return node
-
-        case ast.Attribute(node=node, name=name, expr=expr):
-            node = evaluate(node, context)
-            for n in node:
-                with context:
-                    context.merge_under(n)
-                    value = evaluate(expr, context)
-                    if value != model.null:
-                        n[name] = value
-            return node
+        case ast.Search(query=query):
+            return model.Vector(context.graph.select_below(query))
 
         case ast.InlineLet(name=name, expr=expr, body=body):
             expr = evaluate(expr, context)
@@ -357,34 +386,10 @@ def evaluate(expression, context):
             left = evaluate(left, context)
             return left if left.istrue() else evaluate(right, context)
 
-        case ast.BinaryOperation(left=left, right=right):
-            left = evaluate(left, context)
-            right = evaluate(right, context)
-            match expression:
-                case ast.Add():
-                    return left.add(right)
-                case ast.Subtract():
-                    return left.sub(right)
-                case ast.Multiply():
-                    return left.mul(right)
-                case ast.Divide():
-                    return left.truediv(right)
-                case ast.FloorDivide():
-                    return left.floordiv(right)
-                case ast.Modulo():
-                    return left.mod(right)
-                case ast.Power():
-                    return left.pow(right)
-
         case ast.Call(function=function, args=args):
             function = evaluate(function, context)
             args = tuple(evaluate(arg, context) for arg in args)
             return model.Vector.compose(*(func(*args) for func in function))
-
-        case ast.Slice(expr=expr, index=index):
-            expr = evaluate(expr, context)
-            index = evaluate(index, context)
-            return expr.slice(index)
 
         case ast.Pragma(name=name, expr=expr):
             expr = evaluate(expr, context)
