@@ -362,8 +362,7 @@ class Canvas(SceneNode):
         # OpenGL and Cairo worlds are upside-down vs each other
         ctx.translate(0, self.height)
         ctx.scale(1, -1)
-        # await asyncio.get_event_loop().run_in_executor(None, canvas.draw, self.node, ctx)
-        canvas.draw(self.node, ctx)
+        await asyncio.get_event_loop().run_in_executor(None, canvas.draw, self.node, ctx)
         self.texture.write(self._surface.get_data())
 
 

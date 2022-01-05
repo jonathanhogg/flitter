@@ -246,11 +246,12 @@ def simplify(expression, context):
 def evaluate(expression, context):
     match expression:
         case ast.Literal(value=value):
-            return value
+            return value.copynodes() if isinstance(value, model.Vector) else value
 
         case ast.Name(name=name):
             if name in context:
-                return context[name]
+                value = context[name]
+                return value.copynodes() if isinstance(value, model.Vector) else value
             if name in BUILTINS:
                 return BUILTINS[name]
             return model.null
@@ -281,8 +282,6 @@ def evaluate(expression, context):
                     context.merge_under(n)
                     value = evaluate(expr, context)
                     if value != model.null:
-                        if n.parent is None:
-                            n = n.copy()
                         n[name] = value
                     nodes.append(n)
             return model.Vector(nodes)
@@ -295,8 +294,6 @@ def evaluate(expression, context):
             nodes = []
             children = evaluate(children, context)
             for n in evaluate(node, context):
-                if n.parent is None:
-                    n = n.copy()
                 n.extend(children)
                 nodes.append(n)
             return model.Vector(nodes)
