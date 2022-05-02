@@ -246,19 +246,18 @@ def simplify(expression, context):
 def evaluate(expression, context):
     match expression:
         case ast.Literal(value=value):
-            return value.copynodes() if isinstance(value, model.Vector) else value
+            return value.copynodes()
 
         case ast.Name(name=name):
             if name in context:
-                value = context[name]
-                return value.copynodes() if isinstance(value, model.Vector) else value
+                return context[name].copynodes()
             if name in BUILTINS:
                 return BUILTINS[name]
             return model.null
 
         case ast.MathsBinaryOperation(left=left, right=right):
-            left = left.value if isinstance(left, ast.Literal) else evaluate(left, context)
-            right = right.value if isinstance(right, ast.Literal) else evaluate(right, context)
+            left = evaluate(left, context)
+            right = evaluate(right, context)
             match expression:
                 case ast.Add():
                     return left.add(right)

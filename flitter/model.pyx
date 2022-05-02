@@ -347,6 +347,9 @@ cdef class Uniform:
                     result.values.append(self.item(j))
         return result
 
+    def copynodes(self):
+        return self
+
     def __repr__(self):
         return f"{self.__class__.__name__}({self.keys!r})"
 

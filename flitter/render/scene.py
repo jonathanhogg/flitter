@@ -254,7 +254,7 @@ class Window(ProgramNode):
             self.window = self.WindowWrapper(width=self.width, height=self.height, resizable=True, caption=title, screen=screen, vsync=vsync, config=config)
             self.window.event(self.on_resize)
             self.window.event(self.on_close)
-            self.glctx = moderngl.create_context(require=self.GL_VERSION[0] * 100 + self.GL_VERSION[1])
+            self.glctx = moderngl.create_context(require=self.GL_VERSION[0] * 100 + self.GL_VERSION[1] * 10)
             if fullscreen:
                 self.window._nswindow.enterFullScreenMode_(self.window._nswindow.screen())  # noqa
 
