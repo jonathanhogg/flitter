@@ -363,7 +363,7 @@ class Canvas(SceneNode):
         self._graphics_context.resetContext()
         self._framebuffer.clear()
         self._canvas.save()
-        canvas.draw(self.node, self._canvas)
+        await asyncio.get_event_loop().run_in_executor(None, canvas.draw, self.node, self._canvas, skia.Paint(), skia.Font(), skia.Path())
         self._canvas.restore()
         self._surface.flushAndSubmit()
 
