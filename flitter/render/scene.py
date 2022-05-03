@@ -9,7 +9,7 @@ import asyncio
 import logging
 import time
 
-import cairo
+import skia
 import moderngl
 import numpy as np
 
@@ -322,9 +322,11 @@ class Shader(ProgramNode):
 class Canvas(SceneNode):
     def __init__(self, glctx):
         super().__init__(glctx)
-        self._surface = None
-        self._array = None
+        self._graphics_context = skia.GrDirectContext.MakeGL()
         self._texture = None
+        self._framebuffer = None
+        self._surface = None
+        self._canvas = None
 
     @property
     def texture(self):
@@ -335,35 +337,35 @@ class Canvas(SceneNode):
             self._texture.release()
             self._texture = None
         if self._surface is not None:
-            self._array = None
-            self._surface.finish()
             self._surface = None
+        if self._graphics_context is not None:
+            self._graphics_context.abandonContext()
+            self._graphics_context = None
 
     def create(self, resized):
         if resized:
-            if self._surface is not None:
-                self._array = None
-                self._surface.finish()
-            self._surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, self.width, self.height)
-            self._array = np.ndarray(buffer=self._surface.get_data(), shape=(self.height, self.width), dtype='uint32')
+            if self._framebuffer is not None:
+                self._framebuffer.release()
             if self._texture is not None:
                 self._texture.release()
             self._texture = self.glctx.texture((self.width, self.height), 4)
-            self._texture.swizzle = 'BGRA'
-        else:
-            self._array[...] = 0
+            self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
+            backend_render_target = skia.GrBackendRenderTarget(self.width, self.height, 0, 0, skia.GrGLFramebufferInfo(self._framebuffer.glo, pyglet.gl.GL_RGBA8))
+            self._surface = skia.Surface.MakeFromBackendRenderTarget(self._graphics_context, backend_render_target, skia.kBottomLeft_GrSurfaceOrigin,
+                                                                     skia.kRGBA_8888_ColorType, skia.ColorSpace.MakeSRGB())
+            self._canvas = self._surface.getCanvas()
 
     async def descend(self):
         # A canvas is a leaf node from the perspective of the OpenGL world
         pass
 
     async def render(self):
-        ctx = cairo.Context(self._surface)
-        # OpenGL and Cairo worlds are upside-down vs each other
-        ctx.translate(0, self.height)
-        ctx.scale(1, -1)
-        await asyncio.get_event_loop().run_in_executor(None, canvas.draw, self.node, ctx)
-        self.texture.write(self._surface.get_data())
+        self._graphics_context.resetContext()
+        self._framebuffer.clear()
+        self._canvas.save()
+        canvas.draw(self.node, self._canvas)
+        self._canvas.restore()
+        self._surface.flushAndSubmit()
 
 
 SCENE_CLASSES = {'shader': Shader, 'canvas': Canvas}

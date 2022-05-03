@@ -1,10 +1,10 @@
 """
-Flitter drawing canvas based on cairo
+Flitter drawing canvas based on Skia
 """
 
 import enum
 
-import cairo
+import skia
 import numpy as np
 from PIL import Image
 
@@ -13,112 +13,109 @@ TWOPI = 6.283185307179586
 
 
 class Composite(enum.IntEnum):
-    CLEAR = cairo.Operator.CLEAR
-    SOURCE = cairo.Operator.SOURCE
-    OVER = cairo.Operator.OVER
-    IN = cairo.Operator.IN
-    OUT = cairo.Operator.OUT
-    ATOP = cairo.Operator.ATOP
-    DEST = cairo.Operator.DEST
-    DEST_OVER = cairo.Operator.DEST_OVER
-    DEST_IN = cairo.Operator.DEST_IN
-    XOR = cairo.Operator.XOR
-    ADD = cairo.Operator.ADD
-    SATURATE = cairo.Operator.SATURATE
-    MULTIPLY = cairo.Operator.MULTIPLY
-    SCREEN = cairo.Operator.SCREEN
-    OVERLAY = cairo.Operator.OVERLAY
-    DARKEN = cairo.Operator.DARKEN
-    LIGHTEN = cairo.Operator.LIGHTEN
-    COLOR_DODGE = cairo.Operator.COLOR_DODGE
-    COLOR_BURN = cairo.Operator.COLOR_BURN
-    HARD_LIGHT = cairo.Operator.HARD_LIGHT
-    SOFT_LIGHT = cairo.Operator.SOFT_LIGHT
-    DIFFERENCE = cairo.Operator.DIFFERENCE
-    EXCLUSION = cairo.Operator.EXCLUSION
-    HSL_HUE = cairo.Operator.HSL_HUE
-    HSL_SATURATION = cairo.Operator.HSL_SATURATION
-    HSL_COLOR = cairo.Operator.HSL_COLOR
-    HSL_LUMINOSITY = cairo.Operator.HSL_LUMINOSITY
-
-
-class Antialias(enum.IntEnum):
-    DEFAULT = cairo.Antialias.DEFAULT
-    NONE = cairo.Antialias.NONE
-    GRAY = cairo.Antialias.GRAY
-    SUBPIXEL = cairo.Antialias.SUBPIXEL
-    FAST = cairo.Antialias.FAST
-    GOOD = cairo.Antialias.GOOD
-    BEST = cairo.Antialias.BEST
+    CLEAR = skia.BlendMode.kClear
+    SOURCE = skia.BlendMode.kSrc
+    DEST = skia.BlendMode.kDst
+    OVER = skia.BlendMode.kSrcOver
+    DEST_OVER = skia.BlendMode.kDstOver
+    IN = skia.BlendMode.kSrcIn
+    DEST_IN = skia.BlendMode.kDstIn
+    OUT = skia.BlendMode.kSrcOut
+    DEST_OUT = skia.BlendMode.kDstOut
+    ATOP = skia.BlendMode.kSrcATop
+    DEST_ATOP = skia.BlendMode.kDstATop
+    XOR = skia.BlendMode.kXor
+    ADD = skia.BlendMode.kPlus
+    MODULATE = skia.BlendMode.kModulate
+    SCREEN = skia.BlendMode.kScreen
+    OVERLAY = skia.BlendMode.kOverlay
+    DARKEN = skia.BlendMode.kDarken
+    LIGHTEN = skia.BlendMode.kLighten
+    COLOR_DODGE = skia.BlendMode.kColorDodge
+    COLOR_BURN = skia.BlendMode.kColorBurn
+    HARD_LIGHT = skia.BlendMode.kHardLight
+    SOFT_LIGHT = skia.BlendMode.kSoftLight
+    DIFFERENCE = skia.BlendMode.kDifference
+    EXCLUSION = skia.BlendMode.kExclusion
+    MULTIPLY = skia.BlendMode.kMultiply
+    HSL_HUE = skia.BlendMode.kHue
+    HSL_SATURATION = skia.BlendMode.kSaturation
+    HSL_COLOR = skia.BlendMode.kColor
+    HSL_LUMINOSITY = skia.BlendMode.kLuminosity
 
 
 class LineJoin(enum.IntEnum):
-    MITER = cairo.LineJoin.MITER
-    ROUND = cairo.LineJoin.ROUND
-    BEVEL = cairo.LineJoin.BEVEL
+    MITER = skia.Paint.Join.kMiter_Join
+    ROUND = skia.Paint.Join.kRound_Join
+    BEVEL = skia.Paint.Join.kBevel_Join
 
 
-def set_styles(node, ctx):
+def set_styles(node, ctx, paint, font):
     rgb = node.get('color', 3, float)
     if rgb is not None:
-        ctx.set_source_rgb(*rgb)
+        paint.setColor4f(skia.Color4f(*rgb, 1))
     else:
         rgba = node.get('color', 4, float)
         if rgba is not None:
-            ctx.set_source_rgba(*rgba)
+            ctx.setColor4f(skia.Color4f(*rgba))
     translate = node.get('translate', 2, float)
     if translate is not None:
         ctx.translate(*translate)
     rotate = node.get('rotate', 1, float)
     if rotate is not None:
-        ctx.rotate(rotate * TWOPI)
+        ctx.rotate(rotate * 360)
     scale = node.get('scale', 2, float)
     if scale is not None and scale[0] != 0 and scale[1] != 0:
         ctx.scale(*scale)
     line_width = node.get('line_width', 1, float)
     if line_width is not None:
-        ctx.set_line_width(line_width)
+        paint.setStrokeWidth(line_width)
     line_width = node.get('line_join', 1, str)
     if line_width is not None and line_width.upper() in LineJoin.__members__:
-        ctx.set_line_join(LineJoin.__members__[line_width.upper()])
+        paint.setStrokeJoin(skia.Paint.Join(LineJoin.__members__[line_width.upper()]))
     composite = node.get('composite', 1, str)
     if composite is not None and composite.upper() in Composite.__members__:
-        ctx.set_operator(Composite.__members__[composite.upper()])
+        paint.setBlendMode(skia.BlendMode(Composite.__members__[composite.upper()]))
     antialias = node.get('antialias', 1, str)
-    if antialias is not None and antialias.upper() in Antialias.__members__:
-        ctx.set_antialias(Antialias.__members__[antialias.upper()])
+    if antialias is not None:
+        paint.setAntiAlias(antialias.upper() != 'NONE')
     font_size = node.get('font_size', 1, float)
     if font_size is not None:
-        ctx.set_font_size(font_size)
+        font.setSize(font_size)
     font_face = node.get('font_face', 1, str)
     if font_face is not None:
         font_face = font_face.lower()
         if font_face.endswith(' bold'):
-            ctx.select_font_face(font_face[:5], cairo.FontSlant.NORMAL, cairo.FontWeight.BOLD)
+            ctx.setTypeface(skia.Typeface(font_face[:5], skia.FontStyle.Bold()))
         else:
-            ctx.select_font_face(font_face)
+            ctx.setTypeface(skia.Typeface(font_face))
 
 
-def draw(node, ctx):
+def draw(node, ctx, paint=None, font=None, path=None):
+    if paint is None:
+        paint = skia.Paint()
+    if font is None:
+        font = skia.Font()
+    if path is None:
+        path = skia.Path()
     match node.kind:
         case "canvas":
-            set_styles(node, ctx)
+            set_styles(node, ctx, paint, font)
             for child in node.children:
-                draw(child, ctx)
+                draw(child, ctx, paint, font, path)
 
         case "group":
             alpha = node.get('alpha', 1, float, 1)
             if alpha == 0:
                 return
-            ctx.save()
             if alpha < 1:
-                ctx.push_group()
-            set_styles(node, ctx)
+                ctx.saveLayerAlpha(None, int(alpha * 255))
+            else:
+                ctx.save()
+            paint, font = skia.Paint(paint), skia.Font(font.getTypeface(), font.getSize())
+            set_styles(node, ctx, paint, font)
             for child in node.children:
-                draw(child, ctx)
-            if alpha < 1:
-                ctx.pop_group_to_source()
-                ctx.paint_with_alpha(alpha)
+                draw(child, ctx, paint, font)
             ctx.restore()
 
         case "text":
@@ -126,36 +123,37 @@ def draw(node, ctx):
             text = node.get('text', 1, str)
             center = node.get('center', 1, bool, True)
             if point is not None and text is not None:
-                ctx.save()
+                blob = skia.TextBlob(text, font)
                 if center:
-                    extents = ctx.text_extents(text)
-                    ctx.move_to(point[0]-extents.width/2, point[1]+extents.height/2)
+                    rect = blob.bound()
+                    ctx.drawTextBlob(blob, point[0]-rect.width()/2, point[1]+rect.height()/2, paint)
                 else:
-                    ctx.move_to(*point)
-                ctx.show_text(text)
-                ctx.restore()
+                    ctx.drawTextBlob(blob, *point, paint)
 
         case "path":
-            ctx.new_path()
+            path = skia.Path()
             for child in node.children:
-                draw(child, ctx)
+                draw(child, ctx, paint, font, path)
 
         case "move_to":
             point = node.get('point', 2, float)
             if point is not None:
-                ctx.move_to(*point)
+                path.moveTo(*point)
 
         case "line_to":
             point = node.get('point', 2, float)
             if point is not None:
-                ctx.line_to(*point)
+                path.lineTo(*point)
 
         case "curve_to":
             point = node.get('point', 2, float)
             c1 = node.get('c1', 2, float)
             c2 = node.get('c2', 2, float)
-            if point is not None and c1 is not None and c2 is not None:
-                ctx.curve_to(*c1, *c2, *point)
+            if point is not None and c1 is not None:
+                if c2 is not None:
+                    path.cubicTo(*c1, *c2, *point)
+                else:
+                    path.quadTo(*c1, *point)
 
         case "arc":
             point = node.get('point', 2, float)
@@ -163,87 +161,82 @@ def draw(node, ctx):
             if point is not None and radius is not None:
                 start = node.get('start', 1, float, 0)
                 end = node.get('end', 1, float, 1)
-                ctx.save()
-                ctx.translate(*point)
-                ctx.scale(*radius)
-                ctx.arc(0., 0., 1., start * TWOPI, end * TWOPI)
-                ctx.restore()
+                path.arcTo(skia.Rect(point[0]-radius[0]/2, point[1]-radius[1]/2, point[0]+radius[0]/2, point[1]+radius[1]/2), start*360, end*360)
 
         case "close":
-            ctx.close_path()
+            path.close()
 
         case "rect":
             size = node.get('size', 2, float)
             if size is not None:
                 point = node.get('point', 2, float, (0, 0))
-                ctx.rectangle(*point, *size)
+                path.addRect(*point, point[0]+size[0], point[1]+size[1])
 
         case "ellipse":
             radius = node.get('radius', 2, float)
             if radius is not None:
                 point = node.get('point', 2, float, (0, 0))
-                ctx.save()
-                ctx.translate(*point)
-                ctx.scale(*radius)
-                ctx.move_to(1, 0)
-                ctx.arc(0, 0, 1, 0, TWOPI)
-                ctx.restore()
+                path.addOval(skia.Rect(point[0]-radius[0]/2, point[1]-radius[1]/2, point[0]+radius[0]/2, point[1]+radius[1]/2))
 
         case "fill":
-            ctx.fill_preserve()
+            paint = skia.Paint(paint)
+            paint.setStyle(skia.Paint.Style.kFill_Style)
+            ctx.drawPath(path, paint)
 
         case "stroke":
-            ctx.stroke_preserve()
+            paint = skia.Paint(paint)
+            paint.setStyle(skia.Paint.Style.kStroke_Style)
+            ctx.drawPath(path, paint)
 
-        case "gradient":
-            start = node.get('start', 2, float)
-            end = node.get('end', 2, float)
-            if start is not None and end is not None:
-                gradient = cairo.LinearGradient(*start, *end)
-                for child in node.children:
-                    match child.kind:
-                        case "stop":
-                            offset = child.get('offset', 1, float)
-                            if offset is not None:
-                                rgb = child.get('color', 3, float)
-                                if rgb is not None:
-                                    gradient.add_color_stop_rgb(offset, *rgb)
-                                else:
-                                    rgba = child.get('color', 4, float)
-                                    if rgba is not None:
-                                        gradient.add_color_stop_rgba(offset, *rgba)
-                ctx.set_source(gradient)
-
-        case "image":
-            filename = node.get('filename', 1, str)
-            if filename is not None:
-                image = load_image(filename)
-                if image is not None:
-                    width, height = node.get('size', 2, float, (image.get_width(), image.get_height()))
-                    x, y = node.get('point', 2, float, (0, 0))
-                    matrix = cairo.Matrix()
-                    matrix.scale(image.get_width() / width, image.get_height() / height)
-                    matrix.translate(-x, -y)
-                    pattern = cairo.SurfacePattern(image)
-                    pattern.set_matrix(matrix)
-                    ctx.save()
-                    ctx.set_source(pattern)
-                    ctx.rectangle(x, y, width, height)
-                    ctx.fill()
-                    ctx.restore()
-
-
-_ImageCache = {}
-
-def load_image(filename):
-    if filename in _ImageCache:
-        return _ImageCache[filename]
-    try:
-        image = Image.open(filename).convert(mode='RGBA')
-        data = np.array(image)[..., [2,1,0,3]].copy().data
-        surface = cairo.ImageSurface.create_for_data(data, cairo.FORMAT_ARGB32, image.width, image.height, image.width * 4)
-    except Exception as exc:
-        print(exc)
-        image = None
-    _ImageCache[filename] = surface
-    return surface
+#         case "gradient":
+#             start = node.get('start', 2, float)
+#             end = node.get('end', 2, float)
+#             if start is not None and end is not None:
+#                 gradient = cairo.LinearGradient(*start, *end)
+#                 for child in node.children:
+#                     match child.kind:
+#                         case "stop":
+#                             offset = child.get('offset', 1, float)
+#                             if offset is not None:
+#                                 rgb = child.get('color', 3, float)
+#                                 if rgb is not None:
+#                                     gradient.add_color_stop_rgb(offset, *rgb)
+#                                 else:
+#                                     rgba = child.get('color', 4, float)
+#                                     if rgba is not None:
+#                                         gradient.add_color_stop_rgba(offset, *rgba)
+#                 ctx.set_source(gradient)
+#
+#         case "image":
+#             filename = node.get('filename', 1, str)
+#             if filename is not None:
+#                 image = load_image(filename)
+#                 if image is not None:
+#                     width, height = node.get('size', 2, float, (image.get_width(), image.get_height()))
+#                     x, y = node.get('point', 2, float, (0, 0))
+#                     matrix = cairo.Matrix()
+#                     matrix.scale(image.get_width() / width, image.get_height() / height)
+#                     matrix.translate(-x, -y)
+#                     pattern = cairo.SurfacePattern(image)
+#                     pattern.set_matrix(matrix)
+#                     ctx.save()
+#                     ctx.set_source(pattern)
+#                     ctx.rectangle(x, y, width, height)
+#                     ctx.fill()
+#                     ctx.restore()
+#
+#
+# _ImageCache = {}
+#
+# def load_image(filename):
+#     if filename in _ImageCache:
+#         return _ImageCache[filename]
+#     try:
+#         image = Image.open(filename).convert(mode='RGBA')
+#         data = np.array(image)[..., [2,1,0,3]].copy().data
+#         surface = cairo.ImageSurface.create_for_data(data, cairo.FORMAT_ARGB32, image.width, image.height, image.width * 4)
+#     except Exception as exc:
+#         print(exc)
+#         image = None
+#     _ImageCache[filename] = surface
+#     return surface
