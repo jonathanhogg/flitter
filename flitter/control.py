@@ -103,12 +103,17 @@ class Controller:
         return null
 
     def execute(self):
+        if self.current_filename.stat().st_mtime > self.current_mtime:
+            try:
+                self.reload_current_page()
+            except Exception:
+                Log.exception("Syntax error")
         beat = self.counter.beat
         variables = {'beat': Vector((beat,)),
                      'quantum': Vector((self.counter.quantum,)),
                      'clock': Vector((self.counter.time_at_beat(beat),)),
                      'read': Vector((self.read,))}
-        with Context(variables=variables, state=self.state, pragmas=self.pragmas) as context:
+        with Context(variables=variables, state=self.state.copy(), pragmas=self.pragmas) as context:
             expressions = [self.tree] if isinstance(self.tree, Literal) else self.tree.expressions
             for expr in expressions:
                 result = evaluate(expr, context)
@@ -245,17 +250,14 @@ class Controller:
             self.process_message(message)
 
     async def run(self):
-        asyncio.get_event_loop().create_task(self.receive_messages())
+        loop = asyncio.get_event_loop()
+        loop.create_task(self.receive_messages())
         frames = []
         self.enqueue_tempo()
         self.enqueue_page_status()
+        execute_task = loop.run_in_executor(None, self.execute)
         while True:
-            if self.current_filename.stat().st_mtime > self.current_mtime:
-                try:
-                    self.reload_current_page()
-                except Exception:
-                    Log.exception("Syntax error")
-            graph = self.execute()
+            graph = await execute_task
             if 'tempo' in self.pragmas:
                 tempo = self.pragmas['tempo']
                 if len(tempo) == 1 and tempo.isinstance(float):
@@ -263,6 +265,7 @@ class Controller:
                     if not math.isclose(tempo, self.counter.tempo):
                         self.counter.tempo = tempo
                         self.enqueue_tempo()
+            execute_task = loop.run_in_executor(None, self.execute)
             await self.update_windows(graph)
             self.update_controls(graph)
             if self.queue:
