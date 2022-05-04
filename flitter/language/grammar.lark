@@ -16,6 +16,7 @@ QUERY : /{[^}]+}/
 sequence : _NL? expression+
 
 ?expression : node _NL
+            | node "^" _NL _INDENT sequence _DEDENT -> prepend
             | node _NL _INDENT sequence _DEDENT -> append
             | "for" NAME "in" range _NL _INDENT sequence _DEDENT -> loop
             | "let" binding+ _NL -> let

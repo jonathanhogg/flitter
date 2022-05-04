@@ -173,6 +173,12 @@ class Append(Expression):
 
 
 @dataclass(frozen=True, slots=True)
+class Prepend(Expression):
+    node: Expression
+    children: Expression
+
+
+@dataclass(frozen=True, slots=True)
 class Binding:
     name: str
     expr: Expression

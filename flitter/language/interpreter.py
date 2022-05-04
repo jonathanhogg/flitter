@@ -105,6 +105,16 @@ def simplify(expression, context):
                  return node
             return ast.Append(node=node, children=children)
 
+        case ast.Prepend(node=node, children=children):
+            node = simplify(node, context)
+            children = simplify(children, context)
+            if isinstance(node, ast.Literal) and node.value.isinstance(model.Node) and \
+               isinstance(children, ast.Literal) and children.value.isinstance(model.Node):
+                 for n in node.value:
+                     n.prepend(children.value)
+                 return node
+            return ast.Prepend(node=node, children=children)
+
         case ast.Attribute(node=node, name=name, expr=expr):
             node = simplify(node, context)
             if isinstance(node, ast.Literal) and node.value.isinstance(model.Node):
@@ -290,12 +300,12 @@ def evaluate(expression, context):
                 return model.Vector.compose(*(evaluate(expr, context) for expr in expressions))
 
         case ast.Append(node=node, children=children):
-            nodes = []
+            nodes = evaluate(node, context)
             children = evaluate(children, context)
-            for n in evaluate(node, context):
-                n.extend(children)
-                nodes.append(n)
-            return model.Vector(nodes)
+            copy = len(nodes) > 1
+            for n in nodes:
+                n.extend(children.copynodes() if copy else children)
+            return nodes
 
         case ast.Lookup(key=key):
             key = evaluate(key, context)
@@ -386,6 +396,14 @@ def evaluate(expression, context):
             function = function.value if isinstance(function, ast.Literal) else evaluate(function, context)
             args = tuple(evaluate(arg, context) for arg in args)
             return model.Vector.compose(*(func(*args) for func in function))
+
+        case ast.Prepend(node=node, children=children):
+            nodes = evaluate(node, context)
+            children = evaluate(children, context)
+            copy = len(nodes) > 1
+            for n in nodes:
+                n.prepend(children.copynodes() if copy else children)
+            return nodes
 
         case ast.Pragma(name=name, expr=expr):
             expr = evaluate(expr, context)

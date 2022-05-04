@@ -53,7 +53,6 @@ class FlitterTransformer(Transformer):
     gt = ast.GreaterThan
     if_else = ast.IfElse
     inline_let = ast.InlineLet
-    sequence = v_args(inline=False)(ast.Sequence)
     le = ast.LessThanOrEqualTo
     let = v_args(inline=False)(ast.Let)
     literal = ast.Literal
@@ -72,7 +71,9 @@ class FlitterTransformer(Transformer):
     power = ast.Power
     pos = ast.Positive
     pragma = ast.Pragma
+    prepend = ast.Prepend
     search = ast.Search
+    sequence = v_args(inline=False)(ast.Sequence)
     slice = ast.Slice
     subtract = ast.Subtract
     tags = v_args(inline=False)(tuple)

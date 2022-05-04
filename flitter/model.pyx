@@ -131,11 +131,12 @@ cdef class Vector:
         cdef int i
         for i, value in enumerate(self.values):
             if isinstance(value, Node):
-                if result is self:
-                    result = Vector.__new__(Vector)
-                    result.values.extend(self.values)
                 node = value
-                result.values[i] = node.copy()
+                if node.parent is None:
+                    if result is self:
+                        result = Vector.__new__(Vector)
+                        result.values.extend(self.values)
+                    result.values[i] = node.copy()
         return result
 
     cpdef Vector withlen(self, int n, bint force_copy=False):
@@ -529,10 +530,24 @@ cdef class Node:
         else:
             self.first_child = self.last_child = node
 
+    cpdef void insert(self, Node node):
+        if node.parent is not None:
+            node.parent.remove(node)
+        node.parent = self
+        node.next_sibling = self.first_child
+        self.first_child = node
+        if self.last_child is None:
+            self.last_child = self.first_child
+
     def extend(self, nodes):
         cdef Node node
         for node in nodes:
             self.append(node)
+
+    def prepend(self, nodes):
+        cdef Node node
+        for node in reversed(nodes):
+            self.insert(node)
 
     cpdef void remove(self, Node node):
         if node.parent is not self:
