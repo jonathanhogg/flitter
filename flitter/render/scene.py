@@ -11,7 +11,6 @@ import time
 
 import skia
 import moderngl
-import numpy as np
 
 import pyglet
 pyglet.options['shadow_window'] = False
@@ -363,7 +362,8 @@ class Canvas(SceneNode):
         self._graphics_context.resetContext()
         self._framebuffer.clear()
         self._canvas.save()
-        await asyncio.get_event_loop().run_in_executor(None, canvas.draw, self.node, self._canvas, skia.Paint(), skia.Font(), skia.Path())
+        paint = skia.Paint(AntiAlias=True)
+        canvas.draw(self.node, self._canvas, paint, skia.Font(), skia.Path())
         self._canvas.restore()
         self._surface.flushAndSubmit()
 

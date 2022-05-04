@@ -188,55 +188,59 @@ def draw(node, ctx, paint, font, path):
             paint.setStyle(skia.Paint.Style.kStroke_Style)
             ctx.drawPath(path, paint)
 
-#         case "gradient":
-#             start = node.get('start', 2, float)
-#             end = node.get('end', 2, float)
-#             if start is not None and end is not None:
-#                 gradient = cairo.LinearGradient(*start, *end)
-#                 for child in node.children:
-#                     match child.kind:
-#                         case "stop":
-#                             offset = child.get('offset', 1, float)
-#                             if offset is not None:
-#                                 rgb = child.get('color', 3, float)
-#                                 if rgb is not None:
-#                                     gradient.add_color_stop_rgb(offset, *rgb)
-#                                 else:
-#                                     rgba = child.get('color', 4, float)
-#                                     if rgba is not None:
-#                                         gradient.add_color_stop_rgba(offset, *rgba)
-#                 ctx.set_source(gradient)
-#
-#         case "image":
-#             filename = node.get('filename', 1, str)
-#             if filename is not None:
-#                 image = load_image(filename)
-#                 if image is not None:
-#                     width, height = node.get('size', 2, float, (image.get_width(), image.get_height()))
-#                     x, y = node.get('point', 2, float, (0, 0))
-#                     matrix = cairo.Matrix()
-#                     matrix.scale(image.get_width() / width, image.get_height() / height)
-#                     matrix.translate(-x, -y)
-#                     pattern = cairo.SurfacePattern(image)
-#                     pattern.set_matrix(matrix)
-#                     ctx.save()
-#                     ctx.set_source(pattern)
-#                     ctx.rectangle(x, y, width, height)
-#                     ctx.fill()
-#                     ctx.restore()
-#
-#
-# _ImageCache = {}
-#
-# def load_image(filename):
-#     if filename in _ImageCache:
-#         return _ImageCache[filename]
-#     try:
-#         image = Image.open(filename).convert(mode='RGBA')
-#         data = np.array(image)[..., [2,1,0,3]].copy().data
-#         surface = cairo.ImageSurface.create_for_data(data, cairo.FORMAT_ARGB32, image.width, image.height, image.width * 4)
-#     except Exception as exc:
-#         print(exc)
-#         image = None
-#     _ImageCache[filename] = surface
-#     return surface
+        case "gradient":
+            colors = []
+            positions = []
+            for child in node.children:
+                match child.kind:
+                    case "stop":
+                        offset = child.get('offset', 1, float)
+                        rgb = child.get('color', 3, float)
+                        if rgb is not None:
+                            positions.append(offset)
+                            colors.append(skia.Color4f(*rgb, 1))
+                        else:
+                            rgba = child.get('color', 4, float)
+                            if rgba is not None:
+                                positions.append(offset)
+                                colors.append(skia.Color4f(*rgba))
+                            else:
+                                positions.append(offset)
+                                colors.append(paint.getColor())
+            n = len(positions)
+            if n:
+                for i in range(n):
+                    if positions[i] is None:
+                        positions[i] = i / (n - 1)
+                start = node.get('start', 2, float)
+                end = node.get('end', 2, float)
+                if start is not None and end is not None:
+                    points = [skia.Point(*start), skia.Point(*end)]
+                    paint.setShader(skia.GradientShader.MakeLinear(points, colors, positions))
+                else:
+                    radius = node.get('radius', 1, float)
+                    if radius is not None:
+                        point = skia.Point(node.get('point', 2, float, (0, 0)))
+                        paint.setShader(skia.GradientShader.MakeRadial(point, radius, colors, positions))
+
+        case "image":
+            filename = node.get('filename', 1, str)
+            if filename is not None:
+                image = load_image(filename)
+                if image is not None:
+                    dst = skia.Rect.MakeXYWH(*node.get('point', 2, float, (0, 0)), *node.get('size', 2, float, (image.width(), image.height())))
+                    ctx.drawImageRect(image, dst, paint)
+
+
+_ImageCache = {}
+
+def load_image(filename):
+    if filename in _ImageCache:
+        return _ImageCache[filename]
+    try:
+        image = skia.Image.open(filename)
+    except Exception as exc:
+        print(exc)
+        image = None
+    _ImageCache[filename] = image
+    return image
