@@ -11,10 +11,8 @@ import time
 
 import skia
 import moderngl
-
 import pyglet
 pyglet.options['shadow_window'] = False
-
 import pyglet.canvas
 import pyglet.window
 import pyglet.gl
