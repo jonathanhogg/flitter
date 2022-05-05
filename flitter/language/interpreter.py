@@ -7,6 +7,7 @@ Flitter language interpreter
 from contextlib import contextmanager
 
 from . import ast
+from . import functions
 from .. import model
 
 
@@ -14,25 +15,25 @@ BUILTINS = {
     'true': model.true,
     'false': model.false,
     'null': model.null,
-    'uniform': model.Vector((model.Uniform,)),
-    'beta': model.Vector((model.Beta,)),
-    'normal': model.Vector((model.Normal,)),
-    'sine': model.Vector((model.sine,)),
-    'bounce': model.Vector((model.bounce,)),
-    'sharkfin': model.Vector((model.sharkfin,)),
-    'sawtooth': model.Vector((model.sawtooth,)),
-    'triangle': model.Vector((model.triangle,)),
-    'square': model.Vector((model.square,)),
-    'linear': model.Vector((model.linear,)),
-    'quad': model.Vector((model.quad,)),
-    'shuffle': model.Vector((model.shuffle,)),
-    'round': model.Vector((model.roundv,)),
-    'min': model.Vector((model.minv,)),
-    'max': model.Vector((model.maxv,)),
-    'hypot': model.Vector((model.hypot,)),
-    'map': model.Vector((model.mapv,)),
-    'hsl': model.Vector((model.hsl,)),
-    'hsv': model.Vector((model.hsv,)),
+    'uniform': model.Vector((functions.Uniform,)),
+    'beta': model.Vector((functions.Beta,)),
+    'normal': model.Vector((functions.Normal,)),
+    'sine': model.Vector((functions.sine,)),
+    'bounce': model.Vector((functions.bounce,)),
+    'sharkfin': model.Vector((functions.sharkfin,)),
+    'sawtooth': model.Vector((functions.sawtooth,)),
+    'triangle': model.Vector((functions.triangle,)),
+    'square': model.Vector((functions.square,)),
+    'linear': model.Vector((functions.linear,)),
+    'quad': model.Vector((functions.quad,)),
+    'shuffle': model.Vector((functions.shuffle,)),
+    'round': model.Vector((functions.roundv,)),
+    'min': model.Vector((functions.minv,)),
+    'max': model.Vector((functions.maxv,)),
+    'hypot': model.Vector((functions.hypot,)),
+    'map': model.Vector((functions.mapv,)),
+    'hsl': model.Vector((functions.hsl,)),
+    'hsv': model.Vector((functions.hsv,)),
 }
 
 
