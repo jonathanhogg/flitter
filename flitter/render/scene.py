@@ -47,7 +47,7 @@ class SceneNode:
         while self.children:
             self.children.pop().destroy()
 
-    async def update(self, node):
+    def update(self, node):
         self.node = node
         resized = False
         width, height = self.node.get('size', 2, int, (512, 512))
@@ -56,10 +56,10 @@ class SceneNode:
             self.height = height
             resized = True
         self.create(resized)
-        await self.descend()
-        await self.render()
+        self.descend()
+        self.render()
 
-    async def descend(self):
+    def descend(self):
         count = 0
         for i, child in enumerate(self.node.children):
             cls = SCENE_CLASSES[child.kind]
@@ -68,7 +68,7 @@ class SceneNode:
             elif type(self.children[i]) != cls:  # noqa
                 self.children[i].destroy()
                 self.children[i] = cls(self.glctx)
-            await self.children[i].update(child)
+            self.children[i].update(child)
             count += 1
         while len(self.children) > count:
             self.children.pop().destroy()
@@ -76,7 +76,7 @@ class SceneNode:
     def create(self, resized):
         pass
 
-    async def render(self):
+    def render(self):
         raise NotImplementedError()
 
     def release(self):
@@ -159,7 +159,7 @@ void main() {{
             except Exception:
                 Log.exception("Unable to compile shader:\n%s", self._fragment_source)
 
-    async def render(self):
+    def render(self):
         now = time.clock_gettime(time.CLOCK_MONOTONIC_RAW)
         delta = 0.0 if self._timestamp is None else min(now - self._timestamp, 1/25)
         self._timestamp = now
@@ -271,8 +271,8 @@ class Window(ProgramNode):
     def on_close(self):
         asyncio.get_event_loop().stop()
 
-    async def render(self):
-        await super().render()
+    def render(self):
+        super().render()
         self.window.flip()
         self.window.dispatch_events()
 
@@ -354,11 +354,11 @@ class Canvas(SceneNode):
                                                                      skia.kRGBA_8888_ColorType, skia.ColorSpace.MakeSRGB())
             self._canvas = self._surface.getCanvas()
 
-    async def descend(self):
+    def descend(self):
         # A canvas is a leaf node from the perspective of the OpenGL world
         pass
 
-    async def render(self):
+    def render(self):
         self._graphics_context.resetContext()
         self._framebuffer.clear()
         self._canvas.save()

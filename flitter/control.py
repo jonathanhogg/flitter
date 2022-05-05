@@ -26,8 +26,9 @@ class Controller:
     SEND_PORT = 47177
     RECEIVE_PORT = 47178
 
-    def __init__(self, root_dir):
+    def __init__(self, root_dir, profiling=False):
         self.root_dir = Path(root_dir)
+        self.profiling = profiling
         self.state = {}
         self.pragmas = {}
         self.tree = None
@@ -43,17 +44,20 @@ class Controller:
         self.current_page = None
         self.current_filename = None
         self.current_mtime = None
+        self.page_reload_task = None
 
     def load_page(self, filename):
         page_number = len(self.pages)
         filename = Path(filename)
-        with open(filename, encoding='utf8') as file, Context() as context:
-            tree = simplify(parse(file.read()), context)
+        mtime, tree = self.load_source(filename)
         Log.info("Loaded page %i: %s", page_number, filename)
-        self.pages.append((filename, filename.stat().st_mtime, tree, {}))
+        self.pages.append((filename, mtime, tree, {}))
 
     def switch_to_page(self, page_number):
         if self.pages is not None and 0 <= page_number < len(self.pages):
+            if self.page_reload_task is not None:
+                self.page_reload_task.cancel()
+                self.page_reload_task = None
             filename, mtime, tree, state = self.pages[page_number]
             self.state = state
             self.tree = tree
@@ -68,12 +72,12 @@ class Controller:
                 self.enqueue_encoder_status(encoder, deleted=True)
             self.encoders = {}
 
-    def reload_current_page(self):
-        with open(self.current_filename, encoding='utf8') as file, Context() as context:
-            self.tree = simplify(parse(file.read()), context)
-        self.current_mtime = self.current_filename.stat().st_mtime
-        self.pages[self.current_page] = self.current_filename, self.current_mtime, self.tree, self.state
-        Log.info("Reloaded page %i: %s", self.current_page, self.current_filename)
+    @staticmethod
+    def load_source(filename):
+        mtime = filename.stat().st_mtime
+        with open(filename, encoding='utf8') as file, Context() as context:
+            tree = simplify(parse(file.read()), context)
+        return mtime, tree
 
     def get(self, key, default=None):
         return self.state.get(key, default)
@@ -102,32 +106,51 @@ class Controller:
             return text
         return null
 
-    def execute(self):
+    async def execute(self):
+        loop = asyncio.get_event_loop()
         if self.current_filename.stat().st_mtime > self.current_mtime:
-            try:
-                self.reload_current_page()
-            except Exception:
-                Log.exception("Syntax error")
+            if self.page_reload_task is None:
+                Log.debug("Begin reload of page %i: %s", self.current_page, self.current_filename)
+                self.page_reload_task = loop.run_in_executor(None, self.load_source, self.current_filename)
+            elif self.page_reload_task.done():
+                try:
+                    mtime, tree = await self.page_reload_task
+                    self.page_reload_task = None
+                    self.current_mtime = mtime
+                    self.tree = tree
+                    self.pages[self.current_page] = self.current_filename, self.current_mtime, self.tree, self.state
+                    Log.info("Reloaded page %i: %s", self.current_page, self.current_filename)
+                except Exception:
+                    Log.exception("Error reloading page")
         beat = self.counter.beat
         variables = {'beat': Vector((beat,)),
                      'quantum': Vector((self.counter.quantum,)),
                      'clock': Vector((self.counter.time_at_beat(beat),)),
                      'read': Vector((self.read,))}
-        with Context(variables=variables, state=self.state.copy(), pragmas=self.pragmas) as context:
-            expressions = [self.tree] if isinstance(self.tree, Literal) else self.tree.expressions
+        context = Context(variables=variables, state=self.state.copy(), pragmas=self.pragmas)
+        if self.profiling:
+            await asyncio.sleep(0)
+            self.execute_tree(self.tree, context)
+        else:
+            await loop.run_in_executor(None, self.execute_tree, self.tree, context)
+        return context.graph
+
+    @staticmethod
+    def execute_tree(tree, context):
+        with context:
+            expressions = [tree] if isinstance(tree, Literal) else tree.expressions
             for expr in expressions:
                 result = evaluate(expr, context)
                 for value in result:
                     if isinstance(value, Node) and value.parent is None:
                         context.graph.append(value)
-        return context.graph
 
-    async def update_windows(self, graph):
+    def update_windows(self, graph):
         count = 0
         for i, node in enumerate(graph.select_below('window.')):
             if i == len(self.windows):
                 self.windows.append(Window())
-            await self.windows[i].update(node)
+            self.windows[i].update(node)
             count += 1
         while len(self.windows) > count:
             self.windows.pop().destroy()
@@ -255,7 +278,7 @@ class Controller:
         frames = []
         self.enqueue_tempo()
         self.enqueue_page_status()
-        execute_task = loop.run_in_executor(None, self.execute)
+        execute_task = loop.create_task(self.execute())
         while True:
             graph = await execute_task
             if 'tempo' in self.pragmas:
@@ -265,9 +288,11 @@ class Controller:
                     if not math.isclose(tempo, self.counter.tempo):
                         self.counter.tempo = tempo
                         self.enqueue_tempo()
-            execute_task = loop.run_in_executor(None, self.execute)
-            await self.update_windows(graph)
+            execute_task = loop.create_task(self.execute())
+            await asyncio.sleep(0)
+            self.update_windows(graph)
             self.update_controls(graph)
+            graph.dissolve()
             if self.queue:
                 await self.osc_sender.send_bundle_from_queue(self.queue)
             else:

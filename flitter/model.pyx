@@ -15,7 +15,7 @@ cdef union float_long:
 
 
 @cython.final
-@cython.freelist(16)
+@cython.freelist(100)
 cdef class Vector:
     @staticmethod
     def compose(*args):
@@ -316,7 +316,7 @@ true = true_
 false = false_
 
 
-@cython.freelist(16)
+@cython.freelist(20)
 cdef class Uniform:
     cdef Vector keys
     cdef unsigned long long seed
@@ -379,7 +379,7 @@ cdef class Normal(Uniform):
 
 
 @cython.final
-@cython.freelist(8)
+@cython.freelist(20)
 cdef class Query:
     cdef str kind
     cdef frozenset tags
@@ -465,7 +465,6 @@ cdef class Node:
     cdef dict attributes
     cdef readonly Node parent
     cdef Node next_sibling, first_child, last_child
-    cdef object token
 
     @staticmethod
     def from_dict(d):
@@ -493,6 +492,19 @@ cdef class Node:
         else:
             self.tags = frozenset(tags)
         self.attributes = attributes
+
+    cpdef void dissolve(self):
+        cdef Node node = self.first_child
+        if node is not None:
+            while True:
+                if node.first_child is not None:
+                    node.dissolve()
+                node.parent = None
+                if node.next_sibling is None:
+                    break
+                node, node.next_sibling = node.next_sibling, None
+            self.first_child = None
+            self.last_child = None
 
     @property
     def children(self):
@@ -658,19 +670,34 @@ cdef class Node:
         return self.attributes.items()
 
     def get(self, str name, int n, type t, default=None, /):
-        cdef Vector vector
-        if name in self.attributes:
-            vector = (<Vector>self.attributes[name]).withlen(n, True)
-            if vector:
-                try:
-                    for i in range(n):
-                        vector.values[i] = t(vector.values[i])
-                except:
-                    pass
+        cdef Vector attr_vec
+        cdef list attr_values, values
+        cdef int m
+        attr_vec = <Vector> self.attributes.get(name)
+        if attr_vec is not None:
+            attr_values = attr_vec.values
+            m = len(attr_values)
+            try:
+                if n == 1:
+                    if m == 1:
+                        value = attr_values[0]
+                        return t(value) if not isinstance(value, t) else value
                 else:
-                    if n == 1:
-                        return vector.values[0]
-                    return vector
+                    if m == n:
+                        values = []
+                        for value in attr_values:
+                            values.append(t(value) if not isinstance(value, t) else value)
+                        return values
+                    elif m == 1:
+                        value = attr_values[0]
+                        if not isinstance(value, t):
+                            value = t(value)
+                        values = []
+                        for i in range(n):
+                            values.append(value)
+                        return values
+            except:
+                pass
         return default
 
     def __iter__(self):
@@ -720,19 +747,19 @@ cdef class Context:
     def __getitem__(self, name):
         return self.variables[name]
 
-    cdef void set_variable(self, str name, value):
+    def __setitem__(self, str name, value):
         if self._stack[-1] is None:
             self._stack[-1] = self.variables
             self.variables = self.variables.copy()
         self.variables[name] = value
 
-    def __setitem__(self, str name, value):
-        self.set_variable(name, value)
-
     def merge_under(self, Node node):
-        for attr in node.attributes:
+        if self._stack[-1] is None:
+            self._stack[-1] = self.variables
+            self.variables = self.variables.copy()
+        for attr, value in node.attributes.items():
             if attr not in self.variables:
-                self.set_variable(attr, node.attributes[attr])
+                self.variables[attr] = value
 
     def pragma(self, str name, value):
         self.pragmas[name] = value

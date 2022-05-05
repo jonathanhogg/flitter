@@ -3,13 +3,30 @@ Flitter drawing canvas based on Skia
 """
 
 import enum
+from pathlib import Path
 
 import skia
-import numpy as np
-from PIL import Image
 
 
-TWOPI = 6.283185307179586
+_ImageCache = {}
+
+
+def load_image(filename):
+    path = Path(filename)
+    if path.exists():
+        current_mtime = path.stat().st_mtime
+        if path in _ImageCache:
+            mtime, image = _ImageCache[path]
+            if mtime == current_mtime:
+                return image
+        try:
+            image = skia.Image.open(path)
+        except Exception as exc:
+            print(exc)
+            image = None
+        _ImageCache[filename] = current_mtime, image
+        return image
+    return None
 
 
 class Composite(enum.IntEnum):
@@ -38,10 +55,10 @@ class Composite(enum.IntEnum):
     DIFFERENCE = skia.BlendMode.kDifference
     EXCLUSION = skia.BlendMode.kExclusion
     MULTIPLY = skia.BlendMode.kMultiply
-    HSL_HUE = skia.BlendMode.kHue
-    HSL_SATURATION = skia.BlendMode.kSaturation
-    HSL_COLOR = skia.BlendMode.kColor
-    HSL_LUMINOSITY = skia.BlendMode.kLuminosity
+    HUE = skia.BlendMode.kHue
+    SATURATION = skia.BlendMode.kSaturation
+    COLOR = skia.BlendMode.kColor
+    LUMINOSITY = skia.BlendMode.kLuminosity
 
 
 class LineJoin(enum.IntEnum):
@@ -78,9 +95,9 @@ def set_styles(node, ctx=None, paint=None, font=None):
         composite = node.get('composite', 1, str)
         if composite is not None and composite.upper() in Composite.__members__:
             paint.setBlendMode(skia.BlendMode(Composite.__members__[composite.upper()]))
-        antialias = node.get('antialias', 1, str)
+        antialias = node.get('antialias', 1, bool)
         if antialias is not None:
-            paint.setAntiAlias(antialias.upper() != 'NONE')
+            paint.setAntiAlias(antialias)
     if font is not None:
         font_size = node.get('font_size', 1, float)
         if font_size is not None:
@@ -96,11 +113,6 @@ def set_styles(node, ctx=None, paint=None, font=None):
 
 def draw(node, ctx, paint, font, path):
     match node.kind:
-        case "canvas":
-            set_styles(node, ctx, paint, font)
-            for child in node.children:
-                draw(child, ctx, paint, font, path)
-
         case "group":
             alpha = node.get('alpha', 1, float, 1)
             if alpha <= 0:
@@ -114,19 +126,6 @@ def draw(node, ctx, paint, font, path):
             for child in node.children:
                 draw(child, ctx, paint, font, path)
             ctx.restore()
-
-        case "text":
-            set_styles(node, font=font)
-            point = node.get('point', 2, float)
-            text = node.get('text', 1, str)
-            center = node.get('center', 1, bool, True)
-            if point is not None and text is not None:
-                blob = skia.TextBlob(text, font)
-                if center:
-                    rect = blob.bound()
-                    ctx.drawTextBlob(blob, point[0]-rect.width()/2, point[1]+rect.height()/2, paint)
-                else:
-                    ctx.drawTextBlob(blob, *point, paint)
 
         case "path":
             path = skia.Path()
@@ -161,9 +160,6 @@ def draw(node, ctx, paint, font, path):
                 end = node.get('end', 1, float, 1)
                 path.arcTo(skia.Rect(point[0]-radius[0], point[1]-radius[1], point[0]+radius[0], point[1]+radius[1]), start*360, end*360)
 
-        case "close":
-            path.close()
-
         case "rect":
             size = node.get('size', 2, float)
             if size is not None:
@@ -187,6 +183,22 @@ def draw(node, ctx, paint, font, path):
             set_styles(node, paint=paint)
             paint.setStyle(skia.Paint.Style.kStroke_Style)
             ctx.drawPath(path, paint)
+
+        case "close":
+            path.close()
+
+        case "text":
+            set_styles(node, font=font)
+            point = node.get('point', 2, float)
+            text = node.get('text', 1, str)
+            center = node.get('center', 1, bool, True)
+            if point is not None and text is not None:
+                blob = skia.TextBlob(text, font)
+                if center:
+                    rect = blob.bound()
+                    ctx.drawTextBlob(blob, point[0]-rect.width()/2, point[1]+rect.height()/2, paint)
+                else:
+                    ctx.drawTextBlob(blob, *point, paint)
 
         case "gradient":
             colors = []
@@ -218,10 +230,12 @@ def draw(node, ctx, paint, font, path):
                     points = [skia.Point(*start), skia.Point(*end)]
                     paint.setShader(skia.GradientShader.MakeLinear(points, colors, positions))
                 else:
-                    radius = node.get('radius', 1, float)
+                    radius = node.get('radius', 2, float)
                     if radius is not None:
+                        rotate = node.get('rotate', 1, float, 0)
                         point = skia.Point(node.get('point', 2, float, (0, 0)))
-                        paint.setShader(skia.GradientShader.MakeRadial(point, radius, colors, positions))
+                        matrix = skia.Matrix.Scale(*radius).postRotate(rotate * 360)
+                        paint.setShader(skia.GradientShader.MakeRadial(point, 1, colors, positions, localMatrix=matrix))
 
         case "image":
             filename = node.get('filename', 1, str)
@@ -231,16 +245,7 @@ def draw(node, ctx, paint, font, path):
                     dst = skia.Rect.MakeXYWH(*node.get('point', 2, float, (0, 0)), *node.get('size', 2, float, (image.width(), image.height())))
                     ctx.drawImageRect(image, dst, paint)
 
-
-_ImageCache = {}
-
-def load_image(filename):
-    if filename in _ImageCache:
-        return _ImageCache[filename]
-    try:
-        image = skia.Image.open(filename)
-    except Exception as exc:
-        print(exc)
-        image = None
-    _ImageCache[filename] = image
-    return image
+        case "canvas":
+            set_styles(node, ctx, paint, font)
+            for child in node.children:
+                draw(child, ctx, paint, font, path)

@@ -101,7 +101,7 @@ def simplify(expression, context):
             if isinstance(node, ast.Literal) and node.value.isinstance(model.Node) and \
                isinstance(children, ast.Literal) and children.value.isinstance(model.Node):
                  for n in node.value:
-                     n.extend(children.value)
+                     n.extend(children.value.copynodes())
                  return node
             return ast.Append(node=node, children=children)
 
@@ -111,7 +111,7 @@ def simplify(expression, context):
             if isinstance(node, ast.Literal) and node.value.isinstance(model.Node) and \
                isinstance(children, ast.Literal) and children.value.isinstance(model.Node):
                  for n in node.value:
-                     n.prepend(children.value)
+                     n.prepend(children.value.copynodes())
                  return node
             return ast.Prepend(node=node, children=children)
 
@@ -302,9 +302,9 @@ def evaluate(expression, context):
         case ast.Append(node=node, children=children):
             nodes = evaluate(node, context)
             children = evaluate(children, context)
-            copy = len(nodes) > 1
-            for n in nodes:
-                n.extend(children.copynodes() if copy else children)
+            n = len(nodes)
+            for i in range(n):
+                nodes[i].extend(children.copynodes() if i < n-1 else children)
             return nodes
 
         case ast.Lookup(key=key):
@@ -400,9 +400,9 @@ def evaluate(expression, context):
         case ast.Prepend(node=node, children=children):
             nodes = evaluate(node, context)
             children = evaluate(children, context)
-            copy = len(nodes) > 1
-            for n in nodes:
-                n.prepend(children.copynodes() if copy else children)
+            n = len(nodes)
+            for i in range(n):
+                nodes[i].prepend(children.copynodes() if i < n-1 else children)
             return nodes
 
         case ast.Pragma(name=name, expr=expr):
