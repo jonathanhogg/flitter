@@ -1,8 +1,8 @@
 """
-Ableton Push API test
+Ableton Push OSC controller for Flitter
 """
 
-# pylama:ignore=W0601,C0103,R0912,R0915,R0914
+# pylama:ignore=W0601,C0103,R0912,R0915,R0914,R0902
 
 import argparse
 import asyncio
@@ -23,11 +23,19 @@ Log = logging.getLogger(__name__)
 
 
 class Controller:
+    HELLO_RETRY_INTERVAL = 10
+    RECEIVE_TIMEOUT = 5
+    RESET_TIMEOUT = 30
+
     def __init__(self):
         self.push = None
         self.osc_sender = OSCSender('localhost', 47178)
         self.osc_receiver = OSCReceiver('localhost', 47177)
+        self.pads = {}
         self.encoders = {}
+        self.buttons = {}
+        self.last_received = None
+        self.last_hello = None
 
     def process_message(self, message):
         if isinstance(message, OSCBundle):
@@ -45,8 +53,10 @@ class Controller:
                 name, r, g, b, touched, toggled = message.args
                 brightness = 255 if touched or toggled else 63
                 self.push.set_pad_color(row * 8 + column, int(r*brightness), int(g*brightness), int(b*brightness))
-            else:
+                self.pads[column, row] = name, (r, g, b), touched, toggled
+            elif (column, row) in self.pads:
                 self.push.set_pad_color(row * 8 + column, 0, 0, 0)
+                del self.pads[column, row]
         elif parts[0] == 'encoder' and parts[2] == 'state':
             number = int(parts[1])
             if message.args:
@@ -60,13 +70,36 @@ class Controller:
         elif parts[0] == 'page_left':
             enabled, = message.args
             self.push.set_button_white(Control.PAGE_LEFT, 255 if enabled else 0)
+            if enabled:
+                if Control.PAGE_LEFT not in self.buttons:
+                    self.buttons[Control.PAGE_LEFT] = 255
+            elif Control.PAGE_LEFT in self.buttons:
+                del self.buttons[Control.PAGE_LEFT]
         elif parts[0] == 'page_right':
             enabled, = message.args
             self.push.set_button_white(Control.PAGE_RIGHT, 255 if enabled else 0)
+            if enabled:
+                if Control.PAGE_LEFT not in self.buttons:
+                    self.buttons[Control.PAGE_RIGHT] = 255
+            elif Control.PAGE_LEFT in self.buttons:
+                del self.buttons[Control.PAGE_RIGHT]
+
+    def reset(self):
+        for column, row in self.pads:
+            self.push.set_pad_color(row * 8 + column, 0, 0, 0)
+        self.pads.clear()
+        for number in self.encoders:
+            self.push.set_menu_button_color(number + 8, 0, 0, 0)
+        self.encoders.clear()
+        for control in self.buttons:
+            self.push.set_button_white(control, 0)
+        self.buttons.clear()
+        self.last_received = None
 
     async def receive_messages(self):
         while True:
             message = await self.osc_receiver.receive()
+            self.last_received = self.push.counter.clock()
             self.process_message(message)
 
     async def run(self):
@@ -89,7 +122,6 @@ class Controller:
         tap_tempo = TapTempo(rounding=1)
         asyncio.get_event_loop().create_task(self.receive_messages())
         try:
-            await self.osc_sender.send_message('/hello')
             while True:
                 event = await self.push.get_event(1/60)
                 if event:
@@ -143,6 +175,13 @@ class Controller:
                     elif isinstance(event, ButtonReleased) and event.number == Control.PAGE_RIGHT:
                         await self.osc_sender.send_message('/page_right')
                 else:
+                    now = self.push.counter.clock()
+                    if (self.last_hello is None or now > self.last_hello + self.HELLO_RETRY_INTERVAL) \
+                            and (self.last_received is None or now > self.last_received + self.RECEIVE_TIMEOUT):
+                        await self.osc_sender.send_message('/hello')
+                        self.last_hello = now
+                    if self.last_received is not None and now > self.last_received + self.RESET_TIMEOUT:
+                        self.reset()
                     async with self.push.screen_canvas() as canvas:
                         canvas.clear(skia.ColorBLACK)
                         paint = skia.Paint(Color=skia.ColorWHITE, AntiAlias=True)
