@@ -7,12 +7,14 @@ Flitter window management
 import array
 import asyncio
 import logging
+import sys
 import time
 
 import skia
 import moderngl
 import pyglet
-pyglet.options['shadow_window'] = False
+if sys.platform == 'darwin':
+    pyglet.options['shadow_window'] = False
 import pyglet.canvas
 import pyglet.window
 import pyglet.gl
@@ -253,7 +255,11 @@ class Window(ProgramNode):
             self.window.event(self.on_close)
             self.glctx = moderngl.create_context(require=self.GL_VERSION[0] * 100 + self.GL_VERSION[1] * 10)
             if fullscreen:
-                self.window._nswindow.enterFullScreenMode_(self.window._nswindow.screen())  # noqa
+                self.window.set_mouse_visible(False)
+                if sys.platform == 'darwin':
+                    self.window._nswindow.enterFullScreenMode_(self.window._nswindow.screen())  # noqa
+                else:
+                    self.window.set_fullscreen(True)
 
     def on_resize(self, width, height):
         aspect_ratio = self.width / self.height
