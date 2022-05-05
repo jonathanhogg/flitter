@@ -80,9 +80,9 @@ class Controller:
             enabled, = message.args
             self.push.set_button_white(Control.PAGE_RIGHT, 255 if enabled else 0)
             if enabled:
-                if Control.PAGE_LEFT not in self.buttons:
+                if Control.PAGE_RIGHT not in self.buttons:
                     self.buttons[Control.PAGE_RIGHT] = 255
-            elif Control.PAGE_LEFT in self.buttons:
+            elif Control.PAGE_RIGHT in self.buttons:
                 del self.buttons[Control.PAGE_RIGHT]
 
     def reset(self):
