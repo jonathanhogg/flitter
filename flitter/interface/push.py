@@ -50,7 +50,7 @@ class Controller:
             self.push.counter.update(tempo, quantum, start)
         elif parts[0] == 'pad' and parts[-1] == 'state':
             column, row = map(int, parts[1:-1])
-            if message.args:
+            if 0 <= column < 8 and 0 <= row < 8 and message.args:
                 name, r, g, b, touched, toggled = message.args
                 brightness = 255 if touched or toggled else 63
                 self.push.set_pad_color(row * 8 + column, int(r*brightness), int(g*brightness), int(b*brightness))
@@ -60,7 +60,7 @@ class Controller:
                 del self.pads[column, row]
         elif parts[0] == 'encoder' and parts[2] == 'state':
             number = int(parts[1])
-            if message.args:
+            if 0 <= number < 8 and message.args:
                 name, r, g, b, touched, value, lower, upper = message.args
                 brightness = 255 if touched else 63
                 self.push.set_menu_button_color(number + 8, int(r*brightness), int(g*brightness), int(b*brightness))
