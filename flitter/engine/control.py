@@ -6,7 +6,6 @@ The main Flitter engine
 
 import asyncio
 import logging
-import math
 from pathlib import Path
 
 from ..clock import BeatCounter
@@ -58,6 +57,8 @@ class Controller:
             if self.page_reload_task is not None:
                 self.page_reload_task.cancel()
                 self.page_reload_task = None
+            self.pads = {}
+            self.encoders = {}
             filename, mtime, tree, state = self.pages[page_number]
             self.state = state
             self.tree = tree
@@ -65,18 +66,14 @@ class Controller:
             self.current_filename = filename
             self.current_mtime = mtime
             Log.info("Switched to page %i: %s", page_number, filename)
-            for pad in self.pads.values():
-                self.enqueue_pad_status(pad, deleted=True)
-            self.pads = {}
-            for encoder in self.encoders.values():
-                self.enqueue_encoder_status(encoder, deleted=True)
-            self.encoders = {}
+            self.enqueue_reset()
             counter_state = self.get(Vector(['_counter']))
             if counter_state is not None:
                 tempo, quantum, start = counter_state
                 self.counter.update(tempo, int(quantum), start)
                 Log.info("Restore counter at beat %.1f, tempo %.1f, quantum %d", self.counter.beat, self.counter.tempo, self.counter.quantum)
                 self.enqueue_tempo()
+            self.enqueue_page_status()
 
     @staticmethod
     def load_source(filename):
@@ -196,6 +193,9 @@ class Controller:
             self.enqueue_encoder_status(self.encoders[number], deleted=True)
             del self.encoders[number]
 
+    def enqueue_reset(self):
+        self.queue.append(OSCMessage('/reset'))
+
     def enqueue_pad_status(self, pad, deleted=False):
         address = '/pad/' + '/'.join(str(int(n)) for n in pad.number) + '/state'
         if deleted:
@@ -267,11 +267,9 @@ class Controller:
         elif parts == ['page_left']:
             if self.current_page > 0:
                 self.switch_to_page(self.current_page - 1)
-                self.enqueue_page_status()
         elif parts == ['page_right']:
             if self.current_page < len(self.pages) - 1:
                 self.switch_to_page(self.current_page + 1)
-                self.enqueue_page_status()
 
     async def receive_messages(self):
         Log.info("Listening for OSC control messages on port %d", self.RECEIVE_PORT)
@@ -288,7 +286,7 @@ class Controller:
             else:
                 tempo = 120
             quantum = self.pragmas.get('quantum')
-            if quantum is not None and len(quantum) == 1 and isinstance(quantum[0], float) and quantum[0] >= 1:
+            if quantum is not None and len(quantum) == 1 and isinstance(quantum[0], float) and quantum[0] >= 2:
                 quantum = int(quantum[0])
             else:
                 quantum = 4
@@ -301,6 +299,7 @@ class Controller:
         loop = asyncio.get_event_loop()
         loop.create_task(self.receive_messages())
         frames = []
+        self.enqueue_reset()
         self.enqueue_page_status()
         execute_task = loop.create_task(self.execute())
         while True:

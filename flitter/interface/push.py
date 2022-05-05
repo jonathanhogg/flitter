@@ -84,6 +84,8 @@ class Controller:
                     self.buttons[Control.PAGE_RIGHT] = 255
             elif Control.PAGE_RIGHT in self.buttons:
                 del self.buttons[Control.PAGE_RIGHT]
+        elif parts == ['reset']:
+            self.reset()
 
     def reset(self):
         for column, row in self.pads:
@@ -95,6 +97,7 @@ class Controller:
         for control in self.buttons:
             self.push.set_button_white(control, 0)
         self.buttons.clear()
+        self.push.counter.update(120, 4, self.push.counter.clock())
         self.last_received = None
         self.updated.set()
 
@@ -164,7 +167,8 @@ class Controller:
                         if shift_pressed:
                             self.push.counter.quantum = max(2, self.push.counter.quantum + event.amount)
                         else:
-                            self.push.counter.set_tempo((round(self.push.counter.tempo * 2) + event.amount) / 2, timestamp=event.timestamp)
+                            tempo = max(0.5, (round(self.push.counter.tempo * 2) + event.amount) / 2)
+                            self.push.counter.set_tempo(tempo, timestamp=event.timestamp)
                         await self.osc_sender.send_message('/tempo', self.push.counter.tempo, self.push.counter.quantum, self.push.counter.start)
                     elif isinstance(event, ButtonPressed) and event.number == Control.TAP_TEMPO:
                         tap_tempo_pressed = True
