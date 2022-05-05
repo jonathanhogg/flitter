@@ -71,6 +71,11 @@ class Controller:
             for encoder in self.encoders.values():
                 self.enqueue_encoder_status(encoder, deleted=True)
             self.encoders = {}
+            counter_state = self.get(Vector(['_counter']))
+            if counter_state is not None:
+                tempo, quantum, start = counter_state
+                self.counter.update(tempo, int(quantum), start)
+                self.enqueue_tempo()
 
     @staticmethod
     def load_source(filename):
@@ -227,7 +232,8 @@ class Controller:
             self.enqueue_page_status()
         elif parts[0] == 'tempo':
             tempo, quantum, start = message.args
-            self.counter.update(tempo, quantum, start)
+            self.counter.update(tempo, int(quantum), start)
+            self[Vector(['_counter'])] = Vector([tempo, int(quantum), start])
             self.enqueue_tempo()
         elif parts[0] == 'pad':
             number = Vector(float(n) for n in parts[1:-1])
@@ -272,22 +278,27 @@ class Controller:
             message = await self.osc_receiver.receive()
             self.process_message(message)
 
+    def handle_pragmas(self):
+        tempo = self.pragmas.get('tempo')
+        quantum = self.pragmas.get('quantum')
+        counter_state = self.get(Vector(['_counter']))
+        if counter_state is None:
+            if tempo is not None and len(tempo) == 1 and isinstance(tempo[0], float):
+                self.counter.tempo = tempo[0]
+            if quantum is not None and len(quantum) == 1 and isinstance(quantum[0], float):
+                self.counter.quantum = int(quantum[0])
+            self[Vector(['_counter'])] = Vector([self.counter.tempo, self.counter.quantum, self.counter.start])
+            self.enqueue_tempo()
+
     async def run(self):
         loop = asyncio.get_event_loop()
         loop.create_task(self.receive_messages())
         frames = []
-        self.enqueue_tempo()
         self.enqueue_page_status()
         execute_task = loop.create_task(self.execute())
         while True:
             graph = await execute_task
-            if 'tempo' in self.pragmas:
-                tempo = self.pragmas['tempo']
-                if len(tempo) == 1 and tempo.isinstance(float):
-                    tempo = tempo[0]
-                    if not math.isclose(tempo, self.counter.tempo):
-                        self.counter.tempo = tempo
-                        self.enqueue_tempo()
+            self.handle_pragmas()
             execute_task = loop.create_task(self.execute())
             await asyncio.sleep(0)
             self.update_windows(graph)
