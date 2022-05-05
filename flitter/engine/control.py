@@ -71,6 +71,8 @@ class Controller:
                 Log.info("Restore counter at beat %.1f, tempo %.1f, quantum %d", self.counter.beat, self.counter.tempo, self.counter.quantum)
                 self.enqueue_tempo()
             self.enqueue_page_status()
+            for window in self.windows:
+                window.purge()
 
     @staticmethod
     def load_source(filename):

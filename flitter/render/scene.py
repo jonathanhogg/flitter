@@ -44,6 +44,9 @@ class SceneNode:
     def destroy(self):
         self.release()
         self.glctx = None
+        self.purge()
+
+    def purge(self):
         while self.children:
             self.children.pop().destroy()
 
@@ -166,6 +169,7 @@ void main() {{
         self.compile()
         if self._rectangle is not None:
             self.framebuffer.use()
+            self.framebuffer.clear()
             samplers = []
             unit = 0
             last = False
@@ -177,7 +181,10 @@ void main() {{
                     elif name == 'last':
                         if self._last is None:
                             self._last = self.glctx.texture((self.width, self.height), 4)
-                        self._last.use(location=unit)
+                            self.glctx.copy_framebuffer(self._last, self.framebuffer)
+                        sampler = self.glctx.sampler(texture=self._last, repeat_x=False, repeat_y=False)
+                        sampler.use(location=unit)
+                        samplers.append(sampler)
                         member.value = unit
                         unit += 1
                         last = True
@@ -198,7 +205,6 @@ void main() {{
                         value = self.node.get(name, member.dimension, float)
                         if value is not None:
                             member.value = value if member.dimension == 1 else tuple(value)
-            self.framebuffer.clear()
             self._rectangle.render(mode=moderngl.TRIANGLE_STRIP)
             for sampler in samplers:
                 sampler.clear()
