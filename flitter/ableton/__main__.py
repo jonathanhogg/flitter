@@ -2,19 +2,18 @@
 Ableton Push API test
 """
 
-# pylama:ignore=W0601,C0103,R0912,R0915
+# pylama:ignore=W0601,C0103,R0912,R0915,R0914
 
 import argparse
 import asyncio
 import logging
-import math
 import sys
 
 import skia
 
 from ..clock import TapTempo
-from .constants import Animation, Encoder, Control, BUTTONS
-from .events import (ButtonPressed, ButtonReleased, TouchStripDragged, PadPressed, PadHeld, PadReleased,
+from .constants import Encoder, Control, BUTTONS
+from .events import (ButtonPressed, ButtonReleased, PadPressed, PadHeld, PadReleased,
                      EncoderTurned, EncoderTouched, EncoderReleased, MenuButtonReleased)
 from .push import Push
 from ..interface.osc import OSCSender, OSCReceiver, OSCBundle
@@ -54,7 +53,7 @@ class Controller:
                 name, r, g, b, touched, value, lower, upper = message.args
                 brightness = 255 if touched else 63
                 self.push.set_menu_button_color(number + 8, int(r*brightness), int(g*brightness), int(b*brightness))
-                self.encoders[number] = name, (r,g,b), touched, value, lower, upper
+                self.encoders[number] = name, (r, g, b), touched, value, lower, upper
             elif number in self.encoders:
                 self.push.set_menu_button_color(number + 8, 0, 0, 0)
                 del self.encoders[number]
@@ -146,16 +145,15 @@ class Controller:
                 else:
                     async with self.push.screen_canvas() as canvas:
                         canvas.clear(skia.ColorBLACK)
-                        white = skia.Paint(Color=skia.ColorWHITE, AntiAlias=True)
-                        black = skia.Paint(Color=skia.ColorBLACK, AntiAlias=True)
+                        paint = skia.Paint(Color=skia.ColorWHITE, AntiAlias=True)
                         font = skia.Font(skia.Typeface("helvetica"), 20)
-                        canvas.drawSimpleText(f"BPM: {self.push.counter.tempo:5.1f}", 10, 150, font, white)
-                        canvas.drawSimpleText(f"Quantum: {self.push.counter.quantum}", 130, 150, font, white)
+                        canvas.drawSimpleText(f"BPM: {self.push.counter.tempo:5.1f}", 10, 150, font, paint)
+                        canvas.drawSimpleText(f"Quantum: {self.push.counter.quantum}", 130, 150, font, paint)
                         font.setSize(16)
                         for number, (name, (r, g, b), touched, value, lower, upper) in self.encoders.items():
                             canvas.save()
                             canvas.translate(120 * number, 0)
-                            paint = skia.Paint(Style=skia.Paint.kStroke_Style, AntiAlias=True)
+                            paint.setStyle(skia.Paint.kStroke_Style)
                             if touched:
                                 paint.setColor4f(skia.Color4f(r, g, b, 1))
                             else:
@@ -175,7 +173,8 @@ class Controller:
                             canvas.drawPath(path, paint)
                             text = name.upper()
                             width = font.measureText(text)
-                            canvas.drawString(text, (120-width) / 2, 20, font, black)
+                            paint.setColor(skia.ColorBLACK)
+                            canvas.drawString(text, (120-width) / 2, 20, font, paint)
                             canvas.restore()
         finally:
             for n in range(64):
