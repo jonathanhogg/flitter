@@ -3,10 +3,13 @@ Flitter drawing canvas based on Skia
 """
 
 import enum
+import logging
 from pathlib import Path
 
 import skia
 
+
+Log = logging.getLogger(__name__)
 
 _ImageCache = {}
 
@@ -15,14 +18,15 @@ def load_image(filename):
     path = Path(filename)
     if path.exists():
         current_mtime = path.stat().st_mtime
-        if path in _ImageCache:
-            mtime, image = _ImageCache[path]
+        if filename in _ImageCache:
+            mtime, image = _ImageCache[filename]
             if mtime == current_mtime:
                 return image
         try:
-            image = skia.Image.open(path)
-        except Exception as exc:
-            print(exc)
+            image = skia.Image.open(filename)
+            Log.info("Read image file %s", filename)
+        except Exception:
+            Log.exception("Unexpected error opening file %s", filename)
             image = None
         _ImageCache[filename] = current_mtime, image
         return image
