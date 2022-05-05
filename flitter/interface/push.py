@@ -36,6 +36,7 @@ class Controller:
         self.buttons = {}
         self.last_received = None
         self.last_hello = None
+        self.updated = asyncio.Event()
 
     def process_message(self, message):
         if isinstance(message, OSCBundle):
@@ -101,6 +102,7 @@ class Controller:
             message = await self.osc_receiver.receive()
             self.last_received = self.push.counter.clock()
             self.process_message(message)
+            self.updated.set()
 
     async def run(self):
         self.push = Push()
@@ -121,10 +123,15 @@ class Controller:
         tap_tempo_pressed = False
         tap_tempo = TapTempo(rounding=1)
         asyncio.get_event_loop().create_task(self.receive_messages())
+        self.updated.set()
         try:
+            wait_event = asyncio.create_task(self.push.get_event())
+            wait_update = asyncio.create_task(self.updated.wait())
             while True:
-                event = await self.push.get_event(1/60)
-                if event:
+                done, _ = await asyncio.wait({wait_event, wait_update}, timeout=1/10, return_when=asyncio.FIRST_COMPLETED)
+                if wait_event in done:
+                    event = wait_event.result()
+                    wait_event = asyncio.create_task(self.push.get_event())
                     if isinstance(event, ButtonPressed) and event.number == Control.SHIFT:
                         shift_pressed = True
                     elif isinstance(event, ButtonReleased) and event.number == Control.SHIFT:
@@ -174,14 +181,10 @@ class Controller:
                         await self.osc_sender.send_message('/page_left')
                     elif isinstance(event, ButtonReleased) and event.number == Control.PAGE_RIGHT:
                         await self.osc_sender.send_message('/page_right')
-                else:
-                    now = self.push.counter.clock()
-                    if (self.last_hello is None or now > self.last_hello + self.HELLO_RETRY_INTERVAL) \
-                            and (self.last_received is None or now > self.last_received + self.RECEIVE_TIMEOUT):
-                        await self.osc_sender.send_message('/hello')
-                        self.last_hello = now
-                    if self.last_received is not None and now > self.last_received + self.RESET_TIMEOUT:
-                        self.reset()
+                    self.updated.set()
+                elif wait_update in done:
+                    self.updated.clear()
+                    wait_update = asyncio.create_task(self.updated.wait())
                     async with self.push.screen_canvas() as canvas:
                         canvas.clear(skia.ColorBLACK)
                         paint = skia.Paint(Color=skia.ColorWHITE, AntiAlias=True)
@@ -215,6 +218,14 @@ class Controller:
                             paint.setColor(skia.ColorBLACK)
                             canvas.drawString(text, (120-width) / 2, 20, font, paint)
                             canvas.restore()
+                else:
+                    now = self.push.counter.clock()
+                    if (self.last_hello is None or now > self.last_hello + self.HELLO_RETRY_INTERVAL) \
+                            and (self.last_received is None or now > self.last_received + self.RECEIVE_TIMEOUT):
+                        await self.osc_sender.send_message('/hello')
+                        self.last_hello = now
+                    if self.last_received is not None and now > self.last_received + self.RESET_TIMEOUT:
+                        self.reset()
         finally:
             for n in range(64):
                 self.push.set_pad_color(n, 0, 0, 0)
