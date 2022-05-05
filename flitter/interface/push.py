@@ -96,6 +96,7 @@ class Controller:
             self.push.set_button_white(control, 0)
         self.buttons.clear()
         self.last_received = None
+        self.updated.set()
 
     async def receive_messages(self):
         while True:

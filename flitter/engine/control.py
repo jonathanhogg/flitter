@@ -75,6 +75,7 @@ class Controller:
             if counter_state is not None:
                 tempo, quantum, start = counter_state
                 self.counter.update(tempo, int(quantum), start)
+                Log.info("Restore counter at beat %.1f, tempo %.1f, quantum %d", self.counter.beat, self.counter.tempo, self.counter.quantum)
                 self.enqueue_tempo()
 
     @staticmethod
@@ -279,16 +280,22 @@ class Controller:
             self.process_message(message)
 
     def handle_pragmas(self):
-        tempo = self.pragmas.get('tempo')
-        quantum = self.pragmas.get('quantum')
         counter_state = self.get(Vector(['_counter']))
         if counter_state is None:
-            if tempo is not None and len(tempo) == 1 and isinstance(tempo[0], float):
-                self.counter.tempo = tempo[0]
-            if quantum is not None and len(quantum) == 1 and isinstance(quantum[0], float):
-                self.counter.quantum = int(quantum[0])
+            tempo = self.pragmas.get('tempo')
+            if tempo is not None and len(tempo) == 1 and isinstance(tempo[0], float) and tempo[0] > 0:
+                tempo = tempo[0]
+            else:
+                tempo = 120
+            quantum = self.pragmas.get('quantum')
+            if quantum is not None and len(quantum) == 1 and isinstance(quantum[0], float) and quantum[0] >= 1:
+                quantum = int(quantum[0])
+            else:
+                quantum = 4
+            self.counter.update(tempo, quantum, self.counter.clock())
             self[Vector(['_counter'])] = Vector([self.counter.tempo, self.counter.quantum, self.counter.start])
             self.enqueue_tempo()
+            Log.info("Start counter, tempo %d, quantum %d", self.counter.tempo, self.counter.quantum)
 
     async def run(self):
         loop = asyncio.get_event_loop()
