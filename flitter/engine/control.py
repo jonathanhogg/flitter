@@ -2,7 +2,7 @@
 The main Flitter engine
 """
 
-# pylama:ignore=W0703,R0902,R0912
+# pylama:ignore=W0703,R0902,R0912,R0915
 
 import asyncio
 import logging
@@ -40,10 +40,10 @@ class Controller:
         self.queue = []
         self.read_cache = {}
         self.pages = []
+        self.next_page = None
         self.current_page = None
         self.current_filename = None
         self.current_mtime = None
-        self.page_reload_task = None
 
     def load_page(self, filename):
         page_number = len(self.pages)
@@ -54,9 +54,6 @@ class Controller:
 
     def switch_to_page(self, page_number):
         if self.pages is not None and 0 <= page_number < len(self.pages):
-            if self.page_reload_task is not None:
-                self.page_reload_task.cancel()
-                self.page_reload_task = None
             self.pads = {}
             self.encoders = {}
             filename, mtime, tree, state = self.pages[page_number]
@@ -109,35 +106,6 @@ class Controller:
             return text
         return null
 
-    async def execute(self):
-        loop = asyncio.get_event_loop()
-        if self.current_filename.stat().st_mtime > self.current_mtime:
-            if self.page_reload_task is None:
-                Log.debug("Begin reload of page %i: %s", self.current_page, self.current_filename)
-                self.page_reload_task = loop.run_in_executor(None, self.load_source, self.current_filename)
-            elif self.page_reload_task.done():
-                try:
-                    mtime, tree = await self.page_reload_task
-                    self.page_reload_task = None
-                    self.current_mtime = mtime
-                    self.tree = tree
-                    self.pages[self.current_page] = self.current_filename, self.current_mtime, self.tree, self.state
-                    Log.info("Reloaded page %i: %s", self.current_page, self.current_filename)
-                except Exception:
-                    Log.exception("Error reloading page")
-        beat = self.counter.beat
-        variables = {'beat': Vector((beat,)),
-                     'quantum': Vector((self.counter.quantum,)),
-                     'clock': Vector((self.counter.time_at_beat(beat),)),
-                     'read': Vector((self.read,))}
-        context = Context(variables=variables, state=self.state.copy(), pragmas=self.pragmas)
-        if self.profiling:
-            await asyncio.sleep(0)
-            self.execute_tree(self.tree, context)
-        else:
-            await loop.run_in_executor(None, self.execute_tree, self.tree, context)
-        return context.graph
-
     @staticmethod
     def execute_tree(tree, context):
         with context:
@@ -147,6 +115,7 @@ class Controller:
                 for value in result:
                     if isinstance(value, Node) and value.parent is None:
                         context.graph.append(value)
+        return context.graph
 
     def update_windows(self, graph):
         count = 0
@@ -266,10 +235,10 @@ class Controller:
                     encoder.on_reset(beat)
         elif parts == ['page_left']:
             if self.current_page > 0:
-                self.switch_to_page(self.current_page - 1)
+                self.next_page = self.current_page - 1
         elif parts == ['page_right']:
             if self.current_page < len(self.pages) - 1:
-                self.switch_to_page(self.current_page + 1)
+                self.next_page = self.current_page + 1
 
     async def receive_messages(self):
         Log.info("Listening for OSC control messages on port %d", self.RECEIVE_PORT)
@@ -301,21 +270,64 @@ class Controller:
         frames = []
         self.enqueue_reset()
         self.enqueue_page_status()
-        execute_task = loop.create_task(self.execute())
+        execute_task = None
+        reload_task = None
+        context = None
         while True:
-            graph = await execute_task
-            self.handle_pragmas()
-            execute_task = loop.create_task(self.execute())
-            await asyncio.sleep(0)
-            self.update_windows(graph)
-            self.update_controls(graph)
-            graph.dissolve()
+            if self.profiling and context is not None:
+                graph = self.execute_tree(self.tree, context)
+            elif execute_task is not None:
+                graph = await execute_task
+            else:
+                graph = None
+
+            if self.next_page is not None:
+                if reload_task is not None:
+                    reload_task.cancel()
+                    reload_task = None
+                self.switch_to_page(self.next_page)
+                self.next_page = None
+                graph = None
+
+            if graph is not None:
+                self.update_controls(graph)
+                self.handle_pragmas()
+
+            if self.current_filename.stat().st_mtime > self.current_mtime:
+                if reload_task is None:
+                    Log.debug("Begin reload of page %i: %s", self.current_page, self.current_filename)
+                    reload_task = loop.run_in_executor(None, self.load_source, self.current_filename)
+                elif reload_task.done():
+                    try:
+                        mtime, tree = await reload_task
+                        self.current_mtime = mtime
+                        self.tree = tree
+                        self.pages[self.current_page] = self.current_filename, self.current_mtime, self.tree, self.state
+                        Log.info("Reloaded page %i: %s", self.current_page, self.current_filename)
+                    except Exception:
+                        Log.exception("Error reloading page")
+                    finally:
+                        reload_task = None
+
+            beat = self.counter.beat
+            variables = {'beat': Vector((beat,)),
+                         'quantum': Vector((self.counter.quantum,)),
+                         'clock': Vector((self.counter.time_at_beat(beat),)),
+                         'read': Vector((self.read,))}
+            context = Context(variables=variables, state=self.state.copy(), pragmas=self.pragmas)
+            if not self.profiling:
+                execute_task = loop.run_in_executor(None, self.execute_tree, self.tree, context)
+
+            if graph is not None:
+                self.update_windows(graph)
+                graph.dissolve()
+                if frames:
+                    await asyncio.sleep(max(0, frames[-1] + 1/120 - self.counter.clock()))
+                frames.append(self.counter.clock())
+                if len(frames) > 1 and frames[-1] - frames[0] > 2:
+                    fps = (len(frames) - 1) / (frames[-1] - frames[0])
+                    Log.info("Frame rate = %.1ffps", fps)
+                    frames = frames[-1:]
+
             if self.queue:
                 await self.osc_sender.send_bundle_from_queue(self.queue)
-            else:
-                await asyncio.sleep(0)
-            frames.append(self.counter.clock())
-            if len(frames) > 1 and frames[-1] - frames[0] > 2:
-                fps = (len(frames) - 1) / (frames[-1] - frames[0])
-                Log.info("Frame rate = %.1ffps", fps)
-                frames = []
