@@ -188,17 +188,18 @@ def draw(node, ctx, paint, font, path):
             path.close()
 
         case "text":
-            set_styles(node, font=font)
+            set_styles(node, paint=paint, font=font)
             point = node.get('point', 2, float)
             text = node.get('text', 1, str)
             center = node.get('center', 1, bool, True)
             if point is not None and text is not None:
-                blob = skia.TextBlob(text, font)
+                bounds = skia.Rect(0, 0, 0, 0)
+                font.measureText(text, bounds=bounds)
                 if center:
-                    rect = blob.bound()
-                    ctx.drawTextBlob(blob, point[0]-rect.width()/2, point[1]+rect.height()/2, paint)
+                    ctx.drawString(text, point[0]-bounds.x()-bounds.width()/2, point[1]-bounds.y()-bounds.height()/2, font, paint)
                 else:
-                    ctx.drawTextBlob(blob, *point, paint)
+                    ctx.drawRect(skia.Rect.MakeXYWH(point[0]+bounds.x(), point[1]+bounds.y(), bounds.width(), bounds.height()), skia.Paint(Color=skia.ColorWHITE))
+                    ctx.drawString(text, *point, font, paint)
 
         case "gradient":
             colors = []

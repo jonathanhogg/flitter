@@ -8,9 +8,9 @@ import asyncio
 from contextlib import asynccontextmanager
 import logging
 
-import cairo
 import numpy as np
 import rtmidi
+import skia
 import usb.core
 
 from ..clock import BeatCounter
@@ -54,8 +54,8 @@ class Push:
     def __init__(self):
         self._screen_data = bytearray(self.SCREEN_HEIGHT * self.SCREEN_STRIDE * 2)
         self._screen_array = np.ndarray(buffer=self._screen_data, shape=(self.SCREEN_HEIGHT, self.SCREEN_STRIDE), dtype='uint16')
-        self._screen_image = cairo.ImageSurface(cairo.Format.ARGB32, self.SCREEN_WIDTH, self.SCREEN_HEIGHT)
-        self._image_array = np.ndarray(buffer=self._screen_image.get_data(), shape=(self.SCREEN_HEIGHT, self.SCREEN_WIDTH, 4), dtype='uint8')
+        self._surface_array = np.zeros((self.SCREEN_HEIGHT, self.SCREEN_WIDTH, 4), dtype='uint8')
+        self._screen_surface = skia.Surface(self._surface_array)
         self._screen_update = asyncio.Condition()
         self._usb_device = usb.core.find(idVendor=0x2982, idProduct=0x1967)
         if self._usb_device is None:
@@ -200,10 +200,12 @@ class Push:
         Log.warning("Unrecognised MIDI - %s", " ".join(f"{b:02x}" for b in message))
 
     @asynccontextmanager
-    async def screen_context(self):
+    async def screen_canvas(self):
         async with self._screen_update:
-            yield cairo.Context(self._screen_image)
-            self._screen_image.flush()
+            with self._screen_surface as canvas:
+                canvas.save()
+                yield canvas
+                canvas.restore()
             self._screen_update.notify()
 
     async def _run_clock(self):
@@ -221,12 +223,12 @@ class Push:
 
     def _update_screen(self):
         self._screen_array[:, :] = 0
-        pixels = self._screen_array[:, :self._image_array.shape[1]]
-        pixels += self._image_array[:, :, 0] >> 3
+        pixels = self._screen_array[:, :self._surface_array.shape[1]]
+        pixels += self._surface_array[:, :, 2] >> 3
         pixels <<= 6
-        pixels += self._image_array[:, :, 1] >> 2
+        pixels += self._surface_array[:, :, 1] >> 2
         pixels <<= 5
-        pixels += self._image_array[:, :, 2] >> 3
+        pixels += self._surface_array[:, :, 0] >> 3
         self._screen_array[:, 0::2] ^= 0xF3E7
         self._screen_array[:, 1::2] ^= 0xFFE7
         self._screen_endpoint.write(self.FRAME_HEADER)

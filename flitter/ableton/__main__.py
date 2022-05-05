@@ -10,6 +10,8 @@ import logging
 import math
 import sys
 
+import skia
+
 from ..clock import TapTempo
 from .constants import Animation, Encoder, Control, BUTTONS
 from .events import (ButtonPressed, ButtonReleased, TouchStripDragged, PadPressed, PadHeld, PadReleased,
@@ -142,42 +144,39 @@ class Controller:
                     elif isinstance(event, ButtonReleased) and event.number == Control.PAGE_RIGHT:
                         await self.osc_sender.send_message('/page_right')
                 else:
-                    async with self.push.screen_context() as ctx:
-                        ctx.set_source_rgb(0, 0, 0)
-                        ctx.paint()
-                        ctx.set_source_rgb(1, 1, 1)
-                        ctx.set_font_size(20)
-                        ctx.move_to(10, 150)
-                        ctx.show_text(f"BPM: {self.push.counter.tempo:5.1f}")
-                        ctx.move_to(130, 150)
-                        ctx.show_text(f"Quantum: {self.push.counter.quantum}")
-                        ctx.set_font_size(16)
-                        for number in self.encoders:
-                            ctx.save()
-                            ctx.translate(120 * number, 0)
-                            name, (r, g, b), touched, value, lower, upper = self.encoders[number]
+                    async with self.push.screen_canvas() as canvas:
+                        canvas.clear(skia.ColorBLACK)
+                        white = skia.Paint(Color=skia.ColorWHITE, AntiAlias=True)
+                        black = skia.Paint(Color=skia.ColorBLACK, AntiAlias=True)
+                        font = skia.Font(skia.Typeface("helvetica"), 20)
+                        canvas.drawSimpleText(f"BPM: {self.push.counter.tempo:5.1f}", 10, 150, font, white)
+                        canvas.drawSimpleText(f"Quantum: {self.push.counter.quantum}", 130, 150, font, white)
+                        font.setSize(16)
+                        for number, (name, (r, g, b), touched, value, lower, upper) in self.encoders.items():
+                            canvas.save()
+                            canvas.translate(120 * number, 0)
+                            paint = skia.Paint(Style=skia.Paint.kStroke_Style, AntiAlias=True)
                             if touched:
-                                ctx.set_source_rgb(r, g, b)
+                                paint.setColor4f(skia.Color4f(r, g, b, 1))
                             else:
-                                ctx.set_source_rgb(r/2, g/2, b/2)
-                            ctx.new_path()
-                            ctx.set_line_width(2)
-                            ctx.arc(60, 80, 30, 2/3*math.pi, 7/3*math.pi)
-                            ctx.stroke()
-                            ctx.new_path()
-                            ctx.set_line_width(10)
-                            p = 2/3 + 5/3 * (value - lower) / (upper - lower)
-                            ctx.arc(60, 80, 40, 2/3*math.pi, p*math.pi)
-                            ctx.stroke()
-                            ctx.new_path()
-                            ctx.rectangle(2, 2, 116, 26)
-                            ctx.fill()
-                            name = name.upper()
-                            extents = ctx.text_extents(name)
-                            ctx.move_to((120 - extents.width) / 2, 20)
-                            ctx.set_source_rgb(0, 0, 0)
-                            ctx.show_text(name)
-                            ctx.restore()
+                                paint.setColor4f(skia.Color4f(r/2, g/2, b/2, 1))
+                            path = skia.Path()
+                            paint.setStrokeWidth(2)
+                            path.addArc(skia.Rect.MakeXYWH(30, 50, 60, 60), -240, 300)
+                            canvas.drawPath(path, paint)
+                            path = skia.Path()
+                            paint.setStrokeWidth(10)
+                            sweep = 300 * (value - lower) / (upper - lower)
+                            path.addArc(skia.Rect.MakeXYWH(30, 50, 60, 60), -240, sweep)
+                            canvas.drawPath(path, paint)
+                            path = skia.Path()
+                            path.addRect(2, 2, 116, 26)
+                            paint.setStyle(skia.Paint.kFill_Style)
+                            canvas.drawPath(path, paint)
+                            text = name.upper()
+                            width = font.measureText(text)
+                            canvas.drawString(text, (120-width) / 2, 20, font, black)
+                            canvas.restore()
         finally:
             for n in range(64):
                 self.push.set_pad_color(n, 0, 0, 0)

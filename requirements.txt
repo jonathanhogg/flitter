@@ -1,9 +1,9 @@
 numpy
 lark
-pycairo
+skia-python
 python-rtmidi
 pyusb
 regex
-cython==3.0.0a9
+cython
 pyglet
 moderngl
