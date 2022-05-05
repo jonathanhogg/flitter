@@ -9,14 +9,14 @@ import logging
 import math
 from pathlib import Path
 
-from .clock import BeatCounter
-from .interface.controls import Pad, Encoder
-from .interface.osc import OSCReceiver, OSCSender, OSCMessage, OSCBundle
-from .language.interpreter import simplify, evaluate
-from .language.parser import parse
-from .language.ast import Literal
-from .model import Context, Vector, Node, null
-from .render.scene import Window
+from ..clock import BeatCounter
+from ..interface.controls import Pad, Encoder
+from ..interface.osc import OSCReceiver, OSCSender, OSCMessage, OSCBundle
+from ..language.interpreter import simplify, evaluate
+from ..language.parser import parse
+from ..language.ast import Literal
+from ..model import Context, Vector, Node, null
+from ..render.scene import Window
 
 
 Log = logging.getLogger(__name__)

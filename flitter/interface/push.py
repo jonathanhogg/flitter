@@ -12,11 +12,11 @@ import sys
 import skia
 
 from ..clock import TapTempo
-from .constants import Encoder, Control, BUTTONS
-from .events import (ButtonPressed, ButtonReleased, PadPressed, PadHeld, PadReleased,
-                     EncoderTurned, EncoderTouched, EncoderReleased, MenuButtonReleased)
-from .push import Push
-from ..interface.osc import OSCSender, OSCReceiver, OSCBundle
+from ..ableton.constants import Encoder, Control, BUTTONS
+from ..ableton.events import (ButtonPressed, ButtonReleased, PadPressed, PadHeld, PadReleased,
+                              EncoderTurned, EncoderTouched, EncoderReleased, MenuButtonReleased)
+from ..ableton.push import Push
+from .osc import OSCSender, OSCReceiver, OSCBundle
 
 
 Log = logging.getLogger(__name__)
