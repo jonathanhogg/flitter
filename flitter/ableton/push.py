@@ -201,6 +201,10 @@ class Push:
 
     @asynccontextmanager
     async def screen_canvas(self):
+        if self._screen_task is None:
+            raise TypeError("Not started")
+        if self._screen_task.done():
+            await self._screen_task
         async with self._screen_update:
             with self._screen_surface as canvas:
                 canvas.save()
@@ -246,3 +250,4 @@ class Push:
                         pass
         except Exception:
             Log.exception("Unexpected exception")
+            raise
