@@ -19,13 +19,15 @@ sequence : _NL? expression+
             | node "^" _NL _INDENT sequence _DEDENT -> prepend
             | node _NL _INDENT sequence _DEDENT -> append
             | "for" NAME "in" range _NL _INDENT sequence _DEDENT -> loop
-            | "let" binding+ _NL -> let
+            | "let" bindings _NL -> let
             | "if" tests ["else" _NL _INDENT sequence _DEDENT] -> if_else
             | "%pragma" NAME node _NL -> pragma
 
 tests : test ("elif" test)*
 
 test : composition _NL _INDENT sequence _DEDENT
+
+bindings : binding+ -> tuple
 
 binding : NAME "=" composition
 
@@ -38,7 +40,11 @@ binding : NAME "=" composition
 
 ?comprehension : or
                | "for" NAME "in" or "|" comprehension -> loop
-               | "let" NAME "=" or "|" comprehension -> inline_let
+               | "let" inline_bindings "|" comprehension -> inline_let
+
+inline_bindings: binding+ -> tuple
+
+inline_binding: NAME "=" or -> binding
 
 ?or : and
     | or "or" and -> logical_or
@@ -85,7 +91,7 @@ binding : NAME "=" composition
 literal : SIGNED_NUMBER
         | ESCAPED_STRING
 
-args : (node ("," node)*)?
+args : (node ("," node)*)? -> tuple
 
 tags: tag*
 

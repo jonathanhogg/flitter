@@ -133,14 +133,19 @@ def simplify(expression, context):
             expr = simplify(expr, context)
             return ast.Attribute(node=node, name=name, expr=expr)
 
-        case ast.InlineLet(name=name, expr=expr, body=body):
-            expr = simplify(expr, context)
-            if not isinstance(expr, ast.Literal):
-                body = simplify(body, context)
-                return ast.InlineLet(name=name, expr=expr, body=body)
+        case ast.InlineLet(bindings=bindings, body=body):
+            remaining = []
             with context:
-                context[name] = expr.value
-                return simplify(body, context)
+                for binding in bindings:
+                    expr = simplify(binding.expr, context)
+                    if isinstance(expr, ast.Literal):
+                        context[binding.name] = expr.value
+                    else:
+                        remaining.append(ast.Binding(binding.name, expr))
+                body = simplify(body, context)
+                if remaining:
+                    return ast.InlineLet(bindings=tuple(remaining), body=body)
+                return body
 
         case ast.For(name=name, source=source, body=body):
             source = simplify(source, context)
@@ -336,10 +341,10 @@ def evaluate(expression, context):
         case ast.Search(query=query):
             return model.Vector(context.graph.select_below(query))
 
-        case ast.InlineLet(name=name, expr=expr, body=body):
-            expr = evaluate(expr, context)
+        case ast.InlineLet(bindings=bindings, body=body):
             with context:
-                context[name] = expr
+                for binding in bindings:
+                    context[binding.name] = evaluate(binding.expr, context)
                 return evaluate(body, context)
 
         case ast.For(name=name, source=source, body=body):

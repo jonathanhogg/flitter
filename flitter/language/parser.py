@@ -39,9 +39,10 @@ class FlitterTransformer(Transformer):
     def range(self, start, stop, step):
         return ast.Range(ast.Literal(model.null) if start is None else start, stop, ast.Literal(model.null) if step is None else step)
 
+    tuple = v_args(inline=False)(tuple)
+
     add = ast.Add
     append = ast.Append
-    args = v_args(inline=False)(tuple)
     attribute = ast.Attribute
     binding = ast.Binding
     bool = ast.Literal
@@ -54,7 +55,7 @@ class FlitterTransformer(Transformer):
     if_else = ast.IfElse
     inline_let = ast.InlineLet
     le = ast.LessThanOrEqualTo
-    let = v_args(inline=False)(ast.Let)
+    let = ast.Let
     literal = ast.Literal
     logical_and = ast.And
     logical_not = ast.Not

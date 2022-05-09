@@ -191,8 +191,7 @@ class Let(Expression):
 
 @dataclass(frozen=True, slots=True)
 class InlineLet(Expression):
-    name: str
-    expr: Expression
+    bindings: Tuple[Binding, ...]
     body: Expression
 
 
