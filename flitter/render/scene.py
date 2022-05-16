@@ -266,6 +266,8 @@ class Window(ProgramNode):
                     self.window._nswindow.enterFullScreenMode_(self.window._nswindow.screen())  # noqa
                 else:
                     self.window.set_fullscreen(True)
+        elif resized:
+            self.on_resize(self.width, self.height)
 
     def on_resize(self, width, height):
         aspect_ratio = self.width / self.height
