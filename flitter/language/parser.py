@@ -55,7 +55,7 @@ class FlitterTransformer(Transformer):
     if_else = ast.IfElse
     inline_let = ast.InlineLet
     le = ast.LessThanOrEqualTo
-    let = ast.Let
+    let = v_args(inline=False)(ast.Let)
     literal = ast.Literal
     logical_and = ast.And
     logical_not = ast.Not

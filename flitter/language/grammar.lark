@@ -5,8 +5,7 @@
 %ignore /\\$\n/m
 %declare _INDENT _DEDENT
 
-
-_NL: /(\r?\n[\t ]*)+/
+_NL: /((--[^\r\n]*)?\r?\n[\t ]*)+/
 
 NAME : /[_a-z][_a-z0-9]*/i
 SIGNED_NUMBER : /([0-9]+(\.[0-9]+)?|\.[0-9]+)(e[-+]?[0-9]+)?/i
@@ -19,15 +18,13 @@ sequence : _NL? expression+
             | node "^" _NL _INDENT sequence _DEDENT -> prepend
             | node _NL _INDENT sequence _DEDENT -> append
             | "for" NAME "in" range _NL _INDENT sequence _DEDENT -> loop
-            | "let" bindings _NL -> let
+            | "let" binding+ _NL (_INDENT (binding+ _NL)+ _DEDENT)? -> let
             | "if" tests ["else" _NL _INDENT sequence _DEDENT] -> if_else
             | "%pragma" NAME node _NL -> pragma
 
 tests : test ("elif" test)*
 
 test : composition _NL _INDENT sequence _DEDENT
-
-bindings : binding+ -> tuple
 
 binding : NAME "=" composition
 
