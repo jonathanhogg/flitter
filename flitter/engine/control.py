@@ -48,7 +48,8 @@ class Controller:
     def load_page(self, filename):
         page_number = len(self.pages)
         filename = Path(filename)
-        mtime, tree = self.load_source(filename)
+        mtime = filename.stat().st_mtime
+        tree = self.load_source(filename)
         Log.info("Loaded page %i: %s", page_number, filename)
         self.pages.append((filename, mtime, tree, {}))
 
@@ -76,10 +77,9 @@ class Controller:
 
     @staticmethod
     def load_source(filename):
-        mtime = filename.stat().st_mtime
         with open(filename, encoding='utf8') as file, Context() as context:
             tree = simplify(parse(file.read()), context)
-        return mtime, tree
+        return tree
 
     def get(self, key, default=None):
         return self.state.get(key, default)
@@ -295,14 +295,14 @@ class Controller:
                 self.update_controls(graph)
                 self.handle_pragmas()
 
-            if self.current_filename.stat().st_mtime > self.current_mtime:
+            mtime = self.current_filename.stat().st_mtime
+            if mtime > self.current_mtime:
                 if reload_task is None:
                     Log.debug("Begin reload of page %i: %s", self.current_page, self.current_filename)
                     reload_task = loop.run_in_executor(None, self.load_source, self.current_filename)
                 elif reload_task.done():
                     try:
-                        mtime, tree = await reload_task
-                        self.current_mtime = mtime
+                        tree = await reload_task
                         self.tree = tree
                         self.pages[self.current_page] = self.current_filename, self.current_mtime, self.tree, self.state
                         Log.info("Reloaded page %i: %s", self.current_page, self.current_filename)
@@ -310,6 +310,7 @@ class Controller:
                         Log.exception("Error reloading page")
                     finally:
                         reload_task = None
+                    self.current_mtime = mtime
 
             beat = self.counter.beat
             variables = {'beat': Vector((beat,)),
