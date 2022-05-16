@@ -161,8 +161,13 @@ def draw(node, ctx, paint, font, path):
             radius = node.get('radius', 2, float)
             if point is not None and radius is not None:
                 start = node.get('start', 1, float, 0)
-                end = node.get('end', 1, float, 1)
-                path.arcTo(skia.Rect(point[0]-radius[0], point[1]-radius[1], point[0]+radius[0], point[1]+radius[1]), start*360, end*360)
+                sweep = node.get('sweep', 1, float)
+                if sweep is None:
+                    end = node.get('end', 1, float)
+                    if end is not None:
+                        sweep = end - start
+                if sweep is not None:
+                    path.arcTo(skia.Rect(point[0]-radius[0], point[1]-radius[1], point[0]+radius[0], point[1]+radius[1]), start*360, sweep*360, False)
 
         case "rect":
             size = node.get('size', 2, float)
