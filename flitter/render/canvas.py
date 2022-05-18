@@ -80,7 +80,7 @@ def set_styles(node, ctx=None, paint=None, font=None):
         if rotate is not None:
             ctx.rotate(rotate * 360)
         scale = node.get('scale', 2, float)
-        if scale is not None and scale[0] != 0 and scale[1] != 0:
+        if scale is not None:
             ctx.scale(*scale)
     if paint is not None:
         rgb = node.get('color', 3, float)
