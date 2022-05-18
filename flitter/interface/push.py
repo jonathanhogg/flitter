@@ -61,10 +61,10 @@ class Controller:
         elif parts[0] == 'encoder' and parts[2] == 'state':
             number = int(parts[1])
             if 0 <= number < 8 and message.args:
-                name, r, g, b, touched, value, lower, upper = message.args
+                name, r, g, b, touched, value, lower, upper, decimals, percent = message.args
                 brightness = 255 if touched else 63
                 self.push.set_menu_button_color(number + 8, int(r*brightness), int(g*brightness), int(b*brightness))
-                self.encoders[number] = name, (r, g, b), touched, value, lower, upper
+                self.encoders[number] = name, (r, g, b), touched, value, lower, upper, decimals, percent
             elif number in self.encoders:
                 self.push.set_menu_button_color(number + 8, 0, 0, 0)
                 del self.encoders[number]
@@ -196,8 +196,7 @@ class Controller:
                         font = skia.Font(skia.Typeface("helvetica"), 20)
                         canvas.drawSimpleText(f"BPM: {self.push.counter.tempo:5.1f}", 10, 150, font, paint)
                         canvas.drawSimpleText(f"Quantum: {self.push.counter.quantum}", 130, 150, font, paint)
-                        font.setSize(16)
-                        for number, (name, (r, g, b), touched, value, lower, upper) in self.encoders.items():
+                        for number, (name, (r, g, b), touched, value, lower, upper, decimals, percent) in self.encoders.items():
                             canvas.save()
                             canvas.translate(120 * number, 0)
                             paint.setStyle(skia.Paint.kStroke_Style)
@@ -207,17 +206,25 @@ class Controller:
                                 paint.setColor4f(skia.Color4f(r/2, g/2, b/2, 1))
                             path = skia.Path()
                             paint.setStrokeWidth(2)
-                            path.addArc(skia.Rect.MakeXYWH(30, 50, 60, 60), -240, 300)
+                            path.addArc(skia.Rect.MakeXYWH(20, 40, 80, 80), -240, 300)
                             canvas.drawPath(path, paint)
                             path = skia.Path()
-                            paint.setStrokeWidth(10)
+                            paint.setStrokeWidth(12)
                             sweep = 300 * (value - lower) / (upper - lower)
-                            path.addArc(skia.Rect.MakeXYWH(30, 50, 60, 60), -240, sweep)
+                            path.addArc(skia.Rect.MakeXYWH(26, 46, 68, 68), -240, sweep)
                             canvas.drawPath(path, paint)
                             path = skia.Path()
                             path.addRect(2, 2, 116, 26)
                             paint.setStyle(skia.Paint.kFill_Style)
                             canvas.drawPath(path, paint)
+                            font.setSize(14)
+                            if percent:
+                                text = f'{{:.{int(decimals)}f}}%'.format(value*100)
+                            else:
+                                text = f'{{:.{int(decimals)}f}}'.format(value)
+                            width = font.measureText(text)
+                            canvas.drawString(text, (120-width) / 2, 84, font, paint)
+                            font.setSize(16)
                             text = name.upper()
                             width = font.measureText(text)
                             paint.setColor(skia.ColorBLACK)

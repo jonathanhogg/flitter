@@ -166,6 +166,8 @@ class Encoder(TouchControl):
         self.lower = None
         self.upper = None
         self.value = None
+        self.decimals = None
+        self.percent = None
         self._value_beat = None
         self._clock = None
 
@@ -191,8 +193,16 @@ class Encoder(TouchControl):
             if initial != self.initial:
                 self.initial = initial
                 changed = True
-            value_key = Vector((*self.state, "value"))
-            value_beat_key = Vector((*self.state, "value", "beat"))
+            decimals = node.get('decimals', 1, int, 1)
+            if decimals != self.decimals:
+                self.decimals = decimals
+                changed = True
+            percent = node.get('percent', 1, bool, False)
+            if percent != self.percent:
+                self.percent = percent
+                changed = True
+            value_key = Vector(self.state)
+            value_beat_key = Vector((*self.state, "beat"))
             if self.value is None:
                 if value_key in controller:
                     self.value = controller[value_key][0]
