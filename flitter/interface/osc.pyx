@@ -1,3 +1,5 @@
+# cython: language_level=3, profile=True
+
 """
 Basic OSC protocol implementation
 """
@@ -15,8 +17,8 @@ Log = logging.getLogger(__name__)
 
 
 def decode_string(data):
-    i = 4
-    while i < len(data) and data[i-1] != 0:
+    cdef int i = 4, n = len(data)
+    while i < n and data[i-1] != 0:
         i += 4
     remains = data[i:]
     while i and data[i-1] == 0:
