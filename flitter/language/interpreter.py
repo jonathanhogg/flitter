@@ -18,6 +18,7 @@ BUILTINS = {
     'uniform': model.Vector((functions.Uniform,)),
     'beta': model.Vector((functions.Beta,)),
     'normal': model.Vector((functions.Normal,)),
+    'len': model.Vector((functions.length,)),
     'sine': model.Vector((functions.sine,)),
     'bounce': model.Vector((functions.bounce,)),
     'sharkfin': model.Vector((functions.sharkfin,)),

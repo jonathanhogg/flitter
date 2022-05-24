@@ -78,6 +78,12 @@ cdef class Normal(Uniform):
         return u
 
 
+def length(Vector xs not None):
+    cdef Vector ys = Vector.__new__(Vector)
+    ys.values.append(len(xs))
+    return ys
+
+
 def sine(Vector xs not None):
     cdef Vector ys = Vector.__new__(Vector)
     cdef double x, y
