@@ -71,6 +71,12 @@ class LineJoin(enum.IntEnum):
     BEVEL = skia.Paint.Join.kBevel_Join
 
 
+class LineCap(enum.IntEnum):
+    BUTT = skia.Paint.Cap.kButt_Cap
+    ROUND = skia.Paint.Cap.kRound_Cap
+    SQUARE = skia.Paint.Cap.kSquare_Cap
+
+
 def set_styles(node, ctx=None, paint=None, font=None):
     if ctx is not None:
         translate = node.get('translate', 2, float)
@@ -93,9 +99,12 @@ def set_styles(node, ctx=None, paint=None, font=None):
         line_width = node.get('line_width', 1, float)
         if line_width is not None:
             paint.setStrokeWidth(line_width)
-        line_width = node.get('line_join', 1, str)
-        if line_width is not None and line_width.upper() in LineJoin.__members__:
-            paint.setStrokeJoin(skia.Paint.Join(LineJoin.__members__[line_width.upper()]))
+        line_join = node.get('line_join', 1, str)
+        if line_join is not None and line_join.upper() in LineJoin.__members__:
+            paint.setStrokeJoin(skia.Paint.Join(LineJoin.__members__[line_join.upper()]))
+        line_cap = node.get('line_cap', 1, str)
+        if line_cap is not None and line_cap.upper() in LineCap.__members__:
+            paint.setStrokeCap(skia.Paint.Cap(LineCap.__members__[line_cap.upper()]))
         composite = node.get('composite', 1, str)
         if composite is not None and composite.upper() in Composite.__members__:
             paint.setBlendMode(skia.BlendMode(Composite.__members__[composite.upper()]))
@@ -109,22 +118,22 @@ def set_styles(node, ctx=None, paint=None, font=None):
         font_face = node.get('font_face', 1, str)
         if font_face is not None:
             font_face = font_face.lower()
+            font_weight = 400
+            font_width = 5
+            font_slant = 0
             if font_face.endswith(' bold'):
-                font.setTypeface(skia.Typeface(font_face[:5], skia.FontStyle.Bold()))
-            else:
-                font.setTypeface(skia.Typeface(font_face))
+                font_weight = 700
+                font_face = font_face[:-5]
+            if font_face.endswith(' condensed'):
+                font_width = 3
+                font_face = font_face[:-10]
+            font.setTypeface(skia.Typeface(font_face, skia.FontStyle(font_weight, font_width, skia.FontStyle.Slant(font_slant))))
 
 
 def draw(node, ctx, paint, font, path):
     match node.kind:
         case "group":
-            alpha = node.get('alpha', 1, float, 1)
-            if alpha <= 0:
-                return
-            if alpha < 1:
-                ctx.saveLayerAlpha(None, int(alpha * 255))
-            else:
-                ctx.save()
+            ctx.save()
             paint, font = skia.Paint(paint), skia.Font(font.getTypeface(), font.getSize())
             set_styles(node, ctx, paint, font)
             for child in node.children:
@@ -207,7 +216,6 @@ def draw(node, ctx, paint, font, path):
                 if center:
                     ctx.drawString(text, point[0]-bounds.x()-bounds.width()/2, point[1]-bounds.y()-bounds.height()/2, font, paint)
                 else:
-                    ctx.drawRect(skia.Rect.MakeXYWH(point[0]+bounds.x(), point[1]+bounds.y(), bounds.width(), bounds.height()), skia.Paint(Color=skia.ColorWHITE))
                     ctx.drawString(text, *point, font, paint)
 
         case "gradient":
@@ -254,6 +262,20 @@ def draw(node, ctx, paint, font, path):
                 if image is not None:
                     dst = skia.Rect.MakeXYWH(*node.get('point', 2, float, (0, 0)), *node.get('size', 2, float, (image.width(), image.height())))
                     ctx.drawImageRect(image, dst, paint)
+
+        case "layer":
+            size = node.get('size', 2, float)
+            if size is not None:
+                alpha = node.get('alpha', 1, float, 1)
+                origin = node.get('origin', 2, float, (0, 0))
+                rect = skia.Rect.MakeXYWH(*origin, *size)
+                ctx.saveLayerAlpha(rect, int(alpha * 255))
+                ctx.clipRect(rect)
+                paint, font = skia.Paint(paint), skia.Font(font.getTypeface(), font.getSize())
+                set_styles(node, ctx, paint, font)
+                for child in node.children:
+                    draw(child, ctx, paint, font, path)
+                ctx.restore()
 
         case "canvas":
             set_styles(node, ctx, paint, font)
