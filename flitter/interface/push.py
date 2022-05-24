@@ -6,6 +6,7 @@ Ableton Push OSC controller for Flitter
 
 import argparse
 import asyncio
+from dataclasses import dataclass
 import logging
 import sys
 
@@ -20,6 +21,30 @@ from .osc import OSCSender, OSCReceiver, OSCBundle
 
 
 Log = logging.getLogger(__name__)
+
+
+@dataclass
+class PadState:
+    name: str
+    r: float
+    g: float
+    b: float
+    touched:bool
+    toggled: bool
+
+
+@dataclass
+class EncoderState:
+    name: str
+    r: float
+    g: float
+    b: float
+    touched: bool
+    value: float
+    lower: float
+    upper: float
+    decimals: int
+    percent: bool
 
 
 class Controller:
@@ -44,48 +69,48 @@ class Controller:
                 self.process_message(element)
             return
         Log.info("Received OSC message: %r", message)
-        parts = message.address.strip('/').split('/')
-        if parts == ['tempo']:
-            tempo, quantum, start = message.args
-            self.push.counter.update(tempo, quantum, start)
-        elif parts[0] == 'pad' and parts[-1] == 'state':
-            column, row = map(int, parts[1:-1])
-            if 0 <= column < 8 and 0 <= row < 8 and message.args:
-                name, r, g, b, touched, toggled = message.args
-                brightness = 255 if touched or toggled else 63
-                self.push.set_pad_color(row * 8 + column, int(r*brightness), int(g*brightness), int(b*brightness))
-                self.pads[column, row] = name, (r, g, b), touched, toggled
-            elif (column, row) in self.pads:
-                self.push.set_pad_color(row * 8 + column, 0, 0, 0)
-                del self.pads[column, row]
-        elif parts[0] == 'encoder' and parts[2] == 'state':
-            number = int(parts[1])
-            if 0 <= number < 8 and message.args:
-                name, r, g, b, touched, value, lower, upper, decimals, percent = message.args
-                brightness = 255 if touched else 63
-                self.push.set_menu_button_color(number + 8, int(r*brightness), int(g*brightness), int(b*brightness))
-                self.encoders[number] = name, (r, g, b), touched, value, lower, upper, decimals, percent
-            elif number in self.encoders:
-                self.push.set_menu_button_color(number + 8, 0, 0, 0)
-                del self.encoders[number]
-        elif parts[0] == 'page_left':
-            enabled, = message.args
-            self.push.set_button_white(Control.PAGE_LEFT, 255 if enabled else 0)
-            if enabled:
-                if Control.PAGE_LEFT not in self.buttons:
-                    self.buttons[Control.PAGE_LEFT] = 255
-            elif Control.PAGE_LEFT in self.buttons:
-                del self.buttons[Control.PAGE_LEFT]
-        elif parts[0] == 'page_right':
-            enabled, = message.args
-            self.push.set_button_white(Control.PAGE_RIGHT, 255 if enabled else 0)
-            if enabled:
-                if Control.PAGE_RIGHT not in self.buttons:
-                    self.buttons[Control.PAGE_RIGHT] = 255
-            elif Control.PAGE_RIGHT in self.buttons:
-                del self.buttons[Control.PAGE_RIGHT]
-        elif parts == ['reset']:
-            self.reset()
+        match message.address.strip('/').split('/'):
+            case ['tempo']:
+                tempo, quantum, start = message.args
+                self.push.counter.update(tempo, quantum, start)
+            case ['pad', column, row, 'state']:
+                column, row = int(column), int(row)
+                if 0 <= column < 8 and 0 <= row < 8 and message.args:
+                    state = PadState(*message.args)
+                    brightness = 255 if state.touched or state.toggled else 63
+                    self.push.set_pad_color(row * 8 + column, int(state.r*brightness), int(state.g*brightness), int(state.b*brightness))
+                    self.pads[column, row] = state
+                elif (column, row) in self.pads:
+                    self.push.set_pad_color(row * 8 + column, 0, 0, 0)
+                    del self.pads[column, row]
+            case ['encoder', number, 'state']:
+                number = int(number)
+                if 0 <= number < 8 and message.args:
+                    state = EncoderState(*message.args)
+                    brightness = 255 if state.touched else 63
+                    self.push.set_menu_button_color(number + 8, int(state.r*brightness), int(state.g*brightness), int(state.b*brightness))
+                    self.encoders[number] = state
+                elif number in self.encoders:
+                    self.push.set_menu_button_color(number + 8, 0, 0, 0)
+                    del self.encoders[number]
+            case ['page_left']:
+                enabled, = message.args
+                self.push.set_button_white(Control.PAGE_LEFT, 255 if enabled else 0)
+                if enabled:
+                    if Control.PAGE_LEFT not in self.buttons:
+                        self.buttons[Control.PAGE_LEFT] = 255
+                elif Control.PAGE_LEFT in self.buttons:
+                    del self.buttons[Control.PAGE_LEFT]
+            case ['page_right']:
+                enabled, = message.args
+                self.push.set_button_white(Control.PAGE_RIGHT, 255 if enabled else 0)
+                if enabled:
+                    if Control.PAGE_RIGHT not in self.buttons:
+                        self.buttons[Control.PAGE_RIGHT] = 255
+                elif Control.PAGE_RIGHT in self.buttons:
+                    del self.buttons[Control.PAGE_RIGHT]
+            case ['reset']:
+                self.reset()
 
     def reset(self):
         for column, row in self.pads:
@@ -136,56 +161,57 @@ class Controller:
                 if wait_event in done:
                     event = wait_event.result()
                     wait_event = asyncio.create_task(self.push.get_event())
-                    if isinstance(event, ButtonPressed) and event.number == Control.SHIFT:
-                        shift_pressed = True
-                    elif isinstance(event, ButtonReleased) and event.number == Control.SHIFT:
-                        shift_pressed = False
-                    elif isinstance(event, PadPressed):
-                        if not tap_tempo_pressed:
-                            address = f'/pad/{event.column}/{event.row}/touched'
-                            await self.osc_sender.send_message(address, event.timestamp, event.pressure)
-                        else:
-                            tap_tempo.tap(event.timestamp)
-                    elif isinstance(event, PadHeld):
-                        if not tap_tempo_pressed:
-                            address = f'/pad/{event.column}/{event.row}/held'
-                            await self.osc_sender.send_message(address, event.timestamp, event.pressure)
-                    elif isinstance(event, PadReleased):
-                        if not tap_tempo_pressed:
-                            address = f'/pad/{event.column}/{event.row}/released'
+                    match event:
+                        case ButtonPressed(number=Control.SHIFT):
+                            shift_pressed = True
+                        case ButtonReleased(number=Control.SHIFT):
+                            shift_pressed = False
+                        case PadPressed():
+                            if not tap_tempo_pressed:
+                                address = f'/pad/{event.column}/{event.row}/touched'
+                                await self.osc_sender.send_message(address, event.timestamp, event.pressure)
+                            else:
+                                tap_tempo.tap(event.timestamp)
+                        case PadHeld():
+                            if not tap_tempo_pressed:
+                                address = f'/pad/{event.column}/{event.row}/held'
+                                await self.osc_sender.send_message(address, event.timestamp, event.pressure)
+                        case PadReleased():
+                            if not tap_tempo_pressed:
+                                address = f'/pad/{event.column}/{event.row}/released'
+                                await self.osc_sender.send_message(address, event.timestamp)
+                        case EncoderTouched() if event.number < 8:
+                            address = f'/encoder/{event.number}/touched'
                             await self.osc_sender.send_message(address, event.timestamp)
-                    elif isinstance(event, EncoderTouched) and event.number < 8:
-                        address = f'/encoder/{event.number}/touched'
-                        await self.osc_sender.send_message(address, event.timestamp)
-                    elif isinstance(event, EncoderTurned) and event.number < 8:
-                        address = f'/encoder/{event.number}/turned'
-                        await self.osc_sender.send_message(address, event.timestamp, event.amount / 400)
-                    elif isinstance(event, EncoderReleased) and event.number < 8:
-                        address = f'/encoder/{event.number}/released'
-                        await self.osc_sender.send_message(address, event.timestamp)
-                    elif isinstance(event, EncoderTurned) and event.number == Encoder.TEMPO:
-                        if shift_pressed:
-                            self.push.counter.quantum = max(2, self.push.counter.quantum + event.amount)
-                        else:
-                            tempo = max(0.5, (round(self.push.counter.tempo * 2) + event.amount) / 2)
-                            self.push.counter.set_tempo(tempo, timestamp=event.timestamp)
-                        await self.osc_sender.send_message('/tempo', self.push.counter.tempo, self.push.counter.quantum, self.push.counter.start)
-                    elif isinstance(event, ButtonPressed) and event.number == Control.TAP_TEMPO:
-                        tap_tempo_pressed = True
-                    elif isinstance(event, ButtonReleased) and event.number == Control.TAP_TEMPO:
-                        tap_tempo.apply(self.push.counter, event.timestamp, backslip_limit=1)
-                        tap_tempo_pressed = False
-                        await self.osc_sender.send_message('/tempo', self.push.counter.tempo, self.push.counter.quantum, self.push.counter.start)
-                    elif isinstance(event, EncoderTurned) and event.number == Encoder.MASTER:
-                        brightness = min(max(0, brightness + event.amount / 200), 1)
-                        self.push.set_led_brightness(brightness)
-                        self.push.set_display_brightness(brightness)
-                    elif isinstance(event, MenuButtonReleased) and event.row == 1:
-                        await self.osc_sender.send_message(f'/encoder/{event.column}/reset', event.timestamp)
-                    elif isinstance(event, ButtonReleased) and event.number == Control.PAGE_LEFT:
-                        await self.osc_sender.send_message('/page_left')
-                    elif isinstance(event, ButtonReleased) and event.number == Control.PAGE_RIGHT:
-                        await self.osc_sender.send_message('/page_right')
+                        case EncoderTurned() if event.number < 8:
+                            address = f'/encoder/{event.number}/turned'
+                            await self.osc_sender.send_message(address, event.timestamp, event.amount / 400)
+                        case EncoderReleased() if event.number < 8:
+                            address = f'/encoder/{event.number}/released'
+                            await self.osc_sender.send_message(address, event.timestamp)
+                        case EncoderTurned(number=Encoder.TEMPO):
+                            if shift_pressed:
+                                self.push.counter.quantum = max(2, self.push.counter.quantum + event.amount)
+                            else:
+                                tempo = max(0.5, (round(self.push.counter.tempo * 2) + event.amount) / 2)
+                                self.push.counter.set_tempo(tempo, timestamp=event.timestamp)
+                            await self.osc_sender.send_message('/tempo', self.push.counter.tempo, self.push.counter.quantum, self.push.counter.start)
+                        case ButtonPressed(number=Control.TAP_TEMPO):
+                            tap_tempo_pressed = True
+                        case ButtonReleased(number=Control.TAP_TEMPO):
+                            tap_tempo.apply(self.push.counter, event.timestamp, backslip_limit=1)
+                            tap_tempo_pressed = False
+                            await self.osc_sender.send_message('/tempo', self.push.counter.tempo, self.push.counter.quantum, self.push.counter.start)
+                        case EncoderTurned(number=Encoder.MASTER):
+                            brightness = min(max(0, brightness + event.amount / 200), 1)
+                            self.push.set_led_brightness(brightness)
+                            self.push.set_display_brightness(brightness)
+                        case MenuButtonReleased() if event.row == 1:
+                            await self.osc_sender.send_message(f'/encoder/{event.column}/reset', event.timestamp)
+                        case ButtonReleased(number=Control.PAGE_LEFT):
+                            await self.osc_sender.send_message('/page_left')
+                        case ButtonReleased(number=Control.PAGE_RIGHT):
+                            await self.osc_sender.send_message('/page_right')
                     self.updated.set()
                 elif wait_update in done:
                     self.updated.clear()
@@ -196,21 +222,21 @@ class Controller:
                         font = skia.Font(skia.Typeface("helvetica"), 20)
                         canvas.drawSimpleText(f"BPM: {self.push.counter.tempo:5.1f}", 10, 150, font, paint)
                         canvas.drawSimpleText(f"Quantum: {self.push.counter.quantum}", 130, 150, font, paint)
-                        for number, (name, (r, g, b), touched, value, lower, upper, decimals, percent) in self.encoders.items():
+                        for number, state in self.encoders.items():
                             canvas.save()
                             canvas.translate(120 * number, 0)
                             paint.setStyle(skia.Paint.kStroke_Style)
-                            if touched:
-                                paint.setColor4f(skia.Color4f(r, g, b, 1))
+                            if state.touched:
+                                paint.setColor4f(skia.Color4f(state.r, state.g, state.b, 1))
                             else:
-                                paint.setColor4f(skia.Color4f(r/2, g/2, b/2, 1))
+                                paint.setColor4f(skia.Color4f(state.r/2, state.g/2, state.b/2, 1))
                             path = skia.Path()
                             paint.setStrokeWidth(2)
                             path.addArc(skia.Rect.MakeXYWH(20, 40, 80, 80), -240, 300)
                             canvas.drawPath(path, paint)
                             path = skia.Path()
                             paint.setStrokeWidth(12)
-                            sweep = 300 * (value - lower) / (upper - lower)
+                            sweep = 300 * (state.value - state.lower) / (state.upper - state.lower)
                             path.addArc(skia.Rect.MakeXYWH(26, 46, 68, 68), -240, sweep)
                             canvas.drawPath(path, paint)
                             path = skia.Path()
@@ -218,14 +244,14 @@ class Controller:
                             paint.setStyle(skia.Paint.kFill_Style)
                             canvas.drawPath(path, paint)
                             font.setSize(14)
-                            if percent:
-                                text = f'{{:.{int(decimals)}f}}%'.format(value*100)
+                            if state.percent:
+                                text = f'{{:.{int(state.decimals)}f}}%'.format(state.value*100)
                             else:
-                                text = f'{{:.{int(decimals)}f}}'.format(value)
+                                text = f'{{:.{int(state.decimals)}f}}'.format(state.value)
                             width = font.measureText(text)
                             canvas.drawString(text, (120-width) / 2, 84, font, paint)
                             font.setSize(16)
-                            text = name.upper()
+                            text = state.name
                             width = font.measureText(text)
                             paint.setColor(skia.ColorBLACK)
                             canvas.drawString(text, (120-width) / 2, 20, font, paint)
