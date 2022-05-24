@@ -25,9 +25,10 @@ class Controller:
     SEND_PORT = 47177
     RECEIVE_PORT = 47178
 
-    def __init__(self, root_dir, profiling=False):
+    def __init__(self, root_dir, profiling=False, max_fps=60):
         self.root_dir = Path(root_dir)
         self.profiling = profiling
+        self.max_fps = max_fps
         self.state = {}
         self.pragmas = {}
         self.tree = None
@@ -324,9 +325,12 @@ class Controller:
 
             if graph is not None:
                 self.update_windows(graph)
+                frame_time = self.counter.clock()
                 if frames:
-                    await asyncio.sleep(max(0, frames[-1] + 1/120 - self.counter.clock()))
-                frames.append(self.counter.clock())
+                    frame_time = max(frame_time, frames[-1] + 1/self.max_fps)
+                    await asyncio.sleep(max(0, frame_time - self.counter.clock()))
+                frames.append(frame_time)
+                graph = None
                 if len(frames) > 1 and frames[-1] - frames[0] > 2:
                     fps = (len(frames) - 1) / (frames[-1] - frames[0])
                     Log.info("Frame rate = %.1ffps", fps)
