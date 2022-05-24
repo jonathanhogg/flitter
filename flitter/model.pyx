@@ -1,6 +1,7 @@
 # cython: language_level=3, profile=True
 
 import cython
+import weakref
 
 from libc.math cimport isnan, floor
 
@@ -11,7 +12,7 @@ cdef union float_long:
 
 
 @cython.final
-@cython.freelist(100)
+# @cython.freelist(100)
 cdef class Vector:
     @staticmethod
     def compose(*args):
@@ -121,12 +122,13 @@ cdef class Vector:
 
     def copynodes(self):
         cdef Vector result = self
-        cdef Node node
+        cdef Node node, parent
         cdef int i
         for i, value in enumerate(self.values):
             if isinstance(value, Node):
                 node = value
-                if node.parent is None:
+                parent = node._parent() if node._parent is not None else None
+                if parent is None:
                     if result is self:
                         result = Vector.__new__(Vector)
                         result.values.extend(self.values)
@@ -413,18 +415,9 @@ cdef class Node:
             self.tags = frozenset(tags)
         self.attributes = attributes
 
-    cpdef void dissolve(self):
-        cdef Node node = self.first_child
-        if node is not None:
-            while True:
-                if node.first_child is not None:
-                    node.dissolve()
-                node.parent = None
-                if node.next_sibling is None:
-                    break
-                node, node.next_sibling = node.next_sibling, None
-            self.first_child = None
-            self.last_child = None
+    @property
+    def parent(self):
+        return self._parent() if self._parent is not None else None
 
     @property
     def children(self):
@@ -453,9 +446,10 @@ cdef class Node:
         return node
 
     cpdef void append(self, Node node):
-        if node.parent is not None:
-            node.parent.remove(node)
-        node.parent = self
+        cdef Node parent = node._parent() if node._parent is not None else None
+        if parent is not None:
+            parent.remove(node)
+        node._parent = weakref.ref(self)
         if self.last_child is not None:
             self.last_child.next_sibling = node
             self.last_child = node
@@ -463,9 +457,10 @@ cdef class Node:
             self.first_child = self.last_child = node
 
     cpdef void insert(self, Node node):
-        if node.parent is not None:
-            node.parent.remove(node)
-        node.parent = self
+        cdef Node parent = node._parent() if node._parent is not None else None
+        if parent is not None:
+            parent.remove(node)
+        node._parent = weakref.ref(self)
         node.next_sibling = self.first_child
         self.first_child = node
         if self.last_child is None:
@@ -482,7 +477,8 @@ cdef class Node:
             self.insert(node)
 
     cpdef void remove(self, Node node):
-        if node.parent is not self:
+        cdef Node parent = node._parent() if node._parent is not None else None
+        if parent is not self:
             raise ValueError("Not a child of this node")
         cdef Node child = self.first_child, previous = None
         while child is not node:
@@ -494,13 +490,14 @@ cdef class Node:
             previous.next_sibling = node.next_sibling
         if node is self.last_child:
             self.last_child = previous
-        node.parent = None
+        node._parent = None
         node.next_sibling = None
 
     def delete(self):
-        if self.parent is None:
+        cdef Node parent = self._parent() if self._parent is not None else None
+        if parent is None:
             raise TypeError("No parent")
-        self.parent.remove(self)
+        parent.remove(self)
 
     def select(self, query):
         cdef list nodes = []

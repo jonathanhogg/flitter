@@ -324,7 +324,6 @@ class Controller:
 
             if graph is not None:
                 self.update_windows(graph)
-                graph.dissolve()
                 if frames:
                     await asyncio.sleep(max(0, frames[-1] + 1/120 - self.counter.clock()))
                 frames.append(self.counter.clock())

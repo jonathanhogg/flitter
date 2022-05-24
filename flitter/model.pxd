@@ -31,13 +31,13 @@ cdef class Query:
 
 
 cdef class Node:
+    cdef object __weakref__
     cdef readonly str kind
     cdef readonly frozenset tags
     cdef dict attributes
-    cdef readonly Node parent
+    cdef object _parent
     cdef Node next_sibling, first_child, last_child
 
-    cpdef void dissolve(self)
     cpdef Node copy(self)
     cpdef void append(self, Node node)
     cpdef void insert(self, Node node)
