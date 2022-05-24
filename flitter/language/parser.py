@@ -4,6 +4,7 @@ Flitter language compiler
 
 # pylama:ignore=R0201,C0103
 
+from ast import literal_eval
 from pathlib import Path
 
 from lark import Lark, Transformer
@@ -31,7 +32,7 @@ class FlitterTransformer(Transformer):
         return model.Vector((float(token),))
 
     def ESCAPED_STRING(self, token):
-        return model.Vector((token[1:-1].encode('utf-8').decode('unicode_escape'),))
+        return model.Vector((literal_eval(token),))
 
     def QUERY(self, token):
         return model.Query(token[1:-1])
@@ -82,7 +83,7 @@ class FlitterTransformer(Transformer):
     tests = v_args(inline=False)(tuple)
 
 
-GRAMMAR = (Path(__file__).parent / 'grammar.lark').open('r').read()
+GRAMMAR = (Path(__file__).parent / 'grammar.lark').open('r', encoding='utf8').read()
 PARSER = Lark(GRAMMAR, postlex=FlitterIndenter(), regex=True, start='sequence', maybe_placeholders=True)
 
 
