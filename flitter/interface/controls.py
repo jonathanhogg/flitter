@@ -2,7 +2,7 @@
 Flitter user interface controls
 """
 
-# pylama:ignore=R0902,R0903
+# pylama:ignore=R0902,R0903,R0912,R0914
 
 import math
 
@@ -83,6 +83,7 @@ class Pad(TouchControl):
     def __init__(self, number):
         super().__init__(number)
         self.toggle = None
+        self.group = None
         self.toggled = None
         self._toggled_beat = None
         self.pressure = None
@@ -110,6 +111,10 @@ class Pad(TouchControl):
             if self.toggled is None and toggled_key in controller:
                 self.toggled = controller[toggled_key].istrue()
                 self._toggled_beat = controller[toggled_beat_key][0]
+            group = node.get('group', 1, str)
+            if group != self.group:
+                self.group = group
+                changed = True
             self._toggle_threshold = node.get('threshold', 1, float, self.DEFAULT_THRESHOLD)
             if self.pressure is not None:
                 pressure_key = Vector((*self.state, "pressure"))
@@ -144,6 +149,8 @@ class Pad(TouchControl):
             self._toggled_beat = beat
             self._can_toggle = False
             self._changed = True
+            return self.toggled
+        return None
 
     def reset(self):
         super().reset()

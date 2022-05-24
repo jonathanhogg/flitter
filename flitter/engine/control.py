@@ -215,14 +215,21 @@ class Controller:
                 pad = self.pads[number]
                 timestamp, *args = message.args
                 beat = self.counter.beat_at_time(timestamp)
+                toggled = None
                 if parts[-1] == 'touched':
                     pad.on_touched(beat)
-                    pad.on_pressure(beat, *args)
+                    toggled = pad.on_pressure(beat, *args)
                 elif parts[-1] == 'held':
-                    pad.on_pressure(beat, *args)
+                    toggled = pad.on_pressure(beat, *args)
                 elif parts[-1] == 'released':
                     pad.on_pressure(beat, 0.0)
                     pad.on_released(beat)
+                if toggled and pad.group is not None:
+                    for other in self.pads.values():
+                        if other is not pad and other.group == pad.group and other.toggled:
+                            other.toggled = False
+                            other._toggled_beat = beat  # noqa
+                            self.enqueue_pad_status(other)
         elif parts[0] == 'encoder':
             number = Vector(float(n) for n in parts[1:-1])
             if number in self.encoders:
