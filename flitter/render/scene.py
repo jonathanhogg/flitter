@@ -31,7 +31,6 @@ class SceneNode:
         self.children = []
         self.width = None
         self.height = None
-        self.node = None
 
     @property
     def texture(self):
@@ -51,20 +50,19 @@ class SceneNode:
             self.children.pop().destroy()
 
     def update(self, node):
-        self.node = node
         resized = False
-        width, height = self.node.get('size', 2, int, (512, 512))
+        width, height = node.get('size', 2, int, (512, 512))
         if width != self.width or height != self.height:
             self.width = width
             self.height = height
             resized = True
-        self.create(resized)
-        self.descend()
-        self.render()
+        self.create(node, resized)
+        self.descend(node)
+        self.render(node)
 
-    def descend(self):
+    def descend(self, node):
         count = 0
-        for i, child in enumerate(self.node.children):
+        for i, child in enumerate(node.children):
             cls = SCENE_CLASSES[child.kind]
             if i == len(self.children):
                 self.children.append(cls(self.glctx))
@@ -76,10 +74,10 @@ class SceneNode:
         while len(self.children) > count:
             self.children.pop().destroy()
 
-    def create(self, resized):
+    def create(self, node, resized):
         pass
 
-    def render(self):
+    def render(self, node):
         raise NotImplementedError()
 
     def release(self):
@@ -111,13 +109,13 @@ class ProgramNode(SceneNode):
     def framebuffer(self):
         raise NotImplementedError()
 
-    def create(self, resized):
-        super().create(resized)
+    def create(self, node, resized):
+        super().create(node, resized)
         if resized and self._last is not None:
             self._last.release()
             self._last = None
 
-    def get_vertex_source(self):
+    def get_vertex_source(self, _):
         return """#version 410
 in vec2 position;
 out vec2 coord;
@@ -127,7 +125,7 @@ void main() {
 }
 """
 
-    def get_fragment_source(self):
+    def get_fragment_source(self, _):
         samplers = '\n'.join(f"uniform sampler2D texture{i};" for i in range(len(self.children)))
         textures = '\n'.join(f"""    merge = texture(texture{i}, coord);
     color = color * (1.0 - merge.a) + merge;""" for i in range(len(self.children)))
@@ -143,9 +141,9 @@ void main() {{
 }}
 """
 
-    def compile(self):
-        vertex_source = self.get_vertex_source()
-        fragment_source = self.get_fragment_source()
+    def compile(self, node):
+        vertex_source = self.get_vertex_source(node)
+        fragment_source = self.get_fragment_source(node)
         if vertex_source != self._vertex_source or fragment_source != self._fragment_source:
             self._vertex_source = vertex_source
             self._fragment_source = fragment_source
@@ -162,11 +160,11 @@ void main() {{
             except Exception:
                 Log.exception("Unable to compile shader:\n%s", self._fragment_source)
 
-    def render(self):
+    def render(self, node):
         now = time.clock_gettime(time.CLOCK_MONOTONIC_RAW)
         delta = 0.0 if self._timestamp is None else min(now - self._timestamp, 1/25)
         self._timestamp = now
-        self.compile()
+        self.compile(node)
         if self._rectangle is not None:
             self.framebuffer.use()
             self.framebuffer.clear()
@@ -201,8 +199,8 @@ void main() {{
                                 child.texture.use(location=unit)
                             member.value = unit
                             unit += 1
-                    elif name in self.node:
-                        value = self.node.get(name, member.dimension, float)
+                    elif name in node:
+                        value = node.get(name, member.dimension, float)
                         if value is not None:
                             member.value = value if member.dimension == 1 else tuple(value)
             self._rectangle.render(mode=moderngl.TRIANGLE_STRIP)
@@ -245,13 +243,13 @@ class Window(ProgramNode):
     def framebuffer(self):
         return self.glctx.screen
 
-    def create(self, resized):
-        super().create(resized)
+    def create(self, node, resized):
+        super().create(node, resized)
         if self.window is None:
-            vsync = self.node.get('vsync', 1, bool, True)
-            screen = self.node.get('screen', 1, int, 0)
-            title = self.node.get('title', 1, str, "Flitter")
-            fullscreen = self.node.get('fullscreen', 1, bool, False)
+            vsync = node.get('vsync', 1, bool, True)
+            screen = node.get('screen', 1, int, 0)
+            title = node.get('title', 1, str, "Flitter")
+            fullscreen = node.get('fullscreen', 1, bool, False)
             screens = pyglet.canvas.get_display().get_screens()
             screen = screens[screen] if screen < len(screens) else screens[0]
             config = pyglet.gl.Config(major_version=self.GL_VERSION[0], minor_version=self.GL_VERSION[1], forward_compatible=True,
@@ -266,7 +264,7 @@ class Window(ProgramNode):
                     self.window._nswindow.enterFullScreenMode_(self.window._nswindow.screen())  # noqa
                 else:
                     self.window.set_fullscreen(True)
-        elif resized:
+        else:
             self.on_resize(self.width, self.height)
 
     def on_resize(self, width, height):
@@ -283,8 +281,8 @@ class Window(ProgramNode):
     def on_close(self):
         asyncio.get_event_loop().stop()
 
-    def render(self):
-        super().render()
+    def render(self, node):
+        super().render(node)
         self.window.flip()
         self.window.dispatch_events()
 
@@ -312,8 +310,8 @@ class Shader(ProgramNode):
             self._texture = None
         super().release()
 
-    def create(self, resized):
-        super().create(resized)
+    def create(self, node, resized):
+        super().create(node, resized)
         if self._framebuffer is None or self._texture is None or resized:
             if self._framebuffer is not None:
                 self._framebuffer.release()
@@ -323,11 +321,11 @@ class Shader(ProgramNode):
             self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
             self._framebuffer.clear()
 
-    def get_vertex_source(self):
-        return self.node.get('vertex', 1, str, super().get_vertex_source())
+    def get_vertex_source(self, node):
+        return node.get('vertex', 1, str, super().get_vertex_source(node))
 
-    def get_fragment_source(self):
-        return self.node.get('fragment', 1, str, super().get_fragment_source())
+    def get_fragment_source(self, node):
+        return node.get('fragment', 1, str, super().get_fragment_source(node))
 
 
 class Canvas(SceneNode):
@@ -353,7 +351,7 @@ class Canvas(SceneNode):
             self._graphics_context.abandonContext()
             self._graphics_context = None
 
-    def create(self, resized):
+    def create(self, node, resized):
         if resized:
             if self._framebuffer is not None:
                 self._framebuffer.release()
@@ -366,16 +364,16 @@ class Canvas(SceneNode):
                                                                      skia.kRGBA_8888_ColorType, skia.ColorSpace.MakeSRGB())
             self._canvas = self._surface.getCanvas()
 
-    def descend(self):
+    def descend(self, node):
         # A canvas is a leaf node from the perspective of the OpenGL world
         pass
 
-    def render(self):
+    def render(self, node):
         self._graphics_context.resetContext()
         self._framebuffer.clear()
         self._canvas.save()
         paint = skia.Paint(AntiAlias=True)
-        canvas.draw(self.node, self._canvas, paint, skia.Font(), skia.Path())
+        canvas.draw(node, self._canvas, paint, skia.Font(), skia.Path())
         self._canvas.restore()
         self._surface.flushAndSubmit()
 
