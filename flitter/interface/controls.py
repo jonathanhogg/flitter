@@ -243,5 +243,7 @@ class Encoder(TouchControl):
         self.lower = None
         self.upper = None
         self.value = None
+        self.decimals = None
+        self.percent = None
         self._value_beat = None
         self._clock = None
