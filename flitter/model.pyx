@@ -1,7 +1,7 @@
 # cython: language_level=3, profile=True
 
 import cython
-import weakref
+from weakref import ref as weak
 
 from libc.math cimport isnan, floor
 
@@ -12,7 +12,7 @@ cdef union float_long:
 
 
 @cython.final
-# @cython.freelist(100)
+@cython.freelist(100)
 cdef class Vector:
     @staticmethod
     def compose(*args):
@@ -127,8 +127,7 @@ cdef class Vector:
         for i, value in enumerate(self.values):
             if isinstance(value, Node):
                 node = value
-                parent = node._parent() if node._parent is not None else None
-                if parent is None:
+                if node._parent is None:
                     if result is self:
                         result = Vector.__new__(Vector)
                         result.values.extend(self.values)
@@ -403,17 +402,17 @@ cdef class Node:
             node.append(child)
         return node
 
-    def __cinit__(self, str kind, tags, /, **attributes):
+    def __cinit__(self, str kind, tags, /):
         cdef str tag_str
         self.kind = kind
-        if isinstance(tags, str):
+        if isinstance(tags, frozenset):
+            self.tags = tags
+        elif isinstance(tags, str):
             tag_str = tags
             self.tags = frozenset(tag_str.split())
-        elif isinstance(tags, frozenset):
-            self.tags = tags
         else:
             self.tags = frozenset(tags)
-        self.attributes = attributes
+        self.attributes = {}
 
     @property
     def parent(self):
@@ -439,17 +438,25 @@ cdef class Node:
     cpdef Node copy(self):
         cdef Node node = Node.__new__(Node, self.kind, self.tags)
         node.attributes = self.attributes.copy()
-        cdef Node child = self.first_child
-        while child is not None:
-            node.append(child.copy())
+        cdef Node copy, child = self.first_child
+        if child is not None:
+            parent = weak(node)
+            copy = child.copy()
+            copy._parent = parent
+            node.first_child = node.last_child = copy
             child = child.next_sibling
+            while child is not None:
+                copy = child.copy()
+                copy._parent = parent
+                node.last_child.next_sibling = node.last_child = copy
+                child = child.next_sibling
         return node
 
     cpdef void append(self, Node node):
         cdef Node parent = node._parent() if node._parent is not None else None
         if parent is not None:
             parent.remove(node)
-        node._parent = weakref.ref(self)
+        node._parent = weak(self)
         if self.last_child is not None:
             self.last_child.next_sibling = node
             self.last_child = node
@@ -460,7 +467,7 @@ cdef class Node:
         cdef Node parent = node._parent() if node._parent is not None else None
         if parent is not None:
             parent.remove(node)
-        node._parent = weakref.ref(self)
+        node._parent = weak(self)
         node.next_sibling = self.first_child
         self.first_child = node
         if self.last_child is None:
@@ -589,30 +596,25 @@ cdef class Node:
     def get(self, str name, int n, type t, default=None, /):
         cdef Vector attr_vec
         cdef list attr_values, values
-        cdef int m
+        cdef int m, i
         attr_vec = <Vector> self.attributes.get(name)
         if attr_vec is not None:
             attr_values = attr_vec.values
             m = len(attr_values)
             try:
-                if n == 1:
-                    if m == 1:
-                        value = attr_values[0]
-                        return t(value) if not isinstance(value, t) else value
-                else:
-                    if m == n:
-                        values = []
-                        for value in attr_values:
-                            values.append(t(value) if not isinstance(value, t) else value)
-                        return values
-                    elif m == 1:
-                        value = attr_values[0]
+                if m == 1:
+                    value = attr_values[0]
+                    if not isinstance(value, t):
+                        value = t(value)
+                    if n == 1:
+                        return value
+                    return [value] * n
+                if m == n:
+                    values = attr_values.copy()
+                    for i, value in enumerate(values):
                         if not isinstance(value, t):
-                            value = t(value)
-                        values = []
-                        for i in range(n):
-                            values.append(value)
-                        return values
+                            values[i] = t(value)
+                    return values
             except:
                 pass
         return default
