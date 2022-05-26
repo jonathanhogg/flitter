@@ -120,8 +120,8 @@ class Controller:
     def update_controls(self, graph):
         remaining = set(self.pads)
         for node in graph.select_below('pad.'):
-            if 'number' in node and node['number']:
-                number = node['number']
+            number = node.get('number', 2, int)
+            if number is not None:
                 if number not in self.pads:
                     Log.debug("New pad @ %r", number)
                     pad = self.pads[number] = Pad(number)
@@ -137,9 +137,10 @@ class Controller:
             del self.pads[number]
         remaining = set(self.encoders)
         for node in graph.select_below('encoder.'):
-            if 'number' in node and node['number']:
-                number = node['number']
+            number = node.get('number', 1, int)
+            if number is not None:
                 if number not in self.encoders:
+                    Log.debug("New encoder @ %r", number)
                     encoder = self.encoders[number] = Encoder(number)
                 elif number in remaining:
                     encoder = self.encoders[number]
@@ -156,14 +157,14 @@ class Controller:
         self.queue.append(OSCMessage('/reset'))
 
     def enqueue_pad_status(self, pad, deleted=False):
-        address = '/pad/' + '/'.join(str(int(n)) for n in pad.number) + '/state'
+        address = '/pad/' + '/'.join(str(n) for n in pad.number) + '/state'
         if deleted:
             self.queue.append(OSCMessage(address))
         else:
             self.queue.append(OSCMessage(address, pad.name, *pad.color, pad.touched, pad.toggled))
 
     def enqueue_encoder_status(self, encoder, deleted=False):
-        address = '/encoder/' + '/'.join(str(int(n)) for n in encoder.number) + '/state'
+        address = f'/encoder/{encoder.number}/state'
         if deleted:
             self.queue.append(OSCMessage(address))
         else:
@@ -197,7 +198,7 @@ class Controller:
             self[Vector(['_counter'])] = Vector([tempo, int(quantum), start])
             self.enqueue_tempo()
         elif parts[0] == 'pad':
-            number = Vector(float(n) for n in parts[1:-1])
+            number = tuple(int(n) for n in parts[1:-1])
             if number in self.pads:
                 pad = self.pads[number]
                 timestamp, *args = message.args
@@ -218,7 +219,7 @@ class Controller:
                             other._toggled_beat = beat  # noqa
                             self.enqueue_pad_status(other)
         elif parts[0] == 'encoder':
-            number = Vector(float(n) for n in parts[1:-1])
+            number = int(parts[1])
             if number in self.encoders:
                 encoder = self.encoders[number]
                 timestamp, *args = message.args
