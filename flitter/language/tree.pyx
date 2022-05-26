@@ -355,24 +355,25 @@ cdef class Attribute(Expression):
         self.expr = expr
 
     cpdef model.VectorLike evaluate(self, model.Context context):
-        cdef list nodes = []
-        cdef model.Vector nodes_vector = self.node.evaluate(context)
+        cdef model.Vector nodes = self.node.evaluate(context)
         cdef model.Node node
         cdef model.Vector value
-        cdef dict variables
-        for node in nodes_vector.values:
-            try:
-                context._stack.append(None)
-                context.merge_under(node)
-                value = self.expr.evaluate(context)
-                if value.values:
-                    node.attributes[self.name] = value
-                nodes.append(node)
-            finally:
-                variables = context._stack.pop()
-                if variables is not None:
-                    context.variables = variables
-        return model.Vector(nodes)
+        cdef dict variables, saved
+        cdef bint use_stack
+        for node in nodes.values:
+            use_stack = node.attributes
+            if use_stack:
+                saved = context.variables
+                variables = context.variables = context.variables.copy()
+                for attr, value in node.attributes.items():
+                    if attr not in variables:
+                        variables[attr] = value
+            value = self.expr.evaluate(context)
+            if value.values:
+                node.attributes[self.name] = value
+            if use_stack:
+                context.variables = saved
+        return nodes
 
     def __repr__(self):
         return f'Attribute({self.node!r}, {self.name!r}, {self.expr!r})'
@@ -471,7 +472,7 @@ cdef class Let(Expression):
     cpdef model.VectorLike evaluate(self, model.Context context):
         cdef Binding binding
         for binding in self.bindings:
-            context.setitem(binding.name,binding.expr.evaluate(context))
+            context.variables[binding.name] = binding.expr.evaluate(context)
         return model.null_
 
     def __repr__(self):
@@ -488,10 +489,13 @@ cdef class InlineLet(Expression):
 
     cpdef model.VectorLike evaluate(self, model.Context context):
         cdef Binding binding
-        with context:
-            for binding in self.bindings:
-                context.setitem(binding.name, binding.expr.evaluate(context))
-            return self.body.evaluate(context)
+        cdef dict saved = context.variables
+        context.variables = saved.copy()
+        for binding in self.bindings:
+            context.variables[binding.name] = binding.expr.evaluate(context)
+        cdef model.VectorLike result = self.body.evaluate(context)
+        context.variables = saved
+        return result
 
     def __repr__(self):
         return f'InlineLet({self.bindings!r}, {self.body!r})'
@@ -511,12 +515,14 @@ cdef class For(Expression):
         cdef model.Vector source = self.source.evaluate(context)
         cdef model.Vector results = model.Vector.__new__(model.Vector)
         cdef model.Vector value
-        with context:
-            for v in source.values:
-                value = model.Vector.__new__(model.Vector)
-                value.values.append(v)
-                context.setitem(self.name, value)
-                results.values.extend(self.body.evaluate(context))
+        cdef dict saved = context.variables
+        context.variables = saved.copy()
+        for v in source.values:
+            value = model.Vector.__new__(model.Vector)
+            value.values.append(v)
+            context.variables[self.name] = value
+            results.values.extend(self.body.evaluate(context))
+        context.variables = saved
         return results
 
     def __repr__(self):

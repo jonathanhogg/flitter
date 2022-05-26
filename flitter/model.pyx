@@ -657,13 +657,12 @@ cdef class Context:
         self._stack = []
 
     def __enter__(self):
-        self._stack.append(None)
+        self._stack.append(self.variables)
+        self.variables = self.variables.copy()
         return self
 
     def __exit__(self, *args):
-        cdef dict variables = self._stack.pop()
-        if variables is not None:
-            self.variables = variables
+        self.variables = self._stack.pop()
 
     def __contains__(self, name):
         return name in self.variables
@@ -671,19 +670,10 @@ cdef class Context:
     def __getitem__(self, name):
         return self.variables[name]
 
-    cdef void setitem(self, str name, value):
-        if self._stack[-1] is None:
-            self._stack[-1] = self.variables
-            self.variables = self.variables.copy()
+    def __setitem__(self, str name, value):
         self.variables[name] = value
 
-    def __setitem__(self, str name, value):
-        self.setitem(name, value)
-
-    cpdef merge_under(self, Node node):
-        if self._stack[-1] is None:
-            self._stack[-1] = self.variables
-            self.variables = self.variables.copy()
+    def merge_under(self, Node node):
         for attr, value in node.attributes.items():
             if attr not in self.variables:
                 self.variables[attr] = value

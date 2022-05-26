@@ -63,6 +63,3 @@ cdef class Context:
     cdef readonly dict state
     cdef readonly Node graph
     cdef list _stack
-
-    cdef void setitem(self, str name, value)
-    cpdef merge_under(self, Node node)
