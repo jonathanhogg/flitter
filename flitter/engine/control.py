@@ -13,7 +13,7 @@ from ..interface.controls import Pad, Encoder
 from ..interface.osc import OSCReceiver, OSCSender, OSCMessage, OSCBundle
 from ..language.simplifier import simplify
 from ..language.parser import parse
-from ..language.tree import Literal
+from ..language.tree import Sequence
 from ..model import Context, Vector, Node, null
 from ..render.scene import Window
 
@@ -76,8 +76,8 @@ class Controller:
 
     @staticmethod
     def load_source(filename):
-        with open(filename, encoding='utf8') as file, Context() as context:
-            tree = simplify(parse(file.read()), context)
+        with open(filename, encoding='utf8') as file:
+            tree = simplify(parse(file.read()), Context())
         return tree
 
     def get(self, key, default=None):
@@ -269,7 +269,10 @@ class Controller:
         self.enqueue_reset()
         self.enqueue_page_status()
         reload_task = None
+        now = self.counter.clock()
         while True:
+            frames.append(now)
+
             if self.next_page is not None:
                 if reload_task is not None:
                     reload_task.cancel()
@@ -294,25 +297,23 @@ class Controller:
                         reload_task = None
                     self.current_mtime = mtime
 
-            beat = self.counter.beat
-            variables = {'beat': Vector((beat,)), 'quantum': Vector((self.counter.quantum,)),
-                         'clock': Vector((self.counter.time_at_beat(beat),)), 'read': Vector((self.read,))}
-            with Context(variables=variables, state=self.state) as context:
-                for expr in [self.tree] if isinstance(self.tree, Literal) else self.tree.expressions:
-                    for value in expr.evaluate(context):
-                        if isinstance(value, Node) and value.parent is None:
-                            context.graph.append(value)
+            variables = {'beat': Vector((self.counter.beat_at_time(now),)), 'quantum': Vector((self.counter.quantum,)),
+                         'clock': Vector((now,)), 'read': Vector((self.read,))}
+            context = Context(variables=variables, state=self.state)
+            for expr in self.tree.expressions if isinstance(self.tree, Sequence) else [self.tree]:
+                for value in expr.evaluate(context):
+                    if isinstance(value, Node) and value.parent is None:
+                        context.graph.append(value)
             self.handle_pragmas(context.pragmas)
             self.update_controls(context.graph)
             self.update_windows(context.graph)
-            frame_time = self.counter.clock()
+
             if self.queue:
                 await self.osc_sender.send_bundle_from_queue(self.queue)
-            if frames:
-                frame_time = max(frame_time, frames[-1] + 1/self.max_fps)
-                await asyncio.sleep(max(0, frame_time - self.counter.clock()))
-            frames.append(frame_time)
             if len(frames) > 1 and frames[-1] - frames[0] > 2:
                 fps = (len(frames) - 1) / (frames[-1] - frames[0])
                 Log.info("Frame rate = %.1ffps", fps)
                 frames = frames[-1:]
+
+            now = max(now + 1/self.max_fps, self.counter.clock())
+            await asyncio.sleep(max(0, now - self.counter.clock()))
