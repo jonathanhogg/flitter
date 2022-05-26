@@ -19,7 +19,7 @@ parser.add_argument('script', nargs='+', help="Script to execute")
 args = parser.parse_args()
 logging.basicConfig(level=logging.DEBUG if args.debug else (logging.INFO if args.verbose else logging.WARNING), stream=sys.stderr)
 
-controller = Controller('.', profiling=args.profile, max_fps=args.throttle)
+controller = Controller('.', max_fps=args.throttle)
 for script in args.script:
     controller.load_page(script)
 controller.switch_to_page(0)

@@ -25,12 +25,10 @@ class Controller:
     SEND_PORT = 47177
     RECEIVE_PORT = 47178
 
-    def __init__(self, root_dir, profiling=False, max_fps=60):
+    def __init__(self, root_dir, max_fps=60):
         self.root_dir = Path(root_dir)
-        self.profiling = profiling
         self.max_fps = max_fps
         self.state = {}
-        self.pragmas = {}
         self.tree = None
         self.windows = []
         self.counter = BeatCounter()
@@ -108,17 +106,6 @@ class Controller:
             Log.info("Read: %s", filename)
             return text
         return null
-
-    @staticmethod
-    def execute_tree(tree, context):
-        with context:
-            expressions = [tree] if isinstance(tree, Literal) else tree.expressions
-            for expr in expressions:
-                result = expr.evaluate(context)
-                for value in result:
-                    if isinstance(value, Node) and value.parent is None:
-                        context.graph.append(value)
-        return context.graph
 
     def update_windows(self, graph):
         count = 0
@@ -257,15 +244,15 @@ class Controller:
             message = await self.osc_receiver.receive()
             self.process_message(message)
 
-    def handle_pragmas(self):
+    def handle_pragmas(self, pragmas):
         counter_state = self.get(Vector(['_counter']))
         if counter_state is None:
-            tempo = self.pragmas.get('tempo')
+            tempo = pragmas.get('tempo')
             if tempo is not None and len(tempo) == 1 and isinstance(tempo[0], float) and tempo[0] > 0:
                 tempo = tempo[0]
             else:
                 tempo = 120
-            quantum = self.pragmas.get('quantum')
+            quantum = pragmas.get('quantum')
             if quantum is not None and len(quantum) == 1 and isinstance(quantum[0], float) and quantum[0] >= 2:
                 quantum = int(quantum[0])
             else:
@@ -281,28 +268,14 @@ class Controller:
         frames = []
         self.enqueue_reset()
         self.enqueue_page_status()
-        execute_task = None
         reload_task = None
-        context = None
         while True:
-            if self.profiling and context is not None:
-                graph = self.execute_tree(self.tree, context)
-            elif execute_task is not None:
-                graph = await execute_task
-            else:
-                graph = None
-
             if self.next_page is not None:
                 if reload_task is not None:
                     reload_task.cancel()
                     reload_task = None
                 self.switch_to_page(self.next_page)
                 self.next_page = None
-                graph = None
-
-            if graph is not None:
-                self.update_controls(graph)
-                self.handle_pragmas()
 
             mtime = self.current_filename.stat().st_mtime
             if mtime > self.current_mtime:
@@ -322,26 +295,24 @@ class Controller:
                     self.current_mtime = mtime
 
             beat = self.counter.beat
-            variables = {'beat': Vector((beat,)),
-                         'quantum': Vector((self.counter.quantum,)),
-                         'clock': Vector((self.counter.time_at_beat(beat),)),
-                         'read': Vector((self.read,))}
-            context = Context(variables=variables, state=self.state.copy(), pragmas=self.pragmas)
-            if not self.profiling:
-                execute_task = loop.run_in_executor(None, self.execute_tree, self.tree, context)
-
-            if graph is not None:
-                self.update_windows(graph)
-                frame_time = self.counter.clock()
-                if frames:
-                    frame_time = max(frame_time, frames[-1] + 1/self.max_fps)
-                    await asyncio.sleep(max(0, frame_time - self.counter.clock()))
-                frames.append(frame_time)
-                graph = None
-                if len(frames) > 1 and frames[-1] - frames[0] > 2:
-                    fps = (len(frames) - 1) / (frames[-1] - frames[0])
-                    Log.info("Frame rate = %.1ffps", fps)
-                    frames = frames[-1:]
-
+            variables = {'beat': Vector((beat,)), 'quantum': Vector((self.counter.quantum,)),
+                         'clock': Vector((self.counter.time_at_beat(beat),)), 'read': Vector((self.read,))}
+            with Context(variables=variables, state=self.state) as context:
+                for expr in [self.tree] if isinstance(self.tree, Literal) else self.tree.expressions:
+                    for value in expr.evaluate(context):
+                        if isinstance(value, Node) and value.parent is None:
+                            context.graph.append(value)
+            self.handle_pragmas(context.pragmas)
+            self.update_controls(context.graph)
+            self.update_windows(context.graph)
+            frame_time = self.counter.clock()
             if self.queue:
                 await self.osc_sender.send_bundle_from_queue(self.queue)
+            if frames:
+                frame_time = max(frame_time, frames[-1] + 1/self.max_fps)
+                await asyncio.sleep(max(0, frame_time - self.counter.clock()))
+            frames.append(frame_time)
+            if len(frames) > 1 and frames[-1] - frames[0] > 2:
+                fps = (len(frames) - 1) / (frames[-1] - frames[0])
+                Log.info("Frame rate = %.1ffps", fps)
+                frames = frames[-1:]
