@@ -12,17 +12,21 @@ SIGNED_NUMBER : /([0-9]+(\.[0-9]+)?|\.[0-9]+)(e[-+]?[0-9]+)?/i
 QUERY : /{[^}]+}/
 
 
-sequence : _NL? expression+
+sequence : _NL? expressions
+
+expressions : expression+ -> tuple
 
 ?expression : node _NL
             | node "^" _NL _INDENT sequence _DEDENT -> prepend
             | node _NL _INDENT sequence _DEDENT -> append
             | "for" NAME "in" range _NL _INDENT sequence _DEDENT -> loop
-            | "let" binding+ _NL (_INDENT (binding+ _NL)+ _DEDENT)? -> let
+            | "let" bindings -> let
             | "if" tests ["else" _NL _INDENT sequence _DEDENT] -> if_else
             | "%pragma" NAME node _NL -> pragma
 
-tests : test ("elif" test)*
+bindings : binding+ _NL (_INDENT (binding+ _NL)+ _DEDENT)? -> tuple
+
+tests : test ("elif" test)* -> tuple
 
 test : composition _NL _INDENT sequence _DEDENT
 
@@ -33,7 +37,9 @@ binding : NAME "=" composition
       | node NAME "=" composition -> attribute
 
 ?composition : comprehension
-             | comprehension (";" comprehension)+ -> sequence
+             | compositions -> sequence
+
+compositions : comprehension (";" comprehension)+ -> tuple
 
 ?comprehension : or
                | "for" NAME "in" or "|" comprehension -> loop
@@ -90,6 +96,6 @@ literal : SIGNED_NUMBER
 
 args : (node ("," node)*)? -> tuple
 
-tags: tag*
+tags: tag* -> tuple
 
 ?tag: "#" NAME

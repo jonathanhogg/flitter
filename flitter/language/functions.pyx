@@ -9,15 +9,14 @@ import cython
 
 from libc.math cimport isnan, floor, round, sin, cos, sqrt
 
-from ..model cimport Vector, null_, true_
+from ..model cimport VectorLike, Vector, null_, true_
 
 
 DEF PI = 3.141592653589793
 DEF TwoPI = 6.283185307179586
 
 
-@cython.freelist(20)
-cdef class Uniform:
+cdef class Uniform(VectorLike):
     cdef Vector keys
     cdef unsigned long long seed
 
@@ -37,7 +36,7 @@ cdef class Uniform:
         x = x*x + y
         return <double>(x >> 32) / <double>(1<<32)
 
-    def slice(self, Vector index not None):
+    cpdef Vector slice(self, Vector index):
         cdef Vector result = Vector.__new__(Vector)
         cdef int j
         for i in range(len(index.values)):
@@ -48,8 +47,11 @@ cdef class Uniform:
                     result.values.append(self.item(j))
         return result
 
-    def copynodes(self):
+    cpdef VectorLike copynodes(self):
         return self
+
+    cpdef bint istrue(self):
+        return True
 
     def __repr__(self):
         return f"{self.__class__.__name__}({self.keys!r})"

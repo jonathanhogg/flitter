@@ -11,9 +11,9 @@ from pathlib import Path
 from ..clock import BeatCounter
 from ..interface.controls import Pad, Encoder
 from ..interface.osc import OSCReceiver, OSCSender, OSCMessage, OSCBundle
-from ..language.interpreter import simplify, evaluate
+from ..language.simplifier import simplify
 from ..language.parser import parse
-from ..language.ast import Literal
+from ..language.tree import Literal
 from ..model import Context, Vector, Node, null
 from ..render.scene import Window
 
@@ -114,7 +114,7 @@ class Controller:
         with context:
             expressions = [tree] if isinstance(tree, Literal) else tree.expressions
             for expr in expressions:
-                result = evaluate(expr, context)
+                result = expr.evaluate(context)
                 for value in result:
                     if isinstance(value, Node) and value.parent is None:
                         context.graph.append(value)

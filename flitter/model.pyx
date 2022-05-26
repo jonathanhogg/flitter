@@ -11,9 +11,20 @@ cdef union float_long:
     unsigned long long l
 
 
-@cython.final
 @cython.freelist(100)
-cdef class Vector:
+cdef class VectorLike:
+    cpdef VectorLike copynodes(self):
+        raise NotImplementedError()
+
+    cpdef Vector slice(self, Vector index):
+        raise NotImplementedError()
+
+    cpdef bint istrue(self):
+        raise NotImplementedError()
+
+
+@cython.final
+cdef class Vector(VectorLike):
     @staticmethod
     def compose(*args):
         if len(args) == 1:
@@ -120,7 +131,7 @@ cdef class Vector:
                 return False
         return True
 
-    def copynodes(self):
+    cpdef VectorLike copynodes(self):
         cdef Vector result = self
         cdef Node node, parent
         cdef int i
@@ -146,19 +157,19 @@ cdef class Vector:
             result.values.append(value)
         return result
 
-    def neg(self):
+    cpdef Vector neg(self):
         cdef Vector result = Vector.__new__(Vector)
         for value in self.values:
             result.values.append(-value)
         return result
 
-    def pos(self):
+    cpdef Vector pos(self):
         cdef Vector result = Vector.__new__(Vector)
         for value in self.values:
             result.values.append(+value)
         return result
 
-    def not_(self):
+    cpdef Vector not_(self):
         return false_ if self.istrue() else true_
 
     cpdef Vector add(self, Vector other):
@@ -177,7 +188,7 @@ cdef class Vector:
                 result.values.append(self.values[i] + y)
         return result
 
-    cpdef sub(self, Vector other):
+    cpdef Vector sub(self, Vector other):
         cdef Vector result = Vector.__new__(Vector)
         cdef int n = len(self.values), m = len(other.values)
         if n == m:
@@ -193,7 +204,7 @@ cdef class Vector:
                 result.values.append(self.values[i] - y)
         return result
 
-    cpdef mul(self, Vector other):
+    cpdef Vector mul(self, Vector other):
         cdef Vector result = Vector.__new__(Vector)
         cdef int n = len(self.values), m = len(other.values)
         if n == m:
@@ -209,7 +220,7 @@ cdef class Vector:
                 result.values.append(self.values[i] * y)
         return result
 
-    cpdef truediv(self, Vector other):
+    cpdef Vector truediv(self, Vector other):
         cdef Vector result = Vector.__new__(Vector)
         cdef int n = len(self.values), m = len(other.values)
         if n == m:
@@ -225,7 +236,7 @@ cdef class Vector:
                 result.values.append(self.values[i] / y)
         return result
 
-    cpdef floordiv(self, Vector other):
+    cpdef Vector floordiv(self, Vector other):
         cdef Vector result = Vector.__new__(Vector)
         cdef int n = len(self.values), m = len(other.values)
         if n == m:
@@ -241,7 +252,7 @@ cdef class Vector:
                 result.values.append(self.values[i] // y)
         return result
 
-    cpdef mod(self, Vector other):
+    cpdef Vector mod(self, Vector other):
         cdef Vector result = Vector.__new__(Vector)
         cdef int n = len(self.values), m = len(other.values)
         if n == m:
@@ -257,7 +268,7 @@ cdef class Vector:
                 result.values.append(self.values[i] % y)
         return result
 
-    cpdef pow(self, Vector other):
+    cpdef Vector pow(self, Vector other):
         cdef Vector result = Vector.__new__(Vector)
         cdef int n = len(self.values), m = len(other.values)
         if n == m:
@@ -288,7 +299,7 @@ cdef class Vector:
             return 1
         return 0
 
-    def slice(self, Vector index):
+    cpdef Vector slice(self, Vector index):
         cdef Vector result = Vector.__new__(Vector)
         cdef int j, n = len(self.values)
         for value in index.values:
@@ -365,7 +376,7 @@ cdef class Query:
         cdef str text = ''
         if self.strict:
             text += '> '
-        if self.kind is None and self.id is None and not self.tags:
+        if self.kind is None and not self.tags:
             text += '*'
         else:
             if self.kind is not None:
@@ -660,13 +671,16 @@ cdef class Context:
     def __getitem__(self, name):
         return self.variables[name]
 
-    def __setitem__(self, str name, value):
+    cdef void setitem(self, str name, value):
         if self._stack[-1] is None:
             self._stack[-1] = self.variables
             self.variables = self.variables.copy()
         self.variables[name] = value
 
-    def merge_under(self, Node node):
+    def __setitem__(self, str name, value):
+        self.setitem(name, value)
+
+    cpdef merge_under(self, Node node):
         if self._stack[-1] is None:
             self._stack[-1] = self.variables
             self.variables = self.variables.copy()

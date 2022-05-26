@@ -11,8 +11,8 @@ from lark import Lark, Transformer
 from lark.indenter import Indenter
 from lark.visitors import v_args
 
-from . import ast
 from .. import model
+from . import tree
 
 
 class FlitterIndenter(Indenter):
@@ -38,49 +38,47 @@ class FlitterTransformer(Transformer):
         return model.Query(token[1:-1])
 
     def range(self, start, stop, step):
-        return ast.Range(ast.Literal(model.null) if start is None else start, stop, ast.Literal(model.null) if step is None else step)
+        return tree.Range(tree.Literal(model.null) if start is None else start, stop, tree.Literal(model.null) if step is None else step)
 
     tuple = v_args(inline=False)(tuple)
 
-    add = ast.Add
-    append = ast.Append
-    attribute = ast.Attribute
-    binding = ast.Binding
-    bool = ast.Literal
-    call = ast.Call
-    divide = ast.Divide
-    eq = ast.EqualTo
-    floor_divide = ast.FloorDivide
-    ge = ast.GreaterThanOrEqualTo
-    gt = ast.GreaterThan
-    if_else = ast.IfElse
-    inline_let = ast.InlineLet
-    le = ast.LessThanOrEqualTo
-    let = v_args(inline=False)(ast.Let)
-    literal = ast.Literal
-    logical_and = ast.And
-    logical_not = ast.Not
-    logical_or = ast.Or
-    lookup = ast.Lookup
-    loop = ast.For
-    lt = ast.LessThan
-    modulo = ast.Modulo
-    multiply = ast.Multiply
-    name = ast.Name
-    ne = ast.NotEqualTo
-    neg = ast.Negative
-    node = ast.Node
-    power = ast.Power
-    pos = ast.Positive
-    pragma = ast.Pragma
-    prepend = ast.Prepend
-    search = ast.Search
-    sequence = v_args(inline=False)(ast.Sequence)
-    slice = ast.Slice
-    subtract = ast.Subtract
-    tags = v_args(inline=False)(tuple)
-    test = ast.Test
-    tests = v_args(inline=False)(tuple)
+    add = tree.Add
+    append = tree.Append
+    attribute = tree.Attribute
+    binding = tree.Binding
+    bool = tree.Literal
+    call = tree.Call
+    divide = tree.Divide
+    eq = tree.EqualTo
+    floor_divide = tree.FloorDivide
+    ge = tree.GreaterThanOrEqualTo
+    gt = tree.GreaterThan
+    if_else = tree.IfElse
+    inline_let = tree.InlineLet
+    le = tree.LessThanOrEqualTo
+    let = tree.Let
+    literal = tree.Literal
+    logical_and = tree.And
+    logical_not = tree.Not
+    logical_or = tree.Or
+    lookup = tree.Lookup
+    loop = tree.For
+    lt = tree.LessThan
+    modulo = tree.Modulo
+    multiply = tree.Multiply
+    name = tree.Name
+    ne = tree.NotEqualTo
+    neg = tree.Negative
+    node = tree.Node
+    power = tree.Power
+    pos = tree.Positive
+    pragma = tree.Pragma
+    prepend = tree.Prepend
+    search = tree.Search
+    sequence = tree.Sequence
+    slice = tree.Slice
+    subtract = tree.Subtract
+    test = tree.Test
 
 
 GRAMMAR = (Path(__file__).parent / 'grammar.lark').open('r', encoding='utf8').read()
