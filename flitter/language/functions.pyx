@@ -286,3 +286,27 @@ def hsv(Vector c):
     v = min(max(0, v), 1)
     cdef double l = v * (1 - s / 2)
     return hsl_to_rgb(h, 0 if l == 0 or l == 1 else (v - l) / min(l, 1 - l), l)
+
+
+FUNCTIONS = {
+    'uniform': Vector((Uniform,)),
+    'beta': Vector((Beta,)),
+    'normal': Vector((Normal,)),
+    'len': Vector((length,)),
+    'sine': Vector((sine,)),
+    'bounce': Vector((bounce,)),
+    'sharkfin': Vector((sharkfin,)),
+    'sawtooth': Vector((sawtooth,)),
+    'triangle': Vector((triangle,)),
+    'square': Vector((square,)),
+    'linear': Vector((linear,)),
+    'quad': Vector((quad,)),
+    'shuffle': Vector((shuffle,)),
+    'round': Vector((roundv,)),
+    'min': Vector((minv,)),
+    'max': Vector((maxv,)),
+    'hypot': Vector((hypot,)),
+    'map': Vector((mapv,)),
+    'hsl': Vector((hsl,)),
+    'hsv': Vector((hsv,)),
+}

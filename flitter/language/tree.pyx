@@ -6,35 +6,16 @@ Language syntax/evaluation tree
 
 cimport cython
 
-from . import functions
+from .functions import FUNCTIONS
 from .. cimport model
 
 
-BUILTINS = {
+cdef dict BUILTINS = {
     'true': model.true_,
     'false': model.false_,
     'null': model.null_,
-    'uniform': model.Vector((functions.Uniform,)),
-    'beta': model.Vector((functions.Beta,)),
-    'normal': model.Vector((functions.Normal,)),
-    'len': model.Vector((functions.length,)),
-    'sine': model.Vector((functions.sine,)),
-    'bounce': model.Vector((functions.bounce,)),
-    'sharkfin': model.Vector((functions.sharkfin,)),
-    'sawtooth': model.Vector((functions.sawtooth,)),
-    'triangle': model.Vector((functions.triangle,)),
-    'square': model.Vector((functions.square,)),
-    'linear': model.Vector((functions.linear,)),
-    'quad': model.Vector((functions.quad,)),
-    'shuffle': model.Vector((functions.shuffle,)),
-    'round': model.Vector((functions.roundv,)),
-    'min': model.Vector((functions.minv,)),
-    'max': model.Vector((functions.maxv,)),
-    'hypot': model.Vector((functions.hypot,)),
-    'map': model.Vector((functions.mapv,)),
-    'hsl': model.Vector((functions.hsl,)),
-    'hsv': model.Vector((functions.hsv,)),
 }
+BUILTINS.update(FUNCTIONS)
 
 
 cdef class Expression:
@@ -99,11 +80,10 @@ cdef class Name(Expression):
 
     cpdef model.VectorLike evaluate(self, model.Context context):
         cdef model.VectorLike result
-        if self.name in context.variables:
-            result = context.variables[self.name]
+        result = context.variables.get(self.name)
+        if result is not None:
             return result.copynodes()
-        cdef dict builtins = BUILTINS
-        result = builtins.get(self.name)
+        result = BUILTINS.get(self.name)
         if result is not None:
             return result
         return model.null_
