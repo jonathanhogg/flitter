@@ -107,12 +107,12 @@ class Controller:
             return text
         return null
 
-    def update_windows(self, graph):
+    def update_windows(self, graph, timestamp):
         count = 0
         for i, node in enumerate(graph.select_below('window.')):
             if i == len(self.windows):
                 self.windows.append(Window())
-            self.windows[i].update(node)
+            self.windows[i].update(node, timestamp)
             count += 1
         while len(self.windows) > count:
             self.windows.pop().destroy()
@@ -307,7 +307,7 @@ class Controller:
                         context.graph.append(value)
             self.handle_pragmas(context.pragmas)
             self.update_controls(context.graph)
-            self.update_windows(context.graph)
+            self.update_windows(context.graph, now)
 
             if self.queue:
                 await self.osc_sender.send_bundle_from_queue(self.queue)

@@ -8,7 +8,6 @@ import array
 import asyncio
 import logging
 import sys
-import time
 
 import skia
 import moderngl
@@ -49,7 +48,7 @@ class SceneNode:
         while self.children:
             self.children.pop().destroy()
 
-    def update(self, node):
+    def update(self, node, timestamp):
         resized = False
         width, height = node.get('size', 2, int, (512, 512))
         if width != self.width or height != self.height:
@@ -57,10 +56,10 @@ class SceneNode:
             self.height = height
             resized = True
         self.create(node, resized)
-        self.descend(node)
-        self.render(node)
+        self.descend(node, timestamp)
+        self.render(node, timestamp)
 
-    def descend(self, node):
+    def descend(self, node, timestamp):
         count = 0
         for i, child in enumerate(node.children):
             cls = SCENE_CLASSES[child.kind]
@@ -69,7 +68,7 @@ class SceneNode:
             elif type(self.children[i]) != cls:  # noqa
                 self.children[i].destroy()
                 self.children[i] = cls(self.glctx)
-            self.children[i].update(child)
+            self.children[i].update(child, timestamp)
             count += 1
         while len(self.children) > count:
             self.children.pop().destroy()
@@ -77,7 +76,7 @@ class SceneNode:
     def create(self, node, resized):
         pass
 
-    def render(self, node):
+    def render(self, node, timestamp):
         raise NotImplementedError()
 
     def release(self):
@@ -160,17 +159,14 @@ void main() {{
             except Exception:
                 Log.exception("Unable to compile shader:\n%s", self._fragment_source)
 
-    def render(self, node):
-        now = time.clock_gettime(time.CLOCK_MONOTONIC_RAW)
-        delta = 0.0 if self._timestamp is None else min(now - self._timestamp, 1/25)
-        self._timestamp = now
+    def render(self, node, timestamp):
         self.compile(node)
         if self._rectangle is not None:
+            delta = 0.0 if self._timestamp is None else timestamp - self._timestamp
+            self._timestamp = timestamp
             self.framebuffer.use()
-            self.framebuffer.clear()
             samplers = []
             unit = 0
-            last = False
             for name in self._program:
                 member = self._program[name]
                 if isinstance(member, moderngl.Uniform):
@@ -179,13 +175,12 @@ void main() {{
                     elif name == 'last':
                         if self._last is None:
                             self._last = self.glctx.texture((self.width, self.height), 4)
-                            self.glctx.copy_framebuffer(self._last, self.framebuffer)
+                        self.glctx.copy_framebuffer(self._last, self.framebuffer)
                         sampler = self.glctx.sampler(texture=self._last, repeat_x=False, repeat_y=False)
                         sampler.use(location=unit)
                         samplers.append(sampler)
                         member.value = unit
                         unit += 1
-                        last = True
                     elif name.startswith('texture'):
                         index = int(name[7:])
                         if index < len(self.children):
@@ -203,12 +198,11 @@ void main() {{
                         value = node.get(name, member.dimension, float)
                         if value is not None:
                             member.value = value if member.dimension == 1 else tuple(value)
+            self.framebuffer.clear()
             self._rectangle.render(mode=moderngl.TRIANGLE_STRIP)
             for sampler in samplers:
                 sampler.clear()
                 sampler.release()
-            if last:
-                self.glctx.copy_framebuffer(self._last, self.framebuffer)
 
 
 class Window(ProgramNode):
@@ -281,8 +275,8 @@ class Window(ProgramNode):
     def on_close(self):
         asyncio.get_event_loop().stop()
 
-    def render(self, node):
-        super().render(node)
+    def render(self, node, timestamp):
+        super().render(node, timestamp)
         self.window.flip()
         self.window.dispatch_events()
 
@@ -364,11 +358,11 @@ class Canvas(SceneNode):
                                                                      skia.kRGBA_8888_ColorType, skia.ColorSpace.MakeSRGB())
             self._canvas = self._surface.getCanvas()
 
-    def descend(self, node):
+    def descend(self, node, timestamp):
         # A canvas is a leaf node from the perspective of the OpenGL world
         pass
 
-    def render(self, node):
+    def render(self, node, timestamp):
         self._graphics_context.resetContext()
         self._framebuffer.clear()
         self._canvas.save()
