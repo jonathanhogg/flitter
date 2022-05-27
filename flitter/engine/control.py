@@ -124,6 +124,7 @@ class Controller:
         for node in graph.select_below('pad.'):
             number = node.get('number', 2, int)
             if number is not None:
+                number = tuple(number)
                 if number not in self.pads:
                     Log.debug("New pad @ %r", number)
                     pad = self.pads[number] = Pad(number)
