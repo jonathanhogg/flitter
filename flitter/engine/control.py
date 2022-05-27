@@ -118,12 +118,12 @@ class Controller:
             return text
         return null
 
-    def update_windows(self, graph, timestamp):
+    def update_windows(self, graph, **kwargs):
         count = 0
         for i, node in enumerate(graph.select_below('window.')):
             if i == len(self.windows):
-                self.windows.append(Window())
-            self.windows[i].update(node, timestamp, screen=self.screen, fullscreen=self.fullscreen)
+                self.windows.append(Window(screen=self.screen, fullscreen=self.fullscreen))
+            self.windows[i].update(node, **kwargs)
             count += 1
         while len(self.windows) > count:
             self.windows.pop().destroy()
@@ -283,6 +283,7 @@ class Controller:
         self.enqueue_page_status()
         reload_task = None
         now = self.counter.clock()
+        last = now
         dump_time = now
         while True:
             frames.append(now)
@@ -311,7 +312,9 @@ class Controller:
                         reload_task = None
                     self.current_mtime = mtime
 
-            variables = {'beat': Vector((self.counter.beat_at_time(now),)), 'quantum': Vector((self.counter.quantum,)),
+            delta = now - last
+            beat = self.counter.beat_at_time(now)
+            variables = {'beat': Vector((beat,)), 'quantum': Vector((self.counter.quantum,)), 'delta': Vector((delta,)),
                          'clock': Vector((now,)), 'read': Vector((self.read,))}
             context = Context(variables=variables, state=self.state)
             for expr in self.tree.expressions if isinstance(self.tree, Sequence) else [self.tree]:
@@ -320,7 +323,7 @@ class Controller:
                         context.graph.append(value)
             self.handle_pragmas(context.pragmas)
             self.update_controls(context.graph)
-            self.update_windows(context.graph, now)
+            self.update_windows(context.graph, clock=now, beat=beat, delta=delta)
 
             if self.queue:
                 await self.osc_sender.send_bundle_from_queue(self.queue)
@@ -336,5 +339,6 @@ class Controller:
                 self.global_state_dirty = False
                 dump_time = now
 
+            last = now
             now = max(now + 1/self.max_fps, self.counter.clock())
             await asyncio.sleep(max(0, now - self.counter.clock()))

@@ -48,7 +48,7 @@ class SceneNode:
         while self.children:
             self.children.pop().destroy()
 
-    def update(self, node, timestamp, **kwargs):
+    def update(self, node, **kwargs):
         resized = False
         width, height = node.get('size', 2, int, (512, 512))
         if width != self.width or height != self.height:
@@ -56,10 +56,10 @@ class SceneNode:
             self.height = height
             resized = True
         self.create(node, resized, **kwargs)
-        self.descend(node, timestamp)
-        self.render(node, timestamp)
+        self.descend(node, **kwargs)
+        self.render(node, **kwargs)
 
-    def descend(self, node, timestamp):
+    def descend(self, node, **kwargs):
         count = 0
         for i, child in enumerate(node.children):
             cls = SCENE_CLASSES[child.kind]
@@ -68,15 +68,15 @@ class SceneNode:
             elif type(self.children[i]) != cls:  # noqa
                 self.children[i].destroy()
                 self.children[i] = cls(self.glctx)
-            self.children[i].update(child, timestamp)
+            self.children[i].update(child, **kwargs)
             count += 1
         while len(self.children) > count:
             self.children.pop().destroy()
 
-    def create(self, node, resized):
+    def create(self, node, resized, **kwargs):
         pass
 
-    def render(self, node, timestamp):
+    def render(self, node, **kwargs):
         raise NotImplementedError()
 
     def release(self):
@@ -90,7 +90,6 @@ class ProgramNode(SceneNode):
         self._rectangle = None
         self._vertex_source = None
         self._fragment_source = None
-        self._timestamp = None
         self._last = None
 
     def release(self):
@@ -108,8 +107,8 @@ class ProgramNode(SceneNode):
     def framebuffer(self):
         raise NotImplementedError()
 
-    def create(self, node, resized):
-        super().create(node, resized)
+    def create(self, node, resized, **kwargs):
+        super().create(node, resized, **kwargs)
         if resized and self._last is not None:
             self._last.release()
             self._last = None
@@ -159,20 +158,16 @@ void main() {{
             except Exception:
                 Log.exception("Unable to compile shader:\n%s", self._fragment_source)
 
-    def render(self, node, timestamp):
+    def render(self, node, **kwargs):
         self.compile(node)
         if self._rectangle is not None:
-            delta = 0.0 if self._timestamp is None else timestamp - self._timestamp
-            self._timestamp = timestamp
             self.framebuffer.use()
             samplers = []
             unit = 0
             for name in self._program:
                 member = self._program[name]
                 if isinstance(member, moderngl.Uniform):
-                    if name == 'delta':
-                        member.value = delta
-                    elif name == 'last':
+                    if name == 'last':
                         if self._last is None:
                             self._last = self.glctx.texture((self.width, self.height), 4)
                         self.glctx.copy_framebuffer(self._last, self.framebuffer)
@@ -194,6 +189,8 @@ void main() {{
                                 child.texture.use(location=unit)
                             member.value = unit
                             unit += 1
+                    elif name in kwargs:
+                        member.value = kwargs[name]
                     elif name in node:
                         value = node.get(name, member.dimension, float)
                         if value is not None:
@@ -219,9 +216,11 @@ class Window(ProgramNode):
         def on_close(self):
             pass
 
-    def __init__(self):
+    def __init__(self, screen=0, fullscreen=False):
         super().__init__(None)
         self.window = None
+        self.default_screen = screen
+        self.default_fullscreen = fullscreen
 
     def release(self):
         if self.window is not None:
@@ -237,13 +236,13 @@ class Window(ProgramNode):
     def framebuffer(self):
         return self.glctx.screen
 
-    def create(self, node, resized, screen=0, fullscreen=False):
+    def create(self, node, resized, **kwargs):
         super().create(node, resized)
         if self.window is None:
             vsync = node.get('vsync', 1, bool, True)
-            screen = node.get('screen', 1, int, screen)
+            screen = node.get('screen', 1, int, self.default_screen)
             title = node.get('title', 1, str, "Flitter")
-            fullscreen = node.get('fullscreen', 1, bool, fullscreen)
+            fullscreen = node.get('fullscreen', 1, bool, self.default_fullscreen)
             screens = pyglet.canvas.get_display().get_screens()
             screen = screens[screen] if screen < len(screens) else screens[0]
             config = pyglet.gl.Config(major_version=self.GL_VERSION[0], minor_version=self.GL_VERSION[1], forward_compatible=True,
@@ -275,8 +274,8 @@ class Window(ProgramNode):
     def on_close(self):
         asyncio.get_event_loop().stop()
 
-    def render(self, node, timestamp):
-        super().render(node, timestamp)
+    def render(self, node, **kwargs):
+        super().render(node, **kwargs)
         self.window.flip()
         self.window.dispatch_events()
 
@@ -304,8 +303,8 @@ class Shader(ProgramNode):
             self._texture = None
         super().release()
 
-    def create(self, node, resized):
-        super().create(node, resized)
+    def create(self, node, resized, **kwargs):
+        super().create(node, resized, **kwargs)
         if self._framebuffer is None or self._texture is None or resized:
             if self._framebuffer is not None:
                 self._framebuffer.release()
@@ -345,7 +344,7 @@ class Canvas(SceneNode):
             self._graphics_context.abandonContext()
             self._graphics_context = None
 
-    def create(self, node, resized):
+    def create(self, node, resized, **kwargs):
         if resized:
             if self._framebuffer is not None:
                 self._framebuffer.release()
@@ -358,11 +357,11 @@ class Canvas(SceneNode):
                                                                      skia.kRGBA_8888_ColorType, skia.ColorSpace.MakeSRGB())
             self._canvas = self._surface.getCanvas()
 
-    def descend(self, node, timestamp):
+    def descend(self, node, **kwargs):
         # A canvas is a leaf node from the perspective of the OpenGL world
         pass
 
-    def render(self, node, timestamp):
+    def render(self, node, **kwargs):
         self._graphics_context.resetContext()
         self._framebuffer.clear()
         self._canvas.save()
