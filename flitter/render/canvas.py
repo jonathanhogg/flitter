@@ -2,6 +2,8 @@
 Flitter drawing canvas based on Skia
 """
 
+# pylama:ignore=W0703,R0912,R0914,R0915,C0103
+
 import enum
 import logging
 from pathlib import Path
@@ -237,11 +239,11 @@ def draw(node, ctx, paint, font, path):
                             else:
                                 positions.append(offset)
                                 colors.append(paint.getColor())
-            n = len(positions)
-            if n:
-                for i in range(n):
+            nstops = len(positions)
+            if nstops:
+                for i in range(nstops):
                     if positions[i] is None:
-                        positions[i] = i / (n - 1)
+                        positions[i] = i / (nstops - 1)
                 start = node.get('start', 2, float)
                 end = node.get('end', 2, float)
                 if start is not None and end is not None:
