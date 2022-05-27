@@ -86,6 +86,16 @@ def length(Vector xs not None):
     return ys
 
 
+def polar(Vector theta not None):
+    cdef Vector xy = Vector.__new__(Vector)
+    cdef float th
+    if len(theta.values) == 1:
+        th = theta.values[0] * TwoPI
+        xy.values.append(cos(th))
+        xy.values.append(sin(th))
+    return xy
+
+
 def sine(Vector xs not None):
     cdef Vector ys = Vector.__new__(Vector)
     cdef double x, y
@@ -293,6 +303,7 @@ FUNCTIONS = {
     'beta': Vector((Beta,)),
     'normal': Vector((Normal,)),
     'len': Vector((length,)),
+    'polar': Vector((polar,)),
     'sine': Vector((sine,)),
     'bounce': Vector((bounce,)),
     'sharkfin': Vector((sharkfin,)),
