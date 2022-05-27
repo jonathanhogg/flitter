@@ -4,6 +4,10 @@ fileTypes: ['fl']
 
 patterns: [
     {
+        match: '--.*$'
+        name: 'comment.single.flitter'
+    }
+    {
         match: '\\b(([0-9]+\\.?[0-9]*)|(\\.[0-9]+))\\b'
         name: 'constant.numeric.flitter'
     }
@@ -39,6 +43,10 @@ patterns: [
     {
         match: "\\b(and|not|or)\\b"
         name: "keyword.operator.logical.flitter"
+    }
+    {
+        match: "\\b(true|false)\\b"
+        name: "constant.logical.flitter"
     }
     {
         match: "!\\s*[_a-zA-Z][_a-zA-Z0-9]*"
