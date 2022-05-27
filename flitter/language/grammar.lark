@@ -33,7 +33,8 @@ test : composition _NL _INDENT sequence _DEDENT
 binding : NAME "=" composition
 
 ?node : composition
-      | "!" NAME tags -> node
+      | "!" NAME -> node
+      | node "#" NAME -> tag
       | node NAME "=" composition -> attribute
 
 ?composition : comprehension
@@ -91,11 +92,7 @@ inline_binding: NAME "=" or -> binding
       | "$" atom -> lookup
       | "(" node ")"
 
-literal : SIGNED_NUMBER
-        | ESCAPED_STRING
-
 args : (node ("," node)*)? -> tuple
 
-tags: tag* -> tuple
-
-?tag: "#" NAME
+literal : SIGNED_NUMBER
+        | ESCAPED_STRING

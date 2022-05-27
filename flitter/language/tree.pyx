@@ -337,17 +337,34 @@ cdef class Call(Expression):
 
 cdef class Node(Expression):
     cdef readonly str kind
-    cdef readonly tuple tags
 
-    def __init__(self, str kind, tuple tags):
+    def __init__(self, str kind):
         self.kind = kind
-        self.tags = tags
 
     cpdef model.VectorLike evaluate(self, model.Context context):
-        return model.Vector((model.Node(self.kind, self.tags),))
+        return model.Vector((model.Node(self.kind),))
 
     def __repr__(self):
-        return f'Node({self.kind!r}, {self.tags!r})'
+        return f'Node({self.kind!r})'
+
+
+cdef class Tag(Expression):
+    cdef readonly Expression node
+    cdef readonly str tag
+
+    def __init__(self, Expression node, str tag):
+        self.node = node
+        self.tag = tag
+
+    cpdef model.VectorLike evaluate(self, model.Context context):
+        cdef model.Vector nodes = self.node.evaluate(context)
+        cdef model.Node node
+        for node in nodes.values:
+            node._tags.add(self.tag)
+        return nodes
+
+    def __repr__(self):
+        return f'Tag({self.node!r}, {self.tag!r})'
 
 
 cdef class Attribute(Expression):

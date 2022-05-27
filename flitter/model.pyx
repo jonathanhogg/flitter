@@ -398,32 +398,14 @@ cdef class Query:
 @cython.final
 @cython.freelist(100)
 cdef class Node:
-    @staticmethod
-    def from_dict(d):
-        d = d.copy()
-        cdef str kind = d.pop('_kind')
-        cdef str tags = d.pop('_tags', '')
-        cdef list children = d.pop('_children', [])
-        cdef Node node = Node(kind, tags)
-        for key, value in d.items():
-            node.attributes[key] = Vector(value)
-        cdef Node child
-        for d in children:
-            child = Node.from_dict(d)
-            node.append(child)
-        return node
-
-    def __cinit__(self, str kind, tags, /):
-        cdef str tag_str
+    def __cinit__(self, str kind, /):
         self.kind = kind
-        if isinstance(tags, frozenset):
-            self.tags = tags
-        elif isinstance(tags, str):
-            tag_str = tags
-            self.tags = frozenset(tag_str.split())
-        else:
-            self.tags = frozenset(tags)
+        self._tags = set()
         self.attributes = {}
+
+    @property
+    def tags(self):
+        return frozenset(self._tags)
 
     @property
     def parent(self):
@@ -436,19 +418,10 @@ cdef class Node:
             yield node
             node = node.next_sibling
 
-    def to_dict(self):
-        d = {'_kind': self.kind}
-        if self.tags:
-            d['_tags'] = ' '.join(self.tags)
-        for key, value in self.attributes.items():
-            d[key] = list(value)
-        if self.first_child is not None:
-            d['_children'] = [node.to_dict() for node in self.children]
-        return d
-
     cpdef Node copy(self):
-        cdef Node node = Node.__new__(Node, self.kind, self.tags)
+        cdef Node node = Node.__new__(Node, self.kind)
         node.attributes = self.attributes.copy()
+        node._tags = self._tags.copy()
         cdef Node copy, child = self.first_child
         if child is not None:
             parent = weak(node)
@@ -462,6 +435,12 @@ cdef class Node:
                 node.last_child.next_sibling = node.last_child = copy
                 child = child.next_sibling
         return node
+
+    cpdef void add_tag(self, str tag):
+        self._tags.add(tag)
+
+    cpdef void remove_tag(self, str tag):
+        self._tags.discard(tag)
 
     cpdef void append(self, Node node):
         cdef Node parent = node._parent() if node._parent is not None else None
@@ -542,7 +521,7 @@ cdef class Node:
         while altquery is not None:
             tags = altquery.tags
             if (altquery.kind is None or altquery.kind == self.kind) and \
-               (tags is None or tags.issubset(self.tags)):
+               (tags is None or tags.issubset(self._tags)):
                 if altquery.stop:
                     descend = False
                 if query.subquery is not None:
@@ -568,7 +547,7 @@ cdef class Node:
     cdef bint _equals(self, Node other):
         if self.kind != other.kind:
             return False
-        if self.tags != other.tags:
+        if self._tags != other._tags:
             return False
         if self.attributes != other.attributes:
             return False
@@ -633,26 +612,12 @@ cdef class Node:
     def __iter__(self):
         return iter(self.attributes)
 
-    def __repr__(self):
-        cdef str text = "Node('" + self.kind + "', {" + ",".join(repr(tag) for tag in self.tags) + "}"
-        cdef str key
-        cdef Node node
-        for key, value in self.attributes.items():
-            text += ", " + key + "=" + repr(value)
-        text += ")"
-        node = self.first_child
-        while node is not None:
-            for line in repr(node).split('\n'):
-                text += "\n    " + line
-            node = node.next_sibling
-        return text
-
 
 cdef class Context:
     def __cinit__(self, dict variables=None, dict state=None, Node graph=None, dict pragmas=None):
         self.variables = variables if variables is not None else {}
         self.state = state if state is not None else {}
-        self.graph = graph if graph is not None else Node.__new__(Node, 'root', ())
+        self.graph = graph if graph is not None else Node.__new__(Node, 'root')
         self.pragmas = pragmas if pragmas is not None else {}
         self._stack = []
 

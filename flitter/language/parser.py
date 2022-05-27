@@ -78,6 +78,7 @@ class FlitterTransformer(Transformer):
     sequence = tree.Sequence
     slice = tree.Slice
     subtract = tree.Subtract
+    tag = tree.Tag
     test = tree.Test
 
 

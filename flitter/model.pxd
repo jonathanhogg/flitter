@@ -44,12 +44,14 @@ cdef class Query:
 cdef class Node:
     cdef object __weakref__
     cdef readonly str kind
-    cdef readonly frozenset tags
+    cdef set _tags
     cdef dict attributes
     cdef object _parent
     cdef Node next_sibling, first_child, last_child
 
     cpdef Node copy(self)
+    cpdef void add_tag(self, str tag)
+    cpdef void remove_tag(self, str tag)
     cpdef void append(self, Node node)
     cpdef void insert(self, Node node)
     cpdef void remove(self, Node node)

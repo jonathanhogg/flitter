@@ -62,8 +62,16 @@ def simplify(expression, context):
                 return tree.Literal(model.Vector.range(start.value, stop.value, step.value))
             return tree.Range(start=start, stop=stop, step=step)
 
-        case tree.Node(kind=kind, tags=tags):
-            return tree.Literal(value=model.Vector((model.Node(kind, tags),)))
+        case tree.Node(kind=kind):
+            return tree.Literal(value=model.Vector((model.Node(kind),)))
+
+        case tree.Tag(node=node, tag=tag):
+            node = simplify(node, context)
+            if isinstance(node, tree.Literal) and node.value.isinstance(model.Node):
+                 for n in node.value:
+                     n.add_tag(tag)
+                 return node
+            return tree.Tag(node=node, tag=tag)
 
         case tree.Append(node=node, children=children):
             node = simplify(node, context)
