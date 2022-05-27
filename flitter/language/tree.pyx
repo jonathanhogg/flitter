@@ -100,10 +100,16 @@ cdef class Lookup(Expression):
 
     cpdef model.VectorLike evaluate(self, model.Context context):
         cdef model.Vector key = self.key.evaluate(context)
-        cdef model.Vector value = context.state.get(key)
+        cdef model.Vector result = model.Vector.__new__(model.Vector)
+        value = context.state.get(tuple(key.values))
         if value is not None:
-            return value
-        return model.null_
+            if isinstance(value, (tuple, list)):
+                result.values.extend(value)
+            elif isinstance(value, bool):
+                result.values.append(1.0 if value else 0.0)
+            else:
+                result.values.append(value)
+        return result
 
     def __repr__(self):
         return f'Lookup({self.key!r})'

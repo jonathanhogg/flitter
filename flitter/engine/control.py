@@ -2,11 +2,12 @@
 The main Flitter engine
 """
 
-# pylama:ignore=W0703,R0902,R0912,R0915
+# pylama:ignore=W0703,R0902,R0912,R0913,R0915
 
 import asyncio
 import logging
 from pathlib import Path
+import pickle
 
 from ..clock import BeatCounter
 from ..interface.controls import Pad, Encoder
@@ -25,12 +26,20 @@ class Controller:
     SEND_PORT = 47177
     RECEIVE_PORT = 47178
 
-    def __init__(self, root_dir, max_fps=60, screen=0, fullscreen=False):
+    def __init__(self, root_dir, max_fps=60, screen=0, fullscreen=False, state_file=None):
         self.root_dir = Path(root_dir)
         self.max_fps = max_fps
         self.screen = screen
         self.fullscreen = fullscreen
-        self.state = {}
+        self.state_file = Path(state_file) if state_file is not None else None
+        if self.state_file is not None and self.state_file.exists():
+            Log.info("Recover state from state file: %s", self.state_file)
+            with open(self.state_file, 'rb') as file:
+                self.global_state = pickle.load(file)
+        else:
+            self.global_state = {}
+        self.global_state_dirty = False
+        self.state = None
         self.tree = None
         self.windows = []
         self.counter = BeatCounter()
@@ -52,7 +61,7 @@ class Controller:
         mtime = filename.stat().st_mtime
         tree = self.load_source(filename)
         Log.info("Loaded page %i: %s", page_number, filename)
-        self.pages.append((filename, mtime, tree, {}))
+        self.pages.append((filename, mtime, tree, self.global_state.setdefault(page_number, {})))
 
     def switch_to_page(self, page_number):
         if self.pages is not None and 0 <= page_number < len(self.pages):
@@ -66,7 +75,7 @@ class Controller:
             self.current_mtime = mtime
             Log.info("Switched to page %i: %s", page_number, filename)
             self.enqueue_reset()
-            counter_state = self.get(Vector(['_counter']))
+            counter_state = self.get(('_counter',))
             if counter_state is not None:
                 tempo, quantum, start = counter_state
                 self.counter.update(tempo, int(quantum), start)
@@ -79,8 +88,7 @@ class Controller:
     @staticmethod
     def load_source(filename):
         with open(filename, encoding='utf8') as file:
-            tree = simplify(parse(file.read()), Context())
-        return tree
+            return simplify(parse(file.read()), Context())
 
     def get(self, key, default=None):
         return self.state.get(key, default)
@@ -94,6 +102,7 @@ class Controller:
     def __setitem__(self, key, value):
         if key not in self.state or value != self.state[key]:
             self.state[key] = value
+            self.global_state_dirty = True
             Log.debug("State changed: %r = %r", key, value)
 
     def read(self, filename):
@@ -198,7 +207,7 @@ class Controller:
         elif parts[0] == 'tempo':
             tempo, quantum, start = message.args
             self.counter.update(tempo, int(quantum), start)
-            self[Vector(['_counter'])] = Vector([tempo, int(quantum), start])
+            self[('_counter',)] = tempo, int(quantum), start
             self.enqueue_tempo()
         elif parts[0] == 'pad':
             number = tuple(int(n) for n in parts[1:-1])
@@ -249,7 +258,7 @@ class Controller:
             self.process_message(message)
 
     def handle_pragmas(self, pragmas):
-        counter_state = self.get(Vector(['_counter']))
+        counter_state = self.get(('_counter',))
         if counter_state is None:
             tempo = pragmas.get('tempo')
             if tempo is not None and len(tempo) == 1 and isinstance(tempo[0], float) and tempo[0] > 0:
@@ -262,7 +271,7 @@ class Controller:
             else:
                 quantum = 4
             self.counter.update(tempo, quantum, self.counter.clock())
-            self[Vector(['_counter'])] = Vector([self.counter.tempo, self.counter.quantum, self.counter.start])
+            self[('_counter',)] = self.counter.tempo, self.counter.quantum, self.counter.start
             self.enqueue_tempo()
             Log.info("Start counter, tempo %d, quantum %d", self.counter.tempo, self.counter.quantum)
 
@@ -274,6 +283,7 @@ class Controller:
         self.enqueue_page_status()
         reload_task = None
         now = self.counter.clock()
+        dump_time = now
         while True:
             frames.append(now)
 
@@ -318,6 +328,13 @@ class Controller:
                 fps = (len(frames) - 1) / (frames[-1] - frames[0])
                 Log.info("Frame rate = %.1ffps", fps)
                 frames = frames[-1:]
+
+            if self.global_state_dirty and self.state_file is not None and now > dump_time + 1:
+                Log.info("Saving state")
+                with open(self.state_file, 'wb') as file:
+                    pickle.dump(self.global_state, file)
+                self.global_state_dirty = False
+                dump_time = now
 
             now = max(now + 1/self.max_fps, self.counter.clock())
             await asyncio.sleep(max(0, now - self.counter.clock()))

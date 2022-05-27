@@ -48,9 +48,9 @@ class EncoderState:
 
 
 class Controller:
-    HELLO_RETRY_INTERVAL = 10
+    HELLO_RETRY_INTERVAL = 1
     RECEIVE_TIMEOUT = 5
-    RESET_TIMEOUT = 30
+    RESET_TIMEOUT = 10
 
     def __init__(self):
         self.push = None
@@ -62,11 +62,13 @@ class Controller:
         self.last_received = None
         self.last_hello = None
         self.updated = asyncio.Event()
+        self.touched_pads = set()
+        self.touched_encoders = set()
 
-    def process_message(self, message):
+    async def process_message(self, message):
         if isinstance(message, OSCBundle):
             for element in message.elements:
-                self.process_message(element)
+                await self.process_message(element)
             return
         Log.info("Received OSC message: %r", message)
         match message.address.strip('/').split('/'):
@@ -80,6 +82,8 @@ class Controller:
                     brightness = 255 if state.touched or state.toggled else 63
                     self.push.set_pad_color(row * 8 + column, int(state.r*brightness), int(state.g*brightness), int(state.b*brightness))
                     self.pads[column, row] = state
+                    if state.touched and (column, row) not in self.touched_pads:
+                        await self.osc_sender.send_message(f'/pad/{column}/{row}/released', self.push.counter.clock())
                 elif (column, row) in self.pads:
                     self.push.set_pad_color(row * 8 + column, 0, 0, 0)
                     del self.pads[column, row]
@@ -90,6 +94,8 @@ class Controller:
                     brightness = 255 if state.touched else 63
                     self.push.set_menu_button_color(number + 8, int(state.r*brightness), int(state.g*brightness), int(state.b*brightness))
                     self.encoders[number] = state
+                    if state.touched and number not in self.touched_encoders:
+                        await self.osc_sender.send_message(f'/encoder/{number}/released', self.push.counter.clock())
                 elif number in self.encoders:
                     self.push.set_menu_button_color(number + 8, 0, 0, 0)
                     del self.encoders[number]
@@ -130,7 +136,7 @@ class Controller:
         while True:
             message = await self.osc_receiver.receive()
             self.last_received = self.push.counter.clock()
-            self.process_message(message)
+            await self.process_message(message)
             self.updated.set()
 
     async def run(self):
@@ -168,6 +174,7 @@ class Controller:
                             shift_pressed = False
                         case PadPressed():
                             if not tap_tempo_pressed:
+                                self.touched_pads.add((event.column, event.row))
                                 address = f'/pad/{event.column}/{event.row}/touched'
                                 await self.osc_sender.send_message(address, event.timestamp, event.pressure)
                             else:
@@ -178,15 +185,18 @@ class Controller:
                                 await self.osc_sender.send_message(address, event.timestamp, event.pressure)
                         case PadReleased():
                             if not tap_tempo_pressed:
+                                self.touched_pads.discard((event.column, event.row))
                                 address = f'/pad/{event.column}/{event.row}/released'
                                 await self.osc_sender.send_message(address, event.timestamp)
                         case EncoderTouched() if event.number < 8:
+                            self.touched_encoders.add(event.number)
                             address = f'/encoder/{event.number}/touched'
                             await self.osc_sender.send_message(address, event.timestamp)
                         case EncoderTurned() if event.number < 8:
                             address = f'/encoder/{event.number}/turned'
                             await self.osc_sender.send_message(address, event.timestamp, event.amount / 400)
                         case EncoderReleased() if event.number < 8:
+                            self.touched_encoders.discard(event.number)
                             address = f'/encoder/{event.number}/released'
                             await self.osc_sender.send_message(address, event.timestamp)
                         case EncoderTurned(number=Encoder.TEMPO):

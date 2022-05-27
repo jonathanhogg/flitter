@@ -6,8 +6,6 @@ Flitter user interface controls
 
 import math
 
-from ..model import Vector, true, false
-
 
 class Control:
     DEFAULT_NAME = "?"
@@ -24,7 +22,7 @@ class Control:
         changed = self._changed
         self._changed = False
         if 'state' in node:
-            state = node['state']
+            state = tuple(node['state'])
             if state != self.state:
                 self.state = state
                 self.reset()
@@ -57,8 +55,8 @@ class TouchControl(Control):
     def update(self, node, controller):
         changed = super().update(node, controller)
         if self.touched is not None:
-            controller[Vector((*self.state, "touched"))] = true if self.touched else false
-            controller[Vector((*self.state, "touched", "beat"))] = Vector((self._touched_beat,))
+            controller[(*self.state, "touched")] = self.touched
+            controller[(*self.state, "touched", "beat")] = self._touched_beat
         return changed
 
     def on_touched(self, beat):
@@ -99,8 +97,8 @@ class Pad(TouchControl):
             delta = 0.0 if self._clock is None else now - self._clock
             self._clock = now
             toggle = node.get('toggle', 1, bool, False)
-            toggled_key = Vector((*self.state, "toggled"))
-            toggled_beat_key = Vector((*self.state, "toggled", "beat"))
+            toggled_key = (*self.state, "toggled")
+            toggled_beat_key = (*self.state, "toggled", "beat")
             if toggle != self.toggle:
                 self.toggle = toggle
                 if not self.toggle and self.toggled:
@@ -109,28 +107,28 @@ class Pad(TouchControl):
                 self._can_toggle = False
                 changed = True
             if self.toggled is None and toggled_key in controller:
-                self.toggled = controller[toggled_key].istrue()
-                self._toggled_beat = controller[toggled_beat_key][0]
+                self.toggled = bool(controller[toggled_key])
+                self._toggled_beat = controller[toggled_beat_key]
             group = node.get('group', 1, str)
             if group != self.group:
                 self.group = group
                 changed = True
             self._toggle_threshold = node.get('threshold', 1, float, self.DEFAULT_THRESHOLD)
             if self.pressure is not None:
-                pressure_key = Vector((*self.state, "pressure"))
-                pressure_beat_key = Vector((*self.state, "pressure", "beat"))
+                pressure_key = (*self.state, "pressure")
+                pressure_beat_key = (*self.state, "pressure", "beat")
                 pressure = self.pressure
                 if pressure_key in controller:
                     alpha = math.exp(20 * -delta)
-                    current_pressure = controller[pressure_key][0]
+                    current_pressure = controller[pressure_key]
                     pressure = pressure * (1-alpha) + current_pressure * alpha
                     if math.isclose(pressure, self.pressure, rel_tol=1e-3, abs_tol=1e-3):
                         pressure = self.pressure
-                controller[pressure_key] = Vector((pressure,))
-                controller[pressure_beat_key] = Vector((self._pressure_beat,))
+                controller[pressure_key] = pressure
+                controller[pressure_beat_key] = self._pressure_beat
             if self.toggled is not None:
-                controller[toggled_key] = true if self.toggled else false
-                controller[toggled_beat_key] = Vector((self._toggled_beat,))
+                controller[toggled_key] = self.toggled
+                controller[toggled_beat_key] = self._toggled_beat
         return changed
 
     def on_touched(self, beat):
@@ -208,24 +206,24 @@ class Encoder(TouchControl):
             if percent != self.percent:
                 self.percent = percent
                 changed = True
-            value_key = Vector(self.state)
-            value_beat_key = Vector((*self.state, "beat"))
+            value_key = self.state
+            value_beat_key = (*self.state, "beat")
             if self.value is None:
                 if value_key in controller:
-                    self.value = controller[value_key][0]
-                    self._value_beat = controller[value_beat_key][0]
+                    self.value = controller[value_key]
+                    self._value_beat = controller[value_beat_key]
                 else:
                     self.value = self.initial
                     self._value_beat = controller.counter.beat
             value = self.value
             if value_key in controller:
                 alpha = math.exp(10 * -delta)
-                current_value = controller[value_key][0]
+                current_value = controller[value_key]
                 value = value * (1-alpha) + current_value * alpha
                 if math.isclose(value, self.value, rel_tol=1e-3, abs_tol=1e-3):
                     value = self.value
-            controller[value_key] = Vector((value,))
-            controller[value_beat_key] = Vector((self._value_beat,))
+            controller[value_key] = value
+            controller[value_beat_key] = self._value_beat
         return changed
 
     def on_turned(self, beat, amount):
