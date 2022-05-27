@@ -29,7 +29,7 @@ class PadState:
     r: float
     g: float
     b: float
-    touched:bool
+    touched: bool
     toggled: bool
 
 
@@ -244,10 +244,11 @@ class Controller:
                             paint.setStyle(skia.Paint.kFill_Style)
                             canvas.drawPath(path, paint)
                             font.setSize(14)
+                            exponent = 10**state.decimals
+                            value = int((state.value * 100 if state.percent else state.value) * exponent) / exponent
+                            text = f'{{:.{max(0, int(state.decimals))}f}}'.format(value)
                             if state.percent:
-                                text = f'{{:.{int(state.decimals)}f}}%'.format(state.value*100)
-                            else:
-                                text = f'{{:.{int(state.decimals)}f}}'.format(state.value)
+                                text += '%'
                             width = font.measureText(text)
                             canvas.drawString(text, (120-width) / 2, 84, font, paint)
                             font.setSize(16)
