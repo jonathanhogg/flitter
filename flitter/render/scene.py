@@ -48,14 +48,14 @@ class SceneNode:
         while self.children:
             self.children.pop().destroy()
 
-    def update(self, node, timestamp):
+    def update(self, node, timestamp, **kwargs):
         resized = False
         width, height = node.get('size', 2, int, (512, 512))
         if width != self.width or height != self.height:
             self.width = width
             self.height = height
             resized = True
-        self.create(node, resized)
+        self.create(node, resized, **kwargs)
         self.descend(node, timestamp)
         self.render(node, timestamp)
 
@@ -237,13 +237,13 @@ class Window(ProgramNode):
     def framebuffer(self):
         return self.glctx.screen
 
-    def create(self, node, resized):
+    def create(self, node, resized, screen=0, fullscreen=False):
         super().create(node, resized)
         if self.window is None:
             vsync = node.get('vsync', 1, bool, True)
-            screen = node.get('screen', 1, int, 0)
+            screen = node.get('screen', 1, int, screen)
             title = node.get('title', 1, str, "Flitter")
-            fullscreen = node.get('fullscreen', 1, bool, False)
+            fullscreen = node.get('fullscreen', 1, bool, fullscreen)
             screens = pyglet.canvas.get_display().get_screens()
             screen = screens[screen] if screen < len(screens) else screens[0]
             config = pyglet.gl.Config(major_version=self.GL_VERSION[0], minor_version=self.GL_VERSION[1], forward_compatible=True,

@@ -25,9 +25,11 @@ class Controller:
     SEND_PORT = 47177
     RECEIVE_PORT = 47178
 
-    def __init__(self, root_dir, max_fps=60):
+    def __init__(self, root_dir, max_fps=60, screen=0, fullscreen=False):
         self.root_dir = Path(root_dir)
         self.max_fps = max_fps
+        self.screen = screen
+        self.fullscreen = fullscreen
         self.state = {}
         self.tree = None
         self.windows = []
@@ -112,7 +114,7 @@ class Controller:
         for i, node in enumerate(graph.select_below('window.')):
             if i == len(self.windows):
                 self.windows.append(Window())
-            self.windows[i].update(node, timestamp)
+            self.windows[i].update(node, timestamp, screen=self.screen, fullscreen=self.fullscreen)
             count += 1
         while len(self.windows) > count:
             self.windows.pop().destroy()
