@@ -2,7 +2,7 @@
 The main Flitter engine
 """
 
-# pylama:ignore=W0703,R0902,R0912,R0913,R0915
+# pylama:ignore=W0703,R0902,R0912,R0913,R0914,R0915,R1702
 
 import asyncio
 import logging
@@ -276,69 +276,73 @@ class Controller:
             Log.info("Start counter, tempo %d, quantum %d", self.counter.tempo, self.counter.quantum)
 
     async def run(self):
-        loop = asyncio.get_event_loop()
-        loop.create_task(self.receive_messages())
-        frames = []
-        self.enqueue_reset()
-        self.enqueue_page_status()
-        reload_task = None
-        now = self.counter.clock()
-        last = now
-        dump_time = now
-        while True:
-            frames.append(now)
+        try:
+            loop = asyncio.get_event_loop()
+            loop.create_task(self.receive_messages())
+            frames = []
+            self.enqueue_reset()
+            self.enqueue_page_status()
+            reload_task = None
+            now = self.counter.clock()
+            last = self.counter.beat_at_time(now)
+            dump_time = now
+            while True:
+                frames.append(now)
 
-            if self.next_page is not None:
-                if reload_task is not None:
-                    reload_task.cancel()
-                    reload_task = None
-                self.switch_to_page(self.next_page)
-                self.next_page = None
-
-            mtime = self.current_filename.stat().st_mtime
-            if mtime > self.current_mtime:
-                if reload_task is None:
-                    Log.debug("Begin reload of page %i: %s", self.current_page, self.current_filename)
-                    reload_task = loop.run_in_executor(None, self.load_source, self.current_filename)
-                elif reload_task.done():
-                    try:
-                        tree = await reload_task
-                        self.tree = tree
-                        self.pages[self.current_page] = self.current_filename, self.current_mtime, self.tree, self.state
-                        Log.info("Reloaded page %i: %s", self.current_page, self.current_filename)
-                    except Exception:
-                        Log.exception("Error reloading page")
-                    finally:
+                if self.next_page is not None:
+                    if reload_task is not None:
+                        reload_task.cancel()
                         reload_task = None
-                    self.current_mtime = mtime
+                    self.switch_to_page(self.next_page)
+                    self.next_page = None
 
-            delta = now - last
-            beat = self.counter.beat_at_time(now)
-            variables = {'beat': Vector((beat,)), 'quantum': Vector((self.counter.quantum,)), 'delta': Vector((delta,)),
-                         'clock': Vector((now,)), 'read': Vector((self.read,))}
-            context = Context(variables=variables, state=self.state)
-            for expr in self.tree.expressions if isinstance(self.tree, Sequence) else [self.tree]:
-                for value in expr.evaluate(context):
-                    if isinstance(value, Node) and value.parent is None:
-                        context.graph.append(value)
-            self.handle_pragmas(context.pragmas)
-            self.update_controls(context.graph)
-            self.update_windows(context.graph, clock=now, beat=beat, delta=delta)
+                mtime = self.current_filename.stat().st_mtime
+                if mtime > self.current_mtime:
+                    if reload_task is None:
+                        Log.debug("Begin reload of page %i: %s", self.current_page, self.current_filename)
+                        reload_task = loop.run_in_executor(None, self.load_source, self.current_filename)
+                    elif reload_task.done():
+                        try:
+                            tree = await reload_task
+                            self.tree = tree
+                            self.pages[self.current_page] = self.current_filename, self.current_mtime, self.tree, self.state
+                            Log.info("Reloaded page %i: %s", self.current_page, self.current_filename)
+                        except Exception:
+                            Log.exception("Error reloading page")
+                        finally:
+                            reload_task = None
+                        self.current_mtime = mtime
 
-            if self.queue:
-                await self.osc_sender.send_bundle_from_queue(self.queue)
-            if len(frames) > 1 and frames[-1] - frames[0] > 2:
-                fps = (len(frames) - 1) / (frames[-1] - frames[0])
-                Log.info("Frame rate = %.1ffps", fps)
-                frames = frames[-1:]
+                beat = self.counter.beat_at_time(now)
+                delta = beat - last
+                last = beat
+                variables = {'beat': Vector((beat,)), 'quantum': Vector((self.counter.quantum,)), 'delta': Vector((delta,)),
+                             'clock': Vector((now,)), 'read': Vector((self.read,))}
+                context = Context(variables=variables, state=self.state)
+                for expr in self.tree.expressions if isinstance(self.tree, Sequence) else [self.tree]:
+                    for value in expr.evaluate(context):
+                        if isinstance(value, Node) and value.parent is None:
+                            context.graph.append(value)
+                self.handle_pragmas(context.pragmas)
+                self.update_controls(context.graph)
+                self.update_windows(context.graph, clock=now, beat=beat, delta=delta)
 
-            if self.global_state_dirty and self.state_file is not None and now > dump_time + 1:
-                Log.info("Saving state")
-                with open(self.state_file, 'wb') as file:
-                    pickle.dump(self.global_state, file)
-                self.global_state_dirty = False
-                dump_time = now
+                if self.queue:
+                    await self.osc_sender.send_bundle_from_queue(self.queue)
+                if len(frames) > 1 and frames[-1] - frames[0] > 2:
+                    fps = (len(frames) - 1) / (frames[-1] - frames[0])
+                    Log.info("Frame rate = %.1ffps", fps)
+                    frames = frames[-1:]
 
-            last = now
-            now = max(now + 1/self.max_fps, self.counter.clock())
-            await asyncio.sleep(max(0, now - self.counter.clock()))
+                if self.global_state_dirty and self.state_file is not None and now > dump_time + 1:
+                    Log.info("Saving state")
+                    with open(self.state_file, 'wb') as file:
+                        pickle.dump(self.global_state, file)
+                    self.global_state_dirty = False
+                    dump_time = now
+
+                now = max(now + 1/self.max_fps, self.counter.clock())
+                await asyncio.sleep(max(0, now - self.counter.clock()))
+        finally:
+            while self.windows:
+                self.windows.pop().destroy()

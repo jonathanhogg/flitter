@@ -206,7 +206,7 @@ class Window(ProgramNode):
     GL_VERSION = (4, 1)
 
     class WindowWrapper(pyglet.window.Window):  # noqa
-        """Disable some pyglet functionality that is broken on moderngl"""
+        """Disable some pyglet functionality that is broken with moderngl"""
         def on_resize(self, width, height):
             pass
 
@@ -218,12 +218,15 @@ class Window(ProgramNode):
 
     def __init__(self, screen=0, fullscreen=False):
         super().__init__(None)
+        self._closed = False
         self.window = None
         self.default_screen = screen
         self.default_fullscreen = fullscreen
 
     def release(self):
         if self.window is not None:
+            self.glctx.release()
+            self.glctx = None
             self.window.close()
             self.window = None
         super().release()
@@ -272,9 +275,11 @@ class Window(ProgramNode):
         self.glctx.screen.viewport = viewport
 
     def on_close(self):
-        asyncio.get_event_loop().stop()
+        self._closed = True
 
     def render(self, node, **kwargs):
+        if self._closed:
+            raise ValueError("Window closed")
         super().render(node, **kwargs)
         self.window.flip()
         self.window.dispatch_events()
@@ -335,14 +340,17 @@ class Canvas(SceneNode):
         return self._texture
 
     def release(self):
-        if self._texture is not None:
-            self._texture.release()
-            self._texture = None
-        if self._surface is not None:
-            self._surface = None
+        self._canvas = None
+        self._surface = None
         if self._graphics_context is not None:
             self._graphics_context.abandonContext()
             self._graphics_context = None
+        if self._framebuffer is not None:
+            self._framebuffer.release()
+            self._framebuffer = None
+        if self._texture is not None:
+            self._texture.release()
+            self._texture = None
 
     def create(self, node, resized, **kwargs):
         if resized:
