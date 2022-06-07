@@ -56,7 +56,10 @@ class TouchControl(Control):
         changed = super().update(node, controller)
         if self.touched is not None:
             controller[(*self.state, "touched")] = self.touched
-            controller[(*self.state, "touched", "beat")] = self._touched_beat
+            if self.touched:
+                controller[(*self.state, "touched", "beat")] = self._touched_beat
+            else:
+                controller[(*self.state, "released", "beat")] = self._touched_beat
         return changed
 
     def on_touched(self, beat):
@@ -86,6 +89,7 @@ class Pad(TouchControl):
         self._toggled_beat = None
         self.pressure = None
         self._pressure_beat = None
+        self._max_pressure = None
         self._toggle_threshold = self.DEFAULT_THRESHOLD
         self._can_toggle = False
         self._clock = None
@@ -109,13 +113,14 @@ class Pad(TouchControl):
             if self.toggled is None and toggled_key in controller:
                 self.toggled = bool(controller[toggled_key])
                 self._toggled_beat = controller[toggled_beat_key]
-            group = node.get('group', 1, str)
+            group = tuple(node["group"]) if "group" in node else None
             if group != self.group:
                 self.group = group
                 changed = True
             self._toggle_threshold = node.get('threshold', 1, float, self.DEFAULT_THRESHOLD)
             if self.pressure is not None:
                 pressure_key = (*self.state, "pressure")
+                max_pressure_key = (*self.state, "max_pressure")
                 pressure_beat_key = (*self.state, "pressure", "beat")
                 pressure = self.pressure
                 if pressure_key in controller:
@@ -124,8 +129,11 @@ class Pad(TouchControl):
                     pressure = pressure * (1-alpha) + current_pressure * alpha
                     if math.isclose(pressure, self.pressure, rel_tol=1e-3, abs_tol=1e-3):
                         pressure = self.pressure
+                if self._max_pressure is None or pressure > self._max_pressure:
+                    self._max_pressure = pressure
                 controller[pressure_key] = pressure
                 controller[pressure_beat_key] = self._pressure_beat
+                controller[max_pressure_key] = self._max_pressure
             if self.toggled is not None:
                 controller[toggled_key] = self.toggled
                 controller[toggled_beat_key] = self._toggled_beat
@@ -134,6 +142,7 @@ class Pad(TouchControl):
     def on_touched(self, beat):
         super().on_touched(beat)
         self._can_toggle = self.toggle
+        self._max_pressure = None
 
     def on_released(self, beat):
         super().on_released(beat)
