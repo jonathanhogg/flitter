@@ -1,5 +1,7 @@
 """
-Ableton Push API
+Ableton Push 2 API
+
+As per official hardware documentation at: https://github.com/Ableton/push-interface
 """
 
 # pylama:ignore=C0103,R0911,R0912,R0903,R0902,W0401,R0913,W0703
@@ -25,7 +27,7 @@ from .palette import SimplePalete
 Log = logging.getLogger(__name__)
 
 
-class Push:
+class Push2:
     USB_VENDOR = 0x2982
     USB_PRODUCT = 0x1967
     MIDI_PORT_NAME = 'Ableton Push 2 User Port'

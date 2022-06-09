@@ -16,7 +16,7 @@ from ..clock import TapTempo
 from ..ableton.constants import Encoder, Control, BUTTONS
 from ..ableton.events import (ButtonPressed, ButtonReleased, PadPressed, PadHeld, PadReleased,
                               EncoderTurned, EncoderTouched, EncoderReleased, MenuButtonReleased)
-from ..ableton.push import Push
+from ..ableton.push import Push2
 from .osc import OSCSender, OSCReceiver, OSCBundle
 
 
@@ -140,7 +140,7 @@ class Controller:
             self.updated.set()
 
     async def run(self):
-        self.push = Push()
+        self.push = Push2()
         self.push.start()
         for n in range(64):
             self.push.set_pad_rgb(n, 0, 0, 0)
