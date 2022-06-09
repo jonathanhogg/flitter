@@ -79,40 +79,40 @@ class Controller:
                 column, row = int(column), int(row)
                 if 0 <= column < 8 and 0 <= row < 8 and message.args:
                     state = PadState(*message.args)
-                    brightness = 255 if state.touched or state.toggled else 63
-                    self.push.set_pad_color(row * 8 + column, int(state.r*brightness), int(state.g*brightness), int(state.b*brightness))
+                    brightness = 1 if state.touched or state.toggled else 0.5
+                    self.push.set_pad_rgb(row * 8 + column, state.r*brightness, state.g*brightness, state.b*brightness)
                     self.pads[column, row] = state
                     if state.touched and (column, row) not in self.touched_pads:
                         await self.osc_sender.send_message(f'/pad/{column}/{row}/released', self.push.counter.clock())
                 elif (column, row) in self.pads:
-                    self.push.set_pad_color(row * 8 + column, 0, 0, 0)
+                    self.push.set_pad_rgb(row * 8 + column, 0, 0, 0)
                     del self.pads[column, row]
             case ['encoder', number, 'state']:
                 number = int(number)
                 if 0 <= number < 8 and message.args:
                     state = EncoderState(*message.args)
-                    brightness = 255 if state.touched else 63
-                    self.push.set_menu_button_color(number + 8, int(state.r*brightness), int(state.g*brightness), int(state.b*brightness))
+                    brightness = 1 if state.touched else 0.5
+                    self.push.set_menu_button_rgb(number + 8, state.r*brightness, state.g*brightness, state.b*brightness)
                     self.encoders[number] = state
                     if state.touched and number not in self.touched_encoders:
                         await self.osc_sender.send_message(f'/encoder/{number}/released', self.push.counter.clock())
                 elif number in self.encoders:
-                    self.push.set_menu_button_color(number + 8, 0, 0, 0)
+                    self.push.set_menu_button_rgb(number + 8, 0, 0, 0)
                     del self.encoders[number]
             case ['page_left']:
                 enabled, = message.args
-                self.push.set_button_white(Control.PAGE_LEFT, 255 if enabled else 0)
+                self.push.set_button_white(Control.PAGE_LEFT, 1 if enabled else 0)
                 if enabled:
                     if Control.PAGE_LEFT not in self.buttons:
-                        self.buttons[Control.PAGE_LEFT] = 255
+                        self.buttons[Control.PAGE_LEFT] = 1
                 elif Control.PAGE_LEFT in self.buttons:
                     del self.buttons[Control.PAGE_LEFT]
             case ['page_right']:
                 enabled, = message.args
-                self.push.set_button_white(Control.PAGE_RIGHT, 255 if enabled else 0)
+                self.push.set_button_white(Control.PAGE_RIGHT, 1 if enabled else 0)
                 if enabled:
                     if Control.PAGE_RIGHT not in self.buttons:
-                        self.buttons[Control.PAGE_RIGHT] = 255
+                        self.buttons[Control.PAGE_RIGHT] = 1
                 elif Control.PAGE_RIGHT in self.buttons:
                     del self.buttons[Control.PAGE_RIGHT]
             case ['reset']:
@@ -120,10 +120,10 @@ class Controller:
 
     def reset(self):
         for column, row in self.pads:
-            self.push.set_pad_color(row * 8 + column, 0, 0, 0)
+            self.push.set_pad_rgb(row * 8 + column, 0, 0, 0)
         self.pads.clear()
         for number in self.encoders:
-            self.push.set_menu_button_color(number + 8, 0, 0, 0)
+            self.push.set_menu_button_rgb(number + 8, 0, 0, 0)
         self.encoders.clear()
         for control in self.buttons:
             self.push.set_button_white(control, 0)
@@ -143,13 +143,13 @@ class Controller:
         self.push = Push()
         self.push.start()
         for n in range(64):
-            self.push.set_pad_color(n, 0, 0, 0)
+            self.push.set_pad_rgb(n, 0, 0, 0)
         for n in range(16):
-            self.push.set_menu_button_color(n, 0, 0, 0)
+            self.push.set_menu_button_rgb(n, 0, 0, 0)
         for n in BUTTONS:
             self.push.set_button_white(n, 0)
-        self.push.set_button_white(Control.TAP_TEMPO, 255)
-        self.push.set_button_white(Control.SHIFT, 255)
+        self.push.set_button_white(Control.TAP_TEMPO, 1)
+        self.push.set_button_white(Control.SHIFT, 1)
         brightness = 1
         self.push.set_led_brightness(brightness)
         self.push.set_display_brightness(brightness)
@@ -277,9 +277,9 @@ class Controller:
                         self.reset()
         finally:
             for n in range(64):
-                self.push.set_pad_color(n, 0, 0, 0)
+                self.push.set_pad_rgb(n, 0, 0, 0)
             for n in range(16):
-                self.push.set_menu_button_color(n, 0, 0, 0)
+                self.push.set_menu_button_rgb(n, 0, 0, 0)
             for n in BUTTONS:
                 self.push.set_button_white(n, 0)
 

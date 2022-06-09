@@ -19,63 +19,48 @@ from .constants import (MIDI, Command, Animation, Control, Note, Encoder, TouchS
 from .events import (PadPressed, PadHeld, PadReleased, ButtonPressed, ButtonReleased,
                      EncoderTouched, EncoderTurned, EncoderReleased, TouchStripTouched,
                      TouchStripDragged, TouchStripReleased, MenuButtonPressed, MenuButtonReleased)
+from .palette import SimplePalete
 
 
 Log = logging.getLogger(__name__)
 
 
-def color_to_index(r, g, b):
-    r, g, b = (int(round(min(max(0, c), 255) / 63.75)) for c in (r, g, b))
-    return ((r * 5) + g) * 5 + b
-
-
-def index_to_color(i):
-    i = min(max(0, int(i)), 124)
-    return int((i // 25) * 63.75), int(((i // 5) % 5) * 63.75), int((i % 5) * 63.75)
-
-
-def white_to_index(w):
-    return int(round(min(max(0, w), 255) / 2.008))
-
-
-def index_to_white(i):
-    i = min(max(0, int(i)), 127)
-    return (i << 1) + (i >> 6)
-
-
 class Push:
-    PORT_NAME = 'Ableton Push 2 User Port'
+    USB_VENDOR = 0x2982
+    USB_PRODUCT = 0x1967
+    MIDI_PORT_NAME = 'Ableton Push 2 User Port'
     SCREEN_HEIGHT = 160
     SCREEN_WIDTH = 960
     SCREEN_STRIDE = 1024
     SYSEX_ID = [0x00, 0x21, 0x1D, 0x01, 0x01]
     FRAME_HEADER = bytes([0xFF, 0xCC, 0xAA, 0x88, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
 
-    def __init__(self):
+    def __init__(self, palette=None):
+        self._palette = palette if palette is not None else SimplePalete()
         self._screen_data = bytearray(self.SCREEN_HEIGHT * self.SCREEN_STRIDE * 2)
         self._screen_array = np.ndarray(buffer=self._screen_data, shape=(self.SCREEN_HEIGHT, self.SCREEN_STRIDE), dtype='uint16')
         self._surface_array = np.zeros((self.SCREEN_HEIGHT, self.SCREEN_WIDTH, 4), dtype='uint8')
         self._screen_surface = skia.Surface(self._surface_array)
         self._screen_update = asyncio.Condition()
-        self._usb_device = usb.core.find(idVendor=0x2982, idProduct=0x1967)
+        self._usb_device = usb.core.find(idVendor=self.USB_VENDOR, idProduct=self.USB_PRODUCT)
         if self._usb_device is None:
             raise RuntimeError("Cannot locate USB device")
         self._usb_device.set_configuration()
         self._screen_endpoint = self._usb_device.get_active_configuration()[0, 0][0]
         self._midi_out = rtmidi.MidiOut()
         for i, name in enumerate(self._midi_out.get_ports()):
-            if name == self.PORT_NAME:
+            if name == self.MIDI_PORT_NAME:
                 self._midi_out.open_port(i)
                 break
         else:
-            raise RuntimeError("Cannot open MIDI output port: " + self.PORT_NAME)
+            raise RuntimeError("Cannot open MIDI output port: " + self.MIDI_PORT_NAME)
         self._midi_in = rtmidi.MidiIn()
         for i, name in enumerate(self._midi_in.get_ports()):
-            if name == self.PORT_NAME:
+            if name == self.MIDI_PORT_NAME:
                 self._midi_in.open_port(i)
                 break
         else:
-            raise RuntimeError("Cannot open MIDI input port: " + self.PORT_NAME)
+            raise RuntimeError("Cannot open MIDI input port: " + self.MIDI_PORT_NAME)
         self._loop = None
         self._receive_queue = asyncio.Queue()
         self._last_receive_timestamp = None
@@ -95,8 +80,8 @@ class Push:
         self._send_sysex(Command.SET_AFTERTOUCH_MODE, 1)
         self._send_sysex(Command.SET_TOUCHSTRIP_CONFIG, TouchStripFlags.HOST_SENDS | TouchStripFlags.LED_POINT)
         for i in range(128):
-            r, g, b = index_to_color(i)
-            w = index_to_white(i)
+            r, g, b = self._palette.index_to_rgb_led(i)
+            w = self._palette.index_to_white_led(i)
             self._send_sysex(Command.SET_COLOR_PALETTE_ENTRY, i, r & 0x7f, r >> 7, g & 0x7f, g >> 7, b & 0x7f, b >> 1, w & 0x7f, w >> 7)
         self._send_sysex(Command.REAPPLY_COLOR_PALETTE)
         self._clock_task = asyncio.create_task(self._run_clock())
@@ -117,24 +102,36 @@ class Push:
     def _send_sysex(self, cmd: Command, *args):
         self._send_midi([MIDI.START_OF_SYSEX] + self.SYSEX_ID + [cmd] + list(args) + [MIDI.END_OF_SYSEX])
 
-    def set_pad_color(self, number, r, g, b, animation=Animation.NONE):
+    def set_pad_rgb(self, number, r, g, b, animation=Animation.NONE):
+        self.set_pad_index(number, self._palette.rgb_to_index(r, g, b), animation)
+
+    def set_pad_index(self, number, index, animation=Animation.NONE):
         assert number < 64
-        self._send_midi([MIDI.NOTE_ON + animation, number + Note.PAD_0_0, color_to_index(r, g, b)])
+        assert index in range(0, 128)
+        self._send_midi([MIDI.NOTE_ON + animation, number + Note.PAD_0_0, index])
+
+    def set_button_rgb(self, number, r, g, b, animation=Animation.NONE):
+        assert number in COLOR_BUTTONS
+        self.set_button_index(number, self._palette.rgb_to_index(r, g, b), animation)
 
     def set_button_white(self, number, w, animation=Animation.NONE):
-        assert number in BUTTONS
         if number in COLOR_BUTTONS:
-            self._send_midi([MIDI.CONTROL_CHANGE + animation, number, color_to_index(w, w, w)])
+            self.set_button_index(number, self._palette.rgb_to_index(w, w, w), animation)
         else:
-            self._send_midi([MIDI.CONTROL_CHANGE + animation, number, white_to_index(w)])
+            self.set_button_index(number, self._palette.white_to_index(w), animation)
 
-    def set_button_color(self, number, r, g, b, animation=Animation.NONE):
-        assert number in COLOR_BUTTONS
-        self._send_midi([MIDI.CONTROL_CHANGE + animation, number, color_to_index(r, g, b)])
+    def set_button_index(self, number, index, animation=Animation.NONE):
+        assert number in BUTTONS
+        assert index in range(0, 128)
+        self._send_midi([MIDI.CONTROL_CHANGE + animation, number, index])
 
-    def set_menu_button_color(self, number, r, g, b, animation=Animation.NONE):
-        assert number in range(16)
-        self._send_midi([MIDI.CONTROL_CHANGE + animation, MENU_NUMBERS[number], color_to_index(r, g, b)])
+    def set_menu_button_rgb(self, number, r, g, b, animation=Animation.NONE):
+        self.set_menu_button_index(number, self._palette.rgb_to_index(r, g, b), animation)
+
+    def set_menu_button_index(self, number, index, animation=Animation.NONE):
+        assert number in MENU_NUMBERS
+        assert index in range(0, 128)
+        self._send_midi([MIDI.CONTROL_CHANGE + animation, MENU_NUMBERS[number], index])
 
     def set_touch_strip_position(self, position):
         value = int(min(max(0, position), 1) * 255) << 6
