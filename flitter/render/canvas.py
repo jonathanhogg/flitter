@@ -79,6 +79,38 @@ class LineCap(enum.IntEnum):
     SQUARE = skia.Paint.Cap.kSquare_Cap
 
 
+class FontWeight(enum.IntEnum):
+    BLACK = skia.FontStyle.Weight.kBlack_Weight
+    BOLD = skia.FontStyle.Weight.kBold_Weight
+    EXTRABLACK = skia.FontStyle.Weight.kExtraBlack_Weight
+    EXTRABOLD = skia.FontStyle.Weight.kExtraBold_Weight
+    EXTRALIGHT = skia.FontStyle.Weight.kExtraLight_Weight
+    INVISIBLE = skia.FontStyle.Weight.kInvisible_Weight
+    LIGHT = skia.FontStyle.Weight.kLight_Weight
+    MEDIUM = skia.FontStyle.Weight.kMedium_Weight
+    NORMAL = skia.FontStyle.Weight.kNormal_Weight
+    SEMIBOLD = skia.FontStyle.Weight.kSemiBold_Weight
+    THIN = skia.FontStyle.Weight.kThin_Weight
+
+
+class FontWidth(enum.IntEnum):
+    CONDENSED = skia.FontStyle.Width.kCondensed_Width
+    EXPANDED = skia.FontStyle.Width.kExpanded_Width
+    EXTRACONDENSED = skia.FontStyle.Width.kExtraCondensed_Width
+    EXTRAEXPANDED = skia.FontStyle.Width.kExtraExpanded_Width
+    NORMAL = skia.FontStyle.Width.kNormal_Width
+    SEMICONDENSED = skia.FontStyle.Width.kSemiCondensed_Width
+    SEMIEXPANDED = skia.FontStyle.Width.kSemiExpanded_Width
+    ULTRACONDENSED = skia.FontStyle.Width.kUltraCondensed_Width
+    ULTRAEXPANDED = skia.FontStyle.Width.kUltraExpanded_Width
+
+
+class FontSlant(enum.IntEnum):
+    ITALIC = skia.FontStyle.Slant.kItalic_Slant
+    OBLIQUE = skia.FontStyle.Slant.kOblique_Slant
+    UPRIGHT = skia.FontStyle.Slant.kUpright_Slant
+
+
 def set_styles(node, ctx=None, paint=None, font=None):
     if ctx is not None:
         translate = node.get('translate', 2, float)
@@ -117,19 +149,26 @@ def set_styles(node, ctx=None, paint=None, font=None):
         font_size = node.get('font_size', 1, float)
         if font_size is not None:
             font.setSize(font_size)
-        font_face = node.get('font_face', 1, str)
-        if font_face is not None:
-            font_face = font_face.lower()
-            font_weight = 400
-            font_width = 5
-            font_slant = 0
-            if font_face.endswith(' bold'):
-                font_weight = 700
-                font_face = font_face[:-5]
-            if font_face.endswith(' condensed'):
-                font_width = 3
-                font_face = font_face[:-10]
-            font.setTypeface(skia.Typeface(font_face, skia.FontStyle(font_weight, font_width, skia.FontStyle.Slant(font_slant))))
+        if node.keys() & {'font_family', 'font_weight', 'font_width', 'font_slant'}:
+            typeface = font.getTypeface()
+            font_style = typeface.fontStyle()
+            font_family = node.get('font_family', 1, str, typeface.getFamilyName())
+            font_weight = node.get('font_weight', 1, str)
+            if font_weight is not None and font_weight.upper() in FontWeight.__members__:
+                weight = skia.FontStyle.Weight(FontWeight.__members__[font_weight.upper()])
+            else:
+                weight = font_style.weight()
+            font_width = node.get('font_width', 1, str)
+            if font_width is not None and font_width.upper() in FontWidth.__members__:
+                width = skia.FontStyle.Width(FontWidth.__members__[font_width.upper()])
+            else:
+                width = font_style.width()
+            font_slant = node.get('font_slant', 1, str)
+            if font_slant is not None and font_slant.upper() in FontSlant.__members__:
+                slant = skia.FontStyle.Slant(FontSlant.__members__[font_slant.upper()])
+            else:
+                slant = font_style.slant()
+            font.setTypeface(skia.Typeface(font_family, skia.FontStyle(weight, width, slant)))
 
 
 def draw(node, ctx, paint, font, path):

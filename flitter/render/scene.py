@@ -374,7 +374,7 @@ class Canvas(SceneNode):
         self._framebuffer.clear()
         self._canvas.save()
         paint = skia.Paint(AntiAlias=True)
-        canvas.draw(node, self._canvas, paint, skia.Font(), skia.Path())
+        canvas.draw(node, self._canvas, paint, skia.Font(skia.Typeface(), 14), skia.Path())
         self._canvas.restore()
         self._surface.flushAndSubmit()
 
