@@ -5,6 +5,7 @@ The main Flitter engine
 # pylama:ignore=W0703,R0902,R0912,R0913,R0914,R0915,R1702
 
 import asyncio
+import gc
 import logging
 from pathlib import Path
 import pickle
@@ -284,11 +285,12 @@ class Controller:
             self.enqueue_reset()
             self.enqueue_page_status()
             reload_task = None
-            now = self.counter.clock()
-            last = self.counter.beat_at_time(now)
-            dump_time = now
+            frame_time = self.counter.clock()
+            last = self.counter.beat_at_time(frame_time)
+            dump_time = frame_time
+            gc.disable()
             while True:
-                frames.append(now)
+                frames.append(frame_time)
 
                 if self.next_page is not None:
                     if reload_task is not None:
@@ -296,6 +298,8 @@ class Controller:
                         reload_task = None
                     self.switch_to_page(self.next_page)
                     self.next_page = None
+                    count = gc.collect(2)
+                    Log.debug("Collected %d objects (full collection)", count)
 
                 mtime = self.current_filename.stat().st_mtime
                 if mtime > self.current_mtime:
@@ -314,11 +318,11 @@ class Controller:
                             reload_task = None
                         self.current_mtime = mtime
 
-                beat = self.counter.beat_at_time(now)
+                beat = self.counter.beat_at_time(frame_time)
                 delta = beat - last
                 last = beat
                 variables = {'beat': Vector((beat,)), 'quantum': Vector((self.counter.quantum,)), 'delta': Vector((delta,)),
-                             'clock': Vector((now,)), 'read': Vector((self.read,))}
+                             'clock': Vector((frame_time,)), 'read': Vector((self.read,))}
                 context = Context(variables=variables, state=self.state)
                 for expr in self.tree.expressions if isinstance(self.tree, Sequence) else [self.tree]:
                     for value in expr.evaluate(context):
@@ -326,7 +330,7 @@ class Controller:
                             context.graph.append(value)
                 self.handle_pragmas(context.pragmas)
                 self.update_controls(context.graph)
-                self.update_windows(context.graph, clock=now, beat=beat, delta=delta)
+                self.update_windows(context.graph, clock=frame_time, beat=beat, delta=delta)
 
                 if self.queue:
                     await self.osc_sender.send_bundle_from_queue(self.queue)
@@ -335,15 +339,25 @@ class Controller:
                     Log.info("Frame rate = %.1ffps", fps)
                     frames = frames[-1:]
 
-                if self.global_state_dirty and self.state_file is not None and now > dump_time + 1:
+                if self.global_state_dirty and self.state_file is not None and frame_time > dump_time + 1:
                     Log.info("Saving state")
                     with open(self.state_file, 'wb') as file:
                         pickle.dump(self.global_state, file)
                     self.global_state_dirty = False
-                    dump_time = now
+                    dump_time = frame_time
 
-                now = max(now + 1/self.max_fps, self.counter.clock())
-                await asyncio.sleep(max(0, now - self.counter.clock()))
+                context = None
+                count = gc.collect(0)
+                if count:
+                    Log.debug("Collected %d objects", count)
+                frame_time += 1 / self.max_fps
+                now = self.counter.clock()
+                if now > frame_time:
+                    Log.debug("Slow frame - %.0fms", (now - frame_time + 1/self.max_fps) * 1000)
+                    frame_time = now
+                    await asyncio.sleep(0)
+                else:
+                    await asyncio.sleep(max(0, frame_time - now))
         finally:
             while self.windows:
                 self.windows.pop().destroy()
