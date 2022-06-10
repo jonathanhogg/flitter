@@ -331,6 +331,7 @@ class Controller:
                 self.handle_pragmas(context.pragmas)
                 self.update_controls(context.graph)
                 self.update_windows(context.graph, clock=frame_time, beat=beat, delta=delta)
+                context = None
 
                 if self.queue:
                     await self.osc_sender.send_bundle_from_queue(self.queue)
@@ -346,7 +347,6 @@ class Controller:
                     self.global_state_dirty = False
                     dump_time = frame_time
 
-                context = None
                 count = gc.collect(0)
                 if count:
                     Log.debug("Collected %d objects", count)
@@ -361,3 +361,6 @@ class Controller:
         finally:
             while self.windows:
                 self.windows.pop().destroy()
+            count = gc.collect(2)
+            Log.debug("Collected %d objects (full collection)", count)
+            gc.enable()
