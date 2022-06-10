@@ -80,12 +80,15 @@ inline_binding: NAME "=" or -> binding
          | product "//" power -> floor_divide
          | product "%" power -> modulo
 
-?power : atom
-       | atom "**" power -> power
+?power : unary
+       | unary "**" power -> power
+
+?unary : atom
+       | "-" atom -> neg
+       | "+" atom -> pos
 
 ?atom : literal
       | NAME -> name
-      | "-" atom -> neg
       | atom "(" args ")" -> call
       | atom "[" node "]" -> slice
       | QUERY -> search
