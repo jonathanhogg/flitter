@@ -26,11 +26,12 @@ class Controller:
     SEND_PORT = 47177
     RECEIVE_PORT = 47178
 
-    def __init__(self, root_dir, max_fps=60, screen=0, fullscreen=False, state_file=None):
+    def __init__(self, root_dir, max_fps=60, screen=0, fullscreen=False, vsync=False, state_file=None):
         self.root_dir = Path(root_dir)
         self.max_fps = max_fps
         self.screen = screen
         self.fullscreen = fullscreen
+        self.vsync = vsync
         self.state_file = Path(state_file) if state_file is not None else None
         if self.state_file is not None and self.state_file.exists():
             Log.info("Recover state from state file: %s", self.state_file)
@@ -122,7 +123,7 @@ class Controller:
         count = 0
         for i, node in enumerate(graph.select_below('window.')):
             if i == len(self.windows):
-                self.windows.append(Window(screen=self.screen, fullscreen=self.fullscreen))
+                self.windows.append(Window(screen=self.screen, fullscreen=self.fullscreen, vsync=self.vsync))
             self.windows[i].update(node, **kwargs)
             count += 1
         while len(self.windows) > count:

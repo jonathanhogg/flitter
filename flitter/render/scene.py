@@ -216,12 +216,13 @@ class Window(ProgramNode):
         def on_close(self):
             pass
 
-    def __init__(self, screen=0, fullscreen=False):
+    def __init__(self, screen=0, fullscreen=False, vsync=False):
         super().__init__(None)
         self._closed = False
         self.window = None
         self.default_screen = screen
         self.default_fullscreen = fullscreen
+        self.default_vsync = vsync
 
     def release(self):
         if self.window is not None:
@@ -242,7 +243,7 @@ class Window(ProgramNode):
     def create(self, node, resized, **kwargs):
         super().create(node, resized)
         if self.window is None:
-            vsync = node.get('vsync', 1, bool, True)
+            vsync = node.get('vsync', 1, bool, self.default_vsync)
             screen = node.get('screen', 1, int, self.default_screen)
             title = node.get('title', 1, str, "Flitter")
             fullscreen = node.get('fullscreen', 1, bool, self.default_fullscreen)
