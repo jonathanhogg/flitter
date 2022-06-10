@@ -44,7 +44,7 @@ class FlitterTransformer(Transformer):
 
     add = tree.Add
     append = tree.Append
-    attribute = tree.Attribute
+    attributes = tree.Attributes
     binding = tree.Binding
     bool = tree.Literal
     call = tree.Call

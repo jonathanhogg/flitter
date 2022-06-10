@@ -20,22 +20,24 @@ expressions : expression+ -> tuple
             | node "^" _NL _INDENT sequence _DEDENT -> prepend
             | node _NL _INDENT sequence _DEDENT -> append
             | "for" NAME "in" range _NL _INDENT sequence _DEDENT -> loop
-            | "let" bindings -> let
+            | "let" multiline_bindings -> let
             | "if" tests ["else" _NL _INDENT sequence _DEDENT] -> if_else
             | "%pragma" NAME node _NL -> pragma
-
-bindings : binding+ _NL (_INDENT (binding+ _NL)+ _DEDENT)? -> tuple
 
 tests : test ("elif" test)* -> tuple
 
 test : composition _NL _INDENT sequence _DEDENT
 
-binding : NAME "=" composition
-
 ?node : composition
       | "!" NAME -> node
       | node "#" NAME -> tag
-      | node NAME "=" composition -> attribute
+      | node bindings -> attributes
+
+multiline_bindings : binding+ _NL (_INDENT (binding+ _NL)+ _DEDENT)? -> tuple
+
+bindings : binding+ -> tuple
+
+binding : NAME "=" composition
 
 ?composition : comprehension
              | compositions -> sequence

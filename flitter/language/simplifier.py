@@ -34,6 +34,8 @@ def simplify(expression, context):
         case tree.Name(name=name):
             if name in context:
                 return tree.Literal(context[name])
+            if name in tree.BUILTINS:
+                return tree.Literal(tree.BUILTINS[name])
             return expression
 
         case tree.Lookup(key=key):
@@ -93,22 +95,19 @@ def simplify(expression, context):
                  return node
             return tree.Prepend(node=node, children=children)
 
-        case tree.Attribute(node=node, name=name, expr=expr):
+        case tree.Attributes(node=node, bindings=bindings):
+            while isinstance(node, tree.Attributes):
+                bindings = node.bindings + bindings
+                node = node.node
             node = simplify(node, context)
-            if isinstance(node, tree.Literal) and node.value.isinstance(model.Node):
-                simplified_values = []
+            bindings = [tree.Binding(name=binding.name, expr=simplify(binding.expr, context)) for binding in bindings]
+            while bindings and isinstance(node, tree.Literal) and node.value.isinstance(model.Node) and isinstance(bindings[0].expr, tree.Literal):
+                binding, *bindings = bindings
                 for n in node.value:
-                    with context:
-                        context.merge_under(n)
-                        attribute_expr = simplify(expr, context)
-                    if isinstance(attribute_expr, tree.Literal):
-                        n[name] = attribute_expr.value
-                        simplified_values.append(tree.Literal(value=model.Vector((n,))))
-                    else:
-                        simplified_values.append(tree.Attribute(node=tree.Literal(value=model.Vector((n,))), name=name, expr=attribute_expr))
-                return sequence_pack(simplified_values)
-            expr = simplify(expr, context)
-            return tree.Attribute(node=node, name=name, expr=expr)
+                    n[binding.name] = binding.expr.value
+            if not bindings:
+                return node
+            return tree.Attributes(node=node, bindings=tuple(bindings))
 
         case tree.InlineLet(bindings=bindings, body=body):
             remaining = []

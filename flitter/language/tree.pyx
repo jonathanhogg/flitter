@@ -10,12 +10,14 @@ from .functions import FUNCTIONS
 from .. cimport model
 
 
-cdef dict BUILTINS = {
+cdef dict builtins_ = {
     'true': model.true_,
     'false': model.false_,
     'null': model.null_,
 }
-BUILTINS.update(FUNCTIONS)
+builtins_.update(FUNCTIONS)
+
+BUILTINS = builtins_
 
 
 cdef class Expression:
@@ -60,9 +62,9 @@ cdef class Sequence(Expression):
 
 
 cdef class Literal(Expression):
-    cdef readonly model.Vector value
+    cdef readonly model.VectorLike value
 
-    def __init__(self, model.Vector value):
+    def __init__(self, model.VectorLike value):
         self.value = value
 
     cpdef model.VectorLike evaluate(self, model.Context context):
@@ -83,7 +85,7 @@ cdef class Name(Expression):
         result = context.variables.get(self.name)
         if result is not None:
             return result.copynodes()
-        result = BUILTINS.get(self.name)
+        result = builtins_.get(self.name)
         if result is not None:
             return result
         return model.null_
@@ -342,7 +344,10 @@ cdef class Node(Expression):
         self.kind = kind
 
     cpdef model.VectorLike evaluate(self, model.Context context):
-        return model.Vector((model.Node(self.kind),))
+        cdef model.Node node = model.Node.__new__(model.Node, self.kind)
+        cdef model.Vector vector = model.Vector.__new__(model.Vector)
+        vector.values.append(node)
+        return vector
 
     def __repr__(self):
         return f'Node({self.kind!r})'
@@ -367,39 +372,37 @@ cdef class Tag(Expression):
         return f'Tag({self.node!r}, {self.tag!r})'
 
 
-cdef class Attribute(Expression):
+cdef class Attributes(Expression):
     cdef readonly Expression node
-    cdef readonly str name
-    cdef readonly Expression expr
+    cdef readonly tuple bindings
 
-    def __init__(self, Expression node, str name, Expression expr):
+    def __init__(self, Expression node, tuple bindings):
         self.node = node
-        self.name = name
-        self.expr = expr
+        self.bindings = bindings
 
     cpdef model.VectorLike evaluate(self, model.Context context):
-        cdef model.Vector nodes = self.node.evaluate(context)
         cdef model.Node node
         cdef model.Vector value
         cdef dict variables, saved
-        cdef bint use_stack
+        cdef Binding binding
+        cdef model.Vector nodes = self.node.evaluate(context)
         for node in nodes.values:
-            use_stack = node.attributes
-            if use_stack:
-                saved = context.variables
-                variables = context.variables = context.variables.copy()
-                for attr, value in node.attributes.items():
-                    if attr not in variables:
-                        variables[attr] = value
-            value = self.expr.evaluate(context)
-            if value.values:
-                node.attributes[self.name] = value
-            if use_stack:
-                context.variables = saved
+            saved = context.variables
+            variables = saved.copy()
+            for attr, value in node.attributes.items():
+                variables.setdefault(attr, value)
+            context.variables = variables
+            for binding in self.bindings:
+                value = binding.expr.evaluate(context)
+                if value.values:
+                    node.attributes[binding.name] = value
+                    if binding.name not in saved:
+                        variables[binding.name] = value
+            context.variables = saved
         return nodes
 
     def __repr__(self):
-        return f'Attribute({self.node!r}, {self.name!r}, {self.expr!r})'
+        return f'Attributes({self.node!r}, {self.bindings!r})'
 
 
 cdef class Search(Expression):
