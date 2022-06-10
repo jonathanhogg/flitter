@@ -312,7 +312,7 @@ def draw(node, ctx, paint, font, path):
                 rect = skia.Rect.MakeXYWH(*origin, *size)
                 ctx.saveLayerAlpha(rect, int(alpha * 255))
                 ctx.clipRect(rect)
-                paint, font = skia.Paint(paint), skia.Font(font.getTypeface(), font.getSize())
+                paint, font = skia.Paint(paint), font.makeWithSize(font.getSize())
                 set_styles(node, ctx, paint, font)
                 for child in node.children:
                     draw(child, ctx, paint, font, path)
