@@ -61,7 +61,7 @@ patterns: [
         name: "constant.tag.flitter"
     }
     {
-        match: "\\b([_a-zA-Z][_a-zA-Z0-9]*)(=)"
+        match: "\\b([_a-zA-Z][_a-zA-Z0-9]*)\\s*(=)"
         captures:
             '1':
                 name: "variable.attribute.flitter"
