@@ -2,10 +2,11 @@
 Flitter drawing canvas based on Skia
 """
 
-# pylama:ignore=W0703,R0912,R0914,R0915,C0103
+# pylama:ignore=W0703,R0912,R0914,R0915,C0103,R0913
 
 import enum
 import logging
+import math
 from pathlib import Path
 
 import skia
@@ -111,6 +112,22 @@ class FontSlant(enum.IntEnum):
     UPRIGHT = skia.FontStyle.Slant.kUpright_Slant
 
 
+def get_color(node, default=None):
+    rgb = node.get('color', 3, float)
+    if rgb is not None:
+        return skia.Color4f(*rgb, 1)
+    rgba = node.get('color', 4, float)
+    if rgba is not None:
+        return skia.Color4f(*rgba)
+    return default
+
+
+def turn_angle(x0, y0, x1, y1, x2, y2):
+    xa, ya, xb, yb = x1 - x0, y1 - y0, x2 - x1, y2 - y1
+    la, lb = math.sqrt(xa*xa + ya*ya), math.sqrt(xb*xb + yb*yb)
+    return math.acos((xa*xb + ya*yb) / (la*lb)) / (2*math.pi)
+
+
 def set_styles(node, ctx=None, paint=None, font=None):
     if ctx is not None:
         translate = node.get('translate', 2, float)
@@ -123,28 +140,27 @@ def set_styles(node, ctx=None, paint=None, font=None):
         if scale is not None:
             ctx.scale(*scale)
     if paint is not None:
-        rgb = node.get('color', 3, float)
-        if rgb is not None:
-            paint.setColor4f(skia.Color4f(*rgb, 1))
-        else:
-            rgba = node.get('color', 4, float)
-            if rgba is not None:
-                paint.setColor4f(skia.Color4f(*rgba))
-        line_width = node.get('line_width', 1, float)
-        if line_width is not None:
-            paint.setStrokeWidth(line_width)
-        line_join = node.get('line_join', 1, str)
-        if line_join is not None and line_join.upper() in LineJoin.__members__:
-            paint.setStrokeJoin(skia.Paint.Join(LineJoin.__members__[line_join.upper()]))
-        line_cap = node.get('line_cap', 1, str)
-        if line_cap is not None and line_cap.upper() in LineCap.__members__:
-            paint.setStrokeCap(skia.Paint.Cap(LineCap.__members__[line_cap.upper()]))
+        color = get_color(node)
+        if color is not None:
+            paint.setShader(skia.Shaders.Color(color))
+        stroke_width = node.get('stroke_width', 1, float)
+        if stroke_width is not None:
+            paint.setStrokeWidth(stroke_width)
+        stroke_join = node.get('stroke_join', 1, str)
+        if stroke_join is not None and stroke_join.upper() in LineJoin.__members__:
+            paint.setStrokeJoin(skia.Paint.Join(LineJoin.__members__[stroke_join.upper()]))
+        stroke_cap = node.get('stroke_cap', 1, str)
+        if stroke_cap is not None and stroke_cap.upper() in LineCap.__members__:
+            paint.setStrokeCap(skia.Paint.Cap(LineCap.__members__[stroke_cap.upper()]))
         composite = node.get('composite', 1, str)
         if composite is not None and composite.upper() in Composite.__members__:
             paint.setBlendMode(skia.BlendMode(Composite.__members__[composite.upper()]))
         antialias = node.get('antialias', 1, bool)
         if antialias is not None:
             paint.setAntiAlias(antialias)
+        dither = node.get('dither', 1, bool)
+        if dither is not None:
+            paint.setDither(dither)
     if font is not None:
         font_size = node.get('font_size', 1, float)
         if font_size is not None:
@@ -231,6 +247,38 @@ def draw(node, ctx, paint, font, path):
                 point = node.get('point', 2, float, (0, 0))
                 path.addOval(skia.Rect(point[0]-radius[0], point[1]-radius[1], point[0]+radius[0], point[1]+radius[1]))
 
+        case "draw":
+            points = node.get('points')
+            if points is not None:
+                smooth = node.get('smooth', 1, float, 0)
+                n = len(points) // 2
+                last_mid_x = last_mid_y = last_x = last_y = None
+                for i in range(n):
+                    x, y = points[i*2], points[i*2+1]
+                    if i == 0:
+                        path.moveTo(x, y)
+                    elif smooth <= 0:
+                        path.lineTo(x, y)
+                    else:
+                        mid_x, mid_y = (last_x + x) / 2, (last_y + y) / 2
+                        if i == 1:
+                            path.lineTo(mid_x, mid_y)
+                        elif turn_angle(last_mid_x, last_mid_y, last_x, last_y, mid_x, mid_y) < smooth:
+                            path.quadTo(last_x, last_y, mid_x, mid_y)
+                        else:
+                            path.lineTo(last_x, last_y)
+                            path.lineTo(mid_x, mid_y)
+                        if n == n-1:
+                            path.lineTo(x, y)
+                        last_mid_x, last_mid_y = mid_x, mid_y
+                    last_x, last_y = x, y
+
+        case "close":
+            path.close()
+
+        case "clip":
+            ctx.clipPath(path, skia.ClipOp.kIntersect, paint.isAntiAlias())
+
         case "fill":
             paint = skia.Paint(paint)
             set_styles(node, paint=paint)
@@ -243,17 +291,17 @@ def draw(node, ctx, paint, font, path):
             paint.setStyle(skia.Paint.Style.kStroke_Style)
             ctx.drawPath(path, paint)
 
-        case "close":
-            path.close()
-
         case "text":
-            set_styles(node, paint=paint, font=font)
             point = node.get('point', 2, float)
             text = node.get('text', 1, str)
-            center = node.get('center', 1, bool, True)
             if point is not None and text is not None:
+                paint, font = skia.Paint(paint), font.makeWithSize(font.getSize())
+                set_styles(node, paint=paint, font=font)
+                stroke = node.get('stroke', 1, bool, False)
+                paint.setStyle(skia.Paint.Style.kStroke_Style if stroke else skia.Paint.Style.kFill_Style)
                 bounds = skia.Rect(0, 0, 0, 0)
                 font.measureText(text, bounds=bounds)
+                center = node.get('center', 1, bool, True)
                 if center:
                     ctx.drawString(text, point[0]-bounds.x()-bounds.width()/2, point[1]-bounds.y()-bounds.height()/2, font, paint)
                 else:
@@ -296,6 +344,19 @@ def draw(node, ctx, paint, font, path):
                         matrix = skia.Matrix.Scale(*radius).postRotate(rotate * 360)
                         paint.setShader(skia.GradientShader.MakeRadial(point, 1, colors, positions, localMatrix=matrix))
 
+        case "noise":
+            frequency = node.get('frequency', 2, float)
+            if frequency is not None:
+                octaves = node.get('octaves', 1, int, 8)
+                seed = node.get('seed', 1, float, 0)
+                shader = skia.PerlinNoiseShader.MakeImprovedNoise(*frequency, octaves, seed)
+                color = get_color(node)
+                if color is not None:
+                    composite = node.get('mode', 1, str)
+                    mode = skia.BlendMode(Composite.__members__[composite.upper()]) if composite is not None and composite.upper() in Composite.__members__ else skia.BlendMode.kModulate
+                    shader = skia.Shaders.Blend(mode, skia.Shaders.Color(color), shader)
+                paint.setShader(shader)
+
         case "image":
             filename = node.get('filename', 1, str)
             if filename is not None:
@@ -310,13 +371,51 @@ def draw(node, ctx, paint, font, path):
                 alpha = node.get('alpha', 1, float, 1)
                 origin = node.get('origin', 2, float, (0, 0))
                 rect = skia.Rect.MakeXYWH(*origin, *size)
-                ctx.saveLayerAlpha(rect, int(alpha * 255))
                 ctx.clipRect(rect)
+                ctx.saveLayerAlpha(rect, int(alpha * 255))
                 paint, font = skia.Paint(paint), font.makeWithSize(font.getSize())
                 set_styles(node, ctx, paint, font)
                 for child in node.children:
                     draw(child, ctx, paint, font, path)
                 ctx.restore()
+
+        case "blur":
+            radius = node.get('radius', 2, float)
+            if radius is not None:
+                current = paint.refImageFilter()
+                paint.setImageFilter(skia.ImageFilters.Blur(*radius, input=current))
+                for child in node.children:
+                    draw(child, ctx, paint, font, path)
+                paint.setImageFilter(current)
+
+        case "shadow":
+            radius = node.get('radius', 2, float)
+            if radius is not None:
+                current = paint.refImageFilter()
+                offset = node.get('offset', 2, float, (0, 0))
+                color = get_color(node, paint.getColor4f())
+                paint.setImageFilter(skia.ImageFilters.DropShadow(*offset, *radius, color.toColor(), input=current))
+                for child in node.children:
+                    draw(child, ctx, paint, font, path)
+                paint.setImageFilter(current)
+
+        case "dilate":
+            radius = node.get('radius', 2, float)
+            if radius is not None:
+                current = paint.refImageFilter()
+                paint.setImageFilter(skia.ImageFilters.Dilate(*radius, input=current))
+                for child in node.children:
+                    draw(child, ctx, paint, font, path)
+                paint.setImageFilter(current)
+
+        case "erode":
+            radius = node.get('radius', 2, float)
+            if radius is not None:
+                current = paint.refImageFilter()
+                paint.setImageFilter(skia.ImageFilters.Erode(*radius, input=current))
+                for child in node.children:
+                    draw(child, ctx, paint, font, path)
+                paint.setImageFilter(current)
 
         case "canvas":
             set_styles(node, ctx, paint, font)
