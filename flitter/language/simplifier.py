@@ -33,7 +33,7 @@ def simplify(expression, context):
 
         case tree.Name(name=name):
             if name in context:
-                return tree.Literal(context[name])
+                return tree.Literal(context[name].copynodes())
             if name in tree.BUILTINS:
                 return tree.Literal(tree.BUILTINS[name])
             return expression
