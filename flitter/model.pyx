@@ -401,7 +401,20 @@ cdef class Node:
     def __cinit__(self, str kind, /):
         self.kind = kind
         self._tags = set()
-        self.attributes = {}
+        self._attributes = {}
+
+    def __setstate__(self, tags):
+        self._tags = set(tags)
+
+    def __reduce__(self):
+        return Node, (self.kind,), tuple(self._tags), self.children, self.attributes
+
+    @property
+    def attributes(self):
+        cdef str key
+        cdef Vector value
+        for key, value in self._attributes.items():
+            yield key, value.values
 
     @property
     def tags(self):
@@ -420,7 +433,7 @@ cdef class Node:
 
     cpdef Node copy(self):
         cdef Node node = Node.__new__(Node, self.kind)
-        node.attributes = self.attributes.copy()
+        node._attributes = self._attributes.copy()
         node._tags = self._tags.copy()
         cdef Node copy, child = self.first_child
         if child is not None:
@@ -549,7 +562,7 @@ cdef class Node:
             return False
         if self._tags != other._tags:
             return False
-        if self.attributes != other.attributes:
+        if self._attributes != other._attributes:
             return False
         cdef Node child1 = self.first_child, child2 = other.first_child
         while child1 is not None and child2 is not None:
@@ -563,38 +576,44 @@ cdef class Node:
         return self._equals(other)
 
     def __len__(self):
-        return len(self.attributes)
+        return len(self._attributes)
 
     def __contains__(self, str name):
-        return name in self.attributes
+        return name in self._attributes
 
     def __getitem__(self, str name):
-        return self.attributes[name]
+        return self._attributes[name]
 
     def __setitem__(self, str name, value):
-        self.attributes[name] = value
+        if not isinstance(value, Vector):
+            value = Vector(value)
+        self._attributes[name] = value
 
     def keys(self):
-        return self.attributes.keys()
+        return self._attributes.keys()
 
     def values(self):
-        return self.attributes.values()
+        return self._attributes.values()
 
     def items(self):
-        return self.attributes.items()
+        return self._attributes.items()
 
-    def get(self, str name, int n, type t, default=None, /):
+    def get(self, str name, int n=0, type t=None, default=None, /):
         cdef Vector attr_vec
         cdef list attr_values, values
         cdef int m, i
-        attr_vec = <Vector> self.attributes.get(name)
+        attr_vec = <Vector> self._attributes.get(name)
         if attr_vec is not None:
             attr_values = attr_vec.values
             m = len(attr_values)
+            if n == 0:
+                if t is None:
+                    return attr_vec
+                n = m
             try:
                 if m == 1:
                     value = attr_values[0]
-                    if not isinstance(value, t):
+                    if t is not None and not isinstance(value, t):
                         value = t(value)
                     if n == 1:
                         return value
@@ -602,7 +621,7 @@ cdef class Node:
                 if m == n:
                     values = attr_values.copy()
                     for i, value in enumerate(values):
-                        if not isinstance(value, t):
+                        if t is not None and not isinstance(value, t):
                             values[i] = t(value)
                     return values
             except:
@@ -610,7 +629,7 @@ cdef class Node:
         return default
 
     def __iter__(self):
-        return iter(self.attributes)
+        return iter(self._attributes)
 
 
 cdef class Context:

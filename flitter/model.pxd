@@ -45,7 +45,7 @@ cdef class Node:
     cdef object __weakref__
     cdef readonly str kind
     cdef set _tags
-    cdef dict attributes
+    cdef dict _attributes
     cdef object _parent
     cdef Node next_sibling, first_child, last_child
 

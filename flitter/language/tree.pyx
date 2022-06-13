@@ -389,13 +389,13 @@ cdef class Attributes(Expression):
         for node in nodes.values:
             saved = context.variables
             variables = saved.copy()
-            for attr, value in node.attributes.items():
+            for attr, value in node._attributes.items():
                 variables.setdefault(attr, value)
             context.variables = variables
             for binding in self.bindings:
                 value = binding.expr.evaluate(context)
                 if value.values:
-                    node.attributes[binding.name] = value
+                    node._attributes[binding.name] = value
                     if binding.name not in saved:
                         variables[binding.name] = value
             context.variables = saved
