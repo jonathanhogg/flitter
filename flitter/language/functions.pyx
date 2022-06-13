@@ -258,6 +258,14 @@ def mapv(Vector x not None, Vector a not None, Vector b not None):
     return a.mul(true_.sub(x)).add(b.mul(x))
 
 
+def zipv(Vector xs not None, Vector ys not None):
+    cdef Vector zs = Vector.__new__(Vector)
+    for x, y in zip(xs.values, ys.values):
+        zs.values.append(x)
+        zs.values.append(y)
+    return zs
+
+
 cdef double hue_to_rgb(double m1, double m2, double h):
     h = h % 6
     if h < 1:
@@ -318,6 +326,7 @@ FUNCTIONS = {
     'max': Vector((maxv,)),
     'hypot': Vector((hypot,)),
     'map': Vector((mapv,)),
+    'zip': Vector((zipv,)),
     'hsl': Vector((hsl,)),
     'hsv': Vector((hsv,)),
 }
