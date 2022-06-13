@@ -51,6 +51,7 @@ class FlitterTransformer(Transformer):
     divide = tree.Divide
     eq = tree.EqualTo
     floor_divide = tree.FloorDivide
+    function = tree.Function
     ge = tree.GreaterThanOrEqualTo
     gt = tree.GreaterThan
     if_else = tree.IfElse

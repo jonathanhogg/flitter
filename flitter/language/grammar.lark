@@ -23,6 +23,9 @@ expressions : expression+ -> tuple
             | "let" multiline_bindings -> let
             | "if" tests ["else" _NL _INDENT sequence _DEDENT] -> if_else
             | "%pragma" NAME node _NL -> pragma
+            | "func" NAME "(" names ")" _NL _INDENT sequence _DEDENT -> function
+
+names : NAME* -> tuple
 
 tests : test ("elif" test)* -> tuple
 

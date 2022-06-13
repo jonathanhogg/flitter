@@ -69,6 +69,14 @@ patterns: [
                 name: "keyword.operator.assignment.flitter"
     }
     {
+        match: "\\b(func)\\s+([_a-zA-Z][_a-zA-Z0-9]*)"
+        captures:
+            '1':
+                name: "keyword.control.flow.flitter"
+            '2':
+                name: "variable.name.flitter"
+    }
+    {
         match: "\\.\\.|:"
         name: "keyword.operator.range.flitter"
     }

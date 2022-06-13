@@ -320,17 +320,27 @@ cdef class Call(Expression):
         self.args = args
 
     cpdef model.VectorLike evaluate(self, model.Context context):
-        cdef model.Vector value, function = self.function.evaluate(context)
+        cdef model.Vector function = self.function.evaluate(context)
         cdef list args = []
         cdef Expression arg
+        cdef model.VectorLike value
         for arg in self.args:
             value = arg.evaluate(context)
             args.append(value)
-        if len(function.values) == 1:
-            return function.values[0](*args)
         cdef model.Vector result = model.Vector.__new__(model.Vector)
+        cdef Function func_expr
+        cdef dict saved
         for func in function.values:
-            result.values.extend(func(*args))
+            if isinstance(func, Function):
+                func_expr = func
+                saved = context.variables
+                context.variables = saved.copy()
+                for name, value in zip(func_expr.parameters, args):
+                    context.variables[name] = value
+                result.values.extend(func_expr.expr.evaluate(context))
+                context.variables = saved
+            else:
+                result.values.extend(func(*args))
         return result
 
     def __repr__(self):
@@ -584,3 +594,23 @@ cdef class IfElse(Expression):
 
     def __repr__(self):
         return f'IfElse({self.tests!r}, {self.else_!r})'
+
+
+cdef class Function(Expression):
+    cdef readonly str name
+    cdef readonly tuple parameters
+    cdef readonly Expression expr
+
+    def __init__(self, str name, tuple parameters, Expression expr):
+        self.name = name
+        self.parameters = parameters
+        self.expr = expr
+
+    cpdef model.VectorLike evaluate(self, model.Context context):
+        cdef model.Vector func = model.Vector.__new__(model.Vector)
+        func.values.append(self)
+        context.variables[self.name] = func
+        return model.null_
+
+    def __repr__(self):
+        return f'Function({self.name!r}, {self.parameters!r}, {self.expr!r})'

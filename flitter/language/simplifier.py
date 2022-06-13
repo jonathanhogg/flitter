@@ -231,5 +231,10 @@ def simplify(expression, context):
             expr = simplify(expr, context)
             return tree.Pragma(name=name, expr=expr)
 
+        case tree.Function(name=name, parameters=parameters, expr=expr):
+            expr = simplify(expr, context)
+            return tree.Function(name=name, parameters=parameters, expr=expr)
+
+
     print(expression)
     raise NotImplementedError(expression.__class__.__name__)
