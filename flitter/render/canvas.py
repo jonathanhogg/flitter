@@ -2,7 +2,7 @@
 Flitter drawing canvas based on Skia
 """
 
-# pylama:ignore=W0703,R0912,R0914,R0915,C0103,R0913
+# pylama:ignore=W0703,R0912,R0914,R0915,C0103,R0913,R0911
 
 import enum
 import logging
@@ -187,6 +187,147 @@ def set_styles(node, ctx=None, paint=None, font=None):
             font.setTypeface(skia.Typeface(font_family, skia.FontStyle(weight, width, slant)))
 
 
+def make_shader(node, paint):
+    shaders = []
+    for child in node.children:
+        shader = make_shader(child, paint)
+        if shader is not None:
+            shaders.append(shader)
+
+    match node.kind:
+        case "color":
+            color = get_color(node, paint.getColor4f())
+            return skia.Shaders.Color(color)
+
+        case "gradient":
+            colors = []
+            positions = []
+            for child in node.children:
+                match child.kind:
+                    case "stop":
+                        positions.append(child.get('offset', 1, float))
+                        colors.append(get_color(child, paint.getColor()))
+            nstops = len(positions)
+            if nstops:
+                for i in range(nstops):
+                    if positions[i] is None:
+                        positions[i] = i / (nstops - 1)
+                start = node.get('start', 2, float)
+                end = node.get('end', 2, float)
+                if start is not None and end is not None:
+                    points = [skia.Point(*start), skia.Point(*end)]
+                    return skia.GradientShader.MakeLinear(points, colors, positions)
+                radius = node.get('radius', 2, float)
+                if radius is not None:
+                    rotate = node.get('rotate', 1, float, 0)
+                    point = skia.Point(node.get('point', 2, float, (0, 0)))
+                    matrix = skia.Matrix.Scale(*radius).postRotate(rotate * 360)
+                    return skia.GradientShader.MakeRadial(point, 1, colors, positions, localMatrix=matrix)
+
+        case "noise":
+            frequency = node.get('frequency', 2, float)
+            if frequency is not None:
+                octaves = node.get('octaves', 1, int, 8)
+                seed = node.get('seed', 1, float, 0)
+                size = skia.ISize(*node.get('size', 2, int, (0, 0)))
+                match node.get('type', 1, str, "improved"):
+                    case "fractal":
+                        return skia.PerlinNoiseShader.MakeFractalNoise(*frequency, octaves, seed, size)
+                    case "turbulence":
+                        return skia.PerlinNoiseShader.MakeTurbulence(*frequency, octaves, seed, size)
+                    case _:
+                        return skia.PerlinNoiseShader.MakeImprovedNoise(*frequency, octaves, seed)
+
+        case "blend":
+            if len(shaders) == 2:
+                ratio = node.get('ratio', 1, float)
+                if ratio is not None:
+                    return skia.Shaders.Lerp(ratio, *shaders)
+                mode = node.get('mode', 1, str, "").upper()
+                if mode in Composite.__members__:
+                    return skia.Shaders.Blend(skia.BlendMode(Composite.__members__[mode]), *shaders)
+
+    return None
+
+
+def make_image_filter(node, paint):
+    sub_filters = []
+    for child in node.children:
+        image_filter = make_image_filter(child, paint)
+        if image_filter is not None:
+            sub_filters.append(image_filter)
+
+    match node.kind:
+        case "blend":
+            if len(sub_filters) in (1, 2):
+                background = sub_filters[0] if len(sub_filters) == 2 else None
+                foreground = sub_filters[-1]
+                ratio = node.get('ratio', 1, float)
+                if ratio is not None:
+                    coefficients = (0, 1-ratio, ratio, 0)
+                else:
+                    coefficients = node.get('coefficients', 4, float)
+                if coefficients is not None:
+                    return skia.ImageFilters.Arithmetic(*coefficients, True, background, foreground)
+                mode = node.get('mode', 1, str, "").upper()
+                if mode in Composite.__members__:
+                    return skia.ImageFilters.Xfermode(skia.BlendMode(Composite.__members__[mode]), background, foreground)
+
+        case "blur":
+            radius = node.get('radius', 2, float)
+            if radius is not None:
+                input_filter = sub_filters[0] if len(sub_filters) == 1 else None
+                return skia.ImageFilters.Blur(*radius, input=input_filter)
+
+        case "shadow":
+            radius = node.get('radius', 2, float)
+            if radius is not None:
+                offset = node.get('offset', 2, float, (0, 0))
+                color = get_color(node, paint.getColor4f())
+                shadow_only = node.get('shadow_only', 1, bool, False)
+                input_filter = sub_filters[0] if len(sub_filters) == 1 else None
+                if shadow_only:
+                    return skia.ImageFilters.DropShadowOnly(*offset, *radius, color.toColor(), input=input_filter)
+                return skia.ImageFilters.DropShadow(*offset, *radius, color.toColor(), input=input_filter)
+
+        case "offset":
+            offset = node.get('offset', 2, float)
+            if offset is not None:
+                input_filter = sub_filters[0] if len(sub_filters) == 1 else None
+                return skia.ImageFilters.Offset(*offset, input=input_filter)
+
+        case "dilate":
+            radius = node.get('radius', 2, float)
+            if radius is not None:
+                input_filter = sub_filters[0] if len(sub_filters) == 1 else None
+                return skia.ImageFilters.Dilate(*radius, input=input_filter)
+
+        case "erode":
+            radius = node.get('radius', 2, float)
+            if radius is not None:
+                input_filter = sub_filters[0] if len(sub_filters) == 1 else None
+                return skia.ImageFilters.Erode(*radius, input=input_filter)
+
+        case "paint":
+            paint = skia.Paint(paint)
+            set_styles(node, paint=paint)
+            return skia.ImageFilters.Paint(paint)
+
+        case "color_matrix":
+            matrix = node.get('matrix', 20, float)
+            if matrix is None:
+                red = node.get('red', 5, float, [1, 0, 0, 0, 0])
+                green = node.get('green', 5, float, [0, 1, 0, 0, 0])
+                blue = node.get('blue', 5, float, [0, 0, 1, 0, 0])
+                alpha = node.get('alpha', 5, float, [0, 0, 0, 1, 0])
+                matrix = red + green + blue + alpha
+            color_filter = skia.ColorFilters.Matrix(matrix)
+            input_filter = sub_filters[0] if len(sub_filters) == 1 else None
+            return skia.ImageFilters.ColorFilter(color_filter, input=input_filter)
+
+    return None
+
+
 def draw(node, ctx, paint, font, path):
     match node.kind:
         case "group":
@@ -292,70 +433,19 @@ def draw(node, ctx, paint, font, path):
             ctx.drawPath(path, paint)
 
         case "text":
-            point = node.get('point', 2, float)
             text = node.get('text', 1, str)
-            if point is not None and text is not None:
+            if text is not None:
+                point = node.get('point', 2, float, (0, 0))
                 paint, font = skia.Paint(paint), font.makeWithSize(font.getSize())
                 set_styles(node, paint=paint, font=font)
                 stroke = node.get('stroke', 1, bool, False)
                 paint.setStyle(skia.Paint.Style.kStroke_Style if stroke else skia.Paint.Style.kFill_Style)
-                bounds = skia.Rect(0, 0, 0, 0)
-                font.measureText(text, bounds=bounds)
-                center = node.get('center', 1, bool, True)
-                if center:
+                if node.get('center', 1, bool, True):
+                    bounds = skia.Rect(0, 0, 0, 0)
+                    font.measureText(text, bounds=bounds)
                     ctx.drawString(text, point[0]-bounds.x()-bounds.width()/2, point[1]-bounds.y()-bounds.height()/2, font, paint)
                 else:
                     ctx.drawString(text, *point, font, paint)
-
-        case "gradient":
-            colors = []
-            positions = []
-            for child in node.children:
-                match child.kind:
-                    case "stop":
-                        offset = child.get('offset', 1, float)
-                        rgb = child.get('color', 3, float)
-                        if rgb is not None:
-                            positions.append(offset)
-                            colors.append(skia.Color4f(*rgb, 1))
-                        else:
-                            rgba = child.get('color', 4, float)
-                            if rgba is not None:
-                                positions.append(offset)
-                                colors.append(skia.Color4f(*rgba))
-                            else:
-                                positions.append(offset)
-                                colors.append(paint.getColor())
-            nstops = len(positions)
-            if nstops:
-                for i in range(nstops):
-                    if positions[i] is None:
-                        positions[i] = i / (nstops - 1)
-                start = node.get('start', 2, float)
-                end = node.get('end', 2, float)
-                if start is not None and end is not None:
-                    points = [skia.Point(*start), skia.Point(*end)]
-                    paint.setShader(skia.GradientShader.MakeLinear(points, colors, positions))
-                else:
-                    radius = node.get('radius', 2, float)
-                    if radius is not None:
-                        rotate = node.get('rotate', 1, float, 0)
-                        point = skia.Point(node.get('point', 2, float, (0, 0)))
-                        matrix = skia.Matrix.Scale(*radius).postRotate(rotate * 360)
-                        paint.setShader(skia.GradientShader.MakeRadial(point, 1, colors, positions, localMatrix=matrix))
-
-        case "noise":
-            frequency = node.get('frequency', 2, float)
-            if frequency is not None:
-                octaves = node.get('octaves', 1, int, 8)
-                seed = node.get('seed', 1, float, 0)
-                shader = skia.PerlinNoiseShader.MakeImprovedNoise(*frequency, octaves, seed)
-                color = get_color(node)
-                if color is not None:
-                    composite = node.get('mode', 1, str)
-                    mode = skia.BlendMode(Composite.__members__[composite.upper()]) if composite is not None and composite.upper() in Composite.__members__ else skia.BlendMode.kModulate
-                    shader = skia.Shaders.Blend(mode, skia.Shaders.Color(color), shader)
-                paint.setShader(shader)
 
         case "image":
             filename = node.get('filename', 1, str)
@@ -373,51 +463,21 @@ def draw(node, ctx, paint, font, path):
                 rect = skia.Rect.MakeXYWH(*origin, *size)
                 ctx.clipRect(rect)
                 ctx.saveLayerAlpha(rect, int(alpha * 255))
-                paint, font = skia.Paint(paint), font.makeWithSize(font.getSize())
+                path, paint, font = skia.Path(), skia.Paint(paint), font.makeWithSize(font.getSize())
                 set_styles(node, ctx, paint, font)
                 for child in node.children:
                     draw(child, ctx, paint, font, path)
                 ctx.restore()
 
-        case "blur":
-            radius = node.get('radius', 2, float)
-            if radius is not None:
-                current = paint.refImageFilter()
-                paint.setImageFilter(skia.ImageFilters.Blur(*radius, input=current))
-                for child in node.children:
-                    draw(child, ctx, paint, font, path)
-                paint.setImageFilter(current)
-
-        case "shadow":
-            radius = node.get('radius', 2, float)
-            if radius is not None:
-                current = paint.refImageFilter()
-                offset = node.get('offset', 2, float, (0, 0))
-                color = get_color(node, paint.getColor4f())
-                paint.setImageFilter(skia.ImageFilters.DropShadow(*offset, *radius, color.toColor(), input=current))
-                for child in node.children:
-                    draw(child, ctx, paint, font, path)
-                paint.setImageFilter(current)
-
-        case "dilate":
-            radius = node.get('radius', 2, float)
-            if radius is not None:
-                current = paint.refImageFilter()
-                paint.setImageFilter(skia.ImageFilters.Dilate(*radius, input=current))
-                for child in node.children:
-                    draw(child, ctx, paint, font, path)
-                paint.setImageFilter(current)
-
-        case "erode":
-            radius = node.get('radius', 2, float)
-            if radius is not None:
-                current = paint.refImageFilter()
-                paint.setImageFilter(skia.ImageFilters.Erode(*radius, input=current))
-                for child in node.children:
-                    draw(child, ctx, paint, font, path)
-                paint.setImageFilter(current)
-
         case "canvas":
             set_styles(node, ctx, paint, font)
             for child in node.children:
                 draw(child, ctx, paint, font, path)
+
+        case _:
+            shader = make_shader(node, paint)
+            if shader is not None:
+                paint.setShader(shader)
+            image_filter = make_image_filter(node, paint)
+            if image_filter is not None:
+                paint.setImageFilter(image_filter)
