@@ -51,15 +51,16 @@ class TouchControl(Control):
         super().__init__(number)
         self.touched = None
         self._touched_beat = None
+        self._released_beat = None
 
     def update(self, node, controller):
         changed = super().update(node, controller)
         if self.touched is not None:
             controller[(*self.state, "touched")] = self.touched
-            if self.touched:
-                controller[(*self.state, "touched", "beat")] = self._touched_beat
-            else:
-                controller[(*self.state, "released", "beat")] = self._touched_beat
+        if self._touched_beat is not None:
+            controller[(*self.state, "touched", "beat")] = self._touched_beat
+        if self._released_beat is not None:
+            controller[(*self.state, "released", "beat")] = self._released_beat
         return changed
 
     def on_touched(self, beat):
@@ -69,7 +70,7 @@ class TouchControl(Control):
 
     def on_released(self, beat):
         self.touched = False
-        self._touched_beat = beat
+        self._released_beat = beat
         self._changed = True
 
     def reset(self):
@@ -129,8 +130,6 @@ class Pad(TouchControl):
                     pressure = pressure * (1-alpha) + current_pressure * alpha
                     if math.isclose(pressure, self.pressure, rel_tol=1e-3, abs_tol=1e-3):
                         pressure = self.pressure
-                if self._max_pressure is None or pressure > self._max_pressure:
-                    self._max_pressure = pressure
                 controller[pressure_key] = pressure
                 controller[pressure_beat_key] = self._pressure_beat
                 controller[max_pressure_key] = self._max_pressure
@@ -151,6 +150,8 @@ class Pad(TouchControl):
     def on_pressure(self, beat, pressure):
         self.pressure = pressure
         self._pressure_beat = beat
+        if self._max_pressure is None or pressure > self._max_pressure:
+            self._max_pressure = pressure
         if self._can_toggle and self.pressure > self._toggle_threshold:
             self.toggled = not self.toggled
             self._toggled_beat = beat
