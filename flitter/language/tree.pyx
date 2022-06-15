@@ -327,7 +327,7 @@ cdef class Call(Expression):
         for arg in self.args:
             value = arg.evaluate(context)
             args.append(value)
-        cdef model.Vector result = model.Vector.__new__(model.Vector)
+        cdef list results = []
         cdef Function func_expr
         cdef dict saved
         for func in function.values:
@@ -337,11 +337,11 @@ cdef class Call(Expression):
                 context.variables = saved.copy()
                 for name, value in zip(func_expr.parameters, args):
                     context.variables[name] = value
-                result.values.extend(func_expr.expr.evaluate(context))
+                results.append(func_expr.expr.evaluate(context))
                 context.variables = saved
             else:
-                result.values.extend(func(*args))
-        return result
+                results.append(func(*args))
+        return model.Vector.compose(*results)
 
     def __repr__(self):
         return f'Call({self.function!r}, {self.args!r})'
