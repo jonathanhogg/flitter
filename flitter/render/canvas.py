@@ -112,6 +112,13 @@ class FontSlant(enum.IntEnum):
     UPRIGHT = skia.FontStyle.Slant.kUpright_Slant
 
 
+class FilterQuality(enum.IntEnum):
+    NONE = skia.FilterQuality.kNone_FilterQuality
+    LOW = skia.FilterQuality.kLow_FilterQuality
+    MEDIUM = skia.FilterQuality.kMedium_FilterQuality
+    HIGH = skia.FilterQuality.kHigh_FilterQuality
+
+
 def get_color(node, default=None):
     rgb = node.get('color', 3, float)
     if rgb is not None:
@@ -161,6 +168,9 @@ def set_styles(node, ctx=None, paint=None, font=None):
         dither = node.get('dither', 1, bool)
         if dither is not None:
             paint.setDither(dither)
+        quality = node.get('quality', 1, str)
+        if quality is not None and quality.upper() in FilterQuality.__members__:
+            paint.setFilterQuality(skia.FilterQuality(FilterQuality.__members__[quality.upper()]))
     if font is not None:
         font_size = node.get('font_size', 1, float)
         if font_size is not None:
