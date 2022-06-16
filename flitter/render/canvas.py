@@ -132,7 +132,7 @@ def get_color(node, default=None):
 def turn_angle(x0, y0, x1, y1, x2, y2):
     xa, ya, xb, yb = x1 - x0, y1 - y0, x2 - x1, y2 - y1
     la, lb = math.sqrt(xa*xa + ya*ya), math.sqrt(xb*xb + yb*yb)
-    return math.acos((xa*xb + ya*yb) / (la*lb)) / (2*math.pi)
+    return math.acos(min(max(0, (xa*xb + ya*yb) / (la*lb)), 1)) / (2*math.pi)
 
 
 def set_styles(node, ctx=None, paint=None, font=None):
@@ -230,9 +230,8 @@ def make_shader(node, paint):
                 radius = node.get('radius', 2, float)
                 if radius is not None:
                     rotate = node.get('rotate', 1, float, 0)
-                    point = skia.Point(node.get('point', 2, float, (0, 0)))
-                    matrix = skia.Matrix.Scale(*radius).postRotate(rotate * 360)
-                    return skia.GradientShader.MakeRadial(point, 1, colors, positions, localMatrix=matrix)
+                    matrix = skia.Matrix.Scale(*radius).postRotate(rotate * 360).postTranslate(*node.get('point', 2, float, (0, 0)))
+                    return skia.GradientShader.MakeRadial(skia.Point(0, 0), 1, colors, positions, localMatrix=matrix)
 
         case "noise":
             frequency = node.get('frequency', 2, float)
