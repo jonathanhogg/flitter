@@ -5,7 +5,6 @@ Flitter window management
 # pylama:ignore=C0413,E402,W0703,R0914,R0902,R0912,R0201,R1702
 
 import array
-import asyncio
 import logging
 import sys
 
@@ -19,6 +18,7 @@ import pyglet.window
 import pyglet.gl
 
 from . import canvas
+from .. import model
 
 
 Log = logging.getLogger(__name__)
@@ -49,6 +49,10 @@ class SceneNode:
             self.children.pop().destroy()
 
     def update(self, node, **kwargs):
+        references = kwargs.setdefault('references', {})
+        node_id = node.get('id', 1, str)
+        if node_id is not None:
+            references[node_id] = self
         resized = False
         width, height = node.get('size', 2, int, (512, 512))
         if width != self.width or height != self.height:
@@ -81,6 +85,23 @@ class SceneNode:
 
     def release(self):
         raise NotImplementedError()
+
+
+class Reference(SceneNode):
+    def __init__(self, _):
+        self._reference = None
+
+    @property
+    def texture(self):
+        return self._reference.texture if self._reference is not None else None
+
+    def update(self, node, references=None, **kwargs):
+        node_id = node.get('id', 1)
+        reference = references.get(node_id) if references is not None and node_id is not None else None
+        self._reference = reference
+
+    def destroy(self):
+        self._reference = None
 
 
 class ProgramNode(SceneNode):
@@ -124,9 +145,10 @@ void main() {
 """
 
     def get_fragment_source(self, _):
-        samplers = '\n'.join(f"uniform sampler2D texture{i};" for i in range(len(self.children)))
+        children = [child for child in self.children if child.texture is not None]
+        samplers = '\n'.join(f"uniform sampler2D texture{i};" for i in range(len(children)))
         textures = '\n'.join(f"""    merge = texture(texture{i}, coord);
-    color = color * (1.0 - merge.a) + merge;""" for i in range(len(self.children)))
+    color = color * (1.0 - merge.a) + merge;""" for i in range(len(children)))
         return f"""#version 410
 precision highp float;
 in vec2 coord;
@@ -161,6 +183,7 @@ void main() {{
     def render(self, node, **kwargs):
         self.compile(node)
         if self._rectangle is not None:
+            children = [child for child in self.children if child.texture is not None]
             self.framebuffer.use()
             samplers = []
             unit = 0
@@ -178,8 +201,8 @@ void main() {{
                         unit += 1
                     elif name.startswith('texture'):
                         index = int(name[7:])
-                        if index < len(self.children):
-                            child = self.children[index]
+                        if index < len(children):
+                            child = children[index]
                             sampler_args = child.sampler_args
                             if sampler_args:
                                 sampler = self.glctx.sampler(texture=child.texture, **sampler_args)
@@ -380,4 +403,4 @@ class Canvas(SceneNode):
         self._surface.flushAndSubmit()
 
 
-SCENE_CLASSES = {'shader': Shader, 'canvas': Canvas}
+SCENE_CLASSES = {'reference': Reference, 'shader': Shader, 'canvas': Canvas}
