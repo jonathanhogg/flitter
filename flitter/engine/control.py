@@ -114,10 +114,11 @@ class Controller:
                 text, mtime = self.read_cache[path]
                 if path.stat().st_mtime == mtime:
                     return text
-            text = Vector((path.open(encoding='utf8').read(),))
-            self.read_cache[path] = text, path.stat().st_mtime
-            Log.info("Read: %s", filename)
-            return text
+            if path.exists():
+                text = Vector((path.open(encoding='utf8').read(),))
+                self.read_cache[path] = text, path.stat().st_mtime
+                Log.info("Read: %s", filename)
+                return text
         return null
 
     def update_windows(self, graph, **kwargs):
