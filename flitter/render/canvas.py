@@ -461,8 +461,32 @@ def draw(node, ctx, paint, font, path):
             if filename is not None:
                 image = load_image(filename)
                 if image is not None:
-                    dst = skia.Rect.MakeXYWH(*node.get('point', 2, float, (0, 0)), *node.get('size', 2, float, (image.width(), image.height())))
-                    ctx.drawImageRect(image, dst, paint)
+                    width, height = image.width(), image.height()
+                    point = node.get('point', 2, float, (0, 0))
+                    fill = node.get('fill', 2, float)
+                    fit = node.get('fit', 2, float)
+                    size = node.get('size', 2, float, (width, height))
+                    if fill is not None:
+                        aspect = fill[0] / fill[1]
+                        if width/height > aspect:
+                            src = skia.Rect.MakeXYWH(0, 0, height*aspect, height)
+                        else:
+                            src = skia.Rect.MakeXYWH(0, 0, width, width/aspect)
+                        dst = skia.Rect.MakeXYWH(*point, *fill)
+                    elif fit is not None:
+                        aspect = width / height
+                        src = skia.Rect.MakeXYWH(0, 0, width, height)
+                        x, y = point
+                        if fit[0]/fit[1] > aspect:
+                            w = fit[1] * aspect
+                            dst = skia.Rect.MakeXYWH(x+(fit[0]-w)/2, y, w, fit[1])
+                        else:
+                            h = fit[0] / aspect
+                            dst = skia.Rect.MakeXYWH(x, y+(fit[1]-h)/2, fit[0], h)
+                    else:
+                        src = skia.Rect.MakeXYWH(0, 0, width, height)
+                        dst = skia.Rect.MakeXYWH(*point, *size)
+                    ctx.drawImageRect(image, src, dst, paint)
 
         case "layer":
             size = node.get('size', 2, float)
