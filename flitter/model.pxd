@@ -60,7 +60,7 @@ cdef class Node:
 
 
 cdef class Context:
-    cdef dict variables
+    cdef readonly dict variables
     cdef readonly dict pragmas
     cdef readonly dict state
     cdef readonly Node graph

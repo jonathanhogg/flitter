@@ -32,8 +32,8 @@ def simplify(expression, context):
             return expression
 
         case tree.Name(name=name):
-            if name in context:
-                return tree.Literal(context[name].copynodes())
+            if name in context.variables:
+                return tree.Literal(context.variables[name].copynodes())
             if name in tree.BUILTINS:
                 return tree.Literal(tree.BUILTINS[name])
             return expression
@@ -49,7 +49,7 @@ def simplify(expression, context):
             for binding in bindings:
                 expr = simplify(binding.expr, context)
                 if isinstance(expr, tree.Literal):
-                    context[binding.name] = expr.value
+                    context.variables[binding.name] = expr.value
                 else:
                     remaining.append(tree.Binding(binding.name, expr))
             if remaining:
@@ -115,7 +115,7 @@ def simplify(expression, context):
                 for binding in bindings:
                     expr = simplify(binding.expr, context)
                     if isinstance(expr, tree.Literal):
-                        context[binding.name] = expr.value
+                        context.variables[binding.name] = expr.value
                     else:
                         remaining.append(tree.Binding(binding.name, expr))
                 body = simplify(body, context)
@@ -131,7 +131,7 @@ def simplify(expression, context):
             with context:
                 remaining = []
                 for value in source.value:
-                    context[name] = model.Vector((value,))
+                    context.variables[name] = model.Vector((value,))
                     remaining.append(simplify(body, context))
             return sequence_pack(remaining)
 
@@ -232,7 +232,11 @@ def simplify(expression, context):
             return tree.Pragma(name=name, expr=expr)
 
         case tree.Function(name=name, parameters=parameters, expr=expr):
-            expr = simplify(expr, context)
+            with context:
+                for parameter in parameters:
+                    if parameter in context.variables:
+                        del context.variables[parameter]
+                expr = simplify(expr, context)
             return tree.Function(name=name, parameters=parameters, expr=expr)
 
 

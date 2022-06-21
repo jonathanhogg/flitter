@@ -648,15 +648,6 @@ cdef class Context:
     def __exit__(self, *args):
         self.variables = self._stack.pop()
 
-    def __contains__(self, name):
-        return name in self.variables
-
-    def __getitem__(self, name):
-        return self.variables[name]
-
-    def __setitem__(self, str name, value):
-        self.variables[name] = value
-
     def merge_under(self, Node node):
         for attr, value in node.attributes.items():
             if attr not in self.variables:

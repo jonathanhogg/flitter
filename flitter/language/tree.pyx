@@ -335,8 +335,8 @@ cdef class Call(Expression):
                 func_expr = func
                 saved = context.variables
                 context.variables = saved.copy()
-                for name, value in zip(func_expr.parameters, args):
-                    context.variables[name] = value
+                for i, name in enumerate(func_expr.parameters):
+                    context.variables[name] = args[i] if i < len(args) else model.null_
                 results.append(func_expr.expr.evaluate(context))
                 context.variables = saved
             else:
