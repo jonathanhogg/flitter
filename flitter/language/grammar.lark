@@ -25,7 +25,7 @@ expressions : expression+ -> tuple
             | "%pragma" NAME node _NL -> pragma
             | "func" NAME "(" names ")" _NL _INDENT sequence _DEDENT -> function
 
-names : NAME* -> tuple
+names : (NAME ("," NAME)*)? -> tuple
 
 tests : test ("elif" test)* -> tuple
 
