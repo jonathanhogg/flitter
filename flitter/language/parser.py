@@ -28,7 +28,7 @@ class FlitterIndenter(Indenter):
 class FlitterTransformer(Transformer):
     NAME = str
 
-    def SIGNED_NUMBER(self, token):
+    def NUMBER(self, token):
         return model.Vector((float(token),))
 
     def ESCAPED_STRING(self, token):
