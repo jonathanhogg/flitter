@@ -457,8 +457,8 @@ def draw(node, ctx, paint, font, path):
                     ctx.drawString(text, *point, font, paint)
 
         case "image":
-            filename = node.get('filename', 1, str)
-            if filename is not None:
+            if 'filename' in node:
+                filename = ''.join(map(str, ((int(x) if isinstance(x, float) else x) for x in node['filename'])))
                 image = load_image(filename)
                 if image is not None:
                     width, height = image.width(), image.height()
@@ -469,9 +469,11 @@ def draw(node, ctx, paint, font, path):
                     if fill is not None:
                         aspect = fill[0] / fill[1]
                         if width/height > aspect:
-                            src = skia.Rect.MakeXYWH(0, 0, height*aspect, height)
+                            w = height * aspect
+                            src = skia.Rect.MakeXYWH((width-w)/2, 0, w, height)
                         else:
-                            src = skia.Rect.MakeXYWH(0, 0, width, width/aspect)
+                            h = width / aspect
+                            src = skia.Rect.MakeXYWH(0, (height-h)/2, width, h)
                         dst = skia.Rect.MakeXYWH(*point, *fill)
                     elif fit is not None:
                         aspect = width / height
