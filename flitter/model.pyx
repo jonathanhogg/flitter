@@ -615,30 +615,30 @@ cdef class Node:
         return self._attributes.items()
 
     def get(self, str name, int n=0, type t=None, default=None, /):
-        cdef Vector attr_vec
-        cdef list attr_values, values
+        cdef Vector attr_vec = self._attributes.get(name)
+        cdef list values
         cdef int m, i
-        attr_vec = <Vector> self._attributes.get(name)
         if attr_vec is not None:
-            attr_values = attr_vec.values
-            m = len(attr_values)
-            if n == 0:
-                if t is None:
-                    return attr_vec
-                n = m
+            values = attr_vec.values
+            m = len(values)
+            if n == 0 and t is None:
+                return attr_vec
             try:
                 if m == 1:
-                    value = attr_values[0]
+                    value = values[0]
                     if t is not None and not isinstance(value, t):
                         value = t(value)
                     if n == 1:
                         return value
+                    if n == 0:
+                        return [value]
                     return [value] * n
-                if m == n:
-                    values = attr_values.copy()
-                    for i, value in enumerate(values):
-                        if t is not None and not isinstance(value, t):
-                            values[i] = t(value)
+                if m == n or n == 0:
+                    values = values.copy()
+                    if t is not None:
+                        for i, value in enumerate(values):
+                            if not isinstance(value, t):
+                                values[i] = t(value)
                     return values
             except:
                 pass

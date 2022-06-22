@@ -120,12 +120,9 @@ class FilterQuality(enum.IntEnum):
 
 
 def get_color(node, default=None):
-    rgb = node.get('color', 3, float)
-    if rgb is not None:
-        return skia.Color4f(*rgb, 1)
-    rgba = node.get('color', 4, float)
-    if rgba is not None:
-        return skia.Color4f(*rgba)
+    color = node.get('color', 0, float)
+    if color is not None and len(color) in (3, 4):
+        return skia.Color4f(*color)
     return default
 
 
@@ -147,9 +144,9 @@ def set_styles(node, ctx=None, paint=None, font=None):
         if scale is not None:
             ctx.scale(*scale)
     if paint is not None:
-        color = get_color(node)
-        if color is not None:
-            paint.setColor4f(color)
+        color = node.get('color', 0, float)
+        if color is not None and len(color) in (3, 4):
+            paint.setColor4f(skia.Color4f(*color))
         stroke_width = node.get('stroke_width', 1, float)
         if stroke_width is not None:
             paint.setStrokeWidth(stroke_width)
@@ -175,7 +172,7 @@ def set_styles(node, ctx=None, paint=None, font=None):
         font_size = node.get('font_size', 1, float)
         if font_size is not None:
             font.setSize(font_size)
-        if node.keys() & {'font_family', 'font_weight', 'font_width', 'font_slant'}:
+        if 'font_family' in node or 'font_weight' in node or 'font_width' in node or 'font_slant' in node:
             typeface = font.getTypeface()
             font_style = typeface.fontStyle()
             font_family = node.get('font_family', 1, str, typeface.getFamilyName())
