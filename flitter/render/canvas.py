@@ -2,7 +2,7 @@
 Flitter drawing canvas based on Skia
 """
 
-# pylama:ignore=W0703,R0912,R0914,R0915,C0103,R0913,R0911
+# pylama:ignore=W0703,R0912,R0914,R0915,C0103,R0913,R0911,C901
 
 import enum
 import logging

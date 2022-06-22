@@ -109,7 +109,7 @@ def simplify(expression, context):
                 return node
             return tree.Attributes(node=node, bindings=tuple(bindings))
 
-        case tree.InlineLet(bindings=bindings, body=body):
+        case tree.InlineLet(body=body, bindings=bindings):
             remaining = []
             with context:
                 for binding in bindings:

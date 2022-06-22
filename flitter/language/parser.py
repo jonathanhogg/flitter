@@ -2,7 +2,7 @@
 Flitter language compiler
 """
 
-# pylama:ignore=R0201,C0103
+# pylama:ignore=R0201,C0103,R0903
 
 from ast import literal_eval
 from pathlib import Path
