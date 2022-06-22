@@ -6,6 +6,7 @@ Flitter language compiler
 
 from ast import literal_eval
 from pathlib import Path
+from sys import intern
 
 from lark import Lark, Transformer
 from lark.indenter import Indenter
@@ -26,13 +27,14 @@ class FlitterIndenter(Indenter):
 
 @v_args(inline=True)
 class FlitterTransformer(Transformer):
-    NAME = str
+    def NAME(self, token):
+        return intern(str(token))
 
     def NUMBER(self, token):
         return model.Vector((float(token),))
 
     def ESCAPED_STRING(self, token):
-        return model.Vector((literal_eval(token),))
+        return model.Vector((intern(literal_eval(token)),))
 
     def QUERY(self, token):
         return model.Query(token[1:-1])

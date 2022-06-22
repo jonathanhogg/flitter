@@ -11,7 +11,7 @@ cdef union float_long:
     unsigned long long l
 
 
-@cython.freelist(100)
+@cython.freelist(1000)
 cdef class VectorLike:
     cpdef VectorLike copynodes(self):
         raise NotImplementedError()
@@ -323,7 +323,7 @@ false = false_
 
 
 @cython.final
-@cython.freelist(20)
+@cython.freelist(100)
 cdef class Query:
     def __cinit__(self, str query=None, *, kind=None, tags=None):
         if query is None:
@@ -396,25 +396,36 @@ cdef class Query:
 
 
 @cython.final
-@cython.freelist(100)
+@cython.freelist(1000)
 cdef class Node:
     def __cinit__(self, str kind, /):
         self.kind = kind
         self._tags = set()
         self._attributes = {}
 
-    def __setstate__(self, tags):
-        self._tags = set(tags)
+    def __setstate__(self, set tags):
+        if tags is not None:
+            self._tags = tags
 
     def __reduce__(self):
-        return Node, (self.kind,), tuple(self._tags), self.children, self.attributes
+        return Node, (self.kind,), self._tags or None, self.children, self.attributes
+
+    @property
+    def children(self):
+        cdef Node node = self.first_child
+        while node is not None:
+            yield node
+            node = node.next_sibling
 
     @property
     def attributes(self):
         cdef str key
         cdef Vector value
         for key, value in self._attributes.items():
-            yield key, value.values
+            if len(value.values) == 1:
+                yield key, value.values[0]
+            elif value.values:
+                yield key, value.values
 
     @property
     def tags(self):
@@ -423,13 +434,6 @@ cdef class Node:
     @property
     def parent(self):
         return self._parent() if self._parent is not None else None
-
-    @property
-    def children(self):
-        cdef Node node = self.first_child
-        while node is not None:
-            yield node
-            node = node.next_sibling
 
     cpdef Node copy(self):
         cdef Node node = Node.__new__(Node, self.kind)
@@ -459,7 +463,9 @@ cdef class Node:
         cdef Node parent = node._parent() if node._parent is not None else None
         if parent is not None:
             parent.remove(node)
-        node._parent = weak(self)
+        if self.weak_self is None:
+            self.weak_self = weak(self)
+        node._parent = self.weak_self
         if self.last_child is not None:
             self.last_child.next_sibling = node
             self.last_child = node
@@ -470,7 +476,9 @@ cdef class Node:
         cdef Node parent = node._parent() if node._parent is not None else None
         if parent is not None:
             parent.remove(node)
-        node._parent = weak(self)
+        if self.weak_self is None:
+            self.weak_self = weak(self)
+        node._parent = self.weak_self
         node.next_sibling = self.first_child
         self.first_child = node
         if self.last_child is None:
@@ -585,9 +593,17 @@ cdef class Node:
         return self._attributes[name]
 
     def __setitem__(self, str name, value):
-        if not isinstance(value, Vector):
-            value = Vector(value)
-        self._attributes[name] = value
+        cdef Vector vector
+        if isinstance(value, Vector):
+            vector = value
+        else:
+            vector = Vector.__new__(Vector)
+            if isinstance(value, list):
+                vector.values = value
+            else:
+                vector.values.append(value)
+        if vector.values:
+            self._attributes[name] = vector
 
     def keys(self):
         return self._attributes.keys()
