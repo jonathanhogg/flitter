@@ -40,6 +40,9 @@ class FlitterTransformer(Transformer):
     def range(self, start, stop, step):
         return tree.Range(tree.Literal(model.null) if start is None else start, stop, tree.Literal(model.null) if step is None else step)
 
+    def inline_if_else(self, then, condition, else_=None):
+        return tree.IfElse((tree.Test(condition, then),), else_)
+
     tuple = v_args(inline=False)(tuple)
 
     add = tree.Add

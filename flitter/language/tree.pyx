@@ -581,7 +581,7 @@ cdef class IfElse(Expression):
     cdef readonly tuple tests
     cdef readonly Expression else_
 
-    def __init__(self, tuple tests, Expression else_):
+    def __init__(self, tuple tests, Expression else_=None):
         self.tests = tests
         self.else_ = else_
 

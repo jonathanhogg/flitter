@@ -21,7 +21,7 @@ expressions : expression+ -> tuple
             | node _NL _INDENT sequence _DEDENT -> append
             | "for" NAME "in" range _NL _INDENT sequence _DEDENT -> loop
             | "let" multiline_bindings -> let
-            | "if" tests ["else" _NL _INDENT sequence _DEDENT] -> if_else
+            | "if" tests ("else" _NL _INDENT sequence _DEDENT)? -> if_else
             | "%pragma" NAME node _NL -> pragma
             | "func" NAME "(" names ")" _NL _INDENT sequence _DEDENT -> function
 
@@ -50,6 +50,7 @@ compositions : comprehension (";" comprehension)+ -> tuple
 ?comprehension : or
                | "for" NAME "in" or "|" comprehension -> loop
                | "let" inline_bindings "|" comprehension -> inline_let
+               | or "if" or ("else" comprehension)? -> inline_if_else
 
 inline_bindings: binding+ -> tuple
 
