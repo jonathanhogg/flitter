@@ -7,3 +7,4 @@ regex
 cython
 pyglet
 moderngl
+posix_ipc
