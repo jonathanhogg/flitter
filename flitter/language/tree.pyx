@@ -516,12 +516,12 @@ cdef class Let(Expression):
 
 
 cdef class InlineLet(Expression):
-    cdef readonly tuple bindings
     cdef readonly Expression body
+    cdef readonly tuple bindings
 
-    def __init__(self, tuple bindings, Expression body):
-        self.bindings = bindings
+    def __init__(self, Expression body, tuple bindings):
         self.body = body
+        self.bindings = bindings
 
     cpdef model.VectorLike evaluate(self, model.Context context):
         cdef Binding binding
@@ -534,7 +534,7 @@ cdef class InlineLet(Expression):
         return result
 
     def __repr__(self):
-        return f'InlineLet({self.bindings!r}, {self.body!r})'
+        return f'InlineLet({self.body!r}, {self.bindings!r})'
 
 
 cdef class For(Expression):
