@@ -47,14 +47,16 @@ binding : NAME "=" composition
 
 compositions : comprehension (";" comprehension)+ -> tuple
 
-?comprehension : or
-               | comprehension "for" NAME "in" or -> inline_loop
+?comprehension : conditional
+               | comprehension "for" NAME "in" conditional -> inline_loop
                | comprehension "where" inline_bindings -> inline_let
-               | or "if" or ("else" comprehension)? -> inline_if_else
 
 inline_bindings: binding+ -> tuple
 
-inline_binding: NAME "=" or -> binding
+inline_binding: NAME "=" conditional -> binding
+
+?conditional : or
+             | or "if" or ("else" conditional)? -> inline_if_else
 
 ?or : and
     | or "or" and -> logical_or
