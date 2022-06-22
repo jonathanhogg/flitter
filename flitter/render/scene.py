@@ -18,7 +18,6 @@ import pyglet.window
 import pyglet.gl
 
 from . import canvas
-from .. import model
 
 
 Log = logging.getLogger(__name__)
