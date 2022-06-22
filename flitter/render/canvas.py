@@ -341,7 +341,7 @@ def draw(node, ctx, paint, font, path):
     match node.kind:
         case "group":
             ctx.save()
-            paint, font = skia.Paint(paint), font.makeWithSize(font.getSize())
+            path, paint, font = skia.Path(), skia.Paint(paint), font.makeWithSize(font.getSize())
             set_styles(node, ctx, paint, font)
             for child in node.children:
                 draw(child, ctx, paint, font, path)
