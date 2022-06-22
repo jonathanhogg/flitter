@@ -149,7 +149,7 @@ def set_styles(node, ctx=None, paint=None, font=None):
     if paint is not None:
         color = get_color(node)
         if color is not None:
-            paint.setShader(skia.Shaders.Color(color))
+            paint.setColor4f(color)
         stroke_width = node.get('stroke_width', 1, float)
         if stroke_width is not None:
             paint.setStrokeWidth(stroke_width)
