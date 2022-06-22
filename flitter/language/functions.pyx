@@ -208,6 +208,16 @@ def roundv(Vector xs not None):
     return ys
 
 
+def sumv(Vector xs not None):
+    cdef float y = 0;
+    for x in xs.values:
+        if isinstance(x, (int, float)):
+            y += x
+    cdef Vector ys = Vector.__new__(Vector)
+    ys.values.append(y)
+    return ys
+
+
 def minv(Vector xs not None, *args):
     cdef Vector ys = null_
     if not args:
@@ -322,6 +332,7 @@ FUNCTIONS = {
     'quad': Vector((quad,)),
     'shuffle': Vector((shuffle,)),
     'round': Vector((roundv,)),
+    'sum': Vector((sumv,)),
     'min': Vector((minv,)),
     'max': Vector((maxv,)),
     'hypot': Vector((hypot,)),
