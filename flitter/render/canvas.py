@@ -345,7 +345,7 @@ def make_image_filter(node, paint):
     return None
 
 
-def draw(node, ctx, paint, font, path):
+def draw(node, ctx, paint=None, font=None, path=None):
     match node.kind:
         case "group":
             ctx.save()
@@ -513,9 +513,12 @@ def draw(node, ctx, paint, font, path):
                 ctx.restore()
 
         case "canvas":
+            ctx.save()
+            paint, font, path = skia.Paint(AntiAlias=True), skia.Font(skia.Typeface(), 14), skia.Path()
             set_styles(node, ctx, paint, font)
             for child in node.children:
                 draw(child, ctx, paint, font, path)
+            ctx.restore()
 
         case _:
             shader = make_shader(node, paint)
