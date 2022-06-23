@@ -8,6 +8,7 @@ import enum
 import logging
 import math
 from pathlib import Path
+import time
 
 import skia
 
@@ -15,6 +16,22 @@ import skia
 Log = logging.getLogger(__name__)
 
 _ImageCache = {}
+_RecordStats = logging.getLogger().level >= logging.INFO
+_Counts = {}
+_Durations = {}
+
+
+def dump_stats():
+    total_duration = sum(_Durations.values())
+    Log.info("Total time spent canvas rendering: %.0fs, comprised of...", total_duration)
+    for key, count in _Counts.items():
+        duration = _Durations[key]
+        Log.info("%15s  - %8d  x %6.1fµs  = %6.1fs  (%4.1f%%)", key, count, 1e6*duration/count, duration, 100*duration/total_duration)
+
+
+if _RecordStats:
+    import atexit
+    atexit.register(dump_stats)
 
 
 def load_image(filename):
@@ -346,6 +363,7 @@ def make_image_filter(node, paint):
 
 
 def draw(node, ctx, paint=None, font=None, path=None):
+    start = time.time()
     match node.kind:
         case "group":
             ctx.save()
@@ -527,3 +545,12 @@ def draw(node, ctx, paint=None, font=None, path=None):
             image_filter = make_image_filter(node, paint)
             if image_filter is not None:
                 paint.setImageFilter(image_filter)
+
+    if _RecordStats:
+        duration = time.time() - start
+        kind = node.kind
+        _Counts[kind] = _Counts.get(kind, 0) + 1
+        _Durations[kind] = _Durations.get(kind, 0) + duration
+        if kind != 'canvas':
+            kind = node.parent.kind
+            _Durations[kind] = _Durations.get(kind, 0) - duration
