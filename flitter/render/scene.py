@@ -2,7 +2,7 @@
 Flitter window management
 """
 
-# pylama:ignore=C0413,E402,W0703,R0914,R0902,R0912,R0201,R1702
+# pylama:ignore=C0413,E402,W0703,R0914,R0902,R0912,R0201,R1702,C901,W0223,W0231
 
 import array
 import logging

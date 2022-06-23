@@ -133,65 +133,76 @@ def turn_angle(x0, y0, x1, y1, x2, y2):
 
 
 def set_styles(node, ctx=None, paint=None, font=None):
-    if ctx is not None:
-        translate = node.get('translate', 2, float)
-        if translate is not None:
-            ctx.translate(*translate)
-        rotate = node.get('rotate', 1, float)
-        if rotate is not None:
-            ctx.rotate(rotate * 360)
-        scale = node.get('scale', 2, float)
-        if scale is not None:
-            ctx.scale(*scale)
-    if paint is not None:
-        color = node.get('color', 0, float)
-        if color is not None and len(color) in (3, 4):
-            paint.setColor4f(skia.Color4f(*color))
-        stroke_width = node.get('stroke_width', 1, float)
-        if stroke_width is not None:
-            paint.setStrokeWidth(stroke_width)
-        stroke_join = node.get('stroke_join', 1, str)
-        if stroke_join is not None and stroke_join.upper() in LineJoin.__members__:
-            paint.setStrokeJoin(skia.Paint.Join(LineJoin.__members__[stroke_join.upper()]))
-        stroke_cap = node.get('stroke_cap', 1, str)
-        if stroke_cap is not None and stroke_cap.upper() in LineCap.__members__:
-            paint.setStrokeCap(skia.Paint.Cap(LineCap.__members__[stroke_cap.upper()]))
-        composite = node.get('composite', 1, str)
-        if composite is not None and composite.upper() in Composite.__members__:
-            paint.setBlendMode(skia.BlendMode(Composite.__members__[composite.upper()]))
-        antialias = node.get('antialias', 1, bool)
-        if antialias is not None:
-            paint.setAntiAlias(antialias)
-        dither = node.get('dither', 1, bool)
-        if dither is not None:
-            paint.setDither(dither)
-        quality = node.get('quality', 1, str)
-        if quality is not None and quality.upper() in FilterQuality.__members__:
-            paint.setFilterQuality(skia.FilterQuality(FilterQuality.__members__[quality.upper()]))
-    if font is not None:
-        font_size = node.get('font_size', 1, float)
-        if font_size is not None:
-            font.setSize(font_size)
-        if 'font_family' in node or 'font_weight' in node or 'font_width' in node or 'font_slant' in node:
-            typeface = font.getTypeface()
-            font_style = typeface.fontStyle()
-            font_family = node.get('font_family', 1, str, typeface.getFamilyName())
-            font_weight = node.get('font_weight', 1, str)
-            if font_weight is not None and font_weight.upper() in FontWeight.__members__:
-                weight = skia.FontStyle.Weight(FontWeight.__members__[font_weight.upper()])
-            else:
-                weight = font_style.weight()
-            font_width = node.get('font_width', 1, str)
-            if font_width is not None and font_width.upper() in FontWidth.__members__:
-                width = skia.FontStyle.Width(FontWidth.__members__[font_width.upper()])
-            else:
-                width = font_style.width()
-            font_slant = node.get('font_slant', 1, str)
-            if font_slant is not None and font_slant.upper() in FontSlant.__members__:
-                slant = skia.FontStyle.Slant(FontSlant.__members__[font_slant.upper()])
-            else:
-                slant = font_style.slant()
-            font.setTypeface(skia.Typeface(font_family, skia.FontStyle(weight, width, slant)))
+    for key, value in node.items():
+        match key:
+            case 'translate':
+                translate = value.match(2, float)
+                if translate is not None and ctx is not None:
+                    ctx.translate(*translate)
+            case 'rotate':
+                rotate = value.match(1, float)
+                if rotate is not None and ctx is not None:
+                    ctx.rotate(rotate * 360)
+            case 'scale':
+                scale = value.match(2, float)
+                if scale is not None and ctx is not None:
+                    ctx.scale(*scale)
+            case 'color':
+                color = value.match(3, float) or value.match(4, float)
+                if color is not None and paint is not None:
+                    paint.setColor4f(skia.Color4f(*color))
+            case 'stroke_width':
+                stroke_width = value.match(1, float)
+                if stroke_width is not None and paint is not None:
+                    paint.setStrokeWidth(stroke_width)
+            case 'stroke_join':
+                stroke_join = value.match(1, str)
+                if stroke_join is not None and stroke_join.upper() in LineJoin.__members__ and paint is not None:
+                    paint.setStrokeJoin(skia.Paint.Join(LineJoin.__members__[stroke_join.upper()]))
+            case 'stroke_cap':
+                stroke_cap = value.match(1, str)
+                if stroke_cap is not None and stroke_cap.upper() in LineCap.__members__ and paint is not None:
+                    paint.setStrokeCap(skia.Paint.Cap(LineCap.__members__[stroke_cap.upper()]))
+            case 'composite':
+                composite = value.match(1, str)
+                if composite is not None and composite.upper() in Composite.__members__ and paint is not None:
+                    paint.setBlendMode(skia.BlendMode(Composite.__members__[composite.upper()]))
+            case 'antialias':
+                antialias = value.match(1, bool)
+                if antialias is not None and paint is not None:
+                    paint.setAntiAlias(antialias)
+            case 'dither':
+                dither = value.match(1, bool)
+                if dither is not None and paint is not None:
+                    paint.setDither(dither)
+            case 'quality':
+                quality = value.match(1, str)
+                if quality is not None and quality.upper() in FilterQuality.__members__ and paint is not None:
+                    paint.setFilterQuality(skia.FilterQuality(FilterQuality.__members__[quality.upper()]))
+            case ('font_size' | 'font_family' | 'font_weight' | 'font_width' | 'font_slant') if font is not None:
+                typeface = font.getTypeface()
+                font_style = typeface.fontStyle()
+                font_family = node.get('font_family', 1, str, typeface.getFamilyName())
+                font_weight = node.get('font_weight', 1, str)
+                if font_weight is not None and font_weight.upper() in FontWeight.__members__:
+                    weight = skia.FontStyle.Weight(FontWeight.__members__[font_weight.upper()])
+                else:
+                    weight = font_style.weight()
+                font_width = node.get('font_width', 1, str)
+                if font_width is not None and font_width.upper() in FontWidth.__members__:
+                    width = skia.FontStyle.Width(FontWidth.__members__[font_width.upper()])
+                else:
+                    width = font_style.width()
+                font_slant = node.get('font_slant', 1, str)
+                if font_slant is not None and font_slant.upper() in FontSlant.__members__:
+                    slant = skia.FontStyle.Slant(FontSlant.__members__[font_slant.upper()])
+                else:
+                    slant = font_style.slant()
+                font.setTypeface(skia.Typeface(font_family, skia.FontStyle(weight, width, slant)))
+                font_size = value.match(1, float)
+                if font_size is not None:
+                    font.setSize(font_size)
+                font = None
 
 
 def make_shader(node, paint):
@@ -283,7 +294,7 @@ def make_image_filter(node, paint):
             radius = node.get('radius', 2, float)
             if radius is not None:
                 input_filter = sub_filters[0] if len(sub_filters) == 1 else None
-                return skia.ImageFilters.Blur(*radius, input=input_filter)
+                return skia.ImageFilters.Blur(*radius, skia.TileMode.kClamp, input=input_filter)
 
         case "shadow":
             radius = node.get('radius', 2, float)

@@ -13,6 +13,7 @@ cdef class Vector(VectorLike):
     cdef unsigned long long _hash(self, bint floor_floats)
     cpdef bint istrue(self)
     cpdef VectorLike copynodes(self)
+    cpdef object match(self, int n=?, type t=?, default=?)
     cpdef Vector withlen(self, int n, bint force_copy=?)
     cpdef Vector neg(self)
     cpdef Vector pos(self)

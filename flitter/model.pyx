@@ -56,7 +56,12 @@ cdef class Vector(VectorLike):
         return result
 
     def __cinit__(self, values=None):
-        self.values = list(values) if values is not None else []
+        if values is None:
+            self.values = []
+        elif isinstance(values, list):
+            self.values = values
+        else:
+            self.values = list(values)
 
     def __len__(self):
         return len(self.values)
@@ -133,7 +138,7 @@ cdef class Vector(VectorLike):
 
     cpdef VectorLike copynodes(self):
         cdef Vector result = self
-        cdef Node node, parent
+        cdef Node node
         cdef int i
         for i, value in enumerate(self.values):
             if isinstance(value, Node):
@@ -144,6 +149,35 @@ cdef class Vector(VectorLike):
                         result.values.extend(self.values)
                     result.values[i] = node.copy()
         return result
+
+    cpdef object match(self, int n=0, type t=None, default=None):
+        cdef list values
+        cdef int m, i
+        values = self.values
+        if n == 0 and t is None:
+            return values
+        try:
+            m = len(values)
+            if m == 1:
+                value = values[0]
+                if t is not None and not isinstance(value, t):
+                    value = t(value)
+                if n == 1:
+                    return value
+                if n == 0:
+                    return [value]
+                return [value] * n
+            if m == n or n == 0:
+                if t is not None:
+                    for i, value in enumerate(self.values):
+                        if not isinstance(value, t):
+                            if values is self.values:
+                                values = values.copy()
+                            values[i] = t(value)
+                return values
+        except:
+            pass
+        return default
 
     cpdef Vector withlen(self, int n, bint force_copy=False):
         cdef int m = len(self.values)
@@ -398,10 +432,10 @@ cdef class Query:
 @cython.final
 @cython.freelist(1000)
 cdef class Node:
-    def __cinit__(self, str kind, /):
+    def __cinit__(self, str kind, set tags=None, dict attributes=None, /):
         self.kind = kind
-        self._tags = set()
-        self._attributes = {}
+        self._tags = set() if tags is None else tags.copy()
+        self._attributes = {} if attributes is None else attributes.copy()
 
     def __setstate__(self, set tags):
         if tags is not None:
@@ -422,10 +456,7 @@ cdef class Node:
         cdef str key
         cdef Vector value
         for key, value in self._attributes.items():
-            if len(value.values) == 1:
-                yield key, value.values[0]
-            elif value.values:
-                yield key, value.values
+            yield key, value.values
 
     @property
     def tags(self):
@@ -436,9 +467,7 @@ cdef class Node:
         return self._parent() if self._parent is not None else None
 
     cpdef Node copy(self):
-        cdef Node node = Node.__new__(Node, self.kind)
-        node._attributes = self._attributes.copy()
-        node._tags = self._tags.copy()
+        cdef Node node = Node.__new__(Node, self.kind, self._tags, self._attributes)
         cdef Node copy, child = self.first_child
         if child is not None:
             parent = weak(node)
@@ -449,7 +478,8 @@ cdef class Node:
             while child is not None:
                 copy = child.copy()
                 copy._parent = parent
-                node.last_child.next_sibling = node.last_child = copy
+                node.last_child.next_sibling = copy
+                node.last_child = copy
                 child = child.next_sibling
         return node
 
@@ -593,17 +623,9 @@ cdef class Node:
         return self._attributes[name]
 
     def __setitem__(self, str name, value):
-        cdef Vector vector
-        if isinstance(value, Vector):
-            vector = value
-        else:
-            vector = Vector.__new__(Vector)
-            if isinstance(value, list):
-                vector.values = value
-            else:
-                vector.values.append(value)
-        if vector.values:
-            self._attributes[name] = vector
+        if not isinstance(value, Vector):
+            value = Vector.__new__(Vector, value)
+        self._attributes[name] = value
 
     def keys(self):
         return self._attributes.keys()
@@ -615,33 +637,9 @@ cdef class Node:
         return self._attributes.items()
 
     def get(self, str name, int n=0, type t=None, default=None, /):
-        cdef Vector attr_vec = self._attributes.get(name)
-        cdef list values
-        cdef int m, i
-        if attr_vec is not None:
-            values = attr_vec.values
-            m = len(values)
-            if n == 0 and t is None:
-                return attr_vec
-            try:
-                if m == 1:
-                    value = values[0]
-                    if t is not None and not isinstance(value, t):
-                        value = t(value)
-                    if n == 1:
-                        return value
-                    if n == 0:
-                        return [value]
-                    return [value] * n
-                if m == n or n == 0:
-                    values = values.copy()
-                    if t is not None:
-                        for i, value in enumerate(values):
-                            if not isinstance(value, t):
-                                values[i] = t(value)
-                    return values
-            except:
-                pass
+        cdef Vector value = self._attributes.get(name)
+        if value is not None:
+            return value.match(n, t, default)
         return default
 
     def __iter__(self):
