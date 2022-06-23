@@ -291,9 +291,43 @@ class Controller:
             frame_time = self.counter.clock()
             last = self.counter.beat_at_time(frame_time)
             dump_time = frame_time
+            execution = render = housekeeping = 0
             gc.disable()
             while True:
                 frames.append(frame_time)
+
+                execution -= self.counter.clock()
+                beat = self.counter.beat_at_time(frame_time)
+                delta = beat - last
+                last = beat
+                variables = {'beat': Vector((beat,)), 'quantum': Vector((self.counter.quantum,)), 'delta': Vector((delta,)),
+                             'clock': Vector((frame_time,)), 'read': Vector((self.read,))}
+                context = Context(variables=variables, state=self.state)
+                for expr in self.tree.expressions if isinstance(self.tree, Sequence) else [self.tree]:
+                    for value in expr.evaluate(context):
+                        if isinstance(value, Node) and value.parent is None:
+                            context.graph.append(value)
+                execution += self.counter.clock()
+                render -= self.counter.clock()
+                self.handle_pragmas(context.pragmas)
+                self.update_controls(context.graph)
+                self.update_windows(context.graph, clock=frame_time, beat=beat, delta=delta)
+                context = None
+                render += self.counter.clock()
+
+                housekeeping -= self.counter.clock()
+                count = gc.collect(0)
+                if count:
+                    Log.debug("Collected %d objects", count)
+                if self.queue:
+                    await self.osc_sender.send_bundle_from_queue(self.queue)
+
+                if self.global_state_dirty and self.state_file is not None and frame_time > dump_time + 1:
+                    Log.debug("Saving state")
+                    with open(self.state_file, 'wb') as file:
+                        pickle.dump(self.global_state, file)
+                    self.global_state_dirty = False
+                    dump_time = frame_time
 
                 if self.next_page is not None:
                     if reload_task is not None:
@@ -321,46 +355,25 @@ class Controller:
                             reload_task = None
                         self.current_mtime = mtime
 
-                beat = self.counter.beat_at_time(frame_time)
-                delta = beat - last
-                last = beat
-                variables = {'beat': Vector((beat,)), 'quantum': Vector((self.counter.quantum,)), 'delta': Vector((delta,)),
-                             'clock': Vector((frame_time,)), 'read': Vector((self.read,))}
-                context = Context(variables=variables, state=self.state)
-                for expr in self.tree.expressions if isinstance(self.tree, Sequence) else [self.tree]:
-                    for value in expr.evaluate(context):
-                        if isinstance(value, Node) and value.parent is None:
-                            context.graph.append(value)
-                self.handle_pragmas(context.pragmas)
-                self.update_controls(context.graph)
-                self.update_windows(context.graph, clock=frame_time, beat=beat, delta=delta)
-                context = None
-
-                if self.queue:
-                    await self.osc_sender.send_bundle_from_queue(self.queue)
-                if len(frames) > 1 and frames[-1] - frames[0] > 2:
-                    fps = (len(frames) - 1) / (frames[-1] - frames[0])
-                    Log.info("Frame rate = %.1ffps", fps)
-                    frames = frames[-1:]
-
-                if self.global_state_dirty and self.state_file is not None and frame_time > dump_time + 1:
-                    Log.info("Saving state")
-                    with open(self.state_file, 'wb') as file:
-                        pickle.dump(self.global_state, file)
-                    self.global_state_dirty = False
-                    dump_time = frame_time
-
-                count = gc.collect(0)
-                if count:
-                    Log.debug("Collected %d objects", count)
                 frame_time += 1 / self.max_fps
                 now = self.counter.clock()
                 if now > frame_time:
                     Log.debug("Slow frame - %.0fms", (now - frame_time + 1/self.max_fps) * 1000)
-                    frame_time = now
                     await asyncio.sleep(0)
+                    frame_time = self.counter.clock()
                 else:
-                    await asyncio.sleep(max(0, frame_time - now))
+                    delay = max(0, frame_time - now)
+                    await asyncio.sleep(delay)
+                    housekeeping -= delay
+                housekeeping += self.counter.clock()
+
+                if len(frames) > 1 and frames[-1] - frames[0] > 2:
+                    nframes = len(frames) - 1
+                    fps = nframes / (frames[-1] - frames[0])
+                    Log.info("%.1ffps; per frame execution %.1fms, render %.1fms, housekeeping %.1fms",
+                             fps, 1000*execution/nframes, 1000*render/nframes, 1000*housekeeping/nframes)
+                    frames = frames[-1:]
+                    execution = render = housekeeping = 0
         finally:
             while self.windows:
                 self.windows.pop().destroy()
