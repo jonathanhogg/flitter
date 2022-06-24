@@ -2,7 +2,7 @@
 Flitter window management
 """
 
-# pylama:ignore=C0413,E402,W0703,R0914,R0902,R0912,R0201,R1702,C901,W0223,W0231
+# pylama:ignore=C0413,E402,W0703,R0914,R0902,R0912,R0201,R1702,C901,W0223,W0231,R0915
 
 import array
 import logging
@@ -33,10 +33,6 @@ class SceneNode:
     @property
     def texture(self):
         raise NotImplementedError()
-
-    @property
-    def sampler_args(self):
-        return {'repeat_x': False, 'repeat_y': False}
 
     def destroy(self):
         self.release()
@@ -182,6 +178,16 @@ void main() {{
     def render(self, node, **kwargs):
         self.compile(node)
         if self._rectangle is not None:
+            sampler_args = {'repeat_x': False, 'repeat_y': False}
+            border = node.get('border', 4, float)
+            repeat = node.get('repeat', 2, bool)
+            if border is not None:
+                sampler_args['border_color'] = tuple(border)
+            elif repeat is not None:
+                if repeat[0]:
+                    del sampler_args['repeat_x']
+                if repeat[1]:
+                    del sampler_args['repeat_y']
             children = [child for child in self.children if child.texture is not None]
             self.framebuffer.use()
             samplers = []
@@ -193,16 +199,18 @@ void main() {{
                         if self._last is None:
                             self._last = self.glctx.texture((self.width, self.height), 4)
                         self.glctx.copy_framebuffer(self._last, self.framebuffer)
-                        sampler = self.glctx.sampler(texture=self._last, repeat_x=False, repeat_y=False)
-                        sampler.use(location=unit)
-                        samplers.append(sampler)
+                        if sampler_args:
+                            sampler = self.glctx.sampler(texture=self._last, **sampler_args)
+                            sampler.use(location=unit)
+                            samplers.append(sampler)
+                        else:
+                            self._last.use(location=unit)
                         member.value = unit
                         unit += 1
                     elif name.startswith('texture'):
                         index = int(name[7:])
                         if index < len(children):
                             child = children[index]
-                            sampler_args = child.sampler_args
                             if sampler_args:
                                 sampler = self.glctx.sampler(texture=child.texture, **sampler_args)
                                 sampler.use(location=unit)
