@@ -130,6 +130,15 @@ cdef class Vector(VectorLike):
                 return True
         return False
 
+    def as_string(self):
+        cdef str text = ""
+        for value in self.values:
+            if isinstance(value, str):
+                text += <str>value
+            elif isinstance(value, (float, int, bool)):
+                text += "{:g}".format(value)
+        return text
+
     def isinstance(self, t):
         for value in self.values:
             if not isinstance(value, t):

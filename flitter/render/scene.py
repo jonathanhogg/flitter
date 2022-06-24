@@ -45,9 +45,9 @@ class SceneNode:
 
     def update(self, node, **kwargs):
         references = kwargs.setdefault('references', {})
-        node_id = node.get('id', 1, str)
+        node_id = node.get('id')
         if node_id is not None:
-            references[node_id] = self
+            references[node_id.as_string()] = self
         resized = False
         width, height = node.get('size', 2, int, (512, 512))
         if width != self.width or height != self.height:
@@ -91,8 +91,8 @@ class Reference(SceneNode):
         return self._reference.texture if self._reference is not None else None
 
     def update(self, node, references=None, **kwargs):
-        node_id = node.get('id', 1)
-        reference = references.get(node_id) if references is not None and node_id is not None else None
+        node_id = node.get('id')
+        reference = references.get(node_id.as_string()) if references is not None and node_id is not None else None
         self._reference = reference
 
     def destroy(self):
@@ -275,7 +275,7 @@ class Window(ProgramNode):
         if self.window is None:
             vsync = node.get('vsync', 1, bool, self.default_vsync)
             screen = node.get('screen', 1, int, self.default_screen)
-            title = node.get('title', 1, str, "Flitter")
+            title = node['title'].as_string() if 'title' in node else "Flitter"
             fullscreen = node.get('fullscreen', 1, bool, self.default_fullscreen)
             screens = pyglet.canvas.get_display().get_screens()
             screen = screens[screen] if screen < len(screens) else screens[0]
@@ -351,10 +351,10 @@ class Shader(ProgramNode):
             self._framebuffer.clear()
 
     def get_vertex_source(self, node):
-        return node.get('vertex', 1, str, super().get_vertex_source(node))
+        return node['vertex'].as_string() if 'vertex' in node else super().get_vertex_source(node)
 
     def get_fragment_source(self, node):
-        return node.get('fragment', 1, str, super().get_fragment_source(node))
+        return node['fragment'].as_string() if 'fragment' in node else super().get_fragment_source(node)
 
 
 class Canvas(SceneNode):
