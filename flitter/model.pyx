@@ -120,7 +120,7 @@ cdef class Vector(VectorLike):
             if isinstance(value, int):
                 if <int>value != 0:
                     return True
-            if isinstance(value, float):
+            elif isinstance(value, float):
                 if <double>value != 0.:
                     return True
             elif isinstance(value, str):
