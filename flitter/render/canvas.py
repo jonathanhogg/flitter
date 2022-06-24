@@ -22,11 +22,12 @@ _Durations = {}
 
 
 def dump_stats():
-    total_duration = sum(_Durations.values())
-    Log.info("Total time spent canvas rendering: %.0fs, comprised of...", total_duration)
-    for key, count in _Counts.items():
-        duration = _Durations[key]
-        Log.info("%15s  - %8d  x %6.1fµs  = %6.1fs  (%4.1f%%)", key, count, 1e6*duration/count, duration, 100*duration/total_duration)
+    if _Counts:
+        total_duration = sum(_Durations.values())
+        Log.info("Total time spent canvas rendering: %.0fs, comprised of...", total_duration)
+        for key, count in _Counts.items():
+            duration = _Durations[key]
+            Log.info("%15s  - %8d  x %6.1fµs  = %6.1fs  (%4.1f%%)", key, count, 1e6*duration/count, duration, 100*duration/total_duration)
 
 
 if _RecordStats:
