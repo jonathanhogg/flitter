@@ -101,27 +101,27 @@ class LineCap(enum.IntEnum):
 class FontWeight(enum.IntEnum):
     BLACK = skia.FontStyle.Weight.kBlack_Weight
     BOLD = skia.FontStyle.Weight.kBold_Weight
-    EXTRABLACK = skia.FontStyle.Weight.kExtraBlack_Weight
-    EXTRABOLD = skia.FontStyle.Weight.kExtraBold_Weight
-    EXTRALIGHT = skia.FontStyle.Weight.kExtraLight_Weight
+    EXTRA_BLACK = skia.FontStyle.Weight.kExtraBlack_Weight
+    EXTRA_BOLD = skia.FontStyle.Weight.kExtraBold_Weight
+    EXTRA_LIGHT = skia.FontStyle.Weight.kExtraLight_Weight
     INVISIBLE = skia.FontStyle.Weight.kInvisible_Weight
     LIGHT = skia.FontStyle.Weight.kLight_Weight
     MEDIUM = skia.FontStyle.Weight.kMedium_Weight
     NORMAL = skia.FontStyle.Weight.kNormal_Weight
-    SEMIBOLD = skia.FontStyle.Weight.kSemiBold_Weight
+    SEMI_BOLD = skia.FontStyle.Weight.kSemiBold_Weight
     THIN = skia.FontStyle.Weight.kThin_Weight
 
 
 class FontWidth(enum.IntEnum):
     CONDENSED = skia.FontStyle.Width.kCondensed_Width
     EXPANDED = skia.FontStyle.Width.kExpanded_Width
-    EXTRACONDENSED = skia.FontStyle.Width.kExtraCondensed_Width
-    EXTRAEXPANDED = skia.FontStyle.Width.kExtraExpanded_Width
+    EXTRA_CONDENSED = skia.FontStyle.Width.kExtraCondensed_Width
+    EXTRA_EXPANDED = skia.FontStyle.Width.kExtraExpanded_Width
     NORMAL = skia.FontStyle.Width.kNormal_Width
-    SEMICONDENSED = skia.FontStyle.Width.kSemiCondensed_Width
-    SEMIEXPANDED = skia.FontStyle.Width.kSemiExpanded_Width
-    ULTRACONDENSED = skia.FontStyle.Width.kUltraCondensed_Width
-    ULTRAEXPANDED = skia.FontStyle.Width.kUltraExpanded_Width
+    SEMI_CONDENSED = skia.FontStyle.Width.kSemiCondensed_Width
+    SEMI_EXPANDED = skia.FontStyle.Width.kSemiExpanded_Width
+    ULTRA_CONDENSED = skia.FontStyle.Width.kUltraCondensed_Width
+    ULTRA_EXPANDED = skia.FontStyle.Width.kUltraExpanded_Width
 
 
 class FontSlant(enum.IntEnum):
