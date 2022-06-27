@@ -7,7 +7,7 @@ Flitter language functions
 
 import cython
 
-from libc.math cimport isnan, floor, round, sin, cos, sqrt
+from libc.math cimport isnan, floor, round, sin, cos, sqrt, exp
 
 from ..model cimport VectorLike, Vector, null_, true_
 
@@ -86,14 +86,44 @@ def length(Vector xs not None):
     return ys
 
 
+def sinv(Vector theta not None):
+    cdef Vector ys = Vector.__new__(Vector)
+    cdef double th, y
+    for i in range(len(theta.values)):
+        th = theta.values[i] * TwoPI
+        y = sin(th)
+        ys.values.append(y)
+    return ys
+
+
+def cosv(Vector theta not None):
+    cdef Vector ys = Vector.__new__(Vector)
+    cdef double th, y
+    for i in range(len(theta.values)):
+        th = theta.values[i] * TwoPI
+        y = cos(th)
+        ys.values.append(y)
+    return ys
+
+
 def polar(Vector theta not None):
-    cdef Vector xy = Vector.__new__(Vector)
-    cdef float th
-    if len(theta.values) == 1:
-        th = theta.values[0] * TwoPI
-        xy.values.append(cos(th))
-        xy.values.append(sin(th))
-    return xy
+    cdef Vector xys = Vector.__new__(Vector)
+    cdef double th
+    for i in range(len(theta.values)):
+        th = theta.values[i] * TwoPI
+        xys.values.append(cos(th))
+        xys.values.append(sin(th))
+    return xys
+
+
+def expv(Vector xs not None):
+    cdef Vector ys = Vector.__new__(Vector)
+    cdef double x, y
+    for i in range(len(xs.values)):
+        x = xs.values[i]
+        y = exp(x)
+        ys.values.append(y)
+    return ys
 
 
 def sine(Vector xs not None):
@@ -321,7 +351,10 @@ FUNCTIONS = {
     'beta': Vector((Beta,)),
     'normal': Vector((Normal,)),
     'len': Vector((length,)),
+    'sin': Vector((sinv,)),
+    'cos': Vector((cosv,)),
     'polar': Vector((polar,)),
+    'exp': Vector((expv,)),
     'sine': Vector((sine,)),
     'bounce': Vector((bounce,)),
     'sharkfin': Vector((sharkfin,)),
