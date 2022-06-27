@@ -45,9 +45,9 @@ class SceneNode:
 
     def update(self, node, **kwargs):
         references = kwargs.setdefault('references', {})
-        node_id = node.get('id')
-        if node_id is not None:
-            references[node_id.as_string()] = self
+        node_id = node['id'].as_string() if 'id' in node else None
+        if node_id:
+            references[node_id] = self
         resized = False
         width, height = node.get('size', 2, int, (512, 512))
         if width != self.width or height != self.height:
@@ -91,9 +91,8 @@ class Reference(SceneNode):
         return self._reference.texture if self._reference is not None else None
 
     def update(self, node, references=None, **kwargs):
-        node_id = node.get('id')
-        reference = references.get(node_id.as_string()) if references is not None and node_id is not None else None
-        self._reference = reference
+        node_id = node['id'].as_string() if 'id' in node else None
+        self._reference = references.get(node_id) if references is not None and node_id else None
 
     def destroy(self):
         self._reference = None
