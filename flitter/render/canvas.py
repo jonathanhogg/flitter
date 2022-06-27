@@ -291,14 +291,16 @@ def make_image_filter(node, paint):
     sub_filters = []
     for child in node.children:
         image_filter = make_image_filter(child, paint)
-        if image_filter is not None:
+        if image_filter is not False:
             sub_filters.append(image_filter)
 
     match node.kind:
+        case "source":
+            return None
+
         case "blend":
-            if len(sub_filters) in (1, 2):
-                background = sub_filters[0] if len(sub_filters) == 2 else None
-                foreground = sub_filters[-1]
+            if len(sub_filters) == 2:
+                background, foreground = sub_filters
                 ratio = node.get('ratio', 1, float)
                 if ratio is not None:
                     coefficients = (0, 1-ratio, ratio, 0)
@@ -312,38 +314,33 @@ def make_image_filter(node, paint):
 
         case "blur":
             radius = node.get('radius', 2, float)
-            if radius is not None:
-                input_filter = sub_filters[0] if len(sub_filters) == 1 else None
-                return skia.ImageFilters.Blur(*radius, skia.TileMode.kClamp, input=input_filter)
+            if radius is not None and len(sub_filters) == 1:
+                return skia.ImageFilters.Blur(*radius, skia.TileMode.kClamp, input=sub_filters[0])
 
         case "shadow":
             radius = node.get('radius', 2, float)
-            if radius is not None:
+            if radius is not None and len(sub_filters) == 1:
                 offset = node.get('offset', 2, float, (0, 0))
                 color = get_color(node, paint.getColor4f())
                 shadow_only = node.get('shadow_only', 1, bool, False)
-                input_filter = sub_filters[0] if len(sub_filters) == 1 else None
                 if shadow_only:
-                    return skia.ImageFilters.DropShadowOnly(*offset, *radius, color.toColor(), input=input_filter)
-                return skia.ImageFilters.DropShadow(*offset, *radius, color.toColor(), input=input_filter)
+                    return skia.ImageFilters.DropShadowOnly(*offset, *radius, color.toColor(), input=sub_filters[0])
+                return skia.ImageFilters.DropShadow(*offset, *radius, color.toColor(), input=sub_filters[0])
 
         case "offset":
             offset = node.get('offset', 2, float)
-            if offset is not None:
-                input_filter = sub_filters[0] if len(sub_filters) == 1 else None
-                return skia.ImageFilters.Offset(*offset, input=input_filter)
+            if offset is not None and len(sub_filters) == 1:
+                return skia.ImageFilters.Offset(*offset, input=sub_filters[0])
 
         case "dilate":
             radius = node.get('radius', 2, float)
-            if radius is not None:
-                input_filter = sub_filters[0] if len(sub_filters) == 1 else None
-                return skia.ImageFilters.Dilate(*radius, input=input_filter)
+            if radius is not None and len(sub_filters) == 1:
+                return skia.ImageFilters.Dilate(*radius, input=sub_filters[0])
 
         case "erode":
             radius = node.get('radius', 2, float)
-            if radius is not None:
-                input_filter = sub_filters[0] if len(sub_filters) == 1 else None
-                return skia.ImageFilters.Erode(*radius, input=input_filter)
+            if radius is not None and len(sub_filters) == 1:
+                return skia.ImageFilters.Erode(*radius, input=sub_filters[0])
 
         case "paint":
             paint = skia.Paint(paint)
@@ -352,17 +349,16 @@ def make_image_filter(node, paint):
 
         case "color_matrix":
             matrix = node.get('matrix', 20, float)
-            if matrix is None:
+            if matrix is None and len(sub_filters) == 1:
                 red = node.get('red', 5, float, [1, 0, 0, 0, 0])
                 green = node.get('green', 5, float, [0, 1, 0, 0, 0])
                 blue = node.get('blue', 5, float, [0, 0, 1, 0, 0])
                 alpha = node.get('alpha', 5, float, [0, 0, 0, 1, 0])
                 matrix = red + green + blue + alpha
             color_filter = skia.ColorFilters.Matrix(matrix)
-            input_filter = sub_filters[0] if len(sub_filters) == 1 else None
-            return skia.ImageFilters.ColorFilter(color_filter, input=input_filter)
+            return skia.ImageFilters.ColorFilter(color_filter, input=sub_filters[0])
 
-    return None
+    return False
 
 
 def draw(node, ctx, paint=None, font=None, path=None):
@@ -542,11 +538,12 @@ def draw(node, ctx, paint=None, font=None, path=None):
 
         case _:
             shader = make_shader(node, paint)
-            if shader is not None:
+            if shader:
                 paint.setShader(shader)
-            image_filter = make_image_filter(node, paint)
-            if image_filter is not None:
-                paint.setImageFilter(image_filter)
+            else:
+                image_filter = make_image_filter(node, paint)
+                if image_filter:
+                    paint.setImageFilter(image_filter)
 
     if _RecordStats:
         duration = time.time() - start
