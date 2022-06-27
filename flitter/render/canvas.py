@@ -298,28 +298,27 @@ def make_image_filter(node, paint):
         case "source":
             return None
 
-        case "blend":
-            if len(sub_filters) == 2:
-                background, foreground = sub_filters
-                ratio = node.get('ratio', 1, float)
-                if ratio is not None:
-                    coefficients = (0, 1-ratio, ratio, 0)
-                else:
-                    coefficients = node.get('coefficients', 4, float)
-                if coefficients is not None:
-                    return skia.ImageFilters.Arithmetic(*coefficients, True, background, foreground)
-                mode = node.get('mode', 1, str, "").upper()
-                if mode in Composite.__members__:
-                    return skia.ImageFilters.Xfermode(skia.BlendMode(Composite.__members__[mode]), background, foreground)
+        case "blend" if len(sub_filters) == 2:
+            background, foreground = sub_filters
+            ratio = node.get('ratio', 1, float)
+            if ratio is not None:
+                coefficients = (0, 1-ratio, ratio, 0)
+            else:
+                coefficients = node.get('coefficients', 4, float)
+            if coefficients is not None:
+                return skia.ImageFilters.Arithmetic(*coefficients, True, background, foreground)
+            mode = node.get('mode', 1, str, "").upper()
+            if mode in Composite.__members__:
+                return skia.ImageFilters.Xfermode(skia.BlendMode(Composite.__members__[mode]), background, foreground)
 
-        case "blur":
+        case "blur" if len(sub_filters) == 1:
             radius = node.get('radius', 2, float)
-            if radius is not None and len(sub_filters) == 1:
+            if radius is not None:
                 return skia.ImageFilters.Blur(*radius, skia.TileMode.kClamp, input=sub_filters[0])
 
-        case "shadow":
+        case "shadow" if len(sub_filters) == 1:
             radius = node.get('radius', 2, float)
-            if radius is not None and len(sub_filters) == 1:
+            if radius is not None:
                 offset = node.get('offset', 2, float, (0, 0))
                 color = get_color(node, paint.getColor4f())
                 shadow_only = node.get('shadow_only', 1, bool, False)
@@ -327,19 +326,19 @@ def make_image_filter(node, paint):
                     return skia.ImageFilters.DropShadowOnly(*offset, *radius, color.toColor(), input=sub_filters[0])
                 return skia.ImageFilters.DropShadow(*offset, *radius, color.toColor(), input=sub_filters[0])
 
-        case "offset":
+        case "offset" if len(sub_filters) == 1:
             offset = node.get('offset', 2, float)
-            if offset is not None and len(sub_filters) == 1:
+            if offset is not None:
                 return skia.ImageFilters.Offset(*offset, input=sub_filters[0])
 
-        case "dilate":
+        case "dilate" if len(sub_filters) == 1:
             radius = node.get('radius', 2, float)
-            if radius is not None and len(sub_filters) == 1:
+            if radius is not None:
                 return skia.ImageFilters.Dilate(*radius, input=sub_filters[0])
 
-        case "erode":
+        case "erode" if len(sub_filters) == 1:
             radius = node.get('radius', 2, float)
-            if radius is not None and len(sub_filters) == 1:
+            if radius is not None:
                 return skia.ImageFilters.Erode(*radius, input=sub_filters[0])
 
         case "paint":
@@ -347,18 +346,83 @@ def make_image_filter(node, paint):
             set_styles(node, paint=paint)
             return skia.ImageFilters.Paint(paint)
 
-        case "color_matrix":
+        case "color_matrix" if len(sub_filters) == 1:
             matrix = node.get('matrix', 20, float)
-            if matrix is None and len(sub_filters) == 1:
+            if matrix is None and node.keys() & {'red', 'green', 'blue', 'alpha'}:
                 red = node.get('red', 5, float, [1, 0, 0, 0, 0])
                 green = node.get('green', 5, float, [0, 1, 0, 0, 0])
                 blue = node.get('blue', 5, float, [0, 0, 1, 0, 0])
                 alpha = node.get('alpha', 5, float, [0, 0, 0, 1, 0])
                 matrix = red + green + blue + alpha
-            color_filter = skia.ColorFilters.Matrix(matrix)
-            return skia.ImageFilters.ColorFilter(color_filter, input=sub_filters[0])
+            if matrix is None and node.keys() & {'scale', 'offset'}:
+                scale = node.get('scale', 3, float, [1, 1, 1])
+                offset = node.get('offset', 3, float, [0, 0, 0])
+                matrix = [scale[0], 0, 0, 0, offset[0],
+                          0, scale[1], 0, 0, offset[1],
+                          0, 0, scale[2], 0, offset[2],
+                          0, 0, 0, 1, 0]
+            if matrix is None and node.keys() & {'brightness', 'contrast'}:
+                brightness = node.get('brightness', 1, float, 0)
+                contrast = node.get('contrast', 1, float, 0) + 1
+                offset = brightness + (1 - contrast) / 2
+                matrix = [contrast, 0, 0, 0, offset,
+                          0, contrast, 0, 0, offset,
+                          0, 0, contrast, 0, offset,
+                          0, 0, 0, 1, 0]
+            if matrix is not None:
+                color_filter = skia.ColorFilters.Matrix(matrix)
+                return skia.ImageFilters.ColorFilter(color_filter, input=sub_filters[0])
 
     return False
+
+
+def make_path_effect(node):
+    sub_path_effects = []
+    for child in node.children:
+        path_effect = make_path_effect(child)
+        if path_effect is not False:
+            sub_path_effects.append(path_effect)
+
+    match node.kind:
+        case "dash":
+            intervals = node.get('intervals', 0, float)
+            if intervals:
+                offset = node.get('offset', 1, float, 0)
+                return skia.DashPathEffect.Make(intervals, offset)
+
+        case "round_corners":
+            radius = node.get('radius', 1, float)
+            if radius:
+                return skia.CornerPathEffect.Make(radius)
+
+        case "randomize":
+            length = node.get('length', 1, float)
+            deviation = node.get('deviation', 1, float)
+            seed = node.get('seed', 1, int, 0)
+            if length and deviation:
+                return skia.DiscretePathEffect.Make(length, deviation, seed)
+
+        case "path_matrix":
+            matrix = node.get('matrix', 9, float)
+            if matrix is None and node.keys() & {'scale', 'rotate', 'translate'}:
+                scale = node.get('scale', 2, float)
+                matrix = skia.Matrix.Scale(*scale) if scale else skia.Matrix.I()
+                rotate = node.get('rotate', 1, float)
+                if rotate:
+                    matrix = skia.Matrix.Concat(skia.Matrix.RotateDeg(rotate * 360), matrix)
+                translate = node.get('translate', 2, float)
+                if translate:
+                    matrix = skia.Matrix.Concat(skia.Matrix.Translate(*translate), matrix)
+            if matrix is not None:
+                return skia.MatrixPathEffect.Make(skia.Matrix.MakeAll(*matrix))
+
+        case "sum" if len(sub_path_effects) == 2:
+            return skia.PathEffect.MakeSum(*sub_path_effects)
+
+        case "compose" if len(sub_path_effects) == 2:
+            return skia.PathEffect.MakeCompose(*sub_path_effects)
+
+    return None
 
 
 def draw(node, ctx, paint=None, font=None, path=None):
@@ -422,23 +486,23 @@ def draw(node, ctx, paint=None, font=None, path=None):
                 point = node.get('point', 2, float, (0, 0))
                 path.addOval(skia.Rect(point[0]-radius[0], point[1]-radius[1], point[0]+radius[0], point[1]+radius[1]))
 
-        case "draw":
+        case "line":
             points = node.get('points', 0, float)
-            if points is not None:
-                smooth = node.get('smooth', 1, float, 0)
+            if points:
+                curve = node.get('curve', 1, float, 0)
                 n = len(points) // 2
                 last_mid_x = last_mid_y = last_x = last_y = None
                 for i in range(n):
                     x, y = points[i*2], points[i*2+1]
                     if i == 0:
                         path.moveTo(x, y)
-                    elif smooth <= 0:
+                    elif curve <= 0:
                         path.lineTo(x, y)
                     else:
                         mid_x, mid_y = (last_x + x) / 2, (last_y + y) / 2
                         if i == 1:
                             path.lineTo(mid_x, mid_y)
-                        elif smooth >= 0.5 or turn_angle(last_mid_x, last_mid_y, last_x, last_y, mid_x, mid_y) < smooth:
+                        elif curve >= 0.5 or turn_angle(last_mid_x, last_mid_y, last_x, last_y, mid_x, mid_y) <= curve:
                             path.quadTo(last_x, last_y, mid_x, mid_y)
                         else:
                             path.lineTo(last_x, last_y)
@@ -544,6 +608,10 @@ def draw(node, ctx, paint=None, font=None, path=None):
                 image_filter = make_image_filter(node, paint)
                 if image_filter:
                     paint.setImageFilter(image_filter)
+                else:
+                    path_effect = make_path_effect(node)
+                    if path_effect:
+                        paint.setPathEffect(path_effect)
 
     if _RecordStats:
         duration = time.time() - start
