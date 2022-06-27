@@ -367,7 +367,7 @@ class Controller:
                     housekeeping -= delay
                 housekeeping += self.counter.clock()
 
-                if len(frames) > 1 and frames[-1] - frames[0] > 2:
+                if len(frames) > 1 and frames[-1] - frames[0] > 5:
                     nframes = len(frames) - 1
                     fps = nframes / (frames[-1] - frames[0])
                     Log.info("%.1ffps; per frame execution %.1fms, render %.1fms, housekeeping %.1fms",
