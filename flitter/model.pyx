@@ -218,6 +218,10 @@ cdef class Vector(VectorLike):
     cpdef Vector add(self, Vector other):
         cdef Vector result = Vector.__new__(Vector)
         cdef int n = len(self.values), m = len(other.values)
+        if m == 0:
+            return self
+        if n == 0:
+            return other
         if n == m:
             for i in range(n):
                 result.values.append(self.values[i] + other.values[i])
@@ -234,6 +238,10 @@ cdef class Vector(VectorLike):
     cpdef Vector sub(self, Vector other):
         cdef Vector result = Vector.__new__(Vector)
         cdef int n = len(self.values), m = len(other.values)
+        if m == 0:
+            return self
+        if n == 0:
+            return other.neg()
         if n == m:
             for i in range(n):
                 result.values.append(self.values[i] - other.values[i])
