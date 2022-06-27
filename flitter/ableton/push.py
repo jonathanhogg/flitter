@@ -21,7 +21,7 @@ from .constants import (MIDI, Command, Animation, Control, Note, Encoder, TouchS
 from .events import (PadPressed, PadHeld, PadReleased, ButtonPressed, ButtonReleased,
                      EncoderTouched, EncoderTurned, EncoderReleased, TouchStripTouched,
                      TouchStripDragged, TouchStripReleased, MenuButtonPressed, MenuButtonReleased)
-from .palette import SimplePalete
+from .palette import SimplePalette
 
 
 Log = logging.getLogger(__name__)
@@ -38,7 +38,7 @@ class Push2:
     FRAME_HEADER = bytes([0xFF, 0xCC, 0xAA, 0x88, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
 
     def __init__(self, palette=None):
-        self._palette = palette if palette is not None else SimplePalete()
+        self._palette = palette if palette is not None else SimplePalette()
         self._screen_data = bytearray(self.SCREEN_HEIGHT * self.SCREEN_STRIDE * 2)
         self._screen_array = np.ndarray(buffer=self._screen_data, shape=(self.SCREEN_HEIGHT, self.SCREEN_STRIDE), dtype='uint16')
         self._surface_array = np.zeros((self.SCREEN_HEIGHT, self.SCREEN_WIDTH, 4), dtype='uint8')

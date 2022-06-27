@@ -2,7 +2,7 @@
 Ableton Push OSC controller for Flitter
 """
 
-# pylama:ignore=W0601,C0103,R0912,R0915,R0914,R0902
+# pylama:ignore=W0601,C0103,R0912,R0915,R0914,R0902,C901
 
 import argparse
 import asyncio
@@ -17,6 +17,7 @@ from ..ableton.constants import Encoder, Control, BUTTONS
 from ..ableton.events import (ButtonPressed, ButtonReleased, PadPressed, PadHeld, PadReleased,
                               EncoderTurned, EncoderTouched, EncoderReleased, MenuButtonReleased)
 from ..ableton.push import Push2
+from ..ableton.palette import PrimaryPalette
 from .osc import OSCSender, OSCReceiver, OSCBundle
 
 
@@ -140,7 +141,7 @@ class Controller:
             self.updated.set()
 
     async def run(self):
-        self.push = Push2()
+        self.push = Push2(palette=PrimaryPalette())
         self.push.start()
         for n in range(64):
             self.push.set_pad_rgb(n, 0, 0, 0)
