@@ -60,6 +60,7 @@ inline_binding: NAME "=" conditional -> binding
 
 ?or : and
     | or "or" and -> logical_or
+    | or "xor" and -> logical_xor
 
 ?and : not
      | and "and" not -> logical_and

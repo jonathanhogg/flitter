@@ -70,6 +70,7 @@ class FlitterTransformer(Transformer):
     logical_and = tree.And
     logical_not = tree.Not
     logical_or = tree.Or
+    logical_xor = tree.Xor
     lookup = tree.Lookup
     loop = tree.For
     lt = tree.LessThan

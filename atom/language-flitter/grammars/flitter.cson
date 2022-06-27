@@ -41,7 +41,7 @@ patterns: [
         name: "keyword.control.flow.flitter"
     }
     {
-        match: "\\b(and|not|or)\\b"
+        match: "\\b(and|not|or|xor)\\b"
         name: "keyword.operator.logical.flitter"
     }
     {

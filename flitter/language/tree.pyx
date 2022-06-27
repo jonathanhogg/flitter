@@ -294,6 +294,17 @@ cdef class Or(BinaryOperation):
         return left if left.istrue() else self.right.evaluate(context)
 
 
+cdef class Xor(BinaryOperation):
+    cpdef model.VectorLike evaluate(self, model.Context context):
+        cdef model.Vector left = self.left.evaluate(context)
+        cdef model.Vector right = self.right.evaluate(context)
+        if not left.istrue():
+            return right
+        if not right.istrue():
+            return left
+        return model.false_
+
+
 cdef class Slice(Expression):
     cdef readonly Expression expr
     cdef readonly Expression index
