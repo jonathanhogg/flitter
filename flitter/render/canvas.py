@@ -2,7 +2,7 @@
 Flitter drawing canvas based on Skia
 """
 
-# pylama:ignore=W0703,R0912,R0914,R0915,C0103,R0913,R0911,C901
+# pylama:ignore=W0703,R0912,R0914,R0915,C0103,R0913,R0911,C901,W0632
 
 import enum
 import logging
@@ -147,6 +147,8 @@ def get_color(node, default=None):
 def turn_angle(x0, y0, x1, y1, x2, y2):
     xa, ya, xb, yb = x1 - x0, y1 - y0, x2 - x1, y2 - y1
     la, lb = math.sqrt(xa*xa + ya*ya), math.sqrt(xb*xb + yb*yb)
+    if la == 0 or lb == 0:
+        return 0
     return math.acos(min(max(0, (xa*xb + ya*yb) / (la*lb)), 1)) / (2*math.pi)
 
 
@@ -425,7 +427,7 @@ def draw(node, ctx, paint=None, font=None, path=None):
                 path.addOval(skia.Rect(point[0]-radius[0], point[1]-radius[1], point[0]+radius[0], point[1]+radius[1]))
 
         case "draw":
-            points = node.get('points')
+            points = node.get('points', 0, float)
             if points is not None:
                 smooth = node.get('smooth', 1, float, 0)
                 n = len(points) // 2
@@ -440,12 +442,12 @@ def draw(node, ctx, paint=None, font=None, path=None):
                         mid_x, mid_y = (last_x + x) / 2, (last_y + y) / 2
                         if i == 1:
                             path.lineTo(mid_x, mid_y)
-                        elif turn_angle(last_mid_x, last_mid_y, last_x, last_y, mid_x, mid_y) < smooth:
+                        elif smooth >= 0.5 or turn_angle(last_mid_x, last_mid_y, last_x, last_y, mid_x, mid_y) < smooth:
                             path.quadTo(last_x, last_y, mid_x, mid_y)
                         else:
                             path.lineTo(last_x, last_y)
                             path.lineTo(mid_x, mid_y)
-                        if n == n-1:
+                        if i == n-1:
                             path.lineTo(x, y)
                         last_mid_x, last_mid_y = mid_x, mid_y
                     last_x, last_y = x, y
