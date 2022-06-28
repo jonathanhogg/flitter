@@ -20,12 +20,13 @@ parser.add_argument('--fullscreen', action='store_true', default=False, help="De
 parser.add_argument('--vsync', action='store_true', default=False, help="Default to winow vsync")
 parser.add_argument('--state', type=str, help="State save/restore file")
 parser.add_argument('--multiprocess', action='store_true', default=False, help="Use multiprocessing")
+parser.add_argument('--autoreset', type=float, help="Auto-reset state on idle")
 parser.add_argument('script', nargs='+', help="Script to execute")
 args = parser.parse_args()
 logging.basicConfig(level=logging.DEBUG if args.debug else (logging.INFO if args.verbose else logging.WARNING), stream=sys.stderr)
 
 controller = Controller('.', max_fps=args.throttle, screen=args.screen, fullscreen=args.fullscreen, vsync=args.vsync,
-                        state_file=args.state, multiprocess=args.multiprocess and not args.profile)
+                        state_file=args.state, multiprocess=args.multiprocess and not args.profile, autoreset=args.autoreset)
 for script in args.script:
     controller.load_page(script)
 controller.switch_to_page(0)

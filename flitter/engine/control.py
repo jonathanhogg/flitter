@@ -27,13 +27,15 @@ class Controller:
     SEND_PORT = 47177
     RECEIVE_PORT = 47178
 
-    def __init__(self, root_dir, max_fps=60, screen=0, fullscreen=False, vsync=False, state_file=None, multiprocess=True):
+    def __init__(self, root_dir, max_fps=60, screen=0, fullscreen=False, vsync=False, state_file=None, multiprocess=True, autoreset=None):
         self.root_dir = Path(root_dir)
         self.max_fps = max_fps
         self.screen = screen
         self.fullscreen = fullscreen
         self.vsync = vsync
         self.multiprocess = multiprocess
+        self.autoreset = autoreset
+        self.state_timestamp = None
         self.state_file = Path(state_file) if state_file is not None else None
         if self.state_file is not None and self.state_file.exists():
             Log.info("Recover state from state file: %s", self.state_file)
@@ -106,6 +108,7 @@ class Controller:
         if key not in self.state or value != self.state[key]:
             self.state[key] = value
             self.global_state_dirty = True
+            self.state_timestamp = self.counter.clock()
             Log.debug("State changed: %r = %r", key, value)
 
     def read(self, filename):
@@ -280,6 +283,16 @@ class Controller:
             self.enqueue_tempo()
             Log.info("Start counter, tempo %d, quantum %d", self.counter.tempo, self.counter.quantum)
 
+    def reset_state(self):
+        for key in [key for key in self.state.keys() if not (len(key) == 1 and key[0].startswith('_'))]:
+            del self.state[key]
+        for pad in self.pads.values():
+            pad.reset()
+        for encoder in self.encoders.values():
+            encoder.reset()
+        self.state_timestamp = None
+        self.global_state_dirty = True
+
     async def run(self):
         try:
             loop = asyncio.get_event_loop()
@@ -310,9 +323,10 @@ class Controller:
                 execution += self.counter.clock()
                 render -= self.counter.clock()
                 self.handle_pragmas(context.pragmas)
+                if self.autoreset and self.state_timestamp and self.counter.clock() > self.state_timestamp + self.autoreset:
+                    self.reset_state()
                 self.update_controls(context.graph)
                 self.update_windows(context.graph, clock=frame_time, beat=beat, delta=delta)
-                context = None
                 render += self.counter.clock()
 
                 housekeeping -= self.counter.clock()
@@ -333,6 +347,8 @@ class Controller:
                     if reload_task is not None:
                         reload_task.cancel()
                         reload_task = None
+                    if self.autoreset:
+                        self.reset_state()
                     self.switch_to_page(self.next_page)
                     self.next_page = None
                     count = gc.collect(2)
