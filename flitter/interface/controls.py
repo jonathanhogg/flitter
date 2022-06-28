@@ -2,7 +2,7 @@
 Flitter user interface controls
 """
 
-# pylama:ignore=R0902,R0903,R0912,R0914
+# pylama:ignore=R0902,R0903,R0912,R0914,C901
 
 import math
 
@@ -86,6 +86,7 @@ class Pad(TouchControl):
         super().__init__(number)
         self.toggle = None
         self.group = None
+        self.initial = None
         self.toggled = None
         self._toggled_beat = None
         self.pressure = None
@@ -104,6 +105,9 @@ class Pad(TouchControl):
             toggle = node.get('toggle', 1, bool, False)
             toggled_key = (*self.state, "toggled")
             toggled_beat_key = (*self.state, "toggled", "beat")
+            initial = node.get('initial', 1, bool, False)
+            if initial != self.initial:
+                self.initial = initial
             if toggle != self.toggle:
                 self.toggle = toggle
                 if not self.toggle and self.toggled:
@@ -111,9 +115,13 @@ class Pad(TouchControl):
                     self._toggled_beat = controller.counter.beat
                 self._can_toggle = False
                 changed = True
-            if self.toggled is None and toggled_key in controller:
-                self.toggled = bool(controller[toggled_key])
-                self._toggled_beat = controller[toggled_beat_key]
+            if self.toggle and self.toggled is None:
+                if toggled_key in controller:
+                    self.toggled = bool(controller[toggled_key])
+                    self._toggled_beat = controller[toggled_beat_key]
+                else:
+                    self.toggled = self.initial
+                    self._toggled_beat = 0
             group = tuple(node["group"]) if "group" in node else None
             if group != self.group:
                 self.group = group
@@ -164,6 +172,7 @@ class Pad(TouchControl):
         super().reset()
         self.toggle = None
         self.toggled = None
+        self.initial = None
         self._toggled_beat = None
         self.pressure = None
         self._pressure_beat = None
@@ -208,7 +217,7 @@ class Encoder(TouchControl):
             if initial != self.initial:
                 self.initial = initial
                 changed = True
-            decimals = node.get('decimals', 1, int, 1)
+            decimals = node.get('decimals', 1, float, 1)
             if decimals != self.decimals:
                 self.decimals = decimals
                 changed = True
@@ -224,14 +233,15 @@ class Encoder(TouchControl):
                     self._value_beat = controller[value_beat_key]
                 else:
                     self.value = self.initial
-                    self._value_beat = controller.counter.beat
-            value = self.value
+                    self._value_beat = 0
+            precision = 10**self.decimals
+            value = int(self.value * precision) / precision
             if value_key in controller:
                 alpha = math.exp(10 * -delta)
                 current_value = controller[value_key]
-                value = value * (1-alpha) + current_value * alpha
-                if math.isclose(value, self.value, rel_tol=1e-3, abs_tol=1e-3):
-                    value = self.value
+                new_value = value * (1-alpha) + current_value * alpha
+                if not math.isclose(new_value, value, rel_tol=1e-3, abs_tol=1e-3):
+                    value = new_value
             controller[value_key] = value
             controller[value_beat_key] = self._value_beat
         return changed

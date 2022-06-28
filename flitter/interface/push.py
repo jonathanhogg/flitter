@@ -8,6 +8,7 @@ import argparse
 import asyncio
 from dataclasses import dataclass
 import logging
+import math
 import sys
 
 import skia
@@ -44,7 +45,7 @@ class EncoderState:
     value: float
     lower: float
     upper: float
-    decimals: int
+    decimals: float
     percent: bool
 
 
@@ -257,7 +258,7 @@ class Controller:
                             font.setSize(14)
                             exponent = 10**state.decimals
                             value = int((state.value * 100 if state.percent else state.value) * exponent) / exponent
-                            text = f'{{:.{max(0, int(state.decimals))}f}}'.format(value)
+                            text = f'{{:.{max(0, int(math.ceil(state.decimals)))}f}}'.format(value)
                             if state.percent:
                                 text += '%'
                             width = font.measureText(text)
