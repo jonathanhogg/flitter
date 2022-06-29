@@ -54,7 +54,8 @@ class Controller:
     RECEIVE_TIMEOUT = 5
     RESET_TIMEOUT = 10
 
-    def __init__(self):
+    def __init__(self, tempo_control=True):
+        self.tempo_control = tempo_control
         self.push = None
         self.osc_sender = OSCSender('localhost', 47178)
         self.osc_receiver = OSCReceiver('localhost', 47177)
@@ -150,8 +151,9 @@ class Controller:
             self.push.set_menu_button_rgb(n, 0, 0, 0)
         for n in BUTTONS:
             self.push.set_button_white(n, 0)
-        self.push.set_button_white(Control.TAP_TEMPO, 1)
-        self.push.set_button_white(Control.SHIFT, 1)
+        if self.tempo_control:
+            self.push.set_button_white(Control.TAP_TEMPO, 1)
+            self.push.set_button_white(Control.SHIFT, 1)
         brightness = 1
         self.push.set_led_brightness(brightness)
         self.push.set_display_brightness(brightness)
@@ -201,16 +203,16 @@ class Controller:
                             self.touched_encoders.discard(event.number)
                             address = f'/encoder/{event.number}/released'
                             await self.osc_sender.send_message(address, event.timestamp)
-                        case EncoderTurned(number=Encoder.TEMPO):
+                        case EncoderTurned(number=Encoder.TEMPO) if self.tempo_control:
                             if shift_pressed:
                                 self.push.counter.quantum = max(2, self.push.counter.quantum + event.amount)
                             else:
                                 tempo = max(0.5, (round(self.push.counter.tempo * 2) + event.amount) / 2)
                                 self.push.counter.set_tempo(tempo, timestamp=event.timestamp)
                             await self.osc_sender.send_message('/tempo', self.push.counter.tempo, self.push.counter.quantum, self.push.counter.start)
-                        case ButtonPressed(number=Control.TAP_TEMPO):
+                        case ButtonPressed(number=Control.TAP_TEMPO) if self.tempo_control:
                             tap_tempo_pressed = True
-                        case ButtonReleased(number=Control.TAP_TEMPO):
+                        case ButtonReleased(number=Control.TAP_TEMPO) if self.tempo_control:
                             tap_tempo.apply(self.push.counter, event.timestamp, backslip_limit=1)
                             tap_tempo_pressed = False
                             await self.osc_sender.send_message('/tempo', self.push.counter.tempo, self.push.counter.quantum, self.push.counter.start)
@@ -232,8 +234,9 @@ class Controller:
                         canvas.clear(skia.ColorBLACK)
                         paint = skia.Paint(Color=skia.ColorWHITE, AntiAlias=True)
                         font = skia.Font(skia.Typeface("helvetica"), 20)
-                        canvas.drawSimpleText(f"BPM: {self.push.counter.tempo:5.1f}", 10, 150, font, paint)
-                        canvas.drawSimpleText(f"Quantum: {self.push.counter.quantum}", 130, 150, font, paint)
+                        if self.tempo_control:
+                            canvas.drawSimpleText(f"BPM: {self.push.counter.tempo:5.1f}", 10, 150, font, paint)
+                            canvas.drawSimpleText(f"Quantum: {self.push.counter.quantum}", 130, 150, font, paint)
                         for number, state in self.encoders.items():
                             canvas.save()
                             canvas.translate(120 * number, 0)
@@ -289,8 +292,9 @@ class Controller:
 parser = argparse.ArgumentParser(description="Flight Server")
 parser.add_argument('--debug', action='store_true', default=False, help="Debug logging")
 parser.add_argument('--verbose', action='store_true', default=False, help="Informational logging")
+parser.add_argument('--notempo', action='store_true', default=False, help="Disable tempo control")
 args = parser.parse_args()
 logging.basicConfig(level=logging.DEBUG if args.debug else (logging.INFO if args.verbose else logging.WARNING), stream=sys.stderr)
 
-controller = Controller()
+controller = Controller(tempo_control=not args.notempo)
 asyncio.run(controller.run())
