@@ -55,6 +55,9 @@ class Window:
         self.done.acquire()
         self.position = HEADER_SIZE
 
+    def purge(self):
+        pass
+
     def destroy(self):
         self.shared_memory.close()
         self.ready.close()
@@ -79,22 +82,24 @@ class Server:
             decode = 0
             draw = 0
             size = 0
-            frame_number = 0
+            nframes = 0
+            stats_time = time.monotonic()
             while True:
                 self.ready.acquire()
-                decode -= time.time()
+                decode -= time.monotonic()
                 end, = struct.unpack_from('>L', self.shared_memory.buf)
                 node, kwargs = pickle.loads(self.shared_memory.buf[HEADER_SIZE:end])
-                decode += time.time()
+                decode += time.monotonic()
                 self.done.release()
-                draw -= time.time()
+                draw -= time.monotonic()
                 self.window.update(node, **kwargs)
-                draw += time.time()
-                frame_number += 1
+                draw += time.monotonic()
+                nframes += 1
                 size += end - HEADER_SIZE
-                if frame_number % 120 == 0:
-                    Log.info("Render stats - decode %.1fms, draw %.1fms, data size %d bytes", decode/.120, draw/.120, size//120)
-                    decode = draw = size = 0
+                if time.monotonic() > stats_time + 5:
+                    Log.info("Render stats - decode %.1fms, draw %.1fms, data size %.0f bytes", 1000*decode/nframes, 1000*draw/nframes, 1000*size/nframes)
+                    nframes = decode = draw = size = 0
+                    stats_time += 5
         finally:
             self.shared_memory.close()
             self.ready.close()
