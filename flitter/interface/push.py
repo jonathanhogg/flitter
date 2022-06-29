@@ -45,6 +45,7 @@ class EncoderState:
     value: float
     lower: float
     upper: float
+    origin: float
     decimals: float
     percent: bool
 
@@ -249,10 +250,22 @@ class Controller:
                             paint.setStrokeWidth(2)
                             path.addArc(skia.Rect.MakeXYWH(20, 40, 80, 80), -240, 300)
                             canvas.drawPath(path, paint)
+                            start = 300 * (state.origin - state.lower) / (state.upper - state.lower)
+                            end = 300 * (state.value - state.lower) / (state.upper - state.lower)
+                            canvas.save()
+                            canvas.translate(60, 80)
+                            canvas.rotate(-240 + start)
+                            path = skia.Path()
+                            path.moveTo(26, 0)
+                            path.lineTo(44, 0)
+                            canvas.drawPath(path, paint)
+                            canvas.restore()
                             path = skia.Path()
                             paint.setStrokeWidth(12)
-                            sweep = 300 * (state.value - state.lower) / (state.upper - state.lower)
-                            path.addArc(skia.Rect.MakeXYWH(26, 46, 68, 68), -240, sweep)
+                            if end > start:
+                                path.addArc(skia.Rect.MakeXYWH(26, 46, 68, 68), -240 + start, end - start)
+                            else:
+                                path.addArc(skia.Rect.MakeXYWH(26, 46, 68, 68), -240 + end, start - end)
                             canvas.drawPath(path, paint)
                             path = skia.Path()
                             path.addRect(2, 2, 116, 26)

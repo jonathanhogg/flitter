@@ -188,8 +188,8 @@ class Controller:
         if deleted:
             self.queue.append(OSCMessage(address))
         else:
-            self.queue.append(OSCMessage(address, encoder.name, *encoder.color, encoder.touched,
-                                         encoder.value, encoder.lower, encoder.upper, encoder.decimals, encoder.percent))
+            self.queue.append(OSCMessage(address, encoder.name, *encoder.color, encoder.touched, encoder.value,
+                                         encoder.lower, encoder.upper, encoder.origin, encoder.decimals, encoder.percent))
 
     def enqueue_tempo(self):
         self.queue.append(OSCMessage('/tempo', self.counter.tempo, self.counter.quantum, self.counter.start))

@@ -189,6 +189,7 @@ class Encoder(TouchControl):
         self.initial = None
         self.lower = None
         self.upper = None
+        self.origin = None
         self.value = None
         self.decimals = None
         self.percent = None
@@ -216,6 +217,10 @@ class Encoder(TouchControl):
             initial = node.get('initial', 1, float, self.lower)
             if initial != self.initial:
                 self.initial = initial
+                changed = True
+            origin = node.get('origin', 1, float, self.lower)
+            if origin != self.origin:
+                self.origin = origin
                 changed = True
             decimals = node.get('decimals', 1, float, 1)
             if decimals != self.decimals:
