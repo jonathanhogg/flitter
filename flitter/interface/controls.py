@@ -239,7 +239,7 @@ class Encoder(TouchControl):
                 else:
                     self.value = self.initial
                     self._value_beat = 0
-            precision = 10**self.decimals
+            precision = 10**(self.decimals + (2 if self.percent else 1))
             value = int(self.value * precision) / precision
             if value_key in controller:
                 alpha = math.exp(10 * -delta)
