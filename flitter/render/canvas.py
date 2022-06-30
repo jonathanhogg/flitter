@@ -139,8 +139,8 @@ class FilterQuality(enum.IntEnum):
 
 
 def get_color(node, default=None):
-    color = node.get('color', 0, float)
-    if color is not None and len(color) in (3, 4):
+    color = node.get('color', 3, float) or node.get('color', 4, float)
+    if color is not None:
         return skia.Color4f(*color)
     return default
 
@@ -163,7 +163,7 @@ def set_styles(node, ctx=None, paint=None, font=None):
             case 'color':
                 color = value.match(3, float) or value.match(4, float)
                 if color is not None and paint is not None:
-                    paint.setColor4f(skia.Color4f(*color))
+                    paint.setShader(skia.Shaders.Color(skia.Color4f(*color)))
             case 'stroke_width':
                 stroke_width = value.match(1, float)
                 if stroke_width is not None and paint is not None:
