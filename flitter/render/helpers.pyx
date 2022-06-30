@@ -1,4 +1,5 @@
 
+import cython
 import skia
 
 from libc.math cimport acos, sqrt
@@ -15,7 +16,9 @@ cdef double turn_angle(float x0, float y0, float x1, float y1, float x2, float y
     return acos(min(max(0, (xa*xb + ya*yb) / (la*lb)), 1)) / TwoPI
 
 
-def line_path(list points, double curve):
+@cython.boundscheck(False)
+@cython.wraparound(False)
+def line_path(list points not None, double curve):
     cdef int i, n=len(points)
     cdef double last_mid_x, last_mid_y, last_x, last_y, x, y
     builder = skia.PathBuilder()
