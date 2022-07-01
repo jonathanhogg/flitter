@@ -305,6 +305,7 @@ class Controller:
             last = self.counter.beat_at_time(frame_time)
             dump_time = frame_time
             execution = render = housekeeping = 0
+            performance = 1
             gc.disable()
             while True:
                 frames.append(frame_time)
@@ -314,7 +315,7 @@ class Controller:
                 delta = beat - last
                 last = beat
                 variables = {'beat': Vector((beat,)), 'quantum': Vector((self.counter.quantum,)), 'delta': Vector((delta,)),
-                             'clock': Vector((frame_time,)), 'read': Vector((self.read,))}
+                             'clock': Vector((frame_time,)), 'read': Vector((self.read,)), 'performance': Vector((performance,))}
                 context = Context(variables=variables, state=self.state)
                 for expr in self.tree.expressions if isinstance(self.tree, Sequence) else [self.tree]:
                     for value in expr.evaluate(context):
@@ -351,6 +352,7 @@ class Controller:
                         self.reset_state()
                     self.switch_to_page(self.next_page)
                     self.next_page = None
+                    performance = 1
                     count = gc.collect(2)
                     Log.debug("Collected %d objects (full collection)", count)
 
@@ -373,21 +375,24 @@ class Controller:
 
                 frame_time += 1 / self.max_fps
                 now = self.counter.clock()
-                if now > frame_time:
+                if frame_time > now:
+                    delay = frame_time - now
+                    await asyncio.sleep(delay)
+                    housekeeping -= delay
+                    if delay > 0.05/self.max_fps:
+                        performance = min(1.5, performance * 1.001)
+                else:
                     Log.debug("Slow frame - %.0fms", (now - frame_time + 1/self.max_fps) * 1000)
                     await asyncio.sleep(0)
                     frame_time = self.counter.clock()
-                else:
-                    delay = max(0, frame_time - now)
-                    await asyncio.sleep(delay)
-                    housekeeping -= delay
+                    performance = max(0.5, performance * 0.999)
                 housekeeping += self.counter.clock()
 
                 if len(frames) > 1 and frames[-1] - frames[0] > 5:
                     nframes = len(frames) - 1
                     fps = nframes / (frames[-1] - frames[0])
-                    Log.info("%.1ffps; per frame execution %.1fms, render %.1fms, housekeeping %.1fms",
-                             fps, 1000*execution/nframes, 1000*render/nframes, 1000*housekeeping/nframes)
+                    Log.info("%.1ffps; /frame execute %.1fms, render %.1fms, housekeep %.1fms; perf %.2f",
+                             fps, 1000*execution/nframes, 1000*render/nframes, 1000*housekeeping/nframes, performance)
                     frames = frames[-1:]
                     execution = render = housekeeping = 0
         finally:
