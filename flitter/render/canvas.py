@@ -5,6 +5,7 @@ Flitter drawing canvas based on Skia
 # pylama:ignore=W0703,R0912,R0914,R0915,C0103,R0913,R0911,C901,W0632
 
 import enum
+import functools
 import logging
 from pathlib import Path
 import time
@@ -295,17 +296,16 @@ def make_image_filter(node, paint):
             return None
 
         case "blend" if len(sub_filters) == 2:
-            background, foreground = sub_filters
-            ratio = node.get('ratio', 1, float)
-            if ratio is not None:
-                coefficients = (0, 1-ratio, ratio, 0)
-            else:
-                coefficients = node.get('coefficients', 4, float)
+            coefficients = node.get('coefficients', 4, float)
+            if coefficients is None:
+                ratio = node.get('ratio', 1, float)
+                if ratio is not None:
+                    coefficients = (0, 1-ratio, ratio, 0)
             if coefficients is not None:
-                return skia.ImageFilters.Arithmetic(*coefficients, True, background, foreground)
+                return skia.ImageFilters.Arithmetic(*coefficients, True, *sub_filters)
             mode = node.get('mode', 1, str, "").upper()
             if mode in Composite.__members__:
-                return skia.ImageFilters.Xfermode(skia.BlendMode(Composite.__members__[mode]), background, foreground)
+                return skia.ImageFilters.Xfermode(skia.BlendMode(Composite.__members__[mode]), *sub_filters)
 
         case "blur" if len(sub_filters) <= 1:
             input_filter = sub_filters[0] if len(sub_filters) == 1 else None
@@ -363,13 +363,15 @@ def make_image_filter(node, paint):
                           0, scale[1], 0, 0, offset[1],
                           0, 0, scale[2], 0, offset[2],
                           0, 0, 0, 1, 0]
-            if matrix is None and node.keys() & {'brightness', 'contrast'}:
+            if matrix is None and node.keys() & {'brightness', 'contrast', 'saturation'}:
                 brightness = node.get('brightness', 1, float, 0)
-                contrast = node.get('contrast', 1, float, 0) + 1
+                contrast = node.get('contrast', 1, float, 1)
+                saturation = node.get('saturation', 1, float, 1)
                 offset = brightness + (1 - contrast) / 2
-                matrix = [contrast, 0, 0, 0, offset,
-                          0, contrast, 0, 0, offset,
-                          0, 0, contrast, 0, offset,
+                rs, gs, bs = (1-saturation)*0.2126, (1-saturation)*0.7152, (1-saturation)*0.0722
+                matrix = [contrast*(rs+saturation), rs, rs, 0, offset,
+                          gs, contrast*(gs+saturation), gs, 0, offset,
+                          bs, bs, contrast*(bs+saturation), 0, offset,
                           0, 0, 0, 1, 0]
             if matrix is not None:
                 color_filter = skia.ColorFilters.Matrix(matrix)
@@ -386,25 +388,28 @@ def make_path_effect(node):
             sub_path_effects.append(path_effect)
 
     match node.kind:
-        case "dash":
+        case "dash" if len(sub_path_effects) <= 1:
             intervals = node.get('intervals', 0, float)
             if intervals:
                 offset = node.get('offset', 1, float, 0)
-                return skia.DashPathEffect.Make(intervals, offset)
+                path_effect = skia.DashPathEffect.Make(intervals, offset)
+                return path_effect if not sub_path_effects else skia.PathEffect.MakeCompose(path_effect, sub_path_effects[0])
 
-        case "round_corners":
+        case "round_corners" if len(sub_path_effects) <= 1:
             radius = node.get('radius', 1, float)
             if radius:
-                return skia.CornerPathEffect.Make(radius)
+                path_effect = skia.CornerPathEffect.Make(radius)
+                return path_effect if not sub_path_effects else skia.PathEffect.MakeCompose(path_effect, sub_path_effects[0])
 
-        case "randomize":
+        case "jitter" if len(sub_path_effects) <= 1:
             length = node.get('length', 1, float)
             deviation = node.get('deviation', 1, float)
             seed = node.get('seed', 1, int, 0)
             if length and deviation:
-                return skia.DiscretePathEffect.Make(length, deviation, seed)
+                path_effect = skia.DiscretePathEffect.Make(length, deviation, seed)
+                return path_effect if not sub_path_effects else skia.PathEffect.MakeCompose(path_effect, sub_path_effects[0])
 
-        case "path_matrix":
+        case "path_matrix" if len(sub_path_effects) <= 1:
             matrix = node.get('matrix', 9, float)
             if matrix is None and node.keys() & {'scale', 'rotate', 'translate'}:
                 scale = node.get('scale', 2, float)
@@ -416,13 +421,11 @@ def make_path_effect(node):
                 if translate:
                     matrix = skia.Matrix.Concat(skia.Matrix.Translate(*translate), matrix)
             if matrix is not None:
-                return skia.MatrixPathEffect.Make(skia.Matrix.MakeAll(*matrix))
+                path_effect = skia.MatrixPathEffect.Make(skia.Matrix.MakeAll(*matrix))
+                return path_effect if not sub_path_effects else skia.PathEffect.MakeCompose(path_effect, sub_path_effects[0])
 
-        case "sum" if len(sub_path_effects) == 2:
-            return skia.PathEffect.MakeSum(*sub_path_effects)
-
-        case "compose" if len(sub_path_effects) == 2:
-            return skia.PathEffect.MakeCompose(*sub_path_effects)
+        case "sum" if len(sub_path_effects) >= 2:
+            return functools.reduce(skia.PathEffect.MakeSum, sub_path_effects)
 
     return None
 
