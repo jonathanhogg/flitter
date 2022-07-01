@@ -163,7 +163,10 @@ def set_styles(node, ctx=None, paint=None, font=None):
             case 'color':
                 color = value.match(3, float) or value.match(4, float)
                 if color is not None and paint is not None:
-                    paint.setShader(skia.Shaders.Color(skia.Color4f(*color)))
+                    color = skia.Color4f(*color)
+                    paint.setColor4f(color)
+                    if paint.getShader():
+                        paint.setShader(skia.Shaders.Color(color))
             case 'stroke_width':
                 stroke_width = value.match(1, float)
                 if stroke_width is not None and paint is not None:
