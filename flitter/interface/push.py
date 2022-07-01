@@ -55,8 +55,9 @@ class Controller:
     RECEIVE_TIMEOUT = 5
     RESET_TIMEOUT = 10
 
-    def __init__(self, tempo_control=True):
+    def __init__(self, tempo_control=True, fader_control=True):
         self.tempo_control = tempo_control
+        self.fader_control = fader_control
         self.push = None
         self.osc_sender = OSCSender('localhost', 47178)
         self.osc_receiver = OSCReceiver('localhost', 47177)
@@ -217,7 +218,7 @@ class Controller:
                             tap_tempo.apply(self.push.counter, event.timestamp, backslip_limit=1)
                             tap_tempo_pressed = False
                             await self.osc_sender.send_message('/tempo', self.push.counter.tempo, self.push.counter.quantum, self.push.counter.start)
-                        case EncoderTurned(number=Encoder.MASTER):
+                        case EncoderTurned(number=Encoder.MASTER) if self.fader_control:
                             brightness = min(max(0, brightness + event.amount / 200), 1)
                             self.push.set_led_brightness(brightness)
                             self.push.set_display_brightness(brightness)
@@ -306,8 +307,9 @@ parser = argparse.ArgumentParser(description="Flight Server")
 parser.add_argument('--debug', action='store_true', default=False, help="Debug logging")
 parser.add_argument('--verbose', action='store_true', default=False, help="Informational logging")
 parser.add_argument('--notempo', action='store_true', default=False, help="Disable tempo control")
+parser.add_argument('--nofader', action='store_true', default=False, help="Disable fader control")
 args = parser.parse_args()
 logging.basicConfig(level=logging.DEBUG if args.debug else (logging.INFO if args.verbose else logging.WARNING), stream=sys.stderr)
 
-controller = Controller(tempo_control=not args.notempo)
+controller = Controller(tempo_control=not args.notempo, fader_control=not args.nofader)
 asyncio.run(controller.run())
