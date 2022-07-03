@@ -37,7 +37,7 @@ patterns: [
                 name: "constant.pragma.flitter"
     }
     {
-        match: "\\b(if|elif|else|for|in|let)\\b"
+        match: "\\b(if|elif|else|for|in|let|where)\\b"
         name: "keyword.control.flow.flitter"
     }
     {
