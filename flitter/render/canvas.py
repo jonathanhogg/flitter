@@ -24,11 +24,11 @@ _Durations = {}
 
 
 def dump_stats():
-    if _Counts:
+    if _Durations:
         total_duration = sum(_Durations.values())
         Log.info("Total time spent canvas rendering: %.0fs, comprised of...", total_duration)
-        for key, count in _Counts.items():
-            duration = _Durations[key]
+        for duration, key in sorted(((duration, key) for (key, duration) in _Durations.items()), reverse=True):
+            count = _Counts[key]
             Log.info("%15s  - %8d  x %6.1fµs  = %6.1fs  (%4.1f%%)", key, count, 1e6*duration/count, duration, 100*duration/total_duration)
 
 
@@ -368,10 +368,12 @@ def make_image_filter(node, paint):
                 contrast = node.get('contrast', 1, float, 1)
                 saturation = node.get('saturation', 1, float, 1)
                 offset = brightness + (1 - contrast) / 2
-                rs, gs, bs = (1-saturation)*0.2126, (1-saturation)*0.7152, (1-saturation)*0.0722
-                matrix = [contrast*(rs+saturation), rs, rs, 0, offset,
-                          gs, contrast*(gs+saturation), gs, 0, offset,
-                          bs, bs, contrast*(bs+saturation), 0, offset,
+                s0 = contrast * (1 - saturation)
+                s1 = contrast * saturation
+                rs0, gs0, bs0 = s0*0.2126, s0*0.7152, s0*0.0722
+                matrix = [rs0+s1, gs0, bs0, 0, offset,
+                          rs0, gs0+s1, bs0, 0, offset,
+                          rs0, gs0, bs0+s1, 0, offset,
                           0, 0, 0, 1, 0]
             if matrix is not None:
                 color_filter = skia.ColorFilters.Matrix(matrix)
