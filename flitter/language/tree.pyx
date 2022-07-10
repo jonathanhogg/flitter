@@ -332,6 +332,8 @@ cdef class Call(Expression):
 
     cpdef model.VectorLike evaluate(self, model.Context context):
         cdef model.Vector function = self.function.evaluate(context)
+        if not function.values:
+            return model.null_
         cdef list args = []
         cdef Expression arg
         cdef model.VectorLike value
@@ -340,14 +342,22 @@ cdef class Call(Expression):
             args.append(value)
         cdef list results = []
         cdef Function func_expr
-        cdef dict saved
+        cdef dict saved, params
+        cdef Binding parameter
+        cdef Literal literal
         for func in function.values:
             if isinstance(func, Function):
                 func_expr = func
                 saved = context.variables
                 context.variables = saved.copy()
-                for i, name in enumerate(func_expr.parameters):
-                    context.variables[name] = args[i] if i < len(args) else model.null_
+                for i, parameter in enumerate(func_expr.parameters):
+                    if i < len(args):
+                        context.variables[parameter.name] = args[i]
+                    elif parameter.expr is not None:
+                        literal = parameter.expr
+                        context.variables[parameter.name] = literal.value
+                    else:
+                        context.variables[parameter.name] = model.null_
                 results.append(func_expr.expr.evaluate(context))
                 context.variables = saved
             else:
@@ -502,7 +512,7 @@ cdef class Binding:
     cdef readonly str name
     cdef readonly Expression expr
 
-    def __init__(self, str name, Expression expr):
+    def __init__(self, str name, Expression expr=None):
         self.name = name
         self.expr = expr
 
@@ -619,7 +629,14 @@ cdef class Function(Expression):
 
     cpdef model.VectorLike evaluate(self, model.Context context):
         cdef model.Vector func = model.Vector.__new__(model.Vector)
-        func.values.append(self)
+        cdef list parameters = []
+        cdef Binding parameter
+        for parameter in self.parameters:
+            if parameter.expr is not None:
+                parameters.append(Binding(parameter.name, Literal(parameter.expr.evaluate(context))))
+            else:
+                parameters.append(parameter)
+        func.values.append(Function(self.name, tuple(parameters), self.expr))
         context.variables[self.name] = func
         return model.null_
 

@@ -232,12 +232,15 @@ def simplify(expression, context):
             return tree.Pragma(name=name, expr=expr)
 
         case tree.Function(name=name, parameters=parameters, expr=expr):
+            params = []
+            for parameter in parameters:
+                params.append(tree.Binding(name=parameter.name, expr=simplify(parameter.expr, context) if parameter.expr is not None else None))
             with context:
                 for parameter in parameters:
-                    if parameter in context.variables:
-                        del context.variables[parameter]
+                    if parameter.name in context.variables:
+                        del context.variables[parameter.name]
                 expr = simplify(expr, context)
-            return tree.Function(name=name, parameters=parameters, expr=expr)
+            return tree.Function(name=name, parameters=tuple(params), expr=expr)
 
 
     print(expression)
