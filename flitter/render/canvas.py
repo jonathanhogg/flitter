@@ -88,13 +88,13 @@ class Composite(enum.IntEnum):
     LUMINOSITY = skia.BlendMode.kLuminosity
 
 
-class LineJoin(enum.IntEnum):
+class StrokeJoin(enum.IntEnum):
     MITER = skia.Paint.Join.kMiter_Join
     ROUND = skia.Paint.Join.kRound_Join
     BEVEL = skia.Paint.Join.kBevel_Join
 
 
-class LineCap(enum.IntEnum):
+class StrokeCap(enum.IntEnum):
     BUTT = skia.Paint.Cap.kButt_Cap
     ROUND = skia.Paint.Cap.kRound_Cap
     SQUARE = skia.Paint.Cap.kSquare_Cap
@@ -174,12 +174,12 @@ def set_styles(node, ctx=None, paint=None, font=None):
                     paint.setStrokeWidth(stroke_width)
             case 'stroke_join':
                 stroke_join = value.match(1, str)
-                if stroke_join is not None and stroke_join.upper() in LineJoin.__members__ and paint is not None:
-                    paint.setStrokeJoin(skia.Paint.Join(LineJoin.__members__[stroke_join.upper()]))
+                if stroke_join is not None and stroke_join.upper() in StrokeJoin.__members__ and paint is not None:
+                    paint.setStrokeJoin(skia.Paint.Join(StrokeJoin.__members__[stroke_join.upper()]))
             case 'stroke_cap':
                 stroke_cap = value.match(1, str)
-                if stroke_cap is not None and stroke_cap.upper() in LineCap.__members__ and paint is not None:
-                    paint.setStrokeCap(skia.Paint.Cap(LineCap.__members__[stroke_cap.upper()]))
+                if stroke_cap is not None and stroke_cap.upper() in StrokeCap.__members__ and paint is not None:
+                    paint.setStrokeCap(skia.Paint.Cap(StrokeCap.__members__[stroke_cap.upper()]))
             case 'composite':
                 composite = value.match(1, str)
                 if composite is not None and composite.upper() in Composite.__members__ and paint is not None:
@@ -496,8 +496,9 @@ def draw(node, ctx, paint=None, font=None, path=None):
         case "line":
             points = node.get('points', 0, float)
             if points:
+                close = node.get('close', 1, bool, False)
                 curve = node.get('curve', 1, float, 0)
-                path.addPath(line_path(points, curve))
+                path.addPath(line_path(points, curve, close))
 
         case "close":
             path.close()

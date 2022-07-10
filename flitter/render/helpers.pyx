@@ -18,7 +18,7 @@ cdef double turn_angle(float x0, float y0, float x1, float y1, float x2, float y
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def line_path(list points not None, double curve):
+def line_path(list points not None, double curve, bint close):
     cdef int i, n=len(points)
     cdef double last_mid_x, last_mid_y, last_x, last_y, x, y
     builder = skia.PathBuilder()
@@ -44,4 +44,6 @@ def line_path(list points not None, double curve):
                 lineTo(x, y)
             last_mid_x, last_mid_y = mid_x, mid_y
         last_x, last_y = x, y
+    if close:
+        builder.close()
     return builder.detach()
