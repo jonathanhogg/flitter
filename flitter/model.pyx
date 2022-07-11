@@ -137,7 +137,7 @@ cdef class Vector(VectorLike):
                 text += "{:g}".format(value)
         return text
 
-    cpdef bint isinstance(self, type t):
+    cpdef bint isinstance(self, t):
         for value in self.values:
             if not isinstance(value, t):
                 return False
