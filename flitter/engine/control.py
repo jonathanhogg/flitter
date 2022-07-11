@@ -13,7 +13,6 @@ import pickle
 from ..clock import BeatCounter
 from ..interface.controls import Pad, Encoder
 from ..interface.osc import OSCReceiver, OSCSender, OSCMessage, OSCBundle
-from ..language.simplifier import simplify
 from ..language.parser import parse
 from ..language.tree import Sequence
 from ..model import Context, Vector, Node, null
@@ -93,7 +92,7 @@ class Controller:
     @staticmethod
     def load_source(filename):
         with open(filename, encoding='utf8') as file:
-            return simplify(parse(file.read()), Context())
+            return parse(file.read()).simplify(Context())
 
     def get(self, key, default=None):
         return self.state.get(key, default)

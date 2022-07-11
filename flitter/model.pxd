@@ -7,11 +7,14 @@ cdef class VectorLike:
     cpdef bint istrue(self)
 
 
+cdef VectorLike Vector_compose(list args)
+
 cdef class Vector(VectorLike):
     cdef list values
 
     cdef unsigned long long _hash(self, bint floor_floats)
     cpdef bint istrue(self)
+    cpdef bint isinstance(self, type t)
     cpdef VectorLike copynodes(self)
     cpdef object match(self, int n=?, type t=?, default=?)
     cpdef Vector withlen(self, int n, bint force_copy=?)

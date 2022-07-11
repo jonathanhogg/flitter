@@ -23,19 +23,17 @@ cdef class VectorLike:
         raise NotImplementedError()
 
 
+cdef VectorLike Vector_compose(list args):
+    if len(args) == 1:
+        return args[0]
+    cdef Vector result = Vector.__new__(Vector)
+    cdef Vector vector
+    for vector in args:
+        result.values.extend(vector.values)
+    return result
+
 @cython.final
 cdef class Vector(VectorLike):
-    @staticmethod
-    def compose(*args):
-        if len(args) == 1:
-            return args[0]
-        cdef Vector result = Vector.__new__(Vector)
-        cdef Vector vector
-        for arg in args:
-            vector = arg
-            result.values.extend(vector.values)
-        return result
-
     @staticmethod
     def range(startv, stopv, stepv):
         cdef double start = float(startv) if startv is not None else float("nan")
@@ -139,7 +137,7 @@ cdef class Vector(VectorLike):
                 text += "{:g}".format(value)
         return text
 
-    def isinstance(self, t):
+    cpdef bint isinstance(self, type t):
         for value in self.values:
             if not isinstance(value, t):
                 return False

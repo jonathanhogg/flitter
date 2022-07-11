@@ -17,12 +17,32 @@ cdef dict builtins_ = {
 }
 builtins_.update(FUNCTIONS)
 
-BUILTINS = builtins_
+
+cdef Expression sequence_pack(list expressions):
+    cdef Expression expr
+    cdef list remaining=[], values=[]
+    for expr in expressions:
+        if isinstance(expr, Literal) and not (<Literal>expr).value:
+            continue
+        if isinstance(expr, Sequence):
+            remaining.extend(expr.expressions)
+        else:
+            remaining.append(expr)
+    for expr in remaining:
+        if not isinstance(expr, Literal):
+            break
+        values.append(expr.value)
+    else:
+        return Literal(model.Vector_compose(values))
+    return Sequence(tuple(remaining))
 
 
 cdef class Expression:
     cpdef model.VectorLike evaluate(self, model.Context context):
         raise NotImplementedError()
+
+    cpdef Expression simplify(self, model.Context context):
+        return self
 
 
 cdef class Pragma(Expression):
@@ -37,6 +57,9 @@ cdef class Pragma(Expression):
         cdef model.Vector value = self.expr.evaluate(context)
         context.pragma(self.name, value)
         return model.null_
+
+    cpdef Expression simplify(self, model.Context context):
+        return Pragma(self.name, self.expr.simplify(context))
 
     def __repr__(self):
         return f'Pragma({self.name!r}, {self.expr!r})'
@@ -56,6 +79,14 @@ cdef class Sequence(Expression):
             vector = expr.evaluate(context)
             result.values.extend(vector.values)
         return result
+
+    cpdef Expression simplify(self, model.Context context):
+        cdef list expressions = []
+        cdef Expression expr
+        with context:
+            for expr in self.expressions:
+                expressions.append(expr.simplify(context))
+        return sequence_pack(expressions)
 
     def __repr__(self):
         return f'Sequence({self.expressions!r})'
@@ -89,6 +120,16 @@ cdef class Name(Expression):
         if result is not None:
             return result
         return model.null_
+
+    cpdef Expression simplify(self, model.Context context):
+        cdef model.VectorLike value
+        if self.name in context.variables:
+            value = context.variables[self.name]
+            return Literal(value.copynodes())
+        if self.name in builtins_:
+            value = builtins_[self.name]
+            return Literal(value)
+        return self
 
     def __repr__(self):
         return f'Name({self.name!r})'
@@ -133,6 +174,14 @@ cdef class Range(Expression):
         step = self.step.evaluate(context)
         return model.Vector.range(start, stop, step)
 
+    cpdef Expression simplify(self, model.Context context):
+        cdef Expression start = self.start.simplify(context)
+        cdef Expression stop = self.stop.simplify(context)
+        cdef Expression step = self.step.simplify(context)
+        if isinstance(start, Literal) and isinstance(stop, Literal) and isinstance(step, Literal):
+            return Literal(model.Vector.range((<Literal>start).value, (<Literal>stop).value, (<Literal>step).value))
+        return Range(start, stop, step)
+
     def __repr__(self):
         return f'Range({self.start!r}, {self.stop!r}, {self.step!r})'
 
@@ -142,6 +191,13 @@ cdef class UnaryOperation(Expression):
 
     def __init__(self, Expression expr):
         self.expr = expr
+
+    cpdef Expression simplify(self, model.Context context):
+        cdef Expression expr = self.expr.simplify(context)
+        cdef Expression unary = type(self)(expr)
+        if isinstance(expr, Literal):
+            return Literal(unary.evaluate(context))
+        return unary
 
     def __repr__(self):
         return f'{self.__class__.__name__}({self.expr!r})'
@@ -172,6 +228,14 @@ cdef class BinaryOperation(Expression):
     def __init__(self, Expression left, Expression right):
         self.left = left
         self.right = right
+
+    cpdef Expression simplify(self, model.Context context):
+        cdef Expression left = self.left.simplify(context)
+        cdef Expression right = self.right.simplify(context)
+        cdef Expression binary = type(self)(left, right)
+        if isinstance(left, Literal) and isinstance(right, Literal):
+            return Literal(binary.evaluate(context))
+        return binary
 
     def __repr__(self):
         return f'{self.__class__.__name__}({self.left!r}, {self.right!r})'
@@ -318,8 +382,19 @@ cdef class Slice(Expression):
         cdef model.Vector index = self.index.evaluate(context)
         return expr.slice(index)
 
+    cpdef Expression simplify(self, model.Context context):
+        cdef Expression expr = self.expr.simplify(context)
+        cdef Expression index = self.index.simplify(context)
+        cdef model.VectorLike expr_value
+        cdef model.Vector index_value
+        if isinstance(expr, Literal) and isinstance(index, Literal):
+            expr_value = (<Literal>expr).value
+            index_value = (<Literal>index).value
+            return Literal(expr_value.slice(index_value))
+        return Slice(expr, index)
+
     def __repr__(self):
-        return f'Slice({self.index!r}, {self.index!r})'
+        return f'Slice({self.expr!r}, {self.index!r})'
 
 
 cdef class Call(Expression):
@@ -344,25 +419,39 @@ cdef class Call(Expression):
         cdef Function func_expr
         cdef dict saved, params
         cdef Binding parameter
-        cdef Literal literal
+        cdef int i
         for func in function.values:
             if isinstance(func, Function):
                 func_expr = func
                 saved = context.variables
-                context.variables = saved.copy()
+                context.variables = {}
                 for i, parameter in enumerate(func_expr.parameters):
                     if i < len(args):
                         context.variables[parameter.name] = args[i]
                     elif parameter.expr is not None:
-                        literal = parameter.expr
-                        context.variables[parameter.name] = literal.value
+                        context.variables[parameter.name] = (<Literal>parameter.expr).value
                     else:
                         context.variables[parameter.name] = model.null_
                 results.append(func_expr.expr.evaluate(context))
                 context.variables = saved
             else:
                 results.append(func(*args))
-        return model.Vector.compose(*results)
+        return model.Vector_compose(results)
+
+    cpdef Expression simplify(self, model.Context context):
+        cdef Expression function = self.function.simplify(context)
+        cdef list args = []
+        cdef Expression arg
+        cdef bint literal = isinstance(function, Literal)
+        for arg in self.args:
+            arg = arg.simplify(context)
+            args.append(arg)
+            if not isinstance(arg, Literal):
+                literal = False
+        cdef Call call = Call(function, tuple(args))
+        if literal:
+            return Literal(call.evaluate(context))
+        return Call(function, tuple(args))
 
     def __repr__(self):
         return f'Call({self.function!r}, {self.args!r})'
@@ -379,6 +468,9 @@ cdef class Node(Expression):
         cdef model.Vector vector = model.Vector.__new__(model.Vector)
         vector.values.append(node)
         return vector
+
+    cpdef Expression simplify(self, model.Context context):
+        return Literal(self.evaluate(context))
 
     def __repr__(self):
         return f'Node({self.kind!r})'
@@ -398,6 +490,18 @@ cdef class Tag(Expression):
         for node in nodes.values:
             node._tags.add(self.tag)
         return nodes
+
+    cpdef Expression simplify(self, model.Context context):
+        cdef Expression node = self.node.simplify(context)
+        cdef model.Vector nodes
+        cdef model.Node n
+        if isinstance(node, Literal):
+            nodes = (<Literal>node).value
+            if nodes.isinstance(model.Node):
+                for n in nodes.values:
+                    n.add_tag(self.tag)
+                return node
+        return Tag(node, self.tag)
 
     def __repr__(self):
         return f'Tag({self.node!r}, {self.tag!r})'
@@ -431,6 +535,30 @@ cdef class Attributes(Expression):
                         variables[binding.name] = value
             context.variables = saved
         return nodes
+
+    cpdef Expression simplify(self, model.Context context):
+        cdef Expression node = self
+        cdef list bindings = []
+        cdef Attributes attrs
+        cdef Binding binding
+        while isinstance(node, Attributes):
+            attrs = <Attributes>node
+            for binding in reversed(attrs.bindings):
+                bindings.insert(0, Binding(binding.name, binding.expr.simplify(context)))
+            node = attrs.node
+        node = node.simplify(context)
+        cdef model.Vector nodes
+        cdef model.Node n
+        if isinstance(node, Literal):
+            nodes = (<Literal>node).value
+            if nodes.isinstance(model.Node):
+                while bindings and isinstance((<Binding>bindings[0]).expr, Literal):
+                    binding = bindings.pop(0)
+                    for n in nodes.values:
+                        n[binding.name] = (<Literal>binding.expr).value
+        if not bindings:
+            return node
+        return Attributes(node, tuple(bindings))
 
     def __repr__(self):
         return f'Attributes({self.node!r}, {self.bindings!r})'
@@ -477,6 +605,21 @@ cdef class Append(Expression):
                     node.append(child)
         return nodes
 
+    cpdef Expression simplify(self, model.Context context):
+        cdef Expression node = self.node.simplify(context)
+        cdef Expression children = self.children.simplify(context)
+        cdef model.Vector nodes, childs
+        cdef model.Node n, c
+        if isinstance(node, Literal) and isinstance(children, Literal):
+            nodes = (<Literal>node).value
+            childs = (<Literal>children).value
+            if nodes.isinstance(model.Node) and childs.isinstance(model.Node):
+                for n in nodes.values:
+                    for c in childs.values:
+                        n.append(c.copy())
+                return node
+        return Append(node, children)
+
     def __repr__(self):
         return f'Append({self.node!r}, {self.children!r})'
 
@@ -503,6 +646,21 @@ cdef class Prepend(Expression):
                 for child in reversed(children.values):
                     node.insert(child)
         return nodes
+
+    cpdef Expression simplify(self, model.Context context):
+        cdef Expression node = self.node.simplify(context)
+        cdef Expression children = self.children.simplify(context)
+        cdef model.Vector nodes, childs
+        cdef model.Node n, c
+        if isinstance(node, Literal) and isinstance(children, Literal):
+            nodes = (<Literal>node).value
+            childs = (<Literal>children).value
+            if nodes.isinstance(model.Node) and childs.isinstance(model.Node):
+                for n in nodes.values:
+                    for c in reversed(childs.values):
+                        n.insert(c.copy())
+                return node
+        return Prepend(node, children)
 
     def __repr__(self):
         return f'Prepend({self.node!r}, {self.children!r})'
@@ -532,6 +690,22 @@ cdef class Let(Expression):
             context.variables[binding.name] = binding.expr.evaluate(context)
         return model.null_
 
+    cpdef Expression simplify(self, model.Context context):
+        cdef list remaining = []
+        cdef Binding binding
+        cdef Expression expr
+        for binding in self.bindings:
+            expr = binding.expr.simplify(context)
+            if isinstance(expr, Literal):
+                context.variables[binding.name] = (<Literal>expr).value
+            else:
+                if binding.name in context.variables:
+                    del context.variables[binding.name]
+                remaining.append(Binding(binding.name, expr))
+        if remaining:
+            return Let(tuple(remaining))
+        return Literal(model.null_)
+
     def __repr__(self):
         return f'Let({self.bindings!r})'
 
@@ -553,6 +727,24 @@ cdef class InlineLet(Expression):
         cdef model.VectorLike result = self.body.evaluate(context)
         context.variables = saved
         return result
+
+    cpdef Expression simplify(self, model.Context context):
+        cdef list remaining = []
+        cdef Binding binding
+        cdef Expression body, expr
+        with context:
+            for binding in self.bindings:
+                expr = binding.expr.simplify(context)
+                if isinstance(expr, Literal):
+                    context.variables[binding.name] = (<Literal>expr).value
+                else:
+                    if binding.name in context.variables:
+                        del context.variables[binding.name]
+                    remaining.append(Binding(binding.name, expr))
+            body = self.body.simplify(context)
+            if remaining:
+                return InlineLet(body, tuple(remaining))
+            return body
 
     def __repr__(self):
         return f'InlineLet({self.body!r}, {self.bindings!r})'
@@ -581,6 +773,23 @@ cdef class For(Expression):
             results.values.extend(self.body.evaluate(context))
         context.variables = saved
         return results
+
+    cpdef Expression simplify(self, model.Context context):
+        cdef Expression source = self.source.simplify(context)
+        cdef list remaining = []
+        cdef model.Vector values, single
+        with context:
+            if not isinstance(source, Literal):
+                if self.name in context.variables:
+                    del context.variables[self.name]
+                return For(self.name, source, self.body.simplify(context))
+            values = (<Literal>source).value
+            for value in values.values:
+                single = model.Vector.__new__(model.Vector)
+                single.values.append(value)
+                context.variables[self.name] = single
+                remaining.append(self.body.simplify(context))
+            return sequence_pack(remaining)
 
     def __repr__(self):
         return f'For({self.name!r}, {self.source!r}, {self.body!r})'
@@ -613,6 +822,26 @@ cdef class IfElse(Expression):
                 return test.then.evaluate(context)
         return self.else_.evaluate(context) if self.else_ is not None else model.null_
 
+    cpdef Expression simplify(self, model.Context context):
+        cdef list remaining = []
+        cdef Test test
+        cdef Expression condition, then
+        for test in self.tests:
+            condition = test.condition.simplify(context)
+            then = test.then.simplify(context)
+            if isinstance(condition, Literal):
+                if (<Literal>condition).value.istrue():
+                    if not remaining:
+                        return then
+                    else:
+                        return IfElse(tuple(remaining), then)
+            else:
+                remaining.append(Test(condition, then))
+        else_ = self.else_.simplify(context) if self.else_ is not None else None
+        if remaining:
+            return IfElse(tuple(remaining), else_)
+        return Literal(model.null_) if else_ is None else else_
+
     def __repr__(self):
         return f'IfElse({self.tests!r}, {self.else_!r})'
 
@@ -632,13 +861,26 @@ cdef class Function(Expression):
         cdef list parameters = []
         cdef Binding parameter
         for parameter in self.parameters:
-            if parameter.expr is not None:
+            if parameter.expr is not None and not isinstance(parameter.expr, Literal):
                 parameters.append(Binding(parameter.name, Literal(parameter.expr.evaluate(context))))
             else:
                 parameters.append(parameter)
-        func.values.append(Function(self.name, tuple(parameters), self.expr))
+        func.values.append(Function(self.name, tuple(parameters), self.expr.simplify(context)))
         context.variables[self.name] = func
         return model.null_
+
+    cpdef Expression simplify(self, model.Context context):
+        cdef list parameters = []
+        cdef Binding parameter
+        cdef Expression expr
+        for parameter in self.parameters:
+            parameters.append(Binding(parameter.name, parameter.expr.simplify(context) if parameter.expr is not None else None))
+        with context:
+            for parameter in parameters:
+                if parameter.name in context.variables:
+                    del context.variables[parameter.name]
+            expr = self.expr.simplify(context)
+        return Function(self.name, tuple(parameters), expr)
 
     def __repr__(self):
         return f'Function({self.name!r}, {self.parameters!r}, {self.expr!r})'
