@@ -116,7 +116,7 @@ class Controller:
             path = self.root_dir / filename
             if path in self.read_cache:
                 text, mtime = self.read_cache[path]
-                if path.stat().st_mtime == mtime:
+                if path.exists() and path.stat().st_mtime == mtime:
                     return text
             if path.exists():
                 text = Vector((path.open(encoding='utf8').read(),))
