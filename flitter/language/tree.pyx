@@ -33,7 +33,8 @@ cdef Expression sequence_pack(list expressions):
                     expr = None
                     break
                 expr = <Expression>expressions.pop(0)
-            remaining.append(Literal(value))
+            if value.values:
+                remaining.append(Literal(value))
         if expr is not None:
             if isinstance(expr, Sequence):
                 expressions[:0] = (<Sequence>expr).expressions
@@ -92,9 +93,11 @@ cdef class Sequence(Expression):
     cpdef Expression partially_evaluate(self, model.Context context):
         cdef list expressions = []
         cdef Expression expr
-        with context:
-            for expr in self.expressions:
-                expressions.append(expr.partially_evaluate(context))
+        cdef dict saved = context.variables
+        context.variables = saved.copy()
+        for expr in self.expressions:
+            expressions.append(expr.partially_evaluate(context))
+        context.variables = saved
         return sequence_pack(expressions)
 
     def __repr__(self):
@@ -562,7 +565,7 @@ cdef class Attributes(Expression):
         while isinstance(node, Attributes):
             attrs = <Attributes>node
             for binding in reversed(attrs.bindings):
-                bindings.insert(0, Binding(binding.name, binding.expr.partially_evaluate(context)))
+                bindings.append(Binding(binding.name, binding.expr.partially_evaluate(context)))
             node = attrs.node
         node = node.partially_evaluate(context)
         cdef model.Vector nodes
@@ -570,12 +573,13 @@ cdef class Attributes(Expression):
         if isinstance(node, Literal):
             nodes = (<Literal>node).value
             if nodes.isinstance(model.Node):
-                while bindings and isinstance((<Binding>bindings[0]).expr, Literal):
-                    binding = bindings.pop(0)
+                while bindings and isinstance((<Binding>bindings[-1]).expr, Literal):
+                    binding = bindings.pop()
                     for n in nodes.values:
                         n[binding.name] = (<Literal>binding.expr).value
         if not bindings:
             return node
+        bindings.reverse()
         return Attributes(node, tuple(bindings))
 
     def __repr__(self):
@@ -753,19 +757,21 @@ cdef class InlineLet(Expression):
         cdef list remaining = []
         cdef Binding binding
         cdef Expression body, expr
-        with context:
-            for binding in self.bindings:
-                expr = binding.expr.partially_evaluate(context)
-                if isinstance(expr, Literal):
-                    context.variables[binding.name] = (<Literal>expr).value
-                else:
-                    if binding.name in context.variables:
-                        del context.variables[binding.name]
-                    remaining.append(Binding(binding.name, expr))
-            body = self.body.partially_evaluate(context)
-            if remaining:
-                return InlineLet(body, tuple(remaining))
-            return body
+        cdef dict saved = context.variables
+        context.variables = saved.copy()
+        for binding in self.bindings:
+            expr = binding.expr.partially_evaluate(context)
+            if isinstance(expr, Literal):
+                context.variables[binding.name] = (<Literal>expr).value
+            else:
+                if binding.name in context.variables:
+                    del context.variables[binding.name]
+                remaining.append(Binding(binding.name, expr))
+        body = self.body.partially_evaluate(context)
+        context.variables = saved
+        if remaining:
+            return InlineLet(body, tuple(remaining))
+        return body
 
     def __repr__(self):
         return f'InlineLet({self.body!r}, {self.bindings!r})'
@@ -796,21 +802,25 @@ cdef class For(Expression):
         return results
 
     cpdef Expression partially_evaluate(self, model.Context context):
-        cdef Expression source = self.source.partially_evaluate(context)
+        cdef Expression body, source=self.source.partially_evaluate(context)
         cdef list remaining = []
         cdef model.Vector values, single
-        with context:
-            if not isinstance(source, Literal):
-                if self.name in context.variables:
-                    del context.variables[self.name]
-                return For(self.name, source, self.body.partially_evaluate(context))
-            values = (<Literal>source).value
-            for value in values.values:
-                single = model.Vector.__new__(model.Vector)
-                single.values.append(value)
-                context.variables[self.name] = single
-                remaining.append(self.body.partially_evaluate(context))
-            return sequence_pack(remaining)
+        cdef dict saved = context.variables
+        context.variables = saved.copy()
+        if not isinstance(source, Literal):
+            if self.name in context.variables:
+                del context.variables[self.name]
+            body = self.body.partially_evaluate(context)
+            context.variables = saved
+            return For(self.name, source, body)
+        values = (<Literal>source).value
+        for value in values.values:
+            single = model.Vector.__new__(model.Vector)
+            single.values.append(value)
+            context.variables[self.name] = single
+            remaining.append(self.body.partially_evaluate(context))
+        context.variables = saved
+        return sequence_pack(remaining)
 
     def __repr__(self):
         return f'For({self.name!r}, {self.source!r}, {self.body!r})'
@@ -902,11 +912,13 @@ cdef class Function(Expression):
         cdef Expression expr
         for parameter in self.parameters:
             parameters.append(Binding(parameter.name, parameter.expr.partially_evaluate(context) if parameter.expr is not None else None))
-        with context:
-            for parameter in parameters:
-                if parameter.name in context.variables:
-                    del context.variables[parameter.name]
-            expr = self.expr.partially_evaluate(context)
+        cdef dict saved = context.variables
+        context.variables = saved.copy()
+        for parameter in parameters:
+            if parameter.name in context.variables:
+                del context.variables[parameter.name]
+        expr = self.expr.partially_evaluate(context)
+        context.variables = saved
         return Function(self.name, tuple(parameters), expr)
 
     def __repr__(self):
