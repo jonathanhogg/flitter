@@ -660,6 +660,9 @@ cdef class Node:
     def __iter__(self):
         return iter(self._attributes)
 
+    def __repr__(self):
+        return f"Node({self.kind!r})"
+
 
 cdef class Context:
     def __cinit__(self, dict variables=None, dict state=None, Node graph=None, dict pragmas=None):
