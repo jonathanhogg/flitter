@@ -92,7 +92,7 @@ class Controller:
     @staticmethod
     def load_source(filename):
         with open(filename, encoding='utf8') as file:
-            return parse(file.read()).simplify(Context())
+            return parse(file.read()).partially_evaluate(Context())
 
     def get(self, key, default=None):
         return self.state.get(key, default)
