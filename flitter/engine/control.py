@@ -111,8 +111,9 @@ class Controller:
             Log.debug("State changed: %r = %r", key, value)
 
     def read(self, filename):
-        if len(filename) == 1 and filename.isinstance(str):
-            path = self.root_dir / filename[0]
+        filename = filename.as_string()
+        if filename:
+            path = self.root_dir / filename
             if path in self.read_cache:
                 text, mtime = self.read_cache[path]
                 if path.stat().st_mtime == mtime:
