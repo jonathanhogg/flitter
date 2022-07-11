@@ -42,7 +42,7 @@ cdef class Expression:
         raise NotImplementedError()
 
     cpdef Expression simplify(self, model.Context context):
-        return self
+        raise NotImplementedError()
 
 
 cdef class Pragma(Expression):
@@ -101,6 +101,9 @@ cdef class Literal(Expression):
     cpdef model.VectorLike evaluate(self, model.Context context):
         return self.value.copynodes()
 
+    cpdef Expression simplify(self, model.Context context):
+        return self
+
     def __repr__(self):
         return f'Literal({self.value!r})'
 
@@ -153,6 +156,9 @@ cdef class Lookup(Expression):
             else:
                 result.values.append(value)
         return result
+
+    cpdef Expression simplify(self, model.Context context):
+        return Lookup(self.key.simplify(context))
 
     def __repr__(self):
         return f'Lookup({self.key!r})'
@@ -577,6 +583,9 @@ cdef class Search(Expression):
             node._select(self.query, nodes.values, False)
             node = node.next_sibling
         return nodes
+
+    cpdef Expression simplify(self, model.Context context):
+        return self
 
     def __repr__(self):
         return f'Search({self.query!r})'
