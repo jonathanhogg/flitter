@@ -20,20 +20,29 @@ builtins_.update(FUNCTIONS)
 
 cdef Expression sequence_pack(list expressions):
     cdef Expression expr
-    cdef list remaining=[], values=[]
-    for expr in expressions:
-        if isinstance(expr, Literal) and not (<Literal>expr).value:
-            continue
-        if isinstance(expr, Sequence):
-            remaining.extend(expr.expressions)
-        else:
+    cdef Literal literal
+    cdef model.Vector value
+    cdef list remaining = []
+    while expressions:
+        expr = <Expression>expressions.pop(0)
+        if isinstance(expr, Literal) and isinstance((<Literal>expr).value, model.Vector):
+            value = model.Vector.__new__(model.Vector)
+            while isinstance(expr, Literal) and isinstance((<Literal>expr).value, model.Vector):
+                value.values.extend((<model.Vector>(<Literal>expr).value).values)
+                if not expressions:
+                    expr = None
+                    break
+                expr = <Expression>expressions.pop(0)
+            remaining.append(Literal(value))
+        if expr is not None:
+            if isinstance(expr, Sequence):
+                expressions[:0] = (<Sequence>expr).expressions
+                continue
             remaining.append(expr)
-    for expr in remaining:
-        if not isinstance(expr, Literal):
-            break
-        values.append(expr.value)
-    else:
-        return Literal(model.Vector_compose(values))
+    if len(remaining) == 0:
+        return Literal(model.null_)
+    if len(remaining) == 1:
+        return remaining[0]
     return Sequence(tuple(remaining))
 
 
@@ -102,7 +111,7 @@ cdef class Literal(Expression):
         return self.value.copynodes()
 
     cpdef Expression partially_evaluate(self, model.Context context):
-        return self
+        return Literal(self.value.copynodes())
 
     def __repr__(self):
         return f'Literal({self.value!r})'
@@ -146,15 +155,18 @@ cdef class Lookup(Expression):
 
     cpdef model.VectorLike evaluate(self, model.Context context):
         cdef model.Vector key = self.key.evaluate(context)
-        cdef model.Vector result = model.Vector.__new__(model.Vector)
         value = context.state.get(tuple(key.values))
-        if value is not None:
-            if isinstance(value, (tuple, list)):
-                result.values.extend(value)
-            elif isinstance(value, bool):
-                result.values.append(1.0 if value else 0.0)
-            else:
-                result.values.append(value)
+        if value is None:
+            return model.null_
+        if isinstance(value, bool):
+            return model.true_ if value else model.false_
+        cdef model.Vector result = model.Vector.__new__(model.Vector)
+        if isinstance(value, list):
+            result.values = <list>value
+        if isinstance(value, tuple):
+            result.values.extend(value)
+        else:
+            result.values.append(value)
         return result
 
     cpdef Expression partially_evaluate(self, model.Context context):
@@ -866,15 +878,21 @@ cdef class Function(Expression):
         self.expr = expr
 
     cpdef model.VectorLike evaluate(self, model.Context context):
-        cdef model.Vector func = model.Vector.__new__(model.Vector)
         cdef list parameters = []
         cdef Binding parameter
+        cdef dict saved=context.variables, variables=saved.copy()
         for parameter in self.parameters:
+            if parameter.name in variables:
+                del variables[parameter.name]
             if parameter.expr is not None and not isinstance(parameter.expr, Literal):
                 parameters.append(Binding(parameter.name, Literal(parameter.expr.evaluate(context))))
             else:
                 parameters.append(parameter)
-        func.values.append(Function(self.name, tuple(parameters), self.expr.partially_evaluate(context)))
+        context.variables = variables
+        cdef Expression expr = self.expr.partially_evaluate(context)
+        context.variables = saved
+        cdef model.Vector func = model.Vector.__new__(model.Vector)
+        func.values.append(Function(self.name, tuple(parameters), expr))
         context.variables[self.name] = func
         return model.null_
 
