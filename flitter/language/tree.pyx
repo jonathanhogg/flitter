@@ -17,6 +17,8 @@ cdef dict builtins_ = {
 }
 builtins_.update(FUNCTIONS)
 
+cdef Literal NoOp = Literal(model.null_)
+
 
 cdef Expression sequence_pack(list expressions):
     cdef Expression expr
@@ -41,7 +43,7 @@ cdef Expression sequence_pack(list expressions):
                 continue
             remaining.append(expr)
     if len(remaining) == 0:
-        return Literal(model.null_)
+        return NoOp
     if len(remaining) == 1:
         return remaining[0]
     return Sequence(tuple(remaining))
@@ -729,7 +731,7 @@ cdef class Let(Expression):
                 remaining.append(Binding(binding.name, expr))
         if remaining:
             return Let(tuple(remaining))
-        return Literal(model.null_)
+        return NoOp
 
     def __repr__(self):
         return f'Let({self.bindings!r})'
@@ -871,7 +873,7 @@ cdef class IfElse(Expression):
         else_ = self.else_.partially_evaluate(context) if self.else_ is not None else None
         if remaining:
             return IfElse(tuple(remaining), else_)
-        return Literal(model.null_) if else_ is None else else_
+        return NoOp if else_ is None else else_
 
     def __repr__(self):
         return f'IfElse({self.tests!r}, {self.else_!r})'
