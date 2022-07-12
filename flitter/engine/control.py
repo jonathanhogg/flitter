@@ -14,8 +14,7 @@ from ..clock import BeatCounter
 from ..interface.controls import Pad, Encoder
 from ..interface.osc import OSCReceiver, OSCSender, OSCMessage, OSCBundle
 from ..language.parser import parse
-from ..language.tree import Sequence
-from ..model import Context, Vector, Node, null
+from ..model import Context, Vector, null
 from ..render import scene, process
 
 
@@ -44,7 +43,7 @@ class Controller:
             self.global_state = {}
         self.global_state_dirty = False
         self.state = None
-        self.tree = None
+        self.program_top = None
         self.windows = []
         self.counter = BeatCounter()
         self.pads = {}
@@ -63,17 +62,17 @@ class Controller:
         page_number = len(self.pages)
         filename = Path(filename)
         mtime = filename.stat().st_mtime
-        tree = self.load_source(filename)
+        program_top = self.load_source(filename)
         Log.info("Loaded page %i: %s", page_number, filename)
-        self.pages.append((filename, mtime, tree, self.global_state.setdefault(page_number, {})))
+        self.pages.append((filename, mtime, program_top, self.global_state.setdefault(page_number, {})))
 
     def switch_to_page(self, page_number):
         if self.pages is not None and 0 <= page_number < len(self.pages):
             self.pads = {}
             self.encoders = {}
-            filename, mtime, tree, state = self.pages[page_number]
+            filename, mtime, program_top, state = self.pages[page_number]
             self.state = state
-            self.tree = tree
+            self.program_top = program_top
             self.current_page = page_number
             self.current_filename = filename
             self.current_mtime = mtime
@@ -317,10 +316,7 @@ class Controller:
                 variables = {'beat': Vector((beat,)), 'quantum': Vector((self.counter.quantum,)), 'delta': Vector((delta,)),
                              'clock': Vector((frame_time,)), 'read': Vector((self.read,)), 'performance': Vector((performance,))}
                 context = Context(variables=variables, state=self.state)
-                for expr in self.tree.expressions if isinstance(self.tree, Sequence) else [self.tree]:
-                    for value in expr.evaluate(context):
-                        if isinstance(value, Node) and value.parent is None:
-                            context.graph.append(value)
+                self.program_top.evaluate(context)
                 execution += self.counter.clock()
                 render -= self.counter.clock()
                 self.handle_pragmas(context.pragmas)
@@ -363,9 +359,9 @@ class Controller:
                         reload_task = loop.run_in_executor(None, self.load_source, self.current_filename)
                     elif reload_task.done():
                         try:
-                            tree = await reload_task
-                            self.tree = tree
-                            self.pages[self.current_page] = self.current_filename, self.current_mtime, self.tree, self.state
+                            program_top = await reload_task
+                            self.program_top = program_top
+                            self.pages[self.current_page] = self.current_filename, self.current_mtime, self.program_top, self.state
                             Log.info("Reloaded page %i: %s", self.current_page, self.current_filename)
                         except Exception:
                             Log.exception("Error reloading page")

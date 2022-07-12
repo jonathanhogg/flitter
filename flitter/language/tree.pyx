@@ -57,6 +57,35 @@ cdef class Expression:
         raise NotImplementedError()
 
 
+cdef class Top(Expression):
+    cdef readonly tuple expressions
+
+    def __init__(self, tuple expressions):
+        self.expressions = expressions
+
+    cpdef model.VectorLike evaluate(self, model.Context context):
+        cdef model.VectorLike vector
+        cdef Expression expr
+        for expr in self.expressions:
+            vector = expr.evaluate(context)
+            if isinstance(vector, model.Vector):
+                for value in (<model.Vector>vector).values:
+                    if isinstance(value, model.Node):
+                        if (<model.Node>value)._parent is None:
+                            context.graph.append(<model.Node>value)
+        return model.null_
+
+    cpdef Expression partially_evaluate(self, model.Context context):
+        cdef list expressions = []
+        cdef Expression expr
+        for expr in self.expressions:
+            expressions.append(expr.partially_evaluate(context))
+        return Top(tuple(expressions))
+
+    def __repr__(self):
+        return f'Top({self.expressions!r})'
+
+
 cdef class Pragma(Expression):
     cdef readonly str name
     cdef readonly Expression expr

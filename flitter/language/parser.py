@@ -90,10 +90,11 @@ class FlitterTransformer(Transformer):
     subtract = tree.Subtract
     tag = tree.Tag
     test = tree.Test
+    top = tree.Top
 
 
 GRAMMAR = (Path(__file__).parent / 'grammar.lark').open('r', encoding='utf8').read()
-PARSER = Lark(GRAMMAR, postlex=FlitterIndenter(), regex=True, start='sequence', maybe_placeholders=True)
+PARSER = Lark(GRAMMAR, postlex=FlitterIndenter(), regex=True, start='top', maybe_placeholders=True)
 
 
 def parse(source):

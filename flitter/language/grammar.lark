@@ -12,7 +12,9 @@ NUMBER : /([0-9]+(\.[0-9]+)?|\.[0-9]+)(e[-+]?[0-9]+)?/i
 QUERY : /{[^}]+}/
 
 
-sequence : _NL? expressions
+top : _NL? expressions
+
+sequence : expressions
 
 expressions : expression+ -> tuple
 
