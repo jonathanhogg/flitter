@@ -42,7 +42,7 @@ class FlitterTransformer(Transformer):
     def range(self, start, stop, step):
         return tree.Range(tree.Literal(model.null) if start is None else start, stop, tree.Literal(model.null) if step is None else step)
 
-    def inline_if_else(self, then, condition, else_=None):
+    def inline_if_else(self, then, condition, else_):
         return tree.IfElse((tree.Test(condition, then),), else_)
 
     def inline_loop(self, body, name, source):

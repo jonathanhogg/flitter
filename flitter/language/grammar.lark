@@ -23,13 +23,13 @@ expressions : expression+ -> tuple
             | node _NL _INDENT sequence _DEDENT -> append
             | "for" NAME "in" range _NL _INDENT sequence _DEDENT -> loop
             | "let" multiline_bindings -> let
-            | "if" tests ("else" _NL _INDENT sequence _DEDENT)? -> if_else
+            | "if" tests ["else" _NL _INDENT sequence _DEDENT] -> if_else
             | "%pragma" NAME node _NL -> pragma
             | "func" NAME "(" parameters ")" _NL _INDENT sequence _DEDENT -> function
 
 parameters : (parameter ("," parameter)*)? -> tuple
 
-parameter : NAME ("=" node)? -> binding
+parameter : NAME ["=" node] -> binding
 
 tests : test ("elif" test)* -> tuple
 
@@ -60,7 +60,7 @@ inline_bindings: binding+ -> tuple
 inline_binding: NAME "=" conditional -> binding
 
 ?conditional : or
-             | or "if" or ("else" conditional)? -> inline_if_else
+             | or "if" or ["else" conditional] -> inline_if_else
 
 ?or : and
     | or "or" and -> logical_or

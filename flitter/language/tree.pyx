@@ -63,6 +63,21 @@ cdef class Top(Expression):
     def __init__(self, tuple expressions):
         self.expressions = expressions
 
+    def run(self, state, **kwargs):
+        cdef dict variables = {}
+        cdef str key
+        cdef model.Vector vector
+        for key, value in kwargs.items():
+            vector = model.Vector.__new__(model.Vector)
+            if isinstance(value, (tuple, list)):
+                vector.values.extend(value)
+            else:
+                vector.values.append(value)
+            variables[key] = vector
+        cdef model.Context context = model.Context(state=state, variables=variables)
+        self.evaluate(context)
+        return context
+
     cpdef model.VectorLike evaluate(self, model.Context context):
         cdef model.VectorLike vector
         cdef Expression expr
@@ -726,7 +741,7 @@ cdef class Binding:
     cdef readonly str name
     cdef readonly Expression expr
 
-    def __init__(self, str name, Expression expr=None):
+    def __init__(self, str name, Expression expr):
         self.name = name
         self.expr = expr
 
@@ -873,7 +888,7 @@ cdef class IfElse(Expression):
     cdef readonly tuple tests
     cdef readonly Expression else_
 
-    def __init__(self, tuple tests, Expression else_=None):
+    def __init__(self, tuple tests, Expression else_):
         self.tests = tests
         self.else_ = else_
 

@@ -113,13 +113,14 @@ class Controller:
         filename = filename.as_string()
         if filename:
             path = self.root_dir / filename
-            if path in self.read_cache:
-                text, mtime = self.read_cache[path]
-                if path.exists() and path.stat().st_mtime == mtime:
-                    return text
             if path.exists():
+                path_mtime = path.stat().st_mtime
+                if path in self.read_cache:
+                    text, mtime = self.read_cache[path]
+                    if path_mtime == mtime:
+                        return text
                 text = Vector((path.open(encoding='utf8').read(),))
-                self.read_cache[path] = text, path.stat().st_mtime
+                self.read_cache[path] = text, path_mtime
                 Log.info("Read: %s", filename)
                 return text
         return null
@@ -313,10 +314,8 @@ class Controller:
                 beat = self.counter.beat_at_time(frame_time)
                 delta = beat - last
                 last = beat
-                variables = {'beat': Vector((beat,)), 'quantum': Vector((self.counter.quantum,)), 'delta': Vector((delta,)),
-                             'clock': Vector((frame_time,)), 'read': Vector((self.read,)), 'performance': Vector((performance,))}
-                context = Context(variables=variables, state=self.state)
-                self.program_top.evaluate(context)
+                context = self.program_top.run(self.state, beat=beat, quantum=self.counter.quantum,
+                                               delta=delta, clock=frame_time, read=self.read, performance=performance)
                 execution += self.counter.clock()
                 render -= self.counter.clock()
                 self.handle_pragmas(context.pragmas)
