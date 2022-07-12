@@ -25,12 +25,9 @@ expressions : expression+ -> tuple
             | "%pragma" NAME node _NL -> pragma
             | "func" NAME "(" parameters ")" _NL _INDENT sequence _DEDENT -> function
 
-parameters : parameter ("," parameter)* ("," optional_parameter)* -> tuple
-           | (optional_parameter ("," optional_parameter)*)? -> tuple
+parameters : (parameter ("," parameter)*)? -> tuple
 
-parameter : NAME -> binding
-
-optional_parameter : NAME "=" node -> binding
+parameter : NAME ("=" node)? -> binding
 
 tests : test ("elif" test)* -> tuple
 
