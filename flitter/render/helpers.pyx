@@ -1,3 +1,4 @@
+# cython: language_level=3, profile=True
 
 import cython
 import skia

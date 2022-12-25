@@ -99,6 +99,8 @@ class Reference(SceneNode):
 
 
 class ProgramNode(SceneNode):
+    GL_VERSION = (4, 1)
+
     def __init__(self, glctx):
         super().__init__(glctx)
         self._program = None
@@ -232,8 +234,6 @@ void main() {{
 
 
 class Window(ProgramNode):
-    GL_VERSION = (4, 1)
-
     class WindowWrapper(pyglet.window.Window):  # noqa
         """Disable some pyglet functionality that is broken with moderngl"""
         def on_resize(self, width, height):
