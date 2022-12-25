@@ -298,12 +298,18 @@ def mapv(Vector x not None, Vector a not None, Vector b not None):
     return a.mul(true_.sub(x)).add(b.mul(x))
 
 
-def zipv(Vector xs not None, Vector ys not None):
+def zipv(*vectors):
     cdef Vector zs = Vector.__new__(Vector)
-    for x, y in zip(xs.values, ys.values):
-        zs.values.append(x)
-        zs.values.append(y)
-    return zs
+    if not vectors:
+        return zs
+    cdef Vector vs
+    cdef int i=0
+    while True:
+        for vs in vectors:
+            if i == len(vs.values):
+                return zs
+            zs.values.append(vs.values[i])
+        i += 1
 
 
 cdef double hue_to_rgb(double m1, double m2, double h):
