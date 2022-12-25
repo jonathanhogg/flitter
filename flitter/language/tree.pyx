@@ -824,12 +824,12 @@ cdef class InlineLet(Expression):
 
 
 cdef class For(Expression):
-    cdef readonly str name
+    cdef readonly tuple names
     cdef readonly Expression source
     cdef readonly Expression body
 
-    def __init__(self, str name, Expression source, Expression body):
-        self.name = name
+    def __init__(self, tuple names, Expression source, Expression body):
+        self.names = names
         self.source = source
         self.body = body
 
@@ -839,10 +839,15 @@ cdef class For(Expression):
         cdef model.Vector value
         cdef dict saved = context.variables
         context.variables = saved.copy()
-        for v in source.values:
-            value = model.Vector.__new__(model.Vector)
-            value.values.append(v)
-            context.variables[self.name] = value
+        cdef int i=0, n=len(source.values)
+        cdef str name
+        while i < n:
+            for name in self.names:
+                value = model.Vector.__new__(model.Vector)
+                if i < n:
+                    value.values.append(source.values[i])
+                i += 1
+                context.variables[name] = value
             results.values.extend(self.body.evaluate(context))
         context.variables = saved
         return results
@@ -853,23 +858,29 @@ cdef class For(Expression):
         cdef model.Vector values, single
         cdef dict saved = context.variables
         context.variables = saved.copy()
+        cdef str name
         if not isinstance(source, Literal):
-            if self.name in context.variables:
-                del context.variables[self.name]
+            for name in self.names:
+                if name in context.variables:
+                    del context.variables[name]
             body = self.body.partially_evaluate(context)
             context.variables = saved
-            return For(self.name, source, body)
+            return For(self.names, source, body)
         values = (<Literal>source).value
-        for value in values.values:
-            single = model.Vector.__new__(model.Vector)
-            single.values.append(value)
-            context.variables[self.name] = single
+        cdef int i=0, n=len(values)
+        while i < n:
+            for name in self.names:
+                single = model.Vector.__new__(model.Vector)
+                if i < n:
+                    single.values.append(values[i])
+                i += 1
+                context.variables[name] = single
             remaining.append(self.body.partially_evaluate(context))
         context.variables = saved
         return sequence_pack(remaining)
 
     def __repr__(self):
-        return f'For({self.name!r}, {self.source!r}, {self.body!r})'
+        return f'For({self.names!r}, {self.source!r}, {self.body!r})'
 
 
 cdef class Test:

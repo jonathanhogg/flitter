@@ -45,8 +45,8 @@ class FlitterTransformer(Transformer):
     def inline_if_else(self, then, condition, else_):
         return tree.IfElse((tree.Test(condition, then),), else_)
 
-    def inline_loop(self, body, name, source):
-        return tree.For(name, source, body)
+    def inline_loop(self, body, names, source):
+        return tree.For(names, source, body)
 
     tuple = v_args(inline=False)(tuple)
 

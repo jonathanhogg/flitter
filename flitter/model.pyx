@@ -447,7 +447,7 @@ cdef class Query:
 @cython.final
 @cython.freelist(1000)
 cdef class Node:
-    def __cinit__(self, str kind, set tags=None, dict attributes=None, /):
+    def __cinit__(self, str kind, set tags=None, dict attributes=None):
         self.kind = kind
         self._tags = set() if tags is None else tags.copy()
         self._attributes = {} if attributes is None else attributes.copy()
@@ -651,7 +651,7 @@ cdef class Node:
     def items(self):
         return self._attributes.items()
 
-    def get(self, str name, int n=0, type t=None, default=None, /):
+    def get(self, str name, int n=0, type t=None, default=None):
         cdef Vector value = self._attributes.get(name)
         if value is not None:
             return value.match(n, t, default)
