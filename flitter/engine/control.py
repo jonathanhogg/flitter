@@ -5,6 +5,7 @@ The main Flitter engine
 # pylama:ignore=W0703,R0902,R0912,R0913,R0914,R0915,R1702,C901
 
 import asyncio
+import csv
 import gc
 import logging
 from pathlib import Path
@@ -52,6 +53,7 @@ class Controller:
         self.osc_receiver = OSCReceiver('localhost', self.RECEIVE_PORT)
         self.queue = []
         self.read_cache = {}
+        self.csv_cache = {}
         self.pages = []
         self.next_page = None
         self.current_page = None
@@ -123,6 +125,42 @@ class Controller:
                 self.read_cache[path] = text, path_mtime
                 Log.info("Read: %s", filename)
                 return text
+        return null
+
+    def csv(self, filename, line_number):
+        filename = filename.as_string()
+        line_number = line_number.match(1, int)
+        lines = reader = None
+        if filename and line_number is not None:
+            path = self.root_dir / filename
+            if path.exists():
+                path_mtime = path.stat().st_mtime
+                if path in self.csv_cache:
+                    cached_lines, cached_reader, mtime = self.csv_cache[path]
+                    if path_mtime == mtime:
+                        lines, reader = cached_lines, cached_reader
+                if lines is None:
+                    lines = []
+                    reader = csv.reader(path.open(encoding='utf8'))
+                    self.csv_cache[path] = lines, reader, path_mtime
+                    Log.info("Read CSV: %s", filename)
+            if lines is not None:
+                while reader is not None and line_number >= len(lines):
+                    try:
+                        row = next(reader)
+                        values = []
+                        for value in row:
+                            try:
+                                value = float(value)
+                            except ValueError:
+                                pass
+                            values.append(value)
+                        lines.append(Vector(values))
+                    except StopIteration:
+                        self.csv_cache[path] = lines, None, path_mtime
+                        break
+                if line_number < len(lines):
+                    return lines[line_number]
         return null
 
     def update_windows(self, graph, **kwargs):
@@ -315,7 +353,7 @@ class Controller:
                 delta = beat - last
                 last = beat
                 context = self.program_top.run(self.state, beat=beat, quantum=self.counter.quantum,
-                                               delta=delta, clock=frame_time, read=self.read, performance=performance)
+                                               delta=delta, clock=frame_time, read=self.read, csv=self.csv, performance=performance)
                 execution += self.counter.clock()
                 render -= self.counter.clock()
                 self.handle_pragmas(context.pragmas)
