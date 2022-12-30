@@ -433,7 +433,7 @@ def make_path_effect(node):
 
 
 def draw(node, ctx, paint=None, font=None, path=None):
-    start = time.time()
+    start = time.perf_counter()
     match node.kind:
         case "group":
             ctx.save()
@@ -602,7 +602,7 @@ def draw(node, ctx, paint=None, font=None, path=None):
                         paint.setPathEffect(path_effect)
 
     if _RecordStats:
-        duration = time.time() - start
+        duration = time.perf_counter() - start
         kind = node.kind
         _Counts[kind] = _Counts.get(kind, 0) + 1
         _Durations[kind] = _Durations.get(kind, 0) + duration

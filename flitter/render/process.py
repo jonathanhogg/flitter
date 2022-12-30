@@ -16,12 +16,13 @@ import time
 from posix_ipc import Semaphore, O_CREX
 
 from . import scene
+from .. import model
 
 
 HEADER_SIZE = 4
 BUFFER_SIZE = 1 << 20
 
-Log = logging.getLogger(__package__)
+Log = logging.getLogger('flitter.render.process')
 
 
 class Window:
@@ -30,7 +31,7 @@ class Window:
         self.ready = Semaphore(None, O_CREX)
         self.done = Semaphore(None, O_CREX)
         self.position = HEADER_SIZE
-        arguments = [sys.executable, '-m', 'flitter.render.process', f'--screen={screen}']
+        arguments = [sys.executable, '-u', '-m', 'flitter.render.process', f'--screen={screen}']
         if fullscreen:
             arguments.append('--fullscreen')
         if vsync:
@@ -71,7 +72,7 @@ class Window:
 
 class Server:
     def __init__(self, buffer, ready, done, screen=0, fullscreen=False, vsync=False):
-        Log.info("Starting render node %s", buffer)
+        Log.info("Started render node %s", buffer)
         self.window = scene.Window(screen=screen, fullscreen=fullscreen, vsync=vsync)
         self.shared_memory = SharedMemory(name=buffer)
         self.ready = Semaphore(ready)
@@ -83,21 +84,21 @@ class Server:
             draw = 0
             size = 0
             nframes = 0
-            stats_time = time.monotonic()
+            stats_time = time.perf_counter()
             while True:
                 self.ready.acquire()
-                decode -= time.monotonic()
+                decode -= time.perf_counter()
                 end, = struct.unpack_from('>L', self.shared_memory.buf)
                 node, kwargs = pickle.loads(self.shared_memory.buf[HEADER_SIZE:end])
-                decode += time.monotonic()
+                decode += time.perf_counter()
                 self.done.release()
-                draw -= time.monotonic()
+                draw -= time.perf_counter()
                 self.window.update(node, **kwargs)
-                draw += time.monotonic()
+                draw += time.perf_counter()
                 nframes += 1
                 size += end - HEADER_SIZE
-                if time.monotonic() > stats_time + 5:
-                    Log.info("Render stats - decode %.1fms, draw %.1fms, data size %.0f bytes", 1000*decode/nframes, 1000*draw/nframes, 1000*size/nframes)
+                if time.perf_counter() > stats_time + 5:
+                    Log.info("Render stats - decode %.1fms, draw %.1fms, data size %d bytes", 1000*decode/nframes, 1000*draw/nframes, size//nframes)
                     nframes = decode = draw = size = 0
                     stats_time += 5
         finally:
