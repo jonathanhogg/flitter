@@ -65,7 +65,7 @@ if $("glow";"touched") or $("glow";"toggled")
 
 if $("glow";"toggled")
     {#top.}
-        !shader#main size=PHYSICAL fragment=read("../glsl/feedback.frag") glow=$("glow_amount") scale=1.1 mixing=0.2
+        !shader#main size=PHYSICAL fragment=read("glsl/feedback.frag") glow=$("glow_amount") scale=1.1 mixing=0.2
             {#top. > *}
 
 
@@ -80,7 +80,7 @@ if $("water";"toggled")
     {#main} size=oversize
     {canvas#main} translate=offset
     {#top.}
-        !shader#main fragment=read("../glsl/water.frag") size=oversize window=PHYSICAL \
+        !shader#main fragment=read("glsl/water.frag") size=oversize window=PHYSICAL \
                 depth = $("water_depth") \
                 strength = $("water_strength") \
                 _period = 4 + 8 * beta("period")[..4] \
