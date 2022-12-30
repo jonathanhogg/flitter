@@ -3,9 +3,38 @@
 **flitter** is a 2D (presently) visuals language and engine designed for live
 performances. While **flitter** supports a basic form of live-coding (live
 reload of source files), it is designed primarily for driving via an Ableton
-Push2 controller.
+Push 2 controller.
 
 It is implemented in a mix of Python and Cython.
+
+## Background
+
+This is probably my third implementation of a variant of these ideas.
+Originally, I developed a simple visuals system as an embedding in Python
+(using a crazy system of `with` statements to build the graph) sending JSON
+graphs over a WebSocket to a JavaScript web app that rendered the results in an
+HTML 2D canvas.
+
+This version was initially developed over a furious fortnight in October 2021
+leading up to a live performance at the Purcell Room, London Southbank Centre,
+supporting Bishi at her 'Let My Country Awake' album launch. The work was
+partially supported by Ableton, who gave me an artist discount on a Push 2. I've
+been working on **flitter** off-and-on since then trying to develop it as a live
+tool.
+
+While I think live-reload is a hugely useful tool for testing ideas, I find the
+idea of writing code live too terrifying. What I'm interested in is using
+physical knobs and buttons to control parametric code. So **flitter** is
+designed to provide different ways to manipulate scene graphs, including the
+ability to search and alter a graph, and piece one together from sections.
+
+Nothing about this is in any sense "finished". It is still a testbed for my
+ideas. I've put this on GitHub in case someone else finds something in this that
+is interesting. If you're thinking of using a Push 2 then you might find the
+Python API for this useful – it provides complete support for all of the
+controls and drawing stuff on the screen.
+
+-- Jonathan Hogg <me@jonathanhogg.com>
 
 ## Requirements
 
@@ -23,8 +52,8 @@ For reference, they are:
 - `numpy` - for fast memory crunching
 - `lark` - for the language parser
 - `regex` - for the language parser
-- `python-rtmidi` - for talking MIDI to the Push2
-- `pyusb` - for sending the screen data to the Push2
+- `python-rtmidi` - for talking MIDI to the Push 2
+- `pyusb` - for sending the screen data to the Push 2
 - `skia-python` - for 2D drawing
 - `pyglet` - for OpenGL windowing
 - `moderngl` - because the OpenGL API is too hard
@@ -69,7 +98,7 @@ repeatedly (at an attempted 60fps) and render this to screen. Note that one
 explicitly specifies a window to be drawn into. The engine actually supports
 multiple windows, although this is pretty untested so your mileage may vary.
 
-```sh
+```
 ./flitter.sh examples/hello.fl
 ```
 
@@ -108,11 +137,11 @@ The available global values are:
 `!window`s composite their children and a `!canvas` is transparent until drawn
 into.
 
-## Controlling the code with a Push2
+## Controlling code with a Push 2
 
-Assuming that you have an Ableton Push2 connected,
+Assuming that you have an Ableton Push 2 connected,
 
-```sh
+```
 ./push.sh
 ```
 
@@ -122,7 +151,7 @@ and stopping.
 
 Other than tempo control, you won't have much in the way of interface until you
 specify one in the program itself. `!pad` and `!encoder` nodes at the top level
-in the graph will configure pads and encoders on the Push2. Again, really
+in the graph will configure pads and encoders on the Push 2. Again, really
 you'll need to look at the examples.
 
 The outputs from the pads and encoders are put into a special environment map
@@ -131,7 +160,7 @@ parameterise the program and live manipulate it.
 
 If multiple code files are specified on the command line of the engine, then
 these will be loaded as multiple "pages". The previous and next page buttons on
-the Push2 can be used to switch between the files. The state of each page is
+the Push 2 can be used to switch between the files. The state of each page is
 maintained when switching, including the current tempo and start time of the
 beat clock, and the state values of all of the pads and encoders.
 
