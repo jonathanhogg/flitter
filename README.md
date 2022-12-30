@@ -7,7 +7,7 @@ Push 2 controller.
 
 It is implemented in a mix of Python and Cython.
 
-## Background
+## Background
 
 This is probably my third implementation of a variant of these ideas.
 Originally, I developed a simple visuals system as an embedding in Python
