@@ -11,16 +11,15 @@ It is implemented in a mix of Python and Cython.
 
 This is probably my third implementation of a variant of these ideas.
 Originally, I developed a simple visuals system as an embedding in Python
-(using a crazy system of `with` statements to build the graph) sending JSON
-graphs over a WebSocket to a JavaScript web app that rendered the results in an
-HTML 2D canvas.
+(using a crazy system of `with` statements) sending JSON graphs over a WebSocket
+to a JavaScript web app that rendered the results in an HTML 2D canvas.
 
-This version was initially developed over a furious fortnight in October 2021
-leading up to a live performance at the Purcell Room, London Southbank Centre,
-supporting Bishi at her 'Let My Country Awake' album launch. The work was
-partially supported by Ableton, who gave me an artist discount on a Push 2. I've
-been working on **flitter** off-and-on since then trying to develop it as a live
-tool.
+This current version was initially developed over a furious fortnight in
+October 2021 leading up to a live performance at the Purcell Room, London
+Southbank Centre, supporting Bishi at her 'Let My Country Awake' album launch.
+The work was partially supported by Ableton, who gave me an artist discount on
+a Push 2. I've been working on **flitter** off-and-on since then trying to
+develop it as a live tool.
 
 While I think live-reload is a hugely useful tool for testing ideas, I find the
 idea of writing code live too terrifying. What I'm interested in is using
@@ -42,7 +41,7 @@ Python 3.10 is *required* as the code uses `match`/`case` syntax.
 
 Install the required modules with:
 
-```sh
+```
 pip3 install -r requirements.txt
 ```
 
@@ -61,13 +60,12 @@ For reference, they are:
 
 ## The Language
 
-**flitter** is mainly a test-bed for my ideas. The language is a declarative
-graph-construction language (`Node` in the model). All values are arrays
-(`Vector` in the model), delimited with semicolons, and all maths is piece-wise.
-Singleton vectors are generally extended out to the useful length, i.e.,
-`(1;2;3;4) * 2` is `2;4;6;8`. The `null` value is an empty array and most
-expressions evaluate to this in event of an error. In particular, all maths
-expressions involving a `null` will evaluate to `null`.
+**flitter** is a declarative graph-construction language (`Node` in the model).
+All values are arrays (`Vector` in the model), delimited with semicolons, and
+all maths is piece-wise. Singleton vectors are generally extended out to the
+useful length, i.e., `(1;2;3;4) * 2` is `2;4;6;8`. The `null` value is an empty
+array and most expressions evaluate to this in event of an error. In particular,
+all maths expressions involving a `null` will evaluate to `null`.
 
 A-la Python, indentation represents block structuring. `let` statements name
 constant values, everything else is largely about creating nodes to append to

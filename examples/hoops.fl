@@ -1,0 +1,42 @@
+
+%pragma tempo 120
+
+let SIZE=1920;1080 RADIUS=min(SIZE)*$("radius") THICKNESS=min(SIZE)*$("thickness") OFFSET=SIZE*$("offset") N=$("count")//1
+
+!window size=SIZE*2/3
+    !canvas size=SIZE composite="add" antialias=N>25
+        !group#arcs translate=SIZE/2 scale=$("size")
+            for i in ..N
+                let period=2*beta("period")[i]*quantum phase=uniform("phase")[i] cycle=beat/period+phase c=quad(cycle%1)
+                    offset=OFFSET*((map(c, beta("x";i)[cycle], beta("x";i)[cycle+1]);map(c, beta("y";i)[cycle], beta("y";i)[cycle+1]))-0.5)
+                    thickness=THICKNESS*map(c, beta("thickness";i)[cycle], beta("thickness";i)[cycle+1])
+                    eccentricity=$("eccentricity")*(map(c, beta("eccentricity";i)[cycle], beta("eccentricity";i)[cycle+1])-0.5)*2
+                    radius=(thickness/2+RADIUS*map(c, beta("radius";i)[cycle], beta("radius";i)[cycle+1]))*(min(1+eccentricity;1);min(1-eccentricity;1))
+                    start=map(c, uniform("start";i)[cycle], uniform("start";i)[cycle+1])
+                    sweep=(1-$("sweep"))+$("sweep")*map(c, beta("sweep";i)[cycle], beta("sweep";i)[cycle+1])
+                    hue=map(c, uniform("hue";i)[cycle], uniform("hue";i)[cycle+1])
+                !group#arc stroke_width=thickness color=hsv(hue;1;1/(N**0.5)) translate=offset rotate=cycle
+                    !path
+                        if sweep < 1
+                            !arc point=0 radius=radius start=start sweep=sweep
+                        else
+                            !ellipse radius=radius
+                        !stroke
+
+if $("mix") > 0
+    {window}
+        !shader size=SIZE fragment=read("glsl/feedback.frag") mixing=$("mix") glow=$("glow") scale=$("zoom")
+            {window>*}
+
+!encoder number=0 name="Count" color=0;1;0 state="count" lower=1 upper=100 initial=5 decimals=0
+!encoder number=1 name="Size" color=0;1;0 state="size" lower=0 upper=2 initial=1 decimals=0 percent=true
+
+!encoder number=2 name="Sweep" color=0;1;1 state="sweep" lower=0 upper=1 initial=0 decimals=0 percent=true
+!encoder number=3 name="Eccentric" color=0;1;1 state="eccentricity" lower=0 upper=1 initial=0.5 decimals=0 percent=true
+!encoder number=4 name="Offset" color=0;1;1 state="offset" lower=0 upper=0.25 initial=0.1 decimals=0 percent=true
+!encoder number=5 name="Thickness" color=0;1;1 state="thickness" lower=0 upper=0.5 initial=0.5 decimals=0 percent=true
+!encoder number=6 name="Radius" color=0;1;1 state="radius" lower=0 upper=0.5 initial=0.5 decimals=0 percent=true
+
+!encoder number=7 name="Mix" color=1;1;0 state="mix" lower=0 upper=1 initial=0.1 decimals=1
+!encoder number=8 name="Glow" color=1;1;0 state="glow" lower=0 upper=5 initial=1
+!encoder number=9 name="Zoom" color=1;1;0 state="zoom" lower=0 upper=2 initial=1.3
