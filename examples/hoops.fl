@@ -4,7 +4,7 @@
 let SIZE=1920;1080 RADIUS=min(SIZE)*$("radius") THICKNESS=min(SIZE)*$("thickness") OFFSET=SIZE*$("offset") N=$("count")//1
 
 !window size=SIZE*2/3
-    !canvas size=SIZE composite="add" antialias=N>25
+    !canvas size=SIZE composite="add" antialias=N<25
         !group#arcs translate=SIZE/2 scale=$("size")
             for i in ..N
                 let period=2*beta("period")[i]*quantum phase=uniform("phase")[i] cycle=beat/period+phase c=quad(cycle%1)
@@ -24,13 +24,14 @@ let SIZE=1920;1080 RADIUS=min(SIZE)*$("radius") THICKNESS=min(SIZE)*$("thickness
                         !stroke
 
 if $("mix") > 0
+    -- Insert a feedback shader into the graph between the window and its contents:
     {window}
         !shader size=SIZE fragment=read("glsl/feedback.frag") mixing=$("mix") glow=$("glow") scale=$("zoom")
             {window>*}
 
+-- Define a bunch of encoders for mucking about with the parameters:
 !encoder number=0 name="Count" color=0;1;0 state="count" lower=1 upper=100 initial=5 decimals=0
 !encoder number=1 name="Size" color=0;1;0 state="size" lower=0 upper=2 initial=1 decimals=0 percent=true
-
 !encoder number=2 name="Sweep" color=0;1;1 state="sweep" lower=0 upper=1 initial=0 decimals=0 percent=true
 !encoder number=3 name="Eccentric" color=0;1;1 state="eccentricity" lower=0 upper=1 initial=0.5 decimals=0 percent=true
 !encoder number=4 name="Offset" color=0;1;1 state="offset" lower=0 upper=0.25 initial=0.1 decimals=0 percent=true
@@ -38,5 +39,8 @@ if $("mix") > 0
 !encoder number=6 name="Radius" color=0;1;1 state="radius" lower=0 upper=0.5 initial=0.5 decimals=0 percent=true
 
 !encoder number=7 name="Mix" color=1;1;0 state="mix" lower=0 upper=1 initial=0.1 decimals=1
-!encoder number=8 name="Glow" color=1;1;0 state="glow" lower=0 upper=5 initial=1
+
+-- Note that these two encoders aren't actually usable as the Push 2 only has 8
+-- TODO: allow for some mechanism of switching banks of encoders...
+!encoder number=8 name="Glow" color=1;1;0 state="glow" lower=0 upper=5 initial=0.5
 !encoder number=9 name="Zoom" color=1;1;0 state="zoom" lower=0 upper=2 initial=1.3
