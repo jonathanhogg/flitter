@@ -506,6 +506,9 @@ def draw(node, ctx, paint=None, font=None, path=None):
         case "clip":
             ctx.clipPath(path, skia.ClipOp.kIntersect, paint.isAntiAlias())
 
+        case "mask":
+            ctx.clipPath(path, skia.ClipOp.kDifference, paint.isAntiAlias())
+
         case "fill":
             paint = skia.Paint(paint)
             set_styles(node, paint=paint)
