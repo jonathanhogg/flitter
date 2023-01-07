@@ -357,13 +357,13 @@ class Controller:
                 execution += self.counter.clock()
                 render -= self.counter.clock()
                 self.handle_pragmas(context.pragmas)
-                if self.autoreset and self.state_timestamp and self.counter.clock() > self.state_timestamp + self.autoreset:
-                    self.reset_state()
                 self.update_controls(context.graph)
                 self.update_windows(context.graph, clock=frame_time, beat=beat, delta=delta)
                 render += self.counter.clock()
 
                 housekeeping -= self.counter.clock()
+                if self.autoreset and self.state_timestamp and self.counter.clock() > self.state_timestamp + self.autoreset:
+                    self.reset_state()
                 count = gc.collect(0)
                 if count:
                     Log.debug("Collected %d objects", count)
