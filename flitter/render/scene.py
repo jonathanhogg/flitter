@@ -124,13 +124,19 @@ class ProgramNode(SceneNode):
     def framebuffer(self):
         raise NotImplementedError()
 
+    @property
+    def size(self):
+        return self.framebuffer.size
+
     def create(self, node, resized, **kwargs):
         super().create(node, resized, **kwargs)
         if resized and self._last is not None:
             self._last.release()
             self._last = None
 
-    def get_vertex_source(self, _):
+    def get_vertex_source(self, node):
+        if 'vertex' in node:
+            return node['vertex'].as_string()
         return """#version 410
 in vec2 position;
 out vec2 coord;
@@ -140,7 +146,9 @@ void main() {
 }
 """
 
-    def get_fragment_source(self, _):
+    def get_fragment_source(self, node):
+        if 'fragment' in node:
+            return node['fragment'].as_string()
         children = [child for child in self.children if child.texture is not None]
         samplers = '\n'.join(f"uniform sampler2D texture{i};" for i in range(len(children)))
         textures = '\n'.join(f"""    merge = texture(texture{i}, coord);
@@ -220,6 +228,8 @@ void main() {{
                                 child.texture.use(location=unit)
                             member.value = unit
                             unit += 1
+                    elif name == 'size':
+                        member.value = self.size
                     elif name in kwargs:
                         member.value = kwargs[name]
                     elif name in node:
@@ -269,6 +279,10 @@ class Window(ProgramNode):
     def framebuffer(self):
         return self.glctx.screen
 
+    @property
+    def size(self):
+        return self.glctx.screen.viewport[2:]
+
     def create(self, node, resized, **kwargs):
         super().create(node, resized)
         if self.window is None:
@@ -290,7 +304,7 @@ class Window(ProgramNode):
                     self.window._nswindow.enterFullScreenMode_(self.window._nswindow.screen())  # noqa
                 else:
                     self.window.set_fullscreen(True)
-        else:
+        elif resized:
             self.on_resize(self.width, self.height)
 
     def on_resize(self, width, height):
@@ -303,6 +317,7 @@ class Window(ProgramNode):
             view_height = int(width / aspect_ratio)
             viewport = (0, (height - view_height) // 2, width, view_height)
         self.glctx.screen.viewport = viewport
+        Log.debug("Window resized to %dx%d (viewport %dx%d)", width, height, *viewport[2:])
 
     def on_close(self):
         self._closed = True
@@ -348,12 +363,6 @@ class Shader(ProgramNode):
             self._texture = self.glctx.texture((self.width, self.height), 4)
             self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
             self._framebuffer.clear()
-
-    def get_vertex_source(self, node):
-        return node['vertex'].as_string() if 'vertex' in node else super().get_vertex_source(node)
-
-    def get_fragment_source(self, node):
-        return node['fragment'].as_string() if 'fragment' in node else super().get_fragment_source(node)
 
 
 class Canvas(SceneNode):
