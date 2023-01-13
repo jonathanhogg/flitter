@@ -61,7 +61,7 @@ class SceneNode:
     def descend(self, node, **kwargs):
         count = 0
         for i, child in enumerate(node.children):
-            cls = SCENE_CLASSES[child.kind]
+            cls = {'reference': Reference, 'shader': Shader, 'canvas': Canvas}[child.kind]
             if i == len(self.children):
                 self.children.append(cls(self.glctx))
             elif type(self.children[i]) != cls:  # noqa
@@ -413,6 +413,3 @@ class Canvas(SceneNode):
         self._framebuffer.clear()
         canvas.draw(node, self._canvas)
         self._surface.flushAndSubmit()
-
-
-SCENE_CLASSES = {'reference': Reference, 'shader': Shader, 'canvas': Canvas}

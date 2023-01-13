@@ -5,8 +5,10 @@ Multi-processing for window rendering
 # pylama:ignore=R0903,R1732,R0913
 
 import argparse
+import importlib
 import logging
 from multiprocessing.shared_memory import SharedMemory
+import os
 import pickle
 import struct
 import subprocess
@@ -15,7 +17,6 @@ import time
 
 from posix_ipc import Semaphore, O_CREX
 
-from . import scene
 from .. import model
 
 
@@ -25,24 +26,23 @@ BUFFER_SIZE = 1 << 20
 Log = logging.getLogger('flitter.render.process')
 
 
-class Window:
-    def __init__(self, screen=0, fullscreen=False, vsync=False):
+class Proxy:
+    def __init__(self, class_name, **kwargs):
         self.shared_memory = SharedMemory(create=True, size=BUFFER_SIZE)
         self.ready = Semaphore(None, O_CREX)
         self.done = Semaphore(None, O_CREX)
         self.position = HEADER_SIZE
-        arguments = [sys.executable, '-u', '-m', 'flitter.render.process', f'--screen={screen}']
-        if fullscreen:
-            arguments.append('--fullscreen')
-        if vsync:
-            arguments.append('--vsync')
+        arguments = [sys.executable, '-u', '-m', 'flitter.render.process']
         level = logging.getLogger().level
         if level == logging.INFO:
             arguments.append('--verbose')
         elif level == logging.DEBUG:
             arguments.append('--debug')
-        arguments.extend([self.shared_memory.name, self.ready.name, self.done.name])
+        arguments.extend([self.shared_memory.name, self.ready.name, self.done.name, class_name])
+        pickle.dump(kwargs, self, protocol=pickle.HIGHEST_PROTOCOL)
+        self.shared_memory.buf[0:4] = struct.pack('>L', self.position)
         self.process = subprocess.Popen(arguments)
+        self.position = HEADER_SIZE
 
     def write(self, data):
         end = self.position + len(data)
@@ -71,14 +71,21 @@ class Window:
 
 
 class Server:
-    def __init__(self, buffer, ready, done, screen=0, fullscreen=False, vsync=False):
-        Log.info("Started render node %s", buffer)
-        self.window = scene.Window(screen=screen, fullscreen=fullscreen, vsync=vsync)
+    def __init__(self, buffer, ready, done, class_name):
+        self.pid = os.getpid()
         self.shared_memory = SharedMemory(name=buffer)
         self.ready = Semaphore(ready)
         self.done = Semaphore(done)
+        self.class_name = class_name
+        parts = class_name.split('.')
+        module = importlib.import_module('.'.join(parts[:-1]))
+        cls = getattr(module, parts[-1])
+        end, = struct.unpack_from('>L', self.shared_memory.buf)
+        kwargs = pickle.loads(self.shared_memory.buf[HEADER_SIZE:end])
+        self.obj = cls(**kwargs)
 
     def run(self):
+        Log.info("Started %s render process %d", self.class_name, self.pid)
         try:
             decode = 0
             draw = 0
@@ -94,30 +101,28 @@ class Server:
                 decode += time.perf_counter()
                 self.done.release()
                 draw -= time.perf_counter()
-                self.window.update(node, **kwargs)
+                self.obj.update(node, **kwargs)
                 draw += time.perf_counter()
                 nframes += 1
                 size += end - HEADER_SIZE
                 if time.perf_counter() > stats_time + 5:
-                    Log.info("Render stats - decode %.1fms, draw %.1fms, data size %d bytes", 1000*decode/nframes, 1000*draw/nframes, size//nframes)
+                    Log.info("Process %d /frame - decode %.1fms, render %.1fms, data size %d bytes", self.pid,
+                             1000*decode/nframes, 1000*draw/nframes, size//nframes)
                     nframes = decode = draw = size = 0
                     stats_time += 5
         finally:
             self.shared_memory.close()
             self.ready.close()
             self.done.close()
-            Log.info("Stopped render node %s", self.shared_memory.name)
+            Log.info("Stopped %s render process %d", self.class_name, self.pid)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Flitter renderer")
     parser.add_argument('--debug', action='store_true', default=False, help="Debug logging")
     parser.add_argument('--verbose', action='store_true', default=False, help="Informational logging")
-    parser.add_argument('--screen', type=int, default=0, help="Default screen number")
-    parser.add_argument('--fullscreen', action='store_true', default=False, help="Default to full screen")
-    parser.add_argument('--vsync', action='store_true', default=False, help="Default to winow vsync")
-    parser.add_argument('objects', type=str, nargs='+', help="Shared objects")
+    parser.add_argument('names', type=str, nargs='+', help="Object/class names")
     args = parser.parse_args()
+    server = Server(*args.names)
     logging.basicConfig(level=logging.DEBUG if args.debug else (logging.INFO if args.verbose else logging.WARNING), stream=sys.stderr)
-    server = Server(*args.objects, screen=args.screen, fullscreen=args.fullscreen, vsync=args.vsync)
     server.run()

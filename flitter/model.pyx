@@ -651,7 +651,7 @@ cdef class Node:
     def items(self):
         return self._attributes.items()
 
-    def get(self, str name, int n=0, type t=None, default=None):
+    cpdef object get(self, str name, int n=0, type t=None, object default=None):
         cdef Vector value = self._attributes.get(name)
         if value is not None:
             return value.match(n, t, default)

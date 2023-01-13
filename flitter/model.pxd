@@ -62,6 +62,7 @@ cdef class Node:
     cpdef void remove(self, Node node)
     cdef bint _select(self, Query query, list nodes, bint first)
     cdef bint _equals(self, Node other)
+    cpdef object get(self, str name, int n=?, type t=?, object default=?)
 
 
 cdef class Context:

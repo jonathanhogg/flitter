@@ -16,7 +16,7 @@ from ..interface.controls import Pad, Encoder
 from ..interface.osc import OSCReceiver, OSCSender, OSCMessage, OSCBundle
 from ..language.parser import parse
 from ..model import Context, Vector, null
-from ..render import scene, process
+from ..render import process, window, laser
 
 
 Log = logging.getLogger(__name__)
@@ -46,6 +46,7 @@ class Controller:
         self.state = None
         self.program_top = None
         self.windows = []
+        self.lasers = []
         self.counter = BeatCounter()
         self.pads = {}
         self.encoders = {}
@@ -167,12 +168,29 @@ class Controller:
         count = 0
         for i, node in enumerate(graph.select_below('window.')):
             if i == len(self.windows):
-                Window = process.Window if self.multiprocess else scene.Window
-                self.windows.append(Window(screen=self.screen, fullscreen=self.fullscreen, vsync=self.vsync))
+                if self.multiprocess:
+                    w = process.Proxy('flitter.render.window.Window', screen=self.screen, fullscreen=self.fullscreen, vsync=self.vsync)
+                else:
+                    w = window.Window(screen=self.screen, fullscreen=self.fullscreen, vsync=self.vsync)
+                self.windows.append(w)
             self.windows[i].update(node, **kwargs)
             count += 1
         while len(self.windows) > count:
             self.windows.pop().destroy()
+
+    def update_lasers(self, graph):
+        count = 0
+        for i, node in enumerate(graph.select_below('laser.')):
+            if i == len(self.lasers):
+                if self.multiprocess:
+                    l = process.Proxy('flitter.render.laser.Laser')
+                else:
+                    l = laser.Laser()
+                self.lasers.append(l)
+            self.lasers[i].update(node)
+            count += 1
+        while len(self.lasers) > count:
+            self.lasers.pop().destroy()
 
     def update_controls(self, graph):
         remaining = set(self.pads)
@@ -352,13 +370,14 @@ class Controller:
                 beat = self.counter.beat_at_time(frame_time)
                 delta = beat - last
                 last = beat
-                context = self.program_top.run(self.state, beat=beat, quantum=self.counter.quantum,
-                                               delta=delta, clock=frame_time, read=self.read, csv=self.csv, performance=performance)
+                names = {'beat': beat, 'quantum': self.counter.quantum, 'delta': delta, 'clock': frame_time, 'performance': performance}
+                context = self.program_top.run(self.state, read=self.read, csv=self.csv, **names)
                 execution += self.counter.clock()
                 render -= self.counter.clock()
                 self.handle_pragmas(context.pragmas)
                 self.update_controls(context.graph)
-                self.update_windows(context.graph, clock=frame_time, beat=beat, delta=delta)
+                self.update_windows(context.graph, **names)
+                self.update_lasers(context.graph)
                 render += self.counter.clock()
 
                 housekeeping -= self.counter.clock()
