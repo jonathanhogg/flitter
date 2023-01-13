@@ -50,10 +50,10 @@ class Window:
         self.position = end
 
     def update(self, node, **kwargs):
+        self.done.acquire()
         pickle.dump((node, kwargs), self, protocol=pickle.HIGHEST_PROTOCOL)
         self.shared_memory.buf[0:4] = struct.pack('>L', self.position)
         self.ready.release()
-        self.done.acquire()
         self.position = HEADER_SIZE
 
     def purge(self):
@@ -85,6 +85,7 @@ class Server:
             size = 0
             nframes = 0
             stats_time = time.perf_counter()
+            self.done.release()
             while True:
                 self.ready.acquire()
                 decode -= time.perf_counter()
