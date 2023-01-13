@@ -59,6 +59,30 @@ cdef class LaserDriver:
     cdef int _sample_rate
     cdef double _accelleration, _epsilon
 
+    @property
+    def sample_rate(self):
+        return self._sample_rate
+
+    @sample_rate.setter
+    def sample_rate(self, value):
+        self._sample_rate = value
+
+    @property
+    def accelleration(self):
+        return self._accelleration
+
+    @accelleration.setter
+    def accelleration(self, value):
+        self._accelleration = value
+
+    @property
+    def epsilon(self):
+        return self._epsilon
+
+    @epsilon.setter
+    def epsilon(self, value):
+        self._epsilon = value
+
     def __init__(self, sample_rate=None, accelleration=None, epsilon=None):
         self._sample_bunches = [np.array([(0.5, 0.5, 0, 0, 0)])]
         self._sample_rate = sample_rate if sample_rate is not None else self.DEFAULT_SAMPLE_RATE
@@ -136,6 +160,8 @@ cdef class LaserCubeDriver(LaserDriver):
     DEFAULT_ACCELLERATION = 20   # sweeps/second^2
     DEFAULT_DAC_LAG = 2e-4       # seconds
 
+    VENDOR_ID = 0x1fc9
+    PRODUCT_ID = 0x04d8
     SET_ENABLED = 0x80
     GET_ENABLED = 0x81
     SET_DAC_RATE = 0x82
@@ -156,15 +182,13 @@ cdef class LaserCubeDriver(LaserDriver):
     cdef int _dac_min, _dac_range, _max_dac_rate
     cdef double _dac_lag
 
-    @classmethod
-    def first_connected(cls, vendor=0x1fc9, product=0x04d8, **kwargs):
-        device = usb.core.find(idVendor=vendor, idProduct=product)
-        if device is None:
-            raise ValueError("No device found")
-        return cls(device, **kwargs)
-
-    def __init__(self, device, dac_lag=None, **kwargs):
+    def __init__(self, id, dac_lag=None, **kwargs):
         super().__init__(**kwargs)
+        for device in usb.core.find(idVendor=self.VENDOR_ID, idProduct=self.PRODUCT_ID, find_all=True):
+            if id is None or device.serial_number == id:
+                break
+        else:
+            raise ValueError("No device found")
         self._device = device
         self._device.set_configuration()
         self._device.set_interface_altsetting(1, 1)
@@ -174,12 +198,21 @@ cdef class LaserCubeDriver(LaserDriver):
         self._dac_min = self._execute(self.GET_DAC_MINIMUM_VALUE, 'I')
         self._dac_range = self._execute(self.GET_DAC_MAXIMUM_VALUE, 'I') - self._dac_min
         self._max_dac_rate = self._execute(self.GET_MAXIMUM_DAC_RATE, 'I')
-        self._sample_rate = min(max(0, self._sample_rate), self._max_dac_rate)
         self._dac_lag = dac_lag if dac_lag is not None else self.DEFAULT_DAC_LAG
+        self._sample_rate = min(max(0, self._sample_rate), self._max_dac_rate)
         self._execute(self.SET_DAC_RATE, None, 'I', self._sample_rate)
         self._execute(self.SET_ENABLED, None, 'B', 1)
         major, minor = self._execute(self.GET_MAJOR_VERSION, 'I'), self._execute(self.GET_MINOR_VERSION, 'I')
         Log.info("Configured USB LaserCube '%s %s' (firmware %d.%d)", self._device.manufacturer, self._device.product, major, minor)
+
+    @property
+    def sample_rate(self):
+        return self._sample_rate
+
+    @sample_rate.setter
+    def sample_rate(self, value):
+        self._sample_rate = min(max(0, value), self._max_dac_rate)
+        self._execute(self.SET_DAC_RATE, None, 'I', self._sample_rate)
 
     def close(self):
         self._execute(self.SET_ENABLED, None, 'B', 0)
@@ -280,12 +313,21 @@ cdef class Laser:
     def update(self, model.Node node):
         driver = node['driver'].as_string().lower()
         cls = {'lasercube': LaserCubeDriver}.get(driver)
+        id = node['id'].as_string() if 'id' in node else None
+        sample_rate = node.get('sample_rate', 1, int, cls.DEFAULT_SAMPLE_RATE)
+        accelleration = node.get('accelleration', 1, float, cls.DEFAULT_ACCELLERATION)
+        epsilon = node.get('epsilon', 1, float, cls.DEFAULT_EPSILON)
         if not isinstance(self.driver, cls):
             if self.driver is not None:
                 self.driver.close()
-            self.driver = cls.first_connected(sample_rate=node.get('sample_rate', 1, int),
-                                               accelleration=node.get('accelleration', 1, float),
-                                               epsilon=node.get('epsilon', 1, float))
+            self.driver = cls(id, sample_rate=sample_rate, accelleration=accelleration, epsilon=epsilon)
+        else:
+            if sample_rate != self.driver.sample_rate:
+                self.driver.sample_rate = sample_rate
+            if accelleration != self.driver.accelleration:
+                self.driver.accelleration = accelleration
+            if epsilon != self.driver.epsilon:
+                self.driver.epsilon = epsilon
         color = (0., 0., 0.)
         transform = AffineTransform.identity()
         paths = []
