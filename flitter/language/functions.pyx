@@ -218,6 +218,20 @@ def quad(Vector xs not None):
     return ys
 
 
+def snap(Vector xs not None):
+    cdef Vector ys = Vector.__new__(Vector)
+    cdef double x, y
+    for i in range(len(xs.values)):
+        x = xs.values[i]
+        if x < 0:
+            x = 0
+        elif x > 1:
+            x = 1
+        y = sqrt(x * 2) / 2 if x < 0.5 else 1 - sqrt((1 - x) * 2) / 2
+        ys.values.append(y)
+    return ys
+
+
 def shuffle(Uniform source, Vector xs not None):
     cdef int j, n = len(xs.values)
     xs = Vector.__new__(Vector, xs)
@@ -369,6 +383,7 @@ FUNCTIONS = {
     'square': Vector((square,)),
     'linear': Vector((linear,)),
     'quad': Vector((quad,)),
+    'snap': Vector((snap,)),
     'shuffle': Vector((shuffle,)),
     'round': Vector((roundv,)),
     'sum': Vector((sumv,)),
