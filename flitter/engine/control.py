@@ -349,6 +349,10 @@ class Controller:
         self.state_timestamp = None
         self.global_state_dirty = True
 
+    def debug(self, value):
+        Log.debug("%r", value)
+        return value
+
     async def run(self):
         try:
             loop = asyncio.get_event_loop()
@@ -371,7 +375,7 @@ class Controller:
                 delta = beat - last
                 last = beat
                 names = {'beat': beat, 'quantum': self.counter.quantum, 'delta': delta, 'clock': frame_time, 'performance': performance}
-                context = self.program_top.run(self.state, read=self.read, csv=self.csv, **names)
+                context = self.program_top.run(self.state, read=self.read, csv=self.csv, debug=self.debug, **names)
                 execution += self.counter.clock()
                 render -= self.counter.clock()
                 self.handle_pragmas(context.pragmas)
