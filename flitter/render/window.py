@@ -23,12 +23,12 @@ from . import canvas
 Log = logging.getLogger(__name__)
 
 
-def value_split(values, n, m):
+def value_split(value, n, m):
     if m == 1:
-        return values[0] if n == 1 else list(values)
+        return value if n == 1 else list(value)
     elif n == 1:
-        return tuple(values)
-    return [tuple(values[i*m:(i+1)*m]) for i in range(n)]
+        return tuple(value)
+    return [tuple(value[i*m:(i+1)*m]) for i in range(n)]
 
 
 class SceneNode:
