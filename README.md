@@ -103,8 +103,8 @@ multiple windows, although this is pretty untested so your mileage may vary.
 A `!canvas` node creates a 2D drawing canvas that follows an SVG-like drawing
 model. `!group` sets styles and transforms. `!text` draws text, centred at
 `point` by default. `sine()` is a function that reproduces a sine wave ranging
-over [0..1] with the argument expressed in waves (turns/circumferens). `beat` is
-a global representing the current floating point beat of the master clock. The
+over [0..1] with the argument expressed in waves (turns/circumferens). `beat`
+is a global representing the current floating point beat of the main clock. The
 default BPM is 120, so `beat/2` is effectively a number of seconds since the
 clock started. `color`s are 3- or 4-vectors (RGB and RGBA) in the range [0..1],
 but the return value from `sine()` here is automagically extended out to the
@@ -119,14 +119,14 @@ for performing live.
 
 The available global values are:
 
-- `beat` - the current master clock beat (a monotonically-increasing floating
+- `beat` - the current main clock beat (a monotonically-increasing floating
     point value)
 - `quantum` - the beats per quantum (usually 4)
 - `delta` - the difference between the current value of `beat` and the value
     at the last display frame
-- `clock` - the time in seconds since the "start" of the master clock, this
-    will adjust when the tempo or quantum is changed to keep the value of `beat`
-    constant, so it's generally not a particularly useful value
+- `clock` - the time in seconds since the "start" of the main clock, this
+    will adjust when the tempo or quantum is changed to keep the value of
+    `beat` constant, so it's generally not a particularly useful value
 - `performance` - a value in the range [0.5 .. 1.5] that represents how well
     the engine is doing at maintaining the maximum frame rate (usually 60fps,
     but configurable with a command-line option) – above 1.0 means that the
