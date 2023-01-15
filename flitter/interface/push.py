@@ -75,7 +75,7 @@ class Controller:
             for element in message.elements:
                 await self.process_message(element)
             return
-        Log.info("Received OSC message: %r", message)
+        Log.debug("Received OSC message: %r", message)
         match message.address.strip('/').split('/'):
             case ['tempo']:
                 tempo, quantum, start = message.args
@@ -145,6 +145,7 @@ class Controller:
             self.updated.set()
 
     async def run(self):
+        Log.info("Starting Ableton Push 2 interface")
         self.push = Push2(palette=PrimaryPalette())
         self.push.start()
         for n in range(64):
@@ -303,7 +304,7 @@ class Controller:
                 self.push.set_button_white(n, 0)
 
 
-parser = argparse.ArgumentParser(description="Flight Server")
+parser = argparse.ArgumentParser(description="Flitter Ableton Push 2 Interface")
 parser.add_argument('--debug', action='store_true', default=False, help="Debug logging")
 parser.add_argument('--verbose', action='store_true', default=False, help="Informational logging")
 parser.add_argument('--notempo', action='store_true', default=False, help="Disable tempo control")
