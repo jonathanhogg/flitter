@@ -51,7 +51,7 @@ class SceneNode:
         while self.children:
             self.children.pop().destroy()
 
-    def update(self, node, **kwargs):
+    async def update(self, node, **kwargs):
         references = kwargs.setdefault('references', {})
         node_id = node['id'].as_string() if 'id' in node else None
         if node_id:
@@ -63,10 +63,10 @@ class SceneNode:
             self.height = height
             resized = True
         self.create(node, resized, **kwargs)
-        self.descend(node, **kwargs)
+        await self.descend(node, **kwargs)
         self.render(node, **kwargs)
 
-    def descend(self, node, **kwargs):
+    async def descend(self, node, **kwargs):
         count = 0
         for i, child in enumerate(node.children):
             cls = {'reference': Reference, 'shader': Shader, 'canvas': Canvas}[child.kind]
@@ -75,7 +75,7 @@ class SceneNode:
             elif type(self.children[i]) != cls:  # noqa
                 self.children[i].destroy()
                 self.children[i] = cls(self.glctx)
-            self.children[i].update(child, **kwargs)
+            await self.children[i].update(child, **kwargs)
             count += 1
         while len(self.children) > count:
             self.children.pop().destroy()
@@ -98,7 +98,7 @@ class Reference(SceneNode):
     def texture(self):
         return self._reference.texture if self._reference is not None else None
 
-    def update(self, node, references=None, **kwargs):
+    async def update(self, node, references=None, **kwargs):
         node_id = node['id'].as_string() if 'id' in node else None
         self._reference = references.get(node_id) if references is not None and node_id else None
 
@@ -412,7 +412,7 @@ class Canvas(SceneNode):
                                                                      skia.kRGBA_8888_ColorType, skia.ColorSpace.MakeSRGB())
             self._canvas = self._surface.getCanvas()
 
-    def descend(self, node, **kwargs):
+    async def descend(self, node, **kwargs):
         # A canvas is a leaf node from the perspective of the OpenGL world
         pass
 

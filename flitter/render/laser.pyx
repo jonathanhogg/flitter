@@ -92,7 +92,7 @@ cdef class LaserDriver:
     def close(self):
         pass
 
-    cpdef flush(self):
+    async def flush(self):
         raise NotImplementedError()
 
     @cython.cdivision(True)
@@ -228,7 +228,7 @@ cdef class LaserCubeDriver(LaserDriver):
         return results if len(results) > 1 else results[0]
 
     @cython.boundscheck(False)
-    cpdef flush(self):
+    async def flush(self):
         cdef int i, n, lag = max(1, <int>(round(self._sample_rate * self._dac_lag)))
         samples_array = np.vstack(self._sample_bunches)
         cdef double[:, :] samples = samples_array
@@ -243,7 +243,7 @@ cdef class LaserCubeDriver(LaserDriver):
                 output[i, 2] = <int>(round((1 - samples[i+lag, 0]) * self._dac_range)) + self._dac_min
                 output[i, 3] = <int>(round((1 - samples[i+lag, 1]) * self._dac_range)) + self._dac_min
             Log.debug("Writing %d sample frame", len(output))
-            self._data_out.write(output_array.tobytes())
+            await asyncio.to_thread(self._data_out.write, output_array.tobytes())
             self._sample_bunches = [samples_array[-lag:]]
         else:
             self._sample_bunches = [samples_array]
@@ -310,7 +310,12 @@ cdef class Laser:
     def __init__(self):
         self.driver = None
 
-    def update(self, model.Node node):
+    def destroy(self):
+        if self.driver is not None:
+            self.driver.close()
+            self.driver = None
+
+    async def update(self, model.Node node):
         driver = node['driver'].as_string().lower()
         cls = {'lasercube': LaserCubeDriver}.get(driver)
         id = node['id'].as_string() if 'id' in node else None
@@ -335,7 +340,7 @@ cdef class Laser:
         paths.sort(key=lambda pc: pc[0][0])
         for points, color in paths:
             self.driver.draw_path(points, color)
-        self.driver.flush()
+        await self.driver.flush()
 
     @cython.cdivision(True)
     def collect_paths(self, model.Node node not None, list paths not None, tuple color not None, AffineTransform transform not None):

@@ -5,6 +5,7 @@ Multi-processing for window rendering
 # pylama:ignore=R0903,R1732,R0913
 
 import argparse
+import asyncio
 import importlib
 import logging
 from multiprocessing.shared_memory import SharedMemory
@@ -49,8 +50,8 @@ class Proxy:
         self.shared_memory.buf[self.position:end] = data
         self.position = end
 
-    def update(self, node, **kwargs):
-        self.done.acquire()
+    async def update(self, node, **kwargs):
+        await asyncio.to_thread(self.done.acquire)
         pickle.dump((node, kwargs), self, protocol=pickle.HIGHEST_PROTOCOL)
         self.shared_memory.buf[0:4] = struct.pack('>L', self.position)
         self.ready.release()
@@ -84,7 +85,7 @@ class Server:
         kwargs = pickle.loads(self.shared_memory.buf[HEADER_SIZE:end])
         self.obj = cls(**kwargs)
 
-    def run(self):
+    async def run(self):
         Log.info("Started %s render process %d", self.class_name, self.pid)
         try:
             decode = 0
@@ -101,7 +102,7 @@ class Server:
                 decode += time.perf_counter()
                 self.done.release()
                 draw -= time.perf_counter()
-                self.obj.update(node, **kwargs)
+                await self.obj.update(node, **kwargs)
                 draw += time.perf_counter()
                 nframes += 1
                 size += end - HEADER_SIZE
@@ -125,4 +126,4 @@ if __name__ == '__main__':
     args = parser.parse_args()
     server = Server(*args.names)
     logging.basicConfig(level=logging.DEBUG if args.debug else (logging.INFO if args.verbose else logging.WARNING), stream=sys.stderr)
-    server.run()
+    asyncio.run(server.run())

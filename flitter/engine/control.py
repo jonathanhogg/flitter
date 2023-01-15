@@ -164,31 +164,33 @@ class Controller:
                     return lines[line_number]
         return null
 
-    def update_windows(self, graph, **kwargs):
+    async def update_windows(self, graph, **kwargs):
         count = 0
-        for i, node in enumerate(graph.select_below('window.')):
-            if i == len(self.windows):
-                if self.multiprocess:
-                    w = process.Proxy('flitter.render.window.Window', screen=self.screen, fullscreen=self.fullscreen, vsync=self.vsync)
-                else:
-                    w = window.Window(screen=self.screen, fullscreen=self.fullscreen, vsync=self.vsync)
-                self.windows.append(w)
-            self.windows[i].update(node, **kwargs)
-            count += 1
+        async with asyncio.TaskGroup() as group:
+            for i, node in enumerate(graph.select_below('window.')):
+                if i == len(self.windows):
+                    if self.multiprocess:
+                        w = process.Proxy('flitter.render.window.Window', screen=self.screen, fullscreen=self.fullscreen, vsync=self.vsync)
+                    else:
+                        w = window.Window(screen=self.screen, fullscreen=self.fullscreen, vsync=self.vsync)
+                    self.windows.append(w)
+                group.create_task(self.windows[i].update(node, **kwargs))
+                count += 1
         while len(self.windows) > count:
             self.windows.pop().destroy()
 
-    def update_lasers(self, graph):
+    async def update_lasers(self, graph):
         count = 0
-        for i, node in enumerate(graph.select_below('laser.')):
-            if i == len(self.lasers):
-                if self.multiprocess:
-                    l = process.Proxy('flitter.render.laser.Laser')
-                else:
-                    l = laser.Laser()
-                self.lasers.append(l)
-            self.lasers[i].update(node)
-            count += 1
+        async with asyncio.TaskGroup() as group:
+            for i, node in enumerate(graph.select_below('laser.')):
+                if i == len(self.lasers):
+                    if self.multiprocess:
+                        l = process.Proxy('flitter.render.laser.Laser')
+                    else:
+                        l = laser.Laser()
+                    self.lasers.append(l)
+                group.create_task(self.lasers[i].update(node))
+                count += 1
         while len(self.lasers) > count:
             self.lasers.pop().destroy()
 
@@ -380,8 +382,9 @@ class Controller:
                 render -= self.counter.clock()
                 self.handle_pragmas(context.pragmas)
                 self.update_controls(context.graph)
-                self.update_windows(context.graph, **names)
-                self.update_lasers(context.graph)
+                async with asyncio.TaskGroup() as group:
+                    group.create_task(self.update_windows(context.graph, **names))
+                    group.create_task(self.update_lasers(context.graph))
                 render += self.counter.clock()
 
                 housekeeping -= self.counter.clock()
