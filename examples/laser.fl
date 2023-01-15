@@ -13,16 +13,16 @@
 
 
 !window size=1000
-    !canvas size=1000 scale=1000 composite="add" stroke_width=0.006 stroke_join="round"
+    !canvas size=1000 scale=1000 composite="add" stroke_join="round"
         !group translate=0.5 rotate=beat/10
             for i in ..10
                 let period=2*beta("beta")[i]+1 phase=uniform("phase")[i] b=beat/period+phase
                 let x=map(quad(b%1), beta("x";i)[b], beta("x";i)[b+1]) y=map(quad(b%1), beta("y";i)[b], beta("y";i)[b+1])
                 let c=map(quad(b%1), hsv(uniform("hue";i)[b];1;0.5), hsv(uniform("hue";i)[b+1];1;0.5))
-                !group translate=(x;y)-0.5 rotate=phase color=c
+                !group translate=(x;y)-0.5 rotate=phase scale=0.1 color=c
                     !path
                         if i % 2
-                            !ellipse radius=0.05
+                            !ellipse radius=0.5
                         else
-                            !line points=.05;-0.05;.1;.05;0;.05 close=true
-                        !stroke
+                            !line points=.5;-.5;1;.4;0;.4 close=true
+                        !stroke stroke_width=0.05
