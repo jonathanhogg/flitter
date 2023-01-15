@@ -5,7 +5,7 @@
 let LOGICAL=1920;1080 PHYSICAL=LOGICAL*2 ROWS=5 COLUMNS=8 box_size=LOGICAL/(COLUMNS;ROWS)
 
 !window#top size=LOGICAL*2/3 screen=1 fullscreen=false vsync=true
-    !canvas#main size=PHYSICAL scale=PHYSICAL/LOGICAL
+    !canvas#main size=PHYSICAL translate=0 scale=PHYSICAL/LOGICAL
         !group#background
             !path
                 !gradient start=0;0 end=0;LOGICAL[1]
@@ -13,12 +13,11 @@ let LOGICAL=1920;1080 PHYSICAL=LOGICAL*2 ROWS=5 COLUMNS=8 box_size=LOGICAL/(COLU
                     !stop color=0;0;0.25
                 !rect size=LOGICAL
                 !fill
-        !layer#boxes composite="add" size=LOGICAL
+        !group#boxes composite="add"
             for row in ..ROWS
                 for column in ..COLUMNS
-                    !group#box line_width=5 color=1 scale=1 \
-                               _index=column;row _period=4 + 8*beta("period";row)[column] _phase=uniform("phase";row)[column] \
-                               _cycle=beat/_period+_phase translate=box_size*(_index + 0.5)
+                    !group#box _index=column;row _period=4+8*beta("period";row)[column] _phase=uniform("phase";row)[column] _cycle=beat/_period+_phase \
+                               stroke_width=5 color=1 translate=box_size*(_index+0.5) scale=1
                         !path
                             !rect point=-0.25*box_size size=0.5*box_size
                             !stroke
@@ -45,7 +44,7 @@ if $("rainbow";"touched") or $("rainbow";"toggled")
 
 if $("rainbow";"toggled")
     let f = $("rainbow_fader")
-    {#box.} color = color*(1-f) + map(quad(_cycle%1), hsv(hue[_cycle];1;f), hsv(hue[_cycle+1];1;f)) ; sine(_cycle) where hue=uniform("hue";_index)
+    {#box.} color = (color*(1-f) + map(quad(_cycle%1), hsv(hue[_cycle];1;f), hsv(hue[_cycle+1];1;f)) ; sine(_cycle)) where hue=uniform("hue";_index)
 
 
 !pad number=1;0 name="Bounce" color=0;1;0 toggle=true state="bounce"
