@@ -148,6 +148,24 @@ def bounce(Vector xs not None):
     return ys
 
 
+def impulse(Vector xs not None):
+    cdef Vector ys = Vector.__new__(Vector)
+    cdef double x, y
+    for i in range(len(xs.values)):
+        x = xs.values[i]
+        x -= floor(x)
+        # bounce(linear(x * 4) / 2) - quad(linear((x * 4 - 1) / 3))
+        x *= 4
+        if x < 1:
+            y = sin(PI*x/2)
+        else:
+            x -= 1
+            x /= 3
+            y = 1 - (x * 2)**2 / 2 if x < 0.5 else 1 - ((1 - x) * 2)**2 / 2
+        ys.values.append(y)
+    return ys
+
+
 def sharkfin(Vector xs not None):
     cdef Vector ys = Vector.__new__(Vector)
     cdef double x, y
@@ -378,6 +396,7 @@ FUNCTIONS = {
     'sine': Vector((sine,)),
     'bounce': Vector((bounce,)),
     'sharkfin': Vector((sharkfin,)),
+    'impulse': Vector((impulse,)),
     'sawtooth': Vector((sawtooth,)),
     'triangle': Vector((triangle,)),
     'square': Vector((square,)),
