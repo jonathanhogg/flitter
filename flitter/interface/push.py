@@ -22,7 +22,7 @@ from ..ableton.palette import PrimaryPalette
 from .osc import OSCSender, OSCReceiver, OSCBundle
 
 
-Log = logging.getLogger(__name__)
+Log = logging.getLogger('flitter.interface.push')
 
 
 @dataclass
@@ -85,12 +85,12 @@ class Controller:
                 if 0 <= column < 8 and 0 <= row < 8 and message.args:
                     state = PadState(*message.args)
                     brightness = 1 if state.touched or state.toggled else 0.5
-                    self.push.set_pad_rgb(row * 8 + column, state.r*brightness, state.g*brightness, state.b*brightness)
+                    self.push.set_pad_rgb((7 - row) * 8 + column, state.r*brightness, state.g*brightness, state.b*brightness)
                     self.pads[column, row] = state
                     if state.touched and (column, row) not in self.touched_pads:
                         await self.osc_sender.send_message(f'/pad/{column}/{row}/released', self.push.counter.clock())
                 elif (column, row) in self.pads:
-                    self.push.set_pad_rgb(row * 8 + column, 0, 0, 0)
+                    self.push.set_pad_rgb((7 - row) * 8 + column, 0, 0, 0)
                     del self.pads[column, row]
             case ['encoder', number, 'state']:
                 number = int(number)
@@ -164,13 +164,14 @@ class Controller:
         shift_pressed = False
         tap_tempo_pressed = False
         tap_tempo = TapTempo(rounding=1)
-        asyncio.get_event_loop().create_task(self.receive_messages())
+        receive_task = asyncio.create_task(self.receive_messages())
         self.updated.set()
         try:
             wait_event = asyncio.create_task(self.push.get_event())
             wait_update = asyncio.create_task(self.updated.wait())
+            wait_beat = asyncio.create_task(self.push.counter.wait_for_beat(self.push.counter.beat // 1 + 1))
             while True:
-                done, _ = await asyncio.wait({wait_event, wait_update}, timeout=1/10, return_when=asyncio.FIRST_COMPLETED)
+                done, _ = await asyncio.wait({wait_event, wait_update, wait_beat}, timeout=1/10, return_when=asyncio.FIRST_COMPLETED)
                 if wait_event in done:
                     event = wait_event.result()
                     wait_event = asyncio.create_task(self.push.get_event())
@@ -181,19 +182,22 @@ class Controller:
                             shift_pressed = False
                         case PadPressed():
                             if not tap_tempo_pressed:
-                                self.touched_pads.add((event.column, event.row))
-                                address = f'/pad/{event.column}/{event.row}/touched'
+                                row = 7 - event.row
+                                self.touched_pads.add((event.column, row))
+                                address = f'/pad/{event.column}/{row}/touched'
                                 await self.osc_sender.send_message(address, event.timestamp, event.pressure)
                             else:
                                 tap_tempo.tap(event.timestamp)
                         case PadHeld():
                             if not tap_tempo_pressed:
-                                address = f'/pad/{event.column}/{event.row}/held'
+                                row = 7 - event.row
+                                address = f'/pad/{event.column}/{row}/held'
                                 await self.osc_sender.send_message(address, event.timestamp, event.pressure)
                         case PadReleased():
                             if not tap_tempo_pressed:
-                                self.touched_pads.discard((event.column, event.row))
-                                address = f'/pad/{event.column}/{event.row}/released'
+                                row = 7 - event.row
+                                self.touched_pads.discard((event.column, row))
+                                address = f'/pad/{event.column}/{row}/released'
                                 await self.osc_sender.send_message(address, event.timestamp)
                         case EncoderTouched() if event.number < 8:
                             self.touched_encoders.add(event.number)
@@ -230,9 +234,12 @@ class Controller:
                         case ButtonReleased(number=Control.PAGE_RIGHT):
                             await self.osc_sender.send_message('/page_right')
                     self.updated.set()
-                elif wait_update in done:
+                elif wait_update in done or wait_beat in done:
                     self.updated.clear()
-                    wait_update = asyncio.create_task(self.updated.wait())
+                    if wait_update in done:
+                        wait_update = asyncio.create_task(self.updated.wait())
+                    if wait_beat in done:
+                        wait_beat = asyncio.create_task(self.push.counter.wait_for_beat(self.push.counter.beat // 1 + 1))
                     async with self.push.screen_canvas() as canvas:
                         canvas.clear(skia.ColorBLACK)
                         paint = skia.Paint(Color=skia.ColorWHITE, AntiAlias=True)
@@ -240,6 +247,7 @@ class Controller:
                         if self.tempo_control:
                             canvas.drawSimpleText(f"BPM: {self.push.counter.tempo:5.1f}", 10, 150, font, paint)
                             canvas.drawSimpleText(f"Quantum: {self.push.counter.quantum}", 130, 150, font, paint)
+                            canvas.drawSimpleText(f"Beat: {int(self.push.counter.beat % self.push.counter.quantum):2d}", 250, 150, font, paint)
                         for number, state in self.encoders.items():
                             canvas.save()
                             canvas.translate(120 * number, 0)

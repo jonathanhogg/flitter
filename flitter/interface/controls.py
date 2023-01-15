@@ -55,12 +55,13 @@ class TouchControl(Control):
 
     def update(self, node, controller):
         changed = super().update(node, controller)
-        if self.touched is not None:
-            controller[(*self.state, "touched")] = self.touched
-        if self._touched_beat is not None:
-            controller[(*self.state, "touched", "beat")] = self._touched_beat
-        if self._released_beat is not None:
-            controller[(*self.state, "released", "beat")] = self._released_beat
+        if self.state is not None:
+            if self.touched is not None:
+                controller[(*self.state, "touched")] = self.touched
+            if self._touched_beat is not None:
+                controller[(*self.state, "touched", "beat")] = self._touched_beat
+            if self._released_beat is not None:
+                controller[(*self.state, "released", "beat")] = self._released_beat
         return changed
 
     def on_touched(self, beat):
