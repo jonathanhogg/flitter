@@ -63,6 +63,9 @@ class BeatCounter:
     def beat_at_time(self, timestamp):
         return (timestamp - self._start) / self._period
 
+    def phase_at_time(self, timestamp):
+        return (timestamp - self._start) / self._period % self._quantum
+
     def time_at_beat(self, beat):
         return beat * self._period + self._start
 
