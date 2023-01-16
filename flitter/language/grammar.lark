@@ -8,6 +8,7 @@
 _NL: /((--[^\r\n]*)?\r?\n[\t ]*)+/
 
 NAME : /[_a-z][_a-z0-9]*/i
+SYMBOL : /:[_a-z][_a-z0-9]*/i
 NUMBER : /([0-9]+(\.[0-9]+)?|\.[0-9]+)(e[-+]?[0-9]+)?/i
 QUERY : /{[^}]+}/
 
@@ -114,3 +115,4 @@ args : (node ("," node)*)? -> tuple
 
 literal : NUMBER
         | ESCAPED_STRING
+        | SYMBOL

@@ -29,6 +29,10 @@ patterns: [
         ]
     }
     {
+        match: ":([_a-zA-Z][_a-zA-Z0-9]*)"
+        name: "constant.symbol.flitter"
+    }
+    {
         match: "\\b(pragma)\\s+([_a-zA-Z][_a-zA-Z0-9]*)"
         captures:
             '1':
