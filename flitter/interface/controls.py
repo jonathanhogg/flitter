@@ -184,6 +184,7 @@ class Pad(TouchControl):
 class Encoder(TouchControl):
     DEFAULT_LOWER = 0.0
     DEFAULT_UPPER = 1.0
+    DEFAULT_LAG = 0.1
 
     def __init__(self, number):
         super().__init__(number)
@@ -194,6 +195,7 @@ class Encoder(TouchControl):
         self.value = None
         self.decimals = None
         self.percent = None
+        self.lag = None
         self._value_beat = None
         self._clock = None
 
@@ -214,6 +216,10 @@ class Encoder(TouchControl):
                 self.upper = upper
                 if self.value is not None:
                     self.value = min(self.value, self.upper)
+                changed = True
+            lag = node.get('lag', 1, float, self.DEFAULT_LAG)
+            if lag != self.lag:
+                self.lag = lag
                 changed = True
             initial = node.get('initial', 1, float, self.lower)
             if initial != self.initial:
@@ -243,7 +249,7 @@ class Encoder(TouchControl):
             precision = 10**(self.decimals + (2 if self.percent else 1))
             value = int(self.value * precision) / precision
             if value_key in controller:
-                alpha = math.exp(10 * -delta)
+                alpha = math.exp(-delta / self.lag)
                 current_value = controller[value_key]
                 new_value = value * (1-alpha) + current_value * alpha
                 if not math.isclose(new_value, value, rel_tol=1e-3, abs_tol=1e-3):
