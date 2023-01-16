@@ -12,6 +12,38 @@ patterns: [
         name: 'constant.numeric.flitter'
     }
     {
+        match: ":([_a-zA-Z][_a-zA-Z0-9]*)\\b"
+        name: "constant.symbol.flitter"
+    }
+    {
+        match: "\\b(true|false)\\b"
+        name: "constant.logical.flitter"
+    }
+    {
+        match: "\\.\\.|\\|"
+        name: "keyword.operator.range.flitter"
+    }
+    {
+        match: "\\$"
+        name: "keyword.operator.lookup.flitter"
+    }
+    {
+        match: "\\^"
+        name: "keyword.operator.insert.flitter"
+    }
+    {
+        match: ";"
+        name: "keyword.operator.sequence.flitter"
+    }
+    {
+        match: "<\\=|>\\=|\\=\\=|<|>|!="
+        name: "keyword.operator.comparison.flitter"
+    }
+    {
+        match: "\\+|\\-|\\*|\\*\\*|/|//|%"
+        name: "keyword.operator.arithmetic.flitter"
+    }
+    {
         begin: '\"'
         beginCaptures:
             '0':
@@ -27,10 +59,6 @@ patterns: [
                 name: 'constant.character.escape.flitter'
             }
         ]
-    }
-    {
-        match: ":([_a-zA-Z][_a-zA-Z0-9]*)"
-        name: "constant.symbol.flitter"
     }
     {
         match: "\\b(pragma)\\s+([_a-zA-Z][_a-zA-Z0-9]*)"
@@ -49,10 +77,6 @@ patterns: [
         name: "keyword.operator.logical.flitter"
     }
     {
-        match: "\\b(true|false)\\b"
-        name: "constant.logical.flitter"
-    }
-    {
         match: "!\\s*[_a-zA-Z][_a-zA-Z0-9]*"
         name: "keyword.operator.node.flitter"
     }
@@ -65,7 +89,7 @@ patterns: [
         name: "constant.tag.flitter"
     }
     {
-        match: "\\b([_a-zA-Z][_a-zA-Z0-9]*)\\s*(=)"
+        match: "\\b([_a-zA-Z][_a-zA-Z0-9]*)\\s*(=)(?=[^=])"
         captures:
             '1':
                 name: "variable.attribute.flitter"
@@ -79,33 +103,5 @@ patterns: [
                 name: "keyword.control.flow.flitter"
             '2':
                 name: "variable.name.flitter"
-    }
-    {
-        match: "\\.\\.|:"
-        name: "keyword.operator.range.flitter"
-    }
-    {
-        match: "\\$"
-        name: "keyword.operator.lookup.flitter"
-    }
-    {
-        match: "\\|"
-        name: "keyword.operator.comprehension.flitter"
-    }
-    {
-        match: "\\^"
-        name: "keyword.operator.insert.flitter"
-    }
-    {
-        match: ";"
-        name: "keyword.operator.sequence.flitter"
-    }
-    {
-        match: "<\\=|>\\=|\\=\\=|<|>|!="
-        name: "keyword.operator.comparison.flitter"
-    }
-    {
-        match: "\\+|\\-|\\*|\\*\\*|/|//|%"
-        name: "keyword.operator.arithmetic.flitter"
     }
 ]

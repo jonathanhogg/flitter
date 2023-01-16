@@ -84,7 +84,7 @@ name_list : NAME (";" NAME)* -> tuple
             | comparison ">=" range -> ge
 
 ?range : sum
-       | [sum] ".." sum [":" sum] -> range
+       | [sum] ".." sum ["|" sum] -> range
 
 ?sum : product
      | sum "+" product -> add
