@@ -90,7 +90,7 @@ class Push2:
         self._screen_task = asyncio.create_task(self._run_screen())
 
     def _send_midi(self, message):
-        Log.debug("Send MIDI - %s", " ".join(f"{b:02x}" for b in message))
+        # Log.debug("Send MIDI - %s", " ".join(f"{b:02x}" for b in message))
         self._midi_out.send_message(message)
 
     def _receive_callback(self, message_delta, _):
@@ -98,7 +98,7 @@ class Push2:
         message, delta = message_delta
         timestamp = now if self._last_receive_timestamp is None else min(now, self._last_receive_timestamp + delta)
         self._last_receive_timestamp = timestamp
-        Log.debug("Received @ %.2f MIDI - %s", timestamp, " ".join(f"{b:02x}" for b in message))
+        # Log.debug("Received @ %.2f MIDI - %s", timestamp, " ".join(f"{b:02x}" for b in message))
         self._loop.call_soon_threadsafe(self._receive_queue.put_nowait, (message, timestamp))
 
     def _send_sysex(self, cmd: Command, *args):
