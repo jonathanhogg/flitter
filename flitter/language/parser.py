@@ -34,7 +34,7 @@ class FlitterTransformer(Transformer):
         return model.Vector((float(token),))
 
     def SYMBOL(self, token):
-        return model.Vector((intern(str(token)),))
+        return model.Vector((intern(str(token)[1:]),))
 
     def ESCAPED_STRING(self, token):
         return model.Vector((intern(literal_eval(token)),))
