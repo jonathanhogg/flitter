@@ -49,6 +49,14 @@ cdef double[:] travel(double distance, double accelleration, double start_speed,
 cdef double max_speed(double distance, double accelleration, double start_speed):
     return sqrt(2*distance*accelleration + start_speed * start_speed)
 
+cdef double distance(tuple p0, tuple p1):
+    cdef double x0, y0, x1, y1, dx, dy
+    x0, y0 = p0
+    x1, y1 = p1
+    dx = x1 - x0
+    dy = y1 - y0
+    return sqrt(dx*dx + dy*dy)
+
 
 cdef class LaserDriver:
     DEFAULT_SAMPLE_RATE = 30000
@@ -318,29 +326,51 @@ cdef class Laser:
     async def update(self, model.Node node):
         driver = node['driver'].as_string().lower()
         cls = {'lasercube': LaserCubeDriver}.get(driver)
-        id = node['id'].as_string() if 'id' in node else None
-        sample_rate = node.get('sample_rate', 1, int, cls.DEFAULT_SAMPLE_RATE)
-        accelleration = node.get('accelleration', 1, float, cls.DEFAULT_ACCELLERATION)
-        epsilon = node.get('epsilon', 1, float, cls.DEFAULT_EPSILON)
-        if not isinstance(self.driver, cls):
-            if self.driver is not None:
-                self.driver.close()
-            self.driver = cls(id, sample_rate=sample_rate, accelleration=accelleration, epsilon=epsilon)
-        else:
-            if sample_rate != self.driver.sample_rate:
-                self.driver.sample_rate = sample_rate
-            if accelleration != self.driver.accelleration:
-                self.driver.accelleration = accelleration
-            if epsilon != self.driver.epsilon:
-                self.driver.epsilon = epsilon
-        color = (0., 0., 0.)
-        transform = AffineTransform.identity()
-        paths = []
-        self.collect_paths(node, paths, color, transform)
-        paths.sort(key=lambda pc: pc[0][0])
-        for points, color in paths:
+        if cls is not None:
+            id = node['id'].as_string() if 'id' in node else None
+            sample_rate = node.get('sample_rate', 1, int, cls.DEFAULT_SAMPLE_RATE)
+            accelleration = node.get('accelleration', 1, float, cls.DEFAULT_ACCELLERATION)
+            epsilon = node.get('epsilon', 1, float, cls.DEFAULT_EPSILON)
+            if not isinstance(self.driver, cls):
+                if self.driver is not None:
+                    self.driver.close()
+                self.driver = cls(id, sample_rate=sample_rate, accelleration=accelleration, epsilon=epsilon)
+            else:
+                if sample_rate != self.driver.sample_rate:
+                    self.driver.sample_rate = sample_rate
+                if accelleration != self.driver.accelleration:
+                    self.driver.accelleration = accelleration
+                if epsilon != self.driver.epsilon:
+                    self.driver.epsilon = epsilon
+            color = (0., 0., 0.)
+            transform = AffineTransform.identity()
+            paths = []
+            self.collect_paths(node, paths, color, transform)
+            if paths:
+                self.draw_paths(paths)
+            await self.driver.flush()
+        elif self.driver is not None:
+            self.driver.close()
+            self.driver = None
+
+    def draw_paths(self, list paths not None):
+        cdef list points
+        cdef tuple pair, color, point, last=(0.5, 0.5)
+        cdef int i, nearest_i
+        cdef double d, nearest_d=0
+        while paths:
+            for i in range(len(paths)):
+                pair = paths[i]
+                points = pair[0]
+                d = distance(last, points[0])
+                if i == 0 or d < nearest_d:
+                    nearest_d = d
+                    nearest_i = i
+            pair = paths.pop(nearest_i)
+            points = pair[0]
+            color = pair[1]
             self.driver.draw_path(points, color)
-        await self.driver.flush()
+            last = points[-1]
 
     @cython.cdivision(True)
     def collect_paths(self, model.Node node not None, list paths not None, tuple color not None, AffineTransform transform not None):
