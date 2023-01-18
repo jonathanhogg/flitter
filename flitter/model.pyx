@@ -3,7 +3,7 @@
 import cython
 from weakref import ref as weak
 
-from libc.math cimport isnan, floor
+from libc.math cimport isnan, floor, ceil
 
 
 cdef union float_long:
@@ -48,7 +48,7 @@ cdef class Vector(VectorLike):
         elif step == 0:
             return null_
         cdef Vector result = Vector.__new__(Vector)
-        cdef int i, n = <int>floor((stop - start) / step)
+        cdef int i, n = <int>ceil((stop - start) / step)
         for i in range(n):
             result.values.append(start + step * i)
         return result
