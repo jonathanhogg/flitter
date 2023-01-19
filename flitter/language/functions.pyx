@@ -126,6 +126,16 @@ def expv(Vector xs not None):
     return ys
 
 
+def sqrtv(Vector xs not None):
+    cdef Vector ys = Vector.__new__(Vector)
+    cdef double x, y
+    for i in range(len(xs.values)):
+        x = xs.values[i]
+        y = sqrt(x)
+        ys.values.append(y)
+    return ys
+
+
 def sine(Vector xs not None):
     cdef Vector ys = Vector.__new__(Vector)
     cdef double x, y
@@ -393,6 +403,7 @@ FUNCTIONS = {
     'cos': Vector((cosv,)),
     'polar': Vector((polar,)),
     'exp': Vector((expv,)),
+    'sqrt': Vector((sqrtv,)),
     'sine': Vector((sine,)),
     'bounce': Vector((bounce,)),
     'sharkfin': Vector((sharkfin,)),
