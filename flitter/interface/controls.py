@@ -82,12 +82,15 @@ class TouchControl(Control):
 
 class Pad(TouchControl):
     DEFAULT_THRESHOLD = 0.4
+    DEFAULT_LAG = 0.05
 
     def __init__(self, number):
         super().__init__(number)
         self.toggle = None
         self.group = None
         self.initial = None
+        self.quantize = None
+        self.lag = None
         self.toggled = None
         self._toggled_beat = None
         self.pressure = None
@@ -107,8 +110,15 @@ class Pad(TouchControl):
             toggled_key = (*self.state, "toggled")
             toggled_beat_key = (*self.state, "toggled", "beat")
             initial = node.get('initial', 1, bool, False)
+            quantize = node.get('quantize', 1, float, 0)
+            lag = node.get('lag', 1, float, self.DEFAULT_LAG)
+            if lag != self.lag:
+                self.lag = lag
+                changed = True
             if initial != self.initial:
                 self.initial = initial
+            if quantize != self.quantize:
+                self.quantize = quantize
             if toggle != self.toggle:
                 self.toggle = toggle
                 if not self.toggle and self.toggled:
@@ -134,7 +144,7 @@ class Pad(TouchControl):
                 pressure_beat_key = (*self.state, "pressure", "beat")
                 pressure = self.pressure
                 if pressure_key in controller:
-                    alpha = math.exp(20 * -delta)
+                    alpha = math.exp(-delta/self.lag)
                     current_pressure = controller[pressure_key]
                     pressure = pressure * (1-alpha) + current_pressure * alpha
                     if math.isclose(pressure, self.pressure, rel_tol=1e-3, abs_tol=1e-3):
@@ -157,16 +167,17 @@ class Pad(TouchControl):
         self._can_toggle = False
 
     def on_pressure(self, beat, pressure):
-        self.pressure = pressure
-        self._pressure_beat = beat
-        if self._max_pressure is None or pressure > self._max_pressure:
-            self._max_pressure = pressure
-        if self._can_toggle and self.pressure > self._toggle_threshold:
-            self.toggled = not self.toggled
-            self._toggled_beat = beat
-            self._can_toggle = False
-            self._changed = True
-            return self.toggled
+        if self.touched:
+            self.pressure = pressure
+            self._pressure_beat = beat
+            if self._max_pressure is None or pressure > self._max_pressure:
+                self._max_pressure = pressure
+            if self._can_toggle and self.pressure > self._toggle_threshold:
+                self.toggled = not self.toggled
+                self._toggled_beat = beat
+                self._can_toggle = False
+                self._changed = True
+                return self.toggled
         return None
 
     def reset(self):
