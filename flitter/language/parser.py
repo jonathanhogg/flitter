@@ -33,6 +33,9 @@ class FlitterTransformer(Transformer):
     def NUMBER(self, token):
         return model.Vector((float(token),))
 
+    def TAG(self, token):
+        return intern(str(token)[1:])
+
     def SYMBOL(self, token):
         return model.Vector((intern(str(token)[1:]),))
 
