@@ -132,7 +132,7 @@ class Pad(TouchControl):
                     self._toggled_beat = controller[toggled_beat_key]
                 else:
                     self.toggled = self.initial
-                    self._toggled_beat = 0
+                    self._toggled_beat = 0 if self.initial else None
             group = tuple(node["group"]) if "group" in node else None
             if group != self.group:
                 self.group = group
