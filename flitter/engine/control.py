@@ -167,6 +167,7 @@ class Controller:
     async def update_windows(self, graph, **kwargs):
         count = 0
         async with asyncio.TaskGroup() as group:
+            references = {}
             for i, node in enumerate(graph.select_below('window.')):
                 if i == len(self.windows):
                     if self.multiprocess:
@@ -174,7 +175,7 @@ class Controller:
                     else:
                         w = window.Window(screen=self.screen, fullscreen=self.fullscreen, vsync=self.vsync)
                     self.windows.append(w)
-                group.create_task(self.windows[i].update(node, **kwargs))
+                group.create_task(self.windows[i].update(node, references=references, **kwargs))
                 count += 1
         while len(self.windows) > count:
             self.windows.pop().destroy()

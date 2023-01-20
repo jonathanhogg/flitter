@@ -333,6 +333,7 @@ class Window(ProgramNode):
     def render(self, node, **kwargs):
         if self._closed:
             raise ValueError("Window closed")
+        self.window.switch_to()
         super().render(node, **kwargs)
         self.window.flip()
         self.window.dispatch_events()
