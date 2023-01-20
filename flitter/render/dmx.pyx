@@ -11,6 +11,7 @@ import struct
 import time
 
 import cython
+from libc.math cimport round
 
 from .. cimport model
 from ..streams import SerialStream
@@ -213,7 +214,7 @@ cdef class DMX:
                     end = start + len(channels)
                     if start >=1 and end <= len(channel_data):
                         for i, channel in zip(range(start, end), channels):
-                            channel_data[i] = min(max(0, <int>(channel*255)), 255)
+                            channel_data[i] = min(max(0, <int>(round(channel*255))), 255)
                         if end > n:
                             n = end
                     else:
