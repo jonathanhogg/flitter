@@ -15,7 +15,7 @@ import skia
 
 from ..clock import TapTempo
 from ..ableton.constants import Encoder, Control, BUTTONS
-from ..ableton.events import (ButtonPressed, ButtonReleased, PadPressed, PadHeld, PadReleased,
+from ..ableton.events import (ButtonPressed, ButtonReleased, PadEvent, PadPressed, PadHeld, PadReleased,
                               EncoderTurned, EncoderTouched, EncoderReleased, MenuButtonReleased)
 from ..ableton.push import Push2
 from ..ableton.palette import PrimaryPalette
@@ -31,6 +31,7 @@ class PadState:
     r: float
     g: float
     b: float
+    quantize: float
     touched: bool
     toggled: bool
 
@@ -69,6 +70,10 @@ class Controller:
         self.updated = asyncio.Event()
         self.touched_pads = set()
         self.touched_encoders = set()
+        self.recording = False
+        self.record_buffer = []
+        self.playing = False
+        self.playback_position = None
 
     async def process_message(self, message):
         if isinstance(message, OSCBundle):
@@ -125,7 +130,7 @@ class Controller:
 
     def reset(self):
         for column, row in self.pads:
-            self.push.set_pad_rgb(row * 8 + column, 0, 0, 0)
+            self.push.set_pad_rgb((7-row) * 8 + column, 0, 0, 0)
         self.pads.clear()
         for number in self.encoders:
             self.push.set_menu_button_rgb(number + 8, 0, 0, 0)
@@ -135,6 +140,9 @@ class Controller:
         self.buttons.clear()
         self.push.counter.update(120, 4, self.push.counter.clock())
         self.last_received = None
+        self.recording = False
+        self.playing = False
+        self.record_buffer = []
         self.updated.set()
 
     async def receive_messages(self):
@@ -143,6 +151,13 @@ class Controller:
             self.last_received = self.push.counter.clock()
             await self.process_message(message)
             self.updated.set()
+
+    def record_event(self, event):
+        beat = self.push.counter.beat_at_time(event.timestamp)
+        quantum = self.push.counter.quantum
+        phase = beat % quantum
+        event.timestamp = self.push.counter.time_at_beat(beat + quantum)
+        self.record_buffer.append((phase, event))
 
     async def run(self):
         Log.info("Starting Ableton Push 2 interface")
@@ -164,41 +179,84 @@ class Controller:
         shift_pressed = False
         tap_tempo_pressed = False
         tap_tempo = TapTempo(rounding=1)
+        record_pressed_at = None
         receive_task = asyncio.create_task(self.receive_messages())
+        next_playback_event = None
+        playback_release_pads = set()
+        pad_shifts = {}
         self.updated.set()
         try:
             wait_event = asyncio.create_task(self.push.get_event())
             wait_update = asyncio.create_task(self.updated.wait())
-            wait_beat = asyncio.create_task(self.push.counter.wait_for_beat(self.push.counter.beat // 1 + 1))
+            wait_beat = asyncio.create_task(self.push.counter.wait_for_beat(self.push.counter.beat*2//1/2 + 0.5))
             while True:
-                done, _ = await asyncio.wait({wait_event, wait_update, wait_beat}, timeout=1/10, return_when=asyncio.FIRST_COMPLETED)
-                if wait_event in done:
-                    event = wait_event.result()
-                    wait_event = asyncio.create_task(self.push.get_event())
+                if self.playing and next_playback_event is None:
+                    _, event = self.record_buffer[0]
+                    beat = self.push.counter.beat_at_time(event.timestamp)
+                    next_playback_event = asyncio.create_task(self.push.counter.wait_for_beat(beat))
+                    Log.debug("Next playback event: %r", event)
+                events = {wait_event, wait_update, wait_beat}
+                if next_playback_event is not None:
+                    events.add(next_playback_event)
+                done, _ = await asyncio.wait(events, timeout=1/10, return_when=asyncio.FIRST_COMPLETED)
+                if wait_event in done or next_playback_event in done:
+                    synthetic = False
+                    if wait_event in done:
+                        event = wait_event.result()
+                        wait_event = asyncio.create_task(self.push.get_event())
+                    elif next_playback_event in done:
+                        next_playback_event = None
+                        if not self.playing or not self.record_buffer:
+                            continue
+                        phase, event = self.record_buffer.pop(0)
+                        self.record_buffer.append((phase, event))
+                        synthetic = True
                     match event:
                         case ButtonPressed(number=Control.SHIFT):
                             shift_pressed = True
                         case ButtonReleased(number=Control.SHIFT):
                             shift_pressed = False
                         case PadPressed():
-                            if not tap_tempo_pressed:
+                            if synthetic or not tap_tempo_pressed:
                                 row = 7 - event.row
+                                quantize = None
+                                if not synthetic:
+                                    pad_state = self.pads.get((row, event.column))
+                                    if pad_state and pad_state.quantize:
+                                        beat = self.push.counter.beat_at_time(event.timestamp)
+                                        beat = round(beat * pad_state.quantize) / pad_state.quantize
+                                        timestamp = self.push.counter.time_at_beat(beat)
+                                        pad_shifts[(row, event.column)] = timestamp - event.timestamp
+                                        event.timestamp = timestamp
                                 self.touched_pads.add((event.column, row))
                                 address = f'/pad/{event.column}/{row}/touched'
                                 await self.osc_sender.send_message(address, event.timestamp, event.pressure)
+                                if synthetic:
+                                    playback_release_pads.add((event.column, row))
+                                elif self.recording:
+                                    self.record_event(event)
                             else:
                                 tap_tempo.tap(event.timestamp)
                         case PadHeld():
-                            if not tap_tempo_pressed:
+                            if synthetic or not tap_tempo_pressed:
                                 row = 7 - event.row
+                                event.timestamp += pad_shifts.get((row, event.column), 0)
                                 address = f'/pad/{event.column}/{row}/held'
                                 await self.osc_sender.send_message(address, event.timestamp, event.pressure)
+                                if not synthetic and self.recording:
+                                    self.record_event(event)
                         case PadReleased():
-                            if not tap_tempo_pressed:
+                            if synthetic or not tap_tempo_pressed:
                                 row = 7 - event.row
                                 self.touched_pads.discard((event.column, row))
+                                if (row, event.column) in pad_shifts:
+                                    event.timestamp += pad_shifts.pop((row, event.column))
                                 address = f'/pad/{event.column}/{row}/released'
                                 await self.osc_sender.send_message(address, event.timestamp)
+                                if synthetic:
+                                    playback_release_pads.discard((event.column, row))
+                                elif self.recording:
+                                    self.record_event(event)
                         case EncoderTouched() if event.number < 8:
                             self.touched_encoders.add(event.number)
                             address = f'/encoder/{event.number}/touched'
@@ -233,21 +291,70 @@ class Controller:
                             await self.osc_sender.send_message('/page_left')
                         case ButtonReleased(number=Control.PAGE_RIGHT):
                             await self.osc_sender.send_message('/page_right')
+                        case ButtonPressed(number=Control.RECORD):
+                            record_pressed_at = event.timestamp
+                        case ButtonReleased(number=Control.RECORD):
+                            if self.recording:
+                                Log.info("Stop recording")
+                                self.recording = False
+                            else:
+                                Log.info("Start recording")
+                                if event.timestamp - record_pressed_at > 0.5:
+                                    self.push.counter.set_phase(0, event.timestamp, backslip_limit=1)
+                                    self.record_buffer = []
+                                    await self.osc_sender.send_message('/tempo', self.push.counter.tempo, self.push.counter.quantum, self.push.counter.start)
+                                    if self.playing:
+                                        Log.info("Stop playback")
+                                        self.playing = False
+                                        next_playback_event = None
+                                        while playback_release_pads:
+                                            column, row = playback_release_pads.pop()
+                                            address = f'/pad/{column}/{row}/released'
+                                            await self.osc_sender.send_message(address, event.timestamp)
+                                self.recording = True
+                            record_pressed_at = None
+                        case ButtonReleased(number=Control.PLAY):
+                            if self.playing:
+                                Log.info("Stop playback")
+                                self.playing = False
+                                next_playback_event = None
+                                while playback_release_pads:
+                                    column, row = playback_release_pads.pop()
+                                    address = f'/pad/{column}/{row}/released'
+                                    await self.osc_sender.send_message(address, event.timestamp)
+                            elif self.record_buffer:
+                                Log.info("Start playback")
+                                beat = self.push.counter.beat_at_time(event.timestamp)
+                                quantum = self.push.counter.quantum
+                                phase = beat % quantum
+                                for event_phase, event in self.record_buffer:
+                                    if event_phase < phase:
+                                        event_phase += quantum
+                                    event.timestamp = self.push.counter.time_at_beat(beat - phase + event_phase)
+                                self.record_buffer.sort(key=lambda pe: pe[1].timestamp)
+                                self.playing = True
+                    if synthetic:
+                        beat = self.push.counter.beat_at_time(event.timestamp)
+                        event.timestamp = self.push.counter.time_at_beat(beat + self.push.counter.quantum)
                     self.updated.set()
                 elif wait_update in done or wait_beat in done:
                     self.updated.clear()
                     if wait_update in done:
                         wait_update = asyncio.create_task(self.updated.wait())
                     if wait_beat in done:
-                        wait_beat = asyncio.create_task(self.push.counter.wait_for_beat(self.push.counter.beat // 1 + 1))
+                        wait_beat = asyncio.create_task(self.push.counter.wait_for_beat(self.push.counter.beat*2//1/2 + 0.5))
                     async with self.push.screen_canvas() as canvas:
                         canvas.clear(skia.ColorBLACK)
                         paint = skia.Paint(Color=skia.ColorWHITE, AntiAlias=True)
-                        font = skia.Font(skia.Typeface("helvetica"), 20)
+                        red_paint = skia.Paint(Color=skia.ColorRED, AntiAlias=True)
+                        font = skia.Font(skia.Typeface("helvetica"), 18)
                         if self.tempo_control:
                             canvas.drawSimpleText(f"BPM: {self.push.counter.tempo:5.1f}", 10, 150, font, paint)
                             canvas.drawSimpleText(f"Quantum: {self.push.counter.quantum}", 130, 150, font, paint)
-                            canvas.drawSimpleText(f"Beat: {int(self.push.counter.beat % self.push.counter.quantum):2d}", 250, 150, font, paint)
+                            if record_pressed_at is not None and self.push.counter.clock() > record_pressed_at + 0.5:
+                                canvas.drawSimpleText(f"Phase: {int(self.push.counter.phase):2d}", 250, 150, font, red_paint)
+                            else:
+                                canvas.drawSimpleText(f"Phase: {int(self.push.counter.phase):2d}", 250, 150, font, paint)
                         for number, state in self.encoders.items():
                             canvas.save()
                             canvas.translate(120 * number, 0)
@@ -303,6 +410,19 @@ class Controller:
                         self.last_hello = now
                     if self.last_received is not None and now > self.last_received + self.RESET_TIMEOUT:
                         self.reset()
+                flash = 1 if self.push.counter.beat % 1 < 0.5 else 0.5
+                if self.tempo_control:
+                    self.push.set_button_white(Control.TAP_TEMPO, flash)
+                if self.recording:
+                    self.push.set_button_rgb(Control.RECORD, flash, 0, 0)
+                else:
+                    self.push.set_button_rgb(Control.RECORD, 0.5, 0, 0)
+                if self.playing:
+                    self.push.set_button_rgb(Control.PLAY, 0, flash, 0)
+                elif self.record_buffer:
+                    self.push.set_button_rgb(Control.PLAY, 0, 0.5, 0)
+                else:
+                    self.push.set_button_rgb(Control.PLAY, 0, 0, 0)
         finally:
             for n in range(64):
                 self.push.set_pad_rgb(n, 0, 0, 0)

@@ -16,7 +16,7 @@ from ..interface.controls import Pad, Encoder
 from ..interface.osc import OSCReceiver, OSCSender, OSCMessage, OSCBundle
 from ..language.parser import parse
 from ..model import Context, Vector, null
-from ..render import process, window, laser
+from ..render import process, window, laser, dmx
 
 
 Log = logging.getLogger(__name__)
@@ -47,6 +47,7 @@ class Controller:
         self.program_top = None
         self.windows = []
         self.lasers = []
+        self.dmx = []
         self.counter = BeatCounter()
         self.pads = {}
         self.encoders = {}
@@ -195,6 +196,21 @@ class Controller:
         while len(self.lasers) > count:
             self.lasers.pop().destroy()
 
+    async def update_dmx(self, graph):
+        count = 0
+        async with asyncio.TaskGroup() as group:
+            for i, node in enumerate(graph.select_below('dmx.')):
+                if i == len(self.lasers):
+                    if self.multiprocess:
+                        d = process.Proxy('flitter.render.dmx.DMX')
+                    else:
+                        d = dmx.DMX()
+                    self.dmx.append(d)
+                group.create_task(self.dmx[i].update(node))
+                count += 1
+        while len(self.dmx) > count:
+            self.dmx.pop().destroy()
+
     def update_controls(self, graph):
         remaining = set(self.pads)
         for node in graph.select_below('pad.'):
@@ -240,7 +256,7 @@ class Controller:
         if deleted:
             self.queue.append(OSCMessage(address))
         else:
-            self.queue.append(OSCMessage(address, pad.name, *pad.color, pad.touched, pad.toggled))
+            self.queue.append(OSCMessage(address, pad.name, *pad.color, pad.quantize, pad.touched, pad.toggled))
 
     def enqueue_encoder_status(self, encoder, deleted=False):
         address = f'/encoder/{encoder.number}/state'
@@ -386,6 +402,7 @@ class Controller:
                 async with asyncio.TaskGroup() as group:
                     group.create_task(self.update_windows(context.graph, **names))
                     group.create_task(self.update_lasers(context.graph))
+                    group.create_task(self.update_dmx(context.graph))
                 render += self.counter.clock()
 
                 housekeeping -= self.counter.clock()
