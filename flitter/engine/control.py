@@ -200,7 +200,7 @@ class Controller:
         count = 0
         async with asyncio.TaskGroup() as group:
             for i, node in enumerate(graph.select_below('dmx.')):
-                if i == len(self.lasers):
+                if i == len(self.dmx):
                     if self.multiprocess:
                         d = process.Proxy('flitter.render.dmx.DMX')
                     else:

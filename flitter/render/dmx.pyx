@@ -217,8 +217,4 @@ cdef class DMX:
                             channel_data[i] = min(max(0, <int>(round(channel*255))), 255)
                         if end > n:
                             n = end
-                    else:
-                        print(start, end, len(channel_data))
-                else:
-                    print(address, channels)
         return n
