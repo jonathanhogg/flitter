@@ -169,14 +169,18 @@ void main() {
         if 'fragment' in node:
             return node['fragment'].as_string()
         names = list(self.child_textures.keys())
-        samplers = '\n'.join(f"uniform sampler2D {name};" for name in names)
-        composite = ["    vec4 child;"] if len(names) > 1 else []
-        composite.append(f"    color = texture({names.pop(0)}, coord);")
-        while names:
-            composite.append(f"""
-    child = texture({names.pop(0)});
-    color = color * (1.0 - child.a) + child;""")
-        composite = '\n'.join(composite)
+        if names:
+            samplers = '\n'.join(f"uniform sampler2D {name};" for name in names)
+            composite = ["    vec4 child;"] if len(names) > 1 else []
+            composite.append(f"    color = texture({names.pop(0)}, coord);")
+            while names:
+                composite.append(f"""
+        child = texture({names.pop(0)});
+        color = color * (1.0 - child.a) + child;""")
+            composite = '\n'.join(composite)
+        else:
+            samplers = ""
+            composite = "    color = vec4(0.0);"
         return f"""#version 410
 in vec2 coord;
 out vec4 color;
@@ -444,11 +448,15 @@ class Video(Shader):
         self._decoder = None
         self._frames = []
         self._current_pts = None
-        self._video_texture = None
+        self._next_pts = None
+        self._current_texture = None
+        self._next_texture = None
 
     def release(self):
-        if self._video_texture is not None:
-            self._video_texture.release()
+        if self._current_texture is not None:
+            self._current_texture.release()
+        if self._next_texture is not None:
+            self._next_texture.release()
         if self._container is not None:
             Log.info("Closed video %s", self._container.name)
             self._container.close()
@@ -457,12 +465,14 @@ class Video(Shader):
         self._decoder = None
         self._frames = []
         self._current_pts = None
-        self._video_texture = None
+        self._next_pts = None
+        self._current_texture = None
+        self._next_texture = None
         super().release()
 
     @property
     def child_textures(self):
-        return {'video': self._video_texture}
+        return {'current_frame': self._current_texture, 'next_frame': self._next_texture}
 
     def get_vertex_source(self, node):
         return """#version 410
@@ -471,6 +481,20 @@ out vec2 coord;
 void main() {
     gl_Position = vec4(position.x, -position.y, 0.0, 1.0);
     coord = (position + 1.0) / 2.0;
+}
+"""
+
+    def get_fragment_source(self, node):
+        return """#version 410
+in vec2 coord;
+out vec4 color;
+uniform sampler2D current_frame;
+uniform sampler2D next_frame;
+uniform float ratio;
+void main() {
+    vec4 current_color = texture(current_frame, coord);
+    vec4 next_color = texture(next_frame, coord);
+    color = mix(current_color, next_color, ratio);
 }
 """
 
@@ -494,28 +518,37 @@ void main() {
                 self._stream = stream
                 self._stream.thread_type = 'AUTO'
                 codec_context = self._stream.codec_context
-                self.width, self.height = int(codec_context.display_aspect_ratio * codec_context.height), codec_context.height
+                if codec_context.display_aspect_ratio:
+                    self.width, self.height = int(codec_context.display_aspect_ratio * codec_context.height), codec_context.height
+                else:
+                    self.width, self.height = codec_context.width, codec_context.height
                 self._texture = self.glctx.texture((self.width, self.height), 3)
                 self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
-                self._video_texture = self.glctx.texture((codec_context.width, codec_context.height), 3)
-        if self._container is not None:
-            await self.read_frame(node)
-            self.render(node, **kwargs)
-
-    async def read_frame(self, node):
+                self._current_texture = self.glctx.texture((codec_context.width, codec_context.height), 3)
+                self._next_texture = self.glctx.texture((codec_context.width, codec_context.height), 3)
         position = node.get('position', 1, float, 0)
         loop = node.get('loop', 1, bool, False)
+        interpolate = node.get('interpolate', 1, bool, False)
         start_position = self._stream.start_time
         if loop:
             timestamp = start_position + int(position / self._stream.time_base) % self._stream.duration
         else:
             timestamp = min(max(start_position, int(position / self._stream.time_base)), start_position + self._stream.duration)
+        if self._container is not None:
+            await self.read_frame(node, timestamp)
+            if not interpolate or self._next_pts is None:
+                ratio = 0
+            else:
+                ratio = (timestamp - self._current_pts) / (self._next_pts - self._current_pts)
+            self.render(node, ratio=ratio, **kwargs)
+
+    async def read_frame(self, node, timestamp):
         while True:
             if len(self._frames) == 2:
-                last, current = self._frames
-                if last.pts <= timestamp and (current is None or timestamp < current.pts):
+                current_frame, next_frame = self._frames
+                if current_frame.pts <= timestamp and (next_frame is None or timestamp < next_frame.pts):
                     break
-                elif timestamp < last.pts or (timestamp > current.pts and current.key_frame):
+                elif timestamp < current_frame.pts or (timestamp > next_frame.pts and next_frame.key_frame):
                     self._frames = []
             if not self._frames:
                 if self._decoder is not None:
@@ -532,7 +565,15 @@ void main() {
                     self._decoder = None
                     frame = None
                 self._frames.append(frame)
-        frame = self._frames[0]
-        if frame.pts != self._current_pts:
-            self._video_texture.write(memoryview(frame.to_rgb().planes[0]))
-            self._current_pts = frame.pts
+        current_frame, next_frame = self._frames
+        if current_frame.pts == self._next_pts:
+            self._current_texture, self._next_texture = self._next_texture, self._current_texture
+            self._current_pts, self._next_pts = self._next_pts, self._current_pts
+        if current_frame.pts != self._current_pts:
+            self._current_texture.write(memoryview(current_frame.to_rgb().planes[0]))
+            self._current_pts = current_frame.pts
+        if next_frame is None:
+            self._next_pts = None
+        elif next_frame.pts != self._next_pts:
+            self._next_texture.write(memoryview(next_frame.to_rgb().planes[0]))
+            self._next_pts = next_frame.pts
