@@ -168,10 +168,10 @@ void main() {
     def get_fragment_source(self, node):
         if 'fragment' in node:
             return node['fragment'].as_string()
-        children = [child for child in self.children if child.texture is not None]
-        samplers = '\n'.join(f"uniform sampler2D texture{i};" for i in range(len(children)))
-        textures = '\n'.join(f"""    merge = texture(texture{i}, coord);
-    color = color * (1.0 - merge.a) + merge;""" for i in range(len(children)))
+        child_textures = self.child_textures
+        samplers = '\n'.join(f"uniform sampler2D {name};" for name in child_textures)
+        textures = '\n'.join(f"""    merge = texture({name}, coord);
+    color = color * (1.0 - merge.a) + merge;""" for name in child_textures)
         return f"""#version 410
 in vec2 coord;
 out vec4 color;
@@ -433,6 +433,7 @@ class Canvas(SceneNode):
 
 class Video(Shader):
     MAX_BUFFER_FRAMES = 60
+    BT709 = (1, 1, 1, 0, -0.21482, 2.12798, 1.28033, -0.38059, 0)
 
     def __init__(self, glctx):
         super().__init__(glctx)
@@ -442,6 +443,7 @@ class Video(Shader):
         self._frames = []
         self._current_pts = None
         self._plane_textures = {}
+        self._scale = (1, 1)
 
     def release(self):
         while self._plane_textures:
@@ -450,6 +452,7 @@ class Video(Shader):
         self._stream = None
         self._decoder = None
         self._frames = []
+        self._scale = (1, 1)
         if self._container is not None:
             Log.debug("Closed video %s", self._container.name)
             self._container.close()
@@ -479,14 +482,14 @@ out vec4 color;
 uniform sampler2D y;
 uniform sampler2D u;
 uniform sampler2D v;
-const mat3 bt709 = mat3(    1.0,      1.0,     1.0,
-                            0.0, -0.21482, 2.12798,
-                        1.28033, -0.38059,     0.0);
+uniform vec2 scale;
+uniform mat3 color_conversion;
 void main() {
-    vec3 yuv = vec3(texture(y, coord).r, texture(u, coord).r, texture(v, coord).r);
+    vec2 xy = coord * scale;
+    vec3 yuv = vec3(texture(y, xy).r, texture(u, xy).r, texture(v, xy).r);
     yuv -= vec3(0.0627451, 0.5, 0.5);
     yuv *= 1.138393;
-    color = vec4(bt709 * yuv, 1);
+    color = vec4(color_conversion * yuv, 1);
 }
 """
 
@@ -515,13 +518,10 @@ void main() {
                 self.width, self.height = codec_context.width, codec_context.height
                 self._texture = self.glctx.texture((self.width, self.height), 3)
                 self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
-                self._plane_textures['y'] = self.glctx.texture((self.width, self.height), 1)
-                self._plane_textures['u'] = self.glctx.texture((self.width//2, self.height//2), 1)
-                self._plane_textures['v'] = self.glctx.texture((self.width//2, self.height//2), 1)
                 self._decoder = self._container.decode(streams=(self._stream.index,))
         if self._container is not None:
             await self.read_frame(node)
-            self.render(node, **kwargs)
+            self.render(node, color_conversion=self.BT709, scale=self._scale, **kwargs)
 
     async def read_frame(self, node):
         position = node.get('position', 1, float, 0)
@@ -551,6 +551,10 @@ void main() {
             break
         frame = self._frames[0]
         if frame.pts != self._current_pts:
-            for plane, texture in zip(frame.planes, self._plane_textures.values()):
-                texture.write(memoryview(plane))
+            for name, plane in zip('yuv', frame.planes):
+                if name not in self._plane_textures:
+                    if plane.line_size > plane.width:
+                        self._scale = (plane.width / plane.line_size, 1)
+                    self._plane_textures[name] = self.glctx.texture((plane.line_size, plane.height), 1)
+                self._plane_textures[name].write(memoryview(plane))
             self._current_pts = frame.pts
