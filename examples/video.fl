@@ -1,0 +1,3 @@
+
+!window size=1280;720
+    !video filename="test.mov" position=60*beat/tempo loop=true

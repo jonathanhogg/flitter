@@ -393,7 +393,8 @@ class Controller:
                 beat = self.counter.beat_at_time(frame_time)
                 delta = beat - last
                 last = beat
-                names = {'beat': beat, 'quantum': self.counter.quantum, 'delta': delta, 'clock': frame_time, 'performance': performance}
+                names = {'beat': beat, 'quantum': self.counter.quantum, 'tempo': self.counter.tempo,
+                         'delta': delta, 'clock': frame_time, 'performance': performance}
                 context = self.program_top.run(self.state, read=self.read, csv=self.csv, debug=self.debug, **names)
                 execution += self.counter.clock()
                 render -= self.counter.clock()

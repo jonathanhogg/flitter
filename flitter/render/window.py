@@ -8,6 +8,7 @@ import array
 import logging
 import sys
 
+import av
 import skia
 import moderngl
 import pyglet
@@ -42,6 +43,16 @@ class SceneNode:
     def texture(self):
         raise NotImplementedError()
 
+    @property
+    def child_textures(self):
+        textures = {}
+        i = 0
+        for child in self.children:
+            if child.texture is not None:
+                textures[f'texture{i}'] = child.texture
+                i += 1
+        return textures
+
     def destroy(self):
         self.release()
         self.glctx = None
@@ -69,7 +80,7 @@ class SceneNode:
     async def descend(self, node, **kwargs):
         count = 0
         for i, child in enumerate(node.children):
-            cls = {'reference': Reference, 'shader': Shader, 'canvas': Canvas}[child.kind]
+            cls = {'reference': Reference, 'shader': Shader, 'canvas': Canvas, 'video': Video}[child.kind]
             if i == len(self.children):
                 self.children.append(cls(self.glctx))
             elif type(self.children[i]) != cls:  # noqa
@@ -162,7 +173,6 @@ void main() {
         textures = '\n'.join(f"""    merge = texture(texture{i}, coord);
     color = color * (1.0 - merge.a) + merge;""" for i in range(len(children)))
         return f"""#version 410
-precision highp float;
 in vec2 coord;
 out vec4 color;
 vec4 merge;
@@ -205,7 +215,7 @@ void main() {{
                     del sampler_args['repeat_x']
                 if repeat[1]:
                     del sampler_args['repeat_y']
-            children = [child for child in self.children if child.texture is not None]
+            child_textures = self.child_textures
             self.framebuffer.use()
             samplers = []
             unit = 0
@@ -224,18 +234,15 @@ void main() {{
                             self._last.use(location=unit)
                         member.value = unit
                         unit += 1
-                    elif name.startswith('texture'):
-                        index = int(name[7:])
-                        if index < len(children):
-                            child = children[index]
-                            if sampler_args:
-                                sampler = self.glctx.sampler(texture=child.texture, **sampler_args)
-                                sampler.use(location=unit)
-                                samplers.append(sampler)
-                            else:
-                                child.texture.use(location=unit)
-                            member.value = unit
-                            unit += 1
+                    elif name in child_textures:
+                        if sampler_args:
+                            sampler = self.glctx.sampler(texture=child_textures[name], **sampler_args)
+                            sampler.use(location=unit)
+                            samplers.append(sampler)
+                        else:
+                            child_textures[name].use(location=unit)
+                        member.value = unit
+                        unit += 1
                     elif name == 'size':
                         member.value = self.size
                     elif name in kwargs:
@@ -422,3 +429,128 @@ class Canvas(SceneNode):
         self._framebuffer.clear()
         canvas.draw(node, self._canvas)
         self._surface.flushAndSubmit()
+
+
+class Video(Shader):
+    MAX_BUFFER_FRAMES = 60
+
+    def __init__(self, glctx):
+        super().__init__(glctx)
+        self._container = None
+        self._stream = None
+        self._decoder = None
+        self._frames = []
+        self._current_pts = None
+        self._plane_textures = {}
+
+    def release(self):
+        while self._plane_textures:
+            self._plane_textures.popitem()[1].release()
+        self._current_pts = None
+        self._stream = None
+        self._decoder = None
+        self._frames = []
+        if self._container is not None:
+            Log.debug("Closed video %s", self._container.name)
+            self._container.close()
+            self._container = None
+        super().release()
+
+    @property
+    def child_textures(self):
+        return self._plane_textures
+
+    def get_vertex_source(self, node):
+        return """
+#version 410
+in vec2 position;
+out vec2 coord;
+void main() {
+    gl_Position = vec4(position.x, -position.y, 0.0, 1.0);
+    coord = (position + 1.0) / 2.0;
+}
+"""
+
+    def get_fragment_source(self, node):
+        return """
+#version 410
+in vec2 coord;
+out vec4 color;
+uniform sampler2D y;
+uniform sampler2D u;
+uniform sampler2D v;
+const mat3 bt709 = mat3(    1.0,      1.0,     1.0,
+                            0.0, -0.21482, 2.12798,
+                        1.28033, -0.38059,     0.0);
+void main() {
+    vec3 yuv = vec3(texture(y, coord).r, texture(u, coord).r, texture(v, coord).r);
+    yuv -= vec3(0.0627451, 0.5, 0.5);
+    yuv *= 1.138393;
+    color = vec4(bt709 * yuv, 1);
+}
+"""
+
+    async def update(self, node, **kwargs):
+        references = kwargs.setdefault('references', {})
+        node_id = node['id'].as_string() if 'id' in node else None
+        if node_id:
+            references[node_id] = self
+        if 'filename' in node:
+            filename = node['filename'].as_string()
+            if self._container is not None and self._container.name != filename:
+                self.release()
+            if self._container is None and filename:
+                try:
+                    container = av.container.open(filename)
+                    stream = container.streams.video[0]
+                except (FileNotFoundError, av.InvalidDataError, IndexError):
+                    return
+                Log.info("Opened video %r", filename)
+                self._container = container
+                self._stream = stream
+                self._stream.thread_type = 'AUTO'
+                codec_context = self._stream.codec_context
+                if codec_context.format.name != 'yuv420p':
+                    Log.warning("Video %s has pixel format %s, which will require reformatting (slower)", container.name, codec_context.format.name)
+                self.width, self.height = codec_context.width, codec_context.height
+                self._texture = self.glctx.texture((self.width, self.height), 3)
+                self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
+                self._plane_textures['y'] = self.glctx.texture((self.width, self.height), 1)
+                self._plane_textures['u'] = self.glctx.texture((self.width//2, self.height//2), 1)
+                self._plane_textures['v'] = self.glctx.texture((self.width//2, self.height//2), 1)
+                self._decoder = self._container.decode(streams=(self._stream.index,))
+        if self._container is not None:
+            await self.read_frame(node)
+            self.render(node, **kwargs)
+
+    async def read_frame(self, node):
+        position = node.get('position', 1, float, 0)
+        loop = node.get('loop', 1, bool, False)
+        start_position = self._stream.start_time
+        if loop:
+            timestamp = start_position + int(position / self._stream.time_base) % self._stream.duration
+        else:
+            timestamp = min(max(start_position, int(position / self._stream.time_base)), start_position + self._stream.duration)
+        while True:
+            while len(self._frames) > 1 and timestamp > self._frames[1].pts:
+                self._frames.pop(0)
+            while self._decoder is not None and (not self._frames or self._frames[-1].pts < timestamp) and len(self._frames) < self.MAX_BUFFER_FRAMES:
+                try:
+                    self._frames.append(next(self._decoder).reformat(format='yuv420p'))
+                except StopIteration:
+                    Log.debug("Reached end of video %r", self._container.name)
+                    self._decoder = None
+                    break
+            else:
+                if timestamp < self._frames[0].pts or timestamp > self._frames[-1].pts and self._decoder is not None:
+                    Log.debug("Seek video %r to position %0.2f", self._container.name, timestamp * self._stream.time_base)
+                    self._frames = []
+                    self._container.seek(timestamp, stream=self._stream)
+                    self._decoder = self._container.decode(streams=(self._stream.index,))
+                    continue
+            break
+        frame = self._frames[0]
+        if frame.pts != self._current_pts:
+            for plane, texture in zip(frame.planes, self._plane_textures.values()):
+                texture.write(memoryview(plane))
+            self._current_pts = frame.pts
