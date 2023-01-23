@@ -168,25 +168,28 @@ void main() {
     def get_fragment_source(self, node):
         if 'fragment' in node:
             return node['fragment'].as_string()
-        child_textures = self.child_textures
-        samplers = '\n'.join(f"uniform sampler2D {name};" for name in child_textures)
-        textures = '\n'.join(f"""    merge = texture({name}, coord);
-    color = color * (1.0 - merge.a) + merge;""" for name in child_textures)
+        names = list(self.child_textures.keys())
+        samplers = '\n'.join(f"uniform sampler2D {name};" for name in names)
+        composite = ["    vec4 child;"] if len(names) > 1 else []
+        composite.append(f"    color = texture({names.pop(0)}, coord);")
+        while names:
+            composite.append(f"""
+    child = texture({names.pop(0)});
+    color = color * (1.0 - child.a) + child;""")
+        composite = '\n'.join(composite)
         return f"""#version 410
 in vec2 coord;
 out vec4 color;
-vec4 merge;
 {samplers}
 void main() {{
-    color = vec4(0.0, 0.0, 0.0, 0.0);
-{textures}
+{composite}
 }}
 """
 
     def compile(self, node):
         vertex_source = self.get_vertex_source(node)
         fragment_source = self.get_fragment_source(node)
-        if vertex_source != self._vertex_source or fragment_source != self._fragment_source:
+        if self._rectangle is None or vertex_source != self._vertex_source or fragment_source != self._fragment_source:
             self._vertex_source = vertex_source
             self._fragment_source = fragment_source
             if self._program is not None:
@@ -432,8 +435,7 @@ class Canvas(SceneNode):
 
 
 class Video(Shader):
-    MAX_BUFFER_FRAMES = 60
-    BT709 = (1, 1, 1, 0, -0.21482, 2.12798, 1.28033, -0.38059, 0)
+    MAX_BUFFER_FRAMES = 300
 
     def __init__(self, glctx):
         super().__init__(glctx)
@@ -442,54 +444,33 @@ class Video(Shader):
         self._decoder = None
         self._frames = []
         self._current_pts = None
-        self._plane_textures = {}
-        self._scale = (1, 1)
+        self._video_texture = None
 
     def release(self):
-        while self._plane_textures:
-            self._plane_textures.popitem()[1].release()
-        self._current_pts = None
+        if self._video_texture is not None:
+            self._video_texture.release()
+        if self._container is not None:
+            Log.info("Closed video %s", self._container.name)
+            self._container.close()
+        self._container = None
         self._stream = None
         self._decoder = None
         self._frames = []
-        self._scale = (1, 1)
-        if self._container is not None:
-            Log.debug("Closed video %s", self._container.name)
-            self._container.close()
-            self._container = None
+        self._current_pts = None
+        self._video_texture = None
         super().release()
 
     @property
     def child_textures(self):
-        return self._plane_textures
+        return {'video': self._video_texture}
 
     def get_vertex_source(self, node):
-        return """
-#version 410
+        return """#version 410
 in vec2 position;
 out vec2 coord;
 void main() {
     gl_Position = vec4(position.x, -position.y, 0.0, 1.0);
     coord = (position + 1.0) / 2.0;
-}
-"""
-
-    def get_fragment_source(self, node):
-        return """
-#version 410
-in vec2 coord;
-out vec4 color;
-uniform sampler2D y;
-uniform sampler2D u;
-uniform sampler2D v;
-uniform vec2 scale;
-uniform mat3 color_conversion;
-void main() {
-    vec2 xy = coord * scale;
-    vec3 yuv = vec3(texture(y, xy).r, texture(u, xy).r, texture(v, xy).r);
-    yuv -= vec3(0.0627451, 0.5, 0.5);
-    yuv *= 1.138393;
-    color = vec4(color_conversion * yuv, 1);
 }
 """
 
@@ -513,15 +494,13 @@ void main() {
                 self._stream = stream
                 self._stream.thread_type = 'AUTO'
                 codec_context = self._stream.codec_context
-                if codec_context.format.name != 'yuv420p':
-                    Log.warning("Video %s has pixel format %s, which will require reformatting (slower)", container.name, codec_context.format.name)
-                self.width, self.height = codec_context.width, codec_context.height
+                self.width, self.height = int(codec_context.display_aspect_ratio * codec_context.height), codec_context.height
                 self._texture = self.glctx.texture((self.width, self.height), 3)
                 self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
-                self._decoder = self._container.decode(streams=(self._stream.index,))
+                self._video_texture = self.glctx.texture((codec_context.width, codec_context.height), 3)
         if self._container is not None:
             await self.read_frame(node)
-            self.render(node, color_conversion=self.BT709, scale=self._scale, **kwargs)
+            self.render(node, **kwargs)
 
     async def read_frame(self, node):
         position = node.get('position', 1, float, 0)
@@ -532,29 +511,28 @@ void main() {
         else:
             timestamp = min(max(start_position, int(position / self._stream.time_base)), start_position + self._stream.duration)
         while True:
-            while len(self._frames) > 1 and timestamp > self._frames[1].pts:
-                self._frames.pop(0)
-            while self._decoder is not None and (not self._frames or self._frames[-1].pts < timestamp) and len(self._frames) < self.MAX_BUFFER_FRAMES:
+            if len(self._frames) == 2:
+                last, current = self._frames
+                if last.pts <= timestamp and (current is None or timestamp < current.pts):
+                    break
+                elif timestamp < last.pts or (timestamp > current.pts and current.key_frame):
+                    self._frames = []
+            if not self._frames:
+                if self._decoder is not None:
+                    self._decoder.close()
+                self._container.seek(timestamp, stream=self._stream)
+                self._decoder = self._container.decode(streams=(self._stream.index,))
+            if self._decoder is not None:
+                if len(self._frames) == 2:
+                    self._frames.pop(0)
                 try:
-                    self._frames.append(next(self._decoder).reformat(format='yuv420p'))
+                    frame = next(self._decoder)
                 except StopIteration:
                     Log.debug("Reached end of video %r", self._container.name)
                     self._decoder = None
-                    break
-            else:
-                if timestamp < self._frames[0].pts or timestamp > self._frames[-1].pts and self._decoder is not None:
-                    Log.debug("Seek video %r to position %0.2f", self._container.name, timestamp * self._stream.time_base)
-                    self._frames = []
-                    self._container.seek(timestamp, stream=self._stream)
-                    self._decoder = self._container.decode(streams=(self._stream.index,))
-                    continue
-            break
+                    frame = None
+                self._frames.append(frame)
         frame = self._frames[0]
         if frame.pts != self._current_pts:
-            for name, plane in zip('yuv', frame.planes):
-                if name not in self._plane_textures:
-                    if plane.line_size > plane.width:
-                        self._scale = (plane.width / plane.line_size, 1)
-                    self._plane_textures[name] = self.glctx.texture((plane.line_size, plane.height), 1)
-                self._plane_textures[name].write(memoryview(plane))
+            self._video_texture.write(memoryview(frame.to_rgb().planes[0]))
             self._current_pts = frame.pts
