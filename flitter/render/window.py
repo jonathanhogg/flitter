@@ -174,9 +174,8 @@ void main() {
             composite = ["    vec4 child;"] if len(names) > 1 else []
             composite.append(f"    color = texture({names.pop(0)}, coord);")
             while names:
-                composite.append(f"""
-        child = texture({names.pop(0)});
-        color = color * (1.0 - child.a) + child;""")
+                composite.append(f"    child = texture({names.pop(0)}, coord);")
+                composite.append(f"    color = color * (1.0 - child.a) + child;")
             composite = '\n'.join(composite)
         else:
             samplers = ""
