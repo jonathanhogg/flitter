@@ -131,13 +131,15 @@ class ProgramNode(SceneNode):
     def release(self):
         if self._last is not None:
             self._last.release()
-            self._last = None
         if self._program is not None:
             self._program.release()
-            self._program = None
         if self._rectangle is not None:
             self._rectangle.release()
-            self._rectangle = None
+        self._program = None
+        self._rectangle = None
+        self._vertex_source = None
+        self._fragment_source = None
+        self._last = None
 
     @property
     def framebuffer(self):
@@ -192,7 +194,7 @@ void main() {{
     def compile(self, node):
         vertex_source = self.get_vertex_source(node)
         fragment_source = self.get_fragment_source(node)
-        if self._rectangle is None or vertex_source != self._vertex_source or fragment_source != self._fragment_source:
+        if vertex_source != self._vertex_source or fragment_source != self._fragment_source:
             self._vertex_source = vertex_source
             self._fragment_source = fragment_source
             if self._program is not None:
@@ -490,10 +492,11 @@ out vec4 color;
 uniform sampler2D current_frame;
 uniform sampler2D next_frame;
 uniform float ratio;
+uniform float alpha;
 void main() {
     vec4 current_color = texture(current_frame, coord);
     vec4 next_color = texture(next_frame, coord);
-    color = mix(current_color, next_color, ratio);
+    color = vec4(mix(current_color.rgb, next_color.rgb, ratio) * alpha, alpha);
 }
 """
 
@@ -521,13 +524,14 @@ void main() {
                     self.width, self.height = int(codec_context.display_aspect_ratio * codec_context.height), codec_context.height
                 else:
                     self.width, self.height = codec_context.width, codec_context.height
-                self._texture = self.glctx.texture((self.width, self.height), 3)
+                self._texture = self.glctx.texture((self.width, self.height), 4)
                 self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
                 self._current_texture = self.glctx.texture((codec_context.width, codec_context.height), 3)
                 self._next_texture = self.glctx.texture((codec_context.width, codec_context.height), 3)
         position = node.get('position', 1, float, 0)
         loop = node.get('loop', 1, bool, False)
-        interpolate = node.get('interpolate', 1, bool, False)
+        interpolate = node.get('interpolate', 1, bool, True)
+        alpha = node.get('alpha', 1, float, 1)
         start_position = self._stream.start_time
         if loop:
             timestamp = start_position + int(position / self._stream.time_base) % self._stream.duration
@@ -539,7 +543,7 @@ void main() {
                 ratio = 0
             else:
                 ratio = (timestamp - self._current_pts) / (self._next_pts - self._current_pts)
-            self.render(node, ratio=ratio, **kwargs)
+            self.render(node, ratio=ratio, alpha=alpha, **kwargs)
 
     async def read_frame(self, node, timestamp):
         while True:
