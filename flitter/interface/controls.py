@@ -155,6 +155,10 @@ class Pad(TouchControl):
             if self.toggled is not None:
                 controller[toggled_key] = self.toggled
                 controller[toggled_beat_key] = self._toggled_beat
+                if self.toggled:
+                    controller[(*self.state, "toggled_on", "beat")] = self._toggled_beat
+                else:
+                    controller[(*self.state, "toggled_off", "beat")] = self._toggled_beat
         return changed
 
     def on_touched(self, beat):
@@ -185,6 +189,7 @@ class Pad(TouchControl):
         self.toggle = None
         self.toggled = None
         self.initial = None
+        self.lag = None
         self._toggled_beat = None
         self.pressure = None
         self._pressure_beat = None
@@ -196,6 +201,7 @@ class Encoder(TouchControl):
     DEFAULT_LOWER = 0.0
     DEFAULT_UPPER = 1.0
     DEFAULT_LAG = 0.1
+    DEFAULT_TURNS = 1.0
 
     def __init__(self, number):
         super().__init__(number)
@@ -207,6 +213,7 @@ class Encoder(TouchControl):
         self.decimals = None
         self.percent = None
         self.lag = None
+        self.turns = None
         self._value_beat = None
         self._clock = None
 
@@ -231,6 +238,10 @@ class Encoder(TouchControl):
             lag = node.get('lag', 1, float, self.DEFAULT_LAG)
             if lag != self.lag:
                 self.lag = lag
+                changed = True
+            turns = node.get('turns', 1, float, self.DEFAULT_TURNS)
+            if turns != self.turns:
+                self.turns = turns
                 changed = True
             initial = node.get('initial', 1, float, self.lower)
             if initial != self.initial:
@@ -270,7 +281,7 @@ class Encoder(TouchControl):
         return changed
 
     def on_turned(self, beat, amount):
-        self.value = min(max(self.lower, self.value + amount * (self.upper - self.lower)), self.upper)
+        self.value = min(max(self.lower, self.value + amount / self.turns * (self.upper - self.lower)), self.upper)
         self._value_beat = beat
         self._changed = True
 
@@ -286,5 +297,7 @@ class Encoder(TouchControl):
         self.value = None
         self.decimals = None
         self.percent = None
+        self.lag = None
+        self.turns = None
         self._value_beat = None
         self._clock = None
