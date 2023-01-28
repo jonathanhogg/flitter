@@ -77,19 +77,32 @@ class SceneNode:
         await self.descend(node, **kwargs)
         self.render(node, **kwargs)
 
+    def similar_to(self, node):
+        return False
+
     async def descend(self, node, **kwargs):
         count = 0
-        for i, child in enumerate(node.children):
+        existing = self.children
+        updated = []
+        for child in node.children:
             cls = {'reference': Reference, 'shader': Shader, 'canvas': Canvas, 'video': Video}[child.kind]
-            if i == len(self.children):
-                self.children.append(cls(self.glctx))
-            elif type(self.children[i]) != cls:  # noqa
-                self.children[i].destroy()
-                self.children[i] = cls(self.glctx)
-            await self.children[i].update(child, **kwargs)
-            count += 1
-        while len(self.children) > count:
-            self.children.pop().destroy()
+            index = None
+            for i, scene_node in enumerate(existing):
+                if type(scene_node) == cls:
+                    if scene_node.similar_to(child):
+                        index = i
+                        break
+                    if index is None:
+                        index = i
+            if index is not None:
+                scene_node = existing.pop(index)
+            else:
+                scene_node = cls(self.glctx)
+            await scene_node.update(child, **kwargs)
+            updated.append(scene_node)
+        while existing:
+            existing.pop().destroy()
+        self.children = updated
 
     def create(self, node, resized, **kwargs):
         pass
@@ -185,9 +198,11 @@ void main() {
         return f"""#version 410
 in vec2 coord;
 out vec4 color;
+uniform float alpha = 1;
 {samplers}
 void main() {{
 {composite}
+    color *= alpha;
 }}
 """
 
@@ -440,8 +455,6 @@ class Canvas(SceneNode):
 
 
 class Video(Shader):
-    MAX_BUFFER_FRAMES = 300
-
     def __init__(self, glctx):
         super().__init__(glctx)
         self._container = None
@@ -458,17 +471,19 @@ class Video(Shader):
             self._current_texture.release()
         if self._next_texture is not None:
             self._next_texture.release()
+        self._current_texture = None
+        self._next_texture = None
+        self._current_pts = None
+        self._next_pts = None
+        self._frames = []
+        if self._decoder is not None:
+            self._decoder.close()
+        self._decoder = None
+        self._stream = None
         if self._container is not None:
             Log.info("Closed video %s", self._container.name)
             self._container.close()
         self._container = None
-        self._stream = None
-        self._decoder = None
-        self._frames = []
-        self._current_pts = None
-        self._next_pts = None
-        self._current_texture = None
-        self._next_texture = None
         super().release()
 
     @property
@@ -500,6 +515,9 @@ void main() {
 }
 """
 
+    def similar_to(self, node):
+        return self._container is not None and 'filename' in node and node['filename'].as_string() == self._container.name
+
     async def update(self, node, **kwargs):
         references = kwargs.setdefault('references', {})
         node_id = node['id'].as_string() if 'id' in node else None
@@ -518,7 +536,7 @@ void main() {
                 Log.info("Opened video %r", filename)
                 self._container = container
                 self._stream = stream
-                self._stream.thread_type = 'AUTO'
+                # self._stream.thread_type = 'AUTO'
                 codec_context = self._stream.codec_context
                 if codec_context.display_aspect_ratio:
                     self.width, self.height = int(codec_context.display_aspect_ratio * codec_context.height), codec_context.height
