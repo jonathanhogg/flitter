@@ -5,7 +5,16 @@ performances. While **flitter** supports a basic form of live-coding (live
 reload of source files), it is designed primarily for driving via an Ableton
 Push 2 controller.
 
-It is implemented in a mix of Python and Cython.
+The engine that runs the language is capable of: drawing in windows with Skia,
+OpenGL shaders and video files; driving a LaserCube plugged in over USB (other
+lasers probably easy to support); driving DMX lighting via a USB DMX interface
+(currently via an Entec/-compatible interface or my own crazy hand-built
+interfaces).
+
+It is implemented in a mix of Python and Cython. I use and develop **flitter**
+exclusively on macOS. It is notionally portable – in that there's no particular
+reason why it wouldn't work on Linux or Windows – but I've not tested either of
+those platforms.
 
 ## Background
 
@@ -49,14 +58,14 @@ For reference, they are:
 
 - `cython` - because half of **flitter** is implemented in Cython for speed
 - `numpy` - for fast memory crunching
-- `lark` - for the language parser
-- `regex` - for the language parser
+- `lark` and `regex` - for the language parser
 - `python-rtmidi` - for talking MIDI to the Push 2
-- `pyusb` - for sending the screen data to the Push 2
+- `pyusb` - for sending screen data to the Push 2 and for talking to LaserCubes
 - `skia-python` - for 2D drawing
 - `pyglet` - for OpenGL windowing
 - `moderngl` - because the OpenGL API is too hard
 - `posix_ipc` - for multiprocessing
+- `av` - for decoding video
 
 ## The Language
 
@@ -128,7 +137,7 @@ The available global values are:
     will adjust when the tempo or quantum is changed to keep the value of
     `beat` constant, so it's generally not a particularly useful value
 - `performance` - a value in the range [0.5 .. 1.5] that represents how well
-    the engine is doing at maintaining the maximum frame rate (usually 60fps,
+    the engine is doing at maintaining the target frame rate (usually 60fps,
     but configurable with a command-line option) – above 1.0 means that the
     engine has cycles to spare and below this means the frame rate is dipping
 
@@ -145,7 +154,9 @@ Assuming that you have an Ableton Push 2 connected,
 
 will fire up the process that talks to it. This interfaces with the engine via
 OSC messaging (on `localhost`) and is generally resilient to the engine starting
-and stopping.
+and stopping. You can also automatically start the Push 2 interface as a
+managed subprocess of the engine by just adding the `--push` command-line
+option to `flitter.sh`.
 
 Other than tempo control, you won't have much in the way of interface until you
 specify one in the program itself. `!pad` and `!encoder` nodes at the top level
