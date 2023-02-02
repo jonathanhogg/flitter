@@ -434,7 +434,7 @@ cdef class Vector:
     cdef Vector mod(self, Vector other):
         cdef int i, n = self.length, m = other.length
         cdef Vector result = Vector.__new__(Vector)
-        cdef float x, y
+        cdef double x, y
         if n and m and self.objects is None and other.objects is None:
             for i in range(result.allocate_numbers(max(n, m))):
                 x, y = self.numbers[i % n], other.numbers[i % m]

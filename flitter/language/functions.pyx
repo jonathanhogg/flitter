@@ -307,7 +307,7 @@ def roundv(Vector xs not None):
 def sumv(Vector xs not None):
     if xs.objects is not None:
         return null_
-    cdef float y = 0;
+    cdef double y = 0;
     for i in range(xs.length):
         y += xs.numbers[i]
     cdef Vector ys = Vector.__new__(Vector)
