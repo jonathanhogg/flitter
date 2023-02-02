@@ -347,7 +347,7 @@ cdef class Vector:
     cdef Vector neg(self):
         cdef int i, n = self.length
         cdef Vector result = Vector.__new__(Vector)
-        if n and self.objects is None:
+        if self.numbers != NULL:
             for i in range(result.allocate_numbers(n)):
                 result.numbers[i] = -self.numbers[i]
         return result
@@ -366,7 +366,7 @@ cdef class Vector:
     cdef Vector abs(self):
         cdef int i, n = self.length
         cdef Vector result = Vector.__new__(Vector)
-        if n and self.objects is None:
+        if self.numbers != NULL:
             for i in range(result.allocate_numbers(n)):
                 result.numbers[i] = abs(self.numbers[i])
         return result
@@ -378,7 +378,7 @@ cdef class Vector:
     cdef Vector add(self, Vector other):
         cdef int i, n = self.length, m = other.length
         cdef Vector result = Vector.__new__(Vector)
-        if n and m and self.objects is None and other.objects is None:
+        if self.numbers != NULL and other.numbers != NULL:
             for i in range(result.allocate_numbers(max(n, m))):
                 result.numbers[i] = self.numbers[i % n] + other.numbers[i % m]
         return result
@@ -390,7 +390,7 @@ cdef class Vector:
     cdef Vector sub(self, Vector other):
         cdef int i, n = self.length, m = other.length
         cdef Vector result = Vector.__new__(Vector)
-        if n and m and self.objects is None and other.objects is None:
+        if self.numbers != NULL and other.numbers != NULL:
             for i in range(result.allocate_numbers(max(n, m))):
                 result.numbers[i] = self.numbers[i % n] - other.numbers[i % m]
         return result
@@ -402,7 +402,7 @@ cdef class Vector:
     cdef Vector mul(self, Vector other):
         cdef int i, n = self.length, m = other.length
         cdef Vector result = Vector.__new__(Vector)
-        if n and m and self.objects is None and other.objects is None:
+        if self.numbers != NULL and other.numbers != NULL:
             for i in range(result.allocate_numbers(max(n, m))):
                 result.numbers[i] = self.numbers[i % n] * other.numbers[i % m]
         return result
@@ -414,7 +414,7 @@ cdef class Vector:
     cdef Vector truediv(self, Vector other):
         cdef int i, n = self.length, m = other.length
         cdef Vector result = Vector.__new__(Vector)
-        if n and m and self.objects is None and other.objects is None:
+        if self.numbers != NULL and other.numbers != NULL:
             for i in range(result.allocate_numbers(max(n, m))):
                 result.numbers[i] = self.numbers[i % n] / other.numbers[i % m]
         return result
@@ -426,7 +426,7 @@ cdef class Vector:
     cdef Vector floordiv(self, Vector other):
         cdef int i, n = self.length, m = other.length
         cdef Vector result = Vector.__new__(Vector)
-        if n and m and self.objects is None and other.objects is None:
+        if self.numbers != NULL and other.numbers != NULL:
             for i in range(result.allocate_numbers(max(n, m))):
                 result.numbers[i] = floor(self.numbers[i % n] / other.numbers[i % m])
         return result
@@ -439,7 +439,7 @@ cdef class Vector:
         cdef int i, n = self.length, m = other.length
         cdef Vector result = Vector.__new__(Vector)
         cdef double x, y
-        if n and m and self.objects is None and other.objects is None:
+        if self.numbers != NULL and other.numbers != NULL:
             for i in range(result.allocate_numbers(max(n, m))):
                 x, y = self.numbers[i % n], other.numbers[i % m]
                 result.numbers[i] = x - floor(x / y) * y
@@ -455,7 +455,7 @@ cdef class Vector:
     cdef Vector pow(self, Vector other):
         cdef int i, n = self.length, m = other.length
         cdef Vector result = Vector.__new__(Vector)
-        if n and m and self.objects is None and other.objects is None:
+        if self.numbers != NULL and other.numbers != NULL:
             for i in range(result.allocate_numbers(max(n, m))):
                 result.numbers[i] = self.numbers[i % n] ** other.numbers[i % m]
         return result
@@ -554,7 +554,7 @@ cdef class Vector:
     cdef Vector slice(self, Vector index):
         cdef int i, j, n = self.length
         cdef list values = []
-        if index.objects is None:
+        if index.numbers != NULL:
             for i in range(index.length):
                 j = <int>floor(index.numbers[i])
                 if j >= 0 and j < n:
