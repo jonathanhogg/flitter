@@ -1,14 +1,17 @@
 # cython: language_level=3, profile=True
 
 import cython
-import skia
+from skia import PathBuilder
 
 from libc.math cimport acos, sqrt
+
+from ..model cimport Vector
 
 
 DEF TwoPI = 6.283185307179586
 
 
+@cython.cdivision(True)
 cdef double turn_angle(double x0, double y0, double x1, double y1, double x2, double y2):
     cdef double xa=x1-x0, ya=y1-y0, xb=x2-x1, yb=y2-y1
     cdef double la=sqrt(xa*xa + ya*ya), lb=sqrt(xb*xb + yb*yb)
@@ -19,17 +22,17 @@ cdef double turn_angle(double x0, double y0, double x1, double y1, double x2, do
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def line_path(list points not None, double curve, bint close):
-    cdef int i, n=len(points)
+def line_path(Vector points not None, double curve, bint close):
+    cdef int i, n=points.length
+    assert points.numbers != NULL
     cdef double last_mid_x, last_mid_y, last_x, last_y, x, y
-    builder = skia.PathBuilder()
-    moveTo = builder.moveTo
+    builder = PathBuilder()
     lineTo = builder.lineTo
     quadTo = builder.quadTo
     for i in range(0, n, 2):
-        x, y = points[i], points[i+1]
+        x, y = points.numbers[i], points.numbers[i+1]
         if i == 0:
-            moveTo(x, y)
+            builder.moveTo(x, y)
         elif curve <= 0:
             lineTo(x, y)
         else:

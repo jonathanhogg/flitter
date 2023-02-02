@@ -494,11 +494,12 @@ def draw(node, ctx, paint=None, font=None, path=None):
                 path.addOval(skia.Rect(point[0]-radius[0], point[1]-radius[1], point[0]+radius[0], point[1]+radius[1]))
 
         case "line":
-            points = node.get('points', 0, float)
-            if points:
-                close = node.get('close', 1, bool, False)
-                curve = node.get('curve', 1, float, 0)
-                path.addPath(line_path(points, curve, close))
+            if 'points' in node:
+                points = node['points']
+                if points.numeric:
+                    close = node.get('close', 1, bool, False)
+                    curve = node.get('curve', 1, float, 0)
+                    path.addPath(line_path(points, curve, close))
 
         case "close":
             path.close()

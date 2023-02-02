@@ -131,6 +131,10 @@ cdef class Vector:
             PyMem_Free(self.numbers)
             self.numbers = NULL
 
+    @property
+    def numeric(self):
+        return self.numbers != NULL
+
     @cython.cdivision(True)
     cdef bint fill_range(self, startv, stopv, stepv) except False:
         assert self.length == 0
