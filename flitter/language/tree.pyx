@@ -24,19 +24,21 @@ cdef Expression sequence_pack(list expressions):
     cdef Expression expr
     cdef Literal literal
     cdef model.Vector value
-    cdef list remaining = []
+    cdef list vectors, remaining = []
     while expressions:
         expr = <Expression>expressions.pop(0)
         if isinstance(expr, Literal) and isinstance((<Literal>expr).value, model.Vector):
-            value = model.Vector.__new__(model.Vector)
+            vectors = []
             while isinstance(expr, Literal) and isinstance((<Literal>expr).value, model.Vector):
-                value.values.extend((<model.Vector>(<Literal>expr).value).values)
+                value = (<Literal>expr).value
+                if value.length:
+                    vectors.append(value)
                 if not expressions:
                     expr = None
                     break
                 expr = <Expression>expressions.pop(0)
-            if value.values:
-                remaining.append(Literal(value))
+            if vectors:
+                remaining.append(Literal(model.Vector._compose(vectors)))
         if expr is not None:
             if isinstance(expr, Sequence):
                 expressions[:0] = (<Sequence>expr).expressions
@@ -68,26 +70,26 @@ cdef class Top(Expression):
         cdef str key
         cdef model.Vector vector
         for key, value in kwargs.items():
-            vector = model.Vector.__new__(model.Vector)
-            if isinstance(value, (tuple, list)):
-                vector.values.extend(value)
-            else:
-                vector.values.append(value)
-            variables[key] = vector
+            variables[key] = model.Vector.coerce(value)
         cdef model.Context context = model.Context(state=state, variables=variables)
         self.evaluate(context)
         return context
 
     cpdef model.VectorLike evaluate(self, model.Context context):
-        cdef model.VectorLike vector
+        cdef model.VectorLike result
+        cdef model.Vector vector
         cdef Expression expr
+        cdef model.Node node
         for expr in self.expressions:
-            vector = expr.evaluate(context)
-            if isinstance(vector, model.Vector):
-                for value in (<model.Vector>vector).values:
-                    if isinstance(value, model.Node):
-                        if (<model.Node>value)._parent is None:
-                            context.graph.append(<model.Node>value)
+            result = expr.evaluate(context)
+            if isinstance(result, model.Vector):
+                vector = result
+                if vector.length and vector.objects is not None:
+                    for value in vector.objects:
+                        if isinstance(value, model.Node):
+                            node = value
+                            if node._parent is None:
+                                context.graph.append(node)
         return model.null_
 
     cpdef Expression partially_evaluate(self, model.Context context):
@@ -128,13 +130,10 @@ cdef class Sequence(Expression):
         self.expressions = expressions
 
     cpdef model.VectorLike evaluate(self, model.Context context):
-        cdef model.Vector result = model.Vector.__new__(model.Vector)
-        cdef model.Vector vector
-        cdef Expression expr
+        cdef list vectors = []
         for expr in self.expressions:
-            vector = expr.evaluate(context)
-            result.values.extend(vector.values)
-        return result
+            vectors.append(expr.evaluate(context))
+        return model.Vector._compose(vectors)
 
     cpdef Expression partially_evaluate(self, model.Context context):
         cdef list expressions = []
@@ -204,19 +203,7 @@ cdef class Lookup(Expression):
 
     cpdef model.VectorLike evaluate(self, model.Context context):
         cdef model.Vector key = self.key.evaluate(context)
-        value = context.state.get(tuple(key.values))
-        if value is None:
-            return model.null_
-        if isinstance(value, bool):
-            return model.true_ if value else model.false_
-        cdef model.Vector result = model.Vector.__new__(model.Vector)
-        if isinstance(value, list):
-            result.values = <list>value
-        if isinstance(value, tuple):
-            result.values.extend(value)
-        else:
-            result.values.append(value)
-        return result
+        return context.state.get(key, model.null_)
 
     cpdef Expression partially_evaluate(self, model.Context context):
         return Lookup(self.key.partially_evaluate(context))
@@ -239,7 +226,9 @@ cdef class Range(Expression):
         start = self.start.evaluate(context)
         stop = self.stop.evaluate(context)
         step = self.step.evaluate(context)
-        return model.Vector.range(start, stop, step)
+        cdef model.Vector result = model.Vector.__new__(model.Vector)
+        result.fill_range(start, stop, step)
+        return result
 
     cpdef Expression partially_evaluate(self, model.Context context):
         cdef Expression start = self.start.partially_evaluate(context)
@@ -285,7 +274,7 @@ cdef class Positive(UnaryOperation):
 cdef class Not(UnaryOperation):
     cpdef model.VectorLike evaluate(self, model.Context context):
         cdef model.Vector value = self.expr.evaluate(context)
-        return value.not_()
+        return model.false_ if value.as_bool() else model.true_
 
 
 cdef class BinaryOperation(Expression):
@@ -369,69 +358,63 @@ cdef class EqualTo(Comparison):
     cpdef model.VectorLike evaluate(self, model.Context context):
         cdef model.Vector left = self.left.evaluate(context)
         cdef model.Vector right = self.right.evaluate(context)
-        cdef int cmp = left.compare(right)
-        return model.true_ if cmp == 0 else model.false_
+        return left.eq(right)
 
 
 cdef class NotEqualTo(Comparison):
     cpdef model.VectorLike evaluate(self, model.Context context):
         cdef model.Vector left = self.left.evaluate(context)
         cdef model.Vector right = self.right.evaluate(context)
-        cdef int cmp = left.compare(right)
-        return model.true_ if cmp != 0 else model.false_
+        return left.ne(right)
 
 
 cdef class LessThan(Comparison):
     cpdef model.VectorLike evaluate(self, model.Context context):
         cdef model.Vector left = self.left.evaluate(context)
         cdef model.Vector right = self.right.evaluate(context)
-        cdef int cmp = left.compare(right)
-        return model.true_ if cmp == -1 else model.false_
+        return left.lt(right)
 
 
 cdef class GreaterThan(Comparison):
     cpdef model.VectorLike evaluate(self, model.Context context):
         cdef model.Vector left = self.left.evaluate(context)
         cdef model.Vector right = self.right.evaluate(context)
-        cdef int cmp = left.compare(right)
-        return model.true_ if cmp == 1 else model.false_
+        return left.gt(right)
 
 
 cdef class LessThanOrEqualTo(Comparison):
     cpdef model.VectorLike evaluate(self, model.Context context):
         cdef model.Vector left = self.left.evaluate(context)
         cdef model.Vector right = self.right.evaluate(context)
-        cdef int cmp = left.compare(right)
-        return model.true_ if cmp != 1 else model.false_
+        return left.le(right)
 
 
 cdef class GreaterThanOrEqualTo(Comparison):
     cpdef model.VectorLike evaluate(self, model.Context context):
         cdef model.Vector left = self.left.evaluate(context)
         cdef model.Vector right = self.right.evaluate(context)
-        cdef int cmp = left.compare(right)
-        return model.true_ if cmp != -1 else model.false_
+        return left.ge(right)
 
 
 cdef class And(BinaryOperation):
     cpdef model.VectorLike evaluate(self, model.Context context):
         cdef model.Vector left = self.left.evaluate(context)
-        return self.right.evaluate(context) if left.istrue() else left
+        return self.right.evaluate(context) if left.as_bool() else left
 
 
 cdef class Or(BinaryOperation):
     cpdef model.VectorLike evaluate(self, model.Context context):
         cdef model.Vector left = self.left.evaluate(context)
-        return left if left.istrue() else self.right.evaluate(context)
+        return left if left.as_bool() else self.right.evaluate(context)
 
 
 cdef class Xor(BinaryOperation):
     cpdef model.VectorLike evaluate(self, model.Context context):
         cdef model.Vector left = self.left.evaluate(context)
         cdef model.Vector right = self.right.evaluate(context)
-        if not left.istrue():
+        if not left.as_bool():
             return right
-        if not right.istrue():
+        if not right.as_bool():
             return left
         return model.false_
 
@@ -474,7 +457,7 @@ cdef class Call(Expression):
 
     cpdef model.VectorLike evaluate(self, model.Context context):
         cdef model.Vector function = self.function.evaluate(context)
-        if not function.values:
+        if not function.length or function.objects is None:
             return model.null_
         cdef list args = []
         cdef Expression arg
@@ -487,8 +470,10 @@ cdef class Call(Expression):
         cdef dict saved, params
         cdef Binding parameter
         cdef int i
-        for func in function.values:
-            if isinstance(func, Function):
+        for func in function.objects:
+            if callable(func):
+                results.append(func(*args))
+            elif isinstance(func, Function):
                 func_expr = func
                 saved = context.variables
                 context.variables = {}
@@ -501,9 +486,7 @@ cdef class Call(Expression):
                         context.variables[parameter.name] = model.null_
                 results.append(func_expr.expr.evaluate(context))
                 context.variables = saved
-            else:
-                results.append(func(*args))
-        return model.Vector_compose(results)
+        return model.Vector._compose(results)
 
     cpdef Expression partially_evaluate(self, model.Context context):
         cdef Expression function = self.function.partially_evaluate(context)
@@ -532,9 +515,7 @@ cdef class Node(Expression):
 
     cpdef model.VectorLike evaluate(self, model.Context context):
         cdef model.Node node = model.Node.__new__(model.Node, self.kind)
-        cdef model.Vector vector = model.Vector.__new__(model.Vector)
-        vector.values.append(node)
-        return vector
+        return model.Vector.__new__(model.Vector, node)
 
     cpdef Expression partially_evaluate(self, model.Context context):
         return Literal(self.evaluate(context))
@@ -554,8 +535,9 @@ cdef class Tag(Expression):
     cpdef model.VectorLike evaluate(self, model.Context context):
         cdef model.Vector nodes = self.node.evaluate(context)
         cdef model.Node node
-        for node in nodes.values:
-            node._tags.add(self.tag)
+        if nodes.isinstance(model.Node):
+            for node in nodes.objects:
+                node._tags.add(self.tag)
         return nodes
 
     cpdef Expression partially_evaluate(self, model.Context context):
@@ -565,7 +547,7 @@ cdef class Tag(Expression):
         if isinstance(node, Literal):
             nodes = (<Literal>node).value
             if nodes.isinstance(model.Node):
-                for n in nodes.values:
+                for n in nodes.objects:
                     n.add_tag(self.tag)
                 return node
         return Tag(node, self.tag)
@@ -588,19 +570,20 @@ cdef class Attributes(Expression):
         cdef dict variables, saved
         cdef Binding binding
         cdef model.Vector nodes = self.node.evaluate(context)
-        for node in nodes.values:
-            saved = context.variables
-            variables = saved.copy()
-            for attr, value in node._attributes.items():
-                variables.setdefault(attr, value)
-            context.variables = variables
-            for binding in self.bindings:
-                value = binding.expr.evaluate(context)
-                if value.values:
-                    node._attributes[binding.name] = value
-                    if binding.name not in saved:
-                        variables[binding.name] = value
-            context.variables = saved
+        if nodes.isinstance(model.Node):
+            for node in nodes.objects:
+                saved = context.variables
+                variables = saved.copy()
+                for attr, value in node._attributes.items():
+                    variables.setdefault(attr, value)
+                context.variables = variables
+                for binding in self.bindings:
+                    value = binding.expr.evaluate(context)
+                    if value.length:
+                        node._attributes[binding.name] = value
+                        if binding.name not in saved:
+                            variables[binding.name] = value
+                context.variables = saved
         return nodes
 
     cpdef Expression partially_evaluate(self, model.Context context):
@@ -621,7 +604,7 @@ cdef class Attributes(Expression):
             if nodes.isinstance(model.Node):
                 while bindings and isinstance((<Binding>bindings[-1]).expr, Literal):
                     binding = bindings.pop()
-                    for n in nodes.values:
+                    for n in nodes.objects:
                         n[binding.name] = (<Literal>binding.expr).value
         if not bindings:
             return node
@@ -640,11 +623,11 @@ cdef class Search(Expression):
 
     cpdef model.VectorLike evaluate(self, model.Context context):
         cdef model.Node node = context.graph.first_child
-        cdef model.Vector nodes = model.Vector.__new__(model.Vector)
+        cdef list nodes = []
         while node is not None:
-            node._select(self.query, nodes.values, False)
+            node._select(self.query, nodes, False)
             node = node.next_sibling
-        return nodes
+        return model.Vector.__new__(model.Vector, nodes)
 
     cpdef Expression partially_evaluate(self, model.Context context):
         return self
@@ -665,15 +648,16 @@ cdef class Append(Expression):
         cdef model.Vector nodes = self.node.evaluate(context)
         cdef model.Vector children = self.children.evaluate(context)
         cdef model.Node node, child
-        cdef int i, n = len(nodes.values)
-        for i in range(n):
-            node = nodes[i]
-            if i < n-1:
-                for child in children.values:
-                    node.append(child.copy())
-            else:
-                for child in children.values:
-                    node.append(child)
+        cdef int i, n = nodes.length
+        if nodes.isinstance(model.Node) and children.isinstance(model.Node):
+            for i in range(n):
+                node = nodes.objects[i]
+                if i < n-1:
+                    for child in children.objects:
+                        node.append(child.copy())
+                else:
+                    for child in children.objects:
+                        node.append(child)
         return nodes
 
     cpdef Expression partially_evaluate(self, model.Context context):
@@ -685,8 +669,8 @@ cdef class Append(Expression):
             nodes = (<Literal>node).value
             childs = (<Literal>children).value
             if nodes.isinstance(model.Node) and childs.isinstance(model.Node):
-                for n in nodes.values:
-                    for c in childs.values:
+                for n in nodes.objects:
+                    for c in childs.objects:
                         n.append(c.copy())
                 return node
         return Append(node, children)
@@ -707,15 +691,16 @@ cdef class Prepend(Expression):
         cdef model.Vector nodes = self.node.evaluate(context)
         cdef model.Vector children = self.children.evaluate(context)
         cdef model.Node node, child
-        cdef int i, n = len(nodes.values)
-        for i in range(n):
-            node = nodes[i]
-            if i < n-1:
-                for child in reversed(children.values):
-                    node.insert(child.copy())
-            else:
-                for child in reversed(children.values):
-                    node.insert(child)
+        cdef int i, n = nodes.length
+        if nodes.isinstance(model.Node) and children.isinstance(model.Node):
+            for i in range(n):
+                node = nodes.objects[i]
+                if i < n-1:
+                    for child in reversed(children.objects):
+                        node.insert(child.copy())
+                else:
+                    for child in reversed(children.objects):
+                        node.insert(child)
         return nodes
 
     cpdef Expression partially_evaluate(self, model.Context context):
@@ -727,8 +712,8 @@ cdef class Prepend(Expression):
             nodes = (<Literal>node).value
             childs = (<Literal>children).value
             if nodes.isinstance(model.Node) and childs.isinstance(model.Node):
-                for n in nodes.values:
-                    for c in reversed(childs.values):
+                for n in nodes.objects:
+                    for c in reversed(childs.objects):
                         n.insert(c.copy())
                 return node
         return Prepend(node, children)
@@ -835,22 +820,19 @@ cdef class For(Expression):
 
     cpdef model.VectorLike evaluate(self, model.Context context):
         cdef model.Vector source = self.source.evaluate(context)
-        cdef model.Vector results = model.Vector.__new__(model.Vector)
+        cdef list results = []
         cdef model.Vector value
         cdef dict saved = context.variables
         context.variables = saved.copy()
-        cdef int i=0, n=len(source.values)
+        cdef int i=0, n=source.length
         cdef str name
         while i < n:
             for name in self.names:
-                value = model.Vector.__new__(model.Vector)
-                if i < n:
-                    value.values.append(source.values[i])
+                context.variables[name] = source[i]
                 i += 1
-                context.variables[name] = value
-            results.values.extend(self.body.evaluate(context))
+            results.append(self.body.evaluate(context))
         context.variables = saved
-        return results
+        return model.Vector._compose(results)
 
     cpdef Expression partially_evaluate(self, model.Context context):
         cdef Expression body, source=self.source.partially_evaluate(context)
@@ -867,14 +849,11 @@ cdef class For(Expression):
             context.variables = saved
             return For(self.names, source, body)
         values = (<Literal>source).value
-        cdef int i=0, n=len(values)
+        cdef int i=0, n=values.length
         while i < n:
             for name in self.names:
-                single = model.Vector.__new__(model.Vector)
-                if i < n:
-                    single.values.append(values[i])
+                context.variables[name] = values[i]
                 i += 1
-                context.variables[name] = single
             remaining.append(self.body.partially_evaluate(context))
         context.variables = saved
         return sequence_pack(remaining)
@@ -906,7 +885,7 @@ cdef class IfElse(Expression):
     cpdef model.VectorLike evaluate(self, model.Context context):
         cdef Test test
         for test in self.tests:
-            if test.condition.evaluate(context).istrue():
+            if test.condition.evaluate(context).as_bool():
                 return test.then.evaluate(context)
         return self.else_.evaluate(context) if self.else_ is not None else model.null_
 
@@ -918,7 +897,7 @@ cdef class IfElse(Expression):
             condition = test.condition.partially_evaluate(context)
             then = test.then.partially_evaluate(context)
             if isinstance(condition, Literal):
-                if (<Literal>condition).value.istrue():
+                if (<Literal>condition).value.as_bool():
                     if not remaining:
                         return then
                     else:
@@ -958,9 +937,7 @@ cdef class Function(Expression):
         context.variables = variables
         cdef Expression expr = self.expr.partially_evaluate(context)
         context.variables = saved
-        cdef model.Vector func = model.Vector.__new__(model.Vector)
-        func.values.append(Function(self.name, tuple(parameters), expr))
-        context.variables[self.name] = func
+        context.variables[self.name] = model.Vector.__new__(model.Vector, Function(self.name, tuple(parameters), expr))
         return model.null_
 
     cpdef Expression partially_evaluate(self, model.Context context):

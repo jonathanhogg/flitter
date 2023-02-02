@@ -3,33 +3,48 @@
 
 cdef class VectorLike:
     cpdef VectorLike copynodes(self)
-    cpdef Vector slice(self, Vector index)
-    cpdef bint istrue(self)
+    cdef Vector slice(self, Vector index)
+    cdef bint as_bool(self)
 
-
-cdef VectorLike Vector_compose(list args)
 
 cdef class Vector(VectorLike):
-    cdef list values
+    cdef int length
+    cdef list objects
+    cdef double* numbers
 
-    cdef unsigned long long _hash(self, bint floor_floats)
-    cpdef bint istrue(self)
+    @staticmethod
+    cdef Vector _coerce(object other)
+    @staticmethod
+    cdef VectorLike _compose(list args)
+
+    cdef int allocate_numbers(self, int n) except -1
+    cdef void deallocate_numbers(self)
+    cdef bint fill_range(self, startv, stopv, stepv) except False
     cpdef bint isinstance(self, t)
-    cpdef VectorLike copynodes(self)
+    cdef bint as_bool(self)
+    cdef double as_float(self)
+    cdef str as_string(self)
+    cdef unsigned long long hash(self, bint floor_floats)
     cpdef object match(self, int n=?, type t=?, default=?)
-    cpdef Vector withlen(self, int n, bint force_copy=?)
-    cpdef Vector neg(self)
-    cpdef Vector pos(self)
-    cpdef Vector not_(self)
-    cpdef Vector add(self, Vector other)
-    cpdef Vector sub(self, Vector other)
-    cpdef Vector mul(self, Vector other)
-    cpdef Vector truediv(self, Vector other)
-    cpdef Vector floordiv(self, Vector other)
-    cpdef Vector mod(self, Vector other)
-    cpdef Vector pow(self, Vector other)
-    cpdef int compare(self, Vector other)
-    cpdef Vector slice(self, Vector index)
+    cpdef VectorLike copynodes(self)
+    cdef Vector neg(self)
+    cdef Vector pos(self)
+    cdef Vector abs(self)
+    cdef Vector add(self, Vector other)
+    cdef Vector sub(self, Vector other)
+    cdef Vector mul(self, Vector other)
+    cdef Vector truediv(self, Vector other)
+    cdef Vector floordiv(self, Vector other)
+    cdef Vector mod(self, Vector other)
+    cdef Vector pow(self, Vector other)
+    cdef Vector eq(self, Vector other)
+    cdef Vector ne(self, Vector other)
+    cdef Vector gt(self, Vector other)
+    cdef Vector ge(self, Vector other)
+    cdef Vector lt(self, Vector other)
+    cdef Vector le(self, Vector other)
+    cdef int compare(self, Vector other) except -2
+    cdef Vector slice(self, Vector index)
 
 
 cdef Vector null_
@@ -63,6 +78,7 @@ cdef class Node:
     cdef bint _select(self, Query query, list nodes, bint first)
     cdef bint _equals(self, Node other)
     cpdef object get(self, str name, int n=?, type t=?, object default=?)
+    cpdef void pprint(self, int indent=?)
 
 
 cdef class Context:

@@ -98,15 +98,33 @@ class Controller:
             return parse(file.read()).partially_evaluate(Context())
 
     def get(self, key, default=None):
-        return self.state.get(key, default)
+        key = Vector.coerce(key)
+        if key not in self.state:
+            return default
+        value = self.state[key]
+        if len(value) == 0:
+            return default
+        if len(value) == 1:
+            a, = value
+            return a
+        return tuple(value)
 
     def __contains__(self, key):
-        return key in self.state
+        return Vector.coerce(key) in self.state
 
     def __getitem__(self, key):
-        return self.state[key]
+        key = Vector.coerce(key)
+        value = self.state[key]
+        if len(value) == 0:
+            return default
+        if len(value) == 1:
+            a, = value
+            return a
+        return tuple(value)
 
     def __setitem__(self, key, value):
+        key = Vector.coerce(key)
+        value = Vector.coerce(value)
         if key not in self.state or value != self.state[key]:
             self.state[key] = value
             self.global_state_dirty = True
@@ -114,7 +132,7 @@ class Controller:
             Log.debug("State changed: %r = %r", key, value)
 
     def read(self, filename):
-        filename = filename.as_string()
+        filename = str(filename)
         if filename:
             path = self.root_dir / filename
             if path.exists():
@@ -130,7 +148,7 @@ class Controller:
         return null
 
     def csv(self, filename, line_number):
-        filename = filename.as_string()
+        filename = str(filename)
         line_number = line_number.match(1, int)
         lines = reader = None
         if filename and line_number is not None:

@@ -64,7 +64,7 @@ class SceneNode:
 
     async def update(self, node, **kwargs):
         references = kwargs.setdefault('references', {})
-        node_id = node['id'].as_string() if 'id' in node else None
+        node_id = str(node['id']) if 'id' in node else None
         if node_id:
             references[node_id] = self
         resized = False
@@ -123,7 +123,7 @@ class Reference(SceneNode):
         return self._reference.texture if self._reference is not None else None
 
     async def update(self, node, references=None, **kwargs):
-        node_id = node['id'].as_string() if 'id' in node else None
+        node_id = str(node['id']) if 'id' in node else None
         self._reference = references.get(node_id) if references is not None and node_id else None
 
     def destroy(self):
@@ -170,7 +170,7 @@ class ProgramNode(SceneNode):
 
     def get_vertex_source(self, node):
         if 'vertex' in node:
-            return node['vertex'].as_string()
+            return str(node['vertex'])
         return """#version 410
 in vec2 position;
 out vec2 coord;
@@ -182,7 +182,7 @@ void main() {
 
     def get_fragment_source(self, node):
         if 'fragment' in node:
-            return node['fragment'].as_string()
+            return str(node['fragment'])
         names = list(self.child_textures.keys())
         if names:
             samplers = '\n'.join(f"uniform sampler2D {name};" for name in names)
@@ -326,7 +326,7 @@ class Window(ProgramNode):
         if self.window is None:
             vsync = node.get('vsync', 1, bool, self.default_vsync)
             screen = node.get('screen', 1, int, self.default_screen)
-            title = node['title'].as_string() if 'title' in node else "Flitter"
+            title = str(node['title']) if 'title' in node else "Flitter"
             fullscreen = node.get('fullscreen', 1, bool, self.default_fullscreen)
             screens = pyglet.canvas.get_display().get_screens()
             screen = screens[screen] if screen < len(screens) else screens[0]
@@ -516,15 +516,15 @@ void main() {
 """
 
     def similar_to(self, node):
-        return self._container is not None and 'filename' in node and node['filename'].as_string() == self._container.name
+        return self._container is not None and 'filename' in node and str(node['filename']) == self._container.name
 
     async def update(self, node, **kwargs):
         references = kwargs.setdefault('references', {})
-        node_id = node['id'].as_string() if 'id' in node else None
+        node_id = str(node['id']) if 'id' in node else None
         if node_id:
             references[node_id] = self
         if 'filename' in node:
-            filename = node['filename'].as_string()
+            filename = str(node['filename'])
             if self._container is not None and self._container.name != filename:
                 self.release()
             if self._container is None and filename:

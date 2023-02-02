@@ -1,9 +1,14 @@
-# cython: language_level=3, profile=True
+# cython: language_level=3, profile=False
 
-import cython
 from weakref import ref as weak
 
-from libc.math cimport isnan, floor, ceil
+import cython
+
+from libc.math cimport isnan, floor, ceil, abs
+from cpython.mem cimport PyMem_Malloc, PyMem_Free
+
+
+DEF NAN = float("nan")
 
 
 cdef union float_long:
@@ -16,355 +21,547 @@ cdef class VectorLike:
     cpdef VectorLike copynodes(self):
         raise NotImplementedError()
 
-    cpdef Vector slice(self, Vector index):
+    cdef Vector slice(self, Vector index):
         raise NotImplementedError()
 
-    cpdef bint istrue(self):
+    cdef bint as_bool(self):
         raise NotImplementedError()
 
-
-cdef VectorLike Vector_compose(list args):
-    if len(args) == 1:
-        return args[0]
-    cdef Vector result = Vector.__new__(Vector)
-    cdef Vector vector
-    for vector in args:
-        result.values.extend(vector.values)
-    return result
 
 @cython.final
-cdef class Vector(VectorLike):
+cdef class Vector:
     @staticmethod
-    def range(startv, stopv, stepv):
-        cdef double start = float(startv) if startv is not None else float("nan")
+    def coerce(other):
+        return Vector._coerce(other)
+
+    @staticmethod
+    cdef Vector _coerce(object other):
+        if isinstance(other, Vector):
+            return other
+        if other is None or (isinstance(other, (list, tuple)) and len(other) == 0):
+            return null_
+        if other is True:
+            return true_
+        if other is False:
+            return false_
+        return Vector.__new__(Vector, other)
+
+    @staticmethod
+    def compose(args):
+        return Vector._compose(args if isinstance(list, args) else list(args))
+
+    @staticmethod
+    cdef VectorLike _compose(list args):
+        if len(args) == 1:
+            return args[0]
+        if len(args) == 0:
+            return null_
+        cdef list objects
+        cdef Vector v
+        cdef int i, j, n = 0
+        cdef Vector result = Vector.__new__(Vector)
+        for v in args:
+            if v.objects is not None:
+                break
+            n += v.length
+        else:
+            result.allocate_numbers(n)
+            i = 0
+            for v in args:
+                for j in range(v.length):
+                    result.numbers[i] = v.numbers[j]
+                    i += 1
+            return result
+        objects = []
+        for v in args:
+            if v.objects is None:
+                for j in range(v.length):
+                    objects.append(v.numbers[j])
+            else:
+                objects.extend(v.objects)
+        result.objects = objects
+        result.length = len(objects)
+        return result
+
+    @staticmethod
+    def range(*args):
+        cdef Vector result = Vector.__new__(Vector)
+        if len(args) == 1:
+            result.fill_range(None, args[0], None)
+        elif len(args) == 2:
+            result.fill_range(args[0], args[1], None)
+        elif len(args) == 3:
+            result.fill_range(args[0], args[1], args[2])
+        else:
+            raise TypeError("range takes 1-3 arguments")
+        return result
+
+    def __cinit__(self, value=None):
+        self.length = 0
+        self.objects = None
+        self.numbers = NULL
+        if value is None:
+            return
+        cdef int i, n
+        if isinstance(value, (range, slice)):
+            self.fill_range(value.start, value.stop, value.step)
+            return
+        elif isinstance(value, (list, tuple)):
+            n = len(value)
+        else:
+            value = (value,)
+            n = 1
+        if n:
+            try:
+                for i in range(self.allocate_numbers(n)):
+                    self.numbers[i] = value[i]
+            except TypeError:
+                self.deallocate_numbers()
+                self.objects = list(value)
+
+    cdef int allocate_numbers(self, int n) except -1:
+        self.numbers = <double*>PyMem_Malloc(n * sizeof(double))
+        if not self.numbers:
+            raise MemoryError()
+        self.length = n
+        return n
+
+    cdef void deallocate_numbers(self):
+        if self.numbers:
+            PyMem_Free(self.numbers)
+            self.numbers = NULL
+
+    @cython.cdivision(True)
+    cdef bint fill_range(self, startv, stopv, stepv) except False:
+        assert self.length == 0
+        cdef double start = startv if startv is not None else NAN
+        cdef double stop = stopv if stopv is not None else NAN
+        cdef double step = stepv if stepv is not None else NAN
         if isnan(start):
             start = 0
-        cdef double stop = float(stopv) if stopv is not None else float("nan")
         if isnan(stop):
-            return null_
-        cdef double step = float(stepv) if stepv is not None else float("nan")
+            return True
         if isnan(step):
             step = 1
         elif step == 0:
-            return null_
-        cdef Vector result = Vector.__new__(Vector)
-        cdef int i, n = <int>ceil((stop - start) / step)
-        for i in range(n):
-            result.values.append(start + step * i)
-        return result
+            return True
+        cdef int i
+        for i in range(self.allocate_numbers(<int>ceil((stop - start) / step))):
+            self.numbers[i] = start + step * i
+        return True
 
-    def __cinit__(self, values=None):
-        if values is None:
-            self.values = []
-        elif isinstance(values, list):
-            self.values = values
-        else:
-            self.values = list(values)
+    def __dealloc__(self):
+        self.deallocate_numbers()
 
     def __len__(self):
-        return len(self.values)
+        return self.length
 
-    def __iter__(self):
-        return iter(self.values)
-
-    def __getitem__(self, int index):
-        return self.values[index]
+    cpdef bint isinstance(self, t):
+        if not self.length:
+            return False
+        if self.objects is not None:
+            for value in self.objects:
+                if not isinstance(value, t):
+                    return False
+            return True
+        else:
+            return issubclass(float, t)
 
     def __bool__(self):
-        return bool(self.values)
+        return self.as_bool()
+
+    cdef bint as_bool(self):
+        cdef int i
+        if self.objects is not None:
+            for value in self.objects:
+                if isinstance(value, int):
+                    if <int>value != 0:
+                        return True
+                elif isinstance(value, float):
+                    if <double>value != 0.:
+                        return True
+                elif isinstance(value, str):
+                    if <str>value != "":
+                        return True
+                else:
+                    return True
+        else:
+            for i in range(self.length):
+                if self.numbers[i] != 0.:
+                    return True
+        return False
 
     def __float__(self):
-        if len(self.values) == 1 and isinstance(self.values[0], (float, int)):
-            return float(self.values[0])
-        return float("nan")
+        return self.as_float()
 
-    cdef unsigned long long _hash(self, bint floor_floats):
+    cdef double as_float(self):
+        if self.length == 1 and self.objects is None:
+            return self.numbers[0]
+        return NAN
+
+    def __str__(self):
+        return self.as_string()
+
+    cdef str as_string(self):
+        cdef str text = ""
+        cdef int i, n = self.length
+        if n:
+            if self.objects is not None:
+                for value in self.objects:
+                    if isinstance(value, str):
+                        text += <str>value
+                    elif isinstance(value, (float, int, bool)):
+                        text += "{:g}".format(value)
+            else:
+                for i in range(n):
+                    text += "{:g}".format(self.numbers[i])
+        return text
+
+    def __iter__(self):
+        cdef int i
+        if self.length:
+            if self.objects:
+                yield from self.objects
+            else:
+                for i in range(self.length):
+                    yield self.numbers[i]
+
+    def __hash__(self):
+        return self.hash(False)
+
+    cdef unsigned long long hash(self, bint floor_floats):
         # Compute a hash value using the SplitMix64 algorithm [http://xoshiro.di.unimi.it/splitmix64.c]
         cdef unsigned long long y, hash = 0xe220a8397b1dcdaf
         cdef float_long fl
-        for value in self.values:
-            if isinstance(value, str):
-                # FNV-1a hash algorithm [https://en.wikipedia.org/wiki/Fowler–Noll–Vo_hash_function#FNV-1a_hash]
-                y = <unsigned long long>(0xcbf29ce484222325)
-                for c in <str>value:
-                    y = (y ^ ord(c)) * <unsigned long long>(0x100000001b3)
-            elif isinstance(value, float):
-                if floor_floats:
-                    y = <unsigned long long>(<long long>floor(value))
+        cdef int i
+        if self.length:
+            for i in range(self.length):
+                if self.objects is not None:
+                    value = self.objects[i]
+                    if isinstance(value, str):
+                        # FNV-1a hash algorithm [https://en.wikipedia.org/wiki/Fowler–Noll–Vo_hash_function#FNV-1a_hash]
+                        y = <unsigned long long>(0xcbf29ce484222325)
+                        for c in <str>value:
+                            y = (y ^ ord(c)) * <unsigned long long>(0x100000001b3)
+                    elif isinstance(value, int):
+                        y = <unsigned long long>(<long long>value)
+                    elif isinstance(value, float):
+                        if floor_floats:
+                            y = <unsigned long long>(<long long>floor(value))
+                        else:
+                            fl.f = value
+                            y = fl.l
+                    else:
+                        raise TypeError("Unhashable value")
+                elif floor_floats:
+                    y = <unsigned long long>(<long long>floor(self.numbers[i]))
                 else:
-                    fl.f = value
+                    fl.f = self.numbers[i]
                     y = fl.l
-            elif isinstance(value, int):
-                y = <unsigned long long>(<long long>value)
-            else:
-                raise TypeError("Unhashable value")
-            hash ^= y
-            hash += <unsigned long long>(0x9e3779b97f4a7c15)
-            hash ^= hash >> 30
-            hash *= <unsigned long long>(0xbf58476d1ce4e5b9)
-            hash ^= hash >> 27
-            hash *= <unsigned long long>(0x94d049bb133111eb)
-            hash ^= hash >> 31
+                hash ^= y
+                hash += <unsigned long long>(0x9e3779b97f4a7c15)
+                hash ^= hash >> 30
+                hash *= <unsigned long long>(0xbf58476d1ce4e5b9)
+                hash ^= hash >> 27
+                hash *= <unsigned long long>(0x94d049bb133111eb)
+                hash ^= hash >> 31
         return hash
 
-    def __hash__(self):
-        return self._hash(False)
-
-    def __eq__(Node self, other):
-        return isinstance(other, Vector) and self.compare(other) == 0
-
-    cpdef bint istrue(self):
-        for value in self.values:
-            if isinstance(value, int):
-                if <int>value != 0:
-                    return True
-            elif isinstance(value, float):
-                if <double>value != 0.:
-                    return True
-            elif isinstance(value, str):
-                if <str>value != "":
-                    return True
-            else:
-                return True
-        return False
-
-    def as_string(self):
-        cdef str text = ""
-        for value in self.values:
-            if isinstance(value, str):
-                text += <str>value
-            elif isinstance(value, (float, int, bool)):
-                text += "{:g}".format(value)
-        return text
-
-    cpdef bint isinstance(self, t):
-        for value in self.values:
-            if not isinstance(value, t):
-                return False
-        return True
-
-    cpdef VectorLike copynodes(self):
-        cdef Vector result = self
-        cdef Node node
-        cdef int i
-        for i, value in enumerate(self.values):
-            if isinstance(value, Node):
-                node = value
-                if node._parent is None:
-                    if result is self:
-                        result = Vector.__new__(Vector)
-                        result.values.extend(self.values)
-                    result.values[i] = node.copy()
-        return result
-
     cpdef object match(self, int n=0, type t=None, default=None):
+        cdef int i, m = self.length
         cdef list values
-        cdef int m, i
-        values = self.values
+        cdef double f
+        if self.objects is None:
+            if t is float:
+                t = None
+            if t is None or t is int or t is bool:
+                if n == 0 or n == m:
+                    if n == 1:
+                        f = self.numbers[0]
+                        return f if t is None else t(f)
+                    else:
+                        values = []
+                        for i in range(m):
+                            f = self.numbers[i]
+                            values.append(f if t is None else t(f))
+                        return values
+                elif m == 1:
+                    values = []
+                    for i in range(n):
+                        values.append(self.numbers[0])
+                    return values
+            return default
         if n == 0 and t is None:
-            return values
+            return self.objects
         try:
-            m = len(values)
             if m == 1:
-                value = values[0]
-                if t is not None and not isinstance(value, t):
+                value = self.objects[0]
+                if t is not None:
                     value = t(value)
                 if n == 1:
                     return value
                 if n == 0:
                     return [value]
                 return [value] * n
-            if m == n or n == 0:
-                if t is not None:
-                    for i, value in enumerate(self.values):
-                        if not isinstance(value, t):
-                            if values is self.values:
-                                values = values.copy()
-                            values[i] = t(value)
+            elif m == n or n == 0:
+                values = []
+                for value in self.objects:
+                    if t is not None:
+                        value = t(value)
+                    values.append(value)
                 return values
-        except:
+        except ValueError:
             pass
         return default
 
-    cpdef Vector withlen(self, int n, bint force_copy=False):
-        cdef int m = len(self.values)
-        if n == m:
-            return Vector.__new__(Vector, self.values) if force_copy else self
-        if m != 1:
-            return null_
-        cdef Vector result = Vector.__new__(Vector)
-        value = self.values[0]
-        for i in range(n):
-            result.values.append(value)
+    cpdef VectorLike copynodes(self):
+        cdef Vector result = self
+        cdef Node node
+        cdef int i
+        if self.objects is not None:
+            for i, value in enumerate(self.objects):
+                if isinstance(value, Node):
+                    node = value
+                    if node._parent is None:
+                        if result is self:
+                            result = Vector.__new__(Vector)
+                            result.objects = list(self.objects)
+                            result.length = self.length
+                        result.objects[i] = node.copy()
         return result
 
-    cpdef Vector neg(self):
-        cdef Vector result = Vector.__new__(Vector)
-        for value in self.values:
-            result.values.append(-value)
-        return result
-
-    cpdef Vector pos(self):
-        cdef Vector result = Vector.__new__(Vector)
-        for value in self.values:
-            result.values.append(+value)
-        return result
-
-    cpdef Vector not_(self):
-        return false_ if self.istrue() else true_
-
-    cpdef Vector add(self, Vector other):
-        cdef Vector result = Vector.__new__(Vector)
-        cdef int n = len(self.values), m = len(other.values)
-        if m == 0:
-            return self
+    def __repr__(self):
+        cdef int i, n = self.length
+        cdef str s, f
         if n == 0:
-            return other
-        if n == m:
-            for i in range(n):
-                result.values.append(self.values[i] + other.values[i])
-        elif n == 1:
-            x = self.values[0]
-            for i in range(m):
-                result.values.append(x + other.values[i])
-        elif m == 1:
-            y = other.values[0]
-            for i in range(n):
-                result.values.append(self.values[i] + y)
+            return "null"
+        return ";".join(map(repr, self))
+
+    def __neg__(self):
+        return self.neg()
+
+    cdef Vector neg(self):
+        cdef int i, n = self.length
+        cdef Vector result = Vector.__new__(Vector)
+        if n and self.objects is None:
+            for i in range(result.allocate_numbers(n)):
+                result.numbers[i] = -self.numbers[i]
         return result
 
-    cpdef Vector sub(self, Vector other):
-        cdef Vector result = Vector.__new__(Vector)
-        cdef int n = len(self.values), m = len(other.values)
-        if m == 0:
+    def __pos__(self):
+        return self.pos()
+
+    cdef Vector pos(self):
+        if self.objects is None:
             return self
-        if n == 0:
-            return other.neg()
-        if n == m:
-            for i in range(n):
-                result.values.append(self.values[i] - other.values[i])
-        elif n == 1:
-            x = self.values[0]
-            for i in range(m):
-                result.values.append(x - other.values[i])
-        elif m == 1:
-            y = other.values[0]
-            for i in range(n):
-                result.values.append(self.values[i] - y)
-        return result
+        return null_
 
-    cpdef Vector mul(self, Vector other):
+    def __abs__(self):
+        return self.abs()
+
+    cdef Vector abs(self):
+        cdef int i, n = self.length
         cdef Vector result = Vector.__new__(Vector)
-        cdef int n = len(self.values), m = len(other.values)
-        if n == m:
-            for i in range(n):
-                result.values.append(self.values[i] * other.values[i])
-        elif n == 1:
-            x = self.values[0]
-            for i in range(m):
-                result.values.append(x * other.values[i])
-        elif m == 1:
-            y = other.values[0]
-            for i in range(n):
-                result.values.append(self.values[i] * y)
+        if n and self.objects is None:
+            for i in range(result.allocate_numbers(n)):
+                result.numbers[i] = abs(self.numbers[i])
         return result
 
-    cpdef Vector truediv(self, Vector other):
+    def __add__(self, other):
+        return Vector._coerce(self).add(Vector._coerce(other))
+
+    @cython.cdivision(True)
+    cdef Vector add(self, Vector other):
+        cdef int i, n = self.length, m = other.length
         cdef Vector result = Vector.__new__(Vector)
-        cdef int n = len(self.values), m = len(other.values)
-        if n == m:
-            for i in range(n):
-                result.values.append(self.values[i] / other.values[i])
-        elif n == 1:
-            x = self.values[0]
-            for i in range(m):
-                result.values.append(x / other.values[i])
-        elif m == 1:
-            y = other.values[0]
-            for i in range(n):
-                result.values.append(self.values[i] / y)
+        if n and m and self.objects is None and other.objects is None:
+            for i in range(result.allocate_numbers(max(n, m))):
+                result.numbers[i] = self.numbers[i % n] + other.numbers[i % m]
         return result
 
-    cpdef Vector floordiv(self, Vector other):
+    def __sub__(self, other):
+        return Vector._coerce(self).sub(Vector._coerce(other))
+
+    @cython.cdivision(True)
+    cdef Vector sub(self, Vector other):
+        cdef int i, n = self.length, m = other.length
         cdef Vector result = Vector.__new__(Vector)
-        cdef int n = len(self.values), m = len(other.values)
-        if n == m:
-            for i in range(n):
-                result.values.append(self.values[i] // other.values[i])
-        elif n == 1:
-            x = self.values[0]
-            for i in range(m):
-                result.values.append(x // other.values[i])
-        elif m == 1:
-            y = other.values[0]
-            for i in range(n):
-                result.values.append(self.values[i] // y)
+        if n and m and self.objects is None and other.objects is None:
+            for i in range(result.allocate_numbers(max(n, m))):
+                result.numbers[i] = self.numbers[i % n] - other.numbers[i % m]
         return result
 
-    cpdef Vector mod(self, Vector other):
+    def __mul__(self, other):
+        return Vector._coerce(self).mul(Vector._coerce(other))
+
+    @cython.cdivision(True)
+    cdef Vector mul(self, Vector other):
+        cdef int i, n = self.length, m = other.length
         cdef Vector result = Vector.__new__(Vector)
-        cdef int n = len(self.values), m = len(other.values)
-        if n == m:
-            for i in range(n):
-                result.values.append(self.values[i] % other.values[i])
-        elif n == 1:
-            x = self.values[0]
-            for i in range(m):
-                result.values.append(x % other.values[i])
-        elif m == 1:
-            y = other.values[0]
-            for i in range(n):
-                result.values.append(self.values[i] % y)
+        if n and m and self.objects is None and other.objects is None:
+            for i in range(result.allocate_numbers(max(n, m))):
+                result.numbers[i] = self.numbers[i % n] * other.numbers[i % m]
         return result
 
-    cpdef Vector pow(self, Vector other):
+    def __truediv__(self, other):
+        return Vector._coerce(self).truediv(Vector._coerce(other))
+
+    @cython.cdivision(True)
+    cdef Vector truediv(self, Vector other):
+        cdef int i, n = self.length, m = other.length
         cdef Vector result = Vector.__new__(Vector)
-        cdef int n = len(self.values), m = len(other.values)
-        if n == m:
-            for i in range(n):
-                result.values.append(self.values[i] ** other.values[i])
-        elif n == 1:
-            x = self.values[0]
-            for i in range(m):
-                result.values.append(x ** other.values[i])
-        elif m == 1:
-            y = other.values[0]
-            for i in range(n):
-                result.values.append(self.values[i] ** y)
+        if n and m and self.objects is None and other.objects is None:
+            for i in range(result.allocate_numbers(max(n, m))):
+                result.numbers[i] = self.numbers[i % n] / other.numbers[i % m]
         return result
 
-    cpdef int compare(self, Vector other):
-        cdef int n = len(self.values), m = len(other.values)
-        for i in range(min(n, m)):
-            x = self.values[i]
-            y = other.values[i]
-            if x < y:
-                return -1
-            if x > y:
-                return 1
+    def __floordiv__(self, other):
+        return Vector._coerce(self).floordiv(Vector._coerce(other))
+
+    @cython.cdivision(True)
+    cdef Vector floordiv(self, Vector other):
+        cdef int i, n = self.length, m = other.length
+        cdef Vector result = Vector.__new__(Vector)
+        if n and m and self.objects is None and other.objects is None:
+            for i in range(result.allocate_numbers(max(n, m))):
+                result.numbers[i] = floor(self.numbers[i % n] / other.numbers[i % m])
+        return result
+
+    def __mod__(self, other):
+        return Vector._coerce(self).mod(Vector._coerce(other))
+
+    @cython.cdivision(True)
+    cdef Vector mod(self, Vector other):
+        cdef int i, n = self.length, m = other.length
+        cdef Vector result = Vector.__new__(Vector)
+        cdef float x, y
+        if n and m and self.objects is None and other.objects is None:
+            for i in range(result.allocate_numbers(max(n, m))):
+                x, y = self.numbers[i % n], other.numbers[i % m]
+                result.numbers[i] = x - floor(x / y) * y
+        return result
+
+    def __pow__(self, other, modulo):
+        cdef Vector v = Vector._coerce(self).pow(Vector._coerce(other))
+        if modulo is not None:
+            v = v.mod(Vector._coerce(modulo))
+        return v
+
+    @cython.cdivision(True)
+    cdef Vector pow(self, Vector other):
+        cdef int i, n = self.length, m = other.length
+        cdef Vector result = Vector.__new__(Vector)
+        if n and m and self.objects is None and other.objects is None:
+            for i in range(result.allocate_numbers(max(n, m))):
+                result.numbers[i] = self.numbers[i % n] ** other.numbers[i % m]
+        return result
+
+    def __eq__(self, other):
+        return self.eq(Vector._coerce(other)).numbers[0] != 0
+
+    cdef Vector eq(self, Vector other):
+        if self is other:
+            return true_
+        cdef int i, n = self.length, m = other.length
+        if n != m or (self.objects is None) != (other.objects is None):
+            return false_
+        if self.objects is None:
+            for i in range(n):
+                if self.numbers[i] != other.numbers[i]:
+                    return false_
+        else:
+            for i in range(n):
+                if self.objects[i] != other.objects[i]:
+                    return false_
+        return true_
+
+    def __ne__(self, other):
+        return self.ne(Vector._coerce(other)).numbers[0] != 0
+
+    cdef Vector ne(self, Vector other):
+        if self is other:
+            return false_
+        cdef int i, n = self.length, m = other.length
+        if n != m or (self.objects is None) != (other.objects is None):
+            return true_
+        if self.objects is None:
+            for i in range(n):
+                if self.numbers[i] != other.numbers[i]:
+                    return true_
+        else:
+            for i in range(n):
+                if self.objects[i] != other.objects[i]:
+                    return true_
+        return false_
+
+    def __gt__(self, other):
+        return self.gt(Vector._coerce(other)).numbers[0] != 0
+
+    cdef Vector gt(self, Vector other):
+        return true_ if self.compare(other) == 1 else false_
+
+    def __ge__(self, other):
+        return self.ge(Vector._coerce(other)).numbers[0] != 0
+
+    cdef Vector ge(self, Vector other):
+        return true_ if self.compare(other) != -1 else false_
+
+    def __lt__(self, other):
+        return self.lt(Vector._coerce(other)).numbers[0] != 0
+
+    cdef Vector lt(self, Vector other):
+        return true_ if self.compare(other) == -1 else false_
+
+    def __le__(self, other):
+        return self.le(Vector._coerce(other)).numbers[0] != 0
+
+    cdef Vector le(self, Vector other):
+        return true_ if self.compare(other) != 1 else false_
+
+    cdef int compare(self, Vector other) except -2:
+        if self is other:
+            return 0
+        cdef int i, n = self.length, m = other.length
+        cdef double x, y
+        if self.objects is None and other.objects is None:
+            for i in range(min(n, m)):
+                x, y = self.numbers[i], other.numbers[i]
+                if x < y:
+                    return -1
+                if x > y:
+                    return 1
+        else:
+            for i in range(min(n, m)):
+                a = self.objects[i] if self.objects is not None else self.numbers[i]
+                b = other.objects[i] if other.objects is not None else other.numbers[i]
+                if a < b:
+                    return -1
+                if a > b:
+                    return 1
         if n < m:
             return -1
         if n > m:
             return 1
         return 0
 
-    cpdef Vector slice(self, Vector index):
-        cdef Vector result = Vector.__new__(Vector)
-        cdef int j, n = len(self.values)
-        for value in index.values:
-            if isinstance(value, (float, int)):
-                j = <int>floor(value)
+    def __getitem__(self, index):
+        return self.slice(Vector._coerce(index))
+
+    cdef Vector slice(self, Vector index):
+        cdef int i, j, n = self.length
+        cdef list values = []
+        if index.objects is None:
+            for i in range(index.length):
+                j = <int>floor(index.numbers[i])
                 if j >= 0 and j < n:
-                    result.values.append(self.values[j])
-        return result
-
-    def __repr__(self):
-        return f"Vector({self.values!r})"
+                    values.append(self.objects[j] if self.objects is not None else self.numbers[j])
+        return Vector.__new__(Vector, values)
 
 
-cdef Vector null_ = Vector.__new__(Vector)
-cdef Vector true_ = Vector.__new__(Vector, (1.,))
-cdef Vector false_ = Vector.__new__(Vector, (0.,))
+cdef Vector null_ = Vector()
+cdef Vector true_ = Vector(1)
+cdef Vector false_ = Vector(0)
+cdef Vector minusone_ = Vector(-1)
 
 null = null_
 true = true_
@@ -653,9 +850,23 @@ cdef class Node:
 
     cpdef object get(self, str name, int n=0, type t=None, object default=None):
         cdef Vector value = self._attributes.get(name)
-        if value is not None:
-            return value.match(n, t, default)
-        return default
+        if value is None:
+            return default
+        return value.match(n, t, default)
+
+    cpdef void pprint(self, int indent=0):
+        cdef str tag, key
+        cdef Vector value
+        cdef list text = [f"!{self.kind}"]
+        for tag in self._tags:
+            text.append(f"#{tag}")
+        for key, value in self._attributes.items():
+            text.append(f"{key}={value!r}")
+        print(" " * indent + " ".join(text))
+        cdef Node node = self.first_child
+        while node is not None:
+            node.pprint(indent+4)
+            node = node.next_sibling
 
     def __iter__(self):
         return iter(self._attributes)

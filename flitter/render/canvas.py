@@ -523,7 +523,7 @@ def draw(node, ctx, paint=None, font=None, path=None):
 
         case "text":
             if 'text' in node:
-                text = node['text'].as_string()
+                text = str(node['text'])
                 point = node.get('point', 2, float, (0, 0))
                 paint, font = skia.Paint(paint), font.makeWithSize(font.getSize())
                 set_styles(node, paint=paint, font=font)
@@ -538,7 +538,7 @@ def draw(node, ctx, paint=None, font=None, path=None):
 
         case "image":
             if 'filename' in node:
-                image = load_image(node['filename'].as_string())
+                image = load_image(str(node['filename']))
                 if image is not None:
                     width, height = image.width(), image.height()
                     point = node.get('point', 2, float, (0, 0))
