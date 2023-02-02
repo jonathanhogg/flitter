@@ -409,18 +409,21 @@ def zipv(*vectors):
             if v.length > n:
                 n = v.length
             numeric = numeric and v.objects is None
-    cdef int i, j, m = len(vs)
+    cdef int i, j, p, m = len(vs)
     if m == 0:
         return null_
     if m == 1:
         return vs[0]
     cdef Vector zs = Vector.__new__(Vector)
+    cdef double* zp
     if numeric:
         zs.allocate_numbers(n * m)
-        for i in range(n):
-            for j in range(m):
-                v = vs[j]
-                zs.numbers[i*m + j] = v.numbers[i % v.length]
+        for j in range(m):
+            v = vs[j]
+            p = v.length
+            zp = zs.numbers + j
+            for i in range(n):
+                zp[i*m] = v.numbers[i % p]
     else:
         zs.objects = list()
         zs.length = n * m
