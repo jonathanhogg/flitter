@@ -26,9 +26,9 @@ class Controller:
     SEND_PORT = 47177
     RECEIVE_PORT = 47178
 
-    def __init__(self, root_dir, max_fps=60, screen=0, fullscreen=False, vsync=False, state_file=None, multiprocess=True, autoreset=None):
+    def __init__(self, root_dir, target_fps=60, screen=0, fullscreen=False, vsync=False, state_file=None, multiprocess=True, autoreset=None):
         self.root_dir = Path(root_dir)
-        self.max_fps = max_fps
+        self.target_fps = target_fps
         self.screen = screen
         self.fullscreen = fullscreen
         self.vsync = vsync
@@ -397,7 +397,6 @@ class Controller:
             frames = []
             self.enqueue_reset()
             self.enqueue_page_status()
-            reload_task = None
             frame_time = self.counter.clock()
             last = self.counter.beat_at_time(frame_time)
             dump_time = frame_time
@@ -406,25 +405,30 @@ class Controller:
             gc.disable()
             while True:
                 frames.append(frame_time)
-
                 execution -= self.counter.clock()
+
                 beat = self.counter.beat_at_time(frame_time)
                 delta = beat - last
                 last = beat
                 names = {'beat': beat, 'quantum': self.counter.quantum, 'tempo': self.counter.tempo,
                          'delta': delta, 'clock': frame_time, 'performance': performance}
                 context = self.program_top.run(self.state, read=self.read, csv=self.csv, debug=self.debug, **names)
-                execution += self.counter.clock()
-                render -= self.counter.clock()
+
+                now = self.counter.clock()
+                execution += now
+                render -= now
+
                 self.handle_pragmas(context.pragmas)
                 self.update_controls(context.graph)
                 async with asyncio.TaskGroup() as group:
                     group.create_task(self.update_windows(context.graph, **names))
                     group.create_task(self.update_lasers(context.graph))
                     group.create_task(self.update_dmx(context.graph))
-                render += self.counter.clock()
 
-                housekeeping -= self.counter.clock()
+                now = self.counter.clock()
+                render += now
+                housekeeping -= now
+
                 if self.autoreset and self.state_timestamp and self.counter.clock() > self.state_timestamp + self.autoreset:
                     self.reset_state()
                 count = gc.collect(0)
@@ -441,9 +445,6 @@ class Controller:
                     dump_time = frame_time
 
                 if self.next_page is not None:
-                    if reload_task is not None:
-                        reload_task.cancel()
-                        reload_task = None
                     if self.autoreset:
                         self.reset_state()
                     self.switch_to_page(self.next_page)
@@ -454,35 +455,31 @@ class Controller:
 
                 mtime = self.current_filename.stat().st_mtime
                 if mtime > self.current_mtime:
-                    if reload_task is None:
-                        Log.debug("Begin reload of page %i: %s", self.current_page, self.current_filename)
-                        reload_task = loop.run_in_executor(None, self.load_source, self.current_filename)
-                    elif reload_task.done():
-                        try:
-                            program_top = await reload_task
-                            self.program_top = program_top
-                            self.pages[self.current_page] = self.current_filename, self.current_mtime, self.program_top, self.state
-                            Log.info("Reloaded page %i: %s", self.current_page, self.current_filename)
-                        except Exception:
-                            Log.exception("Error reloading page")
-                        finally:
-                            reload_task = None
-                        self.current_mtime = mtime
+                    try:
+                        program_top = self.load_source(self.current_filename)
+                        self.program_top = program_top
+                        self.pages[self.current_page] = self.current_filename, self.current_mtime, self.program_top, self.state
+                        Log.info("Reloaded page %i: %s", self.current_page, self.current_filename)
+                    except Exception:
+                        Log.exception("Error reloading page")
+                    self.current_mtime = mtime
 
-                frame_time += 1 / self.max_fps
                 now = self.counter.clock()
-                if frame_time > now:
-                    delay = frame_time - now
-                    await asyncio.sleep(delay)
-                    housekeeping -= delay
-                    if delay > 0.05/self.max_fps:
-                        performance = min(1.5, performance * 1.001)
+                housekeeping += now
+                frame_period = now - frame_time
+                target_period = 1 / self.target_fps
+                frame_time += target_period
+                wait_time = frame_time - now
+
+                if wait_time > 0:
+                    performance = min(performance+0.01, 2)
+                    await asyncio.sleep(wait_time)
                 else:
-                    Log.debug("Slow frame - %.0fms", (now - frame_time + 1/self.max_fps) * 1000)
+                    performance = max(0.5, performance-0.01)
+                    Log.debug("Slow frame - %.0fms", frame_period*1000)
                     await asyncio.sleep(0)
-                    frame_time = self.counter.clock()
-                    performance = max(0.5, performance * 0.999)
-                housekeeping += self.counter.clock()
+                    if -wait_time > target_period:
+                        frame_time = self.counter.clock()
 
                 if len(frames) > 1 and frames[-1] - frames[0] > 5:
                     nframes = len(frames) - 1

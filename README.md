@@ -136,10 +136,10 @@ The available global values are:
 - `clock` - the time in seconds since the "start" of the main clock, this
     will adjust when the tempo or quantum is changed to keep the value of
     `beat` constant, so it's generally not a particularly useful value
-- `performance` - a value in the range [0.5 .. 1.5] that represents how well
-    the engine is doing at maintaining the target frame rate (usually 60fps,
-    but configurable with a command-line option) – above 1.0 means that the
-    engine has cycles to spare and below this means the frame rate is dipping
+- `performance` - a value in the range [0.5 .. 2.0] that increases fractionally
+    if the engine has time to spare and decreases fractionally if it is missing
+    the target framerate; this value can be multiplied into variable loads
+    in the code, e.g., number of things on screen, to maintain framerate
 
 `!window`s composite their children and a `!canvas` is transparent until drawn
 into.

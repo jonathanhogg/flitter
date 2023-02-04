@@ -839,9 +839,7 @@ cdef class Node:
         return self._attributes[name]
 
     def __setitem__(self, str name, value):
-        if not isinstance(value, Vector):
-            value = Vector.__new__(Vector, value)
-        self._attributes[name] = value
+        self._attributes[name] = Vector.coerce(value)
 
     def keys(self):
         return self._attributes.keys()
