@@ -450,7 +450,7 @@ class Canvas(SceneNode):
     def render(self, node, **kwargs):
         self._graphics_context.resetContext()
         self._framebuffer.clear()
-        canvas.draw(node, self._canvas)
+        canvas.draw(node, self._canvas, None, None, None)
         self._surface.flushAndSubmit()
 
 

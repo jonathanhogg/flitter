@@ -21,10 +21,10 @@ DEF TwoPI = 6.283185307179586
 
 Log = logging.getLogger(__name__)
 
-_ImageCache = {}
-_RecordStats = logging.getLogger().level >= logging.INFO
-_Counts = {}
-_Durations = {}
+cdef dict _ImageCache = {}
+cdef bint _RecordStats = logging.getLogger().level >= logging.INFO
+cdef dict _Counts = {}
+cdef dict _Durations = {}
 
 
 cdef dict Composite = {
@@ -218,9 +218,8 @@ cdef bint set_styles(Node node, ctx, paint, font) except False:
                     ctx.scale(*scale)
         if paint is not None:
             if key == 'color':
-                color = value.match(3, float) or value.match(4, float)
+                color = get_color(node)
                 if color is not None:
-                    color = skia.Color4f(*color)
                     paint.setColor4f(color)
                     if paint.getShader():
                         paint.setShader(skia.Shaders.Color(color))
@@ -513,7 +512,7 @@ cdef object make_path_effect(Node node):
     return None
 
 
-cpdef object draw(Node node, ctx, paint=None, font=None, path=None):
+cpdef object draw(Node node, ctx, paint, font, path):
     start = time.perf_counter()
 
     cdef Node child
@@ -698,9 +697,8 @@ cpdef object draw(Node node, ctx, paint=None, font=None, path=None):
 
     if _RecordStats:
         duration = time.perf_counter() - start
-        kind = node.kind
         _Counts[kind] = _Counts.get(kind, 0) + 1
         _Durations[kind] = _Durations.get(kind, 0) + duration
         if kind != 'canvas':
-            kind = node.parent.kind
-            _Durations[kind] = _Durations.get(kind, 0) - duration
+            parent_kind = node.parent.kind
+            _Durations[parent_kind] = _Durations.get(parent_kind, 0) - duration
