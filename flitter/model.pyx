@@ -65,6 +65,8 @@ cdef class Vector:
                 break
             n += v.length
         else:
+            if n == 0:
+                return null_
             result.allocate_numbers(n)
             i = 0
             for v in args:
@@ -120,6 +122,7 @@ cdef class Vector:
                 self.objects = list(value)
 
     cdef int allocate_numbers(self, int n) except -1:
+        assert n > 0
         self.numbers = <double*>PyMem_Malloc(n * sizeof(double))
         if not self.numbers:
             raise MemoryError()
