@@ -155,13 +155,13 @@ cdef double turn_angle(double x0, double y0, double x1, double y1, double x2, do
 @cython.boundscheck(False)
 @cython.wraparound(False)
 cdef object line_path(Vector points, double curve, bint close):
-    cdef int i, n=points.length
+    cdef int i=0, n=points.length-2
     assert points.numbers != NULL
     cdef double last_mid_x, last_mid_y, last_x, last_y, x, y
     builder = skia.PathBuilder()
     lineTo = builder.lineTo
     quadTo = builder.quadTo
-    for i in range(0, n, 2):
+    while i <= n:
         x, y = points.numbers[i], points.numbers[i+1]
         if i == 0:
             builder.moveTo(x, y)
@@ -176,10 +176,11 @@ cdef object line_path(Vector points, double curve, bint close):
             else:
                 lineTo(last_x, last_y)
                 lineTo(mid_x, mid_y)
-            if i == n-2:
+            if i == n:
                 lineTo(x, y)
             last_mid_x, last_mid_y = mid_x, mid_y
         last_x, last_y = x, y
+        i += 2
     if close:
         builder.close()
     return builder.detach()
