@@ -324,10 +324,10 @@ cdef class Laser:
             self.driver = None
 
     async def update(self, model.Node node):
-        driver = node['driver'].as_string().lower()
+        driver = str(node['driver']).lower()
         cls = {'lasercube': LaserCubeDriver}.get(driver)
         if cls is not None:
-            id = node['id'].as_string() if 'id' in node else None
+            id = str(node['id']) if 'id' in node else None
             sample_rate = node.get('sample_rate', 1, int, cls.DEFAULT_SAMPLE_RATE)
             accelleration = node.get('accelleration', 1, float, cls.DEFAULT_ACCELLERATION)
             epsilon = node.get('epsilon', 1, float, cls.DEFAULT_EPSILON)
