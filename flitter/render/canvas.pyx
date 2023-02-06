@@ -124,7 +124,7 @@ if _RecordStats:
     atexit.register(dump_stats)
 
 
-def load_image(filename):
+cpdef object load_image(str filename):
     path = Path(filename)
     if path.exists():
         current_mtime = path.stat().st_mtime
@@ -154,7 +154,7 @@ cdef double turn_angle(double x0, double y0, double x1, double y1, double x2, do
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def line_path(Vector points not None, double curve, bint close):
+cdef object line_path(Vector points, double curve, bint close):
     cdef int i, n=points.length
     assert points.numbers != NULL
     cdef double last_mid_x, last_mid_y, last_x, last_y, x, y
@@ -202,7 +202,6 @@ cdef object get_color(Node node, default=None):
 cdef tuple set_styles(Node node, ctx, start_paint, start_font):
     cdef str key
     cdef Vector value
-    cdef bint font_done = False
     paint, font = start_paint, start_font
     for key, value in node._attributes.items():
         if ctx is not None:
@@ -269,32 +268,18 @@ cdef tuple set_styles(Node node, ctx, start_paint, start_font):
                     if paint is start_paint:
                         paint = skia.Paint(paint)
                     paint.setFilterQuality(quality)
-        if not font_done and key in ('font_size', 'font_family', 'font_weight', 'font_width', 'font_slant'):
-            if font is start_font:
-                font = font.makeWithSize(font.getSize())
+        if font is start_font and key in ('font_size', 'font_family', 'font_weight', 'font_width', 'font_slant'):
             typeface = font.getTypeface()
             font_style = typeface.fontStyle()
             font_family = node.get('font_family', 1, str, typeface.getFamilyName())
             font_weight = FontWeight.get(node.get('font_weight', 1, str))
-            if font_weight is not None:
-                weight = skia.FontStyle.Weight(font_weight)
-            else:
-                weight = font_style.weight()
+            weight = skia.FontStyle.Weight(font_weight) if font_weight is not None else font_style.weight()
             font_width = FontWidth.get(node.get('font_width', 1, str))
-            if font_width is not None:
-                width = skia.FontStyle.Width(font_width)
-            else:
-                width = font_style.width()
+            width = skia.FontStyle.Width(font_width) if font_width is not None else font_style.width()
             font_slant = FontSlant.get(node.get('font_slant', 1, str))
-            if font_slant is not None:
-                slant = skia.FontStyle.Slant(font_slant)
-            else:
-                slant = font_style.slant()
-            font.setTypeface(skia.Typeface(font_family, skia.FontStyle(weight, width, slant)))
-            font_size = value.match(1, float)
-            if font_size is not None:
-                font.setSize(font_size)
-            font_done = True
+            slant = skia.FontStyle.Slant(font_slant) if font_slant is not None else font_style.slant()
+            font_size = value.match(1, float, font.getSize())
+            font = skia.Font(skia.Typeface(font_family, skia.FontStyle(weight, width, slant)), font_size)
     return paint, font
 
 
@@ -534,6 +519,7 @@ cdef object make_path_effect(Node node):
 cpdef object draw(Node node, ctx, paint, font, path):
     start = time.perf_counter()
 
+    cdef Vector points
     cdef Node child
     cdef str kind = node.kind
     if kind == "group":
@@ -599,12 +585,11 @@ cpdef object draw(Node node, ctx, paint, font, path):
             path.addOval(skia.Rect(point[0]-radius[0], point[1]-radius[1], point[0]+radius[0], point[1]+radius[1]))
 
     elif kind == "line":
-        if 'points' in node:
-            points = node['points']
-            if points.numeric:
-                close = node.get('close', 1, bool, False)
-                curve = node.get('curve', 1, float, 0)
-                path.addPath(line_path(points, curve, close))
+        points = node._attributes.get('points')
+        if points is not None and points.numbers is not NULL:
+            close = node.get('close', 1, bool, False)
+            curve = node.get('curve', 1, float, 0)
+            path.addPath(line_path(points, curve, close))
 
     elif kind == "close":
         path.close()
@@ -690,8 +675,8 @@ cpdef object draw(Node node, ctx, paint, font, path):
 
     elif kind == "canvas":
         ctx.save()
-        paint, font, path = skia.Paint(AntiAlias=True), skia.Font(skia.Typeface(), 14), skia.Path()
-        paint, font = set_styles(node, ctx, paint, font)
+        path = skia.Path()
+        paint, font = set_styles(node, ctx, skia.Paint(AntiAlias=True), skia.Font(skia.Typeface(), 14))
         child = node.first_child
         while child is not None:
             draw(child, ctx, paint, font, path)
