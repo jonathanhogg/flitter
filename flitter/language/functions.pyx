@@ -133,7 +133,7 @@ def sqrtv(Vector xs not None):
         return null_
     cdef Vector ys = Vector.__new__(Vector)
     for i in range(ys.allocate_numbers(xs.length)):
-        ys.numbers[i] = exp(xs.numbers[i])
+        ys.numbers[i] = sqrt(xs.numbers[i])
     return ys
 
 

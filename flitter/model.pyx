@@ -675,7 +675,7 @@ cdef class Node:
         cdef str key
         cdef Vector value
         for key, value in self._attributes.items():
-            yield key, value.values
+            yield key, list(value)
 
     @property
     def tags(self):
