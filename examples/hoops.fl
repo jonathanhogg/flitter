@@ -16,12 +16,11 @@ let SIZE=1920;1080 RADIUS=min(SIZE)*$("radius") THICKNESS=min(SIZE)*$("thickness
                     sweep=(1-$("sweep"))+$("sweep")*map(c, beta("sweep";i)[cycle], beta("sweep";i)[cycle+1])
                     hue=map(c, uniform("hue";i)[cycle], uniform("hue";i)[cycle+1])
                 !group#arc stroke_width=thickness color=hsv(hue;1;1/(N**0.5)) translate=offset rotate=cycle
-                    !path
-                        if sweep < 1
-                            !arc point=0 radius=radius start=start sweep=sweep
-                        else
-                            !ellipse radius=radius
-                        !stroke
+                    if sweep < 1
+                        !arc point=0 radius=radius start=start sweep=sweep
+                    else
+                        !ellipse radius=radius
+                    !stroke
 
 if $("mix") > 0
     -- Insert a feedback shader into the graph between the window and its contents:
