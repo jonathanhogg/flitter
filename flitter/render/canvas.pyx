@@ -200,76 +200,80 @@ cdef object get_color(Node node, default=None):
     return default
 
 
-cdef tuple set_styles(Node node, ctx, start_paint, start_font):
+cdef object apply_transforms(Node node, ctx):
+    cdef str key
+    cdef Vector value
+    for key, value in node._attributes.items():
+        if key == 'translate':
+            translate = value.match(2, float)
+            if translate is not None:
+                ctx.translate(*translate)
+        elif key == 'rotate':
+            rotate = value.match(1, float)
+            if rotate is not None:
+                ctx.rotate(rotate * 360)
+        elif key == 'scale':
+            scale = value.match(2, float)
+            if scale is not None:
+                ctx.scale(*scale)
+
+
+cdef tuple set_styles(Node node, start_paint, start_font):
     cdef str key
     cdef Vector value
     paint, font = start_paint, start_font
     for key, value in node._attributes.items():
-        if ctx is not None:
-            if key == 'translate':
-                translate = value.match(2, float)
-                if translate is not None:
-                    ctx.translate(*translate)
-            elif key == 'rotate':
-                rotate = value.match(1, float)
-                if rotate is not None:
-                    ctx.rotate(rotate * 360)
-            elif key == 'scale':
-                scale = value.match(2, float)
-                if scale is not None:
-                    ctx.scale(*scale)
-        if paint is not None:
-            if key == 'color':
-                color = get_color(node)
-                if color is not None:
-                    if paint is start_paint:
-                        paint = skia.Paint(paint)
-                    paint.setColor4f(color)
-                    if paint.getShader():
-                        paint.setShader(skia.Shaders.Color(color))
-            elif key == 'stroke_width':
-                stroke_width = value.match(1, float)
-                if stroke_width is not None:
-                    if paint is start_paint:
-                        paint = skia.Paint(paint)
-                    paint.setStrokeWidth(stroke_width)
-            elif key == 'stroke_join':
-                stroke_join = StrokeJoin.get(value.match(1, str))
-                if stroke_join is not None:
-                    if paint is start_paint:
-                        paint = skia.Paint(paint)
-                    paint.setStrokeJoin(stroke_join)
-            elif key == 'stroke_cap':
-                stroke_cap = StrokeCap.get(value.match(1, str))
-                if stroke_cap is not None:
-                    if paint is start_paint:
-                        paint = skia.Paint(paint)
-                    paint.setStrokeCap(stroke_cap)
-            elif key == 'composite':
-                composite = Composite.get(value.match(1, str))
-                if composite is not None:
-                    if paint is start_paint:
-                        paint = skia.Paint(paint)
-                    paint.setBlendMode(composite)
-            elif key == 'antialias':
-                antialias = value.match(1, bool)
-                if antialias is not None:
-                    if paint is start_paint:
-                        paint = skia.Paint(paint)
-                    paint.setAntiAlias(antialias)
-            elif key == 'dither':
-                dither = value.match(1, bool)
-                if dither is not None:
-                    if paint is start_paint:
-                        paint = skia.Paint(paint)
-                    paint.setDither(dither)
-            elif key == 'quality':
-                quality = FilterQuality.get(value.match(1, str))
-                if quality is not None:
-                    if paint is start_paint:
-                        paint = skia.Paint(paint)
-                    paint.setFilterQuality(quality)
-        if font is start_font and key in ('font_size', 'font_family', 'font_weight', 'font_width', 'font_slant'):
+        if key == 'color':
+            color = get_color(node)
+            if color is not None:
+                if paint is start_paint:
+                    paint = skia.Paint(paint)
+                paint.setColor4f(color)
+                if paint.getShader():
+                    paint.setShader(skia.Shaders.Color(color))
+        elif key == 'stroke_width':
+            stroke_width = value.match(1, float)
+            if stroke_width is not None:
+                if paint is start_paint:
+                    paint = skia.Paint(paint)
+                paint.setStrokeWidth(stroke_width)
+        elif key == 'stroke_join':
+            stroke_join = StrokeJoin.get(value.match(1, str))
+            if stroke_join is not None:
+                if paint is start_paint:
+                    paint = skia.Paint(paint)
+                paint.setStrokeJoin(stroke_join)
+        elif key == 'stroke_cap':
+            stroke_cap = StrokeCap.get(value.match(1, str))
+            if stroke_cap is not None:
+                if paint is start_paint:
+                    paint = skia.Paint(paint)
+                paint.setStrokeCap(stroke_cap)
+        elif key == 'composite':
+            composite = Composite.get(value.match(1, str))
+            if composite is not None:
+                if paint is start_paint:
+                    paint = skia.Paint(paint)
+                paint.setBlendMode(composite)
+        elif key == 'antialias':
+            antialias = value.match(1, bool)
+            if antialias is not None:
+                if paint is start_paint:
+                    paint = skia.Paint(paint)
+                paint.setAntiAlias(antialias)
+        elif key == 'dither':
+            dither = value.match(1, bool)
+            if dither is not None:
+                if paint is start_paint:
+                    paint = skia.Paint(paint)
+                paint.setDither(dither)
+        elif key == 'quality':
+            quality = FilterQuality.get(value.match(1, str))
+            if quality is not None:
+                if paint is start_paint:
+                    paint = skia.Paint(paint)
+                paint.setFilterQuality(quality)
+        elif font is not None and font is start_font and key in ('font_size', 'font_family', 'font_weight', 'font_width', 'font_slant'):
             typeface = font.getTypeface()
             font_style = typeface.fontStyle()
             font_family = node.get('font_family', 1, str, typeface.getFamilyName())
@@ -420,7 +424,7 @@ cdef object make_image_filter(Node node, paint):
 
     elif kind == "paint":
         if len(sub_filters) == 0:
-            paint = set_styles(node, None, paint, None)[0]
+            paint = set_styles(node, paint, None)[0]
             return skia.ImageFilters.Paint(paint)
 
     elif kind == "color_matrix":
@@ -526,7 +530,8 @@ cpdef object draw(Node node, ctx, paint, font, path):
     if kind == "group":
         ctx.save()
         path = skia.Path()
-        paint, font = set_styles(node, ctx, paint, font)
+        apply_transforms(node, ctx)
+        paint, font = set_styles(node, paint, font)
         child = node.first_child
         while child is not None:
             draw(child, ctx, paint, font, path)
@@ -602,12 +607,12 @@ cpdef object draw(Node node, ctx, paint, font, path):
         ctx.clipPath(path, skia.ClipOp.kDifference, paint.isAntiAlias())
 
     elif kind == "fill":
-        paint = set_styles(node, None, paint, None)[0]
+        paint = set_styles(node, paint, None)[0]
         paint.setStyle(skia.Paint.Style.kFill_Style)
         ctx.drawPath(path, paint)
 
     elif kind == "stroke":
-        paint = set_styles(node, None, paint, None)[0]
+        paint = set_styles(node, paint, None)[0]
         paint.setStyle(skia.Paint.Style.kStroke_Style)
         ctx.drawPath(path, paint)
 
@@ -615,7 +620,7 @@ cpdef object draw(Node node, ctx, paint, font, path):
         if 'text' in node:
             text = str(node['text'])
             point = node.get('point', 2, float, (0, 0))
-            paint, font = set_styles(node, None, paint, font)
+            paint, font = set_styles(node, paint, font)
             stroke = node.get('stroke', 1, bool, False)
             paint.setStyle(skia.Paint.Style.kStroke_Style if stroke else skia.Paint.Style.kFill_Style)
             if node.get('center', 1, bool, True):
@@ -667,7 +672,8 @@ cpdef object draw(Node node, ctx, paint, font, path):
             ctx.clipRect(rect)
             ctx.saveLayerAlpha(rect, int(alpha * 255))
             path, = skia.Path()
-            paint, font = set_styles(node, ctx, paint, font)
+            apply_transforms(node, ctx)
+            paint, font = set_styles(node, paint, font)
             child = node.first_child
             while child is not None:
                 draw(child, ctx, paint, font, path)
@@ -677,7 +683,8 @@ cpdef object draw(Node node, ctx, paint, font, path):
     elif kind == "canvas":
         ctx.save()
         path = skia.Path()
-        paint, font = set_styles(node, ctx, skia.Paint(AntiAlias=True), skia.Font(skia.Typeface(), 14))
+        apply_transforms(node, ctx)
+        paint, font = set_styles(node, skia.Paint(AntiAlias=True), skia.Font(skia.Typeface(), 14))
         child = node.first_child
         while child is not None:
             draw(child, ctx, paint, font, path)
