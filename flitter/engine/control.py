@@ -190,7 +190,7 @@ class Controller:
             for i, node in enumerate(graph.select_below('window.')):
                 if i == len(self.windows):
                     if self.multiprocess:
-                        w = process.Proxy('flitter.render.window.Window', screen=self.screen, fullscreen=self.fullscreen, vsync=self.vsync)
+                        w = process.Proxy(window.Window, screen=self.screen, fullscreen=self.fullscreen, vsync=self.vsync)
                     else:
                         w = window.Window(screen=self.screen, fullscreen=self.fullscreen, vsync=self.vsync)
                     self.windows.append(w)
@@ -205,7 +205,7 @@ class Controller:
             for i, node in enumerate(graph.select_below('laser.')):
                 if i == len(self.lasers):
                     if self.multiprocess:
-                        l = process.Proxy('flitter.render.laser.Laser')
+                        l = process.Proxy(laser.Laser)
                     else:
                         l = laser.Laser()
                     self.lasers.append(l)
@@ -220,7 +220,7 @@ class Controller:
             for i, node in enumerate(graph.select_below('dmx.')):
                 if i == len(self.dmx):
                     if self.multiprocess:
-                        d = process.Proxy('flitter.render.dmx.DMX')
+                        d = process.Proxy(dmx.DMX)
                     else:
                         d = dmx.DMX()
                     self.dmx.append(d)

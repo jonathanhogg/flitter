@@ -8,5 +8,4 @@ cython
 pyglet
 pyserial
 moderngl
-posix_ipc
 av
