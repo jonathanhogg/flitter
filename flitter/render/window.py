@@ -64,7 +64,7 @@ class SceneNode:
 
     async def update(self, node, **kwargs):
         references = kwargs.setdefault('references', {})
-        node_id = str(node['id']) if 'id' in node else None
+        node_id = node.get('id', 1, str)
         if node_id:
             references[node_id] = self
         resized = False
@@ -123,7 +123,7 @@ class Reference(SceneNode):
         return self._reference.texture if self._reference is not None else None
 
     async def update(self, node, references=None, **kwargs):
-        node_id = str(node['id']) if 'id' in node else None
+        node_id = node.get('id', 1, str)
         self._reference = references.get(node_id) if references is not None and node_id else None
 
     def destroy(self):
@@ -169,16 +169,14 @@ class ProgramNode(SceneNode):
             self._last = None
 
     def get_vertex_source(self, node):
-        if 'vertex' in node:
-            return str(node['vertex'])
-        return """#version 410
+        return node.get('vertex', 1, str, """#version 410
 in vec2 position;
 out vec2 coord;
 void main() {
     gl_Position = vec4(position, 0.0, 1.0);
     coord = (position + 1.0) / 2.0;
 }
-"""
+""")
 
     def get_fragment_source(self, node):
         if 'fragment' in node:
@@ -326,7 +324,7 @@ class Window(ProgramNode):
         if self.window is None:
             vsync = node.get('vsync', 1, bool, self.default_vsync)
             screen = node.get('screen', 1, int, self.default_screen)
-            title = str(node['title']) if 'title' in node else "Flitter"
+            title = node.get('title', 1, str, "flitter")
             fullscreen = node.get('fullscreen', 1, bool, self.default_fullscreen)
             screens = pyglet.canvas.get_display().get_screens()
             screen = screens[screen] if screen < len(screens) else screens[0]
@@ -450,7 +448,7 @@ class Canvas(SceneNode):
     def render(self, node, **kwargs):
         self._graphics_context.resetContext()
         self._framebuffer.clear()
-        canvas.draw(node, self._canvas, None, None, None)
+        canvas.draw(node, self._canvas)
         self._surface.flushAndSubmit()
 
 
@@ -516,15 +514,15 @@ void main() {
 """
 
     def similar_to(self, node):
-        return self._container is not None and 'filename' in node and str(node['filename']) == self._container.name
+        return self._container is not None and node.get('filename', 1, str) == self._container.name
 
     async def update(self, node, **kwargs):
         references = kwargs.setdefault('references', {})
-        node_id = str(node['id']) if 'id' in node else None
+        node_id = node.get('id', 1, str)
         if node_id:
             references[node_id] = self
-        if 'filename' in node:
-            filename = str(node['filename'])
+        filename = node.get('filename', 1, str)
+        if filename:
             if self._container is not None and self._container.name != filename:
                 self.release()
             if self._container is None and filename:

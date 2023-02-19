@@ -27,7 +27,7 @@ class Control:
                 self.state = state
                 self.reset()
                 changed = True
-            name = (str(node['name']) if 'name' in node else None) or self.DEFAULT_NAME
+            name = node.get('name', 1, str, self.DEFAULT_NAME)
             if name != self.name:
                 self.name = name
                 changed = True

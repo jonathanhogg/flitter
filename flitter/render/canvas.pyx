@@ -521,7 +521,7 @@ cdef object make_path_effect(Node node):
     return None
 
 
-cpdef object draw(Node node, ctx, paint, font, path):
+cpdef object draw(Node node, ctx, paint=None, font=None, path=None):
     start = time.perf_counter()
 
     cdef Vector points
@@ -619,8 +619,8 @@ cpdef object draw(Node node, ctx, paint, font, path):
         ctx.drawPath(path, paint)
 
     elif kind == "text":
-        if 'text' in node:
-            text = str(node['text'])
+        text = node.get('text', 1, str)
+        if text is not None:
             point = node.get('point', 2, float, (0, 0))
             paint = update_paint(node, paint)
             font = update_font(node, font)
@@ -634,8 +634,9 @@ cpdef object draw(Node node, ctx, paint, font, path):
                 ctx.drawString(text, *point, font, paint)
 
     elif kind == "image":
-        if 'filename' in node:
-            image = load_image(str(node['filename']))
+        filename = node.get('filename', 1, str)
+        if filename:
+            image = load_image(filename)
             if image is not None:
                 width, height = image.width(), image.height()
                 point = node.get('point', 2, float, (0, 0))
@@ -686,10 +687,10 @@ cpdef object draw(Node node, ctx, paint, font, path):
 
     elif kind == "canvas":
         ctx.save()
-        path = skia.Path()
         update_context(node, ctx)
-        paint = update_paint(node, skia.Paint(AntiAlias=True))
-        font = update_font(node, skia.Font(skia.Typeface(), 14))
+        paint = update_paint(node, skia.Paint(AntiAlias=True) if paint is None else paint)
+        font = update_font(node, skia.Font(skia.Typeface(), 14) if font is None else font)
+        path = skia.Path()
         child = node.first_child
         while child is not None:
             draw(child, ctx, paint, font, path)

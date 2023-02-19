@@ -183,10 +183,10 @@ cdef class DMX:
             self.driver = None
 
     async def update(self, model.Node node):
-        driver = str(node['driver']).lower()
+        driver = node.get('driver', 1, str, '').lower()
         cls = {'entec': EntecDMXDriver, 'outputarts': OutputArtsDMXDriver}.get(driver)
         if cls is not None:
-            tty = str(node['id']) if 'id' in node else None
+            tty = node.get('id', 1, str)
             baudrate = node.get('baudrate', 1, int, cls.DEFAULT_BAUD_RATE)
             if not isinstance(self.driver, cls):
                 if self.driver is not None:

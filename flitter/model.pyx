@@ -857,6 +857,11 @@ cdef class Node:
         cdef Vector value = self._attributes.get(name)
         if value is None:
             return default
+        if n == 1:
+            if t is bool:
+                return value.as_bool()
+            if t is str:
+                return value.as_string()
         return value.match(n, t, default)
 
     cpdef void pprint(self, int indent=0):
