@@ -18,7 +18,7 @@ from ..ableton.constants import Encoder, Control, BUTTONS
 from ..ableton.events import (ButtonPressed, ButtonReleased, PadEvent, PadPressed, PadHeld, PadReleased,
                               EncoderTurned, EncoderTouched, EncoderReleased, MenuButtonReleased)
 from ..ableton.push import Push2
-from ..ableton.palette import PrimaryPalette
+from ..ableton.palette import HuePalette
 from .osc import OSCSender, OSCReceiver, OSCBundle
 
 
@@ -161,7 +161,7 @@ class Controller:
 
     async def run(self):
         Log.info("Starting Ableton Push 2 interface")
-        self.push = Push2(palette=PrimaryPalette())
+        self.push = Push2(palette=HuePalette())
         self.push.start()
         for n in range(64):
             self.push.set_pad_rgb(n, 0, 0, 0)

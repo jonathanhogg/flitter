@@ -4,6 +4,8 @@ Push LED color management
 
 # pylama:ignore=C0103
 
+import colorsys
+
 
 class Palette:
     def rgb_to_index(self, r, g, b):
@@ -53,7 +55,9 @@ class PrimaryPalette(SimplePalette):
     """
     This palette changes the simple palette for RGB LEDs to provide 32 levels
     of white and 17 levels each of red, green, blue, yellow, cyan and magenta
-    (including a shared value for black).
+    (including a shared value for black). This is a good palette if you don't
+    plan to use a lot of colours, but do want to do pulsing effects with the
+    LED brightness.
 
     Again, the LED transfer function approximates 2.2 gamma, but with some
     linearity to reduce stepping at the dark end.
@@ -83,3 +87,35 @@ class PrimaryPalette(SimplePalette):
         value = (i & 0b1111) + 1
         value += int(239 * (value / 16)**2.4)
         return (value if rgb & 0b001 else 0, value if rgb & 0b010 else 0, value if rgb & 0b100 else 0)
+
+
+class HuePalette(SimplePalette):
+    """
+    This palette provides 32 shades of white, but then 24 different hues at
+    2 levels of saturation (0.5 and 1) and 2 levels of brightness (0.5 and 1).
+    This is a good palette if you're content with just a couple of levels of
+    brightness - e.g., to show toggled/touched status - but want lots of
+    different colours.
+    """
+
+    def rgb_to_index(self, r, g, b):
+        h, s, v = colorsys.rgb_to_hsv(r, g, b)
+        s = int(round(s * 2))
+        if s == 0:
+            return int(min(max(0, v), 0.96875) * 32)
+        h = int(round(h * 24)) % 24
+        v = int(round(v * 2))
+        if v == 0:
+            return 0
+        return ((v - 1) * 48) + ((s - 1) * 24) + h + 32
+
+    def index_to_rgb_led(self, i):
+        i = min(max(0, int(i)), 127)
+        if i < 32:
+            v = i + int(224 * (i / 31)**2.4)
+            return (v, v, v)
+        i -= 32
+        h = i % 24 / 24
+        s = ((i // 24) % 2 + 1) / 2
+        v = ((i // 48) + 1) / 2
+        return tuple(int(c**2.2 * 255) for c in colorsys.hsv_to_rgb(h, s, v))
