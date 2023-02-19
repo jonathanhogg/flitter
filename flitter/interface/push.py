@@ -343,21 +343,21 @@ class Controller:
                         wait_update = asyncio.create_task(self.updated.wait())
                     if wait_beat in done:
                         wait_beat = asyncio.create_task(self.push.counter.wait_for_beat(self.push.counter.beat*2//1/2 + 0.5))
-                    async with self.push.screen_canvas() as canvas:
-                        canvas.clear(skia.ColorBLACK)
+                    async with self.push.screen_context() as ctx:
+                        ctx.clear(skia.ColorBLACK)
                         paint = skia.Paint(Color=skia.ColorWHITE, AntiAlias=True)
                         red_paint = skia.Paint(Color=skia.ColorRED, AntiAlias=True)
                         font = skia.Font(skia.Typeface("helvetica"), 18)
                         if self.tempo_control:
-                            canvas.drawSimpleText(f"BPM: {self.push.counter.tempo:5.1f}", 10, 150, font, paint)
-                            canvas.drawSimpleText(f"Quantum: {self.push.counter.quantum}", 130, 150, font, paint)
+                            ctx.drawSimpleText(f"BPM: {self.push.counter.tempo:5.1f}", 10, 150, font, paint)
+                            ctx.drawSimpleText(f"Quantum: {self.push.counter.quantum}", 130, 150, font, paint)
                             if record_pressed_at is not None and self.push.counter.clock() > record_pressed_at + 0.5:
-                                canvas.drawSimpleText(f"Phase: {int(self.push.counter.phase):2d}", 250, 150, font, red_paint)
+                                ctx.drawSimpleText(f"Phase: {int(self.push.counter.phase):2d}", 250, 150, font, red_paint)
                             else:
-                                canvas.drawSimpleText(f"Phase: {int(self.push.counter.phase):2d}", 250, 150, font, paint)
+                                ctx.drawSimpleText(f"Phase: {int(self.push.counter.phase):2d}", 250, 150, font, paint)
                         for number, state in self.encoders.items():
-                            canvas.save()
-                            canvas.translate(120 * number, 0)
+                            ctx.save()
+                            ctx.translate(120 * number, 0)
                             paint.setStyle(skia.Paint.kStroke_Style)
                             if state.touched:
                                 paint.setColor4f(skia.Color4f(state.r, state.g, state.b, 1))
@@ -366,28 +366,28 @@ class Controller:
                             path = skia.Path()
                             paint.setStrokeWidth(2)
                             path.addArc(skia.Rect.MakeXYWH(20, 40, 80, 80), -240, 300)
-                            canvas.drawPath(path, paint)
+                            ctx.drawPath(path, paint)
                             start = 300 * (state.origin - state.lower) / (state.upper - state.lower)
                             end = 300 * (state.value - state.lower) / (state.upper - state.lower)
-                            canvas.save()
-                            canvas.translate(60, 80)
-                            canvas.rotate(-240 + start)
+                            ctx.save()
+                            ctx.translate(60, 80)
+                            ctx.rotate(-240 + start)
                             path = skia.Path()
                             path.moveTo(26, 0)
                             path.lineTo(44, 0)
-                            canvas.drawPath(path, paint)
-                            canvas.restore()
+                            ctx.drawPath(path, paint)
+                            ctx.restore()
                             path = skia.Path()
                             paint.setStrokeWidth(12)
                             if end > start:
                                 path.addArc(skia.Rect.MakeXYWH(26, 46, 68, 68), -240 + start, end - start)
                             else:
                                 path.addArc(skia.Rect.MakeXYWH(26, 46, 68, 68), -240 + end, start - end)
-                            canvas.drawPath(path, paint)
+                            ctx.drawPath(path, paint)
                             path = skia.Path()
                             path.addRect(2, 2, 116, 26)
                             paint.setStyle(skia.Paint.kFill_Style)
-                            canvas.drawPath(path, paint)
+                            ctx.drawPath(path, paint)
                             font.setSize(14)
                             exponent = 10**state.decimals
                             value = int((state.value * 100 if state.percent else state.value) * exponent) / exponent
@@ -395,13 +395,13 @@ class Controller:
                             if state.percent:
                                 text += '%'
                             width = font.measureText(text)
-                            canvas.drawString(text, (120-width) / 2, 84, font, paint)
+                            ctx.drawString(text, (120-width) / 2, 84, font, paint)
                             font.setSize(16)
                             text = state.name
                             width = font.measureText(text)
                             paint.setColor(skia.ColorBLACK)
-                            canvas.drawString(text, (120-width) / 2, 20, font, paint)
-                            canvas.restore()
+                            ctx.drawString(text, (120-width) / 2, 20, font, paint)
+                            ctx.restore()
                 else:
                     now = self.push.counter.clock()
                     if (self.last_hello is None or now > self.last_hello + self.HELLO_RETRY_INTERVAL) \

@@ -199,16 +199,16 @@ class Push2:
         Log.warning("Unrecognised MIDI - %s", " ".join(f"{b:02x}" for b in message))
 
     @asynccontextmanager
-    async def screen_canvas(self):
+    async def screen_context(self):
         if self._screen_task is None:
             raise TypeError("Not started")
         if self._screen_task.done():
             await self._screen_task
         async with self._screen_update:
-            with self._screen_surface as canvas:
-                canvas.save()
-                yield canvas
-                canvas.restore()
+            with self._screen_surface as ctx:
+                ctx.save()
+                yield ctx
+                ctx.restore()
             self._screen_update.notify()
 
     async def _run_clock(self):
