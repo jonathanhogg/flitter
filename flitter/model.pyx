@@ -44,6 +44,20 @@ cdef class Vector:
             return true_
         if other is False:
             return false_
+        cdef int i
+        if isinstance(other, int):
+            i = other
+            if i == 0:
+                return false_
+            if i == 1:
+                return true_
+        cdef float f
+        if isinstance(other, float):
+            f = other
+            if f == 0:
+                return false_
+            if f == 1:
+                return true_
         return Vector.__new__(Vector, other)
 
     @staticmethod
@@ -218,10 +232,10 @@ cdef class Vector:
                     if isinstance(value, str):
                         text += <str>value
                     elif isinstance(value, (float, int, bool)):
-                        text += "{:g}".format(value)
+                        text += f"{value:g}"
             else:
                 for i in range(n):
-                    text += "{:g}".format(self.numbers[i])
+                    text += f"{self.numbers[i]:g}"
         return text
 
     def __iter__(self):
@@ -241,6 +255,7 @@ cdef class Vector:
         cdef unsigned long long y, hash = 0xe220a8397b1dcdaf
         cdef float_long fl
         cdef int i
+        cdef Py_UNICODE c
         if self.length:
             for i in range(self.length):
                 if self.objects is not None:
@@ -555,14 +570,45 @@ cdef class Vector:
         return self.slice(Vector._coerce(index))
 
     cdef Vector slice(self, Vector index):
-        cdef int i, j, n = self.length
-        cdef list values = []
-        if index.numbers != NULL:
+        cdef int i, j, m = 0, n = self.length
+        if index.numbers == NULL or n == 0:
+            return null_
+        cdef list values
+        cdef Vector result = Vector.__new__(Vector)
+        if self.objects is not None:
+            result.objects = []
             for i in range(index.length):
                 j = <int>floor(index.numbers[i])
                 if j >= 0 and j < n:
-                    values.append(self.objects[j] if self.objects is not None else self.numbers[j])
-        return Vector.__new__(Vector, values)
+                    result.objects.append(self.objects[j])
+            result.length = len(result.objects)
+        else:
+            result.allocate_numbers(index.length)
+            for i in range(index.length):
+                j = <int>floor(index.numbers[i])
+                if j >= 0 and j < n:
+                    result.numbers[m] = self.numbers[j]
+                    m += 1
+            result.length = m
+        return result
+
+    cdef Vector item(self, int i):
+        cdef int n = self.length
+        if i < 0 or i >= n:
+            return null_
+        cdef Vector result = Vector.__new__(Vector)
+        if self.objects is not None:
+            value = self.objects[i]
+            if isinstance(value, (int, float)):
+                result.allocate_numbers(1)
+                result.numbers[0] = value
+            else:
+                result.objects = [self.objects[i]]
+                result.length == 1
+        else:
+            result.allocate_numbers(1)
+            result.numbers[0] = self.numbers[i]
+        return result
 
 
 cdef Vector null_ = Vector()
@@ -601,7 +647,7 @@ cdef class Query:
             raise ValueError("Bad query; contains empty element")
         cdef list tag_list = []
         for j in range(i, n+1):
-            if j == n or query[j] in ('#', '.', '|', '>', ' '):
+            if j == n or query[j] in '#.|> ':
                 if j > i:
                     if query[i] == '#':
                         if i+1 < j:
@@ -618,7 +664,7 @@ cdef class Query:
             i += 1
         if i < n and query[i] == '|':
             j = i + 1
-            while j < n and query[j] not in '> \r\r\n':
+            while j < n and query[j] not in '> \t\r\n':
                 j += 1
             self.altquery = Query.__new__(Query, query[i+1:j])
             i = j

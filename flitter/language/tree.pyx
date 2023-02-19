@@ -828,7 +828,7 @@ cdef class For(Expression):
         cdef str name
         while i < n:
             for name in self.names:
-                context.variables[name] = source[i]
+                context.variables[name] = source.item(i)
                 i += 1
             results.append(self.body.evaluate(context))
         context.variables = saved
@@ -852,7 +852,7 @@ cdef class For(Expression):
         cdef int i=0, n=values.length
         while i < n:
             for name in self.names:
-                context.variables[name] = values[i]
+                context.variables[name] = values.item(i)
                 i += 1
             remaining.append(self.body.partially_evaluate(context))
         context.variables = saved

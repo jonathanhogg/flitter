@@ -45,6 +45,7 @@ cdef class Vector(VectorLike):
     cdef Vector le(self, Vector other)
     cdef int compare(self, Vector other) except -2
     cdef Vector slice(self, Vector index)
+    cdef Vector item(self, int i)
 
 
 cdef Vector null_
