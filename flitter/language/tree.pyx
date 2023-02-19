@@ -1,4 +1,4 @@
-# cython: language_level=3, profile=True
+# cython: language_level=3, profile=False
 
 """
 Language syntax/evaluation tree
@@ -130,6 +130,7 @@ cdef class Sequence(Expression):
         self.expressions = expressions
 
     cpdef model.VectorLike evaluate(self, model.Context context):
+        cdef Expression expr
         cdef list vectors = []
         for expr in self.expressions:
             vectors.append(expr.evaluate(context))
@@ -570,20 +571,22 @@ cdef class Attributes(Expression):
         cdef dict variables, saved
         cdef Binding binding
         cdef model.Vector nodes = self.node.evaluate(context)
-        if nodes.isinstance(model.Node):
-            for node in nodes.objects:
-                saved = context.variables
-                variables = saved.copy()
-                for attr, value in node._attributes.items():
-                    variables.setdefault(attr, value)
-                context.variables = variables
-                for binding in self.bindings:
-                    value = binding.expr.evaluate(context)
-                    if value.length:
-                        node._attributes[binding.name] = value
-                        if binding.name not in saved:
-                            variables[binding.name] = value
-                context.variables = saved
+        if nodes.objects is not None:
+            saved = context.variables
+            for item in nodes.objects:
+                if isinstance(item, model.Node):
+                    node = item
+                    variables = saved.copy()
+                    for attr, value in node._attributes.items():
+                        variables.setdefault(attr, value)
+                    context.variables = variables
+                    for binding in self.bindings:
+                        value = binding.expr.evaluate(context)
+                        if value.length:
+                            node._attributes[binding.name] = value
+                            if binding.name not in saved:
+                                variables[binding.name] = value
+            context.variables = saved
         return nodes
 
     cpdef Expression partially_evaluate(self, model.Context context):
