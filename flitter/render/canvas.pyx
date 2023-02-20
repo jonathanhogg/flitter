@@ -184,15 +184,22 @@ cdef object line_path(object path, Vector points, double curve):
 
 cdef object get_color(Node node, default=None):
     cdef Vector v = node._attributes.get('color')
-    cdef double w
-    if v is not None and v.numbers is not NULL:
+    cdef unsigned int r, g, b, a, color
+    if v is not None and v.numbers != NULL:
         if v.length == 1:
-            w = v.numbers[0]
-            return skia.Color4f(w, w, w)
+            r = min(max(0, <int>(v.numbers[0] * 255)), 255)
+            return <unsigned int>0xff000000 + r * 0x010101
         if v.length == 3:
-            return skia.Color4f(v.numbers[0], v.numbers[1], v.numbers[2])
+            r = min(max(0, <unsigned int>(v.numbers[0] * 255)), 255)
+            g = min(max(0, <unsigned int>(v.numbers[1] * 255)), 255)
+            b = min(max(0, <unsigned int>(v.numbers[2] * 255)), 255)
+            return <unsigned int>0xff000000 + (r << 16) + (g << 8) + b
         if v.length == 4:
-            return skia.Color4f(v.numbers[0], v.numbers[1], v.numbers[2], v.numbers[3])
+            a = min(max(0, <unsigned int>(v.numbers[3] * 255)), 255)
+            r = min(max(0, <unsigned int>(v.numbers[0] * a)), 255)
+            g = min(max(0, <unsigned int>(v.numbers[1] * a)), 255)
+            b = min(max(0, <unsigned int>(v.numbers[2] * a)), 255)
+            return (a << 24) + (r << 16) + (g << 8) + b
     return default
 
 
@@ -224,7 +231,7 @@ cdef object update_paint(Node node, start_paint):
             if color is not None:
                 if paint is start_paint:
                     paint = skia.Paint(paint)
-                paint.setColor4f(color)
+                paint.setColor(color)
                 if paint.getShader():
                     paint.setShader(skia.Shaders.Color(color))
         elif key == 'stroke_width':
@@ -303,7 +310,7 @@ cdef object make_shader(Node node, paint):
 
     cdef str kind = node.kind
     if kind == "color":
-        color = get_color(node, paint.getColor4f())
+        color = get_color(node, paint.getColor())
         return skia.Shaders.Color(color)
 
     elif kind == "gradient":
@@ -396,11 +403,11 @@ cdef object make_image_filter(Node node, paint):
             radius = node.get('radius', 2, float)
             if radius is not None:
                 offset = node.get('offset', 2, float, (0, 0))
-                color = get_color(node, paint.getColor4f())
+                color = get_color(node, paint.getColor())
                 shadow_only = node.get('shadow_only', 1, bool, False)
                 if shadow_only:
-                    return skia.ImageFilters.DropShadowOnly(*offset, *radius, color.toColor(), input=input_filter)
-                return skia.ImageFilters.DropShadow(*offset, *radius, color.toColor(), input=input_filter)
+                    return skia.ImageFilters.DropShadowOnly(*offset, *radius, color, input=input_filter)
+                return skia.ImageFilters.DropShadow(*offset, *radius, color, input=input_filter)
 
     elif kind == "offset":
         if len(sub_filters) <= 1:
