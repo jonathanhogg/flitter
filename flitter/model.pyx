@@ -40,24 +40,12 @@ cdef class Vector:
             return other
         if other is None or (isinstance(other, (list, tuple)) and len(other) == 0):
             return null_
-        if other is True:
-            return true_
-        if other is False:
+        if other == 0:
             return false_
-        cdef int i
-        if isinstance(other, int):
-            i = other
-            if i == 0:
-                return false_
-            if i == 1:
-                return true_
-        cdef float f
-        if isinstance(other, float):
-            f = other
-            if f == 0:
-                return false_
-            if f == 1:
-                return true_
+        if other == 1:
+            return true_
+        if other == -1:
+            return minusone_
         return Vector.__new__(Vector, other)
 
     @staticmethod
@@ -358,7 +346,9 @@ cdef class Vector:
         cdef str s, f
         if n == 0:
             return "null"
-        return ";".join(map(repr, self))
+        if self.objects is not None:
+            return ";".join(map(repr, self))
+        return ";".join(f"{self.numbers[i]:g}" for i in range(n))
 
     def __neg__(self):
         return self.neg()

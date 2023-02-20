@@ -31,16 +31,16 @@ class FlitterTransformer(Transformer):
         return intern(str(token))
 
     def NUMBER(self, token):
-        return model.Vector((float(token),))
+        return model.Vector.coerce(float(token))
 
     def TAG(self, token):
         return intern(str(token)[1:])
 
     def SYMBOL(self, token):
-        return model.Vector((intern(str(token)[1:]),))
+        return model.Vector(intern(str(token)[1:]))
 
     def ESCAPED_STRING(self, token):
-        return model.Vector((intern(literal_eval(token)),))
+        return model.Vector(intern(literal_eval(token)))
 
     def QUERY(self, token):
         return model.Query(token[1:-1])
