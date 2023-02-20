@@ -531,19 +531,42 @@ cpdef object draw(Node node, ctx, paint=None, font=None, path=None):
         ctx.save()
         path = skia.Path()
         update_context(node, ctx)
-        paint = update_paint(node, paint)
+        group_paint = update_paint(node, paint)
         font = update_font(node, font)
         child = node.first_child
         while child is not None:
-            draw(child, ctx, paint, font, path)
+            group_paint = draw(child, ctx, group_paint, font, path)
             child = child.next_sibling
         ctx.restore()
+
+    elif kind == "transform":
+        ctx.save()
+        update_context(node, ctx)
+        child = node.first_child
+        while child is not None:
+            paint = draw(child, ctx, paint, font, path)
+            child = child.next_sibling
+        ctx.restore()
+
+    elif kind == "paint":
+        paint_paint = update_paint(node, paint)
+        child = node.first_child
+        while child is not None:
+            paint_paint = draw(child, ctx, paint_paint, font, path)
+            child = child.next_sibling
+
+    elif kind == "font":
+        font = update_font(node, font)
+        child = node.first_child
+        while child is not None:
+            paint = draw(child, ctx, paint, font, path)
+            child = child.next_sibling
 
     elif kind == "path":
         path = skia.Path()
         child = node.first_child
         while child is not None:
-            draw(child, ctx, paint, font, path)
+            paint = draw(child, ctx, paint, font, path)
             child = child.next_sibling
 
     elif kind == "move_to":
@@ -609,29 +632,29 @@ cpdef object draw(Node node, ctx, paint=None, font=None, path=None):
         ctx.clipPath(path, skia.ClipOp.kDifference, paint.isAntiAlias())
 
     elif kind == "fill":
-        paint = update_paint(node, paint)
-        paint.setStyle(skia.Paint.Style.kFill_Style)
-        ctx.drawPath(path, paint)
+        fill_paint = update_paint(node, paint)
+        fill_paint.setStyle(skia.Paint.Style.kFill_Style)
+        ctx.drawPath(path, fill_paint)
 
     elif kind == "stroke":
-        paint = update_paint(node, paint)
-        paint.setStyle(skia.Paint.Style.kStroke_Style)
-        ctx.drawPath(path, paint)
+        stroke_paint = update_paint(node, paint)
+        stroke_paint.setStyle(skia.Paint.Style.kStroke_Style)
+        ctx.drawPath(path, stroke_paint)
 
     elif kind == "text":
         text = node.get('text', 1, str)
         if text is not None:
             point = node.get('point', 2, float, (0, 0))
-            paint = update_paint(node, paint)
+            text_paint = update_paint(node, paint)
             font = update_font(node, font)
             stroke = node.get('stroke', 1, bool, False)
-            paint.setStyle(skia.Paint.Style.kStroke_Style if stroke else skia.Paint.Style.kFill_Style)
+            text_paint.setStyle(skia.Paint.Style.kStroke_Style if stroke else skia.Paint.Style.kFill_Style)
             if node.get('center', 1, bool, True):
                 bounds = skia.Rect(0, 0, 0, 0)
                 font.measureText(text, bounds=bounds)
-                ctx.drawString(text, point[0]-bounds.x()-bounds.width()/2, point[1]-bounds.y()-bounds.height()/2, font, paint)
+                ctx.drawString(text, point[0]-bounds.x()-bounds.width()/2, point[1]-bounds.y()-bounds.height()/2, font, text_paint)
             else:
-                ctx.drawString(text, *point, font, paint)
+                ctx.drawString(text, *point, font, text_paint)
 
     elif kind == "image":
         filename = node.get('filename', 1, str)
@@ -677,11 +700,11 @@ cpdef object draw(Node node, ctx, paint=None, font=None, path=None):
             ctx.saveLayerAlpha(rect, int(alpha * 255))
             path = skia.Path()
             update_context(node, ctx)
-            paint = update_paint(node, paint)
+            layer_paint = update_paint(node, paint)
             font = update_font(node, font)
             child = node.first_child
             while child is not None:
-                draw(child, ctx, paint, font, path)
+                layer_paint = draw(child, ctx, layer_paint, font, path)
                 child = child.next_sibling
             ctx.restore()
 
@@ -693,21 +716,24 @@ cpdef object draw(Node node, ctx, paint=None, font=None, path=None):
         path = skia.Path()
         child = node.first_child
         while child is not None:
-            draw(child, ctx, paint, font, path)
+            paint = draw(child, ctx, paint, font, path)
             child = child.next_sibling
         ctx.restore()
 
     else:
         shader = make_shader(node, paint)
         if shader:
+            paint = skia.Paint(paint)
             paint.setShader(shader)
         else:
             image_filter = make_image_filter(node, paint)
             if image_filter:
+                paint = skia.Paint(paint)
                 paint.setImageFilter(image_filter)
             else:
                 path_effect = make_path_effect(node)
                 if path_effect:
+                    paint = skia.Paint(paint)
                     paint.setPathEffect(path_effect)
 
     if _RecordStats:
@@ -717,3 +743,5 @@ cpdef object draw(Node node, ctx, paint=None, font=None, path=None):
         if kind != 'canvas':
             parent_kind = node.parent.kind
             _Durations[parent_kind] = _Durations.get(parent_kind, 0) - duration
+
+    return paint
