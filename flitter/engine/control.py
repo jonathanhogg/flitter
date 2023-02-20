@@ -470,12 +470,10 @@ class Controller:
                 target_period = 1 / self.target_fps
                 frame_time += target_period
                 wait_time = frame_time - now
-
+                performance = min(performance+0.001, 2) if wait_time > 0.001 else max(0.5, performance-0.01)
                 if wait_time > 0:
-                    performance = min(performance+0.01, 2)
                     await asyncio.sleep(wait_time)
                 else:
-                    performance = max(0.5, performance-0.01)
                     Log.debug("Slow frame - %.0fms", frame_period*1000)
                     await asyncio.sleep(0)
                     if -wait_time > target_period:
