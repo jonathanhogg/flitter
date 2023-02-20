@@ -37,7 +37,7 @@ cdef class Uniform(VectorLike):
         return <double>(x >> 32) / <double>(1<<32)
 
     cpdef Vector slice(self, Vector index):
-        if index.length == 0 or index.objects is not None:
+        if index.numbers == NULL:
             return null_
         cdef Vector result = Vector.__new__(Vector)
         cdef int i
@@ -88,7 +88,7 @@ def length(Vector xs not None):
 
 
 def sinv(Vector theta not None):
-    if theta.length == 0 or theta.objects is not None:
+    if theta.numbers == NULL:
         return null_
     cdef Vector ys = Vector.__new__(Vector)
     cdef int i, n = theta.length
@@ -98,7 +98,7 @@ def sinv(Vector theta not None):
 
 
 def cosv(Vector theta not None):
-    if theta.length == 0 or theta.objects is not None:
+    if theta.numbers == NULL:
         return null_
     cdef Vector ys = Vector.__new__(Vector)
     cdef int i, n = theta.length
@@ -108,7 +108,7 @@ def cosv(Vector theta not None):
 
 
 def polar(Vector theta not None):
-    if theta.length == 0 or theta.objects is not None:
+    if theta.numbers == NULL:
         return null_
     cdef Vector ys = Vector.__new__(Vector)
     cdef int i, n = theta.length
@@ -120,7 +120,7 @@ def polar(Vector theta not None):
 
 
 def expv(Vector xs not None):
-    if xs.length == 0 or xs.objects is not None:
+    if xs.numbers == NULL:
         return null_
     cdef Vector ys = Vector.__new__(Vector)
     for i in range(ys.allocate_numbers(xs.length)):
@@ -129,7 +129,7 @@ def expv(Vector xs not None):
 
 
 def sqrtv(Vector xs not None):
-    if xs.length == 0 or xs.objects is not None:
+    if xs.numbers == NULL:
         return null_
     cdef Vector ys = Vector.__new__(Vector)
     for i in range(ys.allocate_numbers(xs.length)):
@@ -138,7 +138,7 @@ def sqrtv(Vector xs not None):
 
 
 def sine(Vector xs not None):
-    if xs.length == 0 or xs.objects is not None:
+    if xs.numbers == NULL:
         return null_
     cdef Vector ys = Vector.__new__(Vector)
     for i in range(ys.allocate_numbers(xs.length)):
@@ -147,7 +147,7 @@ def sine(Vector xs not None):
 
 
 def bounce(Vector xs not None):
-    if xs.length == 0 or xs.objects is not None:
+    if xs.numbers == NULL:
         return null_
     cdef Vector ys = Vector.__new__(Vector)
     cdef double x
@@ -158,7 +158,7 @@ def bounce(Vector xs not None):
 
 
 def impulse(Vector xs not None):
-    if xs.length == 0 or xs.objects is not None:
+    if xs.numbers == NULL:
         return null_
     cdef Vector ys = Vector.__new__(Vector)
     cdef double x, y
@@ -178,7 +178,7 @@ def impulse(Vector xs not None):
 
 
 def sharkfin(Vector xs not None):
-    if xs.length == 0 or xs.objects is not None:
+    if xs.numbers == NULL:
         return null_
     cdef Vector ys = Vector.__new__(Vector)
     cdef double x, y
@@ -191,7 +191,7 @@ def sharkfin(Vector xs not None):
 
 
 def sawtooth(Vector xs not None):
-    if xs.length == 0 or xs.objects is not None:
+    if xs.numbers == NULL:
         return null_
     cdef Vector ys = Vector.__new__(Vector)
     cdef double x
@@ -202,7 +202,7 @@ def sawtooth(Vector xs not None):
 
 
 def triangle(Vector xs not None):
-    if xs.length == 0 or xs.objects is not None:
+    if xs.numbers == NULL:
         return null_
     cdef Vector ys = Vector.__new__(Vector)
     cdef double x, y
@@ -215,7 +215,7 @@ def triangle(Vector xs not None):
 
 
 def square(Vector xs not None):
-    if xs.length == 0 or xs.objects is not None:
+    if xs.numbers == NULL:
         return null_
     cdef Vector ys = Vector.__new__(Vector)
     cdef double x, y
@@ -228,7 +228,7 @@ def square(Vector xs not None):
 
 
 def linear(Vector xs not None):
-    if xs.length == 0 or xs.objects is not None:
+    if xs.numbers == NULL:
         return null_
     cdef Vector ys = Vector.__new__(Vector)
     cdef double x
@@ -243,7 +243,7 @@ def linear(Vector xs not None):
 
 
 def quad(Vector xs not None):
-    if xs.length == 0 or xs.objects is not None:
+    if xs.numbers == NULL:
         return null_
     cdef Vector ys = Vector.__new__(Vector)
     cdef double x, y
@@ -259,7 +259,7 @@ def quad(Vector xs not None):
 
 
 def snap(Vector xs not None):
-    if xs.length == 0 or xs.objects is not None:
+    if xs.numbers == NULL:
         return null_
     cdef Vector ys = Vector.__new__(Vector)
     cdef double x, y
@@ -293,7 +293,7 @@ def shuffle(Uniform source, Vector xs not None):
 
 
 def roundv(Vector xs not None):
-    if xs.length == 0 or xs.objects is not None:
+    if xs.numbers == NULL:
         return null_
     cdef Vector ys = Vector.__new__(Vector)
     cdef double x, y

@@ -166,9 +166,10 @@ cdef class Vector:
             step = 1
         elif step == 0:
             return True
-        cdef int i
-        for i in range(self.allocate_numbers(<int>ceil((stop - start) / step))):
-            self.numbers[i] = start + step * i
+        cdef int i, n = <int>ceil((stop - start) / step)
+        if n > 0:
+            for i in range(self.allocate_numbers(n)):
+                self.numbers[i] = start + step * i
         return True
 
     def __dealloc__(self):
@@ -571,7 +572,7 @@ cdef class Vector:
 
     cdef Vector slice(self, Vector index):
         cdef int i, j, m = 0, n = self.length
-        if index.numbers == NULL or n == 0:
+        if index.numbers == NULL:
             return null_
         cdef list values
         cdef Vector result = Vector.__new__(Vector)
@@ -590,6 +591,8 @@ cdef class Vector:
                     result.numbers[m] = self.numbers[j]
                     m += 1
             result.length = m
+            if m == 0:
+                result.deallocate_numbers()
         return result
 
     cdef Vector item(self, int i):
