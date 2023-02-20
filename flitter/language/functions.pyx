@@ -1,4 +1,4 @@
-# cython: language_level=3, profile=True
+# cython: language_level=3, profile=False
 
 """
 Flitter language functions
@@ -393,8 +393,17 @@ def hypot(Vector xs not None):
     return ys
 
 
-def mapv(Vector x not None, Vector a not None, Vector b not None):
-    return a.mul(true_.sub(x)).add(b.mul(x))
+@cython.cdivision(True)
+def mapv(Vector xs not None, Vector ys not None, Vector zs not None):
+    if xs.numbers == NULL or ys.numbers == NULL or zs.numbers == NULL:
+        return null_
+    cdef int i, m=xs.length, n=ys.length, o=zs.length
+    cdef Vector ws = Vector.__new__(Vector)
+    cdef double x
+    for i in range(ws.allocate_numbers(max(m, n, o))):
+        x = xs.numbers[i % m]
+        ws.numbers[i] = (1-x)*ys.numbers[i % n] + x*zs.numbers[i % o]
+    return ws
 
 
 @cython.cdivision(True)
