@@ -476,8 +476,7 @@ class Controller:
                 else:
                     Log.debug("Slow frame - %.0fms", frame_period*1000)
                     await asyncio.sleep(0)
-                    if -wait_time > target_period:
-                        frame_time = self.counter.clock()
+                    frame_time = self.counter.clock()
 
                 if len(frames) > 1 and frames[-1] - frames[0] > 5:
                     nframes = len(frames) - 1
