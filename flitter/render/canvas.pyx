@@ -4,11 +4,13 @@
 Flitter drawing canvas based on Skia
 """
 
+import array
 import functools
 import logging
 from pathlib import Path
 import time
 
+from cpython cimport array
 from libc.math cimport acos, sqrt
 
 import cython
@@ -152,34 +154,97 @@ cdef double turn_angle(double x0, double y0, double x1, double y1, double x2, do
     return acos(min(max(0, (xa*xb + ya*yb) / (la*lb)), 1)) / TwoPI
 
 
+@cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef object line_path(object path, Vector points, double curve):
+cdef object line_path(object path, Vector points, double curve, bint close):
+    cdef int nverbs = 0, npoints = 0
+    cdef array.array points_array = array.array('f')
+    array.resize(points_array, len(points)*2)
+    cdef float[:] ppoints = points_array
+    cdef array.array verbs_array = array.array('B')
+    array.resize(verbs_array, len(points) + 4)
+    cdef unsigned char[:] pverbs = verbs_array
     cdef int i=0, n=points.length-2
-    assert points.numbers != NULL
     cdef double last_mid_x, last_mid_y, last_x, last_y, x, y
-    lineTo = path.lineTo
-    quadTo = path.quadTo
     while i <= n:
         x, y = points.numbers[i], points.numbers[i+1]
         if i == 0:
-            path.moveTo(x, y)
+            pverbs[nverbs] = 0
+            nverbs += 1
+            ppoints[npoints] = x
+            ppoints[npoints+1] = y
+            npoints += 2
         elif curve <= 0:
-            lineTo(x, y)
+            pverbs[nverbs] = 1
+            nverbs += 1
+            ppoints[npoints] = x
+            ppoints[npoints+1] = y
+            npoints += 2
         else:
             mid_x, mid_y = (last_x + x) / 2, (last_y + y) / 2
             if i == 2:
-                lineTo(mid_x, mid_y)
+                pverbs[nverbs] = 1
+                nverbs += 1
+                ppoints[npoints] = mid_x
+                ppoints[npoints+1] = mid_y
+                npoints += 2
             elif curve >= 0.5 or turn_angle(last_mid_x, last_mid_y, last_x, last_y, mid_x, mid_y) <= curve:
-                quadTo(last_x, last_y, mid_x, mid_y)
+                pverbs[nverbs] = 2
+                nverbs += 1
+                ppoints[npoints] = last_x
+                ppoints[npoints+1] = last_y
+                npoints += 2
+                pverbs[nverbs] = 1
+                ppoints[npoints] = mid_x
+                ppoints[npoints+1] = mid_y
+                npoints += 2
             else:
-                lineTo(last_x, last_y)
-                lineTo(mid_x, mid_y)
+                pverbs[nverbs] = 1
+                nverbs += 1
+                ppoints[npoints] = last_x
+                ppoints[npoints+1] = last_y
+                npoints += 2
+                pverbs[nverbs] = 1
+                ppoints[npoints] = mid_x
+                ppoints[npoints+1] = mid_y
+                npoints += 2
             if i == n:
-                lineTo(x, y)
+                pverbs[nverbs] = 1
+                nverbs += 1
+                ppoints[npoints] = x
+                ppoints[npoints+1] = y
+                npoints += 2
             last_mid_x, last_mid_y = mid_x, mid_y
         last_x, last_y = x, y
         i += 2
+    if close:
+        pverbs[nverbs] = 5
+        nverbs += 1
+    cdef bytearray data = bytearray()
+    cdef array.array header_array = array.array('I')
+    array.resize(header_array, 4)
+    cdef unsigned int[:] header = header_array
+    header[0] = 5
+    header[1] = npoints / 2
+    header[2] = 0
+    header[3] = nverbs
+    data.extend(header_array)
+    array.resize(points_array, npoints)
+    data.extend(points_array)
+    if nverbs % 4 != 0:
+        nverbs += 4 - nverbs % 4
+    array.resize(verbs_array, nverbs)
+    data.extend(verbs_array)
+    cdef int processed
+    if path.isEmpty():
+        processed = path.readFromMemory(data)
+    else:
+        new_path = skia.Path()
+        processed = new_path.readFromMemory(data)
+        path.addPath(new_path)
+    if processed != len(data):
+        raise ValueError("Bad path data")
 
 
 cdef object get_color(Node node, default=None):
@@ -625,9 +690,8 @@ cpdef object draw(Node node, ctx, paint=None, font=None, path=None):
         points = node._attributes.get('points')
         if points is not None and points.numbers is not NULL:
             curve = node.get('curve', 1, float, 0)
-            line_path(path, points, curve)
-            if node.get('close', 1, bool, False):
-                path.close()
+            close = node.get('close', 1, bool, False)
+            line_path(path, points, curve, close)
 
     elif kind == "close":
         path.close()
