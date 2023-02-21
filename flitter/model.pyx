@@ -381,7 +381,10 @@ cdef class Vector:
         return result
 
     def __add__(self, other):
-        return Vector._coerce(self).add(Vector._coerce(other))
+        return self.add(Vector._coerce(other))
+
+    def __radd__(self, other):
+        return Vector._coerce(other).add(self)
 
     @cython.cdivision(True)
     cdef Vector add(self, Vector other):
@@ -393,7 +396,10 @@ cdef class Vector:
         return result
 
     def __sub__(self, other):
-        return Vector._coerce(self).sub(Vector._coerce(other))
+        return self.sub(Vector._coerce(other))
+
+    def __rsub__(self, other):
+        return Vector._coerce(other).sub(self)
 
     @cython.cdivision(True)
     cdef Vector sub(self, Vector other):
@@ -405,7 +411,10 @@ cdef class Vector:
         return result
 
     def __mul__(self, other):
-        return Vector._coerce(self).mul(Vector._coerce(other))
+        return self.mul(Vector._coerce(other))
+
+    def __rmul__(self, other):
+        return Vector._coerce(other).mul(self)
 
     @cython.cdivision(True)
     cdef Vector mul(self, Vector other):
@@ -416,8 +425,11 @@ cdef class Vector:
                 result.numbers[i] = self.numbers[i % n] * other.numbers[i % m]
         return result
 
-    def __truediv__(self, other):
-        return Vector._coerce(self).truediv(Vector._coerce(other))
+    def __truediv__(Vector self, other):
+        return self.truediv(Vector._coerce(other))
+
+    def __rtruediv__(self, other):
+        return Vector._coerce(other).truediv(self)
 
     @cython.cdivision(True)
     cdef Vector truediv(self, Vector other):
@@ -428,8 +440,11 @@ cdef class Vector:
                 result.numbers[i] = self.numbers[i % n] / other.numbers[i % m]
         return result
 
-    def __floordiv__(self, other):
-        return Vector._coerce(self).floordiv(Vector._coerce(other))
+    def __floordiv__(Vector self, other):
+        return self.floordiv(Vector._coerce(other))
+
+    def __rfloordiv__(self, other):
+        return Vector._coerce(other).floordiv(self)
 
     @cython.cdivision(True)
     cdef Vector floordiv(self, Vector other):
@@ -441,7 +456,10 @@ cdef class Vector:
         return result
 
     def __mod__(self, other):
-        return Vector._coerce(self).mod(Vector._coerce(other))
+        return self.mod(Vector._coerce(other))
+
+    def __rmod__(self, other):
+        return Vector._coerce(other).mod(self)
 
     @cython.cdivision(True)
     cdef Vector mod(self, Vector other):
@@ -455,7 +473,13 @@ cdef class Vector:
         return result
 
     def __pow__(self, other, modulo):
-        cdef Vector v = Vector._coerce(self).pow(Vector._coerce(other))
+        cdef Vector v = self.pow(Vector._coerce(other))
+        if modulo is not None:
+            v = v.mod(Vector._coerce(modulo))
+        return v
+
+    def __rpow__(self, other, modulo):
+        cdef Vector v = Vector._coerce(other).pow(self)
         if modulo is not None:
             v = v.mod(Vector._coerce(modulo))
         return v
