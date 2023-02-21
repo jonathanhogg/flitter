@@ -60,6 +60,6 @@ class Proxy:
                 obj.purge()
             nframes += 1
             if time.perf_counter() > stats_time + 5:
-                Log.info("%s process %d /frame render %.1fms", obj.__class__.__name__, os.getpid(), 1000*render/nframes)
+                Log.info("%s process %d; render %.1fms", obj.__class__.__name__, os.getpid(), 1000*render/nframes)
                 nframes = render = 0
                 stats_time += 5

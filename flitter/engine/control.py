@@ -448,6 +448,7 @@ class Controller:
                     self.current_mtime = mtime
 
                 now = self.counter.clock()
+                frame_period = now - frame_time
                 housekeeping += now
                 frame_time += 1 / self.target_fps
                 wait_time = frame_time - now
@@ -455,14 +456,14 @@ class Controller:
                 if wait_time > 0:
                     await asyncio.sleep(wait_time)
                 else:
-                    Log.debug("Slow frame - %.0fms", (now - frame_time)*1000)
+                    Log.debug("Slow frame - %.0fms", frame_period*1000)
                     await asyncio.sleep(0)
                     frame_time = self.counter.clock()
 
                 if len(frames) > 1 and frames[-1] - frames[0] > 5:
                     nframes = len(frames) - 1
                     fps = nframes / (frames[-1] - frames[0])
-                    Log.info("%.1ffps; /frame execute %.1fms, render %.1fms, housekeep %.1fms; perf %.2f",
+                    Log.info("%.1ffps; execute %.1fms, render %.1fms, housekeep %.1fms; perf %.2f",
                              fps, 1000*execution/nframes, 1000*render/nframes, 1000*housekeeping/nframes, performance)
                     frames = frames[-1:]
                     execution = render = housekeeping = 0

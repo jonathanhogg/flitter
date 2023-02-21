@@ -260,7 +260,7 @@ class OSCSender:
         self._socket = None
 
     async def _send(self, data):
-        Log.debug("Send: %r", data)
+        Log.trace("Send: %r", data)
         if self._socket is None:
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             sock.setblocking(False)
@@ -291,4 +291,5 @@ class OSCReceiver:
             sock.bind((self._host, self._port))
             self._socket = sock
         data = await asyncio.get_event_loop().sock_recv(self._socket, mtu)
+        Log.trace("Receive: %r", data)
         return decode_oscpacket(data)
