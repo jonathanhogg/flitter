@@ -12,6 +12,7 @@ from .control import Controller
 
 
 parser = argparse.ArgumentParser(description="Flitter")
+parser.add_argument('--trace', action='store_true', default=False, help="Trace logging")
 parser.add_argument('--debug', action='store_true', default=False, help="Debug logging")
 parser.add_argument('--verbose', action='store_true', default=False, help="Informational logging")
 parser.add_argument('--profile', action='store_true', default=False, help="Run with profiling")
@@ -25,7 +26,15 @@ parser.add_argument('--autoreset', type=float, help="Auto-reset state on idle")
 parser.add_argument('--push', action='store_true', default=False, help="Start Ableton Push 2 interface")
 parser.add_argument('script', nargs='+', help="Script to execute")
 args = parser.parse_args()
-logging.basicConfig(level=logging.DEBUG if args.debug else (logging.INFO if args.verbose else logging.WARNING), stream=sys.stderr)
+if args.trace:
+    level = logging.TRACE
+elif args.debug:
+    level = logging.DEBUG
+elif args.verbose:
+    level = logging.INFO
+else:
+    level = logging.WARNING
+logging.basicConfig(level=level, stream=sys.stderr)
 
 controller = Controller('.', target_fps=args.fps, screen=args.screen, fullscreen=args.fullscreen, vsync=args.vsync,
                         state_file=args.state, multiprocess=args.multiprocess and not args.profile, autoreset=args.autoreset)

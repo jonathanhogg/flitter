@@ -65,8 +65,8 @@ class SerialStream:
             except Exception:
                 Log.exception("Error writing to stream")
                 raise
-            # if nbytes:
-            #     Log.debug("Write %r", data[:nbytes])
+            if nbytes:
+                Log.trace("Write %r", data[:nbytes])
             self._output_buffer = data[nbytes:]
         else:
             self._output_buffer += data
@@ -88,7 +88,7 @@ class SerialStream:
             self._output_buffer_empty.set_exception(exc)
             self._loop.remove_writer(self._connection)
         if nbytes:
-            # Log.debug("Write %r", self._output_buffer[:nbytes])
+            Log.trace("Write %r", self._output_buffer[:nbytes])
             self._output_buffer = self._output_buffer[nbytes:]
         if not self._output_buffer:
             self._loop.remove_writer(self._connection)
@@ -100,7 +100,7 @@ class SerialStream:
             nwaiting = self._connection.in_waiting
             if nwaiting:
                 data = self._connection.read(nwaiting if nbytes is None else min(nbytes, nwaiting))
-                # Log.debug("Read %r", data)
+                Log.trace("Read %r", data)
                 return data
             future = self._loop.create_future()
             self._loop.add_reader(self._connection, future.set_result, None)
