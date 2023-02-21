@@ -91,7 +91,7 @@ The simplest program would be something like:
 
 let SIZE=1280;720
 
-!window size=SIZE
+!window #top size=SIZE
     !canvas size=SIZE antialias=true composite=:add
         !group font="Helvetica" font_size=100 color=sine(beat/2)
             !text point=SIZE/2 text="Hello world!"
@@ -100,7 +100,9 @@ let SIZE=1280;720
 This contains a comment, a `let` statement and a node creation statement.
 Indented statements below this represent child nodes. Any name with a `!` in
 front of it creates a node of that *kind*; the bindings following this specify
-attributes of the node.
+attributes of the node. Nodes can also be followed by one or more `#tag`s to
+add tags that can be later searched for with *queries* (see language features
+below).
 
 When the **flitter** engine is run with this file, it will evaluate the code
 repeatedly (at an attempted 60fps) and render this to screen. Note that one
@@ -213,6 +215,10 @@ dozen `!ellipse` nodes created by the loop are combined into a 12-vector, this
 has the final `!fill` node concatenated with it and then all of these nodes are
 appended to the `!group`.
 
+There is actually a more convenient `polar(theta)` function that does the same
+thing as `zip(cos(theta), sin(theta))`. Arguably, it would be even neater to
+implement a clock face using `rotate` transforms instead.
+
 ### Conditionals
 
 ```
@@ -238,23 +244,22 @@ indented expressions is the result value of the `if`. In the absence of an
 Queries allow the node graph so-far to be searched and manipulated. They use
 a CSS-selector-like syntax that is best explained by example:
 
-- `{*}` matches *any* and *all* nodes in the graph
+- `{*}` matches *all* nodes in the graph
 - `{window}` matches any `!window` node
 - `{#spot}` matches any node with the `#spot` tag
-- `{shader#blur}` combines these, matching only a `!shader` node with a `#blur`
-tag
-- `{ellipse|rect}` matches an `!ellipse` or a `!rect` node
-- `{group path}` matches a `!path` node within an `!group` node
-- `{path>line_to}` matches a `!line_to` node *immediately* below a `!path` node
+- `{shader#blur}` matches `!shader` nodes with the `#blur` tag
+- `{ellipse|rect}` matches any `!ellipse` or `!rect` node
+- `{group path}` matches `!path` nodes anywhere within a `!group` node
+- `{path>line_to}` matches `!line_to` nodes *immediately* below a `!path` node
 - `{group.}` returns all `!group` nodes reachable from the root, but *not* any
 further `!group` nodes *within* those, i.e., it stops recursive descent on a
 match
 
 The result of a query expression is a vector of matching nodes. Note that nodes
 are (currently) only appended to the main graph from the top-level after the
-complete evaluation of each expression, including any indent-append operations.
-Thus a query evaluated within a nested expression cannot match any node that
-makes up part of that expression.
+complete evaluation of each expression, including any indented append
+operations. Thus a query evaluated within a nested expression cannot match any
+node that makes up part of that expression.
 
 A query expression may be combined with attribute-setting or node-appending
 expressions to amend the current graph. For example:
@@ -266,18 +271,18 @@ let SIZE=1280;720
     !canvas size=SIZE color=1 font_size=100
         !text point=SIZE/2 text="Hello world!"
 
-if beat > 4
+if beat > 10
     {canvas} color=1;0;0
 ```
 
-In this example, the text will turn red after 4 beats (2 seconds by default).
+In this example, the text will turn red after 10 beats (5 seconds by default).
 
 Appending nodes to a query will append those nodes to all matches:
 
 ```
 ...
 
-if beat > 4
+if beat > 10
     {canvas}
         !text point=SIZE*(0.5;0.75) text="(RED)" color=1;0;0
 ```
@@ -290,7 +295,7 @@ and changes the default color to red:
 ```
 ...
 
-if beat > 4
+if beat > 10
     {canvas}
         !group color=1;0;0 translate=SIZE rotate=0.5
             {canvas>*}
@@ -357,11 +362,50 @@ unit-cost to call, so indexing the billionth number takes the same amount of
 time as the 0th. Unlike normal vectors, the streams also extend into negative
 indices.
 
+### State
+
+The outside world (only in the form of a Push 2 at the moment) communicates with
+a running **flitter** program via a *state* mapping. This can be queried with
+the `$` operator like so:
+
+```
+let SIZE=1280;720
+
+!window size=SIZE
+    !canvas size=SIZE translate=SIZE/2
+        !ellipse radius=$:circ_radius
+        !fill color=1;0;0
+
+!encoder number=0 name="Radius" state=:circ_radius lower=0 upper=300 initial=100
+```
+
+This shows the first Push 2 encoder being configured as a knob that changes the
+radius of a red filled-circle drawn in the middle of the window. The
+`state=:circ_radius` attribute of the `!encoder` node specifies the state key to
+write values to and the current value is retrieved with `$:circ_radius`.
+
+A key is any vector of numbers and/or strings (/symbols). As the `;` operator
+binds with very low precedence, a non-singleton key needs to be surrounded with
+brackets, e.g., `$(:circle;:radius)`.
+
+### Pragmas
+
+There are two supported pragmas that may be placed at the top-level of a source
+file:
+
+```
+%pragma tempo 110
+%pragma quantum 3
+```
+
+These set the initial tempo and/or quantum of the main clock (the defaults are
+120 and 4, respectively).
+
 ### Partial evaluation
 
 When a source file is loaded is is parsed into an evaluation tree and then that
-tree is *partically-evaluated*. This attempts to evaluate all literal/constant
-expressions. The partial-evaluator is able to construct partial node graphs,
+tree is *partially-evaluated*. This attempts to evaluate all literal/constant
+expressions. The partial-evaluator is able to construct parts of node graphs,
 unroll loops with a constant source vector, evaluate conditionals with constant
 tests, call functions with constant arguments (including creating pseudo-random
 streams), replace `let` names with constant values and generally reduce as much
