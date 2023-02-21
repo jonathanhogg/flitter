@@ -11,6 +11,7 @@ from pathlib import Path
 import time
 
 from cpython cimport array
+import cython
 from libc.math cimport acos, sqrt
 
 import cython
@@ -556,11 +557,12 @@ cdef object make_path_effect(Node node):
 
 
 cpdef object draw(Node node, ctx, paint=None, font=None, path=None):
-    start = time.perf_counter()
-
+    start_time = time.perf_counter()
     cdef Vector points
     cdef Node child
     cdef str kind = node.kind
+    cdef double x, y, rx, ry
+
     if kind == 'group':
         ctx.save()
         path = skia.Path()
@@ -618,25 +620,39 @@ cpdef object draw(Node node, ctx, paint=None, font=None, path=None):
             else:
                 path.quadTo(*c1, *point)
 
-    elif kind == 'arc':
+    elif kind == 'arc_to':
         if (point := node.get('point', 2, float)) is not None and (radius := node.get('radius', 2, float)) is not None:
+            x, y = point
+            rx, ry = radius
+            rotate = node.get('rotation', 1, float, 0)
+            large = node.get('large', 1, bool, False)
+            ccw = node.get('ccw', 1, bool, False)
+            path.arcTo(rx, ry, rotate, large, ccw, x, y)
+
+    elif kind == 'arc':
+        if (point := node.get('point', 2, float, (0, 0))) is not None and (radius := node.get('radius', 2, float)) is not None:
+            x, y = point
+            rx, ry = radius
             start = node.get('start', 1, float, 0)
             if (sweep := node.get('sweep', 1, float)) is None:
                 end = node.get('end', 1, float)
                 if end is not None:
                     sweep = end - start
             if sweep is not None:
-                path.arcTo(skia.Rect(point[0]-radius[0], point[1]-radius[1], point[0]+radius[0], point[1]+radius[1]), start*360, sweep*360, False)
+                move_to = node.get('move_to', 1, bool, False)
+                path.arcTo(skia.Rect(x-rx, y-ry, x+rx, y+ry), start*360, sweep*360, move_to)
 
     elif kind == 'rect':
         if (size := node.get('size', 2, float)) is not None:
-            point = node.get('point', 2, float, (0, 0))
-            path.addRect(*point, point[0]+size[0], point[1]+size[1])
+            rx, ry = size
+            x, y = node.get('point', 2, float, (0, 0))
+            path.addRect(x, y, x+rx, y+ry)
 
     elif kind == 'ellipse':
         if (radius := node.get('radius', 2, float)) is not None:
-            point = node.get('point', 2, float, (0, 0))
-            path.addOval(skia.Rect(point[0]-radius[0], point[1]-radius[1], point[0]+radius[0], point[1]+radius[1]))
+            rx, ry = radius
+            x, y = node.get('point', 2, float, (0, 0))
+            path.addOval(skia.Rect(x-rx, y-ry, x+rx, y+ry))
 
     elif kind == 'line':
         if (points := node._attributes.get('points')) is not None and points.numbers is not NULL:
@@ -665,7 +681,7 @@ cpdef object draw(Node node, ctx, paint=None, font=None, path=None):
 
     elif kind == 'text':
         if (text := node.get('text', 1, str)) is not None:
-            point = node.get('point', 2, float, (0, 0))
+            x, y = node.get('point', 2, float, (0, 0))
             text_paint = update_paint(node, paint)
             font = update_font(node, font)
             stroke = node.get('stroke', 1, bool, False)
@@ -673,9 +689,11 @@ cpdef object draw(Node node, ctx, paint=None, font=None, path=None):
             if node.get('center', 1, bool, True):
                 bounds = skia.Rect(0, 0, 0, 0)
                 font.measureText(text, bounds=bounds)
-                ctx.drawString(text, point[0]-bounds.x()-bounds.width()/2, point[1]-bounds.y()-bounds.height()/2, font, text_paint)
+                rx = bounds.x() + bounds.width()/2
+                ry = bounds.y() + bounds.height()/2
+                ctx.drawString(text, x-rx, y-ry, font, text_paint)
             else:
-                ctx.drawString(text, *point, font, text_paint)
+                ctx.drawString(text, x, y, font, text_paint)
 
     elif kind == 'image':
         if (filename := node.get('filename', 1, str)) and (image := load_image(filename)) is not None:
@@ -748,7 +766,7 @@ cpdef object draw(Node node, ctx, paint=None, font=None, path=None):
         paint.setPathEffect(path_effect)
 
     if _RecordStats:
-        duration = time.perf_counter() - start
+        duration = time.perf_counter() - start_time
         _Counts[kind] = _Counts.get(kind, 0) + 1
         _Durations[kind] = _Durations.get(kind, 0) + duration
         if kind != 'canvas':
