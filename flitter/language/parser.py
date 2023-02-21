@@ -86,8 +86,9 @@ class FlitterTransformer(Transformer):
     ne = tree.NotEqualTo
     neg = tree.Negative
     node = tree.Node
-    power = tree.Power
+    poly_binding = tree.PolyBinding
     pos = tree.Positive
+    power = tree.Power
     pragma = tree.Pragma
     prepend = tree.Prepend
     search = tree.Search

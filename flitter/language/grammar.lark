@@ -40,13 +40,17 @@ test : composition _NL _INDENT sequence _DEDENT
 ?node : composition
       | "!" NAME -> node
       | node TAG -> tag
-      | node bindings -> attributes
+      | node attribute_bindings -> attributes
+
+attribute_bindings : attribute_binding+ -> tuple
+
+attribute_binding : NAME "=" composition -> binding
 
 multiline_bindings : binding+ _NL (_INDENT (binding+ _NL)+ _DEDENT)? -> tuple
 
 bindings : binding+ -> tuple
 
-binding : NAME "=" composition
+binding : name_list "=" composition -> poly_binding
 
 ?composition : comprehension
              | compositions -> sequence
@@ -59,7 +63,7 @@ compositions : comprehension (";" comprehension)+ -> tuple
 
 inline_bindings: binding+ -> tuple
 
-inline_binding: NAME "=" conditional -> binding
+inline_binding: name_list "=" conditional -> poly_binding
 
 name_list : NAME (";" NAME)* -> tuple
 

@@ -737,6 +737,18 @@ cdef class Binding:
         return f'Binding({self.name!r}, {self.expr!r})'
 
 
+cdef class PolyBinding:
+    cdef readonly tuple names
+    cdef readonly Expression expr
+
+    def __init__(self, tuple names, Expression expr):
+        self.names = names
+        self.expr = expr
+
+    def __repr__(self):
+        return f'PolyBinding({self.names!r}, {self.expr!r})'
+
+
 cdef class Let(Expression):
     cdef readonly tuple bindings
 
@@ -744,23 +756,42 @@ cdef class Let(Expression):
         self.bindings = bindings
 
     cpdef model.VectorLike evaluate(self, model.Context context):
-        cdef Binding binding
+        cdef PolyBinding binding
+        cdef model.Vector value
+        cdef str name
+        cdef int i, n
         for binding in self.bindings:
-            context.variables[binding.name] = binding.expr.evaluate(context)
+            value = binding.expr.evaluate(context)
+            n = len(binding.names)
+            for i, name in enumerate(binding.names):
+                if i == n-1:
+                    context.variables[name] = value.slice(model.Vector.range(i, n)) if i else value
+                else:
+                    context.variables[name] = value.item(i)
         return model.null_
 
     cpdef Expression partially_evaluate(self, model.Context context):
         cdef list remaining = []
-        cdef Binding binding
+        cdef PolyBinding binding
         cdef Expression expr
+        cdef model.Vector value
+        cdef str name
+        cdef int i, n
         for binding in self.bindings:
             expr = binding.expr.partially_evaluate(context)
             if isinstance(expr, Literal):
-                context.variables[binding.name] = (<Literal>expr).value
+                value = (<Literal>expr).value
+                n = len(binding.names)
+                for i, name in enumerate(binding.names):
+                    if i == n-1:
+                        context.variables[name] = value.slice(model.Vector.range(i, n)) if i else value
+                    else:
+                        context.variables[name] = value.item(i)
             else:
-                if binding.name in context.variables:
-                    del context.variables[binding.name]
-                remaining.append(Binding(binding.name, expr))
+                for name in binding.names:
+                    if name in context.variables:
+                        del context.variables[name]
+                remaining.append(PolyBinding(binding.names, expr))
         if remaining:
             return Let(tuple(remaining))
         return NoOp
@@ -778,29 +809,48 @@ cdef class InlineLet(Expression):
         self.bindings = bindings
 
     cpdef model.VectorLike evaluate(self, model.Context context):
-        cdef Binding binding
+        cdef PolyBinding binding
         cdef dict saved = context.variables
         context.variables = saved.copy()
+        cdef model.Vector value
+        cdef str name
+        cdef int i, n
         for binding in self.bindings:
-            context.variables[binding.name] = binding.expr.evaluate(context)
+            value = binding.expr.evaluate(context)
+            n = len(binding.names)
+            for i, name in enumerate(binding.names):
+                if i == n-1:
+                    context.variables[name] = value.slice(model.Vector.range(i, n)) if i else value
+                else:
+                    context.variables[name] = value.item(i)
         cdef model.VectorLike result = self.body.evaluate(context)
         context.variables = saved
         return result
 
     cpdef Expression partially_evaluate(self, model.Context context):
         cdef list remaining = []
-        cdef Binding binding
+        cdef PolyBinding binding
         cdef Expression body, expr
         cdef dict saved = context.variables
         context.variables = saved.copy()
+        cdef model.Vector value
+        cdef str name
+        cdef int i, n
         for binding in self.bindings:
             expr = binding.expr.partially_evaluate(context)
             if isinstance(expr, Literal):
-                context.variables[binding.name] = (<Literal>expr).value
+                value = (<Literal>expr).value
+                n = len(binding.names)
+                for i, name in enumerate(binding.names):
+                    if i == n-1:
+                        context.variables[name] = value.slice(model.Vector.range(i, n)) if i else value
+                    else:
+                        context.variables[name] = value.item(i)
             else:
-                if binding.name in context.variables:
-                    del context.variables[binding.name]
-                remaining.append(Binding(binding.name, expr))
+                for name in binding.names:
+                    if name in context.variables:
+                        del context.variables[name]
+                remaining.append(PolyBinding(binding.names, expr))
         body = self.body.partially_evaluate(context)
         context.variables = saved
         if remaining:
