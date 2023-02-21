@@ -98,29 +98,17 @@ class Controller:
             return parse(file.read()).partially_evaluate(Context())
 
     def get(self, key, default=None):
-        key = Vector.coerce(key)
-        if key not in self.state:
-            return default
-        value = self.state[key]
-        if len(value) == 0:
-            return default
-        if len(value) == 1:
-            a, = value
-            return a
-        return tuple(value)
+        if (value := self.state.get(Vector.coerce(key), null)) != null:
+            return value[0] if len(value) == 1 else tuple(value)
+        return default
 
     def __contains__(self, key):
         return Vector.coerce(key) in self.state
 
     def __getitem__(self, key):
-        key = Vector.coerce(key)
-        value = self.state[key]
-        if len(value) == 0:
-            return default
-        if len(value) == 1:
-            a, = value
-            return a
-        return tuple(value)
+        if (value := self.state.get(Vector.coerce(key), null)) != null:
+            return value[0] if len(value) == 1 else tuple(value)
+        raise KeyError(key)
 
     def __setitem__(self, key, value):
         key = Vector.coerce(key)
@@ -156,8 +144,8 @@ class Controller:
             if path.exists():
                 path_mtime = path.stat().st_mtime
                 if path in self.csv_cache:
-                    cached_lines, cached_reader, mtime = self.csv_cache[path]
-                    if path_mtime == mtime:
+                    cached_lines, cached_reader, cached_mtime = self.csv_cache[path]
+                    if path_mtime == cached_mtime:
                         lines, reader = cached_lines, cached_reader
                 if lines is None:
                     lines = []
@@ -232,8 +220,7 @@ class Controller:
     def update_controls(self, graph):
         remaining = set(self.pads)
         for node in graph.select_below('pad.'):
-            number = node.get('number', 2, int)
-            if number is not None:
+            if (number := node.get('number', 2, int)) is not None:
                 number = tuple(number)
                 if number not in self.pads:
                     Log.debug("New pad @ %r", number)
@@ -250,8 +237,7 @@ class Controller:
             del self.pads[number]
         remaining = set(self.encoders)
         for node in graph.select_below('encoder.'):
-            number = node.get('number', 1, int)
-            if number is not None:
+            if (number := node.get('number', 1, int)) is not None:
                 if number not in self.encoders:
                     Log.debug("New encoder @ %r", number)
                     encoder = self.encoders[number] = Encoder(number)
@@ -359,8 +345,7 @@ class Controller:
             self.process_message(message)
 
     def handle_pragmas(self, pragmas):
-        counter_state = self.get(('_counter',))
-        if counter_state is None:
+        if '_counter' not in self:
             tempo = pragmas.get('tempo')
             if tempo is not None and len(tempo) == 1 and isinstance(tempo[0], float) and tempo[0] > 0:
                 tempo = tempo[0]
@@ -372,7 +357,7 @@ class Controller:
             else:
                 quantum = 4
             self.counter.update(tempo, quantum, self.counter.clock())
-            self[('_counter',)] = self.counter.tempo, self.counter.quantum, self.counter.start
+            self['_counter'] = self.counter.tempo, self.counter.quantum, self.counter.start
             self.enqueue_tempo()
             Log.info("Start counter, tempo %d, quantum %d", self.counter.tempo, self.counter.quantum)
 
@@ -431,8 +416,7 @@ class Controller:
 
                 if self.autoreset and self.state_timestamp and self.counter.clock() > self.state_timestamp + self.autoreset:
                     self.reset_state()
-                count = gc.collect(0)
-                if count:
+                if count := gc.collect(0):
                     Log.debug("Collected %d objects", count)
                 if self.queue:
                     await self.osc_sender.send_bundle_from_queue(self.queue)
@@ -453,8 +437,7 @@ class Controller:
                     count = gc.collect(2)
                     Log.debug("Collected %d objects (full collection)", count)
 
-                mtime = self.current_filename.stat().st_mtime
-                if mtime > self.current_mtime:
+                if (mtime := self.current_filename.stat().st_mtime) > self.current_mtime:
                     try:
                         program_top = self.load_source(self.current_filename)
                         self.program_top = program_top
@@ -466,15 +449,13 @@ class Controller:
 
                 now = self.counter.clock()
                 housekeeping += now
-                frame_period = now - frame_time
-                target_period = 1 / self.target_fps
-                frame_time += target_period
+                frame_time += 1 / self.target_fps
                 wait_time = frame_time - now
                 performance = min(performance+0.001, 2) if wait_time > 0.001 else max(0.5, performance-0.01)
                 if wait_time > 0:
                     await asyncio.sleep(wait_time)
                 else:
-                    Log.debug("Slow frame - %.0fms", frame_period*1000)
+                    Log.debug("Slow frame - %.0fms", (now - frame_time)*1000)
                     await asyncio.sleep(0)
                     frame_time = self.counter.clock()
 

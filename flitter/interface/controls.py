@@ -22,17 +22,14 @@ class Control:
         changed = self._changed
         self._changed = False
         if 'state' in node:
-            state = tuple(node['state'])
-            if state != self.state:
+            if (state := tuple(node['state'])) != self.state:
                 self.state = state
                 self.reset()
                 changed = True
-            name = node.get('name', 1, str, self.DEFAULT_NAME)
-            if name != self.name:
+            if (name := node.get('name', 1, str, self.DEFAULT_NAME)) != self.name:
                 self.name = name
                 changed = True
-            color = tuple(node.get('color', 3, float, self.DEFAULT_COLOR))
-            if color != self.color:
+            if (color := tuple(node.get('color', 3, float, self.DEFAULT_COLOR))) != self.color:
                 self.color = color
                 changed = True
             return changed
@@ -106,20 +103,16 @@ class Pad(TouchControl):
             now = controller.counter.clock()
             delta = 0.0 if self._clock is None else now - self._clock
             self._clock = now
-            toggle = node.get('toggle', 1, bool, False)
             toggled_key = (*self.state, "toggled")
             toggled_beat_key = (*self.state, "toggled", "beat")
-            initial = node.get('initial', 1, bool, False)
-            quantize = node.get('quantize', 1, float, 0)
-            lag = node.get('lag', 1, float, self.DEFAULT_LAG)
-            if lag != self.lag:
+            if (lag := node.get('lag', 1, float, self.DEFAULT_LAG)) != self.lag:
                 self.lag = lag
                 changed = True
-            if initial != self.initial:
+            if (initial := node.get('initial', 1, bool, False)) != self.initial:
                 self.initial = initial
-            if quantize != self.quantize:
+            if (quantize := node.get('quantize', 1, float, 0)) != self.quantize:
                 self.quantize = quantize
-            if toggle != self.toggle:
+            if (toggle := node.get('toggle', 1, bool, False)) != self.toggle:
                 self.toggle = toggle
                 if not self.toggle and self.toggled:
                     self.toggled = False
@@ -133,8 +126,7 @@ class Pad(TouchControl):
                 else:
                     self.toggled = self.initial
                     self._toggled_beat = 0 if self.initial else None
-            group = tuple(node["group"]) if "group" in node else None
-            if group != self.group:
+            if (group := tuple(node["group"]) if "group" in node else None) != self.group:
                 self.group = group
                 changed = True
             self._toggle_threshold = node.get('threshold', 1, float, self.DEFAULT_THRESHOLD)
@@ -223,40 +215,32 @@ class Encoder(TouchControl):
             now = controller.counter.clock()
             delta = 0.0 if self._clock is None else now - self._clock
             self._clock = now
-            lower = node.get('lower', 1, float, self.DEFAULT_LOWER)
-            if lower != self.lower:
+            if (lower := node.get('lower', 1, float, self.DEFAULT_LOWER)) != self.lower:
                 self.lower = lower
                 if self.value is not None:
                     self.value = max(self.lower, self.value)
                 changed = True
-            upper = node.get('upper', 1, float, self.DEFAULT_UPPER)
-            if upper != self.upper:
+            if (upper := node.get('upper', 1, float, self.DEFAULT_UPPER)) != self.upper:
                 self.upper = upper
                 if self.value is not None:
                     self.value = min(self.value, self.upper)
                 changed = True
-            lag = node.get('lag', 1, float, self.DEFAULT_LAG)
-            if lag != self.lag:
+            if (lag := node.get('lag', 1, float, self.DEFAULT_LAG)) != self.lag:
                 self.lag = lag
                 changed = True
-            turns = node.get('turns', 1, float, self.DEFAULT_TURNS)
-            if turns != self.turns:
+            if (turns := node.get('turns', 1, float, self.DEFAULT_TURNS)) != self.turns:
                 self.turns = turns
                 changed = True
-            initial = node.get('initial', 1, float, self.lower)
-            if initial != self.initial:
+            if (initial := node.get('initial', 1, float, self.lower)) != self.initial:
                 self.initial = initial
                 changed = True
-            origin = node.get('origin', 1, float, self.lower)
-            if origin != self.origin:
+            if (origin := node.get('origin', 1, float, self.lower)) != self.origin:
                 self.origin = origin
                 changed = True
-            decimals = node.get('decimals', 1, float, 1)
-            if decimals != self.decimals:
+            if (decimals := node.get('decimals', 1, float, 1)) != self.decimals:
                 self.decimals = decimals
                 changed = True
-            percent = node.get('percent', 1, bool, False)
-            if percent != self.percent:
+            if (percent := node.get('percent', 1, bool, False)) != self.percent:
                 self.percent = percent
                 changed = True
             value_key = self.state

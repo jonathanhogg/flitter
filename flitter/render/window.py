@@ -64,8 +64,7 @@ class SceneNode:
 
     async def update(self, node, **kwargs):
         references = kwargs.setdefault('references', {})
-        node_id = node.get('id', 1, str)
-        if node_id:
+        if node_id := node.get('id', 1, str):
             references[node_id] = self
         resized = False
         width, height = node.get('size', 2, int, (512, 512))
@@ -179,8 +178,8 @@ void main() {
 """)
 
     def get_fragment_source(self, node):
-        if 'fragment' in node:
-            return str(node['fragment'])
+        if fragment := node.get('fragment', 1, str):
+            return fragment
         names = list(self.child_textures.keys())
         if names:
             samplers = '\n'.join(f"uniform sampler2D {name};" for name in names)
@@ -227,11 +226,9 @@ void main() {{
         self.compile(node)
         if self._rectangle is not None:
             sampler_args = {'repeat_x': False, 'repeat_y': False}
-            border = node.get('border', 4, float)
-            repeat = node.get('repeat', 2, bool)
-            if border is not None:
+            if (border := node.get('border', 4, float)) is not None:
                 sampler_args['border_color'] = tuple(border)
-            elif repeat is not None:
+            elif (repeat := node.get('repeat', 2, bool)) is not None:
                 if repeat[0]:
                     del sampler_args['repeat_x']
                 if repeat[1]:
@@ -269,8 +266,7 @@ void main() {{
                     elif name in kwargs:
                         member.value = kwargs[name]
                     elif name in node:
-                        value = node.get(name, member.array_length * member.dimension, float)
-                        if value is not None:
+                        if (value := node.get(name, member.array_length * member.dimension, float)) is not None:
                             member.value = value_split(value, member.array_length, member.dimension)
             self.framebuffer.clear()
             self._rectangle.render(mode=moderngl.TRIANGLE_STRIP)
@@ -518,48 +514,42 @@ void main() {
 
     async def update(self, node, **kwargs):
         references = kwargs.setdefault('references', {})
-        node_id = node.get('id', 1, str)
-        if node_id:
+        if node_id := node.get('id', 1, str):
             references[node_id] = self
         filename = node.get('filename', 1, str)
-        if filename:
-            if self._container is not None and self._container.name != filename:
-                self.release()
-            if self._container is None and filename:
-                try:
-                    container = av.container.open(filename)
-                    stream = container.streams.video[0]
-                except (FileNotFoundError, av.InvalidDataError, IndexError):
-                    return
-                Log.info("Opened video %r", filename)
-                self._container = container
-                self._stream = stream
-                # self._stream.thread_type = 'AUTO'
-                codec_context = self._stream.codec_context
-                if codec_context.display_aspect_ratio:
-                    self.width, self.height = int(codec_context.display_aspect_ratio * codec_context.height), codec_context.height
-                else:
-                    self.width, self.height = codec_context.width, codec_context.height
-                self._texture = self.glctx.texture((self.width, self.height), 4)
-                self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
-                self._current_texture = self.glctx.texture((codec_context.width, codec_context.height), 3)
-                self._next_texture = self.glctx.texture((codec_context.width, codec_context.height), 3)
-        position = node.get('position', 1, float, 0)
-        loop = node.get('loop', 1, bool, False)
-        interpolate = node.get('interpolate', 1, bool, True)
-        alpha = node.get('alpha', 1, float, 1)
-        start_position = self._stream.start_time
-        if loop:
-            timestamp = start_position + int(position / self._stream.time_base) % self._stream.duration
-        else:
-            timestamp = min(max(start_position, int(position / self._stream.time_base)), start_position + self._stream.duration)
+        if self._container is not None and self._container.name != filename:
+            self.release()
+        if self._container is None and filename:
+            try:
+                container = av.container.open(filename)
+                stream = container.streams.video[0]
+            except (FileNotFoundError, av.InvalidDataError, IndexError):
+                return
+            Log.info("Opened video %r", filename)
+            self._container = container
+            self._stream = stream
+            codec_context = self._stream.codec_context
+            if codec_context.display_aspect_ratio:
+                self.width, self.height = int(codec_context.display_aspect_ratio * codec_context.height), codec_context.height
+            else:
+                self.width, self.height = codec_context.width, codec_context.height
+            self._texture = self.glctx.texture((self.width, self.height), 4)
+            self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
+            self._current_texture = self.glctx.texture((codec_context.width, codec_context.height), 3)
+            self._next_texture = self.glctx.texture((codec_context.width, codec_context.height), 3)
         if self._container is not None:
+            start_position = self._stream.start_time
+            position = node.get('position', 1, float, 0)
+            if node.get('loop', 1, bool, False):
+                timestamp = start_position + int(position / self._stream.time_base) % self._stream.duration
+            else:
+                timestamp = min(max(start_position, int(position / self._stream.time_base)), start_position + self._stream.duration)
             await self.read_frame(node, timestamp)
-            if not interpolate or self._next_pts is None:
+            if not node.get('interpolate', 1, bool, True) or self._next_pts is None:
                 ratio = 0
             else:
                 ratio = (timestamp - self._current_pts) / (self._next_pts - self._current_pts)
-            self.render(node, ratio=ratio, alpha=alpha, **kwargs)
+            self.render(node, ratio=ratio, alpha=node.get('alpha', 1, float, 1), **kwargs)
 
     async def read_frame(self, node, timestamp):
         while True:

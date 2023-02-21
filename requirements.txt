@@ -4,7 +4,7 @@ skia-python
 python-rtmidi
 pyusb
 regex
-cython
+cython>=3.0.0a11
 pyglet
 pyserial
 moderngl
