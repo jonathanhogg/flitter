@@ -558,7 +558,10 @@ cdef class Vector:
         return 0
 
     def __getitem__(self, index):
-        return self.slice(Vector._coerce(index))
+        cdef Vector result = self.slice(Vector._coerce(index))
+        if result.length == 1:
+            return result.objects[0] if result.objects is not None else result.numbers[0]
+        return result
 
     cdef Vector slice(self, Vector index):
         cdef int i, j, m = 0, n = self.length
