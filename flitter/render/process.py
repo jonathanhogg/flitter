@@ -5,7 +5,6 @@ Multi-processing for rendering
 # pylama:ignore=R0903,R1732,R0913
 
 import asyncio
-import logging
 from multiprocessing import Process, Queue
 import os
 import sys
