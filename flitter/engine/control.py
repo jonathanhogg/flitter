@@ -77,6 +77,7 @@ class Controller:
             self.encoders = {}
             filename, mtime, program_top, state = self.pages[page_number]
             self.state = state
+            self.state_timestamp = self.counter.clock()
             self.program_top = program_top
             self.current_page = page_number
             self.current_filename = filename
@@ -98,11 +99,14 @@ class Controller:
         logger.debug("Reading source {}", filename)
         start = time.perf_counter()
         with open(filename, encoding='utf8') as file:
-            tree = parse(file.read())
+            initial_tree = parse(file.read())
         mid = time.perf_counter()
-        tree = tree.partially_evaluate(Context())
+        tree = initial_tree.partially_evaluate(Context())
         end = time.perf_counter()
-        logger.debug("Parse in {:.1f}ms, partially evaluate in {:.1f}ms", (mid-start)*1000, (end-mid)*1000)
+        logger.debug("Parse in {:.1f}ms, partial evaluation in {:.1f}ms", (mid-start)*1000, (end-mid)*1000)
+        logger.opt(lazy=True).debug("Tree node count before partial-evaluation {before} and after {after}",
+                                    before=lambda: initial_tree.reduce(lambda e, *rs: sum(rs) + 1),
+                                    after=lambda: tree.reduce(lambda e, *rs: sum(rs) + 1))
         return tree
 
     def get(self, key, default=None):
@@ -437,7 +441,10 @@ class Controller:
                 if self.state_eval_wait and self.state_timestamp is not None and now > self.state_timestamp + self.state_eval_wait:
                     start = time.perf_counter()
                     program_top = self.program_top.partially_evaluate(Context(state=self.state))
-                    logger.debug("Partially-evaluate current program on state in {:.1f}ms", (time.perf_counter()-start)*1000)
+                    logger.debug("Partially-evaluated current program on state in {:.1f}ms", (time.perf_counter()-start)*1000)
+                    logger.opt(lazy=True).debug("Tree node count before partial-evaluation {before} and after {after}",
+                                                before=lambda: self.program_top.reduce(lambda e, *rs: sum(rs) + 1),
+                                                after=lambda: program_top.reduce(lambda e, *rs: sum(rs) + 1))
                     self.state_timestamp = None
 
                 if self.global_state_dirty and self.state_file is not None and frame_time > dump_time + 1:
@@ -461,6 +468,13 @@ class Controller:
                     try:
                         program_top = self.program_top = self.load_source(self.current_filename)
                         self.pages[self.current_page] = self.current_filename, self.current_mtime, self.program_top, self.state
+                        if self.state_eval_wait and self.state_timestamp is None:
+                            start = time.perf_counter()
+                            program_top = self.program_top.partially_evaluate(Context(state=self.state))
+                            logger.debug("Partially-evaluated current program on state in {:.1f}ms", (time.perf_counter()-start)*1000)
+                            logger.opt(lazy=True).debug("Tree node count after partial-evaluation {after}",
+                                                        after=lambda: program_top.reduce(lambda e, *rs: sum(rs) + 1))
+                            self.state_timestamp = None
                         logger.info("Reloaded page {}: {}", self.current_page, self.current_filename)
                     except Exception:
                         logger.exception("Error reloading page")

@@ -446,11 +446,11 @@ class Canvas(SceneNode):
         logger.info("Canvas render stats - {:d} x {:.1f}ms = {:.1f}s", total_count, 1e3*self._total_duration/total_count, self._total_duration)
         draw_duration = 0
         for duration, count, key in sorted(((duration, count, key) for (key, (count, duration)) in self._stats.items()), reverse=True):
-            logger.debug("{:15s}  - {:8d}  x {:6.1f}µs  = {:6.1f}s  ({:4.1f}%)",
+            logger.debug("{:15s}  - {:8d}  x {:6.1f}µs = {:5.1f}s  ({:4.1f}%)",
                          key, count, 1e6*duration/count, duration, 100*duration/self._total_duration)
             draw_duration += duration
         overhead = self._total_duration - draw_duration
-        logger.debug("{:15s}  - {:8d}  x {:6.1f}µs  = {:6.1f}s  ({:4.1f}%)",
+        logger.debug("{:15s}  - {:8d}  x {:6.1f}µs = {:5.1f}s  ({:4.1f}%)",
                      '(GL surface)', total_count, 1e6*overhead/total_count, overhead, 100*overhead/self._total_duration)
         self._stats = {}
         self._total_duration = 0
