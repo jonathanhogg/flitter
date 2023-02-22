@@ -207,7 +207,13 @@ cdef class Lookup(Expression):
         return context.state.get(key, model.null_)
 
     cpdef Expression partially_evaluate(self, model.Context context):
-        return Lookup(self.key.partially_evaluate(context))
+        cdef Expression key = self.key.partially_evaluate(context)
+        cdef model.Vector value
+        if isinstance(key, Literal):
+            value = context.state.get((<Literal>key).value, model.null_)
+            if value.length:
+                return Literal(value)
+        return Lookup(key)
 
     def __repr__(self):
         return f'Lookup({self.key!r})'

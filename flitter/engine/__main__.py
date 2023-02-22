@@ -27,13 +27,15 @@ parser.add_argument('--vsync', action='store_true', default=False, help="Default
 parser.add_argument('--state', type=str, help="State save/restore file")
 parser.add_argument('--multiprocess', action='store_true', default=False, help="Use multiprocessing")
 parser.add_argument('--autoreset', type=float, help="Auto-reset state on idle")
+parser.add_argument('--evalstate', type=float, default=0, help="Partially-evaluate on state after stable period")
 parser.add_argument('--push', action='store_true', default=False, help="Start Ableton Push 2 interface")
 parser.add_argument('script', nargs='+', help="Script to execute")
 args = parser.parse_args()
 logger.configure(handlers=[{'sink': sys.stderr, 'format': flitter.LOGGING_FORMAT, 'level': args.level, 'enqueue': True}])
 flitter.LOGGING_LEVEL = args.level
 controller = Controller('.', target_fps=args.fps, screen=args.screen, fullscreen=args.fullscreen, vsync=args.vsync,
-                        state_file=args.state, multiprocess=args.multiprocess and not args.profile, autoreset=args.autoreset)
+                        state_file=args.state, multiprocess=args.multiprocess and not args.profile, autoreset=args.autoreset,
+                        state_eval_wait=args.evalstate)
 for script in args.script:
     controller.load_page(script)
 controller.switch_to_page(0)

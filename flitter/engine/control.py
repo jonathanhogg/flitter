@@ -25,7 +25,8 @@ class Controller:
     SEND_PORT = 47177
     RECEIVE_PORT = 47178
 
-    def __init__(self, root_dir, target_fps=60, screen=0, fullscreen=False, vsync=False, state_file=None, multiprocess=True, autoreset=None):
+    def __init__(self, root_dir, target_fps=60, screen=0, fullscreen=False, vsync=False, state_file=None, multiprocess=True,
+                 autoreset=None, state_eval_wait=0):
         self.root_dir = Path(root_dir)
         self.target_fps = target_fps
         self.screen = screen
@@ -33,6 +34,7 @@ class Controller:
         self.vsync = vsync
         self.multiprocess = multiprocess
         self.autoreset = autoreset
+        self.state_eval_wait = state_eval_wait
         self.state_timestamp = None
         self.state_file = Path(state_file) if state_file is not None else None
         if self.state_file is not None and self.state_file.exists():
@@ -394,16 +396,20 @@ class Controller:
             execution = render = housekeeping = 0
             performance = 1
             gc.disable()
+            program_top = self.program_top
             while True:
                 frames.append(frame_time)
                 execution -= self.counter.clock()
 
+                if self.state_timestamp is not None and program_top is not self.program_top:
+                    logger.debug("Undo partial-evaluation on state")
+                    program_top = self.program_top
                 beat = self.counter.beat_at_time(frame_time)
                 delta = beat - last
                 last = beat
                 names = {'beat': beat, 'quantum': self.counter.quantum, 'tempo': self.counter.tempo,
                          'delta': delta, 'clock': frame_time, 'performance': performance}
-                context = self.program_top.run(self.state, read=self.read, csv=self.csv, debug=self.debug, **names)
+                context = program_top.run(self.state, read=self.read, csv=self.csv, debug=self.debug, **names)
 
                 now = self.counter.clock()
                 execution += now
@@ -422,10 +428,17 @@ class Controller:
 
                 if self.autoreset and self.state_timestamp and self.counter.clock() > self.state_timestamp + self.autoreset:
                     self.reset_state()
+                    program_top = self.program_top
                 if count := gc.collect(0):
                     logger.debug("Collected {} objects", count)
                 if self.queue:
                     await self.osc_sender.send_bundle_from_queue(self.queue)
+
+                if self.state_eval_wait and self.state_timestamp is not None and now > self.state_timestamp + self.state_eval_wait:
+                    start = time.perf_counter()
+                    program_top = self.program_top.partially_evaluate(Context(state=self.state))
+                    logger.debug("Partially-evaluate current program on state in {:.1f}ms", (time.perf_counter()-start)*1000)
+                    self.state_timestamp = None
 
                 if self.global_state_dirty and self.state_file is not None and frame_time > dump_time + 1:
                     logger.debug("Saving state")
@@ -439,14 +452,14 @@ class Controller:
                         self.reset_state()
                     self.switch_to_page(self.next_page)
                     self.next_page = None
+                    program_top = self.program_top
                     performance = 1
                     count = gc.collect(2)
                     logger.debug("Collected {} objects (full collection)", count)
 
                 if (mtime := self.current_filename.stat().st_mtime) > self.current_mtime:
                     try:
-                        program_top = self.load_source(self.current_filename)
-                        self.program_top = program_top
+                        program_top = self.program_top = self.load_source(self.current_filename)
                         self.pages[self.current_page] = self.current_filename, self.current_mtime, self.program_top, self.state
                         logger.info("Reloaded page {}: {}", self.current_page, self.current_filename)
                     except Exception:
