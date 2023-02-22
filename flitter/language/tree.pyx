@@ -786,17 +786,26 @@ cdef class Let(Expression):
 
     cpdef model.VectorLike evaluate(self, model.Context context):
         cdef PolyBinding binding
-        cdef model.Vector value
+        cdef model.VectorLike value
+        cdef model.Vector vector
         cdef str name
         cdef int i, n
         for binding in self.bindings:
             value = binding.expr.evaluate(context)
             n = len(binding.names)
-            for i, name in enumerate(binding.names):
-                if i == n-1:
-                    context.variables[name] = value.slice(model.Vector.range(i, n)) if i else value
-                else:
-                    context.variables[name] = value.item(i)
+            if n == 1:
+                name = binding.names[0]
+                context.variables[name] = value
+            elif isinstance(value, model.Vector):
+                vector = value
+                for i, name in enumerate(binding.names):
+                    if i == n-1:
+                        context.variables[name] = vector.slice(model.Vector.range(i, vector.length))
+                    else:
+                        context.variables[name] = vector.item(i)
+            else:
+                for i, name in enumerate(binding.names):
+                    context.variables[name] = value if i == 0 else model.null_
         return model.null_
 
     cpdef Expression partially_evaluate(self, model.Context context):
@@ -808,7 +817,7 @@ cdef class Let(Expression):
         cdef int i, n
         for binding in self.bindings:
             expr = binding.expr.partially_evaluate(context)
-            if isinstance(expr, Literal):
+            if isinstance(expr, Literal) and isinstance((<Literal>expr).value, model.Vector):
                 value = (<Literal>expr).value
                 n = len(binding.names)
                 for i, name in enumerate(binding.names):
@@ -838,36 +847,45 @@ cdef class InlineLet(Expression):
         self.bindings = bindings
 
     cpdef model.VectorLike evaluate(self, model.Context context):
-        cdef PolyBinding binding
         cdef dict saved = context.variables
         context.variables = saved.copy()
-        cdef model.Vector value
+        cdef PolyBinding binding
+        cdef model.VectorLike value
+        cdef model.Vector vector
         cdef str name
         cdef int i, n
         for binding in self.bindings:
             value = binding.expr.evaluate(context)
             n = len(binding.names)
-            for i, name in enumerate(binding.names):
-                if i == n-1:
-                    context.variables[name] = value.slice(model.Vector.range(i, n)) if i else value
-                else:
-                    context.variables[name] = value.item(i)
+            if n == 1:
+                name = binding.names[0]
+                context.variables[name] = value
+            elif isinstance(value, model.Vector):
+                vector = value
+                for i, name in enumerate(binding.names):
+                    if i == n-1:
+                        context.variables[name] = vector.slice(model.Vector.range(i, vector.length))
+                    else:
+                        context.variables[name] = vector.item(i)
+            else:
+                for i, name in enumerate(binding.names):
+                    context.variables[name] = value if i == 0 else model.null_
         cdef model.VectorLike result = self.body.evaluate(context)
         context.variables = saved
         return result
 
     cpdef Expression partially_evaluate(self, model.Context context):
-        cdef list remaining = []
-        cdef PolyBinding binding
-        cdef Expression body, expr
         cdef dict saved = context.variables
         context.variables = saved.copy()
+        cdef list remaining = []
+        cdef PolyBinding binding
+        cdef Expression expr
         cdef model.Vector value
         cdef str name
         cdef int i, n
         for binding in self.bindings:
             expr = binding.expr.partially_evaluate(context)
-            if isinstance(expr, Literal):
+            if isinstance(expr, Literal) and isinstance((<Literal>expr).value, model.Vector):
                 value = (<Literal>expr).value
                 n = len(binding.names)
                 for i, name in enumerate(binding.names):
