@@ -755,7 +755,7 @@ cdef class Node:
         cdef Node node = Node.__new__(Node, self.kind, self._tags, self._attributes)
         cdef Node copy, child = self.first_child
         if child is not None:
-            parent = weak(node)
+            parent = node.weak_self = weak(node)
             copy = child.copy()
             copy._parent = parent
             node.first_child = node.last_child = copy

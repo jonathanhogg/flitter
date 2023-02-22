@@ -68,9 +68,8 @@ cdef class Top(Expression):
     def run(self, state, **kwargs):
         cdef dict variables = {}
         cdef str key
-        cdef model.Vector vector
         for key, value in kwargs.items():
-            variables[key] = model.Vector.coerce(value)
+            variables[key] = model.Vector._coerce(value)
         cdef model.Context context = model.Context(state=state, variables=variables)
         self.evaluate(context)
         return context
@@ -150,16 +149,12 @@ cdef class Sequence(Expression):
         return sequence_pack(Sequence, expressions)
 
     def __repr__(self):
-        return f'Sequence({self.expressions!r})'
+        return f'{self.__class__.__name__}({self.expressions!r})'
 
 
 cdef class InlineSequence(Sequence):
     cpdef model.VectorLike evaluate(self, model.Context context):
-        cdef Expression expr
-        cdef list vectors = []
-        for expr in self.expressions:
-            vectors.append(expr.evaluate(context))
-        return model.Vector._compose(vectors)
+        return model.Vector._compose([(<Expression>expr).evaluate(context) for expr in self.expressions])
 
     cpdef Expression partially_evaluate(self, model.Context context):
         cdef list expressions = []
@@ -168,21 +163,28 @@ cdef class InlineSequence(Sequence):
             expressions.append(expr.partially_evaluate(context))
         return sequence_pack(InlineSequence, expressions)
 
-    def __repr__(self):
-        return f'InlineSequence({self.expressions!r})'
-
 
 cdef class Literal(Expression):
     cdef readonly model.VectorLike value
+    cdef bint copynodes
 
     def __init__(self, model.VectorLike value):
         self.value = value
+        self.copynodes = False
+        cdef model.Vector vector
+        if isinstance(self.value, model.Vector):
+            vector = self.value
+            if vector.objects is not None:
+                for obj in vector.objects:
+                    if isinstance(obj, model.Node):
+                        self.copynodes = True
+                        break
 
     cpdef model.VectorLike evaluate(self, model.Context context):
-        return self.value.copynodes()
+        return self.value.copynodes() if self.copynodes else self.value
 
     cpdef Expression partially_evaluate(self, model.Context context):
-        return Literal(self.value.copynodes())
+        return Literal(self.value.copynodes()) if self.copynodes else self
 
     def __repr__(self):
         return f'Literal({self.value!r})'
@@ -196,11 +198,9 @@ cdef class Name(Expression):
 
     cpdef model.VectorLike evaluate(self, model.Context context):
         cdef model.VectorLike result
-        result = context.variables.get(self.name)
-        if result is not None:
+        if (result := context.variables.get(self.name)) is not None:
             return result.copynodes()
-        result = builtins_.get(self.name)
-        if result is not None:
+        if (result := builtins_.get(self.name)) is not None:
             return result
         return model.null_
 
@@ -209,9 +209,6 @@ cdef class Name(Expression):
         if self.name in context.variables:
             value = context.variables[self.name]
             return Literal(value.copynodes())
-        if self.name in builtins_:
-            value = builtins_[self.name]
-            return Literal(value)
         return self
 
     def __repr__(self):
@@ -604,15 +601,19 @@ cdef class Attributes(Expression):
             for item in nodes.objects:
                 if isinstance(item, model.Node):
                     node = item
-                    variables = saved.copy()
-                    for attr, value in node._attributes.items():
-                        variables.setdefault(attr, value)
-                    context.variables = variables
+                    if node._attributes and len(self.bindings) > 1:
+                        variables = saved.copy()
+                        for attr, value in node._attributes.items():
+                            variables.setdefault(attr, value)
+                        context.variables = variables
+                    else:
+                        variables = None
+                        context.variables = saved
                     for binding in self.bindings:
                         value = binding.expr.evaluate(context)
                         if value.length:
                             node._attributes[binding.name] = value
-                            if binding.name not in saved:
+                            if variables is not None and binding.name not in saved:
                                 variables[binding.name] = value
             context.variables = saved
         return nodes
