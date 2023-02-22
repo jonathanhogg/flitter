@@ -53,7 +53,7 @@ bindings : binding+ -> tuple
 binding : name_list "=" composition -> poly_binding
 
 ?composition : comprehension
-             | compositions -> sequence
+             | compositions -> inline_sequence
 
 compositions : comprehension (";" comprehension)+ -> tuple
 

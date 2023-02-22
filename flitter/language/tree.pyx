@@ -20,7 +20,7 @@ builtins_.update(FUNCTIONS)
 cdef Literal NoOp = Literal(model.null_)
 
 
-cdef Expression sequence_pack(list expressions):
+cdef Expression sequence_pack(cls, list expressions):
     cdef Expression expr
     cdef Literal literal
     cdef model.Vector value
@@ -48,7 +48,7 @@ cdef Expression sequence_pack(list expressions):
         return NoOp
     if len(remaining) == 1:
         return remaining[0]
-    return Sequence(tuple(remaining))
+    return cls(tuple(remaining))
 
 
 cdef class Expression:
@@ -132,8 +132,11 @@ cdef class Sequence(Expression):
     cpdef model.VectorLike evaluate(self, model.Context context):
         cdef Expression expr
         cdef list vectors = []
+        cdef dict saved = context.variables
+        context.variables = saved.copy()
         for expr in self.expressions:
             vectors.append(expr.evaluate(context))
+        context.variables = saved
         return model.Vector._compose(vectors)
 
     cpdef Expression partially_evaluate(self, model.Context context):
@@ -144,10 +147,29 @@ cdef class Sequence(Expression):
         for expr in self.expressions:
             expressions.append(expr.partially_evaluate(context))
         context.variables = saved
-        return sequence_pack(expressions)
+        return sequence_pack(Sequence, expressions)
 
     def __repr__(self):
         return f'Sequence({self.expressions!r})'
+
+
+cdef class InlineSequence(Sequence):
+    cpdef model.VectorLike evaluate(self, model.Context context):
+        cdef Expression expr
+        cdef list vectors = []
+        for expr in self.expressions:
+            vectors.append(expr.evaluate(context))
+        return model.Vector._compose(vectors)
+
+    cpdef Expression partially_evaluate(self, model.Context context):
+        cdef list expressions = []
+        cdef Expression expr
+        for expr in self.expressions:
+            expressions.append(expr.partially_evaluate(context))
+        return sequence_pack(InlineSequence, expressions)
+
+    def __repr__(self):
+        return f'InlineSequence({self.expressions!r})'
 
 
 cdef class Literal(Expression):
@@ -915,7 +937,7 @@ cdef class For(Expression):
                 i += 1
             remaining.append(self.body.partially_evaluate(context))
         context.variables = saved
-        return sequence_pack(remaining)
+        return sequence_pack(Sequence, remaining)
 
     def __repr__(self):
         return f'For({self.names!r}, {self.source!r}, {self.body!r})'

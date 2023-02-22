@@ -70,6 +70,7 @@ class FlitterTransformer(Transformer):
     gt = tree.GreaterThan
     if_else = tree.IfElse
     inline_let = tree.InlineLet
+    inline_sequence = tree.InlineSequence
     le = tree.LessThanOrEqualTo
     let = tree.Let
     literal = tree.Literal
