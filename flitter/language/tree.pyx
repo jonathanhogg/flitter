@@ -197,18 +197,21 @@ cdef class Name(Expression):
         self.name = name
 
     cpdef model.VectorLike evaluate(self, model.Context context):
-        cdef model.VectorLike result
-        if (result := context.variables.get(self.name)) is not None:
-            return result.copynodes()
-        if (result := builtins_.get(self.name)) is not None:
-            return result
+        cdef model.VectorLike value
+        if (value := context.variables.get(self.name)) is not None:
+            return value.copynodes()
+        if (value := builtins_.get(self.name)) is not None:
+            return value
         return model.null_
 
     cpdef Expression partially_evaluate(self, model.Context context):
         cdef model.VectorLike value
         if self.name in context.variables:
             value = context.variables[self.name]
-            return Literal(value.copynodes())
+            if value is not None:
+                return Literal(value.copynodes())
+        elif (value := builtins_.get(self.name)) is not None:
+            return Literal(value)
         return self
 
     def __repr__(self):
@@ -596,25 +599,26 @@ cdef class Attributes(Expression):
         cdef dict variables, saved
         cdef Binding binding
         cdef model.Vector nodes = self.node.evaluate(context)
+        cdef int i, n=len(self.bindings)
         if nodes.objects is not None:
             saved = context.variables
             for item in nodes.objects:
                 if isinstance(item, model.Node):
                     node = item
-                    if node._attributes and len(self.bindings) > 1:
+                    if node._attributes or n > 1:
                         variables = saved.copy()
                         for attr, value in node._attributes.items():
-                            variables.setdefault(attr, value)
+                            if attr not in builtins_:
+                                variables.setdefault(attr, value)
                         context.variables = variables
                     else:
-                        variables = None
                         context.variables = saved
-                    for binding in self.bindings:
+                    for i, binding in enumerate(self.bindings):
                         value = binding.expr.evaluate(context)
                         if value.length:
                             node._attributes[binding.name] = value
-                            if variables is not None and binding.name not in saved:
-                                variables[binding.name] = value
+                            if i < n-1 and binding.name not in saved and binding.name not in builtins_:
+                                context.variables[binding.name] = value
             context.variables = saved
         return nodes
 
@@ -827,8 +831,7 @@ cdef class Let(Expression):
                         context.variables[name] = value.item(i)
             else:
                 for name in binding.names:
-                    if name in context.variables:
-                        del context.variables[name]
+                    context.variables[name] = None
                 remaining.append(PolyBinding(binding.names, expr))
         if remaining:
             return Let(tuple(remaining))
@@ -895,8 +898,7 @@ cdef class InlineLet(Expression):
                         context.variables[name] = value.item(i)
             else:
                 for name in binding.names:
-                    if name in context.variables:
-                        del context.variables[name]
+                    context.variables[name] = None
                 remaining.append(PolyBinding(binding.names, expr))
         body = self.body.partially_evaluate(context)
         context.variables = saved
