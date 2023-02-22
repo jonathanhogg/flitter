@@ -6,18 +6,15 @@ Flitter DMX control
 
 import asyncio
 import enum
-import logging
 import struct
 import time
 
 import cython
 from libc.math cimport round
+from loguru import logger
 
 from .. cimport model
 from ..streams import SerialStream
-
-
-Log = logging.getLogger(__name__)
 
 
 class DMXDriver:
@@ -77,7 +74,7 @@ class EntecDMXDriver(DMXDriver):
             if label != self.Label.GetParameters:
                 raise ConnectionError("Label mismatch on initial parameters request")
             self.parameters = self.Parameters.from_payload(payload)
-            Log.info("Connected to DMX interface; firmware version %d, refresh rate %d", self.parameters.firmware_version, self.parameters.refresh_rate)
+            logger.info("Connected to DMX interface; firmware version {}, refresh rate {}", self.parameters.firmware_version, self.parameters.refresh_rate)
         except ConnectionError:
             raise
         except Exception as exc:
@@ -108,7 +105,7 @@ class EntecDMXDriver(DMXDriver):
             junk += index
             del data[:index]
         if junk:
-            Log.warning("Discarded %d leading bytes of junk in stream", junk)
+            logger.warning("Discarded {} leading bytes of junk in stream", junk)
         _, label, payload_length = struct.unpack('<BBH', data)
         payload = await self._readexactly(payload_length, fail_time)
         assert (await self._readexactly(1, fail_time)) == bytes([self.PACKET_END])

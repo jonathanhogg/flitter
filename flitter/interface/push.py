@@ -7,10 +7,10 @@ Ableton Push OSC controller for Flitter
 import argparse
 import asyncio
 from dataclasses import dataclass
-import logging
 import math
 import sys
 
+from loguru import logger
 import skia
 
 from ..clock import TapTempo
@@ -20,9 +20,6 @@ from ..ableton.events import (ButtonPressed, ButtonReleased, PadEvent, PadPresse
 from ..ableton.push import Push2
 from ..ableton.palette import HuePalette
 from .osc import OSCSender, OSCReceiver, OSCBundle
-
-
-Log = logging.getLogger('flitter.interface.push')
 
 
 @dataclass
@@ -80,7 +77,7 @@ class Controller:
             for element in message.elements:
                 await self.process_message(element)
             return
-        Log.debug("Received OSC message: %r", message)
+        logger.debug("Received OSC message: {!r}", message)
         match message.address.strip('/').split('/'):
             case ['tempo']:
                 tempo, quantum, start = message.args
@@ -160,7 +157,7 @@ class Controller:
         self.record_buffer.append((phase, event))
 
     async def run(self):
-        Log.info("Starting Ableton Push 2 interface")
+        logger.info("Starting Ableton Push 2 interface")
         self.push = Push2(palette=HuePalette())
         self.push.start()
         for n in range(64):
@@ -194,7 +191,7 @@ class Controller:
                     _, event = self.record_buffer[0]
                     beat = self.push.counter.beat_at_time(event.timestamp)
                     next_playback_event = asyncio.create_task(self.push.counter.wait_for_beat(beat))
-                    Log.debug("Next playback event: %r", event)
+                    logger.debug("Next playback event: {!r}", event)
                 events = {wait_event, wait_update, wait_beat}
                 if next_playback_event is not None:
                     events.add(next_playback_event)
@@ -295,16 +292,16 @@ class Controller:
                             record_pressed_at = event.timestamp
                         case ButtonReleased(number=Control.RECORD):
                             if self.recording:
-                                Log.info("Stop recording")
+                                logger.info("Stop recording")
                                 self.recording = False
                             else:
-                                Log.info("Start recording")
+                                logger.info("Start recording")
                                 if event.timestamp - record_pressed_at > 0.5:
                                     self.push.counter.set_phase(0, event.timestamp, backslip_limit=1)
                                     self.record_buffer = []
                                     await self.osc_sender.send_message('/tempo', self.push.counter.tempo, self.push.counter.quantum, self.push.counter.start)
                                     if self.playing:
-                                        Log.info("Stop playback")
+                                        logger.info("Stop playback")
                                         self.playing = False
                                         next_playback_event = None
                                         while playback_release_pads:
@@ -315,7 +312,7 @@ class Controller:
                             record_pressed_at = None
                         case ButtonReleased(number=Control.PLAY):
                             if self.playing:
-                                Log.info("Stop playback")
+                                logger.info("Stop playback")
                                 self.playing = False
                                 next_playback_event = None
                                 while playback_release_pads:
@@ -323,7 +320,7 @@ class Controller:
                                     address = f'/pad/{column}/{row}/released'
                                     await self.osc_sender.send_message(address, event.timestamp)
                             elif self.record_buffer:
-                                Log.info("Start playback")
+                                logger.info("Start playback")
                                 beat = self.push.counter.beat_at_time(event.timestamp)
                                 quantum = self.push.counter.quantum
                                 phase = beat % quantum

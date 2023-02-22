@@ -7,9 +7,11 @@ The main Flitter engine
 import asyncio
 import csv
 import gc
-import logging
 from pathlib import Path
 import pickle
+import time
+
+from loguru import logger
 
 from ..clock import BeatCounter
 from ..interface.controls import Pad, Encoder
@@ -17,9 +19,6 @@ from ..interface.osc import OSCReceiver, OSCSender, OSCMessage, OSCBundle
 from ..language.parser import parse
 from ..model import Context, Vector, null
 from ..render import process, window, laser, dmx
-
-
-Log = logging.getLogger(__name__)
 
 
 class Controller:
@@ -37,7 +36,7 @@ class Controller:
         self.state_timestamp = None
         self.state_file = Path(state_file) if state_file is not None else None
         if self.state_file is not None and self.state_file.exists():
-            Log.info("Recover state from state file: %s", self.state_file)
+            logger.info("Recover state from state file: {}", self.state_file)
             with open(self.state_file, 'rb') as file:
                 self.global_state = pickle.load(file)
         else:
@@ -67,7 +66,7 @@ class Controller:
         filename = Path(filename)
         mtime = filename.stat().st_mtime
         program_top = self.load_source(filename)
-        Log.info("Loaded page %i: %s", page_number, filename)
+        logger.info("Loaded page {}: {}", page_number, filename)
         self.pages.append((filename, mtime, program_top, self.global_state.setdefault(page_number, {})))
 
     def switch_to_page(self, page_number):
@@ -80,13 +79,13 @@ class Controller:
             self.current_page = page_number
             self.current_filename = filename
             self.current_mtime = mtime
-            Log.info("Switched to page %i: %s", page_number, filename)
+            logger.info("Switched to page {}: {}", page_number, filename)
             self.enqueue_reset()
             counter_state = self.get(('_counter',))
             if counter_state is not None:
                 tempo, quantum, start = counter_state
                 self.counter.update(tempo, int(quantum), start)
-                Log.info("Restore counter at beat %.1f, tempo %.1f, quantum %d", self.counter.beat, self.counter.tempo, self.counter.quantum)
+                logger.info("Restore counter at beat {:.1f}, tempo {:.1f}, quantum {}", self.counter.beat, self.counter.tempo, self.counter.quantum)
                 self.enqueue_tempo()
             self.enqueue_page_status()
             for window in self.windows:
@@ -94,8 +93,15 @@ class Controller:
 
     @staticmethod
     def load_source(filename):
+        logger.debug("Reading source {}", filename)
+        start = time.perf_counter()
         with open(filename, encoding='utf8') as file:
-            return parse(file.read()).partially_evaluate(Context())
+            tree = parse(file.read())
+        mid = time.perf_counter()
+        tree = tree.partially_evaluate(Context())
+        end = time.perf_counter()
+        logger.debug("Parse in {:.1f}ms, partially evaluate in {:.1f}ms", (mid-start)*1000, (end-mid)*1000)
+        return tree
 
     def get(self, key, default=None):
         if (value := self.state.get(Vector.coerce(key), null)) != null:
@@ -117,7 +123,7 @@ class Controller:
             self.state[key] = value
             self.global_state_dirty = True
             self.state_timestamp = self.counter.clock()
-            Log.debug("State changed: %r = %r", key, value)
+            logger.debug("State changed: {!r} = {!r}", key, value)
 
     def read(self, filename):
         filename = str(filename)
@@ -131,7 +137,7 @@ class Controller:
                         return text
                 text = Vector((path.open(encoding='utf8').read(),))
                 self.read_cache[path] = text, path_mtime
-                Log.info("Read: %s", filename)
+                logger.info("Read: {}", filename)
                 return text
         return null
 
@@ -151,7 +157,7 @@ class Controller:
                     lines = []
                     reader = csv.reader(path.open(encoding='utf8'))
                     self.csv_cache[path] = lines, reader, path_mtime
-                    Log.info("Read CSV: %s", filename)
+                    logger.info("Read CSV: {}", filename)
             if lines is not None:
                 while reader is not None and line_number >= len(lines):
                     try:
@@ -223,7 +229,7 @@ class Controller:
             if (number := node.get('number', 2, int)) is not None:
                 number = tuple(number)
                 if number not in self.pads:
-                    Log.debug("New pad @ %r", number)
+                    logger.debug("New pad @ {!r}", number)
                     pad = self.pads[number] = Pad(number)
                 elif number in remaining:
                     pad = self.pads[number]
@@ -239,7 +245,7 @@ class Controller:
         for node in graph.select_below('encoder.'):
             if (number := node.get('number', 1, int)) is not None:
                 if number not in self.encoders:
-                    Log.debug("New encoder @ %r", number)
+                    logger.debug("New encoder @ {!r}", number)
                     encoder = self.encoders[number] = Encoder(number)
                 elif number in remaining:
                     encoder = self.encoders[number]
@@ -282,7 +288,7 @@ class Controller:
             for element in message.elements:
                 self.process_message(element)
             return
-        Log.debug("Received OSC message: %r", message)
+        logger.debug("Received OSC message: {!r}", message)
         parts = message.address.strip('/').split('/')
         if parts[0] == 'hello':
             self.enqueue_tempo()
@@ -339,7 +345,7 @@ class Controller:
                 self.next_page = self.current_page + 1
 
     async def receive_messages(self):
-        Log.info("Listening for OSC control messages on port %d", self.RECEIVE_PORT)
+        logger.info("Listening for OSC control messages on port {}", self.RECEIVE_PORT)
         while True:
             message = await self.osc_receiver.receive()
             self.process_message(message)
@@ -359,7 +365,7 @@ class Controller:
             self.counter.update(tempo, quantum, self.counter.clock())
             self['_counter'] = self.counter.tempo, self.counter.quantum, self.counter.start
             self.enqueue_tempo()
-            Log.info("Start counter, tempo %d, quantum %d", self.counter.tempo, self.counter.quantum)
+            logger.info("Start counter, tempo {}, quantum {}", self.counter.tempo, self.counter.quantum)
 
     def reset_state(self):
         for key in [key for key in self.state.keys() if not (len(key) == 1 and key[0].startswith('_'))]:
@@ -372,7 +378,7 @@ class Controller:
         self.global_state_dirty = True
 
     def debug(self, value):
-        Log.debug("%r", value)
+        logger.debug("{!r}", value)
         return value
 
     async def run(self):
@@ -417,12 +423,12 @@ class Controller:
                 if self.autoreset and self.state_timestamp and self.counter.clock() > self.state_timestamp + self.autoreset:
                     self.reset_state()
                 if count := gc.collect(0):
-                    Log.debug("Collected %d objects", count)
+                    logger.debug("Collected {} objects", count)
                 if self.queue:
                     await self.osc_sender.send_bundle_from_queue(self.queue)
 
                 if self.global_state_dirty and self.state_file is not None and frame_time > dump_time + 1:
-                    Log.debug("Saving state")
+                    logger.debug("Saving state")
                     with open(self.state_file, 'wb') as file:
                         pickle.dump(self.global_state, file)
                     self.global_state_dirty = False
@@ -435,16 +441,16 @@ class Controller:
                     self.next_page = None
                     performance = 1
                     count = gc.collect(2)
-                    Log.debug("Collected %d objects (full collection)", count)
+                    logger.debug("Collected {} objects (full collection)", count)
 
                 if (mtime := self.current_filename.stat().st_mtime) > self.current_mtime:
                     try:
                         program_top = self.load_source(self.current_filename)
                         self.program_top = program_top
                         self.pages[self.current_page] = self.current_filename, self.current_mtime, self.program_top, self.state
-                        Log.info("Reloaded page %i: %s", self.current_page, self.current_filename)
+                        logger.info("Reloaded page {}: {}", self.current_page, self.current_filename)
                     except Exception:
-                        Log.exception("Error reloading page")
+                        logger.exception("Error reloading page")
                     self.current_mtime = mtime
 
                 now = self.counter.clock()
@@ -456,20 +462,24 @@ class Controller:
                 if wait_time > 0:
                     await asyncio.sleep(wait_time)
                 else:
-                    Log.debug("Slow frame - %.0fms", frame_period*1000)
+                    logger.debug("Slow frame - {:.0f}ms", frame_period*1000)
                     await asyncio.sleep(0)
                     frame_time = self.counter.clock()
 
                 if len(frames) > 1 and frames[-1] - frames[0] > 5:
                     nframes = len(frames) - 1
                     fps = nframes / (frames[-1] - frames[0])
-                    Log.info("%.1ffps; execute %.1fms, render %.1fms, housekeep %.1fms; perf %.2f",
+                    logger.info("{:.1f}fps; execute {:.1f}ms, render {:.1f}ms, housekeep {:.1f}ms; perf {:.2f}",
                              fps, 1000*execution/nframes, 1000*render/nframes, 1000*housekeeping/nframes, performance)
                     frames = frames[-1:]
                     execution = render = housekeeping = 0
         finally:
             while self.windows:
                 self.windows.pop().destroy()
+            while self.lasers:
+                self.lasers.pop().destroy()
+            while self.dmx:
+                self.dmx.pop().destroy()
             count = gc.collect(2)
-            Log.debug("Collected %d objects (full collection)", count)
+            logger.debug("Collected {} objects (full collection)", count)
             gc.enable()

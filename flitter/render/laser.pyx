@@ -5,10 +5,10 @@ Flitter laser control
 """
 
 import asyncio
-import logging
 import struct
 
 import cython
+from loguru import logger
 from libc.math cimport sqrt, abs, round, isnan, cos, sin
 import numpy as np
 import usb.core
@@ -17,8 +17,6 @@ from .. cimport model
 
 
 cdef double TWO_PI = 2*np.pi
-
-Log = logging.getLogger(__name__)
 
 
 @cython.cdivision(True)
@@ -211,7 +209,7 @@ cdef class LaserCubeDriver(LaserDriver):
         self._execute(self.SET_DAC_RATE, None, 'I', self._sample_rate)
         self._execute(self.SET_ENABLED, None, 'B', 1)
         major, minor = self._execute(self.GET_MAJOR_VERSION, 'I'), self._execute(self.GET_MINOR_VERSION, 'I')
-        Log.info("Configured USB LaserCube '%s %s' (firmware %d.%d)", self._device.manufacturer, self._device.product, major, minor)
+        logger.info("Configured USB LaserCube '{} {}' (firmware {}.{})", self._device.manufacturer, self._device.product, major, minor)
 
     @property
     def sample_rate(self):
@@ -250,7 +248,7 @@ cdef class LaserCubeDriver(LaserDriver):
                 output[i, 1] = <int>(round(samples[i, 4] * 255))
                 output[i, 2] = <int>(round((1 - samples[i+lag, 0]) * self._dac_range)) + self._dac_min
                 output[i, 3] = <int>(round((1 - samples[i+lag, 1]) * self._dac_range)) + self._dac_min
-            Log.debug("Writing %d sample frame", len(output))
+            logger.debug("Writing {} sample frame", len(output))
             await asyncio.to_thread(self._data_out.write, output_array.tobytes())
             self._sample_bunches = [samples_array[-lag:]]
         else:

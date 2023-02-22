@@ -6,28 +6,20 @@ Flitter drawing canvas based on Skia
 
 import array
 import functools
-import logging
 from pathlib import Path
 import time
 
 from cpython cimport array
 import cython
 from libc.math cimport acos, sqrt
-
-import cython
+from loguru import logger
 import skia
 
 from ..model cimport Vector, Node
 
 
-DEF TwoPI = 6.283185307179586
-
-Log = logging.getLogger(__name__)
-
+cdef double TwoPI = 6.283185307179586
 cdef dict _ImageCache = {}
-cdef bint _RecordStats = logging.getLogger().level >= logging.INFO
-cdef dict _Counts = {}
-cdef dict _Durations = {}
 
 
 cdef dict Composite = {
@@ -114,19 +106,6 @@ cdef dict FilterQuality = {
 }
 
 
-def dump_stats():
-    if _Durations:
-        total_duration = sum(_Durations.values())
-        Log.info("Total time spent canvas rendering: %.0fs, comprised of...", total_duration)
-        for duration, key in sorted(((duration, key) for (key, duration) in _Durations.items()), reverse=True):
-            count = _Counts[key]
-            Log.info("%15s  - %8d  x %6.1fµs  = %6.1fs  (%4.1f%%)", key, count, 1e6*duration/count, duration, 100*duration/total_duration)
-
-if _RecordStats:
-    import atexit
-    atexit.register(dump_stats)
-
-
 cpdef object load_image(str filename):
     path = Path(filename)
     if path.exists():
@@ -137,9 +116,9 @@ cpdef object load_image(str filename):
                 return image
         try:
             image = skia.Image.open(filename)
-            Log.info("Read image file %s", filename)
+            logger.info("Read image file {}", filename)
         except Exception:
-            Log.exception("Unexpected error opening file %s", filename)
+            logger.exception("Unexpected error opening file {}", filename)
             image = None
         _ImageCache[filename] = current_mtime, image
         return image
@@ -556,8 +535,8 @@ cdef object make_path_effect(Node node):
     return None
 
 
-cpdef object draw(Node node, ctx, paint=None, font=None, path=None):
-    start_time = time.perf_counter()
+cpdef object draw(Node node, ctx, paint=None, font=None, path=None, dict stats=None):
+    cdef double start_time = time.perf_counter()
     cdef Vector points
     cdef Node child
     cdef str kind = node.kind
@@ -571,7 +550,7 @@ cpdef object draw(Node node, ctx, paint=None, font=None, path=None):
         font = update_font(node, font)
         child = node.first_child
         while child is not None:
-            group_paint = draw(child, ctx, group_paint, font, path)
+            group_paint = draw(child, ctx, group_paint, font, path, stats)
             child = child.next_sibling
         ctx.restore()
 
@@ -580,7 +559,7 @@ cpdef object draw(Node node, ctx, paint=None, font=None, path=None):
         update_context(node, ctx)
         child = node.first_child
         while child is not None:
-            paint = draw(child, ctx, paint, font, path)
+            paint = draw(child, ctx, paint, font, path, stats)
             child = child.next_sibling
         ctx.restore()
 
@@ -588,21 +567,21 @@ cpdef object draw(Node node, ctx, paint=None, font=None, path=None):
         paint_paint = update_paint(node, paint)
         child = node.first_child
         while child is not None:
-            paint_paint = draw(child, ctx, paint_paint, font, path)
+            paint_paint = draw(child, ctx, paint_paint, font, path, stats)
             child = child.next_sibling
 
     elif kind == 'font':
         font = update_font(node, font)
         child = node.first_child
         while child is not None:
-            paint = draw(child, ctx, paint, font, path)
+            paint = draw(child, ctx, paint, font, path, stats)
             child = child.next_sibling
 
     elif kind == 'path':
         path = skia.Path()
         child = node.first_child
         while child is not None:
-            paint = draw(child, ctx, paint, font, path)
+            paint = draw(child, ctx, paint, font, path, stats)
             child = child.next_sibling
 
     elif kind == 'move_to':
@@ -737,7 +716,7 @@ cpdef object draw(Node node, ctx, paint=None, font=None, path=None):
             font = update_font(node, font)
             child = node.first_child
             while child is not None:
-                layer_paint = draw(child, ctx, layer_paint, font, path)
+                layer_paint = draw(child, ctx, layer_paint, font, path, stats)
                 child = child.next_sibling
             ctx.restore()
 
@@ -749,7 +728,7 @@ cpdef object draw(Node node, ctx, paint=None, font=None, path=None):
         path = skia.Path()
         child = node.first_child
         while child is not None:
-            paint = draw(child, ctx, paint, font, path)
+            paint = draw(child, ctx, paint, font, path, stats)
             child = child.next_sibling
         ctx.restore()
 
@@ -765,12 +744,16 @@ cpdef object draw(Node node, ctx, paint=None, font=None, path=None):
         paint = skia.Paint(paint)
         paint.setPathEffect(path_effect)
 
-    if _RecordStats:
+    cdef double duration, total
+    cdef int count
+    cdef str parent_kind
+    if stats is not None:
         duration = time.perf_counter() - start_time
-        _Counts[kind] = _Counts.get(kind, 0) + 1
-        _Durations[kind] = _Durations.get(kind, 0) + duration
+        count, total = stats.get(kind, (0, 0))
+        stats[kind] = count+1, total+duration
         if kind != 'canvas':
             parent_kind = node.parent.kind
-            _Durations[parent_kind] = _Durations.get(parent_kind, 0) - duration
+            count, total = stats.get(parent_kind, (0, 0))
+            stats[parent_kind] = count, total-duration
 
     return paint

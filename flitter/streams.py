@@ -8,14 +8,11 @@ Package for asynchronous serial IO.
 # pylama:ignore=R0916,W0703
 
 import asyncio
-import logging
 
+from loguru import logger
 import serial
 from serial.tools.list_ports import comports
 from serial.serialutil import SerialException
-
-
-Log = logging.getLogger(__name__)
 
 
 class SerialStream:
@@ -35,7 +32,7 @@ class SerialStream:
     def __init__(self, device, **kwargs):
         self._device = device
         self._connection = serial.Serial(self._device, timeout=0, write_timeout=0, **kwargs)
-        Log.debug("Opened SerialStream on %s (%r)", device, ', '.join(f'{k}={v!r}' for k, v in kwargs.items()))
+        logger.debug("Opened SerialStream on {} ({!r})", device, ', '.join(f'{k}={v!r}' for k, v in kwargs.items()))
         self._loop = asyncio.get_event_loop()
         self._output_buffer = bytes()
         self._output_buffer_empty = None
@@ -63,10 +60,10 @@ class SerialStream:
             except serial.SerialTimeoutException:
                 nbytes = 0
             except Exception:
-                Log.exception("Error writing to stream")
+                logger.exception("Error writing to stream")
                 raise
             if nbytes:
-                Log.trace("Write %r", data[:nbytes])
+                logger.trace("Write {!r}", data[:nbytes])
             self._output_buffer = data[nbytes:]
         else:
             self._output_buffer += data
@@ -84,11 +81,11 @@ class SerialStream:
         except serial.SerialTimeoutException:
             nbytes = 0
         except Exception as exc:
-            Log.exception("Error writing to stream")
+            logger.exception("Error writing to stream")
             self._output_buffer_empty.set_exception(exc)
             self._loop.remove_writer(self._connection)
         if nbytes:
-            Log.trace("Write %r", self._output_buffer[:nbytes])
+            logger.trace("Write {!r}", self._output_buffer[:nbytes])
             self._output_buffer = self._output_buffer[nbytes:]
         if not self._output_buffer:
             self._loop.remove_writer(self._connection)
@@ -100,7 +97,7 @@ class SerialStream:
             nwaiting = self._connection.in_waiting
             if nwaiting:
                 data = self._connection.read(nwaiting if nbytes is None else min(nbytes, nwaiting))
-                Log.trace("Read %r", data)
+                logger.trace("Read {!r}", data)
                 return data
             future = self._loop.create_future()
             self._loop.add_reader(self._connection, future.set_result, None)

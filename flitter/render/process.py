@@ -11,40 +11,43 @@ import os
 import sys
 import time
 
+from loguru import logger
 
-Log = logging.getLogger(__name__)
+import flitter
 
 
 class Proxy:
     def __init__(self, cls, **kwargs):
         self.queue = Queue(1)
-        self.process = Process(target=Proxy.run, args=(cls, kwargs, self.queue, logging.getLogger().level))
+        self.process = Process(target=Proxy.run, args=(cls, kwargs, self.queue, flitter.LOGGING_LEVEL))
         self.process.start()
 
     async def update(self, *args, **kwargs):
         await asyncio.to_thread(self.queue.put, ('update', args, kwargs))
 
     def purge(self):
-        self.connection.send(('purge', (), {}))
+        self.queue.put(('purge', (), {}))
 
     def destroy(self):
+        self.queue.put(('purge', (), {}))
+        self.queue.put(('destroy', (), {}))
         self.queue.close()
         self.queue.join_thread()
-        self.process.terminate()
         self.process.join()
         self.process.close()
         self.queue = self.process = None
 
     @staticmethod
     def run(cls, kwargs, queue, log_level):
-        logging.basicConfig(level=log_level, stream=sys.stderr)
-        Log.info("Started %s process %d", cls.__name__, os.getpid())
+        logger.configure(handlers=[{'sink': sys.stderr, 'format': flitter.LOGGING_FORMAT, 'level': log_level, 'enqueue': True}])
+        logger.info("Started {} render process", cls.__name__)
         try:
             asyncio.run(Proxy.loop(queue, cls(**kwargs)))
         except Exception:
-            Log.exception("Unhandled exception in %s process %d", cls.__name__, os.getpid())
+            logger.exception("Unhandled exception in {} render process", cls.__name__)
         finally:
-            Log.info("Stopped %s process %d", cls.__name__, os.getpid())
+            logger.info("Stopped {} render process", cls.__name__)
+            logger.complete()
 
     @staticmethod
     async def loop(queue, obj):
@@ -58,8 +61,11 @@ class Proxy:
                 render += time.perf_counter()
             elif method == 'purge':
                 obj.purge()
+            elif method == 'destroy':
+                obj.destroy()
+                return
             nframes += 1
             if time.perf_counter() > stats_time + 5:
-                Log.info("%s process %d; render %.1fms", obj.__class__.__name__, os.getpid(), 1000*render/nframes)
+                logger.info("{} render {:.1f}ms", obj.__class__.__name__, 1000*render/nframes)
                 nframes = render = 0
                 stats_time += 5

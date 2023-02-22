@@ -7,13 +7,11 @@ Basic OSC protocol implementation
 # pylama:ignore=C0103,R0912,R0903
 
 import asyncio
-import logging
 import socket
 import struct
 import time
 
-
-Log = logging.getLogger(__name__)
+from loguru import logger
 
 
 def decode_string(data):
@@ -260,7 +258,7 @@ class OSCSender:
         self._socket = None
 
     async def _send(self, data):
-        Log.trace("Send: %r", data)
+        logger.trace("Send: {!r}", data)
         if self._socket is None:
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             sock.setblocking(False)
@@ -291,5 +289,5 @@ class OSCReceiver:
             sock.bind((self._host, self._port))
             self._socket = sock
         data = await asyncio.get_event_loop().sock_recv(self._socket, mtu)
-        Log.trace("Receive: %r", data)
+        logger.trace("Receive: {!r}", data)
         return decode_oscpacket(data)

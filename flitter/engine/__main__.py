@@ -4,17 +4,21 @@ Flitter main entry point
 
 import argparse
 import asyncio
-import logging
 import subprocess
 import sys
 
+from loguru import logger
+
+import flitter
 from .control import Controller
 
 
 parser = argparse.ArgumentParser(description="Flitter")
-parser.add_argument('--trace', action='store_true', default=False, help="Trace logging")
-parser.add_argument('--debug', action='store_true', default=False, help="Debug logging")
-parser.add_argument('--verbose', action='store_true', default=False, help="Informational logging")
+parser.set_defaults(level=flitter.LOGGING_LEVEL)
+levels = parser.add_mutually_exclusive_group()
+levels.add_argument('--trace', action='store_const', const='TRACE', dest='level', help="Trace logging")
+levels.add_argument('--debug', action='store_const', const='DEBUG', dest='level', help="Debug logging")
+levels.add_argument('--verbose', action='store_const', const='INFO', dest='level', help="Informational logging")
 parser.add_argument('--profile', action='store_true', default=False, help="Run with profiling")
 parser.add_argument('--fps', type=int, default=60, help="Target framerate")
 parser.add_argument('--screen', type=int, default=0, help="Default screen number")
@@ -26,16 +30,8 @@ parser.add_argument('--autoreset', type=float, help="Auto-reset state on idle")
 parser.add_argument('--push', action='store_true', default=False, help="Start Ableton Push 2 interface")
 parser.add_argument('script', nargs='+', help="Script to execute")
 args = parser.parse_args()
-if args.trace:
-    level = logging.TRACE
-elif args.debug:
-    level = logging.DEBUG
-elif args.verbose:
-    level = logging.INFO
-else:
-    level = logging.WARNING
-logging.basicConfig(level=level, stream=sys.stderr)
-
+logger.configure(handlers=[{'sink': sys.stderr, 'format': flitter.LOGGING_FORMAT, 'level': args.level, 'enqueue': True}])
+flitter.LOGGING_LEVEL = args.level
 controller = Controller('.', target_fps=args.fps, screen=args.screen, fullscreen=args.fullscreen, vsync=args.vsync,
                         state_file=args.state, multiprocess=args.multiprocess and not args.profile, autoreset=args.autoreset)
 for script in args.script:
@@ -44,10 +40,9 @@ controller.switch_to_page(0)
 
 if args.push:
     arguments = [sys.executable, '-u', '-m', 'flitter.interface.push']
-    level = logging.getLogger().level
-    if args.debug:
+    if args.level == 'DEBUG':
         arguments.append('--debug')
-    elif args.verbose:
+    elif args.level == 'VERBOSE':
         arguments.append('--verbose')
     push = subprocess.Popen(arguments)
 else:
@@ -63,3 +58,4 @@ finally:
     if push is not None:
         push.kill()
         push.wait()
+    logger.complete()

@@ -9,3 +9,4 @@ pyglet
 pyserial
 moderngl
 av
+loguru

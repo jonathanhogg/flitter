@@ -8,8 +8,8 @@ As per official hardware documentation at: https://github.com/Ableton/push-inter
 
 import asyncio
 from contextlib import asynccontextmanager
-import logging
 
+from loguru import logger
 import numpy as np
 import rtmidi
 import skia
@@ -22,9 +22,6 @@ from .events import (PadPressed, PadHeld, PadReleased, ButtonPressed, ButtonRele
                      EncoderTouched, EncoderTurned, EncoderReleased, TouchStripTouched,
                      TouchStripDragged, TouchStripReleased, MenuButtonPressed, MenuButtonReleased)
 from .palette import SimplePalette
-
-
-Log = logging.getLogger(__name__)
 
 
 class Push2:
@@ -90,7 +87,7 @@ class Push2:
         self._screen_task = asyncio.create_task(self._run_screen())
 
     def _send_midi(self, message):
-        Log.trace("Send MIDI - %s", " ".join(f"{b:02x}" for b in message))
+        logger.trace("Send MIDI - {}", " ".join(f"{b:02x}" for b in message))
         self._midi_out.send_message(message)
 
     def _receive_callback(self, message_delta, _):
@@ -98,7 +95,7 @@ class Push2:
         message, delta = message_delta
         timestamp = now if self._last_receive_timestamp is None else min(now, self._last_receive_timestamp + delta)
         self._last_receive_timestamp = timestamp
-        Log.trace("Received @ %.2f MIDI - %s", timestamp, " ".join(f"{b:02x}" for b in message))
+        logger.trace("Received @ {:.2f} MIDI - {}", timestamp, " ".join(f"{b:02x}" for b in message))
         self._loop.call_soon_threadsafe(self._receive_queue.put_nowait, (message, timestamp))
 
     def _send_sysex(self, cmd: Command, *args):
@@ -196,7 +193,7 @@ class Push2:
         elif message[0] == MIDI.PITCH_BEND_CHANGE:
             position = ((message[2] << 7) + message[1]) / (1 << 14)
             return TouchStripDragged(timestamp=timestamp, position=position)
-        Log.warning("Unrecognised MIDI - %s", " ".join(f"{b:02x}" for b in message))
+        logger.warning("Unrecognised MIDI - {}", " ".join(f"{b:02x}" for b in message))
 
     @asynccontextmanager
     async def screen_context(self):
@@ -222,7 +219,7 @@ class Push2:
                 tick += 1
                 await self._counter.wait_for_beat(tick / 24)
         except Exception:
-            Log.exception("Unexpected exception")
+            logger.exception("Unexpected exception")
 
     def _update_screen(self):
         self._screen_array[:, :] = 0
@@ -248,5 +245,5 @@ class Push2:
                     except asyncio.TimeoutError:
                         pass
         except Exception:
-            Log.exception("Unexpected exception")
+            logger.exception("Unexpected exception")
             raise

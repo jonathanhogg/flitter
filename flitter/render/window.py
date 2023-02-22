@@ -5,10 +5,11 @@ Flitter window management
 # pylama:ignore=C0413,E402,W0703,R0914,R0902,R0912,R0201,R1702,C901,W0223,W0231,R0915
 
 import array
-import logging
 import sys
+import time
 
 import av
+from loguru import logger
 import skia
 import moderngl
 import pyglet
@@ -19,9 +20,6 @@ import pyglet.window
 import pyglet.gl
 
 from . import canvas
-
-
-Log = logging.getLogger(__name__)
 
 
 def value_split(value, n, m):
@@ -220,7 +218,7 @@ void main() {{
                 vertices = self.glctx.buffer(array.array('f', [-1, 1, -1, -1, 1, 1, 1, -1]))
                 self._rectangle = self.glctx.vertex_array(self._program, [(vertices, '2f', 'position')])
             except Exception:
-                Log.exception("Unable to compile shader:\n%s", self._fragment_source)
+                logger.exception("Unable to compile shader:\n{}", self._fragment_source)
 
     def render(self, node, **kwargs):
         self.compile(node)
@@ -349,7 +347,7 @@ class Window(ProgramNode):
             view_height = int(width / aspect_ratio)
             viewport = (0, (height - view_height) // 2, width, view_height)
         self.glctx.screen.viewport = viewport
-        Log.debug("Window resized to %dx%d (viewport %dx%d)", width, height, *viewport[2:])
+        logger.debug("Window resized to {}x{} (viewport {}x{})", width, height, *viewport[2:])
 
     def on_close(self):
         self._closed = True
@@ -406,6 +404,8 @@ class Canvas(SceneNode):
         self._framebuffer = None
         self._surface = None
         self._canvas = None
+        self._stats = {}
+        self._total_duration = 0
 
     @property
     def texture(self):
@@ -441,11 +441,27 @@ class Canvas(SceneNode):
         # A canvas is a leaf node from the perspective of the OpenGL world
         pass
 
+    def purge(self):
+        total_count = self._stats['canvas'][0]
+        logger.info("Canvas render stats - {:d} x {:.1f}ms = {:.1f}s", total_count, 1e3*self._total_duration/total_count, self._total_duration)
+        draw_duration = 0
+        for duration, count, key in sorted(((duration, count, key) for (key, (count, duration)) in self._stats.items()), reverse=True):
+            logger.debug("{:15s}  - {:8d}  x {:6.1f}µs  = {:6.1f}s  ({:4.1f}%)",
+                         key, count, 1e6*duration/count, duration, 100*duration/self._total_duration)
+            draw_duration += duration
+        overhead = self._total_duration - draw_duration
+        logger.debug("{:15s}  - {:8d}  x {:6.1f}µs  = {:6.1f}s  ({:4.1f}%)",
+                     '(GL surface)', total_count, 1e6*overhead/total_count, overhead, 100*overhead/self._total_duration)
+        self._stats = {}
+        self._total_duration = 0
+
     def render(self, node, **kwargs):
+        self._total_duration -= time.perf_counter()
         self._graphics_context.resetContext()
         self._framebuffer.clear()
-        canvas.draw(node, self._canvas)
+        canvas.draw(node, self._canvas, stats=self._stats)
         self._surface.flushAndSubmit()
+        self._total_duration += time.perf_counter()
 
 
 class Video(Shader):
@@ -475,7 +491,7 @@ class Video(Shader):
         self._decoder = None
         self._stream = None
         if self._container is not None:
-            Log.info("Closed video %s", self._container.name)
+            logger.info("Closed video {}", self._container.name)
             self._container.close()
         self._container = None
         super().release()
@@ -525,7 +541,7 @@ void main() {
                 stream = container.streams.video[0]
             except (FileNotFoundError, av.InvalidDataError, IndexError):
                 return
-            Log.info("Opened video %r", filename)
+            logger.info("Opened video {!r}", filename)
             self._container = container
             self._stream = stream
             codec_context = self._stream.codec_context
@@ -570,7 +586,7 @@ void main() {
                 try:
                     frame = next(self._decoder)
                 except StopIteration:
-                    Log.debug("Reached end of video %r", self._container.name)
+                    logger.debug("Reached end of video {!r}", self._container.name)
                     self._decoder = None
                     frame = None
                 self._frames.append(frame)
