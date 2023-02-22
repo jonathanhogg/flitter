@@ -324,9 +324,9 @@ class Window(ProgramNode):
             screen = screens[screen] if screen < len(screens) else screens[0]
             config = pyglet.gl.Config(major_version=self.GL_VERSION[0], minor_version=self.GL_VERSION[1], forward_compatible=True,
                                       depth_size=24, double_buffer=True, sample_buffers=1, samples=0)
-            self.window = self.WindowWrapper(width=self.width, height=self.height, resizable=True, caption=title, screen=screen, vsync=vsync, config=config)
+            self.window = self.WindowWrapper(width=self.width, height=self.height, resizable=True, caption=title,
+                                             screen=screen, vsync=vsync, config=config)
             self.window.event(self.on_resize)
-            self.window.event(self.on_close)
             self.glctx = moderngl.create_context(require=self.GL_VERSION[0] * 100 + self.GL_VERSION[1] * 10)
             if fullscreen:
                 self.window.set_mouse_visible(False)
@@ -348,9 +348,6 @@ class Window(ProgramNode):
             viewport = (0, (height - view_height) // 2, width, view_height)
         self.glctx.screen.viewport = viewport
         logger.debug("Window resized to {}x{} (viewport {}x{})", width, height, *viewport[2:])
-
-    def on_close(self):
-        self._closed = True
 
     def render(self, node, **kwargs):
         if self._closed:

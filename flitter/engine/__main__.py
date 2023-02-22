@@ -47,6 +47,7 @@ if args.push:
     elif args.level == 'VERBOSE':
         arguments.append('--verbose')
     push = subprocess.Popen(arguments)
+    logger.success("Started Push 2 interface sub-process")
 else:
     push = None
 
@@ -56,6 +57,10 @@ try:
         cProfile.run('asyncio.run(controller.run())', sort='tottime')
     else:
         asyncio.run(controller.run())
+except KeyboardInterrupt:
+    logger.info("Exiting on keyboard interrupt")
+except Exception:
+    logger.exception("Unexpected error in flitter")
 finally:
     if push is not None:
         push.kill()

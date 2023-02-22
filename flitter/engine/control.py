@@ -68,8 +68,8 @@ class Controller:
         filename = Path(filename)
         mtime = filename.stat().st_mtime
         program_top = self.load_source(filename)
-        logger.info("Loaded page {}: {}", page_number, filename)
         self.pages.append((filename, mtime, program_top, self.global_state.setdefault(page_number, {})))
+        logger.success("Loaded page {}: {}", page_number, filename)
 
     def switch_to_page(self, page_number):
         if self.pages is not None and 0 <= page_number < len(self.pages):
