@@ -343,12 +343,32 @@ cdef class Vector:
 
     def __repr__(self):
         cdef int i, n = self.length
-        cdef str s, f
+        cdef str s
+        cdef double f
+        cdef Py_UNICODE c
         if n == 0:
             return "null"
-        if self.objects is not None:
-            return ";".join(map(repr, self))
-        return ";".join(f"{self.numbers[i]:g}" for i in range(n))
+        if self.numbers != NULL:
+            return ";".join(f"{self.numbers[i]:g}" for i in range(n))
+        cdef list parts = []
+        for obj in self.objects:
+            if isinstance(obj, float):
+                f = obj
+                parts.append(f"{f:g}")
+            elif isinstance(obj, str):
+                s = obj
+                for i, c in enumerate(s):
+                    if c == ord('_') or (c >= ord('a') and c <= ord('z')) or (c >= ord('A') and c <= ord('Z')) or \
+                       (i > 0 and c >= ord('0') and c <= ord('9')):
+                        pass
+                    else:
+                        parts.append(repr(s))
+                        break
+                else:
+                    parts.append(f":{s}")
+            else:
+                parts.append(repr(s))
+        return ";".join(parts)
 
     def __neg__(self):
         return self.neg()
