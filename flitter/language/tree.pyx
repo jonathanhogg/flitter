@@ -58,6 +58,9 @@ cdef class Expression:
     cpdef Expression partially_evaluate(self, model.Context context):
         raise NotImplementedError()
 
+    cpdef object reduce(self, func):
+        return func(self)
+
 
 cdef class Top(Expression):
     cdef readonly tuple expressions
@@ -98,6 +101,13 @@ cdef class Top(Expression):
             expressions.append(expr.partially_evaluate(context))
         return Top(tuple(expressions))
 
+    cpdef object reduce(self, func):
+        cdef list children = []
+        cdef Expression expr
+        for expr in self.expressions:
+            children.append(expr.reduce(func))
+        return func(self, *children)
+
     def __repr__(self):
         return f'Top({self.expressions!r})'
 
@@ -117,6 +127,9 @@ cdef class Pragma(Expression):
 
     cpdef Expression partially_evaluate(self, model.Context context):
         return Pragma(self.name, self.expr.partially_evaluate(context))
+
+    cpdef object reduce(self, func):
+        return func(self, self.expr.reduce(func))
 
     def __repr__(self):
         return f'Pragma({self.name!r}, {self.expr!r})'
@@ -147,6 +160,13 @@ cdef class Sequence(Expression):
             expressions.append(expr.partially_evaluate(context))
         context.variables = saved
         return sequence_pack(Sequence, expressions)
+
+    cpdef object reduce(self, func):
+        cdef list children = []
+        cdef Expression expr
+        for expr in self.expressions:
+            children.append(expr.reduce(func))
+        return func(self, *children)
 
     def __repr__(self):
         return f'{self.__class__.__name__}({self.expressions!r})'
@@ -237,6 +257,9 @@ cdef class Lookup(Expression):
                 return Literal(value)
         return Lookup(key)
 
+    cpdef object reduce(self, func):
+        return func(self, self.key.reduce(func))
+
     def __repr__(self):
         return f'Lookup({self.key!r})'
 
@@ -267,6 +290,9 @@ cdef class Range(Expression):
             return Literal(model.Vector.range((<Literal>start).value, (<Literal>stop).value, (<Literal>step).value))
         return Range(start, stop, step)
 
+    cpdef object reduce(self, func):
+        return func(self, self.start.reduce(func), self.stop.reduce(func), self.step.reduce(func))
+
     def __repr__(self):
         return f'Range({self.start!r}, {self.stop!r}, {self.step!r})'
 
@@ -283,6 +309,9 @@ cdef class UnaryOperation(Expression):
         if isinstance(expr, Literal):
             return Literal(unary.evaluate(context))
         return unary
+
+    cpdef object reduce(self, func):
+        return func(self, self.expr.reduce(func))
 
     def __repr__(self):
         return f'{self.__class__.__name__}({self.expr!r})'
@@ -321,6 +350,9 @@ cdef class BinaryOperation(Expression):
         if isinstance(left, Literal) and isinstance(right, Literal):
             return Literal(binary.evaluate(context))
         return binary
+
+    cpdef object reduce(self, func):
+        return func(self, self.left.reduce(func), self.right.reduce(func))
 
     def __repr__(self):
         return f'{self.__class__.__name__}({self.left!r}, {self.right!r})'
@@ -472,6 +504,9 @@ cdef class Slice(Expression):
             return Literal(expr_value.slice(index_value))
         return Slice(expr, index)
 
+    cpdef object reduce(self, func):
+        return func(self, self.expr.reduce(func), self.index.reduce(func))
+
     def __repr__(self):
         return f'Slice({self.expr!r}, {self.index!r})'
 
@@ -532,6 +567,13 @@ cdef class Call(Expression):
             return Literal(call.evaluate(context))
         return Call(function, tuple(args))
 
+    cpdef object reduce(self, func):
+        cdef list children = []
+        cdef Expression arg
+        for arg in self.args:
+            children.append(arg.reduce(func))
+        return func(self, *children)
+
     def __repr__(self):
         return f'Call({self.function!r}, {self.args!r})'
 
@@ -580,6 +622,9 @@ cdef class Tag(Expression):
                     n.add_tag(self.tag)
                 return node
         return Tag(node, self.tag)
+
+    cpdef object reduce(self, func):
+        return func(self, self.node.reduce(func))
 
     def __repr__(self):
         return f'Tag({self.node!r}, {self.tag!r})'
@@ -647,6 +692,13 @@ cdef class Attributes(Expression):
         bindings.reverse()
         return Attributes(node, tuple(bindings))
 
+    cpdef object reduce(self, func):
+        cdef list children = [self.node.reduce(func)]
+        cdef Binding binding
+        for binding in self.bindings:
+            children.append(binding.expr.reduce(func))
+        return func(self, *children)
+
     def __repr__(self):
         return f'Attributes({self.node!r}, {self.bindings!r})'
 
@@ -711,18 +763,14 @@ cdef class Append(Expression):
                 return node
         return Append(node, children)
 
+    cpdef object reduce(self, func):
+        return func(self, self.node.reduce(func), self.children.reduce(func))
+
     def __repr__(self):
-        return f'Append({self.node!r}, {self.children!r})'
+        return f'{self.__class__.__name__}({self.node!r}, {self.children!r})'
 
 
-cdef class Prepend(Expression):
-    cdef readonly Expression node
-    cdef readonly Expression children
-
-    def __init__(self, Expression node, Expression children):
-        self.node = node
-        self.children = children
-
+cdef class Prepend(Append):
     cpdef model.VectorLike evaluate(self, model.Context context):
         cdef model.Vector nodes = self.node.evaluate(context)
         cdef model.Vector children = self.children.evaluate(context)
@@ -753,9 +801,6 @@ cdef class Prepend(Expression):
                         n.insert(c.copy())
                 return node
         return Prepend(node, children)
-
-    def __repr__(self):
-        return f'Prepend({self.node!r}, {self.children!r})'
 
 
 cdef class Binding:
@@ -837,6 +882,13 @@ cdef class Let(Expression):
             return Let(tuple(remaining))
         return NoOp
 
+    cpdef object reduce(self, func):
+        cdef list children = []
+        cdef PolyBinding binding
+        for binding in self.bindings:
+            children.append(binding.expr.reduce(func))
+        return func(self, *children)
+
     def __repr__(self):
         return f'Let({self.bindings!r})'
 
@@ -906,6 +958,13 @@ cdef class InlineLet(Expression):
             return InlineLet(body, tuple(remaining))
         return body
 
+    cpdef object reduce(self, func):
+        cdef list children = [self.body.reduce(func)]
+        cdef PolyBinding binding
+        for binding in self.bindings:
+            children.append(binding.expr.reduce(func))
+        return func(self, *children)
+
     def __repr__(self):
         return f'InlineLet({self.body!r}, {self.bindings!r})'
 
@@ -960,6 +1019,9 @@ cdef class For(Expression):
         context.variables = saved
         return sequence_pack(Sequence, remaining)
 
+    cpdef object reduce(self, func):
+        return func(self, self.source.reduce(func), self.body.reduce(func))
+
     def __repr__(self):
         return f'For({self.names!r}, {self.source!r}, {self.body!r})'
 
@@ -1011,6 +1073,16 @@ cdef class IfElse(Expression):
             return IfElse(tuple(remaining), else_)
         return NoOp if else_ is None else else_
 
+    cpdef object reduce(self, func):
+        cdef list children = []
+        cdef Test test
+        for test in self.tests:
+            children.append(test.condition.reduce(func))
+            children.append(test.then.reduce(func))
+        if self.else_ is not None:
+            children.append(self.else_.reduce(func))
+        return func(self, *children)
+
     def __repr__(self):
         return f'IfElse({self.tests!r}, {self.else_!r})'
 
@@ -1056,6 +1128,15 @@ cdef class Function(Expression):
         expr = self.expr.partially_evaluate(context)
         context.variables = saved
         return Function(self.name, tuple(parameters), expr)
+
+    cpdef object reduce(self, func):
+        cdef list children = []
+        cdef Binding parameter
+        for parameter in self.parameters:
+            if parameter.expr is not None:
+                children.append(parameter.expr.reduce(func))
+        children.append(self.expr.reduce(func))
+        return func(self, *children)
 
     def __repr__(self):
         return f'Function({self.name!r}, {self.parameters!r}, {self.expr!r})'
