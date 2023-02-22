@@ -13,6 +13,7 @@ import sys
 from loguru import logger
 import skia
 
+import flitter
 from ..clock import TapTempo
 from ..ableton.constants import Encoder, Control, BUTTONS
 from ..ableton.events import (ButtonPressed, ButtonReleased, PadEvent, PadPressed, PadHeld, PadReleased,
@@ -430,12 +431,20 @@ class Controller:
 
 
 parser = argparse.ArgumentParser(description="Flitter Ableton Push 2 Interface")
-parser.add_argument('--debug', action='store_true', default=False, help="Debug logging")
-parser.add_argument('--verbose', action='store_true', default=False, help="Informational logging")
+parser.set_defaults(level=flitter.LOGGING_LEVEL)
+levels = parser.add_mutually_exclusive_group()
+levels.add_argument('--trace', action='store_const', const='TRACE', dest='level', help="Trace logging")
+levels.add_argument('--debug', action='store_const', const='DEBUG', dest='level', help="Debug logging")
+levels.add_argument('--verbose', action='store_const', const='INFO', dest='level', help="Informational logging")
 parser.add_argument('--notempo', action='store_true', default=False, help="Disable tempo control")
 parser.add_argument('--nofader', action='store_true', default=False, help="Disable fader control")
 args = parser.parse_args()
-logging.basicConfig(level=logging.DEBUG if args.debug else (logging.INFO if args.verbose else logging.WARNING), stream=sys.stderr)
+logger.configure(handlers=[{'sink': sys.stderr, 'format': flitter.LOGGING_FORMAT, 'level': args.level, 'enqueue': True}])
 
-controller = Controller(tempo_control=not args.notempo, fader_control=not args.nofader)
-asyncio.run(controller.run())
+try:
+    controller = Controller(tempo_control=not args.notempo, fader_control=not args.nofader)
+    asyncio.run(controller.run())
+except KeyboardInterrupt:
+    logger.info("Exiting Push 2 interface on keyboard interrupt")
+except Exception:
+    logger.exception("Unhandled exception in Push 2 interface")
