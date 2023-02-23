@@ -135,8 +135,12 @@ cast to a string if necessary and then concatenated together, e.g.,
 
 So the end result of this should be the text "Hello world!" pulsing white in
 the middle of the window. You can edit and re-save the code while the engine is
-running and it will reload the code on-the-fly. This is the best way to
-experiment, but the reloading may be a little too janky for performing live.
+running and it will reload the code on-the-fly. ~~This is the best way to
+experiment, but the reloading may be a little too janky for performing live.~~
+
+**UPDATE!** After making a simple change to the Lark parser, which I clearly
+should have looked at a lot more closely when I first wrote it, live reload is
+now fast enough to not be noticed (generally less than 1/60th second).
 
 The available global values are:
 
