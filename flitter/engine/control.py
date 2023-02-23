@@ -137,7 +137,7 @@ class Controller:
             self.state[key] = value
             self.global_state_dirty = True
             self.state_timestamp = self.counter.clock()
-            logger.debug("State changed: {!r} = {!r}", key, value)
+            logger.trace("State changed: {!r} = {!r}", key, value)
 
     def read(self, filename):
         filename = str(filename)
