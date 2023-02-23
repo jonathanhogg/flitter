@@ -411,9 +411,15 @@ tests, call functions with constant arguments (including creating pseudo-random
 streams), replace `let` names with constant values and generally reduce as much
 of the evaluation tree as possible to literal values.
 
-Unbound names (which includes all of the globals listed above, like `beat`),
-all state (`$...`) and queries (`{...}`) are irreducible, as are obviously any
-expressions that include these.
+The partial-evaluator will also run again incorporating the state if it has
+been stable for a period of time (configurable with the `--evalstate`
+command-line option). If the state is touched again (i.e., a pad or encoder
+is touched) then this partially-evaluated tree is discarded and the engine will
+return to dynamically evaluating state expressions.
+
+Unbound names (which includes all of the globals listed above, like `beat`) and
+queries (`{...}`) are always dynamic, as are obviously any expressions that
+then include these.
 
 ## Controlling code with a Push 2
 
