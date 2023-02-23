@@ -334,6 +334,7 @@ class Window(ProgramNode):
                     self.window._nswindow.enterFullScreenMode_(self.window._nswindow.screen())  # noqa
                 else:
                     self.window.set_fullscreen(True)
+            logger.info("Opened {}window on {}", "fullscreen " if fullscreen else "", screen)
         elif resized:
             self.on_resize(self.width, self.height)
 

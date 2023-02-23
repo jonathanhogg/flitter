@@ -430,21 +430,22 @@ class Controller:
                 self.push.set_button_white(n, 0)
 
 
-parser = argparse.ArgumentParser(description="Flitter Ableton Push 2 Interface")
-parser.set_defaults(level=flitter.LOGGING_LEVEL)
-levels = parser.add_mutually_exclusive_group()
-levels.add_argument('--trace', action='store_const', const='TRACE', dest='level', help="Trace logging")
-levels.add_argument('--debug', action='store_const', const='DEBUG', dest='level', help="Debug logging")
-levels.add_argument('--verbose', action='store_const', const='INFO', dest='level', help="Informational logging")
-parser.add_argument('--notempo', action='store_true', default=False, help="Disable tempo control")
-parser.add_argument('--nofader', action='store_true', default=False, help="Disable fader control")
-args = parser.parse_args()
-logger.configure(handlers=[{'sink': sys.stderr, 'format': flitter.LOGGING_FORMAT, 'level': args.level, 'enqueue': True}])
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="Flitter Ableton Push 2 Interface")
+    parser.set_defaults(level=None)
+    levels = parser.add_mutually_exclusive_group()
+    levels.add_argument('--trace', action='store_const', const='TRACE', dest='level', help="Trace logging")
+    levels.add_argument('--debug', action='store_const', const='DEBUG', dest='level', help="Debug logging")
+    levels.add_argument('--verbose', action='store_const', const='INFO', dest='level', help="Informational logging")
+    parser.add_argument('--notempo', action='store_true', default=False, help="Disable tempo control")
+    parser.add_argument('--nofader', action='store_true', default=False, help="Disable fader control")
+    args = parser.parse_args()
+    flitter.configure_logger(args.level)
 
-try:
-    controller = Controller(tempo_control=not args.notempo, fader_control=not args.nofader)
-    asyncio.run(controller.run())
-except KeyboardInterrupt:
-    logger.info("Exiting Push 2 interface on keyboard interrupt")
-except Exception:
-    logger.exception("Unhandled exception in Push 2 interface")
+    try:
+        controller = Controller(tempo_control=not args.notempo, fader_control=not args.nofader)
+        asyncio.run(controller.run())
+    except KeyboardInterrupt:
+        logger.info("Exiting Push 2 interface on keyboard interrupt")
+    except Exception:
+        logger.exception("Unhandled exception in Push 2 interface")

@@ -38,7 +38,7 @@ class Proxy:
 
     @staticmethod
     def run(cls, kwargs, queue, log_level):
-        logger.configure(handlers=[{'sink': sys.stderr, 'format': flitter.LOGGING_FORMAT, 'level': log_level, 'enqueue': True}])
+        flitter.configure_logger(log_level)
         logger.info("Started {} render process", cls.__name__)
         try:
             asyncio.run(Proxy.loop(queue, cls(**kwargs)))
