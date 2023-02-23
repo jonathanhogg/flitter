@@ -57,7 +57,8 @@ try:
 except KeyboardInterrupt:
     logger.info("Exited on keyboard interrupt")
 except Exception:
-    logger.exception("Unexpected error in flitter")
+    logger.error("Unexpected exception in flitter")
+    raise
 finally:
     if push is not None:
         push.kill()
