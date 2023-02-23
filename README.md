@@ -340,15 +340,16 @@ Similarly, the index value to the infinite-vector is truncated to pick a
 specific number in the stream. For example:
 
 ```
-let SIZE=1920;1080
+let SIZE=1280;720
 
 !window size=SIZE
-    for i in ..10
-        let x=uniform(:x;i)[beat] y=uniform(:y;i)[beat]
-            r=10*beta(:r;i)[beat] h=uniform(:h;i)[beat]
-        !path
-            !ellipse point=(x;y)*SIZE radius=r*100
-            !fill color=hsv(h;1;1)
+    !canvas size=SIZE
+        for i in ..10
+            let x=uniform(:x;i)[beat] y=uniform(:y;i)[beat]
+                r=10*beta(:r;i)[beat] h=uniform(:h;i)[beat]
+            !path
+                !ellipse point=(x;y)*SIZE radius=r*50
+                !fill color=hsv(h;1;1)
 ```
 
 This will create 10 circles distributed uniformly around the window with
