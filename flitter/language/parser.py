@@ -102,8 +102,9 @@ class FlitterTransformer(Transformer):
 
 
 GRAMMAR = (Path(__file__).parent / 'grammar.lark').open('r', encoding='utf8').read()
-PARSER = Lark(GRAMMAR, postlex=FlitterIndenter(), regex=True, start='top', maybe_placeholders=True)
+PARSER = Lark(GRAMMAR, postlex=FlitterIndenter(), regex=True, start='top', maybe_placeholders=True,
+              parser='lalr', transformer=FlitterTransformer())
 
 
 def parse(source):
-    return FlitterTransformer().transform(PARSER.parse(source))
+    return PARSER.parse(source)
