@@ -497,7 +497,7 @@ class Controller:
                 if wait_time > 0:
                     await asyncio.sleep(wait_time)
                 else:
-                    logger.debug("Slow frame - {:.0f}ms", frame_period*1000)
+                    logger.trace("Slow frame - {:.0f}ms", frame_period*1000)
                     await asyncio.sleep(0)
                     frame_time = self.counter.clock()
 

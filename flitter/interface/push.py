@@ -78,7 +78,7 @@ class Controller:
             for element in message.elements:
                 await self.process_message(element)
             return
-        logger.debug("Received OSC message: {!r}", message)
+        logger.trace("Received OSC message: {!r}", message)
         match message.address.strip('/').split('/'):
             case ['tempo']:
                 tempo, quantum, start = message.args
@@ -192,7 +192,7 @@ class Controller:
                     _, event = self.record_buffer[0]
                     beat = self.push.counter.beat_at_time(event.timestamp)
                     next_playback_event = asyncio.create_task(self.push.counter.wait_for_beat(beat))
-                    logger.debug("Next playback event: {!r}", event)
+                    logger.trace("Next playback event: {!r}", event)
                 events = {wait_event, wait_update, wait_beat}
                 if next_playback_event is not None:
                     events.add(next_playback_event)
