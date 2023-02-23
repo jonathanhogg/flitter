@@ -81,7 +81,7 @@ class Push2:
         for i in range(128):
             r, g, b = self._palette.index_to_rgb_led(i)
             w = self._palette.index_to_white_led(i)
-            self._send_sysex(Command.SET_COLOR_PALETTE_ENTRY, i, r & 0x7f, r >> 7, g & 0x7f, g >> 7, b & 0x7f, b >> 1, w & 0x7f, w >> 7)
+            self._send_sysex(Command.SET_COLOR_PALETTE_ENTRY, i, r & 0x7f, r >> 7, g & 0x7f, g >> 7, b & 0x7f, b >> 7, w & 0x7f, w >> 7)
         self._send_sysex(Command.REAPPLY_COLOR_PALETTE)
         self._clock_task = asyncio.create_task(self._run_clock())
         self._screen_task = asyncio.create_task(self._run_screen())
