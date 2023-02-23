@@ -287,7 +287,6 @@ class Window(ProgramNode):
 
     def __init__(self, screen=0, fullscreen=False, vsync=False):
         super().__init__(None)
-        self._closed = False
         self.window = None
         self.default_screen = screen
         self.default_fullscreen = fullscreen
@@ -323,7 +322,7 @@ class Window(ProgramNode):
             screens = pyglet.canvas.get_display().get_screens()
             screen = screens[screen] if screen < len(screens) else screens[0]
             config = pyglet.gl.Config(major_version=self.GL_VERSION[0], minor_version=self.GL_VERSION[1], forward_compatible=True,
-                                      depth_size=24, double_buffer=True, sample_buffers=1, samples=0)
+                                      double_buffer=True, sample_buffers=0)
             self.window = self.WindowWrapper(width=self.width, height=self.height, resizable=True, caption=title,
                                              screen=screen, vsync=vsync, config=config)
             self.window.event(self.on_resize)
@@ -334,11 +333,12 @@ class Window(ProgramNode):
                     self.window._nswindow.enterFullScreenMode_(self.window._nswindow.screen())  # noqa
                 else:
                     self.window.set_fullscreen(True)
-            logger.info("Opened {}window on {}", "fullscreen " if fullscreen else "", screen)
+            logger.info("New {}window on {}", "fullscreen " if fullscreen else "", screen)
+            logger.debug("OpenGL info: {GL_RENDERER} {GL_VERSION}", **self.glctx.info)
         elif resized:
-            self.on_resize(self.width, self.height)
+            self.on_resize()
 
-    def on_resize(self, width, height):
+    def on_resize(self, *args):
         aspect_ratio = self.width / self.height
         width, height = self.window.get_framebuffer_size()
         if width / height > aspect_ratio:
@@ -347,12 +347,15 @@ class Window(ProgramNode):
         else:
             view_height = int(width / aspect_ratio)
             viewport = (0, (height - view_height) // 2, width, view_height)
-        self.glctx.screen.viewport = viewport
-        logger.debug("Window resized to {}x{} (viewport {}x{})", width, height, *viewport[2:])
+        if viewport != self.glctx.screen.viewport:
+            self.glctx.screen.viewport = viewport
+            actual = viewport[2:]
+            if actual != (width, height):
+                logger.debug("Window resized to {}x{} (viewport {}x{})", width, height, actual)
+            else:
+                logger.debug("Window resized to {}x{}", width, height)
 
     def render(self, node, **kwargs):
-        if self._closed:
-            raise ValueError("Window closed")
         self.window.switch_to()
         super().render(node, **kwargs)
         self.window.flip()
