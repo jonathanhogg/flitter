@@ -110,16 +110,24 @@ class Controller:
         return tree
 
     def get(self, key, default=None):
-        if (value := self.state.get(Vector.coerce(key), null)) != null:
-            return value[0] if len(value) == 1 else tuple(value)
+        if (value := self.state.get(Vector.coerce(key), None)) is not None:
+            if value == null:
+                return None
+            elif len(value) == 1:
+                return value[0]
+            return tuple(value)
         return default
 
     def __contains__(self, key):
         return Vector.coerce(key) in self.state
 
     def __getitem__(self, key):
-        if (value := self.state.get(Vector.coerce(key), null)) != null:
-            return value[0] if len(value) == 1 else tuple(value)
+        if (value := self.state.get(Vector.coerce(key), None)) is not None:
+            if value == null:
+                return None
+            elif len(value) == 1:
+                return value[0]
+            return tuple(value)
         raise KeyError(key)
 
     def __setitem__(self, key, value):
