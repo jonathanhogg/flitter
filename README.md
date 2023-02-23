@@ -68,6 +68,7 @@ For reference, they are:
 - `moderngl` - because the OpenGL API is too hard
 - `av` - for decoding video
 - `pyserial` - for talking to DMX interfaces and lasers
+- `loguru` - because the standard library `logging` is just too antiquated
 
 ## The Language
 
