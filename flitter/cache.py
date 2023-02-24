@@ -124,10 +124,10 @@ class CachePath:
                     timestamp = stream.start_time + min(max(0, int(position / stream.time_base)), stream.duration)
                 count = 0
                 while True:
-                    if len(frames) == 2:
-                        if timestamp >= frames[0].pts and (frames[1] is None or timestamp <= frames[1].pts):
+                    if len(frames) >= 2:
+                        if timestamp >= frames[0].pts and (frames[-1] is None or timestamp <= frames[-1].pts):
                             break
-                        if timestamp < frames[0].pts or (timestamp > frames[1].pts and frames[1].key_frame):
+                        if timestamp < frames[0].pts or (timestamp > frames[1].pts and frames[-1].key_frame):
                             frames = []
                     if not frames:
                         if decoder is not None:
@@ -136,8 +136,6 @@ class CachePath:
                         container.seek(timestamp, stream=stream)
                         decoder = container.decode(streams=(stream.index,))
                     if decoder is not None:
-                        if len(frames) == 2:
-                            frames.pop(0)
                         try:
                             frame = next(decoder)
                             count += 1
@@ -150,7 +148,10 @@ class CachePath:
                             logger.trace("Decoding frames from {:.2f}s", float(frames[0].pts * stream.time_base))
                 if count > 1:
                     logger.trace("Decoded {} frames to find position {:.2f}s", count, float(timestamp * stream.time_base))
-                current_frame, next_frame = frames
+                for current_frame in reversed(frames):
+                    if current_frame is not None and current_frame.pts <= timestamp:
+                        break
+                    next_frame = current_frame
                 ratio = (timestamp - current_frame.pts) / (next_frame.pts - current_frame.pts) if next_frame is not None else 0
             except Exception as exc:
                 logger.opt(exception=exc).warning("Error reading video file: {}", self._path)

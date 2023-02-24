@@ -539,13 +539,13 @@ void main() {
             self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
             self._current_texture = self.glctx.texture((self.width, self.height), 3)
             self._next_texture = self.glctx.texture((self.width, self.height), 3)
-        if current_frame is self._next_frame:
+        if current_frame is self._next_frame or next_frame is self._current_frame:
             self._current_texture, self._next_texture = self._next_texture, self._current_texture
             self._current_frame, self._next_frame = self._next_frame, self._current_frame
         if current_frame is not self._current_frame:
             rgb_frame = current_frame.to_rgb()
             plane = rgb_frame.planes[0]
-            data = rgb_frame.to_ndarray().tobytes() if plane.line_size > plane.width * 3 else memoryview(plane)
+            data = memoryview(rgb_frame.to_ndarray().data) if plane.line_size > plane.width * 3 else memoryview(plane)
             self._current_texture.write(data)
             self._current_frame = current_frame
         if next_frame is None:
@@ -553,7 +553,7 @@ void main() {
         elif next_frame is not self._next_frame:
             rgb_frame = next_frame.to_rgb()
             plane = rgb_frame.planes[0]
-            data = rgb_frame.to_ndarray().tobytes() if plane.line_size > plane.width * 3 else memoryview(plane)
+            data = memoryview(rgb_frame.to_ndarray().data) if plane.line_size > plane.width * 3 else memoryview(plane)
             self._next_texture.write(data)
             self._next_frame = next_frame
         self.render(node, ratio=ratio, alpha=node.get('alpha', 1, float, 1), **kwargs)
