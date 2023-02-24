@@ -109,7 +109,9 @@ class CachePath:
         else:
             try:
                 container = av.container.open(str(self._path))
-                logger.debug("Opened video file: {}", self._path)
+                stream = container.streams.video[0]
+                ctx = stream.codec_context
+                logger.debug("Opened {}x{} {:.0f}fps video file: {}", ctx.width, ctx.height, float(stream.average_rate), self._path)
             except Exception as exc:
                 logger.opt(exception=exc).warning("Error reading video file: {}", self._path)
                 container = None
@@ -120,6 +122,7 @@ class CachePath:
                     timestamp = stream.start_time + int(position / stream.time_base) % stream.duration
                 else:
                     timestamp = stream.start_time + min(max(0, int(position / stream.time_base)), stream.duration)
+                count = 0
                 while True:
                     if len(frames) == 2:
                         if timestamp >= frames[0].pts and (frames[1] is None or timestamp <= frames[1].pts):
@@ -129,6 +132,7 @@ class CachePath:
                     if not frames:
                         if decoder is not None:
                             decoder.close()
+                        logger.trace("Seek video {} to {:.2f}s", self._path, float(timestamp * stream.time_base))
                         container.seek(timestamp, stream=stream)
                         decoder = container.decode(streams=(stream.index,))
                     if decoder is not None:
@@ -136,10 +140,16 @@ class CachePath:
                             frames.pop(0)
                         try:
                             frame = next(decoder)
+                            count += 1
                         except StopIteration:
+                            logger.trace("Hit end of video {}", self._path)
                             decoder = None
                             frame = None
                         frames.append(frame)
+                        if len(frames) == 1:
+                            logger.trace("Decoding frames from {:.2f}s", float(frames[0].pts * stream.time_base))
+                if count > 1:
+                    logger.trace("Decoded {} frames to find position {:.2f}s", count, float(timestamp * stream.time_base))
                 current_frame, next_frame = frames
                 ratio = (timestamp - current_frame.pts) / (next_frame.pts - current_frame.pts) if next_frame is not None else 0
             except Exception as exc:

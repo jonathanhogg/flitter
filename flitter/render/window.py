@@ -532,7 +532,6 @@ void main() {
         if not node.get('interpolate', 1, bool, False):
             ratio = 0
         if self._texture is None or (self.width, self.height) != (current_frame.width, current_frame.height):
-            logger.debug("Video frame size: {} x {}", current_frame.width, current_frame.height)
             if self._texture is not None:
                 self.release()
             self.width, self.height = current_frame.width, current_frame.height
