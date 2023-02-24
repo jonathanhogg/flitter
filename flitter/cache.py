@@ -97,13 +97,14 @@ class CachePath:
         self._cache['image'] = mtime, image
         return image
 
-    def read_video_frames(self, position, loop=False):
+    def read_video_frames(self, obj, position, loop=False):
+        key = 'video', id(obj)
         container = decoder = current_frame = next_frame = None
         frames = []
         ratio = 0
         mtime = self._path.stat().st_mtime if self._path.exists() else None
-        if 'video' in self._cache and self._cache['video'][0] == mtime:
-            _, container, decoder, frames = self._cache['video']
+        if key in self._cache and self._cache[key][0] == mtime:
+            _, container, decoder, frames = self._cache[key]
         elif mtime is None:
             logger.warning("File not found: {}", self._path)
         else:
@@ -157,12 +158,22 @@ class CachePath:
                 logger.opt(exception=exc).warning("Error reading video file: {}", self._path)
                 container = decoder = None
                 frames = []
-        self._cache['video'] = mtime, container, decoder, frames
+        self._cache[key] = mtime, container, decoder, frames
         return ratio, current_frame, next_frame
         if frames:
             return ratio, *frames
         else:
             return 0, None, None
+
+    def close_video(self, obj):
+        key = 'video', id(obj)
+        if key in self._cache:
+            mtime, container, decoder, frames = self._cache.pop(key)
+            if decoder is not None:
+                decoder.close()
+            if container is not None:
+                container.close()
+                logger.debug("Closing video file: {}", self._path)
 
     def __str__(self):
         return str(self._path)

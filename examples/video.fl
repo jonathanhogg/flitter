@@ -1,3 +1,4 @@
 
 !window size=640;480
     !video filename="badapple.m4v" position=60*beat/tempo loop=true interpolate=true
+    !video filename="badapple.m4v" position=-60*beat/tempo loop=true alpha=0.5

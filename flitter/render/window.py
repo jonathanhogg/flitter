@@ -52,9 +52,9 @@ class SceneNode:
         return textures
 
     def destroy(self):
+        self.purge()
         self.release()
         self.glctx = None
-        self.purge()
 
     def purge(self):
         while self.children:
@@ -488,8 +488,12 @@ class Video(Shader):
         self._next_texture = None
         self._current_frame = None
         self._next_frame = None
-        self._filename = None
         super().release()
+
+    def purge(self):
+        if self._filename is not None:
+            SharedCache[self._filename].close_video(self)
+            self._filename = None
 
     @property
     def child_textures(self):
@@ -530,7 +534,7 @@ void main() {
         self._filename = node.get('filename', 1, str)
         position = node.get('position', 1, float, 0)
         loop = node.get('loop', 1, bool, False)
-        ratio, current_frame, next_frame = SharedCache[self._filename].read_video_frames(position, loop)
+        ratio, current_frame, next_frame = SharedCache[self._filename].read_video_frames(self, position, loop)
         if self._texture is not None and (current_frame is None or (self.width, self.height) != (current_frame.width, current_frame.height)):
             self.release()
         if current_frame is None:
