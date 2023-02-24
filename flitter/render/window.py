@@ -351,7 +351,7 @@ class Window(ProgramNode):
             self.glctx.screen.viewport = viewport
             actual = viewport[2:]
             if actual != (width, height):
-                logger.debug("Window resized to {}x{} (viewport {}x{})", width, height, actual)
+                logger.debug("Window resized to {}x{} (viewport {}x{})", width, height, *actual)
             else:
                 logger.debug("Window resized to {}x{}", width, height)
 
