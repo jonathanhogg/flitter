@@ -51,6 +51,7 @@ cdef class Vector(VectorLike):
 cdef Vector null_
 cdef Vector true_
 cdef Vector false_
+cdef Vector minusone_
 
 
 cdef class Query:

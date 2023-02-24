@@ -367,7 +367,7 @@ cdef class Vector:
                 else:
                     parts.append(f":{s}")
             else:
-                parts.append(repr(s))
+                parts.append(repr(obj))
         return ";".join(parts)
 
     def __neg__(self):
