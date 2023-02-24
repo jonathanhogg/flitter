@@ -402,7 +402,7 @@ class Controller:
                     self.reset_state()
                     program_top = self.program_top
                 if count := gc.collect(0):
-                    logger.debug("Collected {} objects", count)
+                    logger.trace("Collected {} objects", count)
                 if self.queue:
                     await self.osc_sender.send_bundle_from_queue(self.queue)
 
@@ -430,11 +430,11 @@ class Controller:
                     program_top = self.program_top
                     performance = 1
                     count = gc.collect(2)
-                    logger.debug("Collected {} objects (full collection)", count)
+                    logger.trace("Collected {} objects (full collection)", count)
 
                 if (source := self.current_path.read_text(encoding='utf8')) != self.current_source:
                     try:
-                        program_top = self.program_top = self.load_source(self.current_source)
+                        program_top = self.program_top = self.load_source(source)
                         self.pages[self.current_page] = self.current_path, source, self.program_top, self.state
                         if self.state_eval_wait and self.state_timestamp is None:
                             start = time.perf_counter()
@@ -476,5 +476,5 @@ class Controller:
             while self.dmx:
                 self.dmx.pop().destroy()
             count = gc.collect(2)
-            logger.debug("Collected {} objects (full collection)", count)
+            logger.trace("Collected {} objects (full collection)", count)
             gc.enable()
