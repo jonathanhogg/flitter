@@ -13,6 +13,7 @@ import time
 
 from loguru import logger
 
+from ..cache import SharedCache
 from ..clock import BeatCounter
 from ..interface.controls import Pad, Encoder
 from ..interface.osc import OSCReceiver, OSCSender, OSCMessage, OSCBundle
@@ -25,9 +26,8 @@ class Controller:
     SEND_PORT = 47177
     RECEIVE_PORT = 47178
 
-    def __init__(self, root_dir, target_fps=60, screen=0, fullscreen=False, vsync=False, state_file=None, multiprocess=True,
+    def __init__(self, target_fps=60, screen=0, fullscreen=False, vsync=False, state_file=None, multiprocess=True,
                  autoreset=None, state_eval_wait=0):
-        self.root_dir = Path(root_dir)
         self.target_fps = target_fps
         self.screen = screen
         self.fullscreen = fullscreen
@@ -60,29 +60,30 @@ class Controller:
         self.pages = []
         self.next_page = None
         self.current_page = None
-        self.current_filename = None
-        self.current_mtime = None
+        self.current_path = None
+        self.current_source = None
 
     def load_page(self, filename):
         page_number = len(self.pages)
-        filename = Path(filename)
-        mtime = filename.stat().st_mtime
-        program_top = self.load_source(filename)
-        self.pages.append((filename, mtime, program_top, self.global_state.setdefault(page_number, {})))
-        logger.success("Loaded page {}: {}", page_number, filename)
+        path = SharedCache[filename]
+        source = path.read_text(encoding='utf8')
+        program_top = self.load_source(source)
+        self.pages.append((path, source, program_top, self.global_state.setdefault(page_number, {})))
+        logger.success("Loaded page {}: {}", page_number, path)
 
     def switch_to_page(self, page_number):
         if self.pages is not None and 0 <= page_number < len(self.pages):
             self.pads = {}
             self.encoders = {}
-            filename, mtime, program_top, state = self.pages[page_number]
+            path, source, program_top, state = self.pages[page_number]
             self.state = state
             self.state_timestamp = self.counter.clock()
             self.program_top = program_top
             self.current_page = page_number
-            self.current_filename = filename
-            self.current_mtime = mtime
-            logger.info("Switched to page {}: {}", page_number, filename)
+            self.current_path = path
+            self.current_source = source
+            SharedCache.set_root(self.current_path)
+            logger.info("Switched to page {}: {}", page_number, self.current_path)
             self.enqueue_reset()
             counter_state = self.get(('_counter',))
             if counter_state is not None:
@@ -95,11 +96,9 @@ class Controller:
                 window.purge()
 
     @staticmethod
-    def load_source(filename):
-        logger.debug("Reading source {}", filename)
+    def load_source(source):
         start = time.perf_counter()
-        with open(filename, encoding='utf8') as file:
-            initial_tree = parse(file.read())
+        initial_tree = parse(source)
         mid = time.perf_counter()
         tree = initial_tree.partially_evaluate(Context())
         end = time.perf_counter()
@@ -142,53 +141,14 @@ class Controller:
     def read(self, filename):
         filename = str(filename)
         if filename:
-            path = self.root_dir / filename
-            if path.exists():
-                path_mtime = path.stat().st_mtime
-                if path in self.read_cache:
-                    text, mtime = self.read_cache[path]
-                    if path_mtime == mtime:
-                        return text
-                text = Vector((path.open(encoding='utf8').read(),))
-                self.read_cache[path] = text, path_mtime
-                logger.info("Read: {}", filename)
-                return text
+            return Vector.coerce(SharedCache[filename].read_text(encoding='utf8'))
         return null
 
-    def csv(self, filename, line_number):
+    def csv(self, filename, row_number):
         filename = str(filename)
-        line_number = line_number.match(1, int)
-        lines = reader = None
-        if filename and line_number is not None:
-            path = self.root_dir / filename
-            if path.exists():
-                path_mtime = path.stat().st_mtime
-                if path in self.csv_cache:
-                    cached_lines, cached_reader, cached_mtime = self.csv_cache[path]
-                    if path_mtime == cached_mtime:
-                        lines, reader = cached_lines, cached_reader
-                if lines is None:
-                    lines = []
-                    reader = csv.reader(path.open(encoding='utf8'))
-                    self.csv_cache[path] = lines, reader, path_mtime
-                    logger.info("Read CSV: {}", filename)
-            if lines is not None:
-                while reader is not None and line_number >= len(lines):
-                    try:
-                        row = next(reader)
-                        values = []
-                        for value in row:
-                            try:
-                                value = float(value)
-                            except ValueError:
-                                pass
-                            values.append(value)
-                        lines.append(Vector(values))
-                    except StopIteration:
-                        self.csv_cache[path] = lines, None, path_mtime
-                        break
-                if line_number < len(lines):
-                    return lines[line_number]
+        row_number = row_number.match(1, int)
+        if filename and row_number is not None:
+            return SharedCache[filename].read_csv_vector(row_number)
         return null
 
     async def update_windows(self, graph, **kwargs):
@@ -472,10 +432,10 @@ class Controller:
                     count = gc.collect(2)
                     logger.debug("Collected {} objects (full collection)", count)
 
-                if (mtime := self.current_filename.stat().st_mtime) > self.current_mtime:
+                if (source := self.current_path.read_text(encoding='utf8')) != self.current_source:
                     try:
-                        program_top = self.program_top = self.load_source(self.current_filename)
-                        self.pages[self.current_page] = self.current_filename, self.current_mtime, self.program_top, self.state
+                        program_top = self.program_top = self.load_source(self.current_source)
+                        self.pages[self.current_page] = self.current_path, source, self.program_top, self.state
                         if self.state_eval_wait and self.state_timestamp is None:
                             start = time.perf_counter()
                             program_top = self.program_top.partially_evaluate(Context(state=self.state))
@@ -483,10 +443,10 @@ class Controller:
                             logger.opt(lazy=True).debug("Tree node count after partial-evaluation {after}",
                                                         after=lambda: program_top.reduce(lambda e, *rs: sum(rs) + 1))
                             self.state_timestamp = None
-                        logger.info("Reloaded page {}: {}", self.current_page, self.current_filename)
+                        logger.info("Reloaded page {}: {}", self.current_page, self.current_path)
                     except Exception:
                         logger.exception("Error reloading page")
-                    self.current_mtime = mtime
+                    self.current_source = source
 
                 now = self.counter.clock()
                 frame_period = now - frame_time

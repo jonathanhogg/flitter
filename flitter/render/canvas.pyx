@@ -15,11 +15,11 @@ from libc.math cimport acos, sqrt
 from loguru import logger
 import skia
 
+from ..cache import SharedCache
 from ..model cimport Vector, Node
 
 
 cdef double TwoPI = 6.283185307179586
-cdef dict _ImageCache = {}
 
 
 cdef dict Composite = {
@@ -104,25 +104,6 @@ cdef dict FilterQuality = {
     'medium': skia.FilterQuality.kMedium_FilterQuality,
     'high': skia.FilterQuality.kHigh_FilterQuality,
 }
-
-
-cpdef object load_image(str filename):
-    path = Path(filename)
-    if path.exists():
-        current_mtime = path.stat().st_mtime
-        if filename in _ImageCache:
-            mtime, image = _ImageCache[filename]
-            if mtime == current_mtime:
-                return image
-        try:
-            image = skia.Image.open(filename)
-            logger.info("Read image file {}", filename)
-        except Exception:
-            logger.exception("Unexpected error opening file {}", filename)
-            image = None
-        _ImageCache[filename] = current_mtime, image
-        return image
-    return None
 
 
 @cython.cdivision(True)
@@ -675,7 +656,7 @@ cpdef object draw(Node node, ctx, paint=None, font=None, path=None, dict stats=N
                 ctx.drawString(text, x, y, font, text_paint)
 
     elif kind == 'image':
-        if (filename := node.get('filename', 1, str)) and (image := load_image(filename)) is not None:
+        if (filename := node.get('filename', 1, str)) and (image := SharedCache[filename].read_image()) is not None:
             width, height = image.width(), image.height()
             point = node.get('point', 2, float, (0, 0))
             if (fill := node.get('fill', 2, float)) is not None:

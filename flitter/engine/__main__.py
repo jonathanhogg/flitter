@@ -30,7 +30,7 @@ parser.add_argument('--push', action='store_true', default=False, help="Start Ab
 parser.add_argument('script', nargs='+', help="Script to execute")
 args = parser.parse_args()
 logger = configure_logger(args.level)
-controller = Controller('.', target_fps=args.fps, screen=args.screen, fullscreen=args.fullscreen, vsync=args.vsync,
+controller = Controller(target_fps=args.fps, screen=args.screen, fullscreen=args.fullscreen, vsync=args.vsync,
                         state_file=args.state, multiprocess=args.multiprocess and not args.profile, autoreset=args.autoreset,
                         state_eval_wait=args.evalstate)
 for script in args.script:
