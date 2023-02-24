@@ -397,13 +397,13 @@ class Controller:
                 render += now
                 housekeeping -= now
 
-                if self.autoreset and self.state_timestamp and self.counter.clock() > self.state_timestamp + self.autoreset:
-                    self.reset_state()
-                    program_top = self.program_top
-                if count := gc.collect(0):
-                    logger.trace("Collected {} objects", count)
                 if self.queue:
                     await self.osc_sender.send_bundle_from_queue(self.queue)
+
+                if self.autoreset and self.state_timestamp and self.counter.clock() > self.state_timestamp + self.autoreset:
+                    logger.debug("Auto-reset state")
+                    self.reset_state()
+                    program_top = self.program_top
 
                 if self.state_eval_wait and self.state_timestamp is not None and now > self.state_timestamp + self.state_eval_wait:
                     start = time.perf_counter()
@@ -446,6 +446,9 @@ class Controller:
                     except Exception:
                         logger.exception("Error reloading page")
                     self.current_source = source
+
+                if count := gc.collect(0):
+                    logger.trace("Collected {} objects", count)
 
                 now = self.counter.clock()
                 frame_period = now - frame_time

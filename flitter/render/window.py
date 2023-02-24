@@ -326,6 +326,7 @@ class Window(ProgramNode):
             self.window = self.WindowWrapper(width=self.width, height=self.height, resizable=True, caption=title,
                                              screen=screen, vsync=vsync, config=config)
             self.window.event(self.on_resize)
+            self.window.switch_to()
             self.glctx = moderngl.create_context(require=self.GL_VERSION[0] * 100 + self.GL_VERSION[1] * 10)
             if fullscreen:
                 self.window.set_mouse_visible(False)
@@ -334,11 +335,12 @@ class Window(ProgramNode):
                 else:
                     self.window.set_fullscreen(True)
             logger.info("New {}window on {}", "fullscreen " if fullscreen else "", screen)
+            self.recalculate_viewport(True)
             logger.debug("OpenGL info: {GL_RENDERER} {GL_VERSION}", **self.glctx.info)
         elif resized:
-            self.on_resize()
+            self.recalculate_viewport()
 
-    def on_resize(self, *args):
+    def recalculate_viewport(self, force=False):
         aspect_ratio = self.width / self.height
         width, height = self.window.get_framebuffer_size()
         if width / height > aspect_ratio:
@@ -347,13 +349,16 @@ class Window(ProgramNode):
         else:
             view_height = int(width / aspect_ratio)
             viewport = (0, (height - view_height) // 2, width, view_height)
-        if viewport != self.glctx.screen.viewport:
+        if force or viewport != self.glctx.screen.viewport:
+            width, height = self.window.width, self.window.height
             self.glctx.screen.viewport = viewport
-            actual = viewport[2:]
-            if actual != (width, height):
-                logger.debug("Window resized to {}x{} (viewport {}x{})", width, height, *actual)
+            if viewport != (0, 0, width, height):
+                logger.debug("Window resized to {0}x{1} (viewport {4}x{5} x={2} y={3})", width, height, *viewport)
             else:
                 logger.debug("Window resized to {}x{}", width, height)
+
+    def on_resize(self, width, height):
+        self.recalculate_viewport()
 
     def render(self, node, **kwargs):
         self.window.switch_to()
@@ -526,14 +531,11 @@ void main() {
         position = node.get('position', 1, float, 0)
         loop = node.get('loop', 1, bool, False)
         ratio, current_frame, next_frame = SharedCache[self._filename].read_video_frames(position, loop)
-        if current_frame is None:
+        if self._texture is not None and (current_frame is None or (self.width, self.height) != (current_frame.width, current_frame.height)):
             self.release()
+        if current_frame is None:
             return
-        if not node.get('interpolate', 1, bool, False):
-            ratio = 0
-        if self._texture is None or (self.width, self.height) != (current_frame.width, current_frame.height):
-            if self._texture is not None:
-                self.release()
+        if self._texture is None:
             self.width, self.height = current_frame.width, current_frame.height
             self._texture = self.glctx.texture((self.width, self.height), 4)
             self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
@@ -556,4 +558,4 @@ void main() {
             data = memoryview(rgb_frame.to_ndarray().data) if plane.line_size > plane.width * 3 else memoryview(plane)
             self._next_texture.write(data)
             self._next_frame = next_frame
-        self.render(node, ratio=ratio, alpha=node.get('alpha', 1, float, 1), **kwargs)
+        self.render(node, ratio=ratio if node.get('interpolate', 1, bool, False) else 0, alpha=node.get('alpha', 1, float, 1), **kwargs)
