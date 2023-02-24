@@ -474,20 +474,20 @@ class Video(Shader):
     def __init__(self, glctx):
         super().__init__(glctx)
         self._filename = None
-        self._current_frame = None
-        self._next_frame = None
-        self._current_texture = None
-        self._next_texture = None
+        self._frame0 = None
+        self._frame1 = None
+        self._frame0_texture = None
+        self._frame1_texture = None
 
     def release(self):
-        if self._current_texture is not None:
-            self._current_texture.release()
-        if self._next_texture is not None:
-            self._next_texture.release()
-        self._current_texture = None
-        self._next_texture = None
-        self._current_frame = None
-        self._next_frame = None
+        if self._frame0_texture is not None:
+            self._frame0_texture.release()
+        if self._frame1_texture is not None:
+            self._frame1_texture.release()
+        self._frame0_texture = None
+        self._frame1_texture = None
+        self._frame0 = None
+        self._frame1 = None
         super().release()
 
     def purge(self):
@@ -497,7 +497,7 @@ class Video(Shader):
 
     @property
     def child_textures(self):
-        return {'current_frame': self._current_texture, 'next_frame': self._next_texture}
+        return {'frame0': self._frame0_texture, 'frame1': self._frame1_texture}
 
     def get_vertex_source(self, node):
         return """#version 410
@@ -513,14 +513,14 @@ void main() {
         return """#version 410
 in vec2 coord;
 out vec4 color;
-uniform sampler2D current_frame;
-uniform sampler2D next_frame;
+uniform sampler2D frame0;
+uniform sampler2D frame1;
 uniform float ratio;
 uniform float alpha;
 void main() {
-    vec4 current_color = texture(current_frame, coord);
-    vec4 next_color = texture(next_frame, coord);
-    color = vec4(mix(current_color.rgb, next_color.rgb, ratio) * alpha, alpha);
+    vec4 frame0_color = texture(frame0, coord);
+    vec4 frame1_color = texture(frame1, coord);
+    color = vec4(mix(frame0_color.rgb, frame1_color.rgb, ratio) * alpha, alpha);
 }
 """
 
@@ -534,32 +534,34 @@ void main() {
         self._filename = node.get('filename', 1, str)
         position = node.get('position', 1, float, 0)
         loop = node.get('loop', 1, bool, False)
-        ratio, current_frame, next_frame = SharedCache[self._filename].read_video_frames(self, position, loop)
-        if self._texture is not None and (current_frame is None or (self.width, self.height) != (current_frame.width, current_frame.height)):
+        ratio, frame0, frame1 = SharedCache[self._filename].read_video_frames(self, position, loop)
+        if self._texture is not None and (frame0 is None or (self.width, self.height) != (frame0.width, frame0.height)):
             self.release()
-        if current_frame is None:
+        if frame0 is None:
             return
         if self._texture is None:
-            self.width, self.height = current_frame.width, current_frame.height
+            self.width, self.height = frame0.width, frame0.height
             self._texture = self.glctx.texture((self.width, self.height), 4)
             self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
-            self._current_texture = self.glctx.texture((self.width, self.height), 3)
-            self._next_texture = self.glctx.texture((self.width, self.height), 3)
-        if current_frame is self._next_frame or next_frame is self._current_frame:
-            self._current_texture, self._next_texture = self._next_texture, self._current_texture
-            self._current_frame, self._next_frame = self._next_frame, self._current_frame
-        if current_frame is not self._current_frame:
-            rgb_frame = current_frame.to_rgb()
+            self._frame0_texture = self.glctx.texture((self.width, self.height), 3)
+            self._frame1_texture = self.glctx.texture((self.width, self.height), 3)
+        if frame0 is self._frame1 or frame1 is self._frame0:
+            self._frame0_texture, self._frame1_texture = self._frame1_texture, self._frame0_texture
+            self._frame0, self._frame1 = self._frame1, self._frame0
+        if frame0 is not self._frame0:
+            rgb_frame = frame0.to_rgb()
             plane = rgb_frame.planes[0]
             data = memoryview(rgb_frame.to_ndarray().data) if plane.line_size > plane.width * 3 else memoryview(plane)
-            self._current_texture.write(data)
-            self._current_frame = current_frame
-        if next_frame is None:
-            self._next_frame = None
-        elif next_frame is not self._next_frame:
-            rgb_frame = next_frame.to_rgb()
+            self._frame0_texture.write(data)
+            self._frame0 = frame0
+        if frame1 is None:
+            self._frame1 = None
+        elif frame1 is not self._frame1:
+            rgb_frame = frame1.to_rgb()
             plane = rgb_frame.planes[0]
-            data = memoryview(rgb_frame.to_ndarray().data) if plane.line_size > plane.width * 3 else memoryview(plane)
-            self._next_texture.write(data)
-            self._next_frame = next_frame
-        self.render(node, ratio=ratio if node.get('interpolate', 1, bool, False) else 0, alpha=node.get('alpha', 1, float, 1), **kwargs)
+            data = rgb_frame.to_ndarray().data if plane.line_size > plane.width * 3 else plane
+            self._frame1_texture.write(memoryview(data))
+            self._frame1 = frame1
+        interpolate = node.get('interpolate', 1, bool, False)
+        alpha = node.get('alpha', 1, float, 1)
+        self.render(node, ratio=ratio if interpolate else 0, alpha=alpha, **kwargs)
