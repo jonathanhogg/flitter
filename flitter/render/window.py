@@ -8,7 +8,6 @@ import array
 import sys
 import time
 
-import av
 from loguru import logger
 import skia
 import moderngl
@@ -19,6 +18,7 @@ import pyglet.canvas
 import pyglet.window
 import pyglet.gl
 
+from ..cache import SharedCache
 from . import canvas
 
 
@@ -468,12 +468,9 @@ class Canvas(SceneNode):
 class Video(Shader):
     def __init__(self, glctx):
         super().__init__(glctx)
-        self._container = None
-        self._stream = None
-        self._decoder = None
-        self._frames = []
-        self._current_pts = None
-        self._next_pts = None
+        self._filename = None
+        self._current_frame = None
+        self._next_frame = None
         self._current_texture = None
         self._next_texture = None
 
@@ -484,17 +481,9 @@ class Video(Shader):
             self._next_texture.release()
         self._current_texture = None
         self._next_texture = None
-        self._current_pts = None
-        self._next_pts = None
-        self._frames = []
-        if self._decoder is not None:
-            self._decoder.close()
-        self._decoder = None
-        self._stream = None
-        if self._container is not None:
-            logger.info("Closed video {}", self._container.name)
-            self._container.close()
-        self._container = None
+        self._current_frame = None
+        self._next_frame = None
+        self._filename = None
         super().release()
 
     @property
@@ -527,79 +516,45 @@ void main() {
 """
 
     def similar_to(self, node):
-        return self._container is not None and node.get('filename', 1, str) == self._container.name
+        return node.get('filename', 1, str) == self._filename
 
     async def update(self, node, **kwargs):
         references = kwargs.setdefault('references', {})
         if node_id := node.get('id', 1, str):
             references[node_id] = self
-        filename = node.get('filename', 1, str)
-        if self._container is not None and self._container.name != filename:
+        self._filename = node.get('filename', 1, str)
+        position = node.get('position', 1, float, 0)
+        loop = node.get('loop', 1, bool, False)
+        ratio, current_frame, next_frame = SharedCache[self._filename].read_video_frames(position, loop)
+        if current_frame is None:
             self.release()
-        if self._container is None and filename:
-            try:
-                container = av.container.open(filename)
-                stream = container.streams.video[0]
-            except (FileNotFoundError, av.InvalidDataError, IndexError):
-                return
-            logger.info("Opened video {!r}", filename)
-            self._container = container
-            self._stream = stream
-            codec_context = self._stream.codec_context
-            if codec_context.display_aspect_ratio:
-                self.width, self.height = int(codec_context.display_aspect_ratio * codec_context.height), codec_context.height
-            else:
-                self.width, self.height = codec_context.width, codec_context.height
+            return
+        if not node.get('interpolate', 1, bool, False):
+            ratio = 0
+        if self._texture is None or (self.width, self.height) != (current_frame.width, current_frame.height):
+            logger.debug("Video frame size: {} x {}", current_frame.width, current_frame.height)
+            if self._texture is not None:
+                self.release()
+            self.width, self.height = current_frame.width, current_frame.height
             self._texture = self.glctx.texture((self.width, self.height), 4)
             self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
-            self._current_texture = self.glctx.texture((codec_context.width, codec_context.height), 3)
-            self._next_texture = self.glctx.texture((codec_context.width, codec_context.height), 3)
-        if self._container is not None:
-            start_position = self._stream.start_time
-            position = node.get('position', 1, float, 0)
-            if node.get('loop', 1, bool, False):
-                timestamp = start_position + int(position / self._stream.time_base) % self._stream.duration
-            else:
-                timestamp = min(max(start_position, int(position / self._stream.time_base)), start_position + self._stream.duration)
-            await self.read_frame(node, timestamp)
-            if not node.get('interpolate', 1, bool, True) or self._next_pts is None:
-                ratio = 0
-            else:
-                ratio = (timestamp - self._current_pts) / (self._next_pts - self._current_pts)
-            self.render(node, ratio=ratio, alpha=node.get('alpha', 1, float, 1), **kwargs)
-
-    async def read_frame(self, node, timestamp):
-        while True:
-            if len(self._frames) == 2:
-                current_frame, next_frame = self._frames
-                if current_frame.pts <= timestamp and (next_frame is None or timestamp < next_frame.pts):
-                    break
-                elif timestamp < current_frame.pts or (timestamp > next_frame.pts and next_frame.key_frame):
-                    self._frames = []
-            if not self._frames:
-                if self._decoder is not None:
-                    self._decoder.close()
-                self._container.seek(timestamp, stream=self._stream)
-                self._decoder = self._container.decode(streams=(self._stream.index,))
-            if self._decoder is not None:
-                if len(self._frames) == 2:
-                    self._frames.pop(0)
-                try:
-                    frame = next(self._decoder)
-                except StopIteration:
-                    logger.debug("Reached end of video {!r}", self._container.name)
-                    self._decoder = None
-                    frame = None
-                self._frames.append(frame)
-        current_frame, next_frame = self._frames
-        if current_frame.pts == self._next_pts:
+            self._current_texture = self.glctx.texture((self.width, self.height), 3)
+            self._next_texture = self.glctx.texture((self.width, self.height), 3)
+        if current_frame is self._next_frame:
             self._current_texture, self._next_texture = self._next_texture, self._current_texture
-            self._current_pts, self._next_pts = self._next_pts, self._current_pts
-        if current_frame.pts != self._current_pts:
-            self._current_texture.write(memoryview(current_frame.to_rgb().planes[0]))
-            self._current_pts = current_frame.pts
+            self._current_frame, self._next_frame = self._next_frame, self._current_frame
+        if current_frame is not self._current_frame:
+            rgb_frame = current_frame.to_rgb()
+            plane = rgb_frame.planes[0]
+            data = rgb_frame.to_ndarray().tobytes() if plane.line_size > plane.width * 3 else memoryview(plane)
+            self._current_texture.write(data)
+            self._current_frame = current_frame
         if next_frame is None:
-            self._next_pts = None
-        elif next_frame.pts != self._next_pts:
-            self._next_texture.write(memoryview(next_frame.to_rgb().planes[0]))
-            self._next_pts = next_frame.pts
+            self._next_frame = None
+        elif next_frame is not self._next_frame:
+            rgb_frame = next_frame.to_rgb()
+            plane = rgb_frame.planes[0]
+            data = rgb_frame.to_ndarray().tobytes() if plane.line_size > plane.width * 3 else memoryview(plane)
+            self._next_texture.write(data)
+            self._next_frame = next_frame
+        self.render(node, ratio=ratio, alpha=node.get('alpha', 1, float, 1), **kwargs)
