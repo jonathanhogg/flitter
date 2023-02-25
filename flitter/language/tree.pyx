@@ -322,11 +322,39 @@ cdef class Negative(UnaryOperation):
         cdef model.Vector value = self.expr.evaluate(context)
         return value.neg()
 
+    cpdef Expression partially_evaluate(self, model.Context context):
+        cdef Expression expr = self.expr.partially_evaluate(context)
+        cdef Expression unary = type(self)(expr)
+        if isinstance(expr, Literal):
+            return Literal(unary.evaluate(context))
+        if isinstance(expr, Negative):
+            expr = Positive((<Negative>expr).expr)
+            return expr.partially_evaluate(context)
+        cdef MathsBinaryOperation maths
+        if isinstance(expr, (Multiply, Divide)):
+            maths = expr
+            if isinstance(maths.left, Literal):
+                expr = type(expr)(Negative(maths.left), maths.right)
+                return expr.partially_evaluate(context)
+            if isinstance(maths.right, Literal):
+                expr = type(expr)(maths.left, Negative(maths.right))
+                return expr.partially_evaluate(context)
+        return unary
+
 
 cdef class Positive(UnaryOperation):
     cpdef model.VectorLike evaluate(self, model.Context context):
         cdef model.Vector value = self.expr.evaluate(context)
         return value.pos()
+
+    cpdef Expression partially_evaluate(self, model.Context context):
+        cdef Expression expr = self.expr.partially_evaluate(context)
+        cdef Expression unary = type(self)(expr)
+        if isinstance(expr, Literal):
+            return Literal(unary.evaluate(context))
+        if isinstance(expr, (Negative, Positive, MathsBinaryOperation)):
+            return expr.partially_evaluate(context)
+        return unary
 
 
 cdef class Not(UnaryOperation):
@@ -349,7 +377,19 @@ cdef class BinaryOperation(Expression):
         cdef Expression binary = type(self)(left, right)
         if isinstance(left, Literal) and isinstance(right, Literal):
             return Literal(binary.evaluate(context))
+        elif isinstance(left, Literal) and isinstance(left.value, model.Vector):
+            if (expr := self.constant_left((<Literal>left).value, right)) is not None:
+                return expr.partially_evaluate(context)
+        elif isinstance(right, Literal) and isinstance(right.value, model.Vector):
+            if (expr := self.constant_right(left, (<Literal>right).value)) is not None:
+                return expr.partially_evaluate(context)
         return binary
+
+    cdef Expression constant_left(self, model.Vector left, Expression right):
+        return None
+
+    cdef Expression constant_right(self, Expression left, model.Vector right):
+        return None
 
     cpdef object reduce(self, func):
         return func(self, self.left.reduce(func), self.right.reduce(func))
@@ -368,12 +408,27 @@ cdef class Add(MathsBinaryOperation):
         cdef model.Vector right = self.right.evaluate(context)
         return left.add(right)
 
+    cdef Expression constant_left(self, model.Vector left, Expression right):
+        if left.eq(model.false_):
+            return Positive(right)
+
+    cdef Expression constant_right(self, Expression left, model.Vector right):
+        return self.constant_left(right, left)
+
 
 cdef class Subtract(MathsBinaryOperation):
     cpdef model.VectorLike evaluate(self, model.Context context):
         cdef model.Vector left = self.left.evaluate(context)
         cdef model.Vector right = self.right.evaluate(context)
         return left.sub(right)
+
+    cdef Expression constant_left(self, model.Vector left, Expression right):
+        if left.eq(model.false_):
+            return Negative(right)
+
+    cdef Expression constant_right(self, Expression left, model.Vector right):
+        if right.eq(model.false_):
+            return Positive(left)
 
 
 cdef class Multiply(MathsBinaryOperation):
@@ -382,12 +437,40 @@ cdef class Multiply(MathsBinaryOperation):
         cdef model.Vector right = self.right.evaluate(context)
         return left.mul(right)
 
+    cdef Expression constant_left(self, model.Vector left, Expression right):
+        if left.eq(model.true_):
+            return Positive(right)
+        if left.eq(model.minusone_):
+            return Negative(right)
+        cdef MathsBinaryOperation maths
+        if isinstance(right, Add) or isinstance(right, Subtract):
+            maths = right
+            if isinstance(maths.left, Literal) or isinstance(maths.right, Literal):
+                return type(maths)(Multiply(Literal(left), maths.left), Multiply(Literal(left), maths.right))
+        elif isinstance(right, Multiply):
+            maths = right
+            if isinstance(maths.left, Literal):
+                return Multiply(Multiply(Literal(left), maths.left), maths.right)
+            if isinstance(maths.right, Literal):
+                return Multiply(maths.left, Multiply(Literal(left), maths.right))
+        elif isinstance(right, Divide):
+            maths = right
+            if isinstance(maths.left, Literal):
+                return Divide(Multiply(Literal(left), maths.left), maths.right)
+
+    cdef Expression constant_right(self, Expression left, model.Vector right):
+        return self.constant_left(right, left)
+
 
 cdef class Divide(MathsBinaryOperation):
     cpdef model.VectorLike evaluate(self, model.Context context):
         cdef model.Vector left = self.left.evaluate(context)
         cdef model.Vector right = self.right.evaluate(context)
         return left.truediv(right)
+
+    cdef Expression constant_right(self, Expression left, model.Vector right):
+        if right.eq(model.true_):
+            return Positive(left)
 
 
 cdef class FloorDivide(MathsBinaryOperation):
@@ -409,6 +492,10 @@ cdef class Power(MathsBinaryOperation):
         cdef model.Vector left = self.left.evaluate(context)
         cdef model.Vector right = self.right.evaluate(context)
         return left.pow(right)
+
+    cdef Expression constant_right(self, Expression left, model.Vector right):
+        if right.eq(model.true_):
+            return Positive(left)
 
 
 cdef class Comparison(BinaryOperation):
@@ -462,11 +549,23 @@ cdef class And(BinaryOperation):
         cdef model.Vector left = self.left.evaluate(context)
         return self.right.evaluate(context) if left.as_bool() else left
 
+    cdef Expression constant_left(self, model.Vector left, Expression right):
+        if left.as_bool():
+            return right
+        else:
+            return Literal(left)
+
 
 cdef class Or(BinaryOperation):
     cpdef model.VectorLike evaluate(self, model.Context context):
         cdef model.Vector left = self.left.evaluate(context)
         return left if left.as_bool() else self.right.evaluate(context)
+
+    cdef Expression constant_left(self, model.Vector left, Expression right):
+        if left.as_bool():
+            return Literal(left)
+        else:
+            return right
 
 
 cdef class Xor(BinaryOperation):
@@ -478,6 +577,10 @@ cdef class Xor(BinaryOperation):
         if not right.as_bool():
             return left
         return model.false_
+
+    cdef Expression constant_left(self, model.Vector left, Expression right):
+        if not left.as_bool():
+            return right
 
 
 cdef class Slice(Expression):
