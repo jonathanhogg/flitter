@@ -39,7 +39,7 @@ class FlitterTransformer(Transformer):
     def SYMBOL(self, token):
         return model.Vector(intern(str(token)[1:]))
 
-    def ESCAPED_STRING(self, token):
+    def STRING(self, token):
         return model.Vector(intern(literal_eval(token)))
 
     def QUERY(self, token):

@@ -44,18 +44,65 @@ patterns: [
         name: "keyword.operator.arithmetic.flitter"
     }
     {
-        begin: '\"'
+        begin: "(\"\"\")"
         beginCaptures:
-            '0':
-                name: 'punctuation.definition.string.begin.flitter'
-        end: '\"'
+            "1":
+                name: "punctuation.definition.string.begin.flitter"
+        end: "((?<=\"\"\")(\")\"\"|\"\"\")"
         endCaptures:
-            '0':
-                name: 'punctuation.definition.string.end.flitter'
-        name: 'string.quoted.single.flitter'
+            "1":
+                name: "punctuation.definition.string.end.flitter"
+            "2":
+                name: "meta.empty-string.double.flitter"
+        name: "string.quoted.double.multi-line.flitter"
+    }
+    {
+        begin: '(\")'
+        beginCaptures:
+            '1':
+                name: 'punctuation.definition.string.begin.flitter'
+        end: '((?<=\")(\")|\")'
+        endCaptures:
+            '1':
+                name: "punctuation.definition.string.end.flitter"
+            '2':
+                name: "meta.empty-string.double.flitter"
+        name: "string.quoted.double.single-line.flitter"
         patterns: [
             {
-                match: '\\"'
+                match: '(\\\\")'
+                name: 'constant.character.escape.flitter'
+            }
+        ]
+    }
+    {
+        begin: "(\'\'\')"
+        beginCaptures:
+            "1":
+                name: "punctuation.definition.string.begin.flitter"
+        end: "((?<=\'\'\')(\')\'\'|\'\'\')"
+        endCaptures:
+            "1":
+                name: "punctuation.definition.string.end.flitter"
+            "2":
+                name: "meta.empty-string.single.flitter"
+        name: "string.quoted.single.multi-line.flitter"
+    }
+    {
+        begin: "(\')"
+        beginCaptures:
+            '1':
+                name: 'punctuation.definition.string.begin.flitter'
+        end: "((?<=\')(\')|\')"
+        endCaptures:
+            '1':
+                name: "punctuation.definition.string.end.flitter"
+            '2':
+                name: "meta.empty-string.single.flitter"
+        name: "string.quoted.single.single-line.flitter"
+        patterns: [
+            {
+                match: "\\\\'"
                 name: 'constant.character.escape.flitter'
             }
         ]
