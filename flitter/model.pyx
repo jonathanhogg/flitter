@@ -298,8 +298,10 @@ cdef class Vector:
                         return values
                 elif m == 1:
                     values = []
+                    f = self.numbers[0]
+                    obj = f if t is None else t(f)
                     for i in range(n):
-                        values.append(self.numbers[0])
+                        values.append(obj)
                     return values
             return default
         if n == 0 and t is None:
