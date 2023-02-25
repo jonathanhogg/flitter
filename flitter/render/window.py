@@ -36,6 +36,11 @@ class SceneNode:
         self.children = []
         self.width = None
         self.height = None
+        self.tags = set()
+
+    @property
+    def name(self):
+        return '#'.join((self.__class__.__name__.lower(), *self.tags))
 
     @property
     def texture(self):
@@ -70,12 +75,13 @@ class SceneNode:
             self.width = width
             self.height = height
             resized = True
+        self.tags = node.tags
         self.create(node, resized, **kwargs)
         await self.descend(node, **kwargs)
         self.render(node, **kwargs)
 
     def similar_to(self, node):
-        return False
+        return node.tags and node.tags == self.tags
 
     async def descend(self, node, **kwargs):
         count = 0
@@ -214,11 +220,19 @@ void main() {{
                 self._rectangle.release()
                 self._rectangle = None
             try:
+                start = time.perf_counter()
                 self._program = self.glctx.program(vertex_shader=self._vertex_source, fragment_shader=self._fragment_source)
                 vertices = self.glctx.buffer(array.array('f', [-1, 1, -1, -1, 1, 1, 1, -1]))
                 self._rectangle = self.glctx.vertex_array(self._program, [(vertices, '2f', 'position')])
-            except Exception:
-                logger.exception("Unable to compile shader:\n{}", self._fragment_source)
+            except Exception as exc:
+                error = str(exc).strip().split('\n')
+                logger.error("{} GL program compile failed: {}", self.name, error[-1])
+                source = self._fragment_source if 'fragment_shader' in error else self._vertex_source
+                source = '\n'.join(f'{i+1:3d}|{line}' for i, line in enumerate(source.split('\n')))
+                logger.trace("Failing source:\n{}", source)
+            else:
+                end = time.perf_counter()
+                logger.debug("{} GL program compiled in {:.1f}ms", self.name, 1000*(end-start))
 
     def render(self, node, **kwargs):
         self.compile(node)
@@ -334,7 +348,7 @@ class Window(ProgramNode):
                     self.window._nswindow.enterFullScreenMode_(self.window._nswindow.screen())  # noqa
                 else:
                     self.window.set_fullscreen(True)
-            logger.info("New {}window on {}", "fullscreen " if fullscreen else "", screen)
+            logger.debug("{} {} on {}", self.name,  "opened fullscreen" if fullscreen else "opened", screen)
             self.recalculate_viewport(True)
             logger.debug("OpenGL info: {GL_RENDERER} {GL_VERSION}", **self.glctx.info)
         elif resized:
@@ -353,9 +367,9 @@ class Window(ProgramNode):
             width, height = self.window.width, self.window.height
             self.glctx.screen.viewport = viewport
             if viewport != (0, 0, width, height):
-                logger.debug("Window resized to {0}x{1} (viewport {4}x{5} x={2} y={3})", width, height, *viewport)
+                logger.debug("{0} resized to {1}x{2} (viewport {5}x{6} x={3} y={4})", self.name, width, height, *viewport)
             else:
-                logger.debug("Window resized to {}x{}", width, height)
+                logger.debug("{} resized to {}x{}", self.name, width, height)
 
     def on_resize(self, width, height):
         self.recalculate_viewport()
@@ -449,7 +463,8 @@ class Canvas(SceneNode):
 
     def purge(self):
         total_count = self._stats['canvas'][0]
-        logger.info("Canvas render stats - {:d} x {:.1f}ms = {:.1f}s", total_count, 1e3*self._total_duration/total_count, self._total_duration)
+        logger.info("{} render stats - {:d} x {:.1f}ms = {:.1f}s", self.name, total_count,
+                    1e3*self._total_duration/total_count, self._total_duration)
         draw_duration = 0
         for duration, count, key in sorted(((duration, count, key) for (key, (count, duration)) in self._stats.items()), reverse=True):
             logger.debug("{:15s}  - {:8d}  x {:6.1f}µs = {:5.1f}s  ({:4.1f}%)",
@@ -457,7 +472,7 @@ class Canvas(SceneNode):
             draw_duration += duration
         overhead = self._total_duration - draw_duration
         logger.debug("{:15s}  - {:8d}  x {:6.1f}µs = {:5.1f}s  ({:4.1f}%)",
-                     '(GL surface)', total_count, 1e6*overhead/total_count, overhead, 100*overhead/self._total_duration)
+                     '(surface)', total_count, 1e6*overhead/total_count, overhead, 100*overhead/self._total_duration)
         self._stats = {}
         self._total_duration = 0
 
@@ -525,7 +540,7 @@ void main() {
 """
 
     def similar_to(self, node):
-        return node.get('filename', 1, str) == self._filename
+        return super().similar_to(node) and node.get('filename', 1, str) == self._filename
 
     async def update(self, node, **kwargs):
         references = kwargs.setdefault('references', {})
