@@ -450,6 +450,8 @@ class Controller:
                 if count := gc.collect(0):
                     logger.trace("Collected {} objects", count)
 
+                SharedCache.clean()
+
                 now = self.counter.clock()
                 frame_period = now - frame_time
                 housekeeping += now
@@ -471,6 +473,7 @@ class Controller:
                     frames = frames[-1:]
                     execution = render = housekeeping = 0
         finally:
+            SharedCache.clean(0)
             while self.windows:
                 self.windows.pop().destroy()
             while self.lasers:

@@ -312,6 +312,7 @@ class Window(ProgramNode):
             self.glctx = None
             self.window.close()
             self.window = None
+            logger.debug("{} closed", self.name)
         super().release()
 
     @property
@@ -504,11 +505,6 @@ class Video(Shader):
         self._frame0 = None
         self._frame1 = None
         super().release()
-
-    def purge(self):
-        if self._filename is not None:
-            SharedCache[self._filename].close_video(self)
-            self._filename = None
 
     @property
     def child_textures(self):

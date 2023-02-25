@@ -4,6 +4,7 @@ General file cache
 
 import csv
 from pathlib import Path
+import time
 
 import av
 from loguru import logger
@@ -14,10 +15,24 @@ from .model import Vector
 
 class CachePath:
     def __init__(self, path):
+        self._touched = time.monotonic()
         self._path = path
         self._cache = {}
 
+    def cleanup(self):
+        while self._cache:
+            key, value = self._cache.popitem()
+            match key:
+                case 'video', _:
+                    mtime, container, decoder, frames = value
+                    if decoder is not None:
+                        decoder.close()
+                    if container is not None:
+                        container.close()
+                        logger.debug("Closing video file: {}", self._path)
+
     def read_text(self, encoding=None, errors=None):
+        self._touched = time.monotonic()
         key = 'text', encoding, errors
         mtime = self._path.stat().st_mtime if self._path.exists() else None
         if key in self._cache:
@@ -39,6 +54,7 @@ class CachePath:
         return text
 
     def read_csv_vector(self, row_number):
+        self._touched = time.monotonic()
         mtime = self._path.stat().st_mtime if self._path.exists() else None
         if 'csv' in self._cache and self._cache['csv'][0] == mtime:
             _, reader, rows = self._cache['csv']
@@ -78,6 +94,7 @@ class CachePath:
         return null
 
     def read_image(self):
+        self._touched = time.monotonic()
         mtime = self._path.stat().st_mtime if self._path.exists() else None
         if 'image' in self._cache:
             cache_mtime, image = self._cache['image']
@@ -98,6 +115,7 @@ class CachePath:
         return image
 
     def read_video_frames(self, obj, position, loop=False):
+        self._touched = time.monotonic()
         key = 'video', id(obj)
         container = decoder = current_frame = next_frame = None
         frames = []
@@ -165,16 +183,6 @@ class CachePath:
         else:
             return 0, None, None
 
-    def close_video(self, obj):
-        key = 'video', id(obj)
-        if key in self._cache:
-            mtime, container, decoder, frames = self._cache.pop(key)
-            if decoder is not None:
-                decoder.close()
-            if container is not None:
-                container.close()
-                logger.debug("Closing video file: {}", self._path)
-
     def __str__(self):
         return str(self._path)
 
@@ -183,6 +191,15 @@ class FileCache:
     def __init__(self):
         self._cache = {}
         self._root = Path('.')
+
+    def clean(self, max_age=5):
+        cutoff = time.monotonic() - max_age
+        for path in list(self._cache):
+            cache_path = self._cache[path]
+            if cache_path._touched < cutoff:
+                cache_path.cleanup()
+                del self._cache[path]
+                logger.trace("Discarded {}", path)
 
     def set_root(self, path):
         if isinstance(path, CachePath):
