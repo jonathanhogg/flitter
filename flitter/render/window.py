@@ -5,6 +5,7 @@ Flitter window management
 # pylama:ignore=C0413,E402,W0703,R0914,R0902,R0912,R0201,R1702,C901,W0223,W0231,R0915
 
 import array
+from collections import namedtuple
 import sys
 import time
 
@@ -28,6 +29,17 @@ def value_split(value, n, m):
     elif n == 1:
         return tuple(value)
     return [tuple(value[i*m:(i+1)*m]) for i in range(n)]
+
+
+ColorDepth = namedtuple('ColorDepth', ('moderngl_dtype', 'gl_format', 'skia_colortype'))
+
+COLORDEPTHS = {
+    8: ColorDepth('f1', pyglet.gl.GL_RGBA8, skia.kRGBA_8888_ColorType),
+    16: ColorDepth('f2', pyglet.gl.GL_RGBA16F, skia.kRGBA_F16_ColorType),
+    # 32: ColorDepth('f4', pyglet.gl.GL_RGBA32F, skia.kRGBA_F32_ColorType)  -- Canvas currently fails with 32bit color
+}
+
+DEFAULT_COLORDEPTH = 8
 
 
 class SceneNode:
@@ -207,6 +219,9 @@ void main() {{
 }}
 """
 
+    def make_last(self):
+        raise NotImplementedError()
+
     def compile(self, node):
         vertex_source = self.get_vertex_source(node)
         fragment_source = self.get_fragment_source(node)
@@ -254,7 +269,7 @@ void main() {{
                 if isinstance(member, moderngl.Uniform):
                     if name == 'last':
                         if self._last is None:
-                            self._last = self.glctx.texture((self.width, self.height), 4)
+                            self._last = self.make_last()
                         self.glctx.copy_framebuffer(self._last, self.framebuffer)
                         if sampler_args:
                             sampler = self.glctx.sampler(texture=self._last, **sampler_args)
@@ -340,9 +355,9 @@ class Window(ProgramNode):
                                       double_buffer=True, sample_buffers=0)
             self.window = self.WindowWrapper(width=self.width, height=self.height, resizable=True, caption=title,
                                              screen=screen, vsync=vsync, config=config)
-            self.window.event(self.on_resize)
-            self.window.switch_to()
             self.glctx = moderngl.create_context(require=self.GL_VERSION[0] * 100 + self.GL_VERSION[1] * 10)
+            self.glctx.extra = {}
+            self.glctx.blend_func = moderngl.PREMULTIPLIED_ALPHA
             if fullscreen:
                 self.window.set_mouse_visible(False)
                 if sys.platform == 'darwin':
@@ -352,8 +367,14 @@ class Window(ProgramNode):
             logger.debug("{} {} on {}", self.name,  "opened fullscreen" if fullscreen else "opened", screen)
             self.recalculate_viewport(True)
             logger.debug("OpenGL info: {GL_RENDERER} {GL_VERSION}", **self.glctx.info)
-        elif resized:
+        else:
             self.recalculate_viewport()
+        self.window.switch_to()
+        self.glctx.extra['linear'] = node.get('linear', 1, bool, False)
+        colordepth = node.get('colordepth', 1, int, DEFAULT_COLORDEPTH)
+        if colordepth not in COLORDEPTHS:
+            colordepth = DEFAULT_COLORDEPTH
+        self.glctx.extra['colordepth'] = colordepth
 
     def recalculate_viewport(self, force=False):
         aspect_ratio = self.width / self.height
@@ -372,14 +393,18 @@ class Window(ProgramNode):
             else:
                 logger.debug("{} resized to {}x{}", self.name, width, height)
 
-    def on_resize(self, width, height):
-        self.recalculate_viewport()
-
     def render(self, node, **kwargs):
-        self.window.switch_to()
+        if self.glctx.extra['linear']:
+            self.glctx.enable_direct(pyglet.gl.GL_FRAMEBUFFER_SRGB)
         super().render(node, **kwargs)
+        if self.glctx.extra['linear']:
+            self.glctx.disable_direct(pyglet.gl.GL_FRAMEBUFFER_SRGB)
         self.window.flip()
         self.window.dispatch_events()
+
+    def make_last(self):
+        width, height = self.window.get_framebuffer_size()
+        return self.glctx.texture((width, height), 4)
 
 
 class Shader(ProgramNode):
@@ -387,6 +412,7 @@ class Shader(ProgramNode):
         super().__init__(glctx)
         self._framebuffer = None
         self._texture = None
+        self._colordepth = None
 
     @property
     def texture(self):
@@ -397,6 +423,7 @@ class Shader(ProgramNode):
         return self._framebuffer
 
     def release(self):
+        self._colordepth = None
         if self._framebuffer is not None:
             self._framebuffer.release()
             self._framebuffer = None
@@ -407,17 +434,33 @@ class Shader(ProgramNode):
 
     def create(self, node, resized, **kwargs):
         super().create(node, resized, **kwargs)
-        if self._framebuffer is None or self._texture is None or resized:
+        colordepth = node.get('colordepth', 1, int, self.glctx.extra['colordepth'])
+        if colordepth not in COLORDEPTHS:
+            colordepth = self.glctx.extra['colordepth']
+        if self._framebuffer is None or self._texture is None or resized or colordepth != self._colordepth:
+            depth = COLORDEPTHS[colordepth]
             if self._framebuffer is not None:
                 self._framebuffer.release()
             if self._texture is not None:
                 self._texture.release()
-            self._texture = self.glctx.texture((self.width, self.height), 4)
+            if self._last is not None:
+                self._last.release()
+                self._last = None
+            self._texture = self.glctx.texture((self.width, self.height), 4, dtype=depth.moderngl_dtype)
             self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
             self._framebuffer.clear()
+            self._colordepth = colordepth
+
+    def make_last(self):
+        return self.glctx.texture((self.width, self.height), 4, dtype=COLORDEPTHS[self._colordepth].moderngl_dtype)
 
 
 class Canvas(SceneNode):
+    COLORDEPTHS = {8: ('f1', pyglet.gl.GL_RGBA8, skia.kRGBA_8888_ColorType),
+                   16: ('f2', pyglet.gl.GL_RGBA16F, skia.kRGBA_F16_ColorType),
+                   32: ('f4', pyglet.gl.GL_RGBA32F, skia.kRGBA_F32_ColorType)}
+    DEFAULT_COLORDEPTH = 8
+
     def __init__(self, glctx):
         super().__init__(glctx)
         self._graphics_context = skia.GrDirectContext.MakeGL()
@@ -427,12 +470,15 @@ class Canvas(SceneNode):
         self._canvas = None
         self._stats = {}
         self._total_duration = 0
+        self._colordepth = None
+        self._linear = None
 
     @property
     def texture(self):
         return self._texture
 
     def release(self):
+        self._colordepth = None
         self._canvas = None
         self._surface = None
         if self._graphics_context is not None:
@@ -446,17 +492,25 @@ class Canvas(SceneNode):
             self._texture = None
 
     def create(self, node, resized, **kwargs):
-        if resized:
+        colordepth = node.get('colordepth', 1, int, self.glctx.extra['colordepth'])
+        if colordepth not in COLORDEPTHS:
+            colordepth = self.glctx.extra['colordepth']
+        linear = self.glctx.extra['linear']
+        if resized or colordepth != self._colordepth or linear != self._linear:
             if self._framebuffer is not None:
                 self._framebuffer.release()
             if self._texture is not None:
                 self._texture.release()
-            self._texture = self.glctx.texture((self.width, self.height), 4)
+            depth = COLORDEPTHS[colordepth]
+            self._texture = self.glctx.texture((self.width, self.height), 4, dtype=depth.moderngl_dtype)
             self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
-            backend_render_target = skia.GrBackendRenderTarget(self.width, self.height, 0, 0, skia.GrGLFramebufferInfo(self._framebuffer.glo, pyglet.gl.GL_RGBA8))
+            backend_render_target = skia.GrBackendRenderTarget(self.width, self.height, 0, 0, skia.GrGLFramebufferInfo(self._framebuffer.glo, depth.gl_format))
+            colorspace = skia.ColorSpace.MakeSRGBLinear() if linear else skia.ColorSpace.MakeSRGB()
             self._surface = skia.Surface.MakeFromBackendRenderTarget(self._graphics_context, backend_render_target, skia.kBottomLeft_GrSurfaceOrigin,
-                                                                     skia.kRGBA_8888_ColorType, skia.ColorSpace.MakeSRGB())
+                                                                     depth.skia_colortype, colorspace)
             self._canvas = self._surface.getCanvas()
+            self._colordepth = colordepth
+            self._linear = linear
 
     async def descend(self, node, **kwargs):
         # A canvas is a leaf node from the perspective of the OpenGL world
@@ -494,6 +548,8 @@ class Video(Shader):
         self._frame1 = None
         self._frame0_texture = None
         self._frame1_texture = None
+        self._linear = None
+        self._colordepth = None
 
     def release(self):
         if self._frame0_texture is not None:
@@ -504,6 +560,8 @@ class Video(Shader):
         self._frame1_texture = None
         self._frame0 = None
         self._frame1 = None
+        self._linear = None
+        self._colordepth = None
         super().release()
 
     @property
@@ -546,16 +604,25 @@ void main() {
         position = node.get('position', 1, float, 0)
         loop = node.get('loop', 1, bool, False)
         ratio, frame0, frame1 = SharedCache[self._filename].read_video_frames(self, position, loop)
-        if self._texture is not None and (frame0 is None or (self.width, self.height) != (frame0.width, frame0.height)):
+        linear = self.glctx.extra['linear']
+        colordepth = node.get('colordepth', 1, int, self.glctx.extra['colordepth'])
+        if colordepth not in COLORDEPTHS:
+            colordepth = self.glctx.extra['colordepth']
+        if self._texture is not None and (frame0 is None or (self.width, self.height) != (frame0.width, frame0.height)) \
+            or linear != self._linear or colordepth != self._colordepth:
             self.release()
         if frame0 is None:
             return
         if self._texture is None:
             self.width, self.height = frame0.width, frame0.height
-            self._texture = self.glctx.texture((self.width, self.height), 4)
+            depth = COLORDEPTHS[colordepth]
+            self._texture = self.glctx.texture((self.width, self.height), 4, dtype=depth.moderngl_dtype)
             self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
-            self._frame0_texture = self.glctx.texture((self.width, self.height), 3)
-            self._frame1_texture = self.glctx.texture((self.width, self.height), 3)
+            format = pyglet.gl.GL_SRGB8 if linear else None
+            self._frame0_texture = self.glctx.texture((self.width, self.height), 3, internal_format=format)
+            self._frame1_texture = self.glctx.texture((self.width, self.height), 3, internal_format=format)
+            self._linear = linear
+            self._colordepth = colordepth
         if frame0 is self._frame1 or frame1 is self._frame0:
             self._frame0_texture, self._frame1_texture = self._frame1_texture, self._frame0_texture
             self._frame0, self._frame1 = self._frame1, self._frame0
