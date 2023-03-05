@@ -293,7 +293,8 @@ void main() {{
                     elif name in kwargs:
                         member.value = kwargs[name]
                     elif name in node:
-                        if (value := node.get(name, member.array_length * member.dimension, float)) is not None:
+                        dtype = {'f': float, 'd': float, 'i': int, 'I': int}[member.fmt[-1]]
+                        if (value := node.get(name, member.array_length * member.dimension, dtype)) is not None:
                             member.value = value_split(value, member.array_length, member.dimension)
             self.framebuffer.clear()
             self._rectangle.render(mode=moderngl.TRIANGLE_STRIP)
