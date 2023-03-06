@@ -457,11 +457,6 @@ class Shader(ProgramNode):
 
 
 class Canvas(SceneNode):
-    COLORDEPTHS = {8: ('f1', pyglet.gl.GL_RGBA8, skia.kRGBA_8888_ColorType),
-                   16: ('f2', pyglet.gl.GL_RGBA16F, skia.kRGBA_F16_ColorType),
-                   32: ('f4', pyglet.gl.GL_RGBA32F, skia.kRGBA_F32_ColorType)}
-    DEFAULT_COLORDEPTH = 8
-
     def __init__(self, glctx):
         super().__init__(glctx)
         self._graphics_context = skia.GrDirectContext.MakeGL()
