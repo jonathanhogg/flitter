@@ -9,6 +9,7 @@ from collections import namedtuple
 import sys
 import time
 
+from mako.template import Template
 from loguru import logger
 import skia
 import moderngl
@@ -147,6 +148,40 @@ class Reference(SceneNode):
 
 class ProgramNode(SceneNode):
     GL_VERSION = (4, 1)
+    DEFAULT_VERTEX_SOURCE = """#version 410
+in vec2 position;
+out vec2 coord;
+void main() {
+gl_Position = vec4(position, 0.0, 1.0);
+coord = (position + 1.0) / 2.0;
+}
+"""
+    DEFAULT_FRAGMENT_SOURCE = Template("""#version 410
+in vec2 coord;
+out vec4 color;
+uniform float alpha = 1;
+% for name in child_textures:
+uniform sampler2D ${name};
+% endfor
+void main() {
+% if child_textures:
+    % for name in child_textures:
+        % if loop.index == 0:
+    vec4 merged = texture(${name}, coord);
+        % elif loop.index == 1:
+    vec4 child = texture(${name}, coord);
+    merged = merged * (1.0 - child.a) + child;
+        % else:
+    child = texture(${name}, coord);
+    merged = merged * (1.0 - child.a) + child;
+        % endif
+    % endfor
+    color = merged * alpha;
+% else:
+    color = vec4(0);
+% endif
+}
+""")
 
     def __init__(self, glctx):
         super().__init__(glctx)
@@ -184,40 +219,12 @@ class ProgramNode(SceneNode):
             self._last = None
 
     def get_vertex_source(self, node):
-        return node.get('vertex', 1, str, """#version 410
-in vec2 position;
-out vec2 coord;
-void main() {
-    gl_Position = vec4(position, 0.0, 1.0);
-    coord = (position + 1.0) / 2.0;
-}
-""")
+        return node.get('vertex', 1, str, self.DEFAULT_VERTEX_SOURCE)
 
     def get_fragment_source(self, node):
         if fragment := node.get('fragment', 1, str):
             return fragment
-        names = list(self.child_textures.keys())
-        if names:
-            samplers = '\n'.join(f"uniform sampler2D {name};" for name in names)
-            composite = ["    vec4 child;"] if len(names) > 1 else []
-            composite.append(f"    color = texture({names.pop(0)}, coord);")
-            while names:
-                composite.append(f"    child = texture({names.pop(0)}, coord);")
-                composite.append(f"    color = color * (1.0 - child.a) + child;")
-            composite = '\n'.join(composite)
-        else:
-            samplers = ""
-            composite = "    color = vec4(0.0);"
-        return f"""#version 410
-in vec2 coord;
-out vec4 color;
-uniform float alpha = 1;
-{samplers}
-void main() {{
-{composite}
-    color *= alpha;
-}}
-"""
+        return self.DEFAULT_FRAGMENT_SOURCE.render(child_textures=self.child_textures)
 
     def make_last(self):
         raise NotImplementedError()
