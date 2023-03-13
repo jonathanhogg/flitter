@@ -17,12 +17,12 @@ uniform float rotate = 0.0;
 uniform vec2 scale = vec2(1.0, 1.0);
 uniform vec2 offset = vec2(0.0, 0.0);
 
-const float TwoPI = 6.283185307179586;
+const float Tau = 6.283185307179586;
 
 
 void main()
 {
-    float th = TwoPI * rotate * delta;
+    float th = Tau * rotate * delta;
     float a = pow(mixing, delta);
     vec2 last_coord = (coord - 0.5) * size;
     last_coord /= pow(scale, vec2(delta, delta));

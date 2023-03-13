@@ -8,7 +8,8 @@ from libc.math cimport isnan, floor, ceil, abs
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
 
 
-DEF NAN = float("nan")
+cdef double Tau = 6.283185307179586
+cdef double NaN = float("nan")
 
 
 cdef union float_long:
@@ -143,9 +144,9 @@ cdef class Vector:
     @cython.cdivision(True)
     cdef bint fill_range(self, startv, stopv, stepv) except False:
         assert self.length == 0
-        cdef double start = startv if startv is not None else NAN
-        cdef double stop = stopv if stopv is not None else NAN
-        cdef double step = stepv if stepv is not None else NAN
+        cdef double start = startv if startv is not None else NaN
+        cdef double stop = stopv if stopv is not None else NaN
+        cdef double step = stepv if stepv is not None else NaN
         if isnan(start):
             start = 0
         if isnan(stop):
@@ -207,7 +208,7 @@ cdef class Vector:
     cdef double as_float(self):
         if self.length == 1 and self.objects is None:
             return self.numbers[0]
-        return NAN
+        return NaN
 
     def __str__(self):
         return self.as_string()

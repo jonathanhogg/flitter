@@ -19,7 +19,7 @@ from ..cache import SharedCache
 from ..model cimport Vector, Node
 
 
-cdef double TwoPI = 6.283185307179586
+cdef double Tau = 6.283185307179586
 
 
 cdef dict Composite = {
@@ -112,7 +112,7 @@ cdef double turn_angle(double x0, double y0, double x1, double y1, double x2, do
     cdef double la=sqrt(xa*xa + ya*ya), lb=sqrt(xb*xb + yb*yb)
     if la == 0 or lb == 0:
         return 0
-    return acos(min(max(0, (xa*xb + ya*yb) / (la*lb)), 1)) / TwoPI
+    return acos(min(max(0, (xa*xb + ya*yb) / (la*lb)), 1)) / Tau
 
 
 @cython.cdivision(True)

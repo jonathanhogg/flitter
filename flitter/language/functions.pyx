@@ -12,8 +12,8 @@ from libc.math cimport isnan, floor, round, sin, cos, sqrt, exp
 from ..model cimport VectorLike, Vector, null_, true_
 
 
-DEF PI = 3.141592653589793
-DEF TwoPI = 6.283185307179586
+cdef double Pi = 3.141592653589793
+cdef double Tau = 6.283185307179586
 
 
 cdef class Uniform(VectorLike):
@@ -93,7 +93,7 @@ def sinv(Vector theta not None):
     cdef Vector ys = Vector.__new__(Vector)
     cdef int i, n = theta.length
     for i in range(ys.allocate_numbers(n)):
-        ys.numbers[i] = sin(theta.numbers[i] * TwoPI)
+        ys.numbers[i] = sin(theta.numbers[i] * Tau)
     return ys
 
 
@@ -103,7 +103,7 @@ def cosv(Vector theta not None):
     cdef Vector ys = Vector.__new__(Vector)
     cdef int i, n = theta.length
     for i in range(ys.allocate_numbers(n)):
-        ys.numbers[i] = cos(theta.numbers[i] * TwoPI)
+        ys.numbers[i] = cos(theta.numbers[i] * Tau)
     return ys
 
 
@@ -114,8 +114,8 @@ def polar(Vector theta not None):
     cdef int i, n = theta.length
     ys.allocate_numbers(n*2)
     for i in range(0, n):
-        ys.numbers[i*2] = cos(theta.numbers[i] * TwoPI)
-        ys.numbers[i*2+1] = sin(theta.numbers[i] * TwoPI)
+        ys.numbers[i*2] = cos(theta.numbers[i] * Tau)
+        ys.numbers[i*2+1] = sin(theta.numbers[i] * Tau)
     return ys
 
 
@@ -142,7 +142,7 @@ def sine(Vector xs not None):
         return null_
     cdef Vector ys = Vector.__new__(Vector)
     for i in range(ys.allocate_numbers(xs.length)):
-        ys.numbers[i] = (1 - cos(TwoPI * xs.numbers[i])) / 2
+        ys.numbers[i] = (1 - cos(Tau * xs.numbers[i])) / 2
     return ys
 
 
@@ -153,7 +153,7 @@ def bounce(Vector xs not None):
     cdef double x
     for i in range(ys.allocate_numbers(xs.length)):
         x = xs.numbers[i]
-        ys.numbers[i] = sin(PI * (x-floor(x)))
+        ys.numbers[i] = sin(Pi * (x-floor(x)))
     return ys
 
 
@@ -168,7 +168,7 @@ def impulse(Vector xs not None):
         # bounce(linear(x * 4) / 2) - quad(linear((x * 4 - 1) / 3))
         x *= 4
         if x < 1:
-            y = sin(PI*x/2)
+            y = sin(Pi*x/2)
         else:
             x -= 1
             x /= 3
@@ -185,7 +185,7 @@ def sharkfin(Vector xs not None):
     for i in range(ys.allocate_numbers(xs.length)):
         x = xs.numbers[i]
         x -= floor(x)
-        y = sin(PI * x) if x < 0.5 else 1 - sin(PI * (x - 0.5))
+        y = sin(Pi * x) if x < 0.5 else 1 - sin(Pi * (x - 0.5))
         ys.numbers[i] = y
     return ys
 
