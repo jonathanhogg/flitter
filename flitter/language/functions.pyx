@@ -393,23 +393,8 @@ def hypot(Vector xs not None):
     return ys
 
 
-@cython.cdivision(True)
 def normalize(Vector xs not None):
-    cdef int i, n = xs.length
-    if n == 0 or xs.objects is not None:
-        return null_
-    cdef double x, y = 0
-    for i in range(n):
-        x = xs.numbers[i]
-        y += x * x
-    if y == 0:
-        return null_
-    y = sqrt(y)
-    cdef Vector ys = Vector.__new__(Vector)
-    ys.allocate_numbers(n)
-    for i in range(n):
-        ys.numbers[i] = xs.numbers[i] / y
-    return ys
+    return xs.normalize()
 
 
 @cython.cdivision(True)

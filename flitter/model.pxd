@@ -1,5 +1,7 @@
 # cython: language_level=3, profile=True
 
+import cython
+
 
 cdef class VectorLike:
     cpdef VectorLike copynodes(self)
@@ -46,12 +48,39 @@ cdef class Vector(VectorLike):
     cdef int compare(self, Vector other) except -2
     cdef Vector slice(self, Vector index)
     cdef Vector item(self, int i)
+    cdef Vector normalize(self)
+    cdef double dot(self, Vector other)
+    cdef Vector cross(self, Vector other)
 
 
 cdef Vector null_
 cdef Vector true_
 cdef Vector false_
 cdef Vector minusone_
+
+
+cdef class Matrix44:
+    cdef cython.float[16] numbers
+
+    @staticmethod
+    cdef Matrix44 _project(double aspect_ratio, double fov, double near, double far)
+    @staticmethod
+    cdef Matrix44 _look(Vector from_position, Vector to_position, Vector up_direction)
+    @staticmethod
+    cdef Matrix44 _translate(Vector v)
+    @staticmethod
+    cdef Matrix44 _scale(Vector v)
+    @staticmethod
+    cdef Matrix44 _rotate_x(double turns)
+    @staticmethod
+    cdef Matrix44 _rotate_y(double turns)
+    @staticmethod
+    cdef Matrix44 _rotate_z(double turns)
+    @staticmethod
+    cdef Matrix44 _rotate(Vector v)
+
+    cdef Matrix44 mmul(self, Matrix44 b)
+    cdef Vector vmul(self, Vector b)
 
 
 cdef class Query:

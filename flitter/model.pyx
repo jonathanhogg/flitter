@@ -4,7 +4,7 @@ from weakref import ref as weak
 
 import cython
 
-from libc.math cimport isnan, floor, ceil, abs
+from libc.math cimport isnan, floor, ceil, abs, sqrt, sin, cos, tan, isnan
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
 
 
@@ -653,6 +653,47 @@ cdef class Vector:
             result.numbers[0] = self.numbers[i]
         return result
 
+    @cython.cdivision(True)
+    cdef Vector normalize(self):
+        cdef int i, n = self.length
+        if self.numbers == NULL:
+            return null_
+        cdef double x, y = 0
+        for i in range(n):
+            x = self.numbers[i]
+            y += x * x
+        if y == 0:
+            return null_
+        y = sqrt(y)
+        cdef Vector ys = Vector.__new__(Vector)
+        ys.allocate_numbers(n)
+        for i in range(n):
+            ys.numbers[i] = self.numbers[i] / y
+        return ys
+
+    @cython.cdivision(True)
+    cdef double dot(self, Vector other):
+        cdef int i, n = self.length, m = other.length
+        cdef Vector result = Vector.__new__(Vector)
+        cdef double sum = 0
+        if self.numbers != NULL and other.numbers != NULL:
+            for i in range(result.allocate_numbers(max(n, m))):
+                sum += self.numbers[i % n] * other.numbers[i % m]
+            result.allocate_numbers(1)
+            result.numbers[0] = sum
+        return result
+
+    cdef Vector cross(self, Vector other):
+        if self.numbers == NULL or self.length != 3 or other.numbers == NULL or other.length != 3:
+            return null_
+        cdef Vector result = Vector.__new__(Vector)
+        result.allocate_numbers(3)
+        result.numbers[0] = self.numbers[1]*other.numbers[2] - self.numbers[2]*other.numbers[1]
+        result.numbers[1] = self.numbers[2]*other.numbers[0] - self.numbers[0]*other.numbers[2]
+        result.numbers[2] = self.numbers[0]*other.numbers[1] - self.numbers[1]*other.numbers[0]
+        return result
+
+
 
 cdef Vector null_ = Vector()
 cdef Vector true_ = Vector(1)
@@ -662,6 +703,233 @@ cdef Vector minusone_ = Vector(-1)
 null = null_
 true = true_
 false = false_
+
+
+cdef class Matrix44:
+    @cython.cdivision(True)
+    @staticmethod
+    cdef Matrix44 _project(double aspect_ratio, double fov, double near, double far):
+        cdef Matrix44 result = Matrix44.__new__(Matrix44)
+        cdef float* numbers = result.numbers
+        cdef double gradient = tan(fov*Tau)
+        numbers[0] = 1 / gradient
+        numbers[5] = aspect_ratio / gradient
+        numbers[10] = -(far+near) / (far-near)
+        numbers[11] = -1
+        numbers[14] = -2*far*near / (far-near)
+        numbers[15] = 0
+        return result
+
+    @staticmethod
+    def project(aspect_ratio, fov, near, far):
+        return Matrix44._project(aspect_ratio, fov, near, far)
+
+    @staticmethod
+    cdef Matrix44 _look(Vector from_position, Vector to_position, Vector up_direction):
+        cdef Vector z = from_position.sub(to_position).normalize()
+        cdef Vector x = up_direction.normalize().cross(z)
+        cdef Vector y = z.cross(x)
+        cdef Matrix44 translation = Matrix44._translate(from_position.neg())
+        cdef Matrix44 result = None
+        cdef float* numbers
+        if translation is not None and x.length == 3 and y.length == 3 and z.length == 3:
+            result = Matrix44.__new__(Matrix44)
+            numbers = result.numbers
+            numbers[0] = x.numbers[0]
+            numbers[1] = y.numbers[0]
+            numbers[2] = z.numbers[0]
+            numbers[4] = x.numbers[1]
+            numbers[5] = y.numbers[1]
+            numbers[6] = z.numbers[1]
+            numbers[8] = x.numbers[2]
+            numbers[9] = y.numbers[2]
+            numbers[10] = z.numbers[2]
+            result = result.mmul(translation)
+        return result
+
+    @staticmethod
+    def look(from_position, to_position, up_direction):
+        return Matrix44._look(Vector._coerce(from_position), Vector._coerce(to_position), Vector._coerce(up_direction))
+
+    @staticmethod
+    cdef Matrix44 _translate(Vector v):
+        cdef Matrix44 result
+        cdef float* numbers
+        if v.numbers is not NULL and v.length in (1, 3):
+            result = Matrix44.__new__(Matrix44)
+            numbers = result.numbers
+            if v.length == 1:
+                numbers[12] = v.numbers[0]
+                numbers[13] = v.numbers[0]
+                numbers[14] = v.numbers[0]
+            elif v.length == 3:
+                numbers[12] = v.numbers[0]
+                numbers[13] = v.numbers[1]
+                numbers[14] = v.numbers[2]
+            return result
+        return None
+
+    @staticmethod
+    def translate(v):
+        return Matrix44._translate(Vector._coerce(v))
+
+    @staticmethod
+    cdef Matrix44 _scale(Vector v):
+        cdef Matrix44 result
+        cdef float* numbers
+        if v.numbers is not NULL and v.length in (1, 3):
+            result = Matrix44.__new__(Matrix44)
+            numbers = result.numbers
+            if v.length == 1:
+                numbers[0] = v.numbers[0]
+                numbers[5] = v.numbers[0]
+                numbers[10] = v.numbers[0]
+            elif v.length == 3:
+                numbers[0] = v.numbers[0]
+                numbers[5] = v.numbers[1]
+                numbers[10] = v.numbers[2]
+            return result
+        return None
+
+    @staticmethod
+    def scale(v):
+        return Matrix44._scale(Vector._coerce(v))
+
+    @staticmethod
+    cdef Matrix44 _rotate_x(double turns):
+        if isnan(turns):
+            return None
+        cdef float theta = turns*Tau, cth = cos(theta), sth = sin(theta)
+        cdef Matrix44 result = Matrix44.__new__(Matrix44)
+        cdef float* numbers = result.numbers
+        numbers[5] = cth
+        numbers[6] = sth
+        numbers[9] = -sth
+        numbers[10] = cth
+        return result
+
+    @staticmethod
+    def rotate_x(turns):
+        return Matrix44._rotate_x(float(turns))
+
+    @staticmethod
+    cdef Matrix44 _rotate_y(double turns):
+        if isnan(turns):
+            return None
+        cdef float theta = turns*Tau, cth = cos(theta), sth = sin(theta)
+        cdef Matrix44 result = Matrix44.__new__(Matrix44)
+        cdef float* numbers = result.numbers
+        numbers[0] = cth
+        numbers[2] = -sth
+        numbers[8] = sth
+        numbers[10] = cth
+        return result
+
+    @staticmethod
+    def rotate_y(turns):
+        return Matrix44._rotate_y(float(turns))
+
+    @staticmethod
+    cdef Matrix44 _rotate_z(double turns):
+        if isnan(turns):
+            return None
+        cdef float theta = turns*Tau, cth = cos(theta), sth = sin(theta)
+        cdef Matrix44 result = Matrix44.__new__(Matrix44)
+        cdef float* numbers = result.numbers
+        numbers[0] = cth
+        numbers[1] = sth
+        numbers[4] = -sth
+        numbers[5] = cth
+        return result
+
+    @staticmethod
+    def rotate_z(turns):
+        return Matrix44._rotate_z(float(turns))
+
+    @staticmethod
+    cdef Matrix44 _rotate(Vector v):
+        cdef Matrix44 result = None
+        cdef float theta, cth, sth
+        if v.numbers is not NULL and v.length in (1, 3):
+            if v.length == 1:
+                result = Matrix44._rotate_z(v.numbers[0])
+                result = Matrix44._rotate_y(v.numbers[0]).mmul(result)
+                result = Matrix44._rotate_x(v.numbers[0]).mmul(result)
+            else:
+                result = Matrix44._rotate_z(v.numbers[2])
+                result = Matrix44._rotate_y(v.numbers[1]).mmul(result)
+                result = Matrix44._rotate_x(v.numbers[0]).mmul(result)
+        return result
+
+    @staticmethod
+    def rotate(v):
+        return Matrix44._rotate(Vector._coerce(v))
+
+    def __cinit__(self):
+        cdef int i
+        cdef float* numbers = self.numbers
+        for i in range(16):
+            numbers[i] = 1 if i % 5 == 0 else 0
+
+    @property
+    def data(self):
+        return <cython.float[:16]>self.numbers
+
+    cdef Matrix44 mmul(self, Matrix44 b):
+        cdef Matrix44 result = Matrix44.__new__(Matrix44)
+        cdef float* numbers = result.numbers
+        cdef float* a_numbers = self.numbers
+        cdef float* b_numbers = b.numbers
+        cdef int i, j
+        for i in range(0, 16, 4):
+            for j in range(4):
+                numbers[i+j] = a_numbers[j]*b_numbers[i] + \
+                               a_numbers[j+4]*b_numbers[i+1] + \
+                               a_numbers[j+8]*b_numbers[i+2] + \
+                               a_numbers[j+12]*b_numbers[i+3]
+        return result
+
+    cdef Vector vmul(self, Vector b):
+        if b.numbers is NULL or b.length not in (1, 3, 4):
+            return None
+        cdef Vector result = Vector.__new__(Vector)
+        result.allocate_numbers(4)
+        cdef double* numbers = result.numbers
+        cdef float* a_numbers = self.numbers
+        cdef double* b_numbers = b.numbers
+        cdef int j
+        if b.length == 1:
+            for j in range(4):
+                numbers[j] = a_numbers[j]*b_numbers[0] + \
+                             a_numbers[j+4]*b_numbers[0] + \
+                             a_numbers[j+8]*b_numbers[0] + \
+                             a_numbers[j+12]
+        elif b.length == 3:
+            for j in range(4):
+                numbers[j] = a_numbers[j]*b_numbers[0] + \
+                             a_numbers[j+4]*b_numbers[1] + \
+                             a_numbers[j+8]*b_numbers[2] + \
+                             a_numbers[j+12]
+        else:
+            for j in range(4):
+                numbers[j] = a_numbers[j]*b_numbers[0] + \
+                             a_numbers[j+4]*b_numbers[1] + \
+                             a_numbers[j+8]*b_numbers[2] + \
+                             a_numbers[j+12]*b_numbers[3]
+        return result
+
+    def __matmul__(Matrix44 self, other):
+        if isinstance(other, Matrix44):
+            return self.mmul(<Matrix44>other)
+        return self.vmul(Vector._coerce(other))
+
+    def __repr__(self):
+        cdef list rows = []
+        cdef float* numbers = self.numbers
+        cdef int i
+        for i in range(4):
+            rows.append(f"| {numbers[i]:7.3f} {numbers[i+4]:7.3f} {numbers[i+8]:7.3f} {numbers[i+12]:7.3f} |")
+        return '\n'.join(rows)
 
 
 @cython.final
