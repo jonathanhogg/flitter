@@ -3,6 +3,7 @@
 from weakref import ref as weak
 
 import cython
+from cython cimport view
 
 from libc.math cimport isnan, floor, ceil, abs, sqrt, sin, cos, tan, isnan
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
@@ -868,15 +869,34 @@ cdef class Matrix44:
     def rotate(v):
         return Matrix44._rotate(Vector._coerce(v))
 
-    def __cinit__(self):
+    def __cinit__(self, obj=None):
         cdef int i
         cdef float* numbers = self.numbers
-        for i in range(16):
-            numbers[i] = 1 if i % 5 == 0 else 0
+        cdef float k
+        if obj is None:
+            for i in range(16):
+                numbers[i] = 1 if i % 5 == 0 else 0
+        elif isinstance(obj, (int, float)):
+            k = obj
+            for i in range(16):
+                numbers[i] = k if i % 5 == 0 else 0
+        elif hasattr(obj, '__len__') and len(obj) == 16:
+            for i in range(16):
+                numbers[i] = obj[i]
+        else:
+            for i in range(16):
+                numbers[i] = 0
 
-    @property
-    def data(self):
-        return <cython.float[:16]>self.numbers
+    @cython.initializedcheck(False)
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    def as_array(self):
+        cdef view.array data_array = view.array((16,), sizeof(cython.float), 'f')
+        cdef float[:] array_numbers = data_array
+        cdef float* numbers = self.numbers
+        for i in range(16):
+            array_numbers[i] = numbers[i]
+        return data_array
 
     cdef Matrix44 mmul(self, Matrix44 b):
         cdef Matrix44 result = Matrix44.__new__(Matrix44)
@@ -893,27 +913,24 @@ cdef class Matrix44:
         return result
 
     cdef Vector vmul(self, Vector b):
-        if b.numbers is NULL or b.length not in (1, 3, 4):
+        if b.numbers is NULL or b.length not in (3, 4):
             return None
         cdef Vector result = Vector.__new__(Vector)
-        result.allocate_numbers(4)
-        cdef double* numbers = result.numbers
+        cdef double* numbers
         cdef float* a_numbers = self.numbers
         cdef double* b_numbers = b.numbers
         cdef int j
-        if b.length == 1:
-            for j in range(4):
-                numbers[j] = a_numbers[j]*b_numbers[0] + \
-                             a_numbers[j+4]*b_numbers[0] + \
-                             a_numbers[j+8]*b_numbers[0] + \
-                             a_numbers[j+12]
-        elif b.length == 3:
-            for j in range(4):
+        if b.length == 3:
+            result.allocate_numbers(3)
+            numbers = result.numbers
+            for j in range(3):
                 numbers[j] = a_numbers[j]*b_numbers[0] + \
                              a_numbers[j+4]*b_numbers[1] + \
                              a_numbers[j+8]*b_numbers[2] + \
                              a_numbers[j+12]
         else:
+            result.allocate_numbers(4)
+            numbers = result.numbers
             for j in range(4):
                 numbers[j] = a_numbers[j]*b_numbers[0] + \
                              a_numbers[j+4]*b_numbers[1] + \
