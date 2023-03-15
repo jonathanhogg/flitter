@@ -79,6 +79,9 @@ cdef class Matrix44(Vector):
 
     cdef Matrix44 mmul(self, Matrix44 b)
     cdef Vector vmul(self, Vector b)
+    cpdef Matrix44 inverse(self)
+    cpdef Matrix44 transpose(self)
+    cpdef Vector matrix33(self)
 
 
 cdef class Query:

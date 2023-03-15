@@ -13,7 +13,7 @@ cdef double Tau = 6.283185307179586
 cdef double NaN = float("nan")
 
 
-cdef union float_long:
+cdef union double_long:
     double f
     unsigned long long l
 
@@ -246,7 +246,7 @@ cdef class Vector:
     cdef unsigned long long hash(self, bint floor_floats):
         # Compute a hash value using the SplitMix64 algorithm [http://xoshiro.di.unimi.it/splitmix64.c]
         cdef unsigned long long y, hash = 0xe220a8397b1dcdaf
-        cdef float_long fl
+        cdef double_long fl
         cdef int i
         cdef Py_UNICODE c
         if self.length:
@@ -801,7 +801,7 @@ cdef class Matrix44(Vector):
     cdef Matrix44 _rotate_x(double turns):
         if isnan(turns):
             return None
-        cdef float theta = turns*Tau, cth = cos(theta), sth = sin(theta)
+        cdef double theta = turns*Tau, cth = cos(theta), sth = sin(theta)
         cdef Matrix44 result = Matrix44.__new__(Matrix44)
         cdef double* numbers = result.numbers
         numbers[5] = cth
@@ -818,7 +818,7 @@ cdef class Matrix44(Vector):
     cdef Matrix44 _rotate_y(double turns):
         if isnan(turns):
             return None
-        cdef float theta = turns*Tau, cth = cos(theta), sth = sin(theta)
+        cdef double theta = turns*Tau, cth = cos(theta), sth = sin(theta)
         cdef Matrix44 result = Matrix44.__new__(Matrix44)
         cdef double* numbers = result.numbers
         numbers[0] = cth
@@ -835,7 +835,7 @@ cdef class Matrix44(Vector):
     cdef Matrix44 _rotate_z(double turns):
         if isnan(turns):
             return None
-        cdef float theta = turns*Tau, cth = cos(theta), sth = sin(theta)
+        cdef double theta = turns*Tau, cth = cos(theta), sth = sin(theta)
         cdef Matrix44 result = Matrix44.__new__(Matrix44)
         cdef double* numbers = result.numbers
         numbers[0] = cth
@@ -851,7 +851,7 @@ cdef class Matrix44(Vector):
     @staticmethod
     cdef Matrix44 _rotate(Vector v):
         cdef Matrix44 result = None
-        cdef float theta, cth, sth
+        cdef double theta, cth, sth
         if v.numbers is not NULL and v.length in (1, 3):
             if v.length == 1:
                 result = Matrix44._rotate_z(v.numbers[0])
@@ -924,6 +924,56 @@ cdef class Matrix44(Vector):
         if isinstance(other, Matrix44):
             return self.mmul(<Matrix44>other)
         return self.vmul(Vector._coerce(other))
+
+    cpdef Matrix44 inverse(self):
+        cdef double s0 = self.numbers[0]*self.numbers[5] - self.numbers[4]*self.numbers[1]
+        cdef double s1 = self.numbers[0]*self.numbers[6] - self.numbers[4]*self.numbers[2]
+        cdef double s2 = self.numbers[0]*self.numbers[7] - self.numbers[4]*self.numbers[3]
+        cdef double s3 = self.numbers[1]*self.numbers[6] - self.numbers[5]*self.numbers[2]
+        cdef double s4 = self.numbers[1]*self.numbers[7] - self.numbers[5]*self.numbers[3]
+        cdef double s5 = self.numbers[2]*self.numbers[7] - self.numbers[6]*self.numbers[3]
+        cdef double c5 = self.numbers[10]*self.numbers[15] - self.numbers[14]*self.numbers[11]
+        cdef double c4 = self.numbers[9]*self.numbers[15] - self.numbers[13]*self.numbers[11]
+        cdef double c3 = self.numbers[9]*self.numbers[14] - self.numbers[13]*self.numbers[10]
+        cdef double c2 = self.numbers[8]*self.numbers[15] - self.numbers[12]*self.numbers[11]
+        cdef double c1 = self.numbers[8]*self.numbers[14] - self.numbers[12]*self.numbers[10]
+        cdef double c0 = self.numbers[8]*self.numbers[13] - self.numbers[12]*self.numbers[9]
+        cdef double invdet = 1 / (s0*c5 - s1*c4 + s2*c3 + s3*c2 - s4*c1 + s5*c0)
+        cdef Matrix44 result = Matrix44.__new__(Matrix44)
+        result.numbers[0] = (self.numbers[5]*c5 - self.numbers[6]*c4 + self.numbers[7]*c3) * invdet
+        result.numbers[1] = (-self.numbers[1]*c5 + self.numbers[2]*c4 - self.numbers[3]*c3) * invdet
+        result.numbers[2] = (self.numbers[13]*s5 - self.numbers[14]*s4 + self.numbers[15]*s3) * invdet
+        result.numbers[3] = (-self.numbers[9]*s5 + self.numbers[10]*s4 - self.numbers[11]*s3) * invdet
+        result.numbers[4] = (-self.numbers[4]*c5 + self.numbers[6]*c2 - self.numbers[7]*c1) * invdet
+        result.numbers[5] = (self.numbers[0]*c5 - self.numbers[2]*c2 + self.numbers[3]*c1) * invdet
+        result.numbers[6] = (-self.numbers[12]*s5 + self.numbers[14]*s2 - self.numbers[15]*s1) * invdet
+        result.numbers[7] = (self.numbers[8]*s5 - self.numbers[10]*s2 + self.numbers[11]*s1) * invdet
+        result.numbers[8] = (self.numbers[4]*c4 - self.numbers[5]*c2 + self.numbers[7]*c0) * invdet
+        result.numbers[9] = (-self.numbers[0]*c4 + self.numbers[1]*c2 - self.numbers[3]*c0) * invdet
+        result.numbers[10] = (self.numbers[12]*s4 - self.numbers[13]*s2 + self.numbers[15]*s0) * invdet
+        result.numbers[11] = (-self.numbers[8]*s4 + self.numbers[9]*s2 - self.numbers[11]*s0) * invdet
+        result.numbers[12] = (-self.numbers[4]*c3 + self.numbers[5]*c1 - self.numbers[6]*c0) * invdet
+        result.numbers[13] = (self.numbers[0]*c3 - self.numbers[1]*c1 + self.numbers[2]*c0) * invdet
+        result.numbers[14] = (-self.numbers[12]*s3 + self.numbers[13]*s1 - self.numbers[14]*s0) * invdet
+        result.numbers[15] = (self.numbers[8]*s3 - self.numbers[9]*s1 + self.numbers[10]*s0) * invdet
+        return result
+
+    cpdef Matrix44 transpose(self):
+        cdef Matrix44 result = Matrix44.__new__(Matrix44)
+        cdef int i, j
+        for i in range(4):
+            for j in range(4):
+                result.numbers[i*4+j] = self.numbers[j*4+i]
+        return result
+
+    cpdef Vector matrix33(self):
+        cdef Vector result = Vector.__new__(Vector)
+        result.allocate_numbers(9)
+        cdef int i, j
+        for i in range(3):
+            for j in range(3):
+                result.numbers[3*i+j] = self.numbers[4*i+j]
+        return result
 
     def __repr__(self):
         cdef list rows = []
