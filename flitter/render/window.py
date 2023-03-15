@@ -77,12 +77,12 @@ class SceneNode:
         while self.children:
             self.children.pop().destroy()
 
-    async def update(self, node, **kwargs):
+    async def update(self, node, default_size=(512, 512), **kwargs):
         references = kwargs.setdefault('references', {})
         if node_id := node.get('id', 1, str):
             references[node_id] = self
         resized = False
-        width, height = node.get('size', 2, int, (512, 512))
+        width, height = node.get('size', 2, int, default_size)
         if width != self.width or height != self.height:
             self.width = width
             self.height = height
@@ -113,7 +113,7 @@ class SceneNode:
                 scene_node = existing.pop(index)
             else:
                 scene_node = cls(self.glctx)
-            await scene_node.update(child, **kwargs)
+            await scene_node.update(child, default_size=(self.width, self.height), **kwargs)
             updated.append(scene_node)
         while existing:
             existing.pop().destroy()
