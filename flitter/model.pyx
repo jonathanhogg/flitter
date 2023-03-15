@@ -733,8 +733,8 @@ cdef class Matrix44(Vector):
     @staticmethod
     cdef Matrix44 _look(Vector from_position, Vector to_position, Vector up_direction):
         cdef Vector z = from_position.sub(to_position).normalize()
-        cdef Vector x = up_direction.normalize().cross(z)
-        cdef Vector y = z.cross(x)
+        cdef Vector y = up_direction.sub(z.mul(up_direction.dot(z))).normalize()
+        cdef Vector x = y.cross(z)
         cdef Matrix44 translation = Matrix44._translate(from_position.neg())
         cdef Matrix44 result = None
         cdef double* numbers
