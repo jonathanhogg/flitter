@@ -49,7 +49,7 @@ cdef class Vector(VectorLike):
     cdef Vector slice(self, Vector index)
     cdef Vector item(self, int i)
     cdef Vector normalize(self)
-    cdef double dot(self, Vector other)
+    cdef Vector dot(self, Vector other)
     cdef Vector cross(self, Vector other)
 
 

@@ -676,7 +676,7 @@ cdef class Vector:
         return ys
 
     @cython.cdivision(True)
-    cdef double dot(self, Vector other):
+    cdef Vector dot(self, Vector other):
         cdef int i, n = self.length, m = other.length
         cdef Vector result = Vector.__new__(Vector)
         cdef double sum = 0
