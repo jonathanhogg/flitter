@@ -9,6 +9,7 @@ from libc.math cimport isnan, floor, ceil, abs, sqrt, sin, cos, tan, isnan
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
 
 
+cdef double Pi = 3.141592653589793
 cdef double Tau = 6.283185307179586
 cdef double NaN = float("nan")
 
@@ -689,11 +690,14 @@ cdef class Vector:
     cdef Vector cross(self, Vector other):
         if self.numbers == NULL or self.length != 3 or other.numbers == NULL or other.length != 3:
             return null_
+        cdef double* self_numbers = self.numbers
+        cdef double* other_numbers = other.numbers
         cdef Vector result = Vector.__new__(Vector)
         result.allocate_numbers(3)
-        result.numbers[0] = self.numbers[1]*other.numbers[2] - self.numbers[2]*other.numbers[1]
-        result.numbers[1] = self.numbers[2]*other.numbers[0] - self.numbers[0]*other.numbers[2]
-        result.numbers[2] = self.numbers[0]*other.numbers[1] - self.numbers[1]*other.numbers[0]
+        cdef double* result_numbers = result.numbers
+        result_numbers[0] = self_numbers[1]*other_numbers[2] - self_numbers[2]*other_numbers[1]
+        result_numbers[1] = self_numbers[2]*other_numbers[0] - self_numbers[0]*other_numbers[2]
+        result_numbers[2] = self_numbers[0]*other_numbers[1] - self_numbers[1]*other_numbers[0]
         return result
 
 
@@ -713,7 +717,7 @@ cdef class Matrix44(Vector):
     cdef Matrix44 _project(double aspect_ratio, double fov, double near, double far):
         cdef Matrix44 result = Matrix44.__new__(Matrix44)
         cdef double* numbers = result.numbers
-        cdef double gradient = tan(fov*Tau)
+        cdef double gradient = tan(fov*Pi)
         numbers[0] = 1 / gradient
         numbers[5] = aspect_ratio / gradient
         numbers[10] = -(far+near) / (far-near)
@@ -851,7 +855,6 @@ cdef class Matrix44(Vector):
     @staticmethod
     cdef Matrix44 _rotate(Vector v):
         cdef Matrix44 result = None
-        cdef double theta, cth, sth
         if v.numbers is not NULL and v.length in (1, 3):
             if v.length == 1:
                 result = Matrix44._rotate_z(v.numbers[0])
@@ -867,6 +870,7 @@ cdef class Matrix44(Vector):
     def rotate(v):
         return Matrix44._rotate(Vector._coerce(v))
 
+    @cython.cdivision(True)
     def __cinit__(self, obj=None):
         if self.objects is not None or self.length not in (0, 1, 16):
             raise ValueError("Argument must be a float or a sequence of 16 floats")
@@ -877,6 +881,7 @@ cdef class Matrix44(Vector):
             k = self.numbers[0]
             self.deallocate_numbers()
         self.allocate_numbers(16)
+        cdef int i
         for i in range(16):
             self.numbers[i] = k if i % 5 == 0 else 0
 
@@ -925,54 +930,61 @@ cdef class Matrix44(Vector):
             return self.mmul(<Matrix44>other)
         return self.vmul(Vector._coerce(other))
 
+    @cython.cdivision(True)
     cpdef Matrix44 inverse(self):
-        cdef double s0 = self.numbers[0]*self.numbers[5] - self.numbers[4]*self.numbers[1]
-        cdef double s1 = self.numbers[0]*self.numbers[6] - self.numbers[4]*self.numbers[2]
-        cdef double s2 = self.numbers[0]*self.numbers[7] - self.numbers[4]*self.numbers[3]
-        cdef double s3 = self.numbers[1]*self.numbers[6] - self.numbers[5]*self.numbers[2]
-        cdef double s4 = self.numbers[1]*self.numbers[7] - self.numbers[5]*self.numbers[3]
-        cdef double s5 = self.numbers[2]*self.numbers[7] - self.numbers[6]*self.numbers[3]
-        cdef double c5 = self.numbers[10]*self.numbers[15] - self.numbers[14]*self.numbers[11]
-        cdef double c4 = self.numbers[9]*self.numbers[15] - self.numbers[13]*self.numbers[11]
-        cdef double c3 = self.numbers[9]*self.numbers[14] - self.numbers[13]*self.numbers[10]
-        cdef double c2 = self.numbers[8]*self.numbers[15] - self.numbers[12]*self.numbers[11]
-        cdef double c1 = self.numbers[8]*self.numbers[14] - self.numbers[12]*self.numbers[10]
-        cdef double c0 = self.numbers[8]*self.numbers[13] - self.numbers[12]*self.numbers[9]
+        cdef double* numbers = self.numbers
+        cdef double s0 = numbers[0]*numbers[5] - numbers[4]*numbers[1]
+        cdef double s1 = numbers[0]*numbers[6] - numbers[4]*numbers[2]
+        cdef double s2 = numbers[0]*numbers[7] - numbers[4]*numbers[3]
+        cdef double s3 = numbers[1]*numbers[6] - numbers[5]*numbers[2]
+        cdef double s4 = numbers[1]*numbers[7] - numbers[5]*numbers[3]
+        cdef double s5 = numbers[2]*numbers[7] - numbers[6]*numbers[3]
+        cdef double c5 = numbers[10]*numbers[15] - numbers[14]*numbers[11]
+        cdef double c4 = numbers[9]*numbers[15] - numbers[13]*numbers[11]
+        cdef double c3 = numbers[9]*numbers[14] - numbers[13]*numbers[10]
+        cdef double c2 = numbers[8]*numbers[15] - numbers[12]*numbers[11]
+        cdef double c1 = numbers[8]*numbers[14] - numbers[12]*numbers[10]
+        cdef double c0 = numbers[8]*numbers[13] - numbers[12]*numbers[9]
         cdef double invdet = 1 / (s0*c5 - s1*c4 + s2*c3 + s3*c2 - s4*c1 + s5*c0)
         cdef Matrix44 result = Matrix44.__new__(Matrix44)
-        result.numbers[0] = (self.numbers[5]*c5 - self.numbers[6]*c4 + self.numbers[7]*c3) * invdet
-        result.numbers[1] = (-self.numbers[1]*c5 + self.numbers[2]*c4 - self.numbers[3]*c3) * invdet
-        result.numbers[2] = (self.numbers[13]*s5 - self.numbers[14]*s4 + self.numbers[15]*s3) * invdet
-        result.numbers[3] = (-self.numbers[9]*s5 + self.numbers[10]*s4 - self.numbers[11]*s3) * invdet
-        result.numbers[4] = (-self.numbers[4]*c5 + self.numbers[6]*c2 - self.numbers[7]*c1) * invdet
-        result.numbers[5] = (self.numbers[0]*c5 - self.numbers[2]*c2 + self.numbers[3]*c1) * invdet
-        result.numbers[6] = (-self.numbers[12]*s5 + self.numbers[14]*s2 - self.numbers[15]*s1) * invdet
-        result.numbers[7] = (self.numbers[8]*s5 - self.numbers[10]*s2 + self.numbers[11]*s1) * invdet
-        result.numbers[8] = (self.numbers[4]*c4 - self.numbers[5]*c2 + self.numbers[7]*c0) * invdet
-        result.numbers[9] = (-self.numbers[0]*c4 + self.numbers[1]*c2 - self.numbers[3]*c0) * invdet
-        result.numbers[10] = (self.numbers[12]*s4 - self.numbers[13]*s2 + self.numbers[15]*s0) * invdet
-        result.numbers[11] = (-self.numbers[8]*s4 + self.numbers[9]*s2 - self.numbers[11]*s0) * invdet
-        result.numbers[12] = (-self.numbers[4]*c3 + self.numbers[5]*c1 - self.numbers[6]*c0) * invdet
-        result.numbers[13] = (self.numbers[0]*c3 - self.numbers[1]*c1 + self.numbers[2]*c0) * invdet
-        result.numbers[14] = (-self.numbers[12]*s3 + self.numbers[13]*s1 - self.numbers[14]*s0) * invdet
-        result.numbers[15] = (self.numbers[8]*s3 - self.numbers[9]*s1 + self.numbers[10]*s0) * invdet
+        cdef double* result_numbers = result.numbers
+        result_numbers[0] = (numbers[5]*c5 - numbers[6]*c4 + numbers[7]*c3) * invdet
+        result_numbers[1] = (-numbers[1]*c5 + numbers[2]*c4 - numbers[3]*c3) * invdet
+        result_numbers[2] = (numbers[13]*s5 - numbers[14]*s4 + numbers[15]*s3) * invdet
+        result_numbers[3] = (-numbers[9]*s5 + numbers[10]*s4 - numbers[11]*s3) * invdet
+        result_numbers[4] = (-numbers[4]*c5 + numbers[6]*c2 - numbers[7]*c1) * invdet
+        result_numbers[5] = (numbers[0]*c5 - numbers[2]*c2 + numbers[3]*c1) * invdet
+        result_numbers[6] = (-numbers[12]*s5 + numbers[14]*s2 - numbers[15]*s1) * invdet
+        result_numbers[7] = (numbers[8]*s5 - numbers[10]*s2 + numbers[11]*s1) * invdet
+        result_numbers[8] = (numbers[4]*c4 - numbers[5]*c2 + numbers[7]*c0) * invdet
+        result_numbers[9] = (-numbers[0]*c4 + numbers[1]*c2 - numbers[3]*c0) * invdet
+        result_numbers[10] = (numbers[12]*s4 - numbers[13]*s2 + numbers[15]*s0) * invdet
+        result_numbers[11] = (-numbers[8]*s4 + numbers[9]*s2 - numbers[11]*s0) * invdet
+        result_numbers[12] = (-numbers[4]*c3 + numbers[5]*c1 - numbers[6]*c0) * invdet
+        result_numbers[13] = (numbers[0]*c3 - numbers[1]*c1 + numbers[2]*c0) * invdet
+        result_numbers[14] = (-numbers[12]*s3 + numbers[13]*s1 - numbers[14]*s0) * invdet
+        result_numbers[15] = (numbers[8]*s3 - numbers[9]*s1 + numbers[10]*s0) * invdet
         return result
 
     cpdef Matrix44 transpose(self):
+        cdef double* numbers = self.numbers
         cdef Matrix44 result = Matrix44.__new__(Matrix44)
+        cdef double* result_numbers = result.numbers
         cdef int i, j
         for i in range(4):
             for j in range(4):
-                result.numbers[i*4+j] = self.numbers[j*4+i]
+                result_numbers[i*4+j] = numbers[j*4+i]
         return result
 
     cpdef Vector matrix33(self):
+        cdef double* numbers = self.numbers
         cdef Vector result = Vector.__new__(Vector)
         result.allocate_numbers(9)
+        cdef double* result_numbers = result.numbers
         cdef int i, j
         for i in range(3):
             for j in range(3):
-                result.numbers[3*i+j] = self.numbers[4*i+j]
+                result_numbers[3*i+j] = numbers[4*i+j]
         return result
 
     def __repr__(self):
