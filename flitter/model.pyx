@@ -30,7 +30,6 @@ cdef class VectorLike:
         raise NotImplementedError()
 
 
-@cython.final
 cdef class Vector:
     @staticmethod
     def coerce(other):
@@ -207,9 +206,9 @@ cdef class Vector:
         return False
 
     def __float__(self):
-        return self.as_float()
+        return self.as_double()
 
-    cdef double as_float(self):
+    cdef double as_double(self):
         if self.length == 1 and self.objects is None:
             return self.numbers[0]
         return NaN
@@ -698,7 +697,6 @@ cdef class Vector:
         return result
 
 
-
 cdef Vector null_ = Vector()
 cdef Vector true_ = Vector(1)
 cdef Vector false_ = Vector(0)
@@ -709,12 +707,12 @@ true = true_
 false = false_
 
 
-cdef class Matrix44:
+cdef class Matrix44(Vector):
     @cython.cdivision(True)
     @staticmethod
     cdef Matrix44 _project(double aspect_ratio, double fov, double near, double far):
         cdef Matrix44 result = Matrix44.__new__(Matrix44)
-        cdef float* numbers = result.numbers
+        cdef double* numbers = result.numbers
         cdef double gradient = tan(fov*Tau)
         numbers[0] = 1 / gradient
         numbers[5] = aspect_ratio / gradient
@@ -735,7 +733,7 @@ cdef class Matrix44:
         cdef Vector y = z.cross(x)
         cdef Matrix44 translation = Matrix44._translate(from_position.neg())
         cdef Matrix44 result = None
-        cdef float* numbers
+        cdef double* numbers
         if translation is not None and x.length == 3 and y.length == 3 and z.length == 3:
             result = Matrix44.__new__(Matrix44)
             numbers = result.numbers
@@ -758,7 +756,7 @@ cdef class Matrix44:
     @staticmethod
     cdef Matrix44 _translate(Vector v):
         cdef Matrix44 result
-        cdef float* numbers
+        cdef double* numbers
         if v.numbers is not NULL and v.length in (1, 3):
             result = Matrix44.__new__(Matrix44)
             numbers = result.numbers
@@ -780,7 +778,7 @@ cdef class Matrix44:
     @staticmethod
     cdef Matrix44 _scale(Vector v):
         cdef Matrix44 result
-        cdef float* numbers
+        cdef double* numbers
         if v.numbers is not NULL and v.length in (1, 3):
             result = Matrix44.__new__(Matrix44)
             numbers = result.numbers
@@ -805,7 +803,7 @@ cdef class Matrix44:
             return None
         cdef float theta = turns*Tau, cth = cos(theta), sth = sin(theta)
         cdef Matrix44 result = Matrix44.__new__(Matrix44)
-        cdef float* numbers = result.numbers
+        cdef double* numbers = result.numbers
         numbers[5] = cth
         numbers[6] = sth
         numbers[9] = -sth
@@ -822,7 +820,7 @@ cdef class Matrix44:
             return None
         cdef float theta = turns*Tau, cth = cos(theta), sth = sin(theta)
         cdef Matrix44 result = Matrix44.__new__(Matrix44)
-        cdef float* numbers = result.numbers
+        cdef double* numbers = result.numbers
         numbers[0] = cth
         numbers[2] = -sth
         numbers[8] = sth
@@ -839,7 +837,7 @@ cdef class Matrix44:
             return None
         cdef float theta = turns*Tau, cth = cos(theta), sth = sin(theta)
         cdef Matrix44 result = Matrix44.__new__(Matrix44)
-        cdef float* numbers = result.numbers
+        cdef double* numbers = result.numbers
         numbers[0] = cth
         numbers[1] = sth
         numbers[4] = -sth
@@ -870,39 +868,23 @@ cdef class Matrix44:
         return Matrix44._rotate(Vector._coerce(v))
 
     def __cinit__(self, obj=None):
-        cdef int i
-        cdef float* numbers = self.numbers
-        cdef float k
-        if obj is None:
-            for i in range(16):
-                numbers[i] = 1 if i % 5 == 0 else 0
-        elif isinstance(obj, (int, float)):
-            k = obj
-            for i in range(16):
-                numbers[i] = k if i % 5 == 0 else 0
-        elif hasattr(obj, '__len__') and len(obj) == 16:
-            for i in range(16):
-                numbers[i] = obj[i]
-        else:
-            for i in range(16):
-                numbers[i] = 0
-
-    @cython.initializedcheck(False)
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
-    def as_array(self):
-        cdef view.array data_array = view.array((16,), sizeof(cython.float), 'f')
-        cdef float[:] array_numbers = data_array
-        cdef float* numbers = self.numbers
+        if self.objects is not None or self.length not in (0, 1, 16):
+            raise ValueError("Argument must be a float or a sequence of 16 floats")
+        if self.length == 16:
+            return
+        cdef double k = 1
+        if self.length == 1:
+            k = self.numbers[0]
+            self.deallocate_numbers()
+        self.allocate_numbers(16)
         for i in range(16):
-            array_numbers[i] = numbers[i]
-        return data_array
+            self.numbers[i] = k if i % 5 == 0 else 0
 
     cdef Matrix44 mmul(self, Matrix44 b):
         cdef Matrix44 result = Matrix44.__new__(Matrix44)
-        cdef float* numbers = result.numbers
-        cdef float* a_numbers = self.numbers
-        cdef float* b_numbers = b.numbers
+        cdef double* numbers = result.numbers
+        cdef double* a_numbers = self.numbers
+        cdef double* b_numbers = b.numbers
         cdef int i, j
         for i in range(0, 16, 4):
             for j in range(4):
@@ -917,7 +899,7 @@ cdef class Matrix44:
             return None
         cdef Vector result = Vector.__new__(Vector)
         cdef double* numbers
-        cdef float* a_numbers = self.numbers
+        cdef double* a_numbers = self.numbers
         cdef double* b_numbers = b.numbers
         cdef int j
         if b.length == 3:
@@ -945,7 +927,7 @@ cdef class Matrix44:
 
     def __repr__(self):
         cdef list rows = []
-        cdef float* numbers = self.numbers
+        cdef double* numbers = self.numbers
         cdef int i
         for i in range(4):
             rows.append(f"| {numbers[i]:7.3f} {numbers[i+4]:7.3f} {numbers[i+8]:7.3f} {numbers[i+12]:7.3f} |")

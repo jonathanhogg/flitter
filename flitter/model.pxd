@@ -24,7 +24,7 @@ cdef class Vector(VectorLike):
     cdef bint fill_range(self, startv, stopv, stepv) except False
     cpdef bint isinstance(self, t)
     cdef bint as_bool(self)
-    cdef double as_float(self)
+    cdef double as_double(self)
     cdef str as_string(self)
     cdef unsigned long long hash(self, bint floor_floats)
     cpdef object match(self, int n=?, type t=?, default=?)
@@ -59,9 +59,7 @@ cdef Vector false_
 cdef Vector minusone_
 
 
-cdef class Matrix44:
-    cdef cython.float[16] numbers
-
+cdef class Matrix44(Vector):
     @staticmethod
     cdef Matrix44 _project(double aspect_ratio, double fov, double near, double far)
     @staticmethod
