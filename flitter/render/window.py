@@ -31,15 +31,15 @@ def value_split(value, n, m):
     return [tuple(value[i*m:(i+1)*m]) for i in range(n)]
 
 
-ColorDepth = namedtuple('ColorDepth', ('moderngl_dtype', 'gl_format', 'skia_colortype'))
+ColorFormat = namedtuple('ColorFormat', ('moderngl_dtype', 'gl_format', 'skia_colortype'))
 
-COLORDEPTHS = {
-    8: ColorDepth('f1', pyglet.gl.GL_RGBA8, skia.kRGBA_8888_ColorType),
-    16: ColorDepth('f2', pyglet.gl.GL_RGBA16F, skia.kRGBA_F16_ColorType),
-    # 32: ColorDepth('f4', pyglet.gl.GL_RGBA32F, skia.kRGBA_F32_ColorType)  -- Canvas currently fails with 32bit color
+COLOR_FORMATS = {
+    8: ColorFormat('f1', pyglet.gl.GL_RGBA8, skia.kRGBA_8888_ColorType),
+    16: ColorFormat('f2', pyglet.gl.GL_RGBA16F, skia.kRGBA_F16_ColorType),
+    # 32: ColorFormat('f4', pyglet.gl.GL_RGBA32F, skia.kRGBA_F32_ColorType)  -- Canvas currently fails with 32bit color
 }
 
-DEFAULT_COLORDEPTH = 8
+DEFAULT_COLORBITS = 8
 
 
 class SceneNode:
@@ -372,10 +372,11 @@ class Window(ProgramNode):
             self.recalculate_viewport()
         self.window.switch_to()
         self.glctx.extra['linear'] = node.get('linear', 1, bool, False)
-        colordepth = node.get('colordepth', 1, int, DEFAULT_COLORDEPTH)
-        if colordepth not in COLORDEPTHS:
-            colordepth = DEFAULT_COLORDEPTH
-        self.glctx.extra['colordepth'] = colordepth
+        colorbits = node.get('colorbits', 1, int, DEFAULT_COLORBITS)
+        if colorbits not in COLOR_FORMATS:
+            colorbits = DEFAULT_COLORBITS
+        self.glctx.extra['colorbits'] = colorbits
+        self.glctx.extra['size'] = self.width, self.height
 
     def recalculate_viewport(self, force=False):
         aspect_ratio = self.width / self.height
@@ -413,7 +414,7 @@ class Shader(ProgramNode):
         super().__init__(glctx)
         self._framebuffer = None
         self._texture = None
-        self._colordepth = None
+        self._colorbits = None
 
     @property
     def texture(self):
@@ -424,7 +425,7 @@ class Shader(ProgramNode):
         return self._framebuffer
 
     def release(self):
-        self._colordepth = None
+        self._colorbits = None
         if self._framebuffer is not None:
             self._framebuffer.release()
             self._framebuffer = None
@@ -435,11 +436,11 @@ class Shader(ProgramNode):
 
     def create(self, node, resized, **kwargs):
         super().create(node, resized, **kwargs)
-        colordepth = node.get('colordepth', 1, int, self.glctx.extra['colordepth'])
-        if colordepth not in COLORDEPTHS:
-            colordepth = self.glctx.extra['colordepth']
-        if self._framebuffer is None or self._texture is None or resized or colordepth != self._colordepth:
-            depth = COLORDEPTHS[colordepth]
+        colorbits = node.get('colorbits', 1, int, self.glctx.extra['colorbits'])
+        if colorbits not in COLOR_FORMATS:
+            colorbits = self.glctx.extra['colorbits']
+        if self._framebuffer is None or self._texture is None or resized or colorbits != self._colorbits:
+            depth = COLOR_FORMATS[colorbits]
             if self._framebuffer is not None:
                 self._framebuffer.release()
             if self._texture is not None:
@@ -450,10 +451,10 @@ class Shader(ProgramNode):
             self._texture = self.glctx.texture((self.width, self.height), 4, dtype=depth.moderngl_dtype)
             self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
             self._framebuffer.clear()
-            self._colordepth = colordepth
+            self._colorbits = colorbits
 
     def make_last(self):
-        return self.glctx.texture((self.width, self.height), 4, dtype=COLORDEPTHS[self._colordepth].moderngl_dtype)
+        return self.glctx.texture((self.width, self.height), 4, dtype=COLOR_FORMATS[self._colorbits].moderngl_dtype)
 
 
 class Canvas(SceneNode):
@@ -466,7 +467,7 @@ class Canvas(SceneNode):
         self._canvas = None
         self._stats = {}
         self._total_duration = 0
-        self._colordepth = None
+        self._colorbits = None
         self._linear = None
 
     @property
@@ -474,7 +475,7 @@ class Canvas(SceneNode):
         return self._texture
 
     def release(self):
-        self._colordepth = None
+        self._colorbits = None
         self._canvas = None
         self._surface = None
         if self._graphics_context is not None:
@@ -488,16 +489,16 @@ class Canvas(SceneNode):
             self._texture = None
 
     def create(self, node, resized, **kwargs):
-        colordepth = node.get('colordepth', 1, int, self.glctx.extra['colordepth'])
-        if colordepth not in COLORDEPTHS:
-            colordepth = self.glctx.extra['colordepth']
+        colorbits = node.get('colorbits', 1, int, self.glctx.extra['colorbits'])
+        if colorbits not in COLOR_FORMATS:
+            colorbits = self.glctx.extra['colorbits']
         linear = self.glctx.extra['linear']
-        if resized or colordepth != self._colordepth or linear != self._linear:
+        if resized or colorbits != self._colorbits or linear != self._linear:
             if self._framebuffer is not None:
                 self._framebuffer.release()
             if self._texture is not None:
                 self._texture.release()
-            depth = COLORDEPTHS[colordepth]
+            depth = COLOR_FORMATS[colorbits]
             self._texture = self.glctx.texture((self.width, self.height), 4, dtype=depth.moderngl_dtype)
             self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
             backend_render_target = skia.GrBackendRenderTarget(self.width, self.height, 0, 0, skia.GrGLFramebufferInfo(self._framebuffer.glo, depth.gl_format))
@@ -505,7 +506,7 @@ class Canvas(SceneNode):
             self._surface = skia.Surface.MakeFromBackendRenderTarget(self._graphics_context, backend_render_target, skia.kBottomLeft_GrSurfaceOrigin,
                                                                      depth.skia_colortype, colorspace)
             self._canvas = self._surface.getCanvas()
-            self._colordepth = colordepth
+            self._colorbits = colorbits
             self._linear = linear
 
     async def descend(self, node, **kwargs):
@@ -545,7 +546,7 @@ class Video(Shader):
         self._frame0_texture = None
         self._frame1_texture = None
         self._linear = None
-        self._colordepth = None
+        self._colorbits = None
 
     def release(self):
         if self._frame0_texture is not None:
@@ -557,7 +558,7 @@ class Video(Shader):
         self._frame0 = None
         self._frame1 = None
         self._linear = None
-        self._colordepth = None
+        self._colorbits = None
         super().release()
 
     @property
@@ -601,24 +602,24 @@ void main() {
         loop = node.get('loop', 1, bool, False)
         ratio, frame0, frame1 = SharedCache[self._filename].read_video_frames(self, position, loop)
         linear = self.glctx.extra['linear']
-        colordepth = node.get('colordepth', 1, int, self.glctx.extra['colordepth'])
-        if colordepth not in COLORDEPTHS:
-            colordepth = self.glctx.extra['colordepth']
+        colorbits = node.get('colorbits', 1, int, self.glctx.extra['colorbits'])
+        if colorbits not in COLOR_FORMATS:
+            colorbits = self.glctx.extra['colorbits']
         if self._texture is not None and (frame0 is None or (self.width, self.height) != (frame0.width, frame0.height)) \
-            or linear != self._linear or colordepth != self._colordepth:
+            or linear != self._linear or colorbits != self._colorbits:
             self.release()
         if frame0 is None:
             return
         if self._texture is None:
             self.width, self.height = frame0.width, frame0.height
-            depth = COLORDEPTHS[colordepth]
+            depth = COLOR_FORMATS[colorbits]
             self._texture = self.glctx.texture((self.width, self.height), 4, dtype=depth.moderngl_dtype)
             self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
             format = pyglet.gl.GL_SRGB8 if linear else None
             self._frame0_texture = self.glctx.texture((self.width, self.height), 3, internal_format=format)
             self._frame1_texture = self.glctx.texture((self.width, self.height), 3, internal_format=format)
             self._linear = linear
-            self._colordepth = colordepth
+            self._colorbits = colorbits
         if frame0 is self._frame1 or frame1 is self._frame0:
             self._frame0_texture, self._frame1_texture = self._frame1_texture, self._frame0_texture
             self._frame0, self._frame1 = self._frame1, self._frame0
