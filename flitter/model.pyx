@@ -41,12 +41,13 @@ cdef class Vector:
             return other
         if other is None or (isinstance(other, (list, tuple)) and len(other) == 0):
             return null_
-        if other == 0:
-            return false_
-        if other == 1:
-            return true_
-        if other == -1:
-            return minusone_
+        if isinstance(other, (int, float, bool)):
+            if other == 0:
+                return false_
+            if other == 1:
+                return true_
+            if other == -1:
+                return minusone_
         return Vector.__new__(Vector, other)
 
     @staticmethod
@@ -110,19 +111,21 @@ cdef class Vector:
         cdef int i, n
         if isinstance(value, (range, slice)):
             self.fill_range(value.start, value.stop, value.step)
-            return
-        elif isinstance(value, (list, tuple)):
-            n = len(value)
+        elif isinstance(value, (int, float, bool)):
+            self.allocate_numbers(1)
+            self.numbers[0] = value
+        elif isinstance(value, (str, Node)) or not hasattr(value, '__len__'):
+            self.objects = [value]
+            self.length = 1
         else:
-            value = (value,)
-            n = 1
-        if n:
-            try:
-                for i in range(self.allocate_numbers(n)):
-                    self.numbers[i] = value[i]
-            except TypeError:
-                self.deallocate_numbers()
-                self.objects = list(value)
+            n = len(value)
+            if n:
+                try:
+                    for i in range(self.allocate_numbers(n)):
+                        self.numbers[i] = value[i]
+                except TypeError:
+                    self.deallocate_numbers()
+                    self.objects = list(value)
 
     cdef int allocate_numbers(self, int n) except -1:
         assert n > 0
