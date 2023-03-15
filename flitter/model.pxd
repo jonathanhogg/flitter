@@ -48,9 +48,9 @@ cdef class Vector(VectorLike):
     cdef int compare(self, Vector other) except -2
     cdef Vector slice(self, Vector index)
     cdef Vector item(self, int i)
-    cdef Vector normalize(self)
-    cdef Vector dot(self, Vector other)
-    cdef Vector cross(self, Vector other)
+    cpdef Vector normalize(self)
+    cpdef Vector dot(self, Vector other)
+    cpdef Vector cross(self, Vector other)
 
 
 cdef Vector null_

@@ -658,7 +658,7 @@ cdef class Vector:
         return result
 
     @cython.cdivision(True)
-    cdef Vector normalize(self):
+    cpdef Vector normalize(self):
         cdef int i, n = self.length
         if self.numbers == NULL:
             return null_
@@ -676,7 +676,7 @@ cdef class Vector:
         return ys
 
     @cython.cdivision(True)
-    cdef Vector dot(self, Vector other):
+    cpdef Vector dot(self, Vector other):
         cdef int i, n = self.length, m = other.length
         cdef Vector result = Vector.__new__(Vector)
         cdef double sum = 0
@@ -687,7 +687,7 @@ cdef class Vector:
             result.numbers[0] = sum
         return result
 
-    cdef Vector cross(self, Vector other):
+    cpdef Vector cross(self, Vector other):
         if self.numbers == NULL or self.length != 3 or other.numbers == NULL or other.length != 3:
             return null_
         cdef double* self_numbers = self.numbers
