@@ -368,7 +368,7 @@ cdef object make_shader(Node node, paint):
             if (ratio := node.get('ratio', 1, float)) is not None:
                 return skia.Shaders.Lerp(ratio, *shaders)
             if (mode := Composite.get(node.get('mode', 1, str))) is not None:
-                return skia.Shaders.Blend(skia.BlendMode(mode, *shaders))
+                return skia.Shaders.Blend(skia.BlendMode(mode), *shaders)
 
     return None
 

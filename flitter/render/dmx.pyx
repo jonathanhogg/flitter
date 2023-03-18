@@ -164,8 +164,9 @@ class OutputArtsDMXDriver(DMXDriver):
         await self._stream.drain()
 
     def close(self):
-        self._stream.close()
-        self._stream = None
+        if self._stream is not None:
+            self._stream.close()
+            self._stream = None
 
 
 cdef class DMX:
@@ -176,7 +177,7 @@ cdef class DMX:
 
     def destroy(self):
         if self.driver is not None:
-            self.driver.disconnect()
+            self.driver.close()
             self.driver = None
 
     async def update(self, model.Node node):
