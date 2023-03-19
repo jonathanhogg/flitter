@@ -42,7 +42,7 @@ cdef class Vector:
             return other
         if other is None or (isinstance(other, (list, tuple)) and len(other) == 0):
             return null_
-        if isinstance(other, (int, float, bool)):
+        if isinstance(other, (int, float)):
             if other == 0:
                 return false_
             if other == 1:
@@ -294,17 +294,31 @@ cdef class Vector:
                 if n == 0 or n == m:
                     if n == 1:
                         f = self.numbers[0]
-                        return f if t is None else t(f)
+                        if t is int:
+                            return <long long>floor(f)
+                        elif t is bool:
+                            return f != 0
+                        return f
                     else:
                         values = []
                         for i in range(m):
                             f = self.numbers[i]
-                            values.append(f if t is None else t(f))
+                            if t is int:
+                                values.append(<long long>floor(f))
+                            elif t is bool:
+                                values.append(f != 0)
+                            else:
+                                values.append(f)
                         return values
                 elif m == 1:
                     values = []
                     f = self.numbers[0]
-                    obj = f if t is None else t(f)
+                    if t is int:
+                        obj = <long long>floor(f)
+                    elif t is bool:
+                        obj = f != 0
+                    else:
+                        obj = f
                     for i in range(n):
                         values.append(obj)
                     return values
@@ -452,7 +466,7 @@ cdef class Vector:
                 result.numbers[i] = self.numbers[i % n] * other.numbers[i % m]
         return result
 
-    def __truediv__(Vector self, other):
+    def __truediv__(self, other):
         return self.truediv(Vector._coerce(other))
 
     def __rtruediv__(self, other):
@@ -619,17 +633,19 @@ cdef class Vector:
         if index.numbers == NULL:
             return null_
         cdef list values
+        cdef int o = index.length
         cdef Vector result = Vector.__new__(Vector)
         if self.objects is not None:
             result.objects = []
-            for i in range(index.length):
+            for i in range(o):
                 j = <int>floor(index.numbers[i])
                 if j >= 0 and j < n:
                     result.objects.append(self.objects[j])
-            result.length = len(result.objects)
+                    m += 1
+            result.length = m
         else:
-            result.allocate_numbers(index.length)
-            for i in range(index.length):
+            result.allocate_numbers(o)
+            for i in range(o):
                 j = <int>floor(index.numbers[i])
                 if j >= 0 and j < n:
                     result.numbers[m] = self.numbers[j]
@@ -651,7 +667,7 @@ cdef class Vector:
                 result.numbers[0] = value
             else:
                 result.objects = [self.objects[i]]
-                result.length == 1
+                result.length = 1
         else:
             result.allocate_numbers(1)
             result.numbers[0] = self.numbers[i]
@@ -925,7 +941,7 @@ cdef class Matrix44(Vector):
                              a_numbers[j+12]*b_numbers[3]
         return result
 
-    def __matmul__(Matrix44 self, other):
+    def __matmul__(self, other):
         if isinstance(other, Matrix44):
             return self.mmul(<Matrix44>other)
         return self.vmul(Vector._coerce(other))
@@ -999,7 +1015,7 @@ cdef class Matrix44(Vector):
 @cython.final
 @cython.freelist(100)
 cdef class Query:
-    def __cinit__(self, str query=None, *, kind=None, tags=None):
+    def __cinit__(self, str query=None, *, str kind=None, tags=None):
         if query is None:
             self.kind = kind
             if tags is None:
@@ -1082,7 +1098,7 @@ cdef class Node:
             self._tags = tags
 
     def __reduce__(self):
-        return Node, (self.kind,), self._tags or None, self.children, self.attributes
+        return Node, (self.kind,), self._tags or None, self.children, self.__attributes()
 
     @property
     def children(self):
@@ -1091,12 +1107,19 @@ cdef class Node:
             yield node
             node = node.next_sibling
 
-    @property
-    def attributes(self):
+    def __attributes(self):
         cdef str key
         cdef Vector value
+        cdef list values
+        cdef int i
         for key, value in self._attributes.items():
-            yield key, list(value)
+            if value.objects is not None:
+                yield key, value.objects
+            else:
+                values = []
+                for i in range(value.length):
+                    values.append(value.numbers[i])
+                yield key, values
 
     @property
     def tags(self):
