@@ -1001,15 +1001,14 @@ cdef class Matrix44(Vector):
                 result_numbers[i*4+j] = numbers[j*4+i]
         return result
 
-    cpdef Vector matrix33(self):
+    cpdef Matrix44 matrix33(self):
         cdef double* numbers = self.numbers
-        cdef Vector result = Vector.__new__(Vector)
-        result.allocate_numbers(9)
+        cdef Matrix44 result = Matrix44.__new__(Matrix44)
         cdef double* result_numbers = result.numbers
         cdef int i, j
         for i in range(3):
             for j in range(3):
-                result_numbers[3*i+j] = numbers[4*i+j]
+                result_numbers[4*i+j] = numbers[4*i+j]
         return result
 
     def __repr__(self):

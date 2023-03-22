@@ -606,7 +606,7 @@ class Canvas3D(SceneNode):
         self._render_framebuffer.use()
         self._render_framebuffer.clear()
         self.glctx.enable_only(moderngl.DEPTH_TEST | moderngl.CULL_FACE | moderngl.BLEND)
-        canvas3d.render(node, (self.width, self.height), self.glctx, self._objects)
+        canvas3d.draw(node, (self.width, self.height), self.glctx, self._objects)
         self.glctx.enable_only(moderngl.NOTHING)
         self.glctx.copy_framebuffer(self._image_framebuffer, self._render_framebuffer)
 
