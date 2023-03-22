@@ -6,6 +6,7 @@ Flitter window management
 
 import array
 from collections import namedtuple
+import math
 import sys
 import time
 
@@ -21,6 +22,7 @@ import pyglet.gl
 
 from ..cache import SharedCache
 from . import canvas
+from . import canvas3d
 
 
 def value_split(value, n, m):
@@ -100,7 +102,7 @@ class SceneNode:
         existing = self.children
         updated = []
         for child in node.children:
-            cls = {'reference': Reference, 'shader': Shader, 'canvas': Canvas, 'video': Video}[child.kind]
+            cls = {'reference': Reference, 'shader': Shader, 'canvas': Canvas, 'canvas3d': Canvas3D, 'video': Video}[child.kind]
             index = None
             for i, scene_node in enumerate(existing):
                 if type(scene_node) == cls:
@@ -358,7 +360,7 @@ class Window(ProgramNode):
                                              screen=screen, vsync=vsync, config=config)
             self.glctx = moderngl.create_context(require=self.GL_VERSION[0] * 100 + self.GL_VERSION[1] * 10)
             self.glctx.extra = {}
-            self.glctx.blend_func = moderngl.PREMULTIPLIED_ALPHA
+            self.glctx.blend_func = moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA
             if fullscreen:
                 self.window.set_mouse_visible(False)
                 if sys.platform == 'darwin':
@@ -368,6 +370,7 @@ class Window(ProgramNode):
             logger.debug("{} {} on {}", self.name,  "opened fullscreen" if fullscreen else "opened", screen)
             self.recalculate_viewport(True)
             logger.debug("OpenGL info: {GL_RENDERER} {GL_VERSION}", **self.glctx.info)
+            logger.trace("{!r}", self.glctx.info)
         else:
             self.recalculate_viewport()
         self.window.switch_to()
@@ -535,6 +538,77 @@ class Canvas(SceneNode):
         canvas.draw(node, self._canvas, stats=self._stats)
         self._surface.flushAndSubmit()
         self._total_duration += time.perf_counter()
+
+
+class Canvas3D(SceneNode):
+    def __init__(self, glctx):
+        super().__init__(glctx)
+        self._image_texture = None
+        self._image_framebuffer = None
+        self._color_renderbuffer = None
+        self._depth_renderbuffer = None
+        self._render_framebuffer = None
+        self._colorbits = None
+        self._samples = None
+        self._objects = {}
+
+    @property
+    def texture(self):
+        return self._image_texture
+
+    def release(self):
+        self._colorbits = None
+        self._samples = None
+        if self._render_framebuffer is not None:
+            self._render_framebuffer.release()
+            self._render_framebuffer = None
+        if self._image_texture is not None:
+            self._image_texture.release()
+            self._image_texture = None
+        if self._image_framebuffer is not None:
+            self._image_framebuffer.release()
+            self._image_framebuffer = None
+        if self._color_renderbuffer is not None:
+            self._color_renderbuffer.release()
+            self._color_renderbuffer = None
+        if self._depth_renderbuffer is not None:
+            self._depth_renderbuffer.release()
+            self._depth_renderbuffer = None
+
+    def purge(self):
+        for obj in self._objects.values():
+            obj.release()
+        self._objects = {}
+
+    def create(self, node, resized, **kwargs):
+        colorbits = node.get('colorbits', 1, int, self.glctx.extra['colorbits'])
+        if colorbits not in COLOR_FORMATS:
+            colorbits = self.glctx.extra['colorbits']
+        samples = max(0, node.get('samples', 1, int, 0))
+        if samples:
+            samples = min(1<<int(math.log2(samples)), self.glctx.info['GL_MAX_SAMPLES'])
+        if resized or colorbits != self._colorbits or samples != self._samples:
+            self.release()
+            format = COLOR_FORMATS[colorbits]
+            self._image_texture = self.glctx.texture((self.width, self.height), 4, dtype=format.moderngl_dtype)
+            self._image_framebuffer = self.glctx.framebuffer(self._image_texture)
+            self._color_renderbuffer = self.glctx.renderbuffer((self.width, self.height), 4, samples=samples, dtype=format.moderngl_dtype)
+            self._depth_renderbuffer = self.glctx.depth_renderbuffer((self.width, self.height), samples=samples)
+            self._render_framebuffer = self.glctx.framebuffer(color_attachments=(self._color_renderbuffer,), depth_attachment=self._depth_renderbuffer)
+            self._colorbits = colorbits
+            self._samples = samples
+
+    async def descend(self, node, **kwargs):
+        # A canvas3d is a leaf node from the perspective of the OpenGL world
+        pass
+
+    def render(self, node, **kwargs):
+        self._render_framebuffer.use()
+        self._render_framebuffer.clear()
+        self.glctx.enable_only(moderngl.DEPTH_TEST | moderngl.CULL_FACE | moderngl.BLEND)
+        canvas3d.render(node, (self.width, self.height), self.glctx, self._objects)
+        self.glctx.enable_only(moderngl.NOTHING)
+        self.glctx.copy_framebuffer(self._image_framebuffer, self._render_framebuffer)
 
 
 class Video(Shader):
