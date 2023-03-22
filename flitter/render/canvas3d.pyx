@@ -82,18 +82,18 @@ void main() {
             color += diffuse * light.color;
         } else if (light.type == """ + str(LightType.Directional) + """) {
             vec3 light_direction = normalize(light.direction);
-            vec3 reflection_direction = reflect(-light_direction, normal);
+            vec3 reflection_direction = reflect(light_direction, normal);
             float specular_strength = shininess > 0 ? pow(max(dot(view_direction, reflection_direction), 0), shininess) : 0;
-            float diffuse_strength = max(dot(normal, light_direction), 0);
+            float diffuse_strength = max(dot(normal, -light_direction), 0);
             color += light.color * (diffuse * diffuse_strength + specular * specular_strength);
         } else if (light.type == """ + str(LightType.Point) + """) {
-            vec3 light_direction = light.position - world_position;
+            vec3 light_direction = world_position - light.position;
             float light_distance = length(light_direction);
             light_direction = normalize(light_direction);
             float light_attenuation = 1 / (1 + pow(light_distance, 2));
-            float diffuse_strength = max(dot(normal, light_direction), 0);
-            vec3 reflection_direction = reflect(-light_direction, normal);
+            vec3 reflection_direction = reflect(light_direction, normal);
             float specular_strength = shininess > 0 ? pow(max(dot(view_direction, reflection_direction), 0), shininess) : 0;
+            float diffuse_strength = max(dot(normal, -light_direction), 0);
             color += light.color * light_attenuation * (diffuse * diffuse_strength + specular * specular_strength);
         }
     }
