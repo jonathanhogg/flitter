@@ -283,7 +283,7 @@ cdef RenderSet process(Node node, Matrix44 model_matrix, RenderSet render_set, l
 
     elif node.kind == 'box':
         position = Vector._coerce(node.get('position', 3, float, (0, 0, 0)))
-        size = Vector._coerce(node.get('size', 3, float))
+        size = Vector._coerce(node.get('size', 3, float, (1, 1, 1)))
         if size.as_bool():
             instance = Instance(model_matrix=model_matrix.mmul(Matrix44._translate(position).mmul(Matrix44._scale(size))))
             render_set.instances.setdefault('box', []).append(instance)
