@@ -622,6 +622,15 @@ cdef class Vector:
             return 1
         return 0
 
+    def __iter__(self):
+        cdef int i
+        if self.objects is not None:
+            for i in range(self.length):
+                yield self.objects[i]
+        else:
+            for i in range(self.length):
+                yield self.numbers[i]
+
     def __getitem__(self, index):
         cdef Vector result = self.slice(Vector._coerce(index))
         if result.length == 1:
