@@ -159,12 +159,6 @@ class ProgramNode(SceneNode):
         self._last = None
 
     def release(self):
-        if self._last is not None:
-            self._last.release()
-        if self._program is not None:
-            self._program.release()
-        if self._rectangle is not None:
-            self._rectangle.release()
         self._program = None
         self._rectangle = None
         self._vertex_source = None
@@ -182,7 +176,6 @@ class ProgramNode(SceneNode):
     def create(self, node, resized, **kwargs):
         super().create(node, resized, **kwargs)
         if resized and self._last is not None:
-            self._last.release()
             self._last = None
 
     def get_vertex_source(self, node):
@@ -230,12 +223,8 @@ void main() {{
         if vertex_source != self._vertex_source or fragment_source != self._fragment_source:
             self._vertex_source = vertex_source
             self._fragment_source = fragment_source
-            if self._program is not None:
-                self._program.release()
-                self._program = None
-            if self._rectangle is not None:
-                self._rectangle.release()
-                self._rectangle = None
+            self._program = None
+            self._rectangle = None
             try:
                 start = time.perf_counter()
                 self._program = self.glctx.program(vertex_shader=self._vertex_source, fragment_shader=self._fragment_source)
@@ -302,7 +291,6 @@ void main() {{
             self._rectangle.render(mode=moderngl.TRIANGLE_STRIP)
             for sampler in samplers:
                 sampler.clear()
-                sampler.release()
 
 
 class Window(ProgramNode):
@@ -326,6 +314,7 @@ class Window(ProgramNode):
 
     def release(self):
         if self.window is not None:
+            self.glctx.gc()
             self.glctx.release()
             self.glctx = None
             self.window.close()
@@ -359,6 +348,7 @@ class Window(ProgramNode):
             self.window = self.WindowWrapper(width=self.width, height=self.height, resizable=True, caption=title,
                                              screen=screen, vsync=vsync, config=config)
             self.glctx = moderngl.create_context(require=self.GL_VERSION[0] * 100 + self.GL_VERSION[1] * 10)
+            self.glctx.gc_mode = 'context_gc'
             self.glctx.extra = {}
             self.glctx.blend_func = moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA
             if fullscreen:
@@ -406,6 +396,7 @@ class Window(ProgramNode):
             self.glctx.disable_direct(pyglet.gl.GL_FRAMEBUFFER_SRGB)
         self.window.flip()
         self.window.dispatch_events()
+        self.glctx.gc()
 
     def make_last(self):
         width, height = self.window.get_framebuffer_size()
@@ -429,12 +420,8 @@ class Shader(ProgramNode):
 
     def release(self):
         self._colorbits = None
-        if self._framebuffer is not None:
-            self._framebuffer.release()
-            self._framebuffer = None
-        if self._texture is not None:
-            self._texture.release()
-            self._texture = None
+        self._framebuffer = None
+        self._texture = None
         super().release()
 
     def create(self, node, resized, **kwargs):
@@ -444,13 +431,7 @@ class Shader(ProgramNode):
             colorbits = self.glctx.extra['colorbits']
         if self._framebuffer is None or self._texture is None or resized or colorbits != self._colorbits:
             depth = COLOR_FORMATS[colorbits]
-            if self._framebuffer is not None:
-                self._framebuffer.release()
-            if self._texture is not None:
-                self._texture.release()
-            if self._last is not None:
-                self._last.release()
-                self._last = None
+            self._last = None
             self._texture = self.glctx.texture((self.width, self.height), 4, dtype=depth.moderngl_dtype)
             self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
             self._framebuffer.clear()
@@ -484,12 +465,8 @@ class Canvas(SceneNode):
         if self._graphics_context is not None:
             self._graphics_context.abandonContext()
             self._graphics_context = None
-        if self._framebuffer is not None:
-            self._framebuffer.release()
-            self._framebuffer = None
-        if self._texture is not None:
-            self._texture.release()
-            self._texture = None
+        self._framebuffer = None
+        self._texture = None
 
     def create(self, node, resized, **kwargs):
         colorbits = node.get('colorbits', 1, int, self.glctx.extra['colorbits'])
@@ -497,10 +474,6 @@ class Canvas(SceneNode):
             colorbits = self.glctx.extra['colorbits']
         linear = self.glctx.extra['linear']
         if resized or colorbits != self._colorbits or linear != self._linear:
-            if self._framebuffer is not None:
-                self._framebuffer.release()
-            if self._texture is not None:
-                self._texture.release()
             depth = COLOR_FORMATS[colorbits]
             self._texture = self.glctx.texture((self.width, self.height), 4, dtype=depth.moderngl_dtype)
             self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
@@ -559,27 +532,13 @@ class Canvas3D(SceneNode):
     def release(self):
         self._colorbits = None
         self._samples = None
-        if self._render_framebuffer is not None:
-            self._render_framebuffer.release()
-            self._render_framebuffer = None
-        if self._image_texture is not None:
-            self._image_texture.release()
-            self._image_texture = None
-        if self._image_framebuffer is not None:
-            self._image_framebuffer.release()
-            self._image_framebuffer = None
-        if self._color_renderbuffer is not None:
-            self._color_renderbuffer.release()
-            self._color_renderbuffer = None
-        if self._depth_renderbuffer is not None:
-            self._depth_renderbuffer.release()
-            self._depth_renderbuffer = None
+        self._render_framebuffer = None
+        self._image_texture = None
+        self._image_framebuffer = None
+        self._color_renderbuffer = None
+        self._depth_renderbuffer = None
 
     def purge(self):
-        for objs in self._objects.values():
-            for obj in objs:
-                if obj is not None:
-                    obj.release()
         self._objects = {}
 
     def create(self, node, resized, **kwargs):
@@ -625,10 +584,6 @@ class Video(Shader):
         self._colorbits = None
 
     def release(self):
-        if self._frame0_texture is not None:
-            self._frame0_texture.release()
-        if self._frame1_texture is not None:
-            self._frame1_texture.release()
         self._frame0_texture = None
         self._frame1_texture = None
         self._frame0 = None

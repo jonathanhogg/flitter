@@ -361,5 +361,3 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, glc
             render_array = glctx.vertex_array(standard_shader, [(vertex_buffer, '3f 3f', 'model_position', 'model_normal'),
                                                                 (matrices_buffer, '16f/i', 'model_matrix')])
         render_array.render(instances=n)
-        matrices_buffer.release()
-        render_array.release()
