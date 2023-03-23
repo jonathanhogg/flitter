@@ -9,7 +9,9 @@ from cython.view cimport array
 from loguru import logger
 import moderngl
 import numpy as np
+import trimesh
 
+from ..cache import SharedCache
 from ..model cimport Node, Vector, Matrix44, null_
 
 
@@ -39,6 +41,13 @@ cdef class Material:
 
 
 @cython.dataclasses.dataclass
+cdef class Model:
+    name: str
+    vertex_data: np.ndarray = None
+    index_data: np.ndarray = None
+
+
+@cython.dataclasses.dataclass
 cdef class Instance:
     model_matrix: Matrix44
 
@@ -51,6 +60,8 @@ cdef class RenderSet:
 
 
 
+cdef dict ModelCache = {}
+
 cdef int MAX_LIGHTS = 50
 
 cdef str StandardVertexSource = """
@@ -58,7 +69,6 @@ cdef str StandardVertexSource = """
 
 in vec3 model_position;
 in vec3 model_normal;
-in vec2 model_uv;
 in mat4 model_matrix;
 
 out vec2 surface_coord;
@@ -72,7 +82,6 @@ void main() {
     gl_Position = pv_matrix * vec4(world_position, 1);
     mat3 normal_matrix = mat3(transpose(inverse(model_matrix)));
     world_normal = normal_matrix * model_normal;
-    surface_coord = model_uv;
 }
 """
 
@@ -88,7 +97,6 @@ struct Light {
     vec3 direction;
 };
 
-in vec2 surface_coord;
 in vec3 world_position;
 in vec3 world_normal;
 
@@ -131,16 +139,6 @@ void main() {
 }
 """
 
-BoxVertices = np.array([
-    [0,0,1, 0,0,1, 0,0,], [1,1,1, 0,0,1, 1,1,], [0,1,1, 0,0,1, 0,1,], [0,0,1, 0,0,1, 0,0,], [1,0,1, 0,0,1, 1,0,], [1,1,1, 0,0,1, 1,1,],
-    [1,0,1, 1,0,0, 0,0,], [1,1,0, 1,0,0, 1,1,], [1,1,1, 1,0,0, 0,1,], [1,0,1, 1,0,0, 0,0,], [1,0,0, 1,0,0, 1,0,], [1,1,0, 1,0,0, 1,1,],
-    [1,0,0, 0,0,-1, 0,0,], [0,1,0, 0,0,-1, 1,1,], [1,1,0, 0,0,-1, 0,1,], [1,0,0, 0,0,-1, 0,0,], [0,0,0, 0,0,-1, 1,0,], [0,1,0, 0,0,-1, 1,1,],
-    [0,0,0, -1,0,0, 0,0,], [0,1,1, -1,0,0, 1,1,], [0,1,0, -1,0,0, 0,1,], [0,0,0, -1,0,0, 0,0,], [0,0,1, -1,0,0, 1,0,], [0,1,1, -1,0,0, 1,1,],
-    [0,1,1, 0,1,0, 0,0,], [1,1,0, 0,1,0, 1,1,], [0,1,0, 0,1,0, 0,1,], [0,1,1, 0,1,0, 0,0,], [1,1,1, 0,1,0, 1,0,], [1,1,0, 0,1,0, 1,1,],
-    [0,0,0, 0,-1,0, 0,0,], [1,0,1, 0,-1,0, 1,1,], [0,0,1, 0,-1,0, 0,1,], [0,0,0, 0,-1,0, 0,0,], [1,0,0, 0,-1,0, 1,0,], [1,0,1, 0,-1,0, 1,1,],
-], dtype='f4')
-
-
 def draw(Node node, tuple size, glctx, dict objects):
     cdef int width, height
     width, height = size
@@ -167,14 +165,17 @@ cdef RenderSet collect(Node node, Matrix44 model_matrix, RenderSet render_set, l
     cdef str kind = node.kind
     cdef Light light
     cdef list lights, instances
-    cdef Vector vector, color, position, direction, emissive, diffuse, specular
+    cdef Vector vector, color, position, size, direction, emissive, diffuse, specular
     cdef double shininess
     cdef Material material
     cdef Instance instance
     cdef RenderSet new_render_set
     cdef Node child
-    cdef str attribute
+    cdef str attribute, model_name, filename
     cdef Matrix44 matrix
+    cdef int subdivisions, sections
+    cdef bint smooth
+    cdef Model model
 
     if node.kind == 'transform':
         for attribute, vector in node._attributes.items():
@@ -233,34 +234,89 @@ cdef RenderSet collect(Node node, Matrix44 model_matrix, RenderSet render_set, l
             new_render_set = collect(child, model_matrix, new_render_set, render_sets)
             child = child.next_sibling
 
-    elif node.kind == 'box':
+    elif node.kind in ('box', 'sphere', 'cylinder'):
         position = Vector._coerce(node.get('position', 3, float, (0, 0, 0)))
         size = Vector._coerce(node.get('size', 3, float, (1, 1, 1)))
+        smooth = node.get('smooth', 1, bool, True)
+        subdivisions = node.get('subdivisions', 1, int, 2)
+        sections = node.get('sections', 1, int, 32)
         if size.as_bool():
+            model_name = f'!{node.kind}'
+            if node.kind == 'sphere':
+                model_name += f'/{subdivisions}'
+            elif node.kind == 'cylinder':
+                model_name += f'/{sections}'
+            if not smooth:
+                model_name += '/flat'
+            if model_name in ModelCache:
+                model = ModelCache[model_name]
+            else:
+                logger.debug("Initialising model {}", model_name)
+                if node.kind == 'box':
+                    trimesh_model = trimesh.primitives.Box()
+                elif node.kind == 'sphere':
+                    trimesh_model = trimesh.primitives.Sphere(subdivisions=subdivisions)
+                elif node.kind == 'cylinder':
+                    trimesh_model = trimesh.primitives.Cylinder(sections=sections)
+                ModelCache[model_name] = build_model(model_name, trimesh_model, smooth)
             instance = Instance(model_matrix.mmul(Matrix44._translate(position).mmul(Matrix44._scale(size))))
-            if (instances := render_set.instances.get('box')) is not None:
+            if (instances := render_set.instances.get(model_name)) is not None:
                 instances.append(instance)
             else:
-                render_set.instances['box'] = [instance]
+                render_set.instances[model_name] = [instance]
+
+    elif node.kind == 'model':
+        filename = node.get('filename', 1, str)
+        if filename:
+            position = Vector._coerce(node.get('position', 3, float, (0, 0, 0)))
+            size = Vector._coerce(node.get('size', 3, float, (1, 1, 1)))
+            smooth = node.get('smooth', 1, bool, True)
+            model_name = filename
+            if not smooth:
+                model_name += '/flat'
+            if model_name not in ModelCache:
+                trimesh_model = SharedCache[filename].read_trimesh_model()
+                if trimesh_model is not None:
+                    ModelCache[model_name] = build_model(model_name, trimesh_model, smooth)
+                    logger.debug("Loaded model {} with {} faces", filename, len(trimesh_model.faces))
+            if model_name in ModelCache:
+                instance = Instance(model_matrix.mmul(Matrix44._translate(position).mmul(Matrix44._scale(size))))
+                if (instances := render_set.instances.get(model_name)) is not None:
+                    instances.append(instance)
+                else:
+                    render_set.instances[model_name] = [instance]
 
     return render_set
 
 
+cdef Model build_model(str model_name, trimesh_model, bint smooth):
+    cdef Model model = Model(model_name)
+    if smooth:
+        model.vertex_data = np.hstack((trimesh_model.vertices, trimesh_model.vertex_normals)).astype('f4')
+        model.index_data = trimesh_model.faces.astype('i4')
+    else:
+        model.vertex_data = np.empty((len(trimesh_model.faces), 3, 2, 3), dtype='f4')
+        model.vertex_data[:,:,0] = trimesh_model.vertices[trimesh_model.faces]
+        model.vertex_data[:,:,1] = trimesh_model.face_normals[:,:,None]
+    return model
+
+
 cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, glctx, dict objects):
-    cdef str model
+    cdef str model_name
     cdef list instances
     cdef cython.float[:, :] matrices
     cdef Matrix44 model_matrix
     cdef Instance instance
     cdef Material material
     cdef Light light
+    cdef Model model
     cdef int i, j, n
     if 'standard_shader' in objects:
-        standard_shader = objects['standard_shader']
+        standard_shader, = objects['standard_shader']
     else:
         logger.debug("Compiling standard shader")
         standard_shader = glctx.program(vertex_shader=StandardVertexSource, fragment_shader=StandardFragmentSource)
-        objects['standard_shader'] = standard_shader
+        objects['standard_shader'] = (standard_shader,)
     standard_shader['pv_matrix'] = pv_matrix
     standard_shader['view_position'] = viewpoint
     material = render_set.material
@@ -280,7 +336,7 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, glc
             standard_shader[prefix + 'position'] = light.position
     cdef double* src
     cdef float* dest
-    for model, instances in render_set.instances.items():
+    for model_name, instances in render_set.instances.items():
         n = len(instances)
         matrices = array((n, 16), itemsize=sizeof(cython.float), format='f')
         for i in range(n):
@@ -290,15 +346,20 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, glc
             for j in range(16):
                 dest[j] = src[j]
         matrices_buffer = glctx.buffer(matrices)
-        # render
-        if 'box' in objects:
-            vertices_buffer = objects['box']
+        if model_name in objects:
+            vertex_buffer, index_buffer = objects[model_name]
         else:
-            logger.debug("Initialising vertex buffer for box")
-            vertices_buffer = glctx.buffer(BoxVertices.data)
-            objects['box'] = vertices_buffer
-        render_array = glctx.vertex_array(standard_shader, [(vertices_buffer, '3f 3f 2f', 'model_position', 'model_normal', 'model_uv'),
-                                                            (matrices_buffer, '16f/i', 'model_matrix')])
-        render_array.render(mode=moderngl.TRIANGLES, instances=n)
+            model = ModelCache[model_name]
+            vertex_buffer = glctx.buffer(model.vertex_data)
+            index_buffer = glctx.buffer(model.index_data) if model.index_data is not None else None
+            objects[model_name] = vertex_buffer, index_buffer
+        if index_buffer:
+            render_array = glctx.vertex_array(standard_shader, [(vertex_buffer, '3f 3f', 'model_position', 'model_normal'),
+                                                                (matrices_buffer, '16f/i', 'model_matrix')],
+                                              index_buffer=index_buffer, index_element_size=4, mode=moderngl.TRIANGLES)
+        else:
+            render_array = glctx.vertex_array(standard_shader, [(vertex_buffer, '3f 3f', 'model_position', 'model_normal'),
+                                                                (matrices_buffer, '16f/i', 'model_matrix')])
+        render_array.render(instances=n)
         matrices_buffer.release()
         render_array.release()

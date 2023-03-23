@@ -576,8 +576,10 @@ class Canvas3D(SceneNode):
             self._depth_renderbuffer = None
 
     def purge(self):
-        for obj in self._objects.values():
-            obj.release()
+        for objs in self._objects.values():
+            for obj in objs:
+                if obj is not None:
+                    obj.release()
         self._objects = {}
 
     def create(self, node, resized, **kwargs):

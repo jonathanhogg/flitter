@@ -9,6 +9,7 @@ import time
 import av
 from loguru import logger
 import skia
+import trimesh
 
 from .model import Vector
 
@@ -102,13 +103,13 @@ class CachePath:
                 return image
         if mtime is None:
             logger.warning("File not found: {}", self._path)
-            text = None
+            image = None
         else:
             try:
                 image = skia.Image.open(str(self._path))
             except Exception as exc:
                 logger.opt(exception=exc).warning("Error reading image file: {}", self._path)
-                text = None
+                image = None
             else:
                 logger.debug("Read image file: {}", self._path)
         self._cache['image'] = mtime, image
@@ -182,6 +183,27 @@ class CachePath:
             return ratio, *frames
         else:
             return 0, None, None
+
+    def read_trimesh_model(self):
+        self._touched = time.monotonic()
+        mtime = self._path.stat().st_mtime if self._path.exists() else None
+        if 'trimesh' in self._cache:
+            cache_mtime, trimesh_model = self._cache['trimesh']
+            if mtime == cache_mtime:
+                return trimesh_model
+        if mtime is None:
+            logger.warning("File not found: {}", self._path)
+            trimesh_model = None
+        else:
+            try:
+                trimesh_model = trimesh.load(str(self._path))
+            except Exception as exc:
+                logger.opt(exception=exc).warning("Error reading model file: {}", self._path)
+                trimesh_model = None
+            else:
+                logger.debug("Read model file: {}", self._path)
+        self._cache['trimesh'] = mtime, trimesh_model
+        return trimesh_model
 
     def __str__(self):
         return str(self._path)
