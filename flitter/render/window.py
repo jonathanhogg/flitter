@@ -396,7 +396,8 @@ class Window(ProgramNode):
             self.glctx.disable_direct(pyglet.gl.GL_FRAMEBUFFER_SRGB)
         self.window.flip()
         self.window.dispatch_events()
-        self.glctx.gc()
+        if count := self.glctx.gc():
+            logger.trace("Collected {} OpenGL objects", count)
 
     def make_last(self):
         width, height = self.window.get_framebuffer_size()

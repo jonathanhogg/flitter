@@ -5,7 +5,6 @@ Flitter OpenGL 3D drawing canvas
 """
 
 import cython
-from cython.view cimport array
 from loguru import logger
 import moderngl
 import numpy as np
@@ -251,7 +250,7 @@ cdef RenderSet collect(Node node, Matrix44 model_matrix, RenderSet render_set, l
             if model_name in ModelCache:
                 model = ModelCache[model_name]
             else:
-                logger.debug("Initialising model {}", model_name)
+                logger.debug("Building primitive model {}", model_name)
                 if node.kind == 'box':
                     trimesh_model = trimesh.primitives.Box()
                 elif node.kind == 'sphere':
@@ -338,7 +337,7 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, glc
     cdef float* dest
     for model_name, instances in render_set.instances.items():
         n = len(instances)
-        matrices = array((n, 16), itemsize=sizeof(cython.float), format='f')
+        matrices = np.empty((n, 16), dtype='f4')
         for i in range(n):
             instance = instances[i]
             src = instance.model_matrix.numbers
