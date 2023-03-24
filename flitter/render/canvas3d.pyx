@@ -25,6 +25,7 @@ cdef enum LightType:
 
 
 cdef Vector Black = Vector((0, 0, 0))
+cdef Vector White = Vector((1, 1, 1))
 
 
 @cython.dataclasses.dataclass
@@ -226,8 +227,8 @@ cdef RenderSet collect(Node node, Matrix44 model_matrix, RenderSet render_set, l
 
     elif node.kind == 'material':
         emissive = Vector._coerce(node.get('emissive', 3, float, Black))
-        diffuse = Vector._coerce(node.get('diffuse', 3, float, Black))
-        specular = Vector._coerce(node.get('specular', 3, float, Black))
+        diffuse = Vector._coerce(node.get('color', 3, float, Black))
+        specular = Vector._coerce(node.get('specular', 3, float, White))
         shininess = node.get('shininess', 1, float, 0)
         material = Material(emissive, diffuse, specular, shininess)
         new_render_set = RenderSet(render_set.lights, material, {})
