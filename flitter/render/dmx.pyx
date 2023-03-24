@@ -13,8 +13,12 @@ import cython
 from libc.math cimport round
 from loguru import logger
 
+from .. import name_patch
 from .. cimport model
 from ..streams import SerialStream
+
+
+logger = name_patch(logger, __name__)
 
 
 class DMXDriver:

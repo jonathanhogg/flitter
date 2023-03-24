@@ -15,9 +15,12 @@ from libc.math cimport acos, sqrt
 from loguru import logger
 import skia
 
+from flitter import name_patch
 from ..cache import SharedCache
 from ..model cimport Vector, Node
 
+
+logger = name_patch(logger, __name__)
 
 cdef double Tau = 6.283185307179586
 

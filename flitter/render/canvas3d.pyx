@@ -10,8 +10,12 @@ import moderngl
 import numpy as np
 import trimesh
 
+from .. import name_patch
 from ..cache import SharedCache
 from ..model cimport Node, Vector, Matrix44, null_
+
+
+logger = name_patch(logger, __name__)
 
 
 cdef enum LightType:

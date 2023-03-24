@@ -13,7 +13,11 @@ from libc.math cimport sqrt, abs, round, isnan, cos, sin
 import numpy as np
 import usb.core
 
+from .. import name_patch
 from .. cimport model
+
+
+logger = name_patch(logger, __name__)
 
 
 cdef double TWO_PI = 2*np.pi

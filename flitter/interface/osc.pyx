@@ -13,6 +13,11 @@ import time
 
 from loguru import logger
 
+from .. import name_patch
+
+
+logger = name_patch(logger, __name__)
+
 
 def decode_string(data):
     cdef int i = 4, n = len(data)
