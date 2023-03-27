@@ -110,6 +110,7 @@ cdef class Node:
     cdef bint _select(self, Query query, list nodes, bint first)
     cdef bint _equals(self, Node other)
     cpdef object get(self, str name, int n=?, type t=?, object default=?)
+    cpdef Vector get_fvec(self, str name, int n, Vector default=?)
     cpdef void pprint(self, int indent=?)
 
 

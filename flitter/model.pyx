@@ -1316,6 +1316,20 @@ cdef class Node:
                 return value.as_string()
         return value.match(n, t, default)
 
+    cpdef Vector get_fvec(self, str name, int n, Vector default=None):
+        cdef Vector result, value = self._attributes.get(name)
+        cdef int m, i
+        if value is not None and value.numbers != NULL:
+            m = value.length
+            if m == 1 and n > 1:
+                result = Vector.__new__(Vector)
+                for i in range(result.allocate_numbers(n)):
+                    result.numbers[i] = value.numbers[0]
+                return result
+            elif m == n:
+                return value
+        return default
+
     cpdef void pprint(self, int indent=0):
         cdef str tag, key
         cdef Vector value
