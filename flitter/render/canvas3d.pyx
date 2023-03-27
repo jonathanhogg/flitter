@@ -4,6 +4,8 @@
 Flitter OpenGL 3D drawing canvas
 """
 
+import time
+
 import cython
 from loguru import logger
 import moderngl
@@ -24,8 +26,8 @@ cdef enum LightType:
     Point = 3
 
 
-cdef Vector Black = Vector((0, 0, 0))
-cdef Vector White = Vector((1, 1, 1))
+cdef Vector Zero3 = Vector((0, 0, 0))
+cdef Vector One3 = Vector((1, 1, 1))
 
 
 @cython.dataclasses.dataclass
@@ -38,9 +40,9 @@ cdef class Light:
 
 @cython.dataclasses.dataclass
 cdef class Material:
-    emissive: Vector = Black
-    diffuse: Vector = Black
-    specular: Vector = Black
+    emissive: Vector = Zero3
+    diffuse: Vector = Zero3
+    specular: Vector = Zero3
     shininess: cython.double = 0
 
 
@@ -143,12 +145,13 @@ void main() {
 }
 """
 
-def draw(Node node, tuple size, glctx, dict objects):
+
+def draw(Node node, tuple size, glctx, dict objects, dict stats=None):
     cdef int width, height
     width, height = size
-    cdef Vector viewpoint = Vector._coerce(node.get('viewpoint', 3, float, (0, 0, width/2)))
-    cdef Vector focus = Vector._coerce(node.get('focus', 3, float, (0, 0, 0)))
-    cdef Vector up = Vector._coerce(node.get('up', 3, float, (0, 1, 0)))
+    cdef Vector viewpoint = node.get_fvec('viewpoint', 3, Vector((0, 0, width/2)))
+    cdef Vector focus = node.get_fvec('focus', 3, Zero3)
+    cdef Vector up = node.get_fvec('up', 3, Vector((0, 1, 0)))
     cdef double fov = node.get('fov', 1, float, 0.25)
     cdef double near = node.get('near', 1, float, 1)
     cdef double far = node.get('far', 1, float, width)
@@ -157,59 +160,81 @@ def draw(Node node, tuple size, glctx, dict objects):
     cdef Node child = node.first_child
     cdef RenderSet render_set = RenderSet(lights=[], material=Material(), instances={})
     cdef list render_sets = [render_set]
+    cdef int count
+    cdef double total, collect_time = -time.perf_counter()
     while child is not None:
-        render_set = collect(child, model_matrix, render_set, render_sets)
+        collect(child, model_matrix, render_set, render_sets)
         child = child.next_sibling
+    collect_time += time.perf_counter()
     for render_set in render_sets:
         if render_set.instances:
-            render(render_set, pv_matrix, viewpoint, glctx, objects)
+            render(render_set, pv_matrix, viewpoint, glctx, objects, stats)
+    if stats is not None:
+        count = stats.get('_count', 0)
+        stats['_count'] = count+1
+        total = stats.get('_collect', 0)
+        stats['_collect'] = total + collect_time
 
 
-cdef RenderSet collect(Node node, Matrix44 model_matrix, RenderSet render_set, list render_sets):
+cdef Matrix44 update_model_matrix(Matrix44 model_matrix, Node node):
+    cdef Matrix44 matrix
+    cdef str attribute
+    cdef Vector vector
+    for attribute, vector in node._attributes.items():
+        if attribute == 'translate':
+            if (matrix := Matrix44._translate(vector)) is not None:
+                model_matrix = model_matrix.mmul(matrix)
+        elif attribute == 'scale':
+            if (matrix := Matrix44._scale(vector)) is not None:
+                model_matrix = model_matrix.mmul(matrix)
+        elif attribute == 'rotate':
+            if (matrix := Matrix44._rotate(vector)) is not None:
+                model_matrix = model_matrix.mmul(matrix)
+        elif attribute == 'rotate_x':
+            if vector.numbers !=  NULL and vector.length == 1:
+                model_matrix = model_matrix.mmul(Matrix44._rotate_x(vector.numbers[0]))
+        elif attribute == 'rotate_y':
+            if vector.numbers !=  NULL and vector.length == 1:
+                model_matrix = model_matrix.mmul(Matrix44._rotate_y(vector.numbers[0]))
+        elif attribute == 'rotate_z':
+            if vector.numbers !=  NULL and vector.length == 1:
+                model_matrix = model_matrix.mmul(Matrix44._rotate_z(vector.numbers[0]))
+    return model_matrix
+
+
+cdef void collect(Node node, Matrix44 model_matrix, RenderSet render_set, list render_sets):
     cdef str kind = node.kind
     cdef Light light
     cdef list lights, instances
-    cdef Vector vector, color, position, size, direction, emissive, diffuse, specular
+    cdef Vector color, position, direction, emissive, diffuse, specular
     cdef double shininess
     cdef Material material
-    cdef Instance instance
-    cdef RenderSet new_render_set
     cdef Node child
-    cdef str attribute, model_name, filename
-    cdef Matrix44 matrix
+    cdef str model_name, filename
     cdef int subdivisions, sections
     cdef bint smooth
     cdef Model model
 
     if node.kind == 'transform':
-        for attribute, vector in node._attributes.items():
-            if attribute == 'translate':
-                if (matrix := Matrix44._translate(vector)) is not None:
-                    model_matrix = model_matrix.mmul(matrix)
-            elif attribute == 'scale':
-                if (matrix := Matrix44._scale(vector)) is not None:
-                    model_matrix = model_matrix.mmul(matrix)
-            elif attribute == 'rotate':
-                if (matrix := Matrix44._rotate(vector)) is not None:
-                    model_matrix = model_matrix.mmul(matrix)
-            elif attribute == 'rotate_x':
-                if vector.numbers !=  NULL and vector.length == 1:
-                    model_matrix = model_matrix.mmul(Matrix44._rotate_x(vector.numbers[0]))
-            elif attribute == 'rotate_y':
-                if vector.numbers !=  NULL and vector.length == 1:
-                    model_matrix = model_matrix.mmul(Matrix44._rotate_y(vector.numbers[0]))
-            elif attribute == 'rotate_z':
-                if vector.numbers !=  NULL and vector.length == 1:
-                    model_matrix = model_matrix.mmul(Matrix44._rotate_z(vector.numbers[0]))
+        model_matrix = update_model_matrix(model_matrix, node)
         child = node.first_child
         while child is not None:
-            render_set = collect(child, model_matrix, render_set, render_sets)
+            collect(child, model_matrix, render_set, render_sets)
+            child = child.next_sibling
+
+    elif node.kind == 'group':
+        model_matrix = update_model_matrix(model_matrix, node)
+        render_set = RenderSet(list(render_set.lights), render_set.material, {})
+        render_sets.append(render_set)
+        child = node.first_child
+        while child is not None:
+            collect(child, model_matrix, render_set, render_sets)
             child = child.next_sibling
 
     elif node.kind == 'light':
-        color = Vector._coerce(node.get('color', 3, float))
-        position = Vector._coerce(node.get('position', 3, float))
-        direction = Vector._coerce(node.get('direction', 3, float))
+        color = node.get_fvec('color', 3)
+        position = node.get_fvec('position', 3)
+        direction = node.get_fvec('direction', 3)
         if color.as_bool():
             if position.length:
                 position = model_matrix.vmul(position)
@@ -219,61 +244,66 @@ cdef RenderSet collect(Node node, Matrix44 model_matrix, RenderSet render_set, l
                 light = Light(LightType.Directional, color, None, direction)
             else:
                 light = Light(LightType.Ambient, color, None, None)
-            lights = list(render_set.lights)
-            lights.append(light)
-            new_render_set = RenderSet(lights, render_set.material, {})
-            render_sets.append(new_render_set)
-            render_set = new_render_set
+            render_set.lights.append(light)
 
     elif node.kind == 'material':
-        emissive = Vector._coerce(node.get('emissive', 3, float, Black))
-        diffuse = Vector._coerce(node.get('color', 3, float, Black))
-        specular = Vector._coerce(node.get('specular', 3, float, White))
+        emissive = node.get_fvec('emissive', 3, Zero3)
+        diffuse = node.get_fvec('color', 3, Zero3)
+        specular = node.get_fvec('specular', 3, One3)
         shininess = node.get('shininess', 1, float, 0)
         material = Material(emissive, diffuse, specular, shininess)
-        new_render_set = RenderSet(render_set.lights, material, {})
-        render_sets.append(new_render_set)
+        render_set = RenderSet(render_set.lights, material, {})
+        render_sets.append(render_set)
         child = node.first_child
         while child is not None:
-            new_render_set = collect(child, model_matrix, new_render_set, render_sets)
+            collect(child, model_matrix, render_set, render_sets)
             child = child.next_sibling
 
-    elif node.kind in ('box', 'sphere', 'cylinder'):
-        position = Vector._coerce(node.get('position', 3, float, (0, 0, 0)))
-        size = Vector._coerce(node.get('size', 3, float, (1, 1, 1)))
+    elif node.kind == 'box':
         smooth = node.get('smooth', 1, bool, True)
+        if smooth:
+            model_name = '!box'
+        else:
+            model_name = '!box/flat'
+        if model_name in ModelCache:
+            model = ModelCache[model_name]
+        else:
+            logger.debug("Building primitive model {}", model_name)
+            trimesh_model = trimesh.primitives.Box()
+            ModelCache[model_name] = build_model(model_name, trimesh_model, smooth)
+        add_instance(render_set.instances, model_name, node, model_matrix)
+
+    elif node.kind == 'sphere':
         subdivisions = node.get('subdivisions', 1, int, 2)
+        model_name = f'!sphere/{subdivisions}'
+        smooth = node.get('smooth', 1, bool, True)
+        if not smooth:
+            model_name += '/flat'
+        if model_name in ModelCache:
+            model = ModelCache[model_name]
+        else:
+            logger.debug("Building primitive model {}", model_name)
+            trimesh_model = trimesh.primitives.Sphere(subdivisions=subdivisions)
+            ModelCache[model_name] = build_model(model_name, trimesh_model, smooth)
+        add_instance(render_set.instances, model_name, node, model_matrix)
+
+    elif node.kind == 'cylinder':
         sections = node.get('sections', 1, int, 32)
-        if size.as_bool():
-            model_name = f'!{node.kind}'
-            if node.kind == 'sphere':
-                model_name += f'/{subdivisions}'
-            elif node.kind == 'cylinder':
-                model_name += f'/{sections}'
-            if not smooth:
-                model_name += '/flat'
-            if model_name in ModelCache:
-                model = ModelCache[model_name]
-            else:
-                logger.debug("Building primitive model {}", model_name)
-                if node.kind == 'box':
-                    trimesh_model = trimesh.primitives.Box()
-                elif node.kind == 'sphere':
-                    trimesh_model = trimesh.primitives.Sphere(subdivisions=subdivisions)
-                elif node.kind == 'cylinder':
-                    trimesh_model = trimesh.primitives.Cylinder(sections=sections)
-                ModelCache[model_name] = build_model(model_name, trimesh_model, smooth)
-            instance = Instance(model_matrix.mmul(Matrix44._translate(position).mmul(Matrix44._scale(size))))
-            if (instances := render_set.instances.get(model_name)) is not None:
-                instances.append(instance)
-            else:
-                render_set.instances[model_name] = [instance]
+        model_name = f'!cylinder/{sections}'
+        smooth = node.get('smooth', 1, bool, True)
+        if not smooth:
+            model_name += '/flat'
+        if model_name in ModelCache:
+            model = ModelCache[model_name]
+        else:
+            logger.debug("Building primitive model {}", model_name)
+            trimesh_model = trimesh.primitives.Cylinder(sections=sections)
+            ModelCache[model_name] = build_model(model_name, trimesh_model, smooth)
+        add_instance(render_set.instances, model_name, node, model_matrix)
 
     elif node.kind == 'model':
         filename = node.get('filename', 1, str)
         if filename:
-            position = Vector._coerce(node.get('position', 3, float, (0, 0, 0)))
-            size = Vector._coerce(node.get('size', 3, float, (1, 1, 1)))
             smooth = node.get('smooth', 1, bool, True)
             model_name = filename
             if not smooth:
@@ -283,14 +313,7 @@ cdef RenderSet collect(Node node, Matrix44 model_matrix, RenderSet render_set, l
                 if trimesh_model is not None:
                     ModelCache[model_name] = build_model(model_name, trimesh_model, smooth)
                     logger.debug("Loaded model {} with {} faces", filename, len(trimesh_model.faces))
-            if model_name in ModelCache:
-                instance = Instance(model_matrix.mmul(Matrix44._translate(position).mmul(Matrix44._scale(size))))
-                if (instances := render_set.instances.get(model_name)) is not None:
-                    instances.append(instance)
-                else:
-                    render_set.instances[model_name] = [instance]
-
-    return render_set
+            add_instance(render_set.instances, model_name, node, model_matrix)
 
 
 cdef Model build_model(str model_name, trimesh_model, bint smooth):
@@ -305,7 +328,20 @@ cdef Model build_model(str model_name, trimesh_model, bint smooth):
     return model
 
 
-cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, glctx, dict objects):
+cdef void add_instance(dict render_instances, str model_name, Node node, Matrix44 model_matrix):
+    if 'position' in node._attributes:
+        model_matrix = model_matrix.mmul(Matrix44._translate(node.get_fvec('position', 3, Zero3)))
+    if 'size' in node._attributes:
+        model_matrix = model_matrix.mmul(Matrix44._scale(node.get_fvec('size', 3, One3)))
+    cdef Instance instance = Instance(model_matrix)
+    cdef list instances
+    if (instances := render_instances.get(model_name)) is not None:
+        instances.append(instance)
+    else:
+        render_instances[model_name] = [instance]
+
+
+cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, glctx, dict objects, dict stats):
     cdef str model_name
     cdef list instances
     cdef cython.float[:, :] matrices
@@ -340,7 +376,10 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, glc
             standard_shader[prefix + 'position'] = light.position
     cdef double* src
     cdef float* dest
+    cdef float start, end, total
+    cdef int count, total_instances
     for model_name, instances in render_set.instances.items():
+        start = time.perf_counter()
         n = len(instances)
         matrices = np.empty((n, 16), dtype='f4')
         for i in range(n):
@@ -352,11 +391,13 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, glc
         matrices_buffer = glctx.buffer(matrices)
         if model_name in objects:
             vertex_buffer, index_buffer = objects[model_name]
-        else:
+        elif model_name in ModelCache:
             model = ModelCache[model_name]
             vertex_buffer = glctx.buffer(model.vertex_data)
             index_buffer = glctx.buffer(model.index_data) if model.index_data is not None else None
             objects[model_name] = vertex_buffer, index_buffer
+        else:
+            continue
         if index_buffer:
             render_array = glctx.vertex_array(standard_shader, [(vertex_buffer, '3f 3f', 'model_position', 'model_normal'),
                                                                 (matrices_buffer, '16f/i', 'model_matrix')],
@@ -365,3 +406,7 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, glc
             render_array = glctx.vertex_array(standard_shader, [(vertex_buffer, '3f 3f', 'model_position', 'model_normal'),
                                                                 (matrices_buffer, '16f/i', 'model_matrix')])
         render_array.render(instances=n)
+        if stats is not None:
+            end = time.perf_counter()
+            count, total_instances, total = stats.get(model_name, (0, 0, 0))
+            stats[model_name] = count+1, total_instances+n, total+end-start

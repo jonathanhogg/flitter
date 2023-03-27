@@ -350,6 +350,7 @@ class Window(ProgramNode):
             self.glctx = moderngl.create_context(require=self.GL_VERSION[0] * 100 + self.GL_VERSION[1] * 10)
             self.glctx.gc_mode = 'context_gc'
             self.glctx.extra = {}
+            self.glctx.enable(moderngl.BLEND)
             self.glctx.blend_func = moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA
             if fullscreen:
                 self.window.set_mouse_visible(False)
@@ -525,6 +526,8 @@ class Canvas3D(SceneNode):
         self._colorbits = None
         self._samples = None
         self._objects = {}
+        self._stats = {}
+        self._total_duration = 0
 
     @property
     def texture(self):
@@ -541,6 +544,22 @@ class Canvas3D(SceneNode):
 
     def purge(self):
         self._objects = {}
+        total_count = self._stats.pop('_count')
+        collect_time = self._stats.pop('_collect')
+        render_time = 0
+        logger.info("{} draw stats - {:d} x {:.1f}ms = {:.1f}s", self.name, total_count,
+                    1e3*self._total_duration/total_count, self._total_duration)
+        logger.debug("{:15s}         - {:6d} x {:6.1f}µs = {:5.1f}s  ({:4.1f}%)",
+                     '(collect)', total_count, 1e6*collect_time/total_count, collect_time, 100*collect_time/self._total_duration)
+        for duration, n, m, key in sorted(((duration, n, m, key) for (key, (n, m, duration)) in self._stats.items()), reverse=True):
+            logger.debug("{:15s} (x{:4d}) - {:6d} x {:6.1f}µs = {:5.1f}s  ({:4.1f}%)",
+                         key, m//n, n, 1e6*duration/n, duration, 100*duration/self._total_duration)
+            render_time += duration
+        overhead = self._total_duration - collect_time - render_time
+        logger.debug("{:15s}         - {:6d} x {:6.1f}µs = {:5.1f}s  ({:4.1f}%)",
+                     '(overhead)', total_count, 1e6*overhead/total_count, overhead, 100*overhead/self._total_duration)
+        self._stats = {}
+        self._total_duration = 0
 
     def create(self, node, resized, **kwargs):
         colorbits = node.get('colorbits', 1, int, self.glctx.extra['colorbits'])
@@ -552,6 +571,7 @@ class Canvas3D(SceneNode):
         if resized or colorbits != self._colorbits or samples != self._samples:
             self.release()
             format = COLOR_FORMATS[colorbits]
+            logger.debug("Creating canvas3d render targets with {} color bits", colorbits)
             self._image_texture = self.glctx.texture((self.width, self.height), 4, dtype=format.moderngl_dtype)
             self._image_framebuffer = self.glctx.framebuffer(self._image_texture)
             self._color_renderbuffer = self.glctx.renderbuffer((self.width, self.height), 4, samples=samples, dtype=format.moderngl_dtype)
@@ -565,12 +585,14 @@ class Canvas3D(SceneNode):
         pass
 
     def render(self, node, **kwargs):
+        self._total_duration -= time.perf_counter()
         self._render_framebuffer.use()
         self._render_framebuffer.clear()
-        self.glctx.enable_only(moderngl.DEPTH_TEST | moderngl.CULL_FACE | moderngl.BLEND)
-        canvas3d.draw(node, (self.width, self.height), self.glctx, self._objects)
-        self.glctx.enable_only(moderngl.NOTHING)
+        self.glctx.enable(moderngl.DEPTH_TEST | moderngl.CULL_FACE)
+        canvas3d.draw(node, (self.width, self.height), self.glctx, self._objects, self._stats)
+        self.glctx.disable(moderngl.DEPTH_TEST | moderngl.CULL_FACE)
         self.glctx.copy_framebuffer(self._image_framebuffer, self._render_framebuffer)
+        self._total_duration += time.perf_counter()
 
 
 class Video(Shader):
