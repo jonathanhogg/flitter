@@ -191,6 +191,9 @@ void main() {
     def get_fragment_source(self, node):
         if fragment := node.get('fragment', 1, str):
             return fragment
+        blend_mode = node.get('blend', 1, str);
+        if blend_mode not in {'over', 'dest_over', 'lighten', 'darken'}:
+            blend_mode = 'over'
         names = list(self.child_textures.keys())
         if names:
             samplers = '\n'.join(f"uniform sampler2D {name};" for name in names)
@@ -198,12 +201,18 @@ void main() {
             composite.append(f"    color = texture({names.pop(0)}, coord);")
             while names:
                 composite.append(f"    child = texture({names.pop(0)}, coord);")
-                composite.append(f"    color = color * (1.0 - child.a) + child;")
+                composite.append(f"    color = blend_{blend_mode}(child, color);")
             composite = '\n'.join(composite)
         else:
             samplers = ""
             composite = "    color = vec4(0.0);"
         return f"""#version 410
+
+vec4 blend_over(vec4 s, vec4 d) {{ return s + d * (1 - s.a); }}
+vec4 blend_dest_over(vec4 s, vec4 d) {{ return s * (1 - d.a) + d; }}
+vec4 blend_lighten(vec4 s, vec4 d) {{ return max(s, d); }}
+vec4 blend_darken(vec4 s, vec4 d) {{ return min(s, d); }}
+
 in vec2 coord;
 out vec4 color;
 uniform float alpha = 1;
