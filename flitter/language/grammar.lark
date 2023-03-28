@@ -23,6 +23,7 @@ expressions : expression+ -> tuple
 ?expression : node _NL
             | node "^" _NL _INDENT sequence _DEDENT -> prepend
             | node _NL _INDENT sequence _DEDENT -> append
+            | "@" atom [attribute_bindings] _NL [_INDENT sequence _DEDENT] -> template_call
             | "for" name_list "in" range _NL _INDENT sequence _DEDENT -> loop
             | "let" multiline_bindings -> let
             | "if" tests ["else" _NL _INDENT sequence _DEDENT] -> if_else

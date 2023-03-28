@@ -1257,3 +1257,81 @@ cdef class Function(Expression):
 
     def __repr__(self):
         return f'Function({self.name!r}, {self.parameters!r}, {self.expr!r})'
+
+
+cdef class TemplateCall(Expression):
+    cdef readonly Expression function
+    cdef readonly tuple args
+    cdef readonly Expression children
+
+    def __init__(self, Expression function, tuple args, Expression children):
+        self.function = function
+        self.args = args
+        self.children = children
+
+    cpdef model.VectorLike evaluate(self, model.Context context):
+        cdef model.Vector function = self.function.evaluate(context)
+        cdef model.Vector children = self.children.evaluate(context) if self.children is not None else model.null_
+        cdef dict kwargs = {}
+        cdef Binding arg
+        if self.args is not None:
+            for arg in self.args:
+                kwargs[arg.name] = arg.expr.evaluate(context)
+        cdef list results = []
+        cdef Function func_expr
+        cdef Binding parameter
+        cdef int i
+        for func in function.objects:
+            if callable(func):
+                results.append(func(children, **kwargs))
+            elif isinstance(func, Function):
+                func_expr = func
+                saved = context.variables
+                context.variables = {}
+                for i, parameter in enumerate(func_expr.parameters):
+                    if i == 0:
+                        context.variables[parameter.name] = children
+                    elif parameter.name in kwargs:
+                        context.variables[parameter.name] = kwargs[parameter.name]
+                    elif parameter.expr is not None:
+                        context.variables[parameter.name] = (<Literal>parameter.expr).value
+                    else:
+                        context.variables[parameter.name] = model.null_
+                results.append(func_expr.expr.evaluate(context))
+                context.variables = saved
+        return model.Vector._compose(results)
+
+    cpdef Expression partially_evaluate(self, model.Context context):
+        cdef Expression function = self.function.partially_evaluate(context)
+        cdef literal = isinstance(function, Literal)
+        cdef Expression children = None
+        if self.children is not None:
+            children = self.children.partially_evaluate(context)
+            literal = literal and isinstance(children, Literal)
+        cdef list args = None
+        cdef Binding arg
+        cdef Expression value
+        if self.args is not None:
+            args = []
+            for arg in self.args:
+                value = arg.expr.partially_evaluate(context)
+                if not isinstance(value, Literal):
+                    literal = False
+                args.append(Binding(arg.name, value))
+        cdef TemplateCall call = TemplateCall(function, tuple(args) if args is not None else None, children)
+        if literal:
+            return Literal(call.evaluate(context))
+        return call
+
+    cpdef object reduce(self, func):
+        cdef list children = [self.function.reduce(func)]
+        cdef Binding binding
+        if self.args is not None:
+            for arg in self.args:
+                children.append(arg.expr.reduce(func))
+        if self.children is not None:
+            children.append(self.children.reduce(func))
+        return func(self, *children)
+
+    def __repr__(self):
+        return f'TemplateCall({self.function!r}, {self.args!r}, {self.children!r})'

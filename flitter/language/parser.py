@@ -97,6 +97,7 @@ class FlitterTransformer(Transformer):
     slice = tree.Slice
     subtract = tree.Subtract
     tag = tree.Tag
+    template_call = tree.TemplateCall
     test = tree.Test
     top = tree.Top
 
