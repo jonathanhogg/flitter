@@ -116,6 +116,7 @@ cdef class Node:
 
 cdef class Context:
     cdef readonly dict variables
+    cdef readonly set unbound
     cdef readonly dict pragmas
     cdef readonly dict state
     cdef readonly Node graph

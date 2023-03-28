@@ -1357,15 +1357,17 @@ cdef class Context:
         self.state = state if state is not None else {}
         self.graph = graph if graph is not None else Node.__new__(Node, 'root')
         self.pragmas = pragmas if pragmas is not None else {}
+        self.unbound = set()
         self._stack = []
 
     def __enter__(self):
-        self._stack.append(self.variables)
+        self._stack.append((self.variables, self.unbound))
         self.variables = self.variables.copy()
+        self.unbound = set()
         return self
 
     def __exit__(self, *args):
-        self.variables = self._stack.pop()
+        self.variables, self.unbound = self._stack.pop()
 
     def merge_under(self, Node node):
         for attr, value in node.attributes.items():

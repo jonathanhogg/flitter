@@ -230,8 +230,11 @@ cdef class Name(Expression):
             value = context.variables[self.name]
             if value is not None:
                 return Literal(value.copynodes())
+            else:
+                return self
         elif (value := builtins_.get(self.name)) is not None:
             return Literal(value)
+        context.unbound.add(self.name)
         return self
 
     def __repr__(self):
@@ -668,7 +671,7 @@ cdef class Call(Expression):
         cdef Call call = Call(function, tuple(args))
         if literal:
             return Literal(call.evaluate(context))
-        return Call(function, tuple(args))
+        return call
 
     cpdef object reduce(self, func):
         cdef list children = []
@@ -1107,8 +1110,7 @@ cdef class For(Expression):
         cdef str name
         if not isinstance(source, Literal):
             for name in self.names:
-                if name in context.variables:
-                    del context.variables[name]
+                context.variables[name] = None
             body = self.body.partially_evaluate(context)
             context.variables = saved
             return For(self.names, source, body)
@@ -1221,16 +1223,28 @@ cdef class Function(Expression):
         cdef list parameters = []
         cdef Binding parameter
         cdef Expression expr
+        cdef bint literal = True
         for parameter in self.parameters:
-            parameters.append(Binding(parameter.name, parameter.expr.partially_evaluate(context) if parameter.expr is not None else None))
+            expr = parameter.expr.partially_evaluate(context) if parameter.expr is not None else None
+            if expr is not None and not isinstance(expr, Literal):
+                literal = False
+            parameters.append(Binding(parameter.name, expr))
         cdef dict saved = context.variables
+        cdef set unbound = context.unbound
         context.variables = saved.copy()
         for parameter in parameters:
-            if parameter.name in context.variables:
-                del context.variables[parameter.name]
+            context.variables[parameter.name] = None
+        context.unbound = set()
         expr = self.expr.partially_evaluate(context)
+        if literal:
+            literal = not context.unbound
         context.variables = saved
-        return Function(self.name, tuple(parameters), expr)
+        context.unbound = unbound
+        cdef function = Function(self.name, tuple(parameters), expr)
+        if literal:
+            context.variables[self.name] = model.Vector.__new__(model.Vector, function)
+            return NoOp
+        return function
 
     cpdef object reduce(self, func):
         cdef list children = []
