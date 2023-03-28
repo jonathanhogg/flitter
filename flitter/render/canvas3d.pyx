@@ -239,9 +239,9 @@ cdef void collect(Node node, Matrix44 model_matrix, RenderSet render_set, list r
             if position.length:
                 position = model_matrix.vmul(position)
                 light = Light(LightType.Point, color, position, None)
-            elif direction.length:
+            elif direction.as_bool():
                 direction = model_matrix.inverse().transpose().matrix33().vmul(direction)
-                light = Light(LightType.Directional, color, None, direction)
+                light = Light(LightType.Directional, color, None, direction.normalize())
             else:
                 light = Light(LightType.Ambient, color, None, None)
             render_set.lights.append(light)
