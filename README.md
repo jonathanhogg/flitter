@@ -1,15 +1,17 @@
 # flitter
 
-**flitter** is a 2D (presently) visuals language and engine designed for live
+**flitter** is a 2D and basic 3D visuals language and engine designed for live
 performances. While **flitter** supports a basic form of live-coding (live
 reload of source files), it is designed primarily for driving via an Ableton
 Push 2 controller.
 
-The engine that runs the language is capable of: drawing in windows with Skia,
-OpenGL shaders and video files; driving a LaserCube plugged in over USB (other
-lasers probably easy to support); driving DMX lighting via a USB DMX interface
-(currently via an Entec/-compatible interface or my own crazy hand-built
-interfaces).
+The engine that runs the language is capable of: 2D drawing with Skia; running
+OpenGL shaders as image generators/filters; rendering videos; rendering basic
+3D scenes in OpenGL with a few simple primitives, mesh model loading, ambient,
+directional and point light sources, and simple Phong/Gouraud shading; driving
+a LaserCube plugged in over USB (other lasers probably easy to support); driving
+DMX lighting via a USB DMX interface (currently via an Entec/-compatible
+interface or my own crazy hand-built interfaces).
 
 It is implemented in a mix of Python and Cython. I use and develop **flitter**
 exclusively on macOS. It is notionally portable – in that there's no particular
@@ -66,6 +68,8 @@ For reference, they are:
 - `skia-python` - for 2D drawing
 - `pyglet` - for OpenGL windowing
 - `moderngl` - because the OpenGL API is too hard
+- `trimesh` - for generating/loading 3D triangular mesh models
+- `scipy` - because `trimesh` needs it for some operations
 - `av` - for decoding video
 - `pyserial` - for talking to DMX interfaces and lasers
 - `loguru` - because the standard library `logging` is just too antiquated
@@ -320,6 +324,33 @@ an insufficient number of matching arguments, otherwise any parameters lacking
 matching arguments will be bound to `null`. The result of evaluating all
 body expressions will be returned as a single vector.
 
+### Template Functions
+
+This is something of a hack, but the special `@` operator allows calling a
+function using similar syntax to constructing a node. The name following `@`
+should be the name of the function to be called, any named attributes placed
+after this are passed as arguments to the respectively-named function
+parameters. Any indented expressions are evaluated and the resulting
+vector passed as the first argument to the function. Function parameters that
+are not bound by a pseudo-attribute will have their default value if one was
+specified in the function or `null` otherwise.
+
+For example:
+
+```
+func shrink(nodes, percent=0)
+    !transform scale=1-percent/100
+        nodes
+
+!canvas ...
+    @shrink percent=25
+        !ellipse radius=10
+```
+
+This (rather pointless) example shows using a template function call to shrink
+a circle by 25%, by wrapping it in an equivalent `!transform scale=0.75`
+node.
+
 ### Pseudo-random sources
 
 **flitter** provides three useful sources of pseudo-randomness: `uniform()`,
@@ -484,11 +515,40 @@ for the code attribute, a la:
 let SIZE=1920;1080
 
 !window size=SIZE
-    !shader size=SIZE fragment=read('blur.frag') radius=5
-        !canvas size=SIZE
+    !shader fragment=read('blur.frag') radius=5
+        !canvas
             ...
 ```
 
 Shader code will be reloaded on-the-fly if the file's modification timestamp
 changes. On macOS the maximum OpenGL level is `#version 410`. Shaders can be
 nested to apply multiple effects.
+
+Note that `size` is inherited from the containing node by `!shader`, `!canvas`,
+`!canvas3d` and `!video`.
+
+## Linear and HDR color
+
+Adding `linear=true` to a `!window` will force the entire pipeline of that
+window to use linear-sRGB color. This is arguable The Right Thing to do and
+should probably be the default. Images and videos will be shifted into linear
+color values and the final window framebuffer will be converted back into the
+standard logarithmic-sRGB when rendering to the screen.
+
+As logarithmic-sRGB is optimises the limited 8-bit color channel depth for
+the way that the human eye perceives brightness, you will almost certainly not
+want to switch to linear color without also enabling deeper color channels with
+the `colorbits=16` attribute on `!window`. This is inherited by all `!shader`,
+`!canvas`, `!canvas3d` and `!video` nodes underneath the window and forces all
+textures and framebuffers to be 16-bit per channel.
+
+An added benefit of 16-bit channel depths is that the color format is changed
+from pseudo-floats (0 .. 255 scaled to 0 .. 1.0) to actual half-precision
+floating point numbers, which can be negative and greater than 1.0 allowing for
+a high dynamic range pipeline. This is particularly useful for effects like
+bloom filters.
+
+The `hsl()` and `hsv()` color functions do not support values of `l` or `v` that
+are greater than 1, so multiply the resulting RGB vector to construct high
+brightness colors, e.g., `hsv(hue;0.9;1) * 100`. You'll need these bright colors
+when setting the `color` of point `!light` sources in `!canvas3d`.
