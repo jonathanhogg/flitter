@@ -77,7 +77,6 @@ in vec3 model_position;
 in vec3 model_normal;
 in mat4 model_matrix;
 
-out vec2 surface_coord;
 out vec3 world_position;
 out vec3 world_normal;
 
@@ -96,20 +95,13 @@ cdef str StandardFragmentSource = """
 
 const int MAX_LIGHTS = """ + str(MAX_LIGHTS) + """;
 
-struct Light {
-    int type;
-    vec3 color;
-    vec3 position;
-    vec3 direction;
-};
-
 in vec3 world_position;
 in vec3 world_normal;
 
 out vec4 fragment_color;
 
 uniform int nlights = 0;
-uniform Light lights[MAX_LIGHTS];
+uniform vec3 lights[MAX_LIGHTS * 4];
 uniform vec3 diffuse = vec3(0);
 uniform vec3 specular = vec3(0);
 uniform vec3 emissive = vec3(0);
@@ -120,25 +112,28 @@ void main() {
     vec3 view_direction = normalize(view_position - world_position);
     vec3 color = emissive;
     vec3 normal = normalize(world_normal);
-    for (int i = 0; i < nlights; i++) {
-        Light light = lights[i];
-        if (light.type == """ + str(LightType.Ambient) + """) {
-            color += diffuse * light.color;
-        } else if (light.type == """ + str(LightType.Directional) + """) {
-            vec3 light_direction = normalize(light.direction);
+    for (int i = 0; i < nlights*4; i += 4) {
+        float light_type = lights[i].x;
+        vec3 light_color = lights[i+1];
+        vec3 light_position = lights[i+2];
+        vec3 light_direction = lights[i+3];
+        if (light_type == """ + str(LightType.Ambient) + """) {
+            color += diffuse * light_color;
+        } else if (light_type == """ + str(LightType.Directional) + """) {
+            light_direction = normalize(light_direction);
             vec3 reflection_direction = reflect(light_direction, normal);
             float specular_strength = shininess > 0 ? pow(max(dot(view_direction, reflection_direction), 0), shininess) : 0;
             float diffuse_strength = max(dot(normal, -light_direction), 0);
-            color += light.color * (diffuse * diffuse_strength + specular * specular_strength);
-        } else if (light.type == """ + str(LightType.Point) + """) {
-            vec3 light_direction = world_position - light.position;
+            color += light_color * (diffuse * diffuse_strength + specular * specular_strength);
+        } else if (light_type == """ + str(LightType.Point) + """) {
+            light_direction = world_position - light_position;
             float light_distance = length(light_direction);
             light_direction = normalize(light_direction);
             float light_attenuation = 1 / (1 + pow(light_distance, 2));
             vec3 reflection_direction = reflect(light_direction, normal);
             float specular_strength = shininess > 0 ? pow(max(dot(view_direction, reflection_direction), 0), shininess) : 0;
             float diffuse_strength = max(dot(normal, -light_direction), 0);
-            color += light.color * light_attenuation * (diffuse * diffuse_strength + specular * specular_strength);
+            color += light_color * light_attenuation * (diffuse * diffuse_strength + specular * specular_strength);
         }
     }
     fragment_color = vec4(color, 1);
@@ -147,6 +142,7 @@ void main() {
 
 
 def draw(Node node, tuple size, glctx, dict objects, dict stats=None):
+    cdef double total, collect_time = -time.perf_counter()
     cdef int width, height
     width, height = size
     cdef Vector viewpoint = node.get_fvec('viewpoint', 3, Vector((0, 0, width/2)))
@@ -161,19 +157,18 @@ def draw(Node node, tuple size, glctx, dict objects, dict stats=None):
     cdef RenderSet render_set = RenderSet(lights=[], material=Material(), instances={})
     cdef list render_sets = [render_set]
     cdef int count
-    cdef double total, collect_time = -time.perf_counter()
     while child is not None:
         collect(child, model_matrix, render_set, render_sets)
         child = child.next_sibling
     collect_time += time.perf_counter()
-    for render_set in render_sets:
-        if render_set.instances:
-            render(render_set, pv_matrix, viewpoint, glctx, objects, stats)
     if stats is not None:
         count = stats.get('_count', 0)
         stats['_count'] = count+1
         total = stats.get('_collect', 0)
         stats['_collect'] = total + collect_time
+    for render_set in render_sets:
+        if render_set.instances:
+            render(render_set, pv_matrix, viewpoint, glctx, objects, stats)
 
 
 cdef Matrix44 update_model_matrix(Matrix44 model_matrix, Node node):
@@ -342,6 +337,8 @@ cdef void add_instance(dict render_instances, str model_name, Node node, Matrix4
 
 
 cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, glctx, dict objects, dict stats):
+    cdef float start, end, total
+    cdef int count, total_instances
     cdef str model_name
     cdef list instances
     cdef cython.float[:, :] matrices
@@ -364,20 +361,25 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, glc
     standard_shader['diffuse'] = material.diffuse
     standard_shader['specular'] = material.specular
     standard_shader['shininess'] = material.shininess
+    start = time.perf_counter()
     standard_shader['nlights'] = len(render_set.lights)
-    cdef str prefix
+    cdef cython.float[:,:,:] lights = np.zeros((MAX_LIGHTS, 4, 3), dtype='f4')
     for i, light in enumerate(render_set.lights):
-        prefix = f'lights[{i}].'
-        standard_shader[prefix + 'type'] = light.type
-        standard_shader[prefix + 'color'] = light.color
-        if light.type == LightType.Directional:
-            standard_shader[prefix + 'direction'] = light.direction
-        elif light.type == LightType.Point:
-            standard_shader[prefix + 'position'] = light.position
+        lights[i, 0, 0] = <cython.float>(<int>light.type)
+        for j in range(3):
+            lights[i, 1, j] = light.color.numbers[j]
+        if light.type == LightType.Point:
+            for j in range(3):
+                lights[i, 2, j] = light.position.numbers[j]
+        elif light.type == LightType.Directional:
+            for j in range(3):
+                lights[i, 3, j] = light.direction.numbers[j]
+    standard_shader['lights'].write(lights)
+    end = time.perf_counter()
+    count, total_instances, total = stats.get('(lighting)', (0, 0, 0))
+    stats['(lighting)'] = count+1, total_instances+len(render_set.lights), total+end-start
     cdef double* src
     cdef float* dest
-    cdef float start, end, total
-    cdef int count, total_instances
     for model_name, instances in render_set.instances.items():
         start = time.perf_counter()
         n = len(instances)
