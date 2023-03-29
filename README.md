@@ -530,23 +530,25 @@ Note that `size` is inherited from the containing node by `!shader`, `!canvas`,
 ## Linear and HDR color
 
 Adding `linear=true` to a `!window` will force the entire pipeline of that
-window to use linear-sRGB color. This is arguable The Right Thing to do and
+window to use linear-sRGB color. This is arguably The Right Thing to do and
 should probably be the default. Images and videos will be shifted into linear
-color values and the final window framebuffer will be converted back into the
-standard logarithmic-sRGB when rendering to the screen.
+color values, all drawing and blending will be done in linear-space, and then
+the final window framebuffer will be converted back into the standard screen
+logarithmic-sRGB for display.
 
-As logarithmic-sRGB is optimises the limited 8-bit color channel depth for
-the way that the human eye perceives brightness, you will almost certainly not
-want to switch to linear color without also enabling deeper color channels with
+As logarithmic-sRGB optimises the limited 8-bit color channel depth for the way
+that the human eye perceives brightness, you will almost certainly not want to
+switch to linear color without *also* enabling deeper color channels with
 the `colorbits=16` attribute on `!window`. This is inherited by all `!shader`,
 `!canvas`, `!canvas3d` and `!video` nodes underneath the window and forces all
-textures and framebuffers to be 16-bit per channel.
+textures and framebuffers to be 16-bits per channel.
 
 An added benefit of 16-bit channel depths is that the color format is changed
-from pseudo-floats (0 .. 255 scaled to 0 .. 1.0) to actual half-precision
-floating point numbers, which can be negative and greater than 1.0 allowing for
+from pseudo-floats (0..255 scaled to 0..1) to actual half-precision
+floating point numbers, which can be negative and greater than 1, allowing for
 a high dynamic range pipeline. This is particularly useful for effects like
-bloom filters.
+bloom filters. You may need to add a final tone-mapping pass as high brightness
+values will just get clipped in the final window render.
 
 The `hsl()` and `hsv()` color functions do not support values of `l` or `v` that
 are greater than 1, so multiply the resulting RGB vector to construct high
