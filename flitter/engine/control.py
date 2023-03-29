@@ -27,7 +27,7 @@ class Controller:
     RECEIVE_PORT = 47178
 
     def __init__(self, target_fps=60, screen=0, fullscreen=False, vsync=False, state_file=None, multiprocess=True,
-                 autoreset=None, state_eval_wait=0):
+                 autoreset=None, state_eval_wait=0, defined_variables=None):
         self.target_fps = target_fps
         self.screen = screen
         self.fullscreen = fullscreen
@@ -35,6 +35,10 @@ class Controller:
         self.multiprocess = multiprocess
         self.autoreset = autoreset
         self.state_eval_wait = state_eval_wait
+        if defined_variables:
+            self.defined_variables = {key: Vector.coerce(value) for key, value in defined_variables.items()}
+        else:
+            self.defined_variables = {}
         self.state_timestamp = None
         self.state_file = Path(state_file) if state_file is not None else None
         if self.state_file is not None and self.state_file.exists():
@@ -67,7 +71,7 @@ class Controller:
         page_number = len(self.pages)
         path = SharedCache[filename]
         source = path.read_text(encoding='utf8')
-        program_top = self.load_source(source)
+        program_top = self.load_source(source, self.defined_variables)
         self.pages.append((path, source, program_top, self.global_state.setdefault(page_number, {})))
         logger.success("Loaded page {}: {}", page_number, path)
 
@@ -96,11 +100,11 @@ class Controller:
                 window.purge()
 
     @staticmethod
-    def load_source(source):
+    def load_source(source, variables={}):
         start = time.perf_counter()
         initial_tree = parse(source)
         mid = time.perf_counter()
-        tree = initial_tree.partially_evaluate(Context())
+        tree = initial_tree.partially_evaluate(Context(variables=variables.copy()))
         end = time.perf_counter()
         logger.debug("Parse in {:.1f}ms, partial evaluation in {:.1f}ms", (mid-start)*1000, (end-mid)*1000)
         logger.opt(lazy=True).debug("Tree node count before partial-evaluation {before} and after {after}",
@@ -433,7 +437,7 @@ class Controller:
 
                 if (source := self.current_path.read_text(encoding='utf8')) != self.current_source:
                     try:
-                        program_top = self.program_top = self.load_source(source)
+                        program_top = self.program_top = self.load_source(source, self.defined_variables)
                         self.pages[self.current_page] = self.current_path, source, self.program_top, self.state
                         if self.state_eval_wait and self.state_timestamp is None:
                             start = time.perf_counter()
