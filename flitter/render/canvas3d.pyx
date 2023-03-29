@@ -54,15 +54,10 @@ cdef class Model:
 
 
 @cython.dataclasses.dataclass
-cdef class Instance:
-    model_matrix: Matrix44
-
-
-@cython.dataclasses.dataclass
 cdef class RenderSet:
     lights: list[Light]
     material: Material
-    instances: dict[str, list[Instance]]
+    instances: dict[str, list[Matrix44]]
 
 
 
@@ -260,9 +255,7 @@ cdef void collect(Node node, Matrix44 model_matrix, RenderSet render_set, list r
             model_name = '!box'
         else:
             model_name = '!box/flat'
-        if model_name in ModelCache:
-            model = ModelCache[model_name]
-        else:
+        if model_name not in ModelCache:
             logger.debug("Building primitive model {}", model_name)
             trimesh_model = trimesh.primitives.Box()
             ModelCache[model_name] = build_model(model_name, trimesh_model, smooth)
@@ -274,9 +267,7 @@ cdef void collect(Node node, Matrix44 model_matrix, RenderSet render_set, list r
         smooth = node.get('smooth', 1, bool, True)
         if not smooth:
             model_name += '/flat'
-        if model_name in ModelCache:
-            model = ModelCache[model_name]
-        else:
+        if model_name not in ModelCache:
             logger.debug("Building primitive model {}", model_name)
             trimesh_model = trimesh.primitives.Sphere(subdivisions=subdivisions)
             ModelCache[model_name] = build_model(model_name, trimesh_model, smooth)
@@ -288,9 +279,7 @@ cdef void collect(Node node, Matrix44 model_matrix, RenderSet render_set, list r
         smooth = node.get('smooth', 1, bool, True)
         if not smooth:
             model_name += '/flat'
-        if model_name in ModelCache:
-            model = ModelCache[model_name]
-        else:
+        if model_name not in ModelCache:
             logger.debug("Building primitive model {}", model_name)
             trimesh_model = trimesh.primitives.Cylinder(sections=sections)
             ModelCache[model_name] = build_model(model_name, trimesh_model, smooth)
@@ -328,12 +317,11 @@ cdef void add_instance(dict render_instances, str model_name, Node node, Matrix4
         model_matrix = model_matrix.mmul(Matrix44._translate(node.get_fvec('position', 3, Zero3)))
     if 'size' in node._attributes:
         model_matrix = model_matrix.mmul(Matrix44._scale(node.get_fvec('size', 3, One3)))
-    cdef Instance instance = Instance(model_matrix)
     cdef list instances
     if (instances := render_instances.get(model_name)) is not None:
-        instances.append(instance)
+        instances.append(model_matrix)
     else:
-        render_instances[model_name] = [instance]
+        render_instances[model_name] = [model_matrix]
 
 
 cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, glctx, dict objects, dict stats):
@@ -343,7 +331,6 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, glc
     cdef list instances
     cdef cython.float[:, :] matrices
     cdef Matrix44 model_matrix
-    cdef Instance instance
     cdef Material material
     cdef Light light
     cdef Model model
@@ -385,8 +372,8 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, glc
         n = len(instances)
         matrices = np.empty((n, 16), dtype='f4')
         for i in range(n):
-            instance = instances[i]
-            src = instance.model_matrix.numbers
+            model_matrix = instances[i]
+            src = model_matrix.numbers
             dest = &matrices[i, 0]
             for j in range(16):
                 dest[j] = src[j]
