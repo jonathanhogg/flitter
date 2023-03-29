@@ -202,7 +202,7 @@ cdef void collect(Node node, Matrix44 model_matrix, RenderSet render_set, list r
     cdef Node child
     cdef str model_name, filename
     cdef int subdivisions, sections
-    cdef bint smooth
+    cdef bint flat
     cdef Model model
 
     if node.kind == 'transform':
@@ -250,65 +250,65 @@ cdef void collect(Node node, Matrix44 model_matrix, RenderSet render_set, list r
             child = child.next_sibling
 
     elif node.kind == 'box':
-        smooth = node.get('smooth', 1, bool, True)
-        if smooth:
-            model_name = '!box'
-        else:
+        flat = node.get('flat', 1, bool, False)
+        if flat:
             model_name = '!box/flat'
+        else:
+            model_name = '!box'
         if model_name not in ModelCache:
             logger.debug("Building primitive model {}", model_name)
             trimesh_model = trimesh.primitives.Box()
-            ModelCache[model_name] = build_model(model_name, trimesh_model, smooth)
+            ModelCache[model_name] = build_model(model_name, trimesh_model, flat)
         add_instance(render_set.instances, model_name, node, model_matrix)
 
     elif node.kind == 'sphere':
         subdivisions = node.get('subdivisions', 1, int, 2)
         model_name = f'!sphere/{subdivisions}'
-        smooth = node.get('smooth', 1, bool, True)
-        if not smooth:
+        flat = node.get('flat', 1, bool, False)
+        if flat:
             model_name += '/flat'
         if model_name not in ModelCache:
             logger.debug("Building primitive model {}", model_name)
             trimesh_model = trimesh.primitives.Sphere(subdivisions=subdivisions)
-            ModelCache[model_name] = build_model(model_name, trimesh_model, smooth)
+            ModelCache[model_name] = build_model(model_name, trimesh_model, flat)
         add_instance(render_set.instances, model_name, node, model_matrix)
 
     elif node.kind == 'cylinder':
         sections = node.get('sections', 1, int, 32)
         model_name = f'!cylinder/{sections}'
-        smooth = node.get('smooth', 1, bool, True)
-        if not smooth:
+        flat = node.get('flat', 1, bool, False)
+        if flat:
             model_name += '/flat'
         if model_name not in ModelCache:
             logger.debug("Building primitive model {}", model_name)
             trimesh_model = trimesh.primitives.Cylinder(sections=sections)
-            ModelCache[model_name] = build_model(model_name, trimesh_model, smooth)
+            ModelCache[model_name] = build_model(model_name, trimesh_model, flat)
         add_instance(render_set.instances, model_name, node, model_matrix)
 
     elif node.kind == 'model':
         filename = node.get('filename', 1, str)
         if filename:
-            smooth = node.get('smooth', 1, bool, True)
+            flat = node.get('flat', 1, bool, False)
             model_name = filename
-            if not smooth:
+            if flat:
                 model_name += '/flat'
             if model_name not in ModelCache:
                 trimesh_model = SharedCache[filename].read_trimesh_model()
                 if trimesh_model is not None:
-                    ModelCache[model_name] = build_model(model_name, trimesh_model, smooth)
+                    ModelCache[model_name] = build_model(model_name, trimesh_model, flat)
                     logger.debug("Loaded model {} with {} faces", filename, len(trimesh_model.faces))
             add_instance(render_set.instances, model_name, node, model_matrix)
 
 
-cdef Model build_model(str model_name, trimesh_model, bint smooth):
+cdef Model build_model(str model_name, trimesh_model, bint flat):
     cdef Model model = Model(model_name)
-    if smooth:
-        model.vertex_data = np.hstack((trimesh_model.vertices, trimesh_model.vertex_normals)).astype('f4')
-        model.index_data = trimesh_model.faces.astype('i4')
-    else:
+    if flat:
         model.vertex_data = np.empty((len(trimesh_model.faces), 3, 2, 3), dtype='f4')
         model.vertex_data[:,:,0] = trimesh_model.vertices[trimesh_model.faces]
         model.vertex_data[:,:,1] = trimesh_model.face_normals[:,:,None]
+    else:
+        model.vertex_data = np.hstack((trimesh_model.vertices, trimesh_model.vertex_normals)).astype('f4')
+        model.index_data = trimesh_model.faces.astype('i4')
     return model
 
 
