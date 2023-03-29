@@ -1294,7 +1294,14 @@ cdef class Node:
         return self._attributes[name]
 
     def __setitem__(self, str name, value):
-        self._attributes[name] = Vector.coerce(value)
+        cdef Vector vector = Vector.coerce(value)
+        if vector.length:
+            self._attributes[name] = vector
+        elif name in self._attributes:
+            del self._attributes[name]
+
+    def __delitem__(self, str name):
+        del self._attributes[name]
 
     def keys(self):
         return self._attributes.keys()

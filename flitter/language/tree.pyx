@@ -770,6 +770,10 @@ cdef class Attributes(Expression):
                             node._attributes[binding.name] = value
                             if i < n-1 and binding.name not in saved and binding.name not in builtins_:
                                 context.variables[binding.name] = value
+                        elif binding.name in node._attributes:
+                            del node._attributes[binding.name]
+                            if i < n-1 and binding.name not in saved and binding.name not in builtins_:
+                                del context.variables[binding.name]
             context.variables = saved
         return nodes
 
