@@ -1275,6 +1275,8 @@ cdef class TemplateCall(Expression):
 
     cpdef model.VectorLike evaluate(self, model.Context context):
         cdef model.Vector function = self.function.evaluate(context)
+        if not function.objects:
+            return model.null_
         cdef model.Vector children = self.children.evaluate(context) if self.children is not None else model.null_
         cdef dict kwargs = {}
         cdef Binding arg
