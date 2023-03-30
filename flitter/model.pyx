@@ -879,16 +879,24 @@ cdef class Matrix44(Vector):
 
     @staticmethod
     cdef Matrix44 _rotate(Vector v):
-        cdef Matrix44 result = None
+        cdef Matrix44 result
         if v.numbers is not NULL and v.length in (1, 3):
             if v.length == 1:
-                result = Matrix44._rotate_z(v.numbers[0])
-                result = Matrix44._rotate_y(v.numbers[0]).mmul(result)
-                result = Matrix44._rotate_x(v.numbers[0]).mmul(result)
+                if v.numbers[0]:
+                    result = Matrix44._rotate_z(v.numbers[0])
+                    result = Matrix44._rotate_y(v.numbers[0]).mmul(result)
+                    result = Matrix44._rotate_x(v.numbers[0]).mmul(result)
+                else:
+                    result = Matrix44.__new__(Matrix44)
             else:
-                result = Matrix44._rotate_z(v.numbers[2])
-                result = Matrix44._rotate_y(v.numbers[1]).mmul(result)
-                result = Matrix44._rotate_x(v.numbers[0]).mmul(result)
+                if v.numbers[2]:
+                    result = Matrix44._rotate_z(v.numbers[2])
+                else:
+                    result = Matrix44.__new__(Matrix44)
+                if v.numbers[1]:
+                    result = Matrix44._rotate_y(v.numbers[1]).mmul(result)
+                if v.numbers[0]:
+                    result = Matrix44._rotate_x(v.numbers[0]).mmul(result)
         return result
 
     @staticmethod
