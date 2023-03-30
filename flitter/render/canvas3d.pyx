@@ -202,6 +202,7 @@ cdef void collect(Node node, Matrix44 model_matrix, Material material, RenderSet
     cdef int subdivisions, sections
     cdef bint flat
     cdef Model model
+    cdef Material new_material
 
     if node.kind == 'transform':
         model_matrix = update_model_matrix(model_matrix, node)
@@ -244,14 +245,14 @@ cdef void collect(Node node, Matrix44 model_matrix, Material material, RenderSet
             lights.append(light)
 
     elif node.kind == 'material':
-        material = Material.__new__(Material)
-        material.diffuse = node.get_fvec('color', 3, Zero3)
-        material.specular = node.get_fvec('specular', 3, One3)
-        material.emissive = node.get_fvec('emissive', 3, Zero3)
-        material.shininess = node.get_float('shininess', 0)
+        new_material = Material.__new__(Material)
+        new_material.diffuse = node.get_fvec('color', 3, material.diffuse)
+        new_material.specular = node.get_fvec('specular', 3, material.specular)
+        new_material.emissive = node.get_fvec('emissive', 3, material.emissive)
+        new_material.shininess = node.get_float('shininess', material.shininess)
         child = node.first_child
         while child is not None:
-            collect(child, model_matrix, material, render_set, render_sets)
+            collect(child, model_matrix, new_material, render_set, render_sets)
             child = child.next_sibling
 
     elif node.kind == 'box':
