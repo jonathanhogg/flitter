@@ -13,6 +13,9 @@ import time
 from loguru import logger
 import skia
 import moderngl
+import numpy as np
+from pathlib import Path
+import PIL.Image
 import pyglet
 if sys.platform == 'darwin':
     pyglet.options['shadow_window'] = False
@@ -93,6 +96,27 @@ class SceneNode:
         self.create(node, resized, **kwargs)
         await self.descend(node, **kwargs)
         self.render(node, **kwargs)
+        if filename := node.get('snapshot', 1, str):
+            filename = Path(filename)
+            if (texture := self.texture) is not None and not filename.exists() and filename.suffix in PIL.Image.registered_extensions():
+                save_time = -time.perf_counter()
+                data = texture.read()
+                if texture.dtype == 'f1' and not self.glctx.extra['linear']:
+                    image = PIL.Image.frombytes('RGBA', (self.width, self.height), data)
+                else:
+                    if texture.dtype == 'f1':
+                        array = np.ndarray(shape=(self.height, self.width, 4), dtype='u1', buffer=data).astype('float')
+                        array /= 255
+                    else:
+                        array = np.ndarray(shape=(self.height, self.width, 4), dtype=texture.dtype, buffer=data).astype('float')
+                    if self.glctx.extra['linear']:
+                        array **= (1/2.2)
+                    array *= 255
+                    np.clip(array, 0, 255, array)
+                    image = PIL.Image.fromarray(array.astype('u1'), mode='RGBA')
+                image.convert('RGB').transpose(PIL.Image.FLIP_TOP_BOTTOM).save(filename)
+                save_time += time.perf_counter()
+                logger.success("Saved snapshot of {} to '{}' in {:.1f}s", self.name, filename, save_time)
 
     def similar_to(self, node):
         return node.tags and node.tags == self.tags

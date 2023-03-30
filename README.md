@@ -71,6 +71,7 @@ For reference, they are:
 - `trimesh` - for generating/loading 3D triangular mesh models
 - `scipy` - because `trimesh` needs it for some operations
 - `av` - for decoding video
+- `pillow` - for saving screenshots as image files
 - `pyserial` - for talking to DMX interfaces and lasers
 - `loguru` - because the standard library `logging` is just too antiquated
 

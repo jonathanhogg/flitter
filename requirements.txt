@@ -4,6 +4,7 @@ lark
 loguru
 moderngl
 numpy
+pillow
 pyglet
 pyserial
 python-rtmidi
