@@ -1323,7 +1323,7 @@ cdef class Node:
                 return value.as_string()
         return value.match(n, t, default)
 
-    cpdef Vector get_fvec(self, str name, int n, Vector default=null_):
+    cdef Vector get_fvec(self, str name, int n, Vector default=null_):
         cdef Vector result, value = self._attributes.get(name)
         cdef int m, i
         if value is not None and value.numbers != NULL:
@@ -1335,6 +1335,27 @@ cdef class Node:
                 return result
             elif m == n:
                 return value
+        return default
+
+    cdef double get_float(self, str name, double default):
+        cdef Vector result, value = self._attributes.get(name)
+        cdef int m, i
+        if value is not None and value.numbers != NULL and value.length == 1:
+            return value.numbers[0]
+        return default
+
+    cdef int get_int(self, str name, long long default):
+        cdef Vector result, value = self._attributes.get(name)
+        cdef int m, i
+        if value is not None and value.numbers != NULL and value.length == 1:
+            return <long long>value.numbers[0]
+        return default
+
+    cdef bint get_bool(self, str name, bint default):
+        cdef Vector result, value = self._attributes.get(name)
+        cdef int m, i
+        if value is not None:
+            return value.as_bool()
         return default
 
     cpdef void pprint(self, int indent=0):
