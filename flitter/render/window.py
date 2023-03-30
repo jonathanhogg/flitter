@@ -41,7 +41,7 @@ ColorFormat = namedtuple('ColorFormat', ('moderngl_dtype', 'gl_format', 'skia_co
 COLOR_FORMATS = {
     8: ColorFormat('f1', pyglet.gl.GL_RGBA8, skia.kRGBA_8888_ColorType),
     16: ColorFormat('f2', pyglet.gl.GL_RGBA16F, skia.kRGBA_F16_ColorType),
-    # 32: ColorFormat('f4', pyglet.gl.GL_RGBA32F, skia.kRGBA_F32_ColorType)  -- Canvas currently fails with 32bit color
+    32: ColorFormat('f4', pyglet.gl.GL_RGBA32F, skia.kRGBA_F32_ColorType)  # Canvas currently fails with 32bit color
 }
 
 DEFAULT_COLORBITS = 8
