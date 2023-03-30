@@ -23,7 +23,7 @@ logger = name_patch(logger, __name__)
 cdef Vector Zero3 = Vector((0, 0, 0))
 cdef Vector One3 = Vector((1, 1, 1))
 cdef dict ModelCache = {}
-cdef int MAX_LIGHTS = 50
+cdef int DEFAULT_MAX_LIGHTS = 50
 
 
 cdef enum LightType:
@@ -97,7 +97,7 @@ void main() {
 cdef str StandardFragmentSource = """
 #version 410
 
-const int MAX_LIGHTS = """ + str(MAX_LIGHTS) + """;
+const int MAX_LIGHTS = @@max_lights@@;
 
 in vec3 world_position;
 in vec3 world_normal;
@@ -152,17 +152,19 @@ def draw(Node node, tuple size, glctx, dict objects):
     cdef double fov = node.get('fov', 1, float, 0.25)
     cdef double near = node.get('near', 1, float, 1)
     cdef double far = node.get('far', 1, float, width)
+    cdef int max_lights = node.get_int('max_lights', DEFAULT_MAX_LIGHTS)
     cdef Matrix44 pv_matrix = Matrix44._project(width/height, fov, near, far).mmul(Matrix44._look(viewpoint, focus, up))
     cdef Matrix44 model_matrix = Matrix44.__new__(Matrix44)
     cdef Node child = node.first_child
+    cdef RenderSet no_lights_render_set = RenderSet(lights=[[]], instances={})
     cdef RenderSet render_set = RenderSet(lights=[[]], instances={})
-    cdef list render_sets = [render_set]
+    cdef list render_sets = [no_lights_render_set, render_set]
     while child is not None:
         collect(child, model_matrix, Material(), render_set, render_sets)
         child = child.next_sibling
     for render_set in render_sets:
         if render_set.instances:
-            render(render_set, pv_matrix, viewpoint, glctx, objects)
+            render(render_set, pv_matrix, viewpoint, max_lights, glctx, objects)
 
 
 cdef Matrix44 update_model_matrix(Matrix44 model_matrix, Node node):
@@ -265,7 +267,7 @@ cdef void collect(Node node, Matrix44 model_matrix, Material material, RenderSet
             logger.debug("Building primitive model {}", model_name)
             trimesh_model = trimesh.primitives.Box()
             ModelCache[model_name] = build_model(model_name, trimesh_model, flat)
-        add_instance(render_set.instances, model_name, node, model_matrix, material)
+        add_instance(render_sets, render_set, model_name, node, model_matrix, material)
 
     elif node.kind == 'sphere':
         subdivisions = node.get_int('subdivisions', 2)
@@ -277,7 +279,7 @@ cdef void collect(Node node, Matrix44 model_matrix, Material material, RenderSet
             logger.debug("Building primitive model {}", model_name)
             trimesh_model = trimesh.primitives.Sphere(subdivisions=subdivisions)
             ModelCache[model_name] = build_model(model_name, trimesh_model, flat)
-        add_instance(render_set.instances, model_name, node, model_matrix, material)
+        add_instance(render_sets, render_set, model_name, node, model_matrix, material)
 
     elif node.kind == 'cylinder':
         sections = node.get_int('sections', 32)
@@ -289,7 +291,7 @@ cdef void collect(Node node, Matrix44 model_matrix, Material material, RenderSet
             logger.debug("Building primitive model {}", model_name)
             trimesh_model = trimesh.primitives.Cylinder(sections=sections)
             ModelCache[model_name] = build_model(model_name, trimesh_model, flat)
-        add_instance(render_set.instances, model_name, node, model_matrix, material)
+        add_instance(render_sets, render_set, model_name, node, model_matrix, material)
 
     elif node.kind == 'model':
         filename = node.get('filename', 1, str)
@@ -303,7 +305,7 @@ cdef void collect(Node node, Matrix44 model_matrix, Material material, RenderSet
                 if trimesh_model is not None:
                     ModelCache[model_name] = build_model(model_name, trimesh_model, flat)
                     logger.debug("Loaded model {} with {} faces", filename, len(trimesh_model.faces))
-            add_instance(render_set.instances, model_name, node, model_matrix, material)
+            add_instance(render_sets, render_set, model_name, node, model_matrix, material)
 
 
 cdef Model build_model(str model_name, trimesh_model, bint flat):
@@ -318,24 +320,27 @@ cdef Model build_model(str model_name, trimesh_model, bint flat):
     return model
 
 
-cdef void add_instance(dict render_instances, str model_name, Node node, Matrix44 model_matrix, Material material):
+cdef void add_instance(list render_sets, RenderSet render_set, str model_name, Node node, Matrix44 model_matrix, Material material):
     if 'position' in node._attributes:
         model_matrix = model_matrix.mmul(Matrix44._translate(node.get_fvec('position', 3, Zero3)))
     if 'rotation' in node._attributes:
         model_matrix = model_matrix.mmul(Matrix44._rotate(node.get_fvec('rotation', 3, Zero3)))
     if 'size' in node._attributes:
         model_matrix = model_matrix.mmul(Matrix44._scale(node.get_fvec('size', 3, One3)))
-    cdef list instances
+    if not material.diffuse.as_bool() and (not material.specular.as_bool() or material.shininess == 0):
+        render_set = render_sets[0]
+    cdef dict render_instances = render_set.instances
     cdef Instance instance = Instance.__new__(Instance)
     instance.model_matrix = model_matrix
     instance.material = material
+    cdef list instances
     if (instances := render_instances.get(model_name)) is not None:
         instances.append(instance)
     else:
         render_instances[model_name] = [instance]
 
 
-cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, glctx, dict objects):
+cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, int max_lights, glctx, dict objects):
     cdef str model_name
     cdef list instances, lights, buffers
     cdef cython.float[:, :] matrices, materials, lights_data
@@ -346,16 +351,19 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, glc
     cdef double* src
     cdef float* dest
     cdef Instance instance;
-    if (standard_shader := objects.get('standard_shader')) is None:
-        logger.debug("Compiling standard lighting shader")
-        standard_shader = glctx.program(vertex_shader=StandardVertexSource, fragment_shader=StandardFragmentSource)
-        objects['standard_shader'] = standard_shader
+    cdef str shader_name = f'!standard_shader/{max_lights}'
+    if (standard_shader := objects.get(shader_name)) is None:
+        logger.debug("Compiling standard lighting shader for {} max lights", max_lights)
+        standard_shader = compile(glctx, max_lights)
+        objects[shader_name] = standard_shader
     standard_shader['pv_matrix'] = pv_matrix
     standard_shader['view_position'] = viewpoint
-    lights_data = view.array((MAX_LIGHTS, 12), 4, 'f')
+    lights_data = view.array((max_lights, 12), 4, 'f')
     i = 0
     for lights in render_set.lights:
         for light in lights:
+            if i == max_lights:
+                break
             dest = &lights_data[i, 0]
             dest[0] = <cython.float>(<int>light.type)
             for j in range(3):
@@ -402,3 +410,7 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, glc
                    (materials_buffer, '9f 1f/i', 'material_colors', 'material_shininess')]
         render_array = glctx.vertex_array(standard_shader, buffers, index_buffer=index_buffer, mode=moderngl.TRIANGLES)
         render_array.render(instances=n)
+
+cdef object compile(glctx, int max_lights):
+    fragment = StandardFragmentSource.replace('@@max_lights@@', str(max_lights))
+    return glctx.program(vertex_shader=StandardVertexSource, fragment_shader=fragment)
