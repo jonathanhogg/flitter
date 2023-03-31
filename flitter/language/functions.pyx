@@ -7,7 +7,7 @@ Flitter language functions
 
 import cython
 
-from libc.math cimport isnan, floor, round, sin, cos, sqrt, exp
+from libc.math cimport isnan, floor, round, sin, cos, sqrt, exp, ceil
 
 from ..model cimport VectorLike, Vector, null_, true_
 
@@ -304,6 +304,30 @@ def roundv(Vector xs not None):
     return ys
 
 
+def ceilv(Vector xs not None):
+    if xs.numbers == NULL:
+        return null_
+    cdef Vector ys = Vector.__new__(Vector)
+    cdef double x, y
+    for i in range(ys.allocate_numbers(xs.length)):
+        x = xs.numbers[i]
+        y = ceil(x)
+        ys.numbers[i] = y
+    return ys
+
+
+def floorv(Vector xs not None):
+    if xs.numbers == NULL:
+        return null_
+    cdef Vector ys = Vector.__new__(Vector)
+    cdef double x, y
+    for i in range(ys.allocate_numbers(xs.length)):
+        x = xs.numbers[i]
+        y = floor(x)
+        ys.numbers[i] = y
+    return ys
+
+
 def sumv(Vector xs not None):
     if xs.objects is not None:
         return null_
@@ -509,6 +533,8 @@ FUNCTIONS = {
     'snap': Vector(snap),
     'shuffle': Vector(shuffle),
     'round': Vector(roundv),
+    'ceil': Vector(ceilv),
+    'floor': Vector(floorv),
     'sum': Vector(sumv),
     'min': Vector(minv),
     'max': Vector(maxv),
