@@ -8,7 +8,7 @@ Push 2 controller.
 The engine that runs the language is capable of: 2D drawing with Skia; running
 OpenGL shaders as image generators/filters; rendering videos; rendering basic
 3D scenes in OpenGL with a few simple primitives, mesh model loading, ambient,
-directional and point light sources, and simple Phong/Gouraud shading; driving
+directional and point light sources with basic Phong lighting/shading; driving
 a LaserCube plugged in over USB (other lasers probably easy to support); driving
 DMX lighting via a USB DMX interface (currently via an Entec/-compatible
 interface or my own crazy hand-built interfaces).
@@ -140,12 +140,8 @@ cast to a string if necessary and then concatenated together, e.g.,
 
 So the end result of this should be the text "Hello world!" pulsing white in
 the middle of the window. You can edit and re-save the code while the engine is
-running and it will reload the code on-the-fly. ~~This is the best way to
-experiment, but the reloading may be a little too janky for performing live.~~
-
-**UPDATE!** After making a simple change to the Lark parser, which I clearly
-should have looked at a lot more closely when I first wrote it, live reload is
-now fast enough to not be noticed (generally less than 1/60th second).
+running and it will reload the code on-the-fly - this is usually fast enough
+not to be noticeable.
 
 The available global values are:
 
@@ -528,10 +524,10 @@ nested to apply multiple effects.
 Note that `size` is inherited from the containing node by `!shader`, `!canvas`,
 `!canvas3d` and `!video`.
 
-## Linear and HDR color
+### Linear and HDR color
 
-Adding `linear=true` to a `!window` will force the entire pipeline of that
-window to use linear-sRGB color. This is arguably The Right Thing to do and
+Adding `linear=true` to a `!window` will force the entire OpenGL pipeline of
+that window to use linear-sRGB color. This is arguably The Right Thing to do and
 should probably be the default. Images and videos will be shifted into linear
 color values, all drawing and blending will be done in linear-space, and then
 the final window framebuffer will be converted back into the standard screen
@@ -555,3 +551,16 @@ The `hsl()` and `hsv()` color functions do not support values of `l` or `v` that
 are greater than 1, so multiply the resulting RGB vector to construct high
 brightness colors, e.g., `hsv(hue;0.9;1) * 100`. You'll need these bright colors
 when setting the `color` of point `!light` sources in `!canvas3d`.
+
+## Multi-processing
+
+I love Python, but the global interpreter lock basically makes any kind of
+serious multi-threading impossible. **flitter** supports a limited form of
+multi-processing instead. Adding the `--multiprocess` flag on the command line
+will cause a separate renderer child process to be executed for each window,
+laser and DMX bus. The main process handles evaluating the script to produce
+an output tree. This tree is then fed to each renderer and all renderers are
+waited on before moving on to the next evaluation. This works well if the
+script and the renderers are expensive to run, but the tree is small. As the
+tree grows large, the cost of pickling and un-pickling it across the process
+boundaries becomes a bottleneck, so your mileage may vary.
