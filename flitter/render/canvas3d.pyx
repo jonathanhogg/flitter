@@ -98,6 +98,7 @@ cdef str StandardFragmentSource = """
 #version 410
 
 const int MAX_LIGHTS = @@max_lights@@;
+const float min_shininess = 50;
 
 in vec3 world_position;
 in vec3 world_normal;
@@ -124,7 +125,7 @@ void main() {
         } else if (light_type == """ + str(LightType.Directional) + """) {
             light_direction = normalize(light_direction);
             vec3 reflection_direction = reflect(light_direction, normal);
-            float specular_strength = shininess > 0 ? pow(max(dot(view_direction, reflection_direction), 0), shininess) : 0;
+            float specular_strength = pow(max(dot(view_direction, reflection_direction), 0), shininess) * min(shininess, min_shininess) / min_shininess;
             float diffuse_strength = max(dot(normal, -light_direction), 0);
             color += (colors * vec3(diffuse_strength, specular_strength, 0)) * light_color;
         } else if (light_type == """ + str(LightType.Point) + """) {
@@ -133,7 +134,7 @@ void main() {
             light_direction = normalize(light_direction);
             float light_attenuation = 1 / (1 + pow(light_distance, 2));
             vec3 reflection_direction = reflect(light_direction, normal);
-            float specular_strength = shininess > 0 ? pow(max(dot(view_direction, reflection_direction), 0), shininess) : 0;
+            float specular_strength = pow(max(dot(view_direction, reflection_direction), 0), shininess) * min(shininess, min_shininess) / min_shininess;
             float diffuse_strength = max(dot(normal, -light_direction), 0);
             color += (colors * vec3(diffuse_strength, specular_strength, 0)) * light_color * light_attenuation;
         }
