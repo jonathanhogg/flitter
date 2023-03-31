@@ -13,6 +13,7 @@ cdef class Vector(VectorLike):
     cdef int length
     cdef list objects
     cdef double* numbers
+    cdef double[3] _numbers
 
     @staticmethod
     cdef Vector _coerce(object other)

@@ -129,15 +129,17 @@ cdef class Vector:
                     self.objects = list(value)
 
     cdef int allocate_numbers(self, int n) except -1:
-        assert n > 0
-        self.numbers = <double*>PyMem_Malloc(n * sizeof(double))
-        if not self.numbers:
-            raise MemoryError()
+        if n > 3:
+            self.numbers = <double*>PyMem_Malloc(n * sizeof(double))
+            if not self.numbers:
+                raise MemoryError()
+        else:
+            self.numbers = self._numbers
         self.length = n
         return n
 
     cdef void deallocate_numbers(self):
-        if self.numbers:
+        if self.numbers and self.length > 3:
             PyMem_Free(self.numbers)
             self.numbers = NULL
 
