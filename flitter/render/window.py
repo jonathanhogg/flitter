@@ -114,7 +114,10 @@ class SceneNode:
                     array *= 255
                     np.clip(array, 0, 255, array)
                     image = PIL.Image.fromarray(array.astype('u1'), mode='RGBA')
-                image.convert('RGB').transpose(PIL.Image.FLIP_TOP_BOTTOM).save(filename)
+                if filename.suffix.lower() == '.png':
+                    image.transpose(PIL.Image.FLIP_TOP_BOTTOM).save(filename)
+                else:
+                    image.convert('RGB').transpose(PIL.Image.FLIP_TOP_BOTTOM).save(filename)
                 save_time += time.perf_counter()
                 logger.success("Saved snapshot of {} to '{}' in {:.1f}s", self.name, filename, save_time)
 
