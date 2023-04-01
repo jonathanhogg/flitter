@@ -552,7 +552,7 @@ are greater than 1, so multiply the resulting RGB vector to construct high
 brightness colors, e.g., `hsv(hue;0.9;1) * 100`. You'll need these bright colors
 when setting the `color` of point `!light` sources in `!canvas3d`.
 
-## Multi-processing
+## Multi-processing
 
 I love Python, but the global interpreter lock basically makes any kind of
 serious multi-threading impossible. **flitter** supports a limited form of
