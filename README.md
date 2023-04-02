@@ -159,7 +159,9 @@ The available global values are:
     in the code – e.g., number of things on screen – to maintain frame rate
 
 `!window`s composite their children and a `!canvas` is transparent until drawn
-into.
+into. The blending function for compositing is controlled with the `blend`
+attribute on `!window`, which defaults to `:over` (source-over), but may be
+changed to `:dest-over`, `:lighten` or `:darken`.
 
 Other useful language features:
 
@@ -437,7 +439,7 @@ These set the initial tempo and/or quantum of the main clock (the defaults are
 
 ### Partial evaluation
 
-When a source file is loaded is is parsed into an evaluation tree and then that
+When a source file is loaded it is parsed into an evaluation tree and then that
 tree is *partially-evaluated*. This attempts to evaluate all literal/constant
 expressions. The partial-evaluator is able to construct parts of node graphs,
 unroll loops with a constant source vector, evaluate conditionals with constant
@@ -486,24 +488,37 @@ beat clock, and the state values of all of the pads and encoders.
 
 ## OpenGL Shaders
 
-The `!shader` node allows insertion of an OpenGL shader into the scene graph.
-This takes a `fragment` GLSL text code attribute (also an optional `vertex` code
-attribute, but I've never tested this) and a `size` for the framebuffer. Any
-children of this node will be bound to `sampler2D` uniforms called `texture0`,
-`texture1`, etc. The special `uniform sampler2D last` (if present) will be bound
-to the previous contents of the shader's output framebuffer – this allows for
-feedback loops. The fragment shader executes over the framebuffer rectangle with
-`in vec2 coord` being the standardised rectangle coordinate [0..1] (multiply by
-`size` to get pixel coordinates) and `out vec4 color` being the color to write
-to the framebuffer. All textures are RGBA with pre-multiplied alpha.
+The `!shader` node allows insertion of an OpenGL shader into the window render
+graph. This takes a `fragment` GLSL text code attribute (also an optional
+`vertex` text code attribute, but I've never used this) and a `size` for the
+framebuffer. The entire framebuffer is passed to the vertex shader as a pair of
+triangles. The default vertex shader passes through [0..1] standardised UV
+coordinates to the fragment shader as an `out vec2 coord`. The fragment shader
+should have a matching `in vec2 coord` declaration and an `out vec4 color`
+declaration for the color to write to the framebuffer. All textures are
+RGBA with pre-multiplied alpha. The following standard uniforms may be declared
+and will be set to the appropriate values for you:
 
-All of the standard language globals will be bound to `float` uniforms of
-the same name. Any other uniforms will be bound to the value of `!shader`
-attributes with the same name. `float`, `vec2`, `vec3` and `vec4` uniforms
+- `uniform vec2 size` - is the pixel-size of the framebuffer, multiply `coord`
+by this to get actual framebuffer coordinates
+- `uniform float beat` - the current beat
+- `uniform float delta` - the difference between the current beat and the last
+iteration of the evaluation/render loop
+- `uniform sampler2D texture0` - will be bound to a texture representing the
+output of the first child node of the shader; a shader may have multiple child
+nodes and further nodes will be bound to `texture1`, etc.
+- `uniform sampler2D last` - declaring this will cause the shader renderer to
+save the output of the last iteration as a texture that may be used as an input
+to the current iteration - this is great for implementing feedback-style
+effects
+
+Additional uniforms may be declared and will take values from matching
+attributes of the `!shader` node. `float`, `vec2`, `vec3` and `vec4` uniforms
 expect 1-, 2- , 3- and 4-vector values respectively. Arrays of these types
 will expect a vector with an appropriate multiple of those sizes. GLSL default
 values for the uniforms can be given in the code and will be used if the
-attribute value is not specified (or is invalid).
+attribute value is not specified (or is an invalid type or size). This makes it
+easy to parameterize a shader and manipulate its output on-the-fly.
 
 Generally one would use the built-in `read()` function to load text from a file
 for the code attribute, a la:
@@ -517,18 +532,42 @@ let SIZE=1920;1080
             ...
 ```
 
-Shader code will be reloaded on-the-fly if the file's modification timestamp
-changes. On macOS the maximum OpenGL level is `#version 410`. Shaders can be
-nested to apply multiple effects.
+Shader code read in this way will be reloaded and recompiled on-the-fly if that
+file's modification timestamp changes. On macOS the maximum OpenGL level is
+`#version 410`. Shaders can be nested to apply multiple effects.
 
 Note that `size` is inherited from the containing node by `!shader`, `!canvas`,
 `!canvas3d` and `!video`.
+
+### Reference nodes
+
+The output of one node in a window graph can be passed into multiple shaders
+using a `!reference` node. This takes an `id` attribute that should match an
+`id` attribute on the source node. For example, a bloom filter pipeline might
+look like this:
+
+```
+let SIZE=1920;1080
+
+!window size=SIZE blend=:lighten
+    !canvas id=:bloom_source
+        ...
+    !shader fragment=read('blur.frag') radius=5
+        !shader fragment=read('threshold.frag') level=0.5
+            !reference id=:bloom_source
+```
+
+Each node in the graph renders its children in order before rendering itself,
+so the `!canvas` node will be drawn first and then this is passed as the
+`texture0` uniform to the `threshold.frag` shader, the output of which is
+passed into the `blur.frag` shader and then the output of this is composited
+with the original canvas image (using the lighten blend function).
 
 ### Linear and HDR color
 
 Adding `linear=true` to a `!window` will force the entire OpenGL pipeline of
 that window to use linear-sRGB color. This is arguably The Right Thing to do and
-should probably be the default. Images and videos will be shifted into linear
+should probably be the default. Images and videos will be converted into linear
 color values, all drawing and blending will be done in linear-space, and then
 the final window framebuffer will be converted back into the standard screen
 logarithmic-sRGB for display.
@@ -541,7 +580,7 @@ the `colorbits=16` attribute on `!window`. This is inherited by all `!shader`,
 textures and framebuffers to be 16-bits per channel.
 
 An added benefit of 16-bit channel depths is that the color format is changed
-from pseudo-floats (0..255 scaled to 0..1) to actual half-precision
+from pseudo-floats (0..255 integers scaled to 0..1) to actual half-precision
 floating point numbers, which can be negative and greater than 1, allowing for
 a high dynamic range pipeline. This is particularly useful for effects like
 bloom filters. You may need to add a final tone-mapping pass as high brightness
@@ -550,7 +589,8 @@ values will just get clipped in the final window render.
 The `hsl()` and `hsv()` color functions do not support values of `l` or `v` that
 are greater than 1, so multiply the resulting RGB vector to construct high
 brightness colors, e.g., `hsv(hue;0.9;1) * 100`. You'll need these bright colors
-when setting the `color` of point `!light` sources in `!canvas3d`.
+when setting the `color` of point `!light` sources in `!canvas3d` as these
+have an inverse-squared fall-off and so get dim very quickly.
 
 ## Multi-processing
 
