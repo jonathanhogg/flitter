@@ -52,6 +52,7 @@ cdef class Material:
     specular: Vector = One3
     emissive: Vector = Zero3
     shininess: cython.double = 0
+    transparency: cython.double = 0
 
 
 @cython.dataclasses.dataclass
@@ -82,11 +83,13 @@ in vec3 model_normal;
 in mat4 model_matrix;
 in mat3 material_colors;
 in float material_shininess;
+in float material_transparency;
 
 out vec3 world_position;
 out vec3 world_normal;
 flat out mat3 colors;
 flat out float shininess;
+flat out float transparency;
 
 uniform mat4 pv_matrix;
 
@@ -97,6 +100,7 @@ void main() {
     world_normal = normal_matrix * model_normal;
     colors = material_colors;
     shininess = material_shininess;
+    transparency = material_transparency;
 }
 """
 
@@ -110,6 +114,7 @@ in vec3 world_position;
 in vec3 world_normal;
 flat in mat3 colors;
 flat in float shininess;
+flat in float transparency;
 
 out vec4 fragment_color;
 
@@ -121,7 +126,8 @@ void main() {
     vec3 view_direction = normalize(view_position - world_position);
     vec3 color = colors * vec3(0, 0, 1);
     vec3 normal = normalize(world_normal);
-    for (int i = 0; i < nlights*4; i += 4) {
+    int n = shininess == 0 && colors[0] == vec3(0) ? 0 : nlights * 4;
+    for (int i = 0; i < n; i += 4) {
         float light_type = lights[i].x;
         float inner_cone = lights[i].y;
         float outer_cone = lights[i].z;
@@ -157,7 +163,8 @@ void main() {
             color += (colors * vec3(diffuse_strength, specular_strength, 0)) * light_color * light_attenuation;
         }
     }
-    fragment_color = vec4(color, 1);
+    float opacity = 1 - transparency;
+    fragment_color = vec4(color * opacity, opacity);
 }
 """
 
@@ -175,9 +182,8 @@ def draw(Node node, tuple size, glctx, dict objects):
     cdef Matrix44 pv_matrix = Matrix44._project(width/height, fov, near, far).mmul(Matrix44._look(viewpoint, focus, up))
     cdef Matrix44 model_matrix = Matrix44.__new__(Matrix44)
     cdef Node child = node.first_child
-    cdef RenderSet no_lights_render_set = RenderSet(lights=[[]], instances={})
     cdef RenderSet render_set = RenderSet(lights=[[]], instances={})
-    cdef list render_sets = [no_lights_render_set, render_set]
+    cdef list render_sets = [render_set]
     while child is not None:
         collect(child, model_matrix, Material(), render_set, render_sets)
         child = child.next_sibling
@@ -279,6 +285,7 @@ cdef void collect(Node node, Matrix44 model_matrix, Material material, RenderSet
         new_material.specular = node.get_fvec('specular', 3, material.specular)
         new_material.emissive = node.get_fvec('emissive', 3, material.emissive)
         new_material.shininess = node.get_float('shininess', material.shininess)
+        new_material.transparency = node.get_float('transparency', material.transparency)
         child = node.first_child
         while child is not None:
             collect(child, model_matrix, new_material, render_set, render_sets)
@@ -294,7 +301,7 @@ cdef void collect(Node node, Matrix44 model_matrix, Material material, RenderSet
             logger.debug("Building primitive model {}", model_name)
             trimesh_model = trimesh.primitives.Box()
             ModelCache[model_name] = build_model(model_name, trimesh_model, flat)
-        add_instance(render_sets, render_set, model_name, node, model_matrix, material)
+        add_instance(render_set.instances, model_name, node, model_matrix, material)
 
     elif node.kind == 'sphere':
         subdivisions = node.get_int('subdivisions', 2)
@@ -306,7 +313,7 @@ cdef void collect(Node node, Matrix44 model_matrix, Material material, RenderSet
             logger.debug("Building primitive model {}", model_name)
             trimesh_model = trimesh.primitives.Sphere(subdivisions=subdivisions)
             ModelCache[model_name] = build_model(model_name, trimesh_model, flat)
-        add_instance(render_sets, render_set, model_name, node, model_matrix, material)
+        add_instance(render_set.instances, model_name, node, model_matrix, material)
 
     elif node.kind == 'cylinder':
         sections = node.get_int('sections', 32)
@@ -318,7 +325,7 @@ cdef void collect(Node node, Matrix44 model_matrix, Material material, RenderSet
             logger.debug("Building primitive model {}", model_name)
             trimesh_model = trimesh.primitives.Cylinder(sections=sections)
             ModelCache[model_name] = build_model(model_name, trimesh_model, flat)
-        add_instance(render_sets, render_set, model_name, node, model_matrix, material)
+        add_instance(render_set.instances, model_name, node, model_matrix, material)
 
     elif node.kind == 'model':
         filename = node.get('filename', 1, str)
@@ -332,7 +339,7 @@ cdef void collect(Node node, Matrix44 model_matrix, Material material, RenderSet
                 if trimesh_model is not None:
                     ModelCache[model_name] = build_model(model_name, trimesh_model, flat)
                     logger.debug("Loaded model {} with {} faces", filename, len(trimesh_model.faces))
-            add_instance(render_sets, render_set, model_name, node, model_matrix, material)
+            add_instance(render_set.instances, model_name, node, model_matrix, material)
 
 
 cdef Model build_model(str model_name, trimesh_model, bint flat):
@@ -347,16 +354,13 @@ cdef Model build_model(str model_name, trimesh_model, bint flat):
     return model
 
 
-cdef void add_instance(list render_sets, RenderSet render_set, str model_name, Node node, Matrix44 model_matrix, Material material):
+cdef void add_instance(dict render_instances, str model_name, Node node, Matrix44 model_matrix, Material material):
     if 'position' in node._attributes:
         model_matrix = model_matrix.mmul(Matrix44._translate(node.get_fvec('position', 3, Zero3)))
     if 'rotation' in node._attributes:
         model_matrix = model_matrix.mmul(Matrix44._rotate(node.get_fvec('rotation', 3, Zero3)))
     if 'size' in node._attributes:
         model_matrix = model_matrix.mmul(Matrix44._scale(node.get_fvec('size', 3, One3)))
-    if not material.diffuse.as_bool() and (not material.specular.as_bool() or material.shininess == 0):
-        render_set = render_sets[0]
-    cdef dict render_instances = render_set.instances
     cdef Instance instance = Instance.__new__(Instance)
     instance.model_matrix = model_matrix
     instance.material = material
@@ -374,10 +378,13 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, int
     cdef Material material
     cdef Light light
     cdef Model model
-    cdef int i, j, n
+    cdef int i, j, k, n
+    cdef double z
     cdef double* src
     cdef float* dest
-    cdef Instance instance;
+    cdef Instance instance
+    cdef tuple transparent_object
+    cdef list transparent_objects = []
     cdef str shader_name = f'!standard_shader/{max_lights}'
     if (standard_shader := objects.get(shader_name)) is None:
         logger.debug("Compiling standard lighting shader for {} max lights", max_lights)
@@ -409,36 +416,68 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, int
     for model_name, instances in render_set.instances.items():
         n = len(instances)
         matrices = view.array((n, 16), 4, 'f')
-        materials = view.array((n, 10), 4, 'f')
+        materials = view.array((n, 11), 4, 'f')
+        k = 0
         for i in range(n):
             instance = instances[i]
             material = instance.material
+            if material.transparency > 0:
+                z = pv_matrix.mmul(instance.model_matrix).numbers[14]
+                transparent_objects.append((-z, model_name, instance))
+            else:
+                src = instance.model_matrix.numbers
+                dest = &matrices[k, 0]
+                for j in range(16):
+                    dest[j] = src[j]
+                dest = &materials[k, 0]
+                for j in range(3):
+                    dest[j] = material.diffuse.numbers[j]
+                    dest[j+3] = material.specular.numbers[j]
+                    dest[j+6] = material.emissive.numbers[j]
+                dest[9] = material.shininess
+                dest[10] = 0
+                k += 1
+        dispatch_instances(glctx, objects, standard_shader, model_name, matrices, materials, k)
+    if transparent_objects:
+        transparent_objects.sort()
+        matrices = view.array((1, 16), 4, 'f')
+        materials = view.array((1, 11), 4, 'f')
+        for transparent_object in transparent_objects:
+            model_name = transparent_object[1]
+            instance = transparent_object[2]
+            material = instance.material
             src = instance.model_matrix.numbers
-            dest = &matrices[i, 0]
+            dest = &matrices[0, 0]
             for j in range(16):
                 dest[j] = src[j]
-            dest = &materials[i, 0]
+            dest = &materials[0, 0]
             for j in range(3):
                 dest[j] = material.diffuse.numbers[j]
                 dest[j+3] = material.specular.numbers[j]
                 dest[j+6] = material.emissive.numbers[j]
             dest[9] = material.shininess
-        matrices_buffer = glctx.buffer(matrices)
-        materials_buffer = glctx.buffer(materials)
-        if model_name in objects:
-            vertex_buffer, index_buffer = objects[model_name]
-        elif model_name in ModelCache:
-            model = ModelCache[model_name]
-            vertex_buffer = glctx.buffer(model.vertex_data)
-            index_buffer = glctx.buffer(model.index_data) if model.index_data is not None else None
-            objects[model_name] = vertex_buffer, index_buffer
-        else:
-            continue
-        buffers = [(vertex_buffer, '3f 3f', 'model_position', 'model_normal'),
-                   (matrices_buffer, '16f/i', 'model_matrix'),
-                   (materials_buffer, '9f 1f/i', 'material_colors', 'material_shininess')]
-        render_array = glctx.vertex_array(standard_shader, buffers, index_buffer=index_buffer, mode=moderngl.TRIANGLES)
-        render_array.render(instances=n)
+            dest[10] = material.transparency
+            dispatch_instances(glctx, objects, standard_shader, model_name, matrices, materials, 1)
+
+
+cdef void dispatch_instances(glctx, dict objects, shader, str model_name, cython.float[:, :] matrices, cython.float[:, :] materials, int count):
+    matrices_buffer = glctx.buffer(matrices)
+    materials_buffer = glctx.buffer(materials)
+    if model_name in objects:
+        vertex_buffer, index_buffer = objects[model_name]
+    elif model_name in ModelCache:
+        model = ModelCache[model_name]
+        vertex_buffer = glctx.buffer(model.vertex_data)
+        index_buffer = glctx.buffer(model.index_data) if model.index_data is not None else None
+        objects[model_name] = vertex_buffer, index_buffer
+    else:
+        return
+    buffers = [(vertex_buffer, '3f 3f', 'model_position', 'model_normal'),
+               (matrices_buffer, '16f/i', 'model_matrix'),
+               (materials_buffer, '9f 1f 1f/i', 'material_colors', 'material_shininess', 'material_transparency')]
+    render_array = glctx.vertex_array(shader, buffers, index_buffer=index_buffer, mode=moderngl.TRIANGLES)
+    render_array.render(instances=count)
+
 
 cdef object compile(glctx, int max_lights):
     fragment = StandardFragmentSource.replace('@@max_lights@@', str(max_lights))
