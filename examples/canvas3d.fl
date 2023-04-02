@@ -4,7 +4,7 @@
 -- * All angles are in turns
 -- * There is no support (currently) for shadow-casting
 -- * Similarly, there is no support for reflections (beyond light sources and material shininess)
--- * Point light sources have inverse-squared fall-off in intensity
+-- * Point and spot light sources have inverse-squared fall-off in intensity
 -- * Add `flat=true` to a primitive/model to enable flat face-shading (costly on models with lots of vertices)
 
 %pragma tempo 60
@@ -16,8 +16,10 @@ let SIZE=1920;1080
         -- Ambient (directionless) light source:
         !light color=0;0;0.02
         -- Directional light source:
-        !light color=0.02;0.02;0 direction=0;-1;0
-        !material color=1
+        !light color=0;0.02;0 direction=0;-1;0
+        -- Spotlight:
+        !light color=500000;0;0 position=1000;1000;0 direction=-1;-1;0 inner=10/360 outer=20/360
+        !material color=1 shininess=100
             !transform translate=0;100;0 rotate=beat/11;0;beat/7
                 !box flat=true size=100
         let n=6
@@ -27,7 +29,7 @@ let SIZE=1920;1080
                 !material emissive=c
                     !sphere size=7.5
                 -- Point light source:
-                !light color=c*600 position=0
+                !light color=c*1000 position=0
         !transform rotate_x=0.25
-            !material color=0.25 shininess=100
+            !material color=0.25 --shininess=100
                 !cylinder size=500;500;1

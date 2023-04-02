@@ -13,6 +13,8 @@ import moderngl
 import numpy as np
 import trimesh
 
+from libc.math cimport cos
+
 from .. import name_patch
 from ..cache import SharedCache
 from ..model cimport Node, Vector, Matrix44, null_
@@ -24,17 +26,21 @@ cdef Vector Zero3 = Vector((0, 0, 0))
 cdef Vector One3 = Vector((1, 1, 1))
 cdef dict ModelCache = {}
 cdef int DEFAULT_MAX_LIGHTS = 50
+cdef double Pi = 3.141592653589793
 
 
 cdef enum LightType:
     Ambient = 1
     Directional = 2
     Point = 3
+    Spot = 4
 
 
 @cython.dataclasses.dataclass
 cdef class Light:
     type: LightType
+    inner_cone: float
+    outer_cone: float
     color: Vector
     position: Vector
     direction: Vector
@@ -117,13 +123,14 @@ void main() {
     vec3 normal = normalize(world_normal);
     for (int i = 0; i < nlights*4; i += 4) {
         float light_type = lights[i].x;
+        float inner_cone = lights[i].y;
+        float outer_cone = lights[i].z;
         vec3 light_color = lights[i+1];
         vec3 light_position = lights[i+2];
         vec3 light_direction = lights[i+3];
         if (light_type == """ + str(LightType.Ambient) + """) {
-            color += (colors * vec3(1, 0, 1)) * light_color;
+            color += (colors * vec3(1, 0, 0)) * light_color;
         } else if (light_type == """ + str(LightType.Directional) + """) {
-            light_direction = normalize(light_direction);
             vec3 reflection_direction = reflect(light_direction, normal);
             float specular_strength = pow(max(dot(view_direction, reflection_direction), 0), shininess) * min(shininess, min_shininess) / min_shininess;
             float diffuse_strength = max(dot(normal, -light_direction), 0);
@@ -132,10 +139,21 @@ void main() {
             light_direction = world_position - light_position;
             float light_distance = length(light_direction);
             light_direction = normalize(light_direction);
-            float light_attenuation = 1 / (1 + pow(light_distance, 2));
+            float light_attenuation = 1 / (1 + light_distance*light_distance);
             vec3 reflection_direction = reflect(light_direction, normal);
             float specular_strength = pow(max(dot(view_direction, reflection_direction), 0), shininess) * min(shininess, min_shininess) / min_shininess;
             float diffuse_strength = max(dot(normal, -light_direction), 0);
+            color += (colors * vec3(diffuse_strength, specular_strength, 0)) * light_color * light_attenuation;
+        } else if (light_type == """ + str(LightType.Spot) + """) {
+            vec3 spot_direction = world_position - light_position;
+            float spot_distance = length(spot_direction);
+            spot_direction = normalize(spot_direction);
+            float light_attenuation = 1 / (1 + spot_distance*spot_distance);
+            vec3 reflection_direction = reflect(spot_direction, normal);
+            float specular_strength = pow(max(dot(view_direction, reflection_direction), 0), shininess) * min(shininess, min_shininess) / min_shininess;
+            float diffuse_strength = max(dot(normal, -spot_direction), 0);
+            float spot_cosine = dot(spot_direction, light_direction);
+            light_attenuation *= 1 - clamp((inner_cone - spot_cosine) / (inner_cone - outer_cone), 0, 1);
             color += (colors * vec3(diffuse_strength, specular_strength, 0)) * light_color * light_attenuation;
         }
     }
@@ -199,7 +217,7 @@ cdef void collect(Node node, Matrix44 model_matrix, Material material, RenderSet
     cdef Light light
     cdef list lights, instances
     cdef Vector color, position, direction, emissive, diffuse, specular
-    cdef double shininess
+    cdef double shininess, inner, outer
     cdef Node child
     cdef str model_name, filename
     cdef int subdivisions, sections
@@ -227,19 +245,27 @@ cdef void collect(Node node, Matrix44 model_matrix, Material material, RenderSet
 
     elif node.kind == 'light':
         color = node.get_fvec('color', 3)
-        position = node.get_fvec('position', 3)
-        direction = node.get_fvec('direction', 3)
         if color.as_bool():
+            position = node.get_fvec('position', 3)
+            direction = node.get_fvec('direction', 3)
             light = Light.__new__(Light)
             light.color = color
-            if position.length:
+            if position.length and direction.as_bool():
+                light.type = LightType.Spot
+                inner = max(0, node.get_float('inner', 0))
+                outer = max(inner, node.get_float('outer', 0.5))
+                light.inner_cone = cos(inner * Pi)
+                light.outer_cone = cos(outer * Pi)
+                light.position = model_matrix.vmul(position)
+                light.direction = model_matrix.inverse().transpose().matrix33().vmul(direction.normalize())
+            elif position.length:
                 light.type = LightType.Point
                 light.position = model_matrix.vmul(position)
                 light.direction = None
             elif direction.as_bool():
                 light.type = LightType.Directional
                 light.position = None
-                light.direction = model_matrix.inverse().transpose().matrix33().vmul(direction)
+                light.direction = model_matrix.inverse().transpose().matrix33().vmul(direction.normalize())
             else:
                 light.type = LightType.Ambient
                 light.position = None
@@ -367,6 +393,8 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, int
                 break
             dest = &lights_data[i, 0]
             dest[0] = <cython.float>(<int>light.type)
+            dest[1] = light.inner_cone
+            dest[2] = light.outer_cone
             for j in range(3):
                 dest[j+3] = light.color.numbers[j]
             if light.position is not None:
