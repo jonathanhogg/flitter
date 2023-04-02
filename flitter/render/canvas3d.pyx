@@ -314,7 +314,7 @@ cdef Model build_model(str model_name, trimesh_model, bint flat):
     if flat:
         model.vertex_data = np.empty((len(trimesh_model.faces), 3, 2, 3), dtype='f4')
         model.vertex_data[:,:,0] = trimesh_model.vertices[trimesh_model.faces]
-        model.vertex_data[:,:,1] = trimesh_model.face_normals[:,:,None]
+        model.vertex_data[:,:,1] = trimesh_model.face_normals[:,None,:]
     else:
         model.vertex_data = np.hstack((trimesh_model.vertices, trimesh_model.vertex_normals)).astype('f4')
         model.index_data = trimesh_model.faces.astype('i4')
