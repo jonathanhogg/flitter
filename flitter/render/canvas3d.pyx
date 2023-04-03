@@ -18,6 +18,7 @@ from libc.math cimport cos
 from .. import name_patch
 from ..cache import SharedCache
 from ..model cimport Node, Vector, Matrix44, null_
+from .glsl import TemplateLoader
 
 
 logger = name_patch(logger, __name__)
@@ -189,98 +190,8 @@ cdef class LoadedModel(Model):
         return SharedCache[self.filename].read_trimesh_model()
 
 
-cdef str StandardVertexSource = """
-#version 410
-
-in vec3 model_position;
-in vec3 model_normal;
-in mat4 model_matrix;
-in mat3 material_colors;
-in float material_shininess;
-in float material_transparency;
-
-out vec3 world_position;
-out vec3 world_normal;
-flat out mat3 colors;
-flat out float shininess;
-flat out float transparency;
-
-uniform mat4 pv_matrix;
-
-void main() {
-    world_position = (model_matrix * vec4(model_position, 1)).xyz;
-    gl_Position = pv_matrix * vec4(world_position, 1);
-    mat3 normal_matrix = mat3(transpose(inverse(model_matrix)));
-    world_normal = normal_matrix * model_normal;
-    colors = material_colors;
-    shininess = material_shininess;
-    transparency = material_transparency;
-}
-"""
-
-cdef str StandardFragmentSource = """
-#version 410
-
-const int MAX_LIGHTS = @@max_lights@@;
-const float min_shininess = 50;
-
-in vec3 world_position;
-in vec3 world_normal;
-flat in mat3 colors;
-flat in float shininess;
-flat in float transparency;
-
-out vec4 fragment_color;
-
-uniform int nlights;
-uniform vec3 lights[MAX_LIGHTS * 4];
-uniform vec3 view_position;
-
-void main() {
-    vec3 view_direction = normalize(view_position - world_position);
-    vec3 color = colors * vec3(0, 0, 1);
-    vec3 normal = normalize(world_normal);
-    int n = shininess == 0 && colors[0] == vec3(0) ? 0 : nlights * 4;
-    for (int i = 0; i < n; i += 4) {
-        float light_type = lights[i].x;
-        float inner_cone = lights[i].y;
-        float outer_cone = lights[i].z;
-        vec3 light_color = lights[i+1];
-        vec3 light_position = lights[i+2];
-        vec3 light_direction = lights[i+3];
-        if (light_type == """ + str(LightType.Ambient) + """) {
-            color += (colors * vec3(1, 0, 0)) * light_color;
-        } else if (light_type == """ + str(LightType.Directional) + """) {
-            vec3 reflection_direction = reflect(light_direction, normal);
-            float specular_strength = pow(max(dot(view_direction, reflection_direction), 0), shininess) * min(shininess, min_shininess) / min_shininess;
-            float diffuse_strength = max(dot(normal, -light_direction), 0);
-            color += (colors * vec3(diffuse_strength, specular_strength, 0)) * light_color;
-        } else if (light_type == """ + str(LightType.Point) + """) {
-            light_direction = world_position - light_position;
-            float light_distance = length(light_direction);
-            light_direction = normalize(light_direction);
-            float light_attenuation = 1 / (1 + light_distance*light_distance);
-            vec3 reflection_direction = reflect(light_direction, normal);
-            float specular_strength = pow(max(dot(view_direction, reflection_direction), 0), shininess) * min(shininess, min_shininess) / min_shininess;
-            float diffuse_strength = max(dot(normal, -light_direction), 0);
-            color += (colors * vec3(diffuse_strength, specular_strength, 0)) * light_color * light_attenuation;
-        } else if (light_type == """ + str(LightType.Spot) + """) {
-            vec3 spot_direction = world_position - light_position;
-            float spot_distance = length(spot_direction);
-            spot_direction = normalize(spot_direction);
-            float light_attenuation = 1 / (1 + spot_distance*spot_distance);
-            vec3 reflection_direction = reflect(spot_direction, normal);
-            float specular_strength = pow(max(dot(view_direction, reflection_direction), 0), shininess) * min(shininess, min_shininess) / min_shininess;
-            float diffuse_strength = max(dot(normal, -spot_direction), 0);
-            float spot_cosine = dot(spot_direction, light_direction);
-            light_attenuation *= 1 - clamp((inner_cone - spot_cosine) / (inner_cone - outer_cone), 0, 1);
-            color += (colors * vec3(diffuse_strength, specular_strength, 0)) * light_color * light_attenuation;
-        }
-    }
-    float opacity = 1 - transparency;
-    fragment_color = vec4(color * opacity, opacity);
-}
-"""
+cdef object StandardVertexSource = TemplateLoader.get_template("standard_lighting.vert")
+cdef object StandardFragmentSource = TemplateLoader.get_template("standard_lighting.frag")
 
 
 def draw(Node node, tuple size, glctx, dict objects):
@@ -465,7 +376,10 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, int
     cdef str shader_name = f'!standard_shader/{max_lights}'
     if (standard_shader := objects.get(shader_name)) is None:
         logger.debug("Compiling standard lighting shader for {} max lights", max_lights)
-        standard_shader = compile(glctx, max_lights)
+        variables = {'max_lights': max_lights, 'Ambient': LightType.Ambient, 'Directional': LightType.Directional,
+                     'Point': LightType.Point, 'Spot': LightType.Spot}
+        standard_shader = glctx.program(vertex_shader=StandardVertexSource.render(**variables),
+                                        fragment_shader=StandardFragmentSource.render(**variables))
         objects[shader_name] = standard_shader
     standard_shader['pv_matrix'] = pv_matrix
     standard_shader['view_position'] = viewpoint
@@ -548,8 +462,3 @@ cdef void dispatch_instances(glctx, dict objects, shader, Model model, cython.fl
                (materials_buffer, '9f 1f 1f/i', 'material_colors', 'material_shininess', 'material_transparency')]
     render_array = glctx.vertex_array(shader, buffers, index_buffer=index_buffer, mode=moderngl.TRIANGLES)
     render_array.render(instances=count)
-
-
-cdef object compile(glctx, int max_lights):
-    fragment = StandardFragmentSource.replace('@@max_lights@@', str(max_lights))
-    return glctx.program(vertex_shader=StandardVertexSource, fragment_shader=fragment)

@@ -72,6 +72,7 @@ For reference, they are:
 - `scipy` - because `trimesh` needs it for some operations
 - `av` - for decoding video
 - `pillow` - for saving screenshots as image files
+- `mako` - for templating of the GLSL source
 - `pyserial` - for talking to DMX interfaces and lasers
 - `loguru` - because the standard library `logging` is just too antiquated
 

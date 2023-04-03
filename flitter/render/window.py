@@ -26,6 +26,7 @@ import pyglet.gl
 from ..cache import SharedCache
 from . import canvas
 from . import canvas3d
+from .glsl import TemplateLoader
 
 
 def value_split(value, n, m):
@@ -176,6 +177,8 @@ class Reference(SceneNode):
 
 class ProgramNode(SceneNode):
     GL_VERSION = (4, 1)
+    DEFAULT_VERTEX_SOURCE = TemplateLoader.get_template('default.vert')
+    DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('default.frag')
 
     def __init__(self, glctx):
         super().__init__(glctx)
@@ -206,49 +209,14 @@ class ProgramNode(SceneNode):
             self._last = None
 
     def get_vertex_source(self, node):
-        return node.get('vertex', 1, str, """#version 410
-in vec2 position;
-out vec2 coord;
-void main() {
-    gl_Position = vec4(position, 0.0, 1.0);
-    coord = (position + 1.0) / 2.0;
-}
-""")
+        if vertex := node.get('vertex', 1, str):
+            return vertex
+        return self.DEFAULT_VERTEX_SOURCE.render(child_textures=list(self.child_textures), node=node)
 
     def get_fragment_source(self, node):
         if fragment := node.get('fragment', 1, str):
             return fragment
-        blend_mode = node.get('blend', 1, str);
-        if blend_mode not in {'over', 'dest_over', 'lighten', 'darken'}:
-            blend_mode = 'over'
-        names = list(self.child_textures.keys())
-        if names:
-            samplers = '\n'.join(f"uniform sampler2D {name};" for name in names)
-            composite = ["    vec4 child;"] if len(names) > 1 else []
-            composite.append(f"    color = texture({names.pop(0)}, coord);")
-            while names:
-                composite.append(f"    child = texture({names.pop(0)}, coord);")
-                composite.append(f"    color = blend_{blend_mode}(child, color);")
-            composite = '\n'.join(composite)
-        else:
-            samplers = ""
-            composite = "    color = vec4(0.0);"
-        return f"""#version 410
-
-vec4 blend_over(vec4 s, vec4 d) {{ return s + d * (1 - s.a); }}
-vec4 blend_dest_over(vec4 s, vec4 d) {{ return s * (1 - d.a) + d; }}
-vec4 blend_lighten(vec4 s, vec4 d) {{ return max(s, d); }}
-vec4 blend_darken(vec4 s, vec4 d) {{ return min(s, d); }}
-
-in vec2 coord;
-out vec4 color;
-uniform float alpha = 1;
-{samplers}
-void main() {{
-{composite}
-    color *= alpha;
-}}
-"""
+        return self.DEFAULT_FRAGMENT_SOURCE.render(child_textures=list(self.child_textures), node=node)
 
     def make_last(self):
         raise NotImplementedError()
@@ -623,6 +591,9 @@ class Canvas3D(SceneNode):
 
 
 class Video(Shader):
+    DEFAULT_VERTEX_SOURCE = TemplateLoader.get_template('video.vert')
+    DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('video.frag')
+
     def __init__(self, glctx):
         super().__init__(glctx)
         self._filename = None
@@ -645,31 +616,6 @@ class Video(Shader):
     @property
     def child_textures(self):
         return {'frame0': self._frame0_texture, 'frame1': self._frame1_texture}
-
-    def get_vertex_source(self, node):
-        return """#version 410
-in vec2 position;
-out vec2 coord;
-void main() {
-    gl_Position = vec4(position.x, -position.y, 0.0, 1.0);
-    coord = (position + 1.0) / 2.0;
-}
-"""
-
-    def get_fragment_source(self, node):
-        return """#version 410
-in vec2 coord;
-out vec4 color;
-uniform sampler2D frame0;
-uniform sampler2D frame1;
-uniform float ratio;
-uniform float alpha;
-void main() {
-    vec4 frame0_color = texture(frame0, coord);
-    vec4 frame1_color = texture(frame1, coord);
-    color = vec4(mix(frame0_color.rgb, frame1_color.rgb, ratio) * alpha, alpha);
-}
-"""
 
     def similar_to(self, node):
         return super().similar_to(node) and node.get('filename', 1, str) == self._filename
@@ -719,5 +665,4 @@ void main() {
             self._frame1_texture.write(memoryview(data))
             self._frame1 = frame1
         interpolate = node.get('interpolate', 1, bool, False)
-        alpha = node.get('alpha', 1, float, 1)
-        self.render(node, ratio=ratio if interpolate else 0, alpha=alpha, **kwargs)
+        self.render(node, ratio=ratio if interpolate else 0, **kwargs)

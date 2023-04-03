@@ -2,6 +2,7 @@ av
 cython>=3.0.0b1
 lark
 loguru
+mako
 moderngl
 numpy
 pillow
