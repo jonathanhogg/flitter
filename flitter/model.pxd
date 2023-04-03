@@ -4,17 +4,17 @@ import cython
 
 
 cdef class VectorLike:
+    cdef int length
+    cdef list objects
+    cdef double* numbers
+    cdef double[16] _numbers
+
     cpdef VectorLike copynodes(self)
     cdef Vector slice(self, Vector index)
     cdef bint as_bool(self)
 
 
 cdef class Vector(VectorLike):
-    cdef int length
-    cdef list objects
-    cdef double* numbers
-    cdef double[3] _numbers
-
     @staticmethod
     cdef Vector _coerce(object other)
     @staticmethod

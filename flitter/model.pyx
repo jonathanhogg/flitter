@@ -129,7 +129,7 @@ cdef class Vector:
                     self.objects = list(value)
 
     cdef int allocate_numbers(self, int n) except -1:
-        if n > 3:
+        if n > 16:
             self.numbers = <double*>PyMem_Malloc(n * sizeof(double))
             if not self.numbers:
                 raise MemoryError()
@@ -139,7 +139,7 @@ cdef class Vector:
         return n
 
     cdef void deallocate_numbers(self):
-        if self.numbers and self.length > 3:
+        if self.numbers and self.length > 16:
             PyMem_Free(self.numbers)
             self.numbers = NULL
 
@@ -788,7 +788,7 @@ cdef class Matrix44(Vector):
     cdef Matrix44 _translate(Vector v):
         cdef Matrix44 result
         cdef double* numbers
-        if v.numbers is not NULL and v.length in (1, 3):
+        if v is not None and v.numbers is not NULL and v.length in (1, 3):
             result = Matrix44.__new__(Matrix44)
             numbers = result.numbers
             if v.length == 1:
@@ -810,7 +810,7 @@ cdef class Matrix44(Vector):
     cdef Matrix44 _scale(Vector v):
         cdef Matrix44 result
         cdef double* numbers
-        if v.numbers is not NULL and v.length in (1, 3):
+        if v is not None and v.numbers is not NULL and v.length in (1, 3):
             result = Matrix44.__new__(Matrix44)
             numbers = result.numbers
             if v.length == 1:
@@ -881,8 +881,8 @@ cdef class Matrix44(Vector):
 
     @staticmethod
     cdef Matrix44 _rotate(Vector v):
-        cdef Matrix44 result
-        if v.numbers is not NULL and v.length in (1, 3):
+        cdef Matrix44 matrix, result = None
+        if v is not None and v.numbers is not NULL and v.length in (1, 3):
             if v.length == 1:
                 if v.numbers[0]:
                     result = Matrix44._rotate_z(v.numbers[0])
@@ -893,12 +893,14 @@ cdef class Matrix44(Vector):
             else:
                 if v.numbers[2]:
                     result = Matrix44._rotate_z(v.numbers[2])
-                else:
-                    result = Matrix44.__new__(Matrix44)
                 if v.numbers[1]:
-                    result = Matrix44._rotate_y(v.numbers[1]).mmul(result)
+                    matrix = Matrix44._rotate_y(v.numbers[1])
+                    result = matrix if result is None else matrix.mmul(result)
                 if v.numbers[0]:
-                    result = Matrix44._rotate_x(v.numbers[0]).mmul(result)
+                    matrix = Matrix44._rotate_x(v.numbers[0])
+                    result = matrix if result is None else matrix.mmul(result)
+                if result is None:
+                    result = Matrix44.__new__(Matrix44)
         return result
 
     @staticmethod
@@ -907,18 +909,22 @@ cdef class Matrix44(Vector):
 
     @cython.cdivision(True)
     def __cinit__(self, obj=None):
-        if self.objects is not None or self.length not in (0, 1, 16):
+        if self.objects is not None:
             raise ValueError("Argument must be a float or a sequence of 16 floats")
         if self.length == 16:
             return
-        cdef double k = 1
-        if self.length == 1:
+        cdef double k
+        if self.length == 0:
+            k = 1
+            self.numbers = self._numbers
+        elif self.length == 1:
             k = self.numbers[0]
-            self.deallocate_numbers()
-        self.allocate_numbers(16)
+        else:
+            raise ValueError("Argument must be a float or a sequence of 16 floats")
         cdef int i
         for i in range(16):
             self.numbers[i] = k if i % 5 == 0 else 0
+        self.length = 16
 
     cdef Matrix44 mmul(self, Matrix44 b):
         cdef Matrix44 result = Matrix44.__new__(Matrix44)
