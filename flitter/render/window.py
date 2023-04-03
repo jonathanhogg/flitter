@@ -350,7 +350,10 @@ class Window(ProgramNode):
 
     def release(self):
         if self.window is not None:
-            self.glctx.gc()
+            self.glctx.finish()
+            self.glctx.extra.clear()
+            if count := self.glctx.gc():
+                logger.trace("Collected {} OpenGL objects", count)
             self.glctx.release()
             self.glctx = None
             self.window.close()
@@ -561,7 +564,6 @@ class Canvas3D(SceneNode):
         self._render_framebuffer = None
         self._colorbits = None
         self._samples = None
-        self._objects = {}
         self._total_duration = 0
         self._total_count = 0
 
@@ -579,7 +581,6 @@ class Canvas3D(SceneNode):
         self._depth_renderbuffer = None
 
     def purge(self):
-        self._objects = {}
         logger.info("{} draw stats - {:d} x {:.1f}ms = {:.1f}s", self.name, self._total_count,
                     1e3*self._total_duration/self._total_count, self._total_duration)
         self._total_duration = 0
@@ -613,7 +614,8 @@ class Canvas3D(SceneNode):
         self._render_framebuffer.use()
         self._render_framebuffer.clear()
         self.glctx.enable(moderngl.DEPTH_TEST | moderngl.CULL_FACE)
-        canvas3d.draw(node, (self.width, self.height), self.glctx, self._objects)
+        objects = self.glctx.extra.setdefault('canvas3d_objects', {})
+        canvas3d.draw(node, (self.width, self.height), self.glctx, objects)
         self.glctx.disable(moderngl.DEPTH_TEST | moderngl.CULL_FACE)
         self.glctx.copy_framebuffer(self._image_framebuffer, self._render_framebuffer)
         self._total_duration += time.perf_counter()
