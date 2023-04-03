@@ -451,6 +451,7 @@ class Controller:
                         logger.exception("Error reloading page")
                     self.current_source = source
 
+                del context
                 if count := gc.collect(0):
                     logger.trace("Collected {} objects", count)
 
