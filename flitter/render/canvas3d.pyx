@@ -56,23 +56,137 @@ cdef class Material:
 
 
 @cython.dataclasses.dataclass
-cdef class Model:
-    name: str
-    vertex_data: np.ndarray = None
-    index_data: np.ndarray = None
-
-
-@cython.dataclasses.dataclass
 cdef class Instance:
     model_matrix: Matrix44
     material: Material
 
 
+cdef class Model:
+    cdef str name
+    cdef bint flat
+    cdef object trimesh_model
+
+    def __hash__(self):
+        return <Py_hash_t>(<void*>self)
+
+    def __eq__(self, other):
+        return self is other
+
+    cdef object get_trimesh_model(self):
+        raise NotImplementedError()
+
+    cdef tuple get_buffers(self, object glctx, dict objects):
+        cdef str name = self.name
+        trimesh_model = self.get_trimesh_model()
+        if trimesh_model is self.trimesh_model and name in objects:
+            return objects[name]
+        self.trimesh_model = trimesh_model
+        if trimesh_model is None:
+            if name in objects:
+                del objects[name]
+            return None, None
+        logger.debug("Preparing model {}", name)
+        cdef tuple buffers
+        if self.flat:
+            vertex_data = np.empty((len(trimesh_model.faces), 3, 2, 3), dtype='f4')
+            vertex_data[:,:,0] = trimesh_model.vertices[trimesh_model.faces]
+            vertex_data[:,:,1] = trimesh_model.face_normals[:,None,:]
+            buffers = (glctx.buffer(vertex_data), None)
+        else:
+            vertex_data = np.hstack((trimesh_model.vertices, trimesh_model.vertex_normals)).astype('f4')
+            index_data = trimesh_model.faces.astype('i4')
+            buffers = (glctx.buffer(vertex_data), glctx.buffer(index_data))
+        objects[name] = buffers
+        return buffers
+
+
 @cython.dataclasses.dataclass
 cdef class RenderSet:
     lights: list[list[Light]]
-    instances: dict[str, list[Instance]]
+    instances: dict[Model, list[Instance]]
 
+
+cdef class Box(Model):
+    @staticmethod
+    cdef Box get(bint flat):
+        cdef str name = '!box/flat' if flat else '!box'
+        cdef Box model = ModelCache.get(name)
+        if model is None:
+            model = Box.__new__(Box)
+            model.name = name
+            model.flat = flat
+            model.trimesh_model = None
+            ModelCache[name] = model
+        return model
+
+    cdef object get_trimesh_model(self):
+        return trimesh.primitives.Box() if self.trimesh_model is None else self.trimesh_model
+
+
+cdef class Sphere(Model):
+    cdef int subdivisions
+
+    @staticmethod
+    cdef Sphere get(bint flat, int subdivisions):
+        cdef str name = f'!sphere/{subdivisions}'
+        if flat:
+            name += '/flat'
+        cdef Sphere model = ModelCache.get(name)
+        if model is None:
+            model = Sphere.__new__(Sphere)
+            model.name = name
+            model.flat = flat
+            model.subdivisions = subdivisions
+            model.trimesh_model = None
+            ModelCache[name] = model
+        return model
+
+    cdef object get_trimesh_model(self):
+        return trimesh.primitives.Sphere(subdivisions=self.subdivisions) if self.trimesh_model is None else self.trimesh_model
+
+
+cdef class Cylinder(Model):
+    cdef int segments
+
+    @staticmethod
+    cdef Cylinder get(bint flat, int segments):
+        cdef str name = f'!cylinder/{segments}'
+        if flat:
+            name += '/flat'
+        cdef Cylinder model = ModelCache.get(name)
+        if model is None:
+            model = Cylinder.__new__(Cylinder)
+            model.name = name
+            model.flat = flat
+            model.segments = segments
+            model.trimesh_model = None
+            ModelCache[name] = model
+        return model
+
+    cdef object get_trimesh_model(self):
+        return trimesh.primitives.Cylinder(segments=self.segments) if self.trimesh_model is None else self.trimesh_model
+
+
+cdef class LoadedModel(Model):
+    cdef str filename
+
+    @staticmethod
+    cdef LoadedModel get(bint flat, str filename):
+        cdef str name = filename
+        if flat:
+            name += '/flat'
+        cdef LoadedModel model = ModelCache.get(name)
+        if model is None:
+            model = LoadedModel.__new__(LoadedModel)
+            model.name = name
+            model.flat = flat
+            model.filename = filename
+            model.trimesh_model = None
+            ModelCache[name] = model
+        return model
+
+    cdef object get_trimesh_model(self):
+        return SharedCache[self.filename].read_trimesh_model()
 
 
 cdef str StandardVertexSource = """
@@ -180,7 +294,7 @@ def draw(Node node, tuple size, glctx, dict objects):
     cdef double far = node.get('far', 1, float, width)
     cdef int max_lights = node.get_int('max_lights', DEFAULT_MAX_LIGHTS)
     cdef Matrix44 pv_matrix = Matrix44._project(width/height, fov, near, far).mmul(Matrix44._look(viewpoint, focus, up))
-    cdef Matrix44 model_matrix = Matrix44.__new__(Matrix44)
+    cdef Matrix44 model_matrix = update_model_matrix(Matrix44.__new__(Matrix44), node)
     cdef Node child = node.first_child
     cdef RenderSet render_set = RenderSet(lights=[[]], instances={})
     cdef list render_sets = [render_set]
@@ -225,7 +339,7 @@ cdef void collect(Node node, Matrix44 model_matrix, Material material, RenderSet
     cdef Vector color, position, direction, emissive, diffuse, specular
     cdef double shininess, inner, outer
     cdef Node child
-    cdef str model_name, filename
+    cdef str filename
     cdef int subdivisions, sections
     cdef bint flat
     cdef Model model
@@ -293,68 +407,30 @@ cdef void collect(Node node, Matrix44 model_matrix, Material material, RenderSet
 
     elif node.kind == 'box':
         flat = node.get_bool('flat', False)
-        if flat:
-            model_name = '!box/flat'
-        else:
-            model_name = '!box'
-        if model_name not in ModelCache:
-            logger.debug("Building primitive model {}", model_name)
-            trimesh_model = trimesh.primitives.Box()
-            ModelCache[model_name] = build_model(model_name, trimesh_model, flat)
-        add_instance(render_set.instances, model_name, node, model_matrix, material)
+        model = Box.get(flat)
+        add_instance(render_set.instances, model, node, model_matrix, material)
 
     elif node.kind == 'sphere':
-        subdivisions = node.get_int('subdivisions', 2)
-        model_name = f'!sphere/{subdivisions}'
         flat = node.get_bool('flat', False)
-        if flat:
-            model_name += '/flat'
-        if model_name not in ModelCache:
-            logger.debug("Building primitive model {}", model_name)
-            trimesh_model = trimesh.primitives.Sphere(subdivisions=subdivisions)
-            ModelCache[model_name] = build_model(model_name, trimesh_model, flat)
-        add_instance(render_set.instances, model_name, node, model_matrix, material)
+        subdivisions = node.get_int('subdivisions', 2)
+        model = Sphere.get(flat, subdivisions)
+        add_instance(render_set.instances, model, node, model_matrix, material)
 
     elif node.kind == 'cylinder':
-        sections = node.get_int('sections', 32)
-        model_name = f'!cylinder/{sections}'
         flat = node.get_bool('flat', False)
-        if flat:
-            model_name += '/flat'
-        if model_name not in ModelCache:
-            logger.debug("Building primitive model {}", model_name)
-            trimesh_model = trimesh.primitives.Cylinder(sections=sections)
-            ModelCache[model_name] = build_model(model_name, trimesh_model, flat)
-        add_instance(render_set.instances, model_name, node, model_matrix, material)
+        sections = node.get_int('sections', 32)
+        model = Cylinder.get(flat, sections)
+        add_instance(render_set.instances, model, node, model_matrix, material)
 
     elif node.kind == 'model':
         filename = node.get('filename', 1, str)
         if filename:
             flat = node.get_bool('flat', False)
-            model_name = filename
-            if flat:
-                model_name += '/flat'
-            if model_name not in ModelCache:
-                trimesh_model = SharedCache[filename].read_trimesh_model()
-                if trimesh_model is not None:
-                    ModelCache[model_name] = build_model(model_name, trimesh_model, flat)
-                    logger.debug("Loaded model {} with {} faces", filename, len(trimesh_model.faces))
-            add_instance(render_set.instances, model_name, node, model_matrix, material)
+            model = LoadedModel.get(flat, filename)
+            add_instance(render_set.instances, model, node, model_matrix, material)
 
 
-cdef Model build_model(str model_name, trimesh_model, bint flat):
-    cdef Model model = Model(model_name)
-    if flat:
-        model.vertex_data = np.empty((len(trimesh_model.faces), 3, 2, 3), dtype='f4')
-        model.vertex_data[:,:,0] = trimesh_model.vertices[trimesh_model.faces]
-        model.vertex_data[:,:,1] = trimesh_model.face_normals[:,None,:]
-    else:
-        model.vertex_data = np.hstack((trimesh_model.vertices, trimesh_model.vertex_normals)).astype('f4')
-        model.index_data = trimesh_model.faces.astype('i4')
-    return model
-
-
-cdef void add_instance(dict render_instances, str model_name, Node node, Matrix44 model_matrix, Material material):
+cdef void add_instance(dict render_instances, Model model, Node node, Matrix44 model_matrix, Material material):
     cdef dict attrs = node._attributes
     cdef Matrix44 matrix
     if (matrix := Matrix44._translate(attrs.get('position'))) is not None:
@@ -367,14 +443,13 @@ cdef void add_instance(dict render_instances, str model_name, Node node, Matrix4
     instance.model_matrix = model_matrix
     instance.material = material
     cdef list instances
-    if (instances := render_instances.get(model_name)) is not None:
+    if (instances := render_instances.get(model)) is not None:
         instances.append(instance)
     else:
-        render_instances[model_name] = [instance]
+        render_instances[model] = [instance]
 
 
 cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, int max_lights, glctx, dict objects):
-    cdef str model_name
     cdef list instances, lights, buffers
     cdef cython.float[:, :] matrices, materials, lights_data
     cdef Material material
@@ -415,7 +490,7 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, int
             i += 1
     standard_shader['nlights'] = i
     standard_shader['lights'].write(lights_data)
-    for model_name, instances in render_set.instances.items():
+    for model, instances in render_set.instances.items():
         n = len(instances)
         matrices = view.array((n, 16), 4, 'f')
         materials = view.array((n, 11), 4, 'f')
@@ -425,7 +500,7 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, int
             material = instance.material
             if material.transparency > 0:
                 z = pv_matrix.mmul(instance.model_matrix).numbers[14]
-                transparent_objects.append((-z, model_name, instance))
+                transparent_objects.append((-z, model, instance))
             else:
                 src = instance.model_matrix.numbers
                 dest = &matrices[k, 0]
@@ -439,13 +514,13 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, int
                 dest[9] = material.shininess
                 dest[10] = 0
                 k += 1
-        dispatch_instances(glctx, objects, standard_shader, model_name, matrices, materials, k)
+        dispatch_instances(glctx, objects, standard_shader, model, matrices, materials, k)
     if transparent_objects:
         transparent_objects.sort()
         matrices = view.array((1, 16), 4, 'f')
         materials = view.array((1, 11), 4, 'f')
         for transparent_object in transparent_objects:
-            model_name = transparent_object[1]
+            model = transparent_object[1]
             instance = transparent_object[2]
             material = instance.material
             src = instance.model_matrix.numbers
@@ -459,21 +534,15 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, int
                 dest[j+6] = material.emissive.numbers[j]
             dest[9] = material.shininess
             dest[10] = material.transparency
-            dispatch_instances(glctx, objects, standard_shader, model_name, matrices, materials, 1)
+            dispatch_instances(glctx, objects, standard_shader, model, matrices, materials, 1)
 
 
-cdef void dispatch_instances(glctx, dict objects, shader, str model_name, cython.float[:, :] matrices, cython.float[:, :] materials, int count):
+cdef void dispatch_instances(glctx, dict objects, shader, Model model, cython.float[:, :] matrices, cython.float[:, :] materials, int count):
+    vertex_buffer, index_buffer = model.get_buffers(glctx, objects)
+    if vertex_buffer is None:
+        return
     matrices_buffer = glctx.buffer(matrices)
     materials_buffer = glctx.buffer(materials)
-    if model_name in objects:
-        vertex_buffer, index_buffer = objects[model_name]
-    elif model_name in ModelCache:
-        model = ModelCache[model_name]
-        vertex_buffer = glctx.buffer(model.vertex_data)
-        index_buffer = glctx.buffer(model.index_data) if model.index_data is not None else None
-        objects[model_name] = vertex_buffer, index_buffer
-    else:
-        return
     buffers = [(vertex_buffer, '3f 3f', 'model_position', 'model_normal'),
                (matrices_buffer, '16f/i', 'model_matrix'),
                (materials_buffer, '9f 1f 1f/i', 'material_colors', 'material_shininess', 'material_transparency')]
