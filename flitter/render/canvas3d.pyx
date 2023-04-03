@@ -355,12 +355,14 @@ cdef Model build_model(str model_name, trimesh_model, bint flat):
 
 
 cdef void add_instance(dict render_instances, str model_name, Node node, Matrix44 model_matrix, Material material):
-    if 'position' in node._attributes:
-        model_matrix = model_matrix.mmul(Matrix44._translate(node.get_fvec('position', 3, Zero3)))
-    if 'rotation' in node._attributes:
-        model_matrix = model_matrix.mmul(Matrix44._rotate(node.get_fvec('rotation', 3, Zero3)))
-    if 'size' in node._attributes:
-        model_matrix = model_matrix.mmul(Matrix44._scale(node.get_fvec('size', 3, One3)))
+    cdef dict attrs = node._attributes
+    cdef Matrix44 matrix
+    if (matrix := Matrix44._translate(attrs.get('position'))) is not None:
+        model_matrix = model_matrix.mmul(matrix)
+    if (matrix := Matrix44._rotate(attrs.get('rotation'))) is not None:
+        model_matrix = model_matrix.mmul(matrix)
+    if (matrix := Matrix44._scale(attrs.get('size'))) is not None:
+        model_matrix = model_matrix.mmul(matrix)
     cdef Instance instance = Instance.__new__(Instance)
     instance.model_matrix = model_matrix
     instance.material = material
