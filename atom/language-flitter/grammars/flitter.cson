@@ -4,6 +4,10 @@ fileTypes: ['fl']
 
 patterns: [
     {
+        match: '\\A#!.*'
+        name: 'comment.hashbang.flitter'
+    }
+    {
         match: '--.*$'
         name: 'comment.single.flitter'
     }
