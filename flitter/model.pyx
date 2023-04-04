@@ -94,11 +94,11 @@ cdef class Vector:
     def range(*args):
         cdef Vector result = Vector.__new__(Vector)
         if len(args) == 1:
-            result.fill_range(None, args[0], None)
+            result.fill_range(null_, Vector._coerce(args[0]), null_)
         elif len(args) == 2:
-            result.fill_range(args[0], args[1], None)
+            result.fill_range(Vector._coerce(args[0]), Vector._coerce(args[1]), null_)
         elif len(args) == 3:
-            result.fill_range(args[0], args[1], args[2])
+            result.fill_range(Vector._coerce(args[0]), Vector._coerce(args[1]), Vector._coerce(args[2]))
         else:
             raise TypeError("range takes 1-3 arguments")
         return result
@@ -111,7 +111,7 @@ cdef class Vector:
             return
         cdef int i, n
         if isinstance(value, (range, slice)):
-            self.fill_range(value.start, value.stop, value.step)
+            self.fill_range(Vector._coerce(value.start), Vector._coerce(value.stop), Vector._coerce(value.step))
         elif isinstance(value, (int, float, bool)):
             self.allocate_numbers(1)
             self.numbers[0] = value
@@ -148,24 +148,31 @@ cdef class Vector:
         return self.numbers != NULL
 
     @cython.cdivision(True)
-    cdef bint fill_range(self, startv, stopv, stepv) except False:
+    cdef void fill_range(self, Vector startv, Vector stopv, Vector stepv):
         assert self.length == 0
-        cdef double start = startv if startv is not None else NaN
-        cdef double stop = stopv if stopv is not None else NaN
-        cdef double step = stepv if stepv is not None else NaN
-        if isnan(start):
+        cdef double start, stop, step
+        if startv.length == 0:
             start = 0
-        if isnan(stop):
-            return True
-        if isnan(step):
+        elif startv.numbers != NULL and startv.length == 1:
+            start = startv.numbers[0]
+        else:
+            return
+        if stopv.numbers == NULL or stopv.length != 1:
+            return
+        stop = stopv.numbers[0]
+        if stepv.length == 0:
             step = 1
-        elif step == 0:
-            return True
+        elif stepv.numbers != NULL and stepv.length == 1:
+            step = stepv.numbers[0]
+            if step == 0:
+                return
+        else:
+            return
         cdef int i, n = <int>ceil((stop - start) / step)
         if n > 0:
             for i in range(self.allocate_numbers(n)):
                 self.numbers[i] = start + step * i
-        return True
+        return
 
     def __dealloc__(self):
         self.deallocate_numbers()

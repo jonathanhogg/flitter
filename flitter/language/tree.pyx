@@ -278,9 +278,9 @@ cdef class Range(Expression):
         self.step = step
 
     cpdef model.VectorLike evaluate(self, model.Context context):
-        start = self.start.evaluate(context)
-        stop = self.stop.evaluate(context)
-        step = self.step.evaluate(context)
+        cdef model.Vector start = self.start.evaluate(context)
+        cdef model.Vector stop = self.stop.evaluate(context)
+        cdef model.Vector step = self.step.evaluate(context)
         cdef model.Vector result = model.Vector.__new__(model.Vector)
         result.fill_range(start, stop, step)
         return result
@@ -289,8 +289,11 @@ cdef class Range(Expression):
         cdef Expression start = self.start.partially_evaluate(context)
         cdef Expression stop = self.stop.partially_evaluate(context)
         cdef Expression step = self.step.partially_evaluate(context)
+        cdef model.Vector result
         if isinstance(start, Literal) and isinstance(stop, Literal) and isinstance(step, Literal):
-            return Literal(model.Vector.range((<Literal>start).value, (<Literal>stop).value, (<Literal>step).value))
+            result = model.Vector.__new__(model.Vector)
+            result.fill_range((<Literal>start).value, (<Literal>stop).value, (<Literal>step).value)
+            return Literal(result)
         return Range(start, stop, step)
 
     cpdef object reduce(self, func):

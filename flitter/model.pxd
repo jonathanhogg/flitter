@@ -22,7 +22,7 @@ cdef class Vector(VectorLike):
 
     cdef int allocate_numbers(self, int n) except -1
     cdef void deallocate_numbers(self)
-    cdef bint fill_range(self, startv, stopv, stepv) except False
+    cdef void fill_range(self, Vector startv, Vector stopv, Vector stepv)
     cpdef bint isinstance(self, t)
     cdef bint as_bool(self)
     cdef double as_double(self)
