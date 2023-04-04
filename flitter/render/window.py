@@ -355,9 +355,13 @@ class Window(ProgramNode):
             screen = screens[screen] if screen < len(screens) else screens[0]
             config = pyglet.gl.Config(major_version=self.GL_VERSION[0], minor_version=self.GL_VERSION[1], forward_compatible=True,
                                       double_buffer=True, sample_buffers=0)
-            self.window = self.WindowWrapper(width=self.width, height=self.height, resizable=resizable, caption=title,
+            width, height = self.width, self.height
+            while width > screen.width or height > screen.height:
+                width = width*2//3
+                height = height*2//3
+            self.window = self.WindowWrapper(width=width, height=height, resizable=resizable, caption=title,
                                              screen=screen, vsync=vsync, config=config)
-            self.window.set_location(screen.x + max(0, screen.width-self.width)//2, screen.y + max(0, screen.height-self.height)//2)
+            self.window.set_location(screen.x + (screen.width-width)//2, screen.y + (screen.height-height)//2)
             self.window.switch_to()
             self.glctx = moderngl.create_context(require=self.GL_VERSION[0] * 100 + self.GL_VERSION[1] * 10)
             self.glctx.gc_mode = 'context_gc'
