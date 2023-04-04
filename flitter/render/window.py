@@ -160,7 +160,8 @@ class SceneNode:
 
 
 class Reference(SceneNode):
-    def __init__(self, _):
+    def __init__(self, glctx):
+        super().__init__(glctx)
         self._reference = None
 
     @property
@@ -315,6 +316,7 @@ class Window(ProgramNode):
         self.default_screen = screen
         self.default_fullscreen = fullscreen
         self.default_vsync = vsync
+        self._deferred_fullscreen = False
 
     def release(self):
         if self.window is not None:
@@ -347,31 +349,36 @@ class Window(ProgramNode):
             vsync = node.get('vsync', 1, bool, self.default_vsync)
             screen = node.get('screen', 1, int, self.default_screen)
             title = node.get('title', 1, str, "flitter")
-            fullscreen = node.get('fullscreen', 1, bool, self.default_fullscreen)
+            self._deferred_fullscreen = node.get('fullscreen', 1, bool, self.default_fullscreen)
+            resizable = node.get('resizable', 1, bool, True)
             screens = pyglet.canvas.get_display().get_screens()
             screen = screens[screen] if screen < len(screens) else screens[0]
             config = pyglet.gl.Config(major_version=self.GL_VERSION[0], minor_version=self.GL_VERSION[1], forward_compatible=True,
                                       double_buffer=True, sample_buffers=0)
-            self.window = self.WindowWrapper(width=self.width, height=self.height, resizable=True, caption=title,
+            self.window = self.WindowWrapper(width=self.width, height=self.height, resizable=resizable, caption=title,
                                              screen=screen, vsync=vsync, config=config)
+            self.window.set_location(screen.x + max(0, screen.width-self.width)//2, screen.y + max(0, screen.height-self.height)//2)
+            self.window.switch_to()
             self.glctx = moderngl.create_context(require=self.GL_VERSION[0] * 100 + self.GL_VERSION[1] * 10)
             self.glctx.gc_mode = 'context_gc'
             self.glctx.extra = {}
             self.glctx.enable(moderngl.BLEND)
             self.glctx.blend_func = moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA
-            if fullscreen:
+            logger.debug("{} opened on {}", self.name, screen)
+            self.recalculate_viewport(True)
+            logger.debug("OpenGL info: {GL_RENDERER} {GL_VERSION}", **self.glctx.info)
+            logger.trace("{!r}", self.glctx.info)
+        else:
+            if self._deferred_fullscreen:
+                logger.debug("{} going full screen", self.name)
                 self.window.set_mouse_visible(False)
                 if sys.platform == 'darwin':
                     self.window._nswindow.enterFullScreenMode_(self.window._nswindow.screen())  # noqa
                 else:
                     self.window.set_fullscreen(True)
-            logger.debug("{} {} on {}", self.name,  "opened fullscreen" if fullscreen else "opened", screen)
-            self.recalculate_viewport(True)
-            logger.debug("OpenGL info: {GL_RENDERER} {GL_VERSION}", **self.glctx.info)
-            logger.trace("{!r}", self.glctx.info)
-        else:
+                self._deferred_fullscreen = False
+            self.window.switch_to()
             self.recalculate_viewport()
-        self.window.switch_to()
         self.glctx.extra['linear'] = node.get('linear', 1, bool, False)
         colorbits = node.get('colorbits', 1, int, DEFAULT_COLORBITS)
         if colorbits not in COLOR_FORMATS:
