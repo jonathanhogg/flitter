@@ -64,6 +64,7 @@ class FlitterTransformer(Transformer):
     call = tree.Call
     divide = tree.Divide
     eq = tree.EqualTo
+    file_import = tree.Import
     floor_divide = tree.FloorDivide
     function = tree.Function
     ge = tree.GreaterThanOrEqualTo

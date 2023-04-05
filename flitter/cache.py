@@ -2,18 +2,10 @@
 General file cache
 """
 
-import csv
 from pathlib import Path
 import time
 
-import av
 from loguru import logger
-import skia
-import trimesh
-
-from .language.tree import Top
-from .language.parser import parse
-from .model import Vector, Context
 
 
 class CachePath:
@@ -56,7 +48,9 @@ class CachePath:
         self._cache[key] = mtime, text
         return text
 
-    def read_flitter_program(self, **definitions):
+    def read_flitter_program(self, definitions=None):
+        from .model import Vector, Context
+        from .language.parser import parse
         self._touched = time.monotonic()
         mtime = self._path.stat().st_mtime if self._path.exists() else None
         if 'flitter' in self._cache:
@@ -68,25 +62,25 @@ class CachePath:
             top = None
         else:
             try:
-                source = self._path.read_text(encoding='utf8')
                 start = time.perf_counter()
+                source = self._path.read_text(encoding='utf8')
                 initial_top = parse(source)
                 mid = time.perf_counter()
-                top = initial_top.partially_evaluate(Context(variables=definitions.copy()))
+                top = initial_top.simplify(variables=definitions)
                 end = time.perf_counter()
-                logger.debug("Parse in {:.1f}ms, partial evaluation in {:.1f}ms", (mid-start)*1000, (end-mid)*1000)
+                logger.debug("Parsed {} in {:.1f}ms, partial evaluation in {:.1f}ms", self._path, (mid-start)*1000, (end-mid)*1000)
                 logger.opt(lazy=True).debug("Tree node count before partial-evaluation {before} and after {after}",
                                             before=lambda: initial_top.reduce(lambda e, *rs: sum(rs) + 1),
                                             after=lambda: top.reduce(lambda e, *rs: sum(rs) + 1))
             except Exception as exc:
                 logger.opt(exception=exc).warning("Error reading program file: {}", self._path)
                 top = None
-            else:
-                logger.debug("Read program file: {}", self._path)
         self._cache['flitter'] = mtime, top
         return top
 
     def read_csv_vector(self, row_number):
+        import csv
+        from . import model
         self._touched = time.monotonic()
         mtime = self._path.stat().st_mtime if self._path.exists() else None
         if 'csv' in self._cache and self._cache['csv'][0] == mtime:
@@ -113,7 +107,7 @@ class CachePath:
                     except ValueError:
                         pass
                     values.append(value)
-                rows.append(Vector.coerce(values))
+                rows.append(model.Vector.coerce(values))
             except StopIteration:
                 logger.debug("Closed CSV file: {}", self._path)
                 reader = None
@@ -124,9 +118,10 @@ class CachePath:
         self._cache['csv'] = mtime, reader, rows
         if 0 <= row_number < len(rows):
             return rows[row_number]
-        return null
+        return model.null
 
     def read_image(self):
+        import skia
         self._touched = time.monotonic()
         mtime = self._path.stat().st_mtime if self._path.exists() else None
         if 'image' in self._cache:
@@ -148,6 +143,7 @@ class CachePath:
         return image
 
     def read_video_frames(self, obj, position, loop=False):
+        import av
         self._touched = time.monotonic()
         key = 'video', id(obj)
         container = decoder = current_frame = next_frame = None
@@ -217,6 +213,7 @@ class CachePath:
             return 0, None, None
 
     def read_trimesh_model(self):
+        import trimesh
         self._touched = time.monotonic()
         mtime = self._path.stat().st_mtime if self._path.exists() else None
         if 'trimesh' in self._cache:

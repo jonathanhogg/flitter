@@ -120,6 +120,25 @@ patterns: [
                 name: "constant.pragma.flitter"
     }
     {
+        match: "\\b(import)\\s+([_a-zA-Z][_a-zA-Z0-9]*\\s*(?:\\s*;\\s*[_a-zA-Z][_a-zA-Z0-9]*)*)\\s+(from)"
+        captures:
+            '1':
+                name: "keyword.control.flow.flitter"
+            '2':
+                patterns: [
+                    {
+                        match: "[_a-zA-Z][_a-zA-Z0-9]*"
+                        name: "variable.name.flitter"
+                    }
+                    {
+                        match: ";"
+                        name: "keyword.operator.sequence.flitter"
+                    }
+                ]
+            '3':
+                name: "keyword.control.flow.flitter"
+    }
+    {
         match: "\\b(if|elif|else|let|where)\\b"
         name: "keyword.control.flow.flitter"
     }
@@ -144,7 +163,7 @@ patterns: [
         name: "constant.tag.flitter"
     }
     {
-        match: "\\b([_a-zA-Z][_a-zA-Z0-9]*\\s*(?:;\\s*[_a-zA-Z][_a-zA-Z0-9]*)*)\\s*(=)(?=[^=])"
+        match: "\\b([_a-zA-Z][_a-zA-Z0-9]*\\s*(?:\\s*;\\s*[_a-zA-Z][_a-zA-Z0-9]*)*)\\s*(=)(?=[^=])"
         captures:
             '1':
                 patterns: [

@@ -5,7 +5,6 @@ The main Flitter engine
 # pylama:ignore=W0703,R0902,R0912,R0913,R0914,R0915,R1702,C901
 
 import asyncio
-import csv
 import gc
 from pathlib import Path
 import pickle
@@ -59,8 +58,6 @@ class Controller:
         self.osc_sender = OSCSender('localhost', self.SEND_PORT)
         self.osc_receiver = OSCReceiver('localhost', self.RECEIVE_PORT)
         self.queue = []
-        self.read_cache = {}
-        self.csv_cache = {}
         self.pages = []
         self.next_page = None
         self.current_page = None
@@ -123,19 +120,6 @@ class Controller:
             self.global_state_dirty = True
             self.state_timestamp = self.counter.clock()
             logger.trace("State changed: {!r} = {!r}", key, value)
-
-    def read(self, filename):
-        filename = str(filename)
-        if filename:
-            return Vector.coerce(SharedCache[filename].read_text(encoding='utf8'))
-        return null
-
-    def csv(self, filename, row_number):
-        filename = str(filename)
-        row_number = row_number.match(1, int)
-        if filename and row_number is not None:
-            return SharedCache[filename].read_csv_vector(row_number)
-        return null
 
     async def update_windows(self, graph, **kwargs):
         async with asyncio.TaskGroup() as group:
@@ -363,7 +347,7 @@ class Controller:
                     logger.debug("Undo partial-evaluation on state")
                     run_top = current_top
 
-                program_top = self.current_path.read_flitter_program(**self.defined_variables)
+                program_top = self.current_path.read_flitter_program(self.defined_variables)
                 if program_top is not current_top:
                     level = 'SUCCESS' if current_top is None else 'INFO'
                     logger.log(level, "Loaded page {}: {}", self.current_page, self.current_path)
@@ -373,7 +357,7 @@ class Controller:
                         ((self.state_timestamp is not None and self.counter.clock() > self.state_timestamp + self.state_eval_wait) or
                          (self.state_timestamp is None and run_top is current_top)):
                     start = time.perf_counter()
-                    run_top = current_top.partially_evaluate(Context(state=self.state))
+                    run_top = current_top.simplify(state=self.state)
                     logger.debug("Partially-evaluated current program on state in {:.1f}ms", (time.perf_counter()-start)*1000)
                     logger.opt(lazy=True).debug("Tree node count after partial-evaluation {after}",
                                                 after=lambda: run_top.reduce(lambda e, *rs: sum(rs) + 1))
@@ -389,7 +373,7 @@ class Controller:
                 housekeeping += now
                 execution -= now
                 if current_top is not None:
-                    context = run_top.run(self.state, read=self.read, csv=self.csv, debug=self.debug, **names)
+                    context = run_top.run(state=self.state, variables=names)
                 else:
                     context = Context()
                 now = self.counter.clock()

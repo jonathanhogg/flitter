@@ -29,6 +29,7 @@ expressions : expression* -> tuple
             | "let" multiline_bindings -> let
             | "if" tests ["else" _NL _INDENT sequence _DEDENT] -> if_else
             | "%pragma" NAME node _NL -> pragma
+            | "%import" name_list "from" composition _NL ->  file_import
             | "func" NAME "(" parameters ")" _NL _INDENT sequence _DEDENT -> function
 
 parameters : (parameter ("," parameter)*)? -> tuple

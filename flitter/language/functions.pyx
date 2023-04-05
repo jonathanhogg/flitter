@@ -9,6 +9,7 @@ import cython
 
 from libc.math cimport isnan, floor, round, sin, cos, sqrt, exp, ceil
 
+from ..cache import SharedCache
 from ..model cimport VectorLike, Vector, null_, true_
 
 
@@ -78,6 +79,21 @@ cdef class Normal(Uniform):
         for j in range(12):
             u += Uniform.item(self, i + j)
         return u
+
+
+def read_text(Vector filename):
+    cdef str path = filename.as_string()
+    if path:
+        return Vector._coerce(SharedCache[path].read_text(encoding='utf8'))
+    return null_
+
+
+def read_csv(Vector filename, Vector row_number):
+    cdef str path = str(filename)
+    row = row_number.match(1, int)
+    if filename and row_number is not None:
+        return SharedCache[path].read_csv_vector(row)
+    return null_
 
 
 def length(Vector xs not None):
@@ -511,7 +527,7 @@ def hsv(Vector c):
     return hsl_to_rgb(h, 0 if l == 0 or l == 1 else (v - l) / min(l, 1 - l), l)
 
 
-FUNCTIONS = {
+STATIC_FUNCTIONS = {
     'uniform': Vector(Uniform),
     'beta': Vector(Beta),
     'normal': Vector(Normal),
@@ -544,4 +560,9 @@ FUNCTIONS = {
     'zip': Vector(zipv),
     'hsl': Vector(hsl),
     'hsv': Vector(hsv),
+}
+
+DYNAMIC_FUNCTIONS = {
+    'read': Vector(read_text),
+    'csv': Vector(read_csv),
 }

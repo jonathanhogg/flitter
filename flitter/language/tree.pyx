@@ -6,16 +6,19 @@ Language syntax/evaluation tree
 
 cimport cython
 
-from .functions import FUNCTIONS
+from ..cache import SharedCache
+from .functions import STATIC_FUNCTIONS, DYNAMIC_FUNCTIONS
 from .. cimport model
 
 
-cdef dict builtins_ = {
+cdef dict static_builtins = {
     'true': model.true_,
     'false': model.false_,
     'null': model.null_,
 }
-builtins_.update(FUNCTIONS)
+static_builtins.update(STATIC_FUNCTIONS)
+
+cdef dict dynamic_builtins = DYNAMIC_FUNCTIONS
 
 cdef Literal NoOp = Literal(model.null_)
 
@@ -68,14 +71,26 @@ cdef class Top(Expression):
     def __init__(self, tuple expressions):
         self.expressions = expressions
 
-    def run(self, state, **kwargs):
-        cdef dict variables = {}
+    def run(self, dict state=None, dict variables=None):
+        cdef dict context_vars = None
         cdef str key
-        for key, value in kwargs.items():
-            variables[key] = model.Vector._coerce(value)
-        cdef model.Context context = model.Context(state=state, variables=variables)
+        if variables is not None:
+            context_vars = {}
+            for key, value in variables.items():
+                context_vars[key] = model.Vector._coerce(value)
+        cdef model.Context context = model.Context(state=state, variables=context_vars)
         self.evaluate(context)
         return context
+
+    def simplify(self, dict state=None, dict variables=None):
+        cdef dict context_vars = None
+        cdef str key
+        if variables is not None:
+            context_vars = {}
+            for key, value in variables.items():
+                context_vars[key] = model.Vector._coerce(value)
+        cdef model.Context context = model.Context(state=state, variables=context_vars)
+        return self.partially_evaluate(context)
 
     cpdef model.VectorLike evaluate(self, model.Context context):
         cdef model.VectorLike result
@@ -99,6 +114,12 @@ cdef class Top(Expression):
         cdef Expression expr
         for expr in self.expressions:
             expressions.append(expr.partially_evaluate(context))
+        cdef str name
+        cdef model.VectorLike value
+        cdef list bindings = []
+        for name, value in context.variables.items():
+            bindings.append(PolyBinding((name,), Literal(value)))
+        expressions.append(Let(tuple(bindings)))
         return Top(tuple(expressions))
 
     cpdef object reduce(self, func):
@@ -133,6 +154,41 @@ cdef class Pragma(Expression):
 
     def __repr__(self):
         return f'Pragma({self.name!r}, {self.expr!r})'
+
+
+cdef class Import(Expression):
+    cdef readonly tuple names
+    cdef readonly Expression filename
+
+    def __init__(self, tuple names, Expression filename):
+        self.names = names
+        self.filename = filename
+
+    cpdef model.VectorLike evaluate(self, model.Context context):
+        cdef model.Vector value = self.filename.evaluate(context)
+        cdef str filename = value.as_string()
+        cdef Top top
+        cdef model.Context module_context
+        cdef model.VectorLike result
+        cdef str name
+        if filename:
+            top = SharedCache[filename].read_flitter_program()
+            if top is not None:
+                module_context = model.Context()
+                result = top.evaluate(module_context)
+                for name in self.names:
+                    if name in module_context.variables:
+                        context.variables[name] = module_context.variables[name]
+        return model.null_
+
+    cpdef Expression partially_evaluate(self, model.Context context):
+        return Import(self.names, self.filename.partially_evaluate(context))
+
+    cpdef object reduce(self, func):
+        return func(self, self.filename.reduce(func))
+
+    def __repr__(self):
+        return f'Import({self.filename!r})'
 
 
 cdef class Sequence(Expression):
@@ -220,7 +276,9 @@ cdef class Name(Expression):
         cdef model.VectorLike value
         if (value := context.variables.get(self.name)) is not None:
             return value.copynodes()
-        if (value := builtins_.get(self.name)) is not None:
+        if (value := static_builtins.get(self.name)) is not None:
+            return value
+        if (value := dynamic_builtins.get(self.name)) is not None:
             return value
         return model.null_
 
@@ -232,9 +290,10 @@ cdef class Name(Expression):
                 return Literal(value.copynodes())
             else:
                 return self
-        elif (value := builtins_.get(self.name)) is not None:
+        elif (value := static_builtins.get(self.name)) is not None:
             return Literal(value)
-        context.unbound.add(self.name)
+        elif self.name not in dynamic_builtins:
+            context.unbound.add(self.name)
         return self
 
     def __repr__(self):
@@ -762,7 +821,7 @@ cdef class Attributes(Expression):
                     if node._attributes or n > 1:
                         variables = saved.copy()
                         for attr, value in node._attributes.items():
-                            if attr not in builtins_:
+                            if attr not in static_builtins and attr not in dynamic_builtins:
                                 variables.setdefault(attr, value)
                         context.variables = variables
                     else:
@@ -771,11 +830,13 @@ cdef class Attributes(Expression):
                         value = binding.expr.evaluate(context)
                         if value.length:
                             node._attributes[binding.name] = value
-                            if i < n-1 and binding.name not in saved and binding.name not in builtins_:
+                            if i < n-1 and binding.name not in saved and binding.name not in static_builtins \
+                                                                     and binding.name not in dynamic_builtins:
                                 context.variables[binding.name] = value
                         elif binding.name in node._attributes:
                             del node._attributes[binding.name]
-                            if i < n-1 and binding.name not in saved and binding.name not in builtins_:
+                            if i < n-1 and binding.name not in saved and binding.name not in static_builtins \
+                                                                     and binding.name not in dynamic_builtins:
                                 del context.variables[binding.name]
             context.variables = saved
         return nodes
