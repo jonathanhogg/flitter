@@ -414,7 +414,6 @@ class Window(ProgramNode):
         if self.glctx.extra['linear']:
             self.glctx.disable_direct(pyglet.gl.GL_FRAMEBUFFER_SRGB)
         self.window.flip()
-        self.window.dispatch_events()
         if count := self.glctx.gc():
             logger.trace("Collected {} OpenGL objects", count)
 
