@@ -19,7 +19,7 @@ top : _HASHBANG? _NL? expressions
 
 sequence : expressions
 
-expressions : expression+ -> tuple
+expressions : expression* -> tuple
 
 ?expression : node _NL
             | node "^" _NL _INDENT sequence _DEDENT -> prepend
