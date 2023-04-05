@@ -49,7 +49,6 @@ class Controller:
             self.global_state = {}
         self.global_state_dirty = False
         self.state = None
-        self.program_top = None
         self.windows = []
         self.lasers = []
         self.dmx = []
@@ -65,27 +64,22 @@ class Controller:
         self.next_page = None
         self.current_page = None
         self.current_path = None
-        self.current_source = None
 
     def load_page(self, filename):
         page_number = len(self.pages)
         path = SharedCache[filename]
-        source = path.read_text(encoding='utf8')
-        program_top = self.load_source(source, self.defined_variables)
-        self.pages.append((path, source, program_top, self.global_state.setdefault(page_number, {})))
-        logger.success("Loaded page {}: {}", page_number, path)
+        self.pages.append((path, self.global_state.setdefault(page_number, {})))
+        logger.info("Added code page {}: {}", page_number, path)
 
     def switch_to_page(self, page_number):
         if self.pages is not None and 0 <= page_number < len(self.pages):
             self.pads = {}
             self.encoders = {}
-            path, source, program_top, state = self.pages[page_number]
+            path, state = self.pages[page_number]
             self.state = state
             self.state_timestamp = self.counter.clock()
-            self.program_top = program_top
-            self.current_page = page_number
             self.current_path = path
-            self.current_source = source
+            self.current_page = page_number
             SharedCache.set_root(self.current_path)
             logger.info("Switched to page {}: {}", page_number, self.current_path)
             self.enqueue_reset()
@@ -98,19 +92,6 @@ class Controller:
             self.enqueue_page_status()
             for window in self.windows:
                 window.purge()
-
-    @staticmethod
-    def load_source(source, variables={}):
-        start = time.perf_counter()
-        initial_tree = parse(source)
-        mid = time.perf_counter()
-        tree = initial_tree.partially_evaluate(Context(variables=variables.copy()))
-        end = time.perf_counter()
-        logger.debug("Parse in {:.1f}ms, partial evaluation in {:.1f}ms", (mid-start)*1000, (end-mid)*1000)
-        logger.opt(lazy=True).debug("Tree node count before partial-evaluation {before} and after {after}",
-                                    before=lambda: initial_tree.reduce(lambda e, *rs: sum(rs) + 1),
-                                    after=lambda: tree.reduce(lambda e, *rs: sum(rs) + 1))
-        return tree
 
     def get(self, key, default=None):
         if (value := self.state.get(Vector.coerce(key), None)) is not None:
@@ -156,17 +137,17 @@ class Controller:
         return null
 
     async def update_windows(self, graph, **kwargs):
-        count = 0
         async with asyncio.TaskGroup() as group:
             references = {}
-            for i, node in enumerate(graph.select_below('window.')):
-                if i == len(self.windows):
+            count = 0
+            for node in graph.select_below('window.'):
+                if count == len(self.windows):
                     if self.multiprocess:
                         w = process.Proxy(window.Window, screen=self.screen, fullscreen=self.fullscreen, vsync=self.vsync)
                     else:
                         w = window.Window(screen=self.screen, fullscreen=self.fullscreen, vsync=self.vsync)
                     self.windows.append(w)
-                group.create_task(self.windows[i].update(node, references=references, **kwargs))
+                group.create_task(self.windows[count].update(node, references=references, **kwargs))
                 count += 1
         while len(self.windows) > count:
             self.windows.pop().destroy()
@@ -372,21 +353,44 @@ class Controller:
             execution = render = housekeeping = 0
             performance = 1
             gc.disable()
-            program_top = self.program_top
+            run_top = current_top = None
+            # platform_event_loop.start()
             while True:
-                frames.append(frame_time)
-                execution -= self.counter.clock()
+                housekeeping -= self.counter.clock()
 
-                if self.state_timestamp is not None and program_top is not self.program_top:
+                if self.state_timestamp is not None and run_top is not current_top:
                     logger.debug("Undo partial-evaluation on state")
-                    program_top = self.program_top
+                    run_top = current_top
+
+                program_top = self.current_path.read_flitter_program(**self.defined_variables)
+                if program_top is not current_top:
+                    level = 'SUCCESS' if current_top is None else 'INFO'
+                    logger.log(level, "Loaded page {}: {}", self.current_page, self.current_path)
+                    run_top = current_top = program_top
+
+                if current_top is not None and self.state_eval_wait and \
+                        ((self.state_timestamp is not None and self.counter.clock() > self.state_timestamp + self.state_eval_wait) or
+                         (self.state_timestamp is None and run_top is current_top)):
+                    start = time.perf_counter()
+                    run_top = current_top.partially_evaluate(Context(state=self.state))
+                    logger.debug("Partially-evaluated current program on state in {:.1f}ms", (time.perf_counter()-start)*1000)
+                    logger.opt(lazy=True).debug("Tree node count after partial-evaluation {after}",
+                                                after=lambda: run_top.reduce(lambda e, *rs: sum(rs) + 1))
+                    self.state_timestamp = None
+
                 beat = self.counter.beat_at_time(frame_time)
                 delta = beat - last
                 last = beat
                 names = {'beat': beat, 'quantum': self.counter.quantum, 'tempo': self.counter.tempo,
                          'delta': delta, 'clock': frame_time, 'performance': performance}
-                context = program_top.run(self.state, read=self.read, csv=self.csv, debug=self.debug, **names)
 
+                now = self.counter.clock()
+                housekeeping += now
+                execution -= now
+                if current_top is not None:
+                    context = run_top.run(self.state, read=self.read, csv=self.csv, debug=self.debug, **names)
+                else:
+                    context = Context()
                 now = self.counter.clock()
                 execution += now
                 render -= now
@@ -402,6 +406,9 @@ class Controller:
                 render += now
                 housekeeping -= now
 
+                del context
+                SharedCache.clean()
+
                 if self.queue:
                     await self.osc_sender.send_bundle_from_queue(self.queue)
 
@@ -409,15 +416,6 @@ class Controller:
                     logger.debug("Auto-reset state")
                     self.reset_state()
                     program_top = self.program_top
-
-                if self.state_eval_wait and self.state_timestamp is not None and now > self.state_timestamp + self.state_eval_wait:
-                    start = time.perf_counter()
-                    program_top = self.program_top.partially_evaluate(Context(state=self.state))
-                    logger.debug("Partially-evaluated current program on state in {:.1f}ms", (time.perf_counter()-start)*1000)
-                    logger.opt(lazy=True).debug("Tree node count before partial-evaluation {before} and after {after}",
-                                                before=lambda: self.program_top.reduce(lambda e, *rs: sum(rs) + 1),
-                                                after=lambda: program_top.reduce(lambda e, *rs: sum(rs) + 1))
-                    self.state_timestamp = None
 
                 if self.global_state_dirty and self.state_file is not None and frame_time > dump_time + 1:
                     logger.debug("Saving state")
@@ -431,34 +429,16 @@ class Controller:
                         self.reset_state()
                     self.switch_to_page(self.next_page)
                     self.next_page = None
-                    program_top = self.program_top
+                    run_top = current_top = None
                     performance = 1
                     count = gc.collect(2)
                     logger.trace("Collected {} objects (full collection)", count)
 
-                if (source := self.current_path.read_text(encoding='utf8')) != self.current_source:
-                    try:
-                        program_top = self.program_top = self.load_source(source, self.defined_variables)
-                        self.pages[self.current_page] = self.current_path, source, self.program_top, self.state
-                        if self.state_eval_wait and self.state_timestamp is None:
-                            start = time.perf_counter()
-                            program_top = self.program_top.partially_evaluate(Context(state=self.state))
-                            logger.debug("Partially-evaluated current program on state in {:.1f}ms", (time.perf_counter()-start)*1000)
-                            logger.opt(lazy=True).debug("Tree node count after partial-evaluation {after}",
-                                                        after=lambda: program_top.reduce(lambda e, *rs: sum(rs) + 1))
-                            self.state_timestamp = None
-                        logger.info("Reloaded page {}: {}", self.current_page, self.current_path)
-                    except Exception:
-                        logger.exception("Error reloading page")
-                    self.current_source = source
-
-                del context
-                if count := gc.collect(0):
+                elif count := gc.collect(0):
                     logger.trace("Collected {} objects", count)
 
-                SharedCache.clean()
-
                 now = self.counter.clock()
+                frames.append(now)
                 frame_period = now - frame_time
                 housekeeping += now
                 frame_time += 1 / self.target_fps

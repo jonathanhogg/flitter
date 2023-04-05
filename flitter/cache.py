@@ -11,7 +11,9 @@ from loguru import logger
 import skia
 import trimesh
 
-from .model import Vector
+from .language.tree import Top
+from .language.parser import parse
+from .model import Vector, Context
 
 
 class CachePath:
@@ -53,6 +55,36 @@ class CachePath:
                 logger.debug("Read text file: {}", self._path)
         self._cache[key] = mtime, text
         return text
+
+    def read_flitter_program(self, **definitions):
+        self._touched = time.monotonic()
+        mtime = self._path.stat().st_mtime if self._path.exists() else None
+        if 'flitter' in self._cache:
+            cache_mtime, top = self._cache['flitter']
+            if mtime == cache_mtime:
+                return top
+        if mtime is None:
+            logger.warning("Program file not found: {}", self._path)
+            top = None
+        else:
+            try:
+                source = self._path.read_text(encoding='utf8')
+                start = time.perf_counter()
+                initial_top = parse(source)
+                mid = time.perf_counter()
+                top = initial_top.partially_evaluate(Context(variables=definitions.copy()))
+                end = time.perf_counter()
+                logger.debug("Parse in {:.1f}ms, partial evaluation in {:.1f}ms", (mid-start)*1000, (end-mid)*1000)
+                logger.opt(lazy=True).debug("Tree node count before partial-evaluation {before} and after {after}",
+                                            before=lambda: initial_top.reduce(lambda e, *rs: sum(rs) + 1),
+                                            after=lambda: top.reduce(lambda e, *rs: sum(rs) + 1))
+            except Exception as exc:
+                logger.opt(exception=exc).warning("Error reading program file: {}", self._path)
+                top = None
+            else:
+                logger.debug("Read program file: {}", self._path)
+        self._cache['flitter'] = mtime, top
+        return top
 
     def read_csv_vector(self, row_number):
         self._touched = time.monotonic()
@@ -228,10 +260,12 @@ class FileCache:
             path = path._path
         else:
             path = Path(path)
-        assert path.exists()
-        if not path.is_dir():
-            path = path.parent
-        self._root = path
+        if path.exists():
+            if not path.is_dir():
+                path = path.parent
+            self._root = path
+        else:
+            self._root = Path('.')
 
     def __getitem__(self, path):
         path = Path(path)
