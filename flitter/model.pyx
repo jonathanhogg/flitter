@@ -1403,27 +1403,12 @@ cdef class Node:
 
 
 cdef class Context:
-    def __cinit__(self, dict variables=None, dict state=None, Node graph=None, dict pragmas=None):
+    def __cinit__(self, dict variables=None, dict state=None, Node graph=None, dict pragmas=None, str path=None, Context parent=None):
         self.variables = variables if variables is not None else {}
         self.state = state if state is not None else {}
         self.graph = graph if graph is not None else Node.__new__(Node, 'root')
         self.pragmas = pragmas if pragmas is not None else {}
+        self.path = path
+        self.parent = parent
         self.unbound = set()
-        self._stack = []
-
-    def __enter__(self):
-        self._stack.append((self.variables, self.unbound))
-        self.variables = self.variables.copy()
-        self.unbound = set()
-        return self
-
-    def __exit__(self, *args):
-        self.variables, self.unbound = self._stack.pop()
-
-    def merge_under(self, Node node):
-        for attr, value in node.attributes.items():
-            if attr not in self.variables:
-                self.variables[attr] = value
-
-    def pragma(self, str name, value):
-        self.pragmas[name] = value
+        self.errors = set()

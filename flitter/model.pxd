@@ -124,4 +124,6 @@ cdef class Context:
     cdef readonly dict pragmas
     cdef readonly dict state
     cdef readonly Node graph
-    cdef list _stack
+    cdef readonly str path
+    cdef readonly Context parent
+    cdef readonly set errors
