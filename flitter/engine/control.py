@@ -339,7 +339,7 @@ class Controller:
             performance = 1
             gc.disable()
             run_top = current_top = None
-            # platform_event_loop.start()
+            errors = set()
             while True:
                 housekeeping -= self.counter.clock()
 
@@ -376,6 +376,10 @@ class Controller:
                     context = run_top.run(state=self.state, variables=names)
                 else:
                     context = Context()
+                new_errors = context.errors.difference(errors)
+                errors = context.errors
+                for error in new_errors:
+                    logger.error("Evaluation error: {}", error)
                 now = self.counter.clock()
                 execution += now
                 render -= now

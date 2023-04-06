@@ -9,9 +9,10 @@ from loguru import logger
 
 
 class CachePath:
-    def __init__(self, path):
+    def __init__(self, path, absolute):
         self._touched = time.monotonic()
         self._path = path
+        self._absolute = absolute
         self._cache = {}
 
     def cleanup(self):
@@ -67,6 +68,7 @@ class CachePath:
                 start = time.perf_counter()
                 source = self._path.read_text(encoding='utf8')
                 initial_top = parse(source)
+                initial_top.set_path(self._absolute)
                 mid = time.perf_counter()
                 top = initial_top.simplify(variables=definitions)
                 end = time.perf_counter()
@@ -82,7 +84,7 @@ class CachePath:
                     logger.warning("Unable to re-parse {}, error at line {} column {}:\n{}",
                                    self._path, exc.line, exc.column, exc.context)
             except Exception as exc:
-                logger.opt(exception=exc).warning("Error reading program file: {}", self._path)
+                logger.opt(exception=exc).error("Error reading program file: {}", self._path)
                 top = None
         self._cache['flitter'] = mtime, top
         return top
@@ -244,7 +246,7 @@ class CachePath:
         return trimesh_model
 
     def __str__(self):
-        return str(self._path)
+        return self._absolute
 
 
 class FileCache:
@@ -273,6 +275,20 @@ class FileCache:
         else:
             self._root = Path('.')
 
+    def get_with_root(self, path, root):
+        path = Path(path)
+        if not path.is_absolute():
+            root = Path(root)
+            if not root.is_dir():
+                root = root.parent
+            path = root / path
+        key = str(path.resolve())
+        if key in self._cache:
+            return self._cache[key]
+        path = CachePath(path, key)
+        self._cache[key] = path
+        return path
+
     def __getitem__(self, path):
         path = Path(path)
         if not path.is_absolute():
@@ -280,7 +296,7 @@ class FileCache:
         key = str(path.resolve())
         if key in self._cache:
             return self._cache[key]
-        path = CachePath(path)
+        path = CachePath(path, key)
         self._cache[key] = path
         return path
 
