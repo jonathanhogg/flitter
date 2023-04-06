@@ -141,7 +141,7 @@ cdef class Vector:
     cdef void deallocate_numbers(self):
         if self.numbers and self.length > 16:
             PyMem_Free(self.numbers)
-            self.numbers = NULL
+        self.numbers = NULL
 
     @property
     def numeric(self):
