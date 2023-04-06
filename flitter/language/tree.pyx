@@ -113,13 +113,17 @@ cdef class Top(Expression):
         cdef list expressions = []
         cdef Expression expr
         for expr in self.expressions:
-            expressions.append(expr.partially_evaluate(context))
+            expr = expr.partially_evaluate(context)
+            if not isinstance(expr, Literal) or (<Literal>expr).value.length:
+                expressions.append(expr)
         cdef str name
         cdef model.VectorLike value
         cdef list bindings = []
         for name, value in context.variables.items():
-            bindings.append(PolyBinding((name,), Literal(value)))
-        expressions.append(Let(tuple(bindings)))
+            if value is not None:
+                bindings.append(PolyBinding((name,), Literal(value)))
+        if bindings:
+            expressions.append(Let(tuple(bindings)))
         return Top(tuple(expressions))
 
     cpdef object reduce(self, func):
@@ -177,18 +181,23 @@ cdef class Import(Expression):
                 module_context = model.Context()
                 result = top.evaluate(module_context)
                 for name in self.names:
-                    if name in module_context.variables:
-                        context.variables[name] = module_context.variables[name]
+                    context.variables[name] = module_context.variables[name] if name in module_context.variables else model.null_
+            else:
+                for name in self.names:
+                    context.variables[name] = model.null_
         return model.null_
 
     cpdef Expression partially_evaluate(self, model.Context context):
+        cdef str name
+        for name in self.names:
+            context.variables[name] = None
         return Import(self.names, self.filename.partially_evaluate(context))
 
     cpdef object reduce(self, func):
         return func(self, self.filename.reduce(func))
 
     def __repr__(self):
-        return f'Import({self.filename!r})'
+        return f'Import({self.names!r}, {self.filename!r})'
 
 
 cdef class Sequence(Expression):
@@ -1299,7 +1308,12 @@ cdef class Function(Expression):
             parameters.append(Binding(parameter.name, expr))
         cdef dict saved = context.variables
         cdef set unbound = context.unbound
-        context.variables = saved.copy()
+        cdef str key
+        cdef model.VectorLike value
+        context.variables = {}
+        for key, value in saved.items():
+            if value is not None:
+                context.variables[key] = value
         for parameter in parameters:
             context.variables[parameter.name] = None
         context.unbound = set()
@@ -1312,6 +1326,7 @@ cdef class Function(Expression):
         if literal:
             context.variables[self.name] = model.Vector.__new__(model.Vector, function)
             return NoOp
+        context.variables[self.name] = None
         return function
 
     cpdef object reduce(self, func):
