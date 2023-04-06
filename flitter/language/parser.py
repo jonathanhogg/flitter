@@ -9,6 +9,7 @@ from pathlib import Path
 from sys import intern
 
 from lark import Lark, Transformer
+from lark.exceptions import UnexpectedInput
 from lark.indenter import Indenter
 from lark.visitors import v_args
 
@@ -23,6 +24,14 @@ class FlitterIndenter(Indenter):
     INDENT_type = '_INDENT'
     DEDENT_type = '_DEDENT'
     tab_len = 8
+
+
+class ParseError(Exception):
+    def __init__(self, msg, line, column, context):
+        super().__init__(msg)
+        self.line = line
+        self.column = column
+        self.context = context
 
 
 @v_args(inline=True)
@@ -103,10 +112,14 @@ class FlitterTransformer(Transformer):
     top = tree.Top
 
 
-GRAMMAR = (Path(__file__).parent / 'grammar.lark').open('r', encoding='utf8').read()
+GRAMMAR = (Path(__file__).parent / 'grammar.lark').read_text(encoding='utf8')
 PARSER = Lark(GRAMMAR, postlex=FlitterIndenter(), regex=True, start='top', maybe_placeholders=True,
               parser='lalr', transformer=FlitterTransformer())
 
 
 def parse(source):
-    return PARSER.parse(source)
+    try:
+        return PARSER.parse(source)
+    except UnexpectedInput as exc:
+        raise ParseError(f"Parse error in source at line {exc.line} column {exc.column}",
+                         line=exc.line, column=exc.column, context=exc.get_context(source).rstrip()) from exc

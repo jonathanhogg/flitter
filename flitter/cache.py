@@ -50,13 +50,15 @@ class CachePath:
 
     def read_flitter_program(self, definitions=None):
         from .model import Vector, Context
-        from .language.parser import parse
+        from .language.parser import parse, ParseError
         self._touched = time.monotonic()
         mtime = self._path.stat().st_mtime if self._path.exists() else None
         if 'flitter' in self._cache:
             cache_mtime, top = self._cache['flitter']
             if mtime == cache_mtime:
                 return top
+        else:
+            top = None
         if mtime is None:
             logger.warning("Program file not found: {}", self._path)
             top = None
@@ -72,6 +74,13 @@ class CachePath:
                 logger.opt(lazy=True).debug("Tree node count before partial-evaluation {before} and after {after}",
                                             before=lambda: initial_top.reduce(lambda e, *rs: sum(rs) + 1),
                                             after=lambda: top.reduce(lambda e, *rs: sum(rs) + 1))
+            except ParseError as exc:
+                if top is None:
+                    logger.error("Error parsing {} at line {} column {}:\n{}",
+                                 self._path, exc.line, exc.column, exc.context)
+                else:
+                    logger.warning("Unable to re-parse {}, error at line {} column {}:\n{}",
+                                   self._path, exc.line, exc.column, exc.context)
             except Exception as exc:
                 logger.opt(exception=exc).warning("Error reading program file: {}", self._path)
                 top = None
