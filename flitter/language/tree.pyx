@@ -692,15 +692,18 @@ cdef class Slice(Expression):
 
     cpdef model.VectorLike evaluate(self, model.Context context):
         cdef model.VectorLike expr = self.expr.evaluate(context)
-        cdef model.Vector index = self.index.evaluate(context)
-        return expr.slice(index)
+        cdef model.VectorLike index = self.index.evaluate(context)
+        if isinstance(index, model.Vector):
+            return expr.slice(<model.Vector>index)
+        context.errors.add(f"Slice with non-vector index {index.__class__.__name__}")
+        return model.null_
 
     cpdef Expression partially_evaluate(self, model.Context context):
         cdef Expression expr = self.expr.partially_evaluate(context)
         cdef Expression index = self.index.partially_evaluate(context)
         cdef model.VectorLike expr_value
         cdef model.Vector index_value
-        if isinstance(expr, Literal) and isinstance(index, Literal):
+        if isinstance(expr, Literal) and isinstance(index, Literal) and isinstance((<Literal>index).value, model.Vector):
             expr_value = (<Literal>expr).value
             index_value = (<Literal>index).value
             return Literal(expr_value.slice(index_value))
@@ -722,8 +725,8 @@ cdef class Call(Expression):
         self.args = args
 
     cpdef model.VectorLike evaluate(self, model.Context context):
-        cdef model.Vector function = self.function.evaluate(context)
-        if not function.length or function.objects is None:
+        cdef model.VectorLike function = self.function.evaluate(context)
+        if not isinstance(function, model.Vector) or (<model.Vector>function).objects is None:
             return model.null_
         cdef list args = []
         cdef Expression arg
@@ -736,7 +739,7 @@ cdef class Call(Expression):
         cdef dict saved, params
         cdef Binding parameter
         cdef int i
-        for func in function.objects:
+        for func in (<model.Vector>function).objects:
             if callable(func):
                 try:
                     results.append(func(*args))
@@ -810,10 +813,10 @@ cdef class Tag(Expression):
         self.tag = tag
 
     cpdef model.VectorLike evaluate(self, model.Context context):
-        cdef model.Vector nodes = self.node.evaluate(context)
+        cdef model.VectorLike nodes = self.node.evaluate(context)
         cdef model.Node node
-        if nodes.isinstance(model.Node):
-            for node in nodes.objects:
+        if isinstance(nodes, model.Vector) and (<model.Vector>nodes).isinstance(model.Node):
+            for node in (<model.Vector>nodes).objects:
                 node._tags.add(self.tag)
         return nodes
 
@@ -821,7 +824,7 @@ cdef class Tag(Expression):
         cdef Expression node = self.node.partially_evaluate(context)
         cdef model.Vector nodes
         cdef model.Node n
-        if isinstance(node, Literal):
+        if isinstance(node, Literal) and isinstance((<Literal>node).value, model.Vector):
             nodes = (<Literal>node).value
             if nodes.isinstance(model.Node):
                 for n in nodes.objects:
@@ -849,11 +852,11 @@ cdef class Attributes(Expression):
         cdef model.Vector value
         cdef dict variables, saved
         cdef Binding binding
-        cdef model.Vector nodes = self.node.evaluate(context)
+        cdef model.VectorLike nodes = self.node.evaluate(context)
         cdef int i, n=len(self.bindings)
-        if nodes.objects is not None:
+        if isinstance(nodes, model.Vector) and (<model.Vector>nodes).objects is not None:
             saved = context.variables
-            for item in nodes.objects:
+            for item in (<model.Vector>nodes).objects:
                 if isinstance(item, model.Node):
                     node = item
                     if node._attributes or n > 1:
@@ -892,7 +895,7 @@ cdef class Attributes(Expression):
         node = node.partially_evaluate(context)
         cdef model.Vector nodes
         cdef model.Node n
-        if isinstance(node, Literal):
+        if isinstance(node, Literal) and isinstance((<Literal>node).value, model.Vector):
             nodes = (<Literal>node).value
             if nodes.isinstance(model.Node):
                 while bindings and isinstance((<Binding>bindings[-1]).expr, Literal):
@@ -945,18 +948,19 @@ cdef class Append(Expression):
         self.children = children
 
     cpdef model.VectorLike evaluate(self, model.Context context):
-        cdef model.Vector nodes = self.node.evaluate(context)
-        cdef model.Vector children = self.children.evaluate(context)
+        cdef model.VectorLike nodes = self.node.evaluate(context)
+        cdef model.VectorLike children = self.children.evaluate(context)
         cdef model.Node node, child
         cdef int i, n = nodes.length
-        if nodes.isinstance(model.Node) and children.isinstance(model.Node):
+        if isinstance(nodes, model.Vector) and isinstance(children, model.Vector) and \
+                (<model.Vector>nodes).isinstance(model.Node) and (<model.Vector>children).isinstance(model.Node):
             for i in range(n):
-                node = nodes.objects[i]
+                node = (<model.Vector>nodes).objects[i]
                 if i < n-1:
-                    for child in children.objects:
+                    for child in (<model.Vector>children).objects:
                         node.append(child.copy())
                 else:
-                    for child in children.objects:
+                    for child in (<model.Vector>children).objects:
                         node.append(child)
         return nodes
 
@@ -965,7 +969,8 @@ cdef class Append(Expression):
         cdef Expression children = self.children.partially_evaluate(context)
         cdef model.Vector nodes, childs
         cdef model.Node n, c
-        if isinstance(node, Literal) and isinstance(children, Literal):
+        if isinstance(node, Literal) and isinstance(children, Literal) and \
+                isinstance((<Literal>node).value, model.Vector) and isinstance((<Literal>children).value, model.Vector):
             nodes = (<Literal>node).value
             childs = (<Literal>children).value
             if nodes.isinstance(model.Node) and childs.isinstance(model.Node):
@@ -984,18 +989,19 @@ cdef class Append(Expression):
 
 cdef class Prepend(Append):
     cpdef model.VectorLike evaluate(self, model.Context context):
-        cdef model.Vector nodes = self.node.evaluate(context)
-        cdef model.Vector children = self.children.evaluate(context)
+        cdef model.VectorLike nodes = self.node.evaluate(context)
+        cdef model.VectorLike children = self.children.evaluate(context)
         cdef model.Node node, child
         cdef int i, n = nodes.length
-        if nodes.isinstance(model.Node) and children.isinstance(model.Node):
+        if isinstance(nodes, model.Vector) and isinstance(children, model.Vector) and \
+                (<model.Vector>nodes).isinstance(model.Node) and (<model.Vector>children).isinstance(model.Node):
             for i in range(n):
-                node = nodes.objects[i]
+                node = (<model.Vector>nodes).objects[i]
                 if i < n-1:
-                    for child in reversed(children.objects):
+                    for child in reversed((<model.Vector>children).objects):
                         node.insert(child.copy())
                 else:
-                    for child in reversed(children.objects):
+                    for child in reversed((<model.Vector>children).objects):
                         node.insert(child)
         return nodes
 
@@ -1004,7 +1010,8 @@ cdef class Prepend(Append):
         cdef Expression children = self.children.partially_evaluate(context)
         cdef model.Vector nodes, childs
         cdef model.Node n, c
-        if isinstance(node, Literal) and isinstance(children, Literal):
+        if isinstance(node, Literal) and isinstance(children, Literal) and \
+                isinstance((<Literal>node).value, model.Vector) and isinstance((<Literal>children).value, model.Vector):
             nodes = (<Literal>node).value
             childs = (<Literal>children).value
             if nodes.isinstance(model.Node) and childs.isinstance(model.Node):
