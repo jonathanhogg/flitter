@@ -8,10 +8,10 @@
   "dependencies": {},
   "repository": {
     "type": "git",
-    "url": "https://git.outputarts.com/jonathan/language-flitter"
+    "url": "https://github.com/jonathanhogg/flitter"
   },
   "bugs": {
-    "url": "https://git.outputarts.com/jonathan/language-flitter/issues"
+    "url": "https://github.com/jonathanhogg/flitter/issues"
   },
   "license": "BSD"
 }

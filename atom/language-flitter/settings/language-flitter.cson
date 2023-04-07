@@ -1,0 +1,7 @@
+'.source.flitter':
+  'editor':
+    'autoIndentOnPaste': false
+    'softTabs': true
+    'tabLength': 4
+    'commentStart': '-- '
+    'increaseIndentPattern': '^\\s*([!@]\\s*[_a-zA-Z][_a-zA-Z0-9]*|for|if|elif|else|func)\\b.*$'
