@@ -118,6 +118,8 @@ class CachePath:
                     except ValueError:
                         pass
                     values.append(value)
+                while values and values[-1] == '':
+                    values.pop()
                 rows.append(model.Vector.coerce(values))
             except StopIteration:
                 logger.debug("Closed CSV file: {}", self._path)
