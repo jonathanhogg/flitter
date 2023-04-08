@@ -65,6 +65,7 @@ cdef class Instance:
 cdef class Model:
     cdef str name
     cdef bint flat
+    cdef bint invert
     cdef object trimesh_model
 
     def __hash__(self):
@@ -88,14 +89,17 @@ cdef class Model:
             return None, None
         logger.debug("Preparing model {}", name)
         cdef tuple buffers
+        faces = trimesh_model.faces[:,::-1] if self.invert else trimesh_model.faces
         if self.flat:
-            vertex_data = np.empty((len(trimesh_model.faces), 3, 2, 3), dtype='f4')
-            vertex_data[:,:,0] = trimesh_model.vertices[trimesh_model.faces]
-            vertex_data[:,:,1] = trimesh_model.face_normals[:,None,:]
+            face_normals = -trimesh_model.face_normals if self.invert else trimesh_model.face_normals
+            vertex_data = np.empty((len(faces), 3, 2, 3), dtype='f4')
+            vertex_data[:,:,0] = trimesh_model.vertices[faces]
+            vertex_data[:,:,1] = face_normals[:,None,:]
             buffers = (glctx.buffer(vertex_data), None)
         else:
-            vertex_data = np.hstack((trimesh_model.vertices, trimesh_model.vertex_normals)).astype('f4')
-            index_data = trimesh_model.faces.astype('i4')
+            vertex_normals = -trimesh_model.vertex_normals if self.invert else trimesh_model.vertex_normals
+            vertex_data = np.hstack((trimesh_model.vertices, vertex_normals)).astype('f4')
+            index_data = faces.astype('i4')
             buffers = (glctx.buffer(vertex_data), glctx.buffer(index_data))
         objects[name] = buffers
         return buffers
@@ -109,13 +113,16 @@ cdef class RenderSet:
 
 cdef class Box(Model):
     @staticmethod
-    cdef Box get(bint flat):
+    cdef Box get(bint flat, bint invert):
         cdef str name = '!box/flat' if flat else '!box'
+        if invert:
+            name += '/invert'
         cdef Box model = ModelCache.get(name)
         if model is None:
             model = Box.__new__(Box)
             model.name = name
             model.flat = flat
+            model.invert = invert
             model.trimesh_model = None
             ModelCache[name] = model
         return model
@@ -128,15 +135,18 @@ cdef class Sphere(Model):
     cdef int subdivisions
 
     @staticmethod
-    cdef Sphere get(bint flat, int subdivisions):
+    cdef Sphere get(bint flat, bint invert, int subdivisions):
         cdef str name = f'!sphere/{subdivisions}'
         if flat:
             name += '/flat'
+        if invert:
+            name += '/invert'
         cdef Sphere model = ModelCache.get(name)
         if model is None:
             model = Sphere.__new__(Sphere)
             model.name = name
             model.flat = flat
+            model.invert = invert
             model.subdivisions = subdivisions
             model.trimesh_model = None
             ModelCache[name] = model
@@ -150,15 +160,18 @@ cdef class Cylinder(Model):
     cdef int segments
 
     @staticmethod
-    cdef Cylinder get(bint flat, int segments):
+    cdef Cylinder get(bint flat, bint invert, int segments):
         cdef str name = f'!cylinder/{segments}'
         if flat:
             name += '/flat'
+        if invert:
+            name += '/invert'
         cdef Cylinder model = ModelCache.get(name)
         if model is None:
             model = Cylinder.__new__(Cylinder)
             model.name = name
             model.flat = flat
+            model.invert = invert
             model.segments = segments
             model.trimesh_model = None
             ModelCache[name] = model
@@ -172,15 +185,18 @@ cdef class LoadedModel(Model):
     cdef str filename
 
     @staticmethod
-    cdef LoadedModel get(bint flat, str filename):
+    cdef LoadedModel get(bint flat, bint invert, str filename):
         cdef str name = filename
         if flat:
             name += '/flat'
+        if invert:
+            name += '/invert'
         cdef LoadedModel model = ModelCache.get(name)
         if model is None:
             model = LoadedModel.__new__(LoadedModel)
             model.name = name
             model.flat = flat
+            model.invert = invert
             model.filename = filename
             model.trimesh_model = None
             ModelCache[name] = model
@@ -318,26 +334,30 @@ cdef void collect(Node node, Matrix44 model_matrix, Material material, RenderSet
 
     elif node.kind == 'box':
         flat = node.get_bool('flat', False)
-        model = Box.get(flat)
+        invert = node.get_bool('invert', False)
+        model = Box.get(flat, invert)
         add_instance(render_set.instances, model, node, model_matrix, material)
 
     elif node.kind == 'sphere':
         flat = node.get_bool('flat', False)
+        invert = node.get_bool('invert', False)
         subdivisions = node.get_int('subdivisions', 2)
-        model = Sphere.get(flat, subdivisions)
+        model = Sphere.get(flat, invert, subdivisions)
         add_instance(render_set.instances, model, node, model_matrix, material)
 
     elif node.kind == 'cylinder':
         flat = node.get_bool('flat', False)
+        invert = node.get_bool('invert', False)
         sections = node.get_int('sections', 32)
-        model = Cylinder.get(flat, sections)
+        model = Cylinder.get(flat, invert, sections)
         add_instance(render_set.instances, model, node, model_matrix, material)
 
     elif node.kind == 'model':
         filename = node.get('filename', 1, str)
         if filename:
             flat = node.get_bool('flat', False)
-            model = LoadedModel.get(flat, filename)
+            invert = node.get_bool('invert', False)
+            model = LoadedModel.get(flat, invert, filename)
             add_instance(render_set.instances, model, node, model_matrix, material)
 
 
