@@ -39,13 +39,14 @@ parser.add_argument('--multiprocess', action='store_true', default=False, help="
 parser.add_argument('--autoreset', type=float, help="Auto-reset state on idle")
 parser.add_argument('--evalstate', type=float, default=10, help="Partially-evaluate on state after stable period")
 parser.add_argument('--push', action='store_true', default=False, help="Start Ableton Push 2 interface")
+parser.add_argument('--lockstep', action='store_true', default=False, help="Run clock in non-realtime mode")
 parser.add_argument('--define', '-D', action='append', default=[], type=keyvalue, dest='defines', help="Define variable for evaluation")
 parser.add_argument('script', nargs='+', help="Script to execute")
 args = parser.parse_args()
 logger = configure_logger(args.level)
 controller = Controller(target_fps=args.fps, screen=args.screen, fullscreen=args.fullscreen, vsync=args.vsync,
                         state_file=args.state, multiprocess=args.multiprocess and not args.profile, autoreset=args.autoreset,
-                        state_eval_wait=args.evalstate, defined_variables=dict(args.defines))
+                        state_eval_wait=args.evalstate, realtime=not args.lockstep, defined_variables=dict(args.defines))
 for script in args.script:
     controller.load_page(script)
 controller.switch_to_page(0)

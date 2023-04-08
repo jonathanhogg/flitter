@@ -2,6 +2,7 @@
 General file cache
 """
 
+import fractions
 from pathlib import Path
 import time
 
@@ -26,6 +27,12 @@ class CachePath:
                     if container is not None:
                         container.close()
                         logger.debug("Closing video file: {}", self._path)
+                case 'video_output':
+                    container, stream, *_ = value
+                    for packet in stream.encode():
+                        container.mux(packet)
+                    container.close()
+                    logger.debug("Flushed and closed video output file: {}", self._path)
 
     def read_text(self, encoding=None, errors=None):
         self._touched = time.monotonic()
@@ -224,6 +231,38 @@ class CachePath:
             return ratio, *frames
         else:
             return 0, None, None
+
+    def write_video_frame(self, data, timestamp, width, height, codec='h264', fps=60, quality=None):
+        import av
+        self._touched = time.monotonic()
+        key = 'video_output'
+        container = stream = None
+        config = [width, height, codec, fps, quality]
+        if key in self._cache:
+            container, stream, start, *cached_config = self._cache[key]
+            if cached_config != config:
+                logger.debug("Closing output video container as configuration has changed")
+                container.close()
+                container = stream = None
+        if container is None:
+            if self._path.exists():
+                logger.warning("Existing video file will be overwritten: {}", self._path)
+            container = av.open(str(self._path), mode='w')
+            options = {}
+            if quality:
+                options['crf'] = str(quality)
+            stream = container.add_stream(codec, rate=fps, options=options)
+            stream.width = width
+            stream.height = height
+            stream.pix_fmt = 'yuv420p'
+            stream.codec_context.time_base = fractions.Fraction(1, fps*100)
+            self._cache[key] = container, stream, timestamp, *config
+            start = timestamp
+        frame = av.VideoFrame(width, height, 'rgba')
+        frame.planes[0].update(data)
+        frame.pts = int(round((timestamp - start) / stream.codec_context.time_base))
+        for packet in stream.encode(frame):
+            container.mux(packet)
 
     def read_trimesh_model(self):
         import trimesh

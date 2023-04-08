@@ -16,6 +16,7 @@ import moderngl
 import numpy as np
 from pathlib import Path
 import PIL.Image
+import PIL.ImageCms
 import pyglet
 if sys.platform == 'darwin':
     pyglet.options['shadow_window'] = False
@@ -97,30 +98,6 @@ class SceneNode:
         self.create(node, resized, **kwargs)
         await self.descend(node, **kwargs)
         self.render(node, **kwargs)
-        if filename := node.get('snapshot', 1, str):
-            filename = Path(filename)
-            if (texture := self.texture) is not None and not filename.exists() and filename.suffix in PIL.Image.registered_extensions():
-                save_time = -time.perf_counter()
-                data = texture.read()
-                if texture.dtype == 'f1' and not self.glctx.extra['linear']:
-                    image = PIL.Image.frombytes('RGBA', (self.width, self.height), data)
-                else:
-                    if texture.dtype == 'f1':
-                        array = np.ndarray(shape=(self.height, self.width, 4), dtype='u1', buffer=data).astype('float')
-                        array /= 255
-                    else:
-                        array = np.ndarray(shape=(self.height, self.width, 4), dtype=texture.dtype, buffer=data).astype('float')
-                    if self.glctx.extra['linear']:
-                        array **= (1/2.2)
-                    array *= 255
-                    np.clip(array, 0, 255, array)
-                    image = PIL.Image.fromarray(array.astype('u1'), mode='RGBA')
-                if filename.suffix.lower() == '.png':
-                    image.transpose(PIL.Image.FLIP_TOP_BOTTOM).save(filename)
-                else:
-                    image.convert('RGB').transpose(PIL.Image.FLIP_TOP_BOTTOM).save(filename)
-                save_time += time.perf_counter()
-                logger.success("Saved snapshot of {} to '{}' in {:.1f}s", self.name, filename, save_time)
 
     def similar_to(self, node):
         return node.tags and node.tags == self.tags
@@ -130,7 +107,8 @@ class SceneNode:
         existing = self.children
         updated = []
         for child in node.children:
-            cls = {'reference': Reference, 'shader': Shader, 'canvas': Canvas, 'canvas3d': Canvas3D, 'video': Video}[child.kind]
+            cls = {'reference': Reference, 'shader': Shader, 'canvas': Canvas, 'canvas3d': Canvas3D,
+                   'record': Record, 'video': Video}[child.kind]
             index = None
             for i, scene_node in enumerate(existing):
                 if type(scene_node) == cls:
@@ -356,7 +334,7 @@ class Window(ProgramNode):
             config = pyglet.gl.Config(major_version=self.GL_VERSION[0], minor_version=self.GL_VERSION[1], forward_compatible=True,
                                       double_buffer=True, sample_buffers=0)
             width, height = self.width, self.height
-            while width > screen.width or height > screen.height:
+            while width > screen.width*0.9 or height > screen.height*0.9:
                 width = width*2//3
                 height = height*2//3
             self.window = self.WindowWrapper(width=width, height=height, resizable=resizable, caption=title,
@@ -458,6 +436,62 @@ class Shader(ProgramNode):
 
     def make_last(self):
         return self.glctx.texture((self.width, self.height), 4, dtype=COLOR_FORMATS[self._colorbits].moderngl_dtype)
+
+
+class Record(ProgramNode):
+    DEFAULT_VERTEX_SOURCE = TemplateLoader.get_template('video.vert')
+    DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('record.frag')
+
+    def __init__(self, glctx):
+        super().__init__(glctx)
+        self._framebuffer = None
+        self._texture = None
+
+    @property
+    def texture(self):
+        return self.children[0].texture if self.children else None
+
+    @property
+    def framebuffer(self):
+        return self._framebuffer
+
+    def release(self):
+        self._framebuffer = None
+        self._texture = None
+        super().release()
+
+    def create(self, node, resized, **kwargs):
+        super().create(node, resized, **kwargs)
+        if self._framebuffer is None or self._texture is None or resized:
+            self._last = None
+            self._texture = self.glctx.texture((self.width, self.height), 4, dtype='f1')
+            self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
+            self._framebuffer.clear()
+
+    def render(self, node, **kwargs):
+        gamma = 1/2.2 if self.glctx.extra['linear'] else 1
+        super().render(node, gamma=gamma, **kwargs)
+        if filename := node.get('filename', 1, str):
+            filename = Path(filename)
+            quality = node.get('quality', 1, int)
+            if filename.suffix in ('.mp4', '.mov', '.m4v', '.mkv'):
+                codec = node.get('codec', 1, str, 'h264')
+                data = self._texture.read()
+                SharedCache[filename].write_video_frame(data, kwargs['clock'], self.width, self.height,
+                                                        fps=kwargs['fps'], codec=codec, quality=quality)
+            elif filename.suffix in PIL.Image.registered_extensions() and not filename.exists():
+                save_time = -time.perf_counter()
+                data = self._texture.read()
+                image = PIL.Image.frombytes('RGBA', (self.width, self.height), data)
+                options = {'icc_profile': PIL.ImageCms.ImageCmsProfile(PIL.ImageCms.createProfile('sRGB')).tobytes()}
+                if filename.suffix == '.png':
+                    image.save(filename, **options)
+                else:
+                    if quality:
+                        options['quality'] = quality
+                    image.convert('RGB').save(filename, **options)
+                save_time += time.perf_counter()
+                logger.success("Saved snapshot of {} to '{}' in {:.1f}s", self.name, filename, save_time)
 
 
 class Canvas(SceneNode):

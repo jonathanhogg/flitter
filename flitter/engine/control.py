@@ -27,8 +27,9 @@ class Controller:
     RECEIVE_PORT = 47178
 
     def __init__(self, target_fps=60, screen=0, fullscreen=False, vsync=False, state_file=None, multiprocess=True,
-                 autoreset=None, state_eval_wait=0, defined_variables=None):
+                 autoreset=None, state_eval_wait=0, realtime=True, defined_variables=None):
         self.target_fps = target_fps
+        self.realtime = realtime
         self.screen = screen
         self.fullscreen = fullscreen
         self.vsync = vsync
@@ -132,7 +133,7 @@ class Controller:
                     else:
                         w = window.Window(screen=self.screen, fullscreen=self.fullscreen, vsync=self.vsync)
                     self.windows.append(w)
-                group.create_task(self.windows[count].update(node, references=references, **kwargs))
+                group.create_task(self.windows[count].update(node, references=references, fps=self.target_fps, **kwargs))
                 count += 1
         while len(self.windows) > count:
             self.windows.pop().destroy()
@@ -433,8 +434,12 @@ class Controller:
                 frame_period = now - frame_time
                 housekeeping += now
                 frame_time += 1 / self.target_fps
-                wait_time = frame_time - now
-                performance = min(performance+0.001, 2) if wait_time > 0.001 else max(0.5, performance-0.01)
+                if self.realtime:
+                    wait_time = frame_time - now
+                    performance = min(performance+0.001, 2) if wait_time > 0.001 else max(0.5, performance-0.01)
+                else:
+                    wait_time = 0.001
+                    performance = 1
                 if wait_time > 0:
                     await asyncio.sleep(wait_time)
                 else:
