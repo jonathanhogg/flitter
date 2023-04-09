@@ -7,7 +7,7 @@ Flitter language functions
 
 import cython
 
-from libc.math cimport isnan, floor, round, sin, cos, sqrt, exp, ceil
+from libc.math cimport isnan, floor, round, sin, cos, sqrt, exp, ceil, atan2
 
 from ..cache import SharedCache
 from ..model cimport VectorLike, Vector, null_, true_
@@ -132,6 +132,29 @@ def polar(Vector theta not None):
     for i in range(0, n):
         ys.numbers[i*2] = cos(theta.numbers[i] * Tau)
         ys.numbers[i*2+1] = sin(theta.numbers[i] * Tau)
+    return ys
+
+
+def angle(Vector xy not None):
+    if xy.numbers == NULL:
+        return null_
+    cdef int i, n = xy.length // 2
+    cdef double x, y
+    cdef Vector theta = Vector.__new__(Vector)
+    theta.allocate_numbers(n)
+    for i in range(0, n):
+        x = xy.numbers[i*2]
+        y = xy.numbers[i*2+1]
+        theta[i] = atan2(y, x) / Tau
+    return theta
+
+
+def absv(Vector xs not None):
+    if xs.numbers == NULL:
+        return null_
+    cdef Vector ys = Vector.__new__(Vector)
+    for i in range(ys.allocate_numbers(xs.length)):
+        ys.numbers[i] = abs(xs.numbers[i])
     return ys
 
 
@@ -535,6 +558,7 @@ STATIC_FUNCTIONS = {
     'sin': Vector(sinv),
     'cos': Vector(cosv),
     'polar': Vector(polar),
+    'abs': Vector(absv),
     'exp': Vector(expv),
     'sqrt': Vector(sqrtv),
     'sine': Vector(sine),
@@ -555,6 +579,7 @@ STATIC_FUNCTIONS = {
     'min': Vector(minv),
     'max': Vector(maxv),
     'hypot': Vector(hypot),
+    'angle': Vector(angle),
     'normalize': Vector(normalize),
     'map': Vector(mapv),
     'zip': Vector(zipv),
