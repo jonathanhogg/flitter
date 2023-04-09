@@ -248,14 +248,14 @@ cdef Matrix44 update_model_matrix(Matrix44 model_matrix, Node node):
             if (matrix := Matrix44._rotate(vector)) is not None:
                 model_matrix = model_matrix.mmul(matrix)
         elif attribute == 'rotate_x':
-            if vector.numbers !=  NULL and vector.length == 1:
-                model_matrix = model_matrix.mmul(Matrix44._rotate_x(vector.numbers[0]))
+            if vector.numbers !=  NULL and vector.length == 1 and (matrix := Matrix44._rotate_x(vector.numbers[0])) is not None:
+                model_matrix = model_matrix.mmul(matrix)
         elif attribute == 'rotate_y':
-            if vector.numbers !=  NULL and vector.length == 1:
-                model_matrix = model_matrix.mmul(Matrix44._rotate_y(vector.numbers[0]))
+            if vector.numbers !=  NULL and vector.length == 1 and (matrix := Matrix44._rotate_y(vector.numbers[0])) is not None:
+                model_matrix = model_matrix.mmul(matrix)
         elif attribute == 'rotate_z':
-            if vector.numbers !=  NULL and vector.length == 1:
-                model_matrix = model_matrix.mmul(Matrix44._rotate_z(vector.numbers[0]))
+            if vector.numbers !=  NULL and vector.length == 1 and (matrix := Matrix44._rotate_z(vector.numbers[0])) is not None:
+                model_matrix = model_matrix.mmul(matrix)
     return model_matrix
 
 

@@ -891,23 +891,21 @@ cdef class Matrix44(Vector):
         cdef Matrix44 matrix, result = None
         if v is not None and v.numbers is not NULL and v.length in (1, 3):
             if v.length == 1:
-                if v.numbers[0]:
+                if v.numbers[0] and not isnan(v.numbers[0]):
                     result = Matrix44._rotate_z(v.numbers[0])
                     result = Matrix44._rotate_y(v.numbers[0]).mmul(result)
                     result = Matrix44._rotate_x(v.numbers[0]).mmul(result)
-                else:
-                    result = Matrix44.__new__(Matrix44)
             else:
-                if v.numbers[2]:
+                if v.numbers[2] and not isnan(v.numbers[2]):
                     result = Matrix44._rotate_z(v.numbers[2])
-                if v.numbers[1]:
+                if v.numbers[1] and not isnan(v.numbers[1]):
                     matrix = Matrix44._rotate_y(v.numbers[1])
                     result = matrix if result is None else matrix.mmul(result)
-                if v.numbers[0]:
+                if v.numbers[0] and not isnan(v.numbers[0]):
                     matrix = Matrix44._rotate_x(v.numbers[0])
                     result = matrix if result is None else matrix.mmul(result)
-                if result is None:
-                    result = Matrix44.__new__(Matrix44)
+        if result is None:
+            result = Matrix44.__new__(Matrix44)
         return result
 
     @staticmethod
