@@ -4,6 +4,8 @@ General file cache
 
 import fractions
 from pathlib import Path
+from queue import Queue
+import threading
 import time
 
 from loguru import logger
@@ -28,11 +30,10 @@ class CachePath:
                         container.close()
                         logger.debug("Closing video file: {}", self._path)
                 case 'video_output':
-                    container, stream, *_ = value
-                    for packet in stream.encode():
-                        container.mux(packet)
-                    container.close()
-                    logger.debug("Flushed and closed video output file: {}", self._path)
+                    _, _, queue, writer, *_ = value
+                    queue.put(None)
+                    writer.join()
+                    logger.success("Flushed and closed video output file: {}", self._path)
 
     def read_text(self, encoding=None, errors=None):
         self._touched = time.monotonic()
@@ -239,7 +240,7 @@ class CachePath:
         container = stream = None
         config = [width, height, codec, fps, quality]
         if key in self._cache:
-            container, stream, start, *cached_config = self._cache[key]
+            container, stream, queue, writer, start, *cached_config = self._cache[key]
             if cached_config != config:
                 logger.debug("Closing output video container as configuration has changed")
                 container.close()
@@ -256,13 +257,24 @@ class CachePath:
             stream.height = height
             stream.pix_fmt = 'yuv420p'
             stream.codec_context.time_base = fractions.Fraction(1, fps*100)
-            self._cache[key] = container, stream, timestamp, *config
+            queue = Queue(maxsize=fps)
+            writer = threading.Thread(target=self._video_writer, args=(container, stream, queue))
+            writer.start()
+            self._cache[key] = container, stream, queue, writer, timestamp, *config
             start = timestamp
         frame = av.VideoFrame(width, height, 'rgba')
         frame.planes[0].update(data)
         frame.pts = int(round((timestamp - start) / stream.codec_context.time_base))
-        for packet in stream.encode(frame):
-            container.mux(packet)
+        queue.put(frame)
+
+    def _video_writer(self, container, stream, queue):
+        while True:
+            frame = queue.get()
+            for packet in stream.encode(frame):
+                container.mux(packet)
+            if frame is None:
+                break
+        container.close()
 
     def read_trimesh_model(self):
         import trimesh
