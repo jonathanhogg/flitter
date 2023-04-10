@@ -15,8 +15,6 @@ import skia
 import moderngl
 import numpy as np
 from pathlib import Path
-import PIL.Image
-import PIL.ImageCms
 import pyglet
 if sys.platform == 'darwin':
     pyglet.options['shadow_window'] = False
@@ -469,29 +467,17 @@ class Record(ProgramNode):
             self._framebuffer.clear()
 
     def render(self, node, **kwargs):
-        gamma = 1/2.2 if self.glctx.extra['linear'] else 1
-        super().render(node, gamma=gamma, **kwargs)
         if filename := node.get('filename', 1, str):
-            filename = Path(filename)
+            gamma = 1/2.2 if self.glctx.extra['linear'] else 1
+            super().render(node, gamma=gamma, **kwargs)
+            path = SharedCache[filename]
             quality = node.get('quality', 1, int)
-            if filename.suffix in ('.mp4', '.mov', '.m4v', '.mkv'):
+            if path.suffix.lower() in ('.mp4', '.mov', '.m4v', '.mkv'):
                 codec = node.get('codec', 1, str, 'h264')
-                data = self._texture.read()
-                SharedCache[filename].write_video_frame(data, kwargs['clock'], self.width, self.height,
-                                                        fps=kwargs['fps'], codec=codec, quality=quality)
-            elif filename.suffix in PIL.Image.registered_extensions() and not filename.exists():
-                save_time = -time.perf_counter()
-                data = self._texture.read()
-                image = PIL.Image.frombytes('RGBA', (self.width, self.height), data)
-                options = {'icc_profile': PIL.ImageCms.ImageCmsProfile(PIL.ImageCms.createProfile('sRGB')).tobytes()}
-                if filename.suffix == '.png':
-                    image.save(filename, **options)
-                else:
-                    if quality:
-                        options['quality'] = quality
-                    image.convert('RGB').save(filename, **options)
-                save_time += time.perf_counter()
-                logger.success("Saved snapshot of {} to '{}' in {:.1f}s", self.name, filename, save_time)
+                path.write_video_frame(self._texture.read(), kwargs['clock'], self.width, self.height,
+                                       fps=kwargs['fps'], codec=codec, quality=quality)
+            else:
+                path.write_image(self._texture.read(), self.width, self.height, quality=quality)
 
 
 class Canvas(SceneNode):
