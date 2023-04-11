@@ -444,6 +444,7 @@ class Record(ProgramNode):
         super().__init__(glctx)
         self._framebuffer = None
         self._texture = None
+        self._has_alpha = None
 
     @property
     def texture(self):
@@ -460,9 +461,11 @@ class Record(ProgramNode):
 
     def create(self, node, resized, **kwargs):
         super().create(node, resized, **kwargs)
-        if self._framebuffer is None or self._texture is None or resized:
+        has_alpha = node.get('keep_alpha', 1, bool, False)
+        if self._framebuffer is None or self._texture is None or resized or has_alpha != self._has_alpha:
             self._last = None
-            self._texture = self.glctx.texture((self.width, self.height), 4, dtype='f1')
+            self._has_alpha = has_alpha
+            self._texture = self.glctx.texture((self.width, self.height), 4 if self._has_alpha else 3, dtype='f1')
             self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
             self._framebuffer.clear()
 
@@ -471,13 +474,16 @@ class Record(ProgramNode):
             gamma = 1/2.2 if self.glctx.extra['linear'] else 1
             super().render(node, gamma=gamma, **kwargs)
             path = SharedCache[filename]
-            quality = node.get('quality', 1, int)
             if path.suffix.lower() in ('.mp4', '.mov', '.m4v', '.mkv'):
                 codec = node.get('codec', 1, str, 'h264')
-                path.write_video_frame(self._texture.read(), kwargs['clock'], self.width, self.height,
-                                       fps=kwargs['fps'], codec=codec, quality=quality)
+                crf = node.get('crf', 1, int)
+                preset = node.get('preset', 1, str)
+                path.write_video_frame(self._texture, kwargs['clock'],
+                                       fps=kwargs['fps'], realtime=kwargs['realtime'], codec=codec,
+                                       crf=crf, preset=preset)
             else:
-                path.write_image(self._texture.read(), self.width, self.height, quality=quality)
+                quality = node.get('quality', 1, int)
+                path.write_image(self._texture, quality=quality)
 
 
 class Canvas(SceneNode):

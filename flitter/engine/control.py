@@ -133,7 +133,7 @@ class Controller:
                     else:
                         w = window.Window(screen=self.screen, fullscreen=self.fullscreen, vsync=self.vsync)
                     self.windows.append(w)
-                group.create_task(self.windows[count].update(node, references=references, fps=self.target_fps, **kwargs))
+                group.create_task(self.windows[count].update(node, references=references, **kwargs))
                 count += 1
         while len(self.windows) > count:
             self.windows.pop().destroy()
@@ -368,7 +368,8 @@ class Controller:
                 delta = beat - last
                 last = beat
                 names = {'beat': beat, 'quantum': self.counter.quantum, 'tempo': self.counter.tempo,
-                         'delta': delta, 'clock': frame_time, 'performance': performance}
+                         'delta': delta, 'clock': frame_time, 'performance': performance,
+                         'fps': self.target_fps, 'realtime': self.realtime}
 
                 now = self.counter.clock()
                 housekeeping += now
