@@ -70,7 +70,7 @@ For reference, they are:
 - `moderngl` - because the OpenGL API is too hard
 - `trimesh` - for generating/loading 3D triangular mesh models
 - `scipy` - because `trimesh` needs it for some operations
-- `av` - for decoding video
+- `av` - for encoding and decoding video
 - `pillow` - for saving screenshots as image files
 - `mako` - for templating of the GLSL source
 - `pyserial` - for talking to DMX interfaces and lasers
