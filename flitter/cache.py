@@ -343,7 +343,7 @@ class CachePath:
             writer.start()
             start = timestamp
             self._cache['video_output'] = writer, queue, start, *config
-        if queue is not None and (realtime or not queue.full()):
+        if queue is not None and (not realtime or not queue.full()):
             frame = av.VideoFrame(width, height, 'rgba' if has_alpha else 'rgb24')
             frame.planes[0].update(texture.read())
             frame.pts = int(round((timestamp - start) * fps))
