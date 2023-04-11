@@ -292,13 +292,13 @@ class CachePath:
                 logger.success("Saved image to file: {}", self._path)
         self._cache['write_image'] = True
 
-    def write_video_frame(self, texture, timestamp, codec='h264', fps=60, realtime=False, crf=None, preset=None):
+    def write_video_frame(self, texture, timestamp, codec='h264', fps=60, realtime=False, crf=None, bitrate=None, preset=None):
         import av
         self._touched = time.monotonic()
         writer = queue = start = None
         width, height = texture.width, texture.height
         has_alpha = texture.components == 4
-        config = [width, height, has_alpha, codec, fps, crf, preset]
+        config = [width, height, has_alpha, codec, fps, crf, bitrate, preset]
         if 'video_output' in self._cache:
             writer, queue, start, *cached_config = self._cache['video_output']
             if cached_config != config:
@@ -314,6 +314,9 @@ class CachePath:
             options = {}
             if crf is not None:
                 options['crf'] = str(crf)
+            if bitrate is not None:
+                options['maxrate'] = str(bitrate)
+                options['bufsize'] = str(2*bitrate)
             if preset is not None:
                 options['preset'] = preset
             try:

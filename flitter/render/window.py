@@ -477,10 +477,11 @@ class Record(ProgramNode):
             if path.suffix.lower() in ('.mp4', '.mov', '.m4v', '.mkv'):
                 codec = node.get('codec', 1, str, 'h264')
                 crf = node.get('crf', 1, int)
+                bitrate = node.get('bitrate', 1, int)
                 preset = node.get('preset', 1, str)
                 path.write_video_frame(self._texture, kwargs['clock'],
                                        fps=kwargs['fps'], realtime=kwargs['realtime'], codec=codec,
-                                       crf=crf, preset=preset)
+                                       crf=crf, bitrate=bitrate, preset=preset)
             else:
                 quality = node.get('quality', 1, int)
                 path.write_image(self._texture, quality=quality)
