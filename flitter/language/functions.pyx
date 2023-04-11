@@ -7,7 +7,7 @@ Flitter language functions
 
 import cython
 
-from libc.math cimport isnan, floor, round, sin, cos, sqrt, exp, ceil, atan2
+from libc.math cimport isnan, floor, round, sin, cos, asin, acos, sqrt, exp, ceil, atan2
 
 from ..cache import SharedCache
 from ..model cimport VectorLike, Vector, null_, true_
@@ -123,6 +123,26 @@ def cosv(Vector theta not None):
     return ys
 
 
+def asinv(Vector ys not None):
+    if ys.numbers == NULL:
+        return null_
+    cdef Vector theta = Vector.__new__(Vector)
+    cdef int i, n = ys.length
+    for i in range(theta.allocate_numbers(n)):
+        theta.numbers[i] = asin(ys.numbers[i]) / Tau
+    return theta
+
+
+def acosv(Vector ys not None):
+    if ys.numbers == NULL:
+        return null_
+    cdef Vector theta = Vector.__new__(Vector)
+    cdef int i, n = ys.length
+    for i in range(theta.allocate_numbers(n)):
+        theta.numbers[i] = acos(ys.numbers[i]) / Tau
+    return theta
+
+
 def polar(Vector theta not None):
     if theta.numbers == NULL:
         return null_
@@ -211,7 +231,7 @@ def impulse(Vector xs not None):
         else:
             x -= 1
             x /= 3
-            y = 1 - (x * 2)**2 / 2 if x < 0.5 else 1 - ((1 - x) * 2)**2 / 2
+            y = 1 - ((x * 2)**2 / 2 if x < 0.5 else 1 - ((1 - x) * 2)**2 / 2)
         ys.numbers[i] = y
     return ys
 
@@ -557,6 +577,8 @@ STATIC_FUNCTIONS = {
     'len': Vector(length),
     'sin': Vector(sinv),
     'cos': Vector(cosv),
+    'asin': Vector(asinv),
+    'acos': Vector(acosv),
     'polar': Vector(polar),
     'abs': Vector(absv),
     'exp': Vector(expv),
