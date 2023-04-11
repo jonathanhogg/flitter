@@ -8,9 +8,9 @@ Push 2 controller.
 The engine that runs the language is capable of: 2D drawing with Skia; running
 OpenGL shaders as image generators/filters; rendering videos; rendering basic
 3D scenes in OpenGL with a few simple primitives, mesh model loading, ambient,
-directional and point light sources with basic Phong lighting/shading; driving
-a LaserCube plugged in over USB (other lasers probably easy to support); driving
-DMX lighting via a USB DMX interface (currently via an Entec/-compatible
+directional, point and spot- light sources with basic Phong lighting/shading;
+driving a LaserCube plugged in over USB (other lasers probably easy to support);
+driving DMX lighting via a USB DMX interface (currently via an Entec/-compatible
 interface or my own crazy hand-built interfaces).
 
 It is implemented in a mix of Python and Cython. I use and develop **flitter**
