@@ -1397,7 +1397,8 @@ cdef class Node:
             elif node.next_sibling is not None:
                 node = node.next_sibling
             else:
-                node = node._parent()
+                while node is not self and node.next_sibling is None:
+                    node = node._parent()
                 if node is self:
                     break
                 node = node.next_sibling
