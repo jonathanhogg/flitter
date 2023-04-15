@@ -389,7 +389,7 @@ cdef class Vector:
                     else:
                         parts.append(":" + s)
                 else:
-                    parts.append(repr(obj))
+                    parts.append("(" + repr(obj) + ")")
         return ";".join(parts)
 
     def __neg__(self):
