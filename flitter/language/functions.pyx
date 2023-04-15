@@ -21,7 +21,7 @@ cdef class Uniform(Vector):
     cdef unsigned long long seed
 
     def __cinit__(self, value=None):
-        self.seed = self.hash(False)
+        self.seed = self.hash(True)
         self.deallocate_numbers()
         self.length = 0
         self.objects = None
