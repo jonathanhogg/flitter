@@ -110,15 +110,7 @@ cdef class Vector:
         if value is None:
             return
         cdef int i, n
-        if isinstance(value, (range, slice)):
-            self.fill_range(Vector._coerce(value.start), Vector._coerce(value.stop), Vector._coerce(value.step))
-        elif isinstance(value, (int, float, bool)):
-            self.allocate_numbers(1)
-            self.numbers[0] = value
-        elif isinstance(value, (str, Node)) or not hasattr(value, '__len__'):
-            self.objects = [value]
-            self.length = 1
-        else:
+        if isinstance(value, (list, tuple, Vector)):
             n = len(value)
             if n:
                 try:
@@ -127,6 +119,14 @@ cdef class Vector:
                 except TypeError:
                     self.deallocate_numbers()
                     self.objects = list(value)
+        elif isinstance(value, (float, int, bool)):
+            self.allocate_numbers(1)
+            self.numbers[0] = value
+        elif isinstance(value, (range, slice)):
+            self.fill_range(Vector._coerce(value.start), Vector._coerce(value.stop), Vector._coerce(value.step))
+        else:
+            self.objects = [value]
+            self.length = 1
 
     cdef int allocate_numbers(self, int n) except -1:
         if n > 16:
@@ -372,32 +372,35 @@ cdef class Vector:
         return result
 
     def __repr__(self):
+        return self.repr()
+
+    cdef str repr(self):
         cdef int i, n = self.length
         cdef str s
-        cdef double f
         cdef Py_UNICODE c
         if n == 0:
             return "null"
-        if self.numbers != NULL:
-            return ";".join(f"{self.numbers[i]:g}" for i in range(n))
         cdef list parts = []
-        for obj in self.objects:
-            if isinstance(obj, float):
-                f = obj
-                parts.append(f"{f:g}")
-            elif isinstance(obj, str):
-                s = obj
-                for i, c in enumerate(s):
-                    if c == ord('_') or (c >= ord('a') and c <= ord('z')) or (c >= ord('A') and c <= ord('Z')) or \
-                       (i > 0 and c >= ord('0') and c <= ord('9')):
-                        pass
+        if self.numbers != NULL:
+            for i in range(n):
+                parts.append(f"{self.numbers[i]:.9g}")
+        else:
+            for obj in self.objects:
+                if isinstance(obj, float):
+                    parts.append(f"{obj:.9g}")
+                elif isinstance(obj, str):
+                    s = obj
+                    for i, c in enumerate(s):
+                        if c == ord('_') or (c >= ord('a') and c <= ord('z')) or (c >= ord('A') and c <= ord('Z')) or \
+                           (i > 0 and c >= ord('0') and c <= ord('9')):
+                            pass
+                        else:
+                            parts.append(repr(s))
+                            break
                     else:
-                        parts.append(repr(s))
-                        break
+                        parts.append(":" + s)
                 else:
-                    parts.append(f":{s}")
-            else:
-                parts.append(repr(obj))
+                    parts.append(repr(obj))
         return ";".join(parts)
 
     def __neg__(self):
@@ -1315,7 +1318,7 @@ cdef class Node:
         return self._attributes[name]
 
     def __setitem__(self, str name, value):
-        cdef Vector vector = Vector.coerce(value)
+        cdef Vector vector = Vector._coerce(value)
         if vector.length:
             self._attributes[name] = vector
         elif name in self._attributes:
@@ -1379,25 +1382,42 @@ cdef class Node:
             return value.as_bool()
         return default
 
-    cpdef void pprint(self, int indent=0):
-        cdef str tag, key
-        cdef Vector value
-        cdef list text = [f"!{self.kind}"]
-        for tag in self._tags:
-            text.append(f"#{tag}")
-        for key, value in self._attributes.items():
-            text.append(f"{key}={value!r}")
-        print(" " * indent + " ".join(text))
-        cdef Node node = self.first_child
-        while node is not None:
-            node.pprint(indent+4)
-            node = node.next_sibling
-
     def __iter__(self):
         return iter(self._attributes)
 
+    cdef str repr(self):
+        cdef int i, indent = 0
+        cdef str tag, key
+        cdef Vector value
+        cdef list parts, lines = []
+        cdef Node node = self
+        while node is not None:
+            parts = []
+            for i in range(indent):
+                parts.append("")
+            parts.append("!" + node.kind)
+            for tag in node._tags:
+                parts.append("#" + tag)
+            for key, value in node._attributes.items():
+                parts.append(key + "=" + value.repr())
+            lines.append(" ".join(parts))
+            if node.first_child is not None:
+                node = node.first_child
+                indent += 1
+            elif node is self:
+                break
+            elif node.next_sibling is not None:
+                node = node.next_sibling
+            else:
+                node = node._parent()
+                if node is self:
+                    break
+                node = node.next_sibling
+                indent -= 1
+        return '\n'.join(lines)
+
     def __repr__(self):
-        return f"Node({self.kind!r})"
+        return self.repr()
 
 
 cdef class Context:

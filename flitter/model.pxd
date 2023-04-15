@@ -30,6 +30,7 @@ cdef class Vector(VectorLike):
     cdef unsigned long long hash(self, bint floor_floats)
     cpdef object match(self, int n=?, type t=?, default=?)
     cpdef VectorLike copynodes(self)
+    cdef str repr(self)
     cdef Vector neg(self)
     cdef Vector pos(self)
     cdef Vector abs(self)
@@ -115,7 +116,7 @@ cdef class Node:
     cdef double get_float(self, str name, double default)
     cdef int get_int(self, str name, long long default)
     cdef bint get_bool(self, str name, bint default)
-    cpdef void pprint(self, int indent=?)
+    cdef str repr(self)
 
 
 cdef class Context:
