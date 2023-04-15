@@ -132,9 +132,8 @@ cdef class Vector:
             PyMem_Free(self.numbers)
         self.numbers = NULL
 
-    @property
-    def numeric(self):
-        return self.numbers != NULL
+    def __reduce__(self):
+        return Vector, (list(self),)
 
     @cython.cdivision(True)
     cdef void fill_range(self, Vector startv, Vector stopv, Vector stepv):
