@@ -399,6 +399,17 @@ unit-cost to call, so indexing the billionth number takes the same amount of
 time as the 0th. Unlike normal vectors, the streams also extend into negative
 indices.
 
+Pseudo-random streams may be bound to a name list in a `let` expression to
+pick off the first few values, e.g.:
+
+```
+let x;y;z = uniform(:position)
+```
+
+They are also considered to be `true` in conditional expressions (`if`, `and`,
+etc.). In all aspects, pseudo-random streams appear like the `null` vector,
+e.g., attempts to use them in mathematical expressions will evaluate to `null`.
+
 ### State
 
 The outside world (only in the form of a Push 2 at the moment) communicates with

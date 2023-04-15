@@ -321,10 +321,6 @@ class Controller:
         self.state_timestamp = None
         self.global_state_dirty = True
 
-    def debug(self, value):
-        logger.debug("{!r}", value)
-        return value
-
     async def run(self):
         try:
             loop = asyncio.get_event_loop()
@@ -340,6 +336,7 @@ class Controller:
             gc.disable()
             run_top = current_top = None
             errors = set()
+            logs = set()
             while True:
                 housekeeping -= self.counter.clock()
 
@@ -381,6 +378,10 @@ class Controller:
                 errors = context.errors
                 for error in new_errors:
                     logger.error("Evaluation error: {}", error)
+                new_logs = context.logs.difference(logs)
+                logs = context.logs
+                for log in new_logs:
+                    print(log)
                 now = self.counter.clock()
                 execution += now
                 render -= now

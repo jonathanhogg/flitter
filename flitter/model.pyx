@@ -20,17 +20,6 @@ cdef union double_long:
 
 
 @cython.freelist(1000)
-cdef class VectorLike:
-    cpdef VectorLike copynodes(self):
-        raise NotImplementedError()
-
-    cdef Vector slice(self, Vector index):
-        raise NotImplementedError()
-
-    cdef bint as_bool(self):
-        raise NotImplementedError()
-
-
 cdef class Vector:
     @staticmethod
     def coerce(other):
@@ -56,7 +45,7 @@ cdef class Vector:
         return Vector._compose(args if isinstance(list, args) else list(args))
 
     @staticmethod
-    cdef VectorLike _compose(list args):
+    cdef Vector _compose(list args):
         if len(args) == 1:
             return args[0]
         if len(args) == 0:
@@ -355,7 +344,7 @@ cdef class Vector:
             pass
         return default
 
-    cpdef VectorLike copynodes(self):
+    cpdef Vector copynodes(self):
         cdef Vector result = self
         cdef Node node
         cdef int i
@@ -1430,3 +1419,4 @@ cdef class Context:
         self.parent = parent
         self.unbound = set()
         self.errors = set()
+        self.logs = set()

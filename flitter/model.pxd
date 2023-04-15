@@ -3,22 +3,16 @@
 import cython
 
 
-cdef class VectorLike:
+cdef class Vector:
     cdef int length
     cdef list objects
     cdef double* numbers
     cdef double[16] _numbers
 
-    cpdef VectorLike copynodes(self)
-    cdef Vector slice(self, Vector index)
-    cdef bint as_bool(self)
-
-
-cdef class Vector(VectorLike):
     @staticmethod
     cdef Vector _coerce(object other)
     @staticmethod
-    cdef VectorLike _compose(list args)
+    cdef Vector _compose(list args)
 
     cdef int allocate_numbers(self, int n) except -1
     cdef void deallocate_numbers(self)
@@ -29,7 +23,7 @@ cdef class Vector(VectorLike):
     cdef str as_string(self)
     cdef unsigned long long hash(self, bint floor_floats)
     cpdef object match(self, int n=?, type t=?, default=?)
-    cpdef VectorLike copynodes(self)
+    cpdef Vector copynodes(self)
     cdef str repr(self)
     cdef Vector neg(self)
     cdef Vector pos(self)
@@ -128,3 +122,4 @@ cdef class Context:
     cdef readonly str path
     cdef readonly Context parent
     cdef readonly set errors
+    cdef readonly set logs

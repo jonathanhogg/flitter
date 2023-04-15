@@ -10,22 +10,29 @@ import cython
 from libc.math cimport isnan, floor, round, sin, cos, asin, acos, sqrt, exp, ceil, atan2
 
 from ..cache import SharedCache
-from ..model cimport VectorLike, Vector, null_, true_
+from ..model cimport Vector, null_, true_
 
 
 cdef double Pi = 3.141592653589793
 cdef double Tau = 6.283185307179586
 
 
-cdef class Uniform(VectorLike):
-    cdef Vector keys
+cdef class Uniform(Vector):
     cdef unsigned long long seed
 
-    def __cinit__(self, Vector keys not None):
-        self.keys = keys
-        self.seed = keys.hash(True)
+    def __cinit__(self, value=None):
+        self.seed = self.hash(False)
+        self.deallocate_numbers()
+        self.length = 0
+        self.objects = None
 
-    cdef double item(self, unsigned long long i):
+    cdef Vector item(self, int i):
+        cdef Vector value = Vector.__new__(Vector)
+        value.allocate_numbers(1)
+        value.numbers[0] = self._item(i)
+        return value
+
+    cdef double _item(self, unsigned long long i):
         cdef unsigned long long x, y, z
         # Compute a 32bit float PRN using the Squares algorithm [https://arxiv.org/abs/2004.06278]
         x = y = i * self.seed
@@ -45,25 +52,25 @@ cdef class Uniform(VectorLike):
         cdef unsigned long long j
         for i in range(result.allocate_numbers(index.length)):
             j = <unsigned long long>(<long long>floor(index.numbers[i]))
-            result.numbers[i] = self.item(j)
+            result.numbers[i] = self._item(j)
         return result
 
-    cpdef VectorLike copynodes(self):
+    cpdef Vector copynodes(self):
         return self
 
     cpdef bint as_bool(self):
         return True
 
     def __repr__(self):
-        return f"{self.__class__.__name__}({self.keys!r})"
+        return f"{self.__class__.__name__}({self.hash!r})"
 
 
 cdef class Beta(Uniform):
-    cdef double item(self, unsigned long long i):
+    cdef double _item(self, unsigned long long i):
         i <<= 2
-        cdef double u1 = Uniform.item(self, i)
-        cdef double u2 = Uniform.item(self, i + 1)
-        cdef double u3 = Uniform.item(self, i + 2)
+        cdef double u1 = Uniform._item(self, i)
+        cdef double u2 = Uniform._item(self, i + 1)
+        cdef double u3 = Uniform._item(self, i + 2)
         if u1 <= u2 and u1 <= u3:
             return min(u2, u3)
         if u2 <= u1 and u2 <= u3:
@@ -72,12 +79,12 @@ cdef class Beta(Uniform):
 
 
 cdef class Normal(Uniform):
-    cdef double item(self, unsigned long long i):
+    cdef double _item(self, unsigned long long i):
         i <<= 4
         cdef double u = -6
         cdef int j
         for j in range(12):
-            u += Uniform.item(self, i + j)
+            u += Uniform._item(self, i + j)
         return u
 
 
