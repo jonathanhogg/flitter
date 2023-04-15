@@ -392,6 +392,8 @@ class Window(ProgramNode):
         self.window.flip()
         if count := self.glctx.gc():
             logger.trace("Collected {} OpenGL objects", count)
+        from pyglet.app import platform_event_loop
+        platform_event_loop.step(0)
 
     def make_last(self):
         width, height = self.window.get_framebuffer_size()

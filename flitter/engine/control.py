@@ -11,7 +11,6 @@ import pickle
 import time
 
 from loguru import logger
-from pyglet.app import platform_event_loop
 
 from ..cache import SharedCache
 from ..clock import BeatCounter
@@ -396,8 +395,6 @@ class Controller:
                 now = self.counter.clock()
                 render += now
                 housekeeping -= now
-
-                platform_event_loop.step(0)
 
                 del context
                 SharedCache.clean()
