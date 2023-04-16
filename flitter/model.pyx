@@ -29,9 +29,9 @@ cdef class Vector:
     cdef Vector _coerce(object other):
         if isinstance(other, Vector):
             return other
-        if other is None or (isinstance(other, (list, tuple)) and len(other) == 0):
+        if other is None or (isinstance(other, (list, tuple, set, dict)) and len(other) == 0):
             return null_
-        if isinstance(other, (int, float)):
+        if isinstance(other, (float, int)):
             if other == 0:
                 return false_
             if other == 1:
@@ -99,16 +99,17 @@ cdef class Vector:
         if value is None:
             return
         cdef int i, n
-        if isinstance(value, (list, tuple, Vector)):
+        if isinstance(value, (list, tuple, set, dict, Vector)):
             n = len(value)
             if n:
+                self.allocate_numbers(n)
                 try:
-                    for i in range(self.allocate_numbers(n)):
-                        self.numbers[i] = value[i]
+                    for i, v in enumerate(value):
+                        self.numbers[i] = v
                 except TypeError:
                     self.deallocate_numbers()
                     self.objects = list(value)
-        elif isinstance(value, (float, int, bool)):
+        elif isinstance(value, (float, int)):
             self.allocate_numbers(1)
             self.numbers[0] = value
         elif isinstance(value, (range, slice)):
@@ -116,6 +117,14 @@ cdef class Vector:
         else:
             self.objects = [value]
             self.length = 1
+
+    @property
+    def numeric(self):
+        return self.numbers != NULL
+
+    @property
+    def non_numeric(self):
+        return self.objects is not None
 
     cdef int allocate_numbers(self, int n) except -1:
         if n > 16:
@@ -223,10 +232,10 @@ cdef class Vector:
                     if isinstance(value, str):
                         text += <str>value
                     elif isinstance(value, (float, int, bool)):
-                        text += f"{value:g}"
+                        text += f"{value:.9g}"
             else:
                 for i in range(n):
-                    text += f"{self.numbers[i]:g}"
+                    text += f"{self.numbers[i]:.9g}"
         return text
 
     def __iter__(self):
@@ -374,7 +383,7 @@ cdef class Vector:
                 parts.append(f"{self.numbers[i]:.9g}")
         else:
             for obj in self.objects:
-                if isinstance(obj, float):
+                if isinstance(obj, (float, int)):
                     parts.append(f"{obj:.9g}")
                 elif isinstance(obj, str):
                     s = obj
@@ -621,15 +630,6 @@ cdef class Vector:
         if n > m:
             return 1
         return 0
-
-    def __iter__(self):
-        cdef int i
-        if self.objects is not None:
-            for i in range(self.length):
-                yield self.objects[i]
-        else:
-            for i in range(self.length):
-                yield self.numbers[i]
 
     def __getitem__(self, index):
         cdef Vector result = self.slice(Vector._coerce(index))
