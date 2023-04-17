@@ -1,2 +1,7 @@
 __pycache__
+.pytest-cache
+*.c
+build
+dist
 examples/*.m4v
+flitter.egg-info

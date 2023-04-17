@@ -52,15 +52,16 @@ At least Python 3.10 is *required* as the code uses `match`/`case` syntax. I
 work exclusively in 3.11, so I may have introduced some other dependency on
 this later version.
 
-Install the required modules with:
+Install flitter and all of its requirements with:
 
 ```
-pip3 install -r requirements.txt
+pip3 install .
 ```
 
-For reference, they are:
+or some other suitable PEP 517 build mechanism.
 
-- `cython` - because half of **flitter** is implemented in Cython for speed
+For reference, the runtime dependencies are:
+
 - `numpy` - for fast memory crunching
 - `lark` and `regex` - for the language parser
 - `python-rtmidi` - for talking MIDI to the Push 2
@@ -75,6 +76,10 @@ For reference, they are:
 - `mako` - for templating of the GLSL source
 - `pyserial` - for talking to DMX interfaces and lasers
 - `loguru` - because the standard library `logging` is just too antiquated
+
+and the install-time dependencies are:
+
+- `cython` - because half of **flitter** is implemented in Cython for speed
 
 ## The Language
 

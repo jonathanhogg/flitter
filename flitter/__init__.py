@@ -5,8 +5,12 @@ Common Flitter initialisation
 import sys
 
 from loguru import logger
-import pyximport
-pyximport.install()
+
+try:
+    import pyximport
+    pyximport.install()
+except ImportError:
+    pass
 
 
 LOGGING_LEVEL = "SUCCESS"

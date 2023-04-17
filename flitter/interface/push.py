@@ -426,7 +426,7 @@ class Controller:
                 self.push.set_button_white(n, 0)
 
 
-if __name__ == '__main__':
+def main():
     parser = argparse.ArgumentParser(description="Flitter Ableton Push 2 Interface")
     parser.set_defaults(level=None)
     levels = parser.add_mutually_exclusive_group()
@@ -445,3 +445,7 @@ if __name__ == '__main__':
         logger.info("Exiting Push 2 interface on keyboard interrupt")
     except Exception:
         logger.exception("Unhandled exception in Push 2 interface")
+
+
+if __name__ == '__main__':
+    main()
