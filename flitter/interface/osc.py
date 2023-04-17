@@ -1,5 +1,3 @@
-# cython: language_level=3, profile=True
-
 """
 Basic OSC protocol implementation
 """
@@ -18,7 +16,8 @@ logger = name_patch(logger, __name__)
 
 
 def decode_string(data):
-    cdef int i = 4, n = len(data)
+    i = 4
+    n = len(data)
     while i < n and data[i-1] != 0:
         i += 4
     remains = data[i:]
