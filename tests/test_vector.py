@@ -5,7 +5,7 @@ Tests of the model.Vector class
 import math
 import unittest
 
-from ..model import Vector, true, false, null, Node
+from flitter.model import Vector, true, false, null, Node
 
 
 def test_func():

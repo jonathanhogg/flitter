@@ -3,12 +3,12 @@ from setuptools import setup, Extension
 
 setup(
     ext_modules=[
-        Extension("flitter.model", ["flitter/model.pyx"]),
-        Extension("flitter.langage.functions", ["flitter/language/functions.pyx"]),
-        Extension("flitter.langage.tree", ["flitter/language/tree.pyx"]),
-        Extension("flitter.render.canvas", ["flitter/render/canvas.pyx"]),
-        Extension("flitter.render.canvas3d", ["flitter/render/canvas3d.pyx"]),
-        Extension("flitter.render.dmx", ["flitter/render/dmx.pyx"]),
-        Extension("flitter.render.laser", ["flitter/render/laser.pyx"]),
+        Extension("flitter.model", ["src/flitter/model.pyx"]),
+        Extension("flitter.langage.functions", ["src/flitter/language/functions.pyx"]),
+        Extension("flitter.langage.tree", ["src/flitter/language/tree.pyx"]),
+        Extension("flitter.render.canvas", ["src/flitter/render/canvas.pyx"]),
+        Extension("flitter.render.canvas3d", ["src/flitter/render/canvas3d.pyx"]),
+        Extension("flitter.render.dmx", ["src/flitter/render/dmx.pyx"]),
+        Extension("flitter.render.laser", ["src/flitter/render/laser.pyx"]),
     ]
 )
