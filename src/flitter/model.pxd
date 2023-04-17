@@ -85,6 +85,7 @@ cdef class Query:
     cdef frozenset tags
     cdef bint strict
     cdef bint stop
+    cdef bint first
     cdef Query subquery, altquery
 
 

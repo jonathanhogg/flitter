@@ -1,5 +1,6 @@
 # cython: language_level=3, profile=False
 
+import re
 from weakref import ref as weak
 
 import cython
@@ -42,7 +43,7 @@ cdef class Vector:
 
     @staticmethod
     def compose(args):
-        return Vector._compose(args if isinstance(list, args) else list(args))
+        return Vector._compose(args if isinstance(args, list) else list(args))
 
     @staticmethod
     cdef Vector _compose(list args):
@@ -1032,22 +1033,20 @@ cdef class Matrix44(Vector):
         return '\n'.join(rows)
 
 
+NAME_REGEX = re.compile(r'[_a-z][_a-z0-9]*', re.IGNORECASE)
+
+
 @cython.final
 @cython.freelist(100)
 cdef class Query:
-    def __cinit__(self, str query=None, *, str kind=None, tags=None):
-        if query is None:
-            self.kind = kind
-            if tags is None:
-                pass
-            elif isinstance(tags, str):
-                self.tags = frozenset(tags.split())
-            else:
-                self.tags = frozenset(tags)
-            return
+    def __cinit__(self, str query):
         cdef int i = 0, j, n = len(query)
         while n > 0 and query[n-1] in ' \t\r\n':
             n -= 1
+        self.first = False
+        if n > 0 and query[n-1] == '!':
+            n -= 1
+            self.first = True
         while i < n:
             if not self.strict and query[i] == '>':
                 self.strict = True
@@ -1055,16 +1054,23 @@ cdef class Query:
                 break
             i += 1
         if i == n or query[i] in ('.', '|', '>'):
-            raise ValueError("Bad query; contains empty element")
+            raise ValueError("Query contains empty element")
         cdef list tag_list = []
+        cdef str name
         for j in range(i, n+1):
             if j == n or query[j] in '#.|> ':
                 if j > i:
                     if query[i] == '#':
                         if i+1 < j:
-                            tag_list.append(query[i+1:j])
+                            name = query[i+1:j]
+                            if NAME_REGEX.fullmatch(name) is None:
+                                raise ValueError(f"Bad tag in query: {name}")
+                            tag_list.append(name)
                     elif query[i] != '*':
-                        self.kind = query[i:j]
+                        name = query[i:j]
+                        if NAME_REGEX.fullmatch(name) is None:
+                            raise ValueError(f"Bad kind in query: {name}")
+                        self.kind = name
                     i = j
                 if j < n and query[j] in '.|> \t\r\n':
                     break
@@ -1080,7 +1086,8 @@ cdef class Query:
             self.altquery = Query.__new__(Query, query[i+1:j])
             i = j
         if i < n:
-            self.subquery = Query.__new__(Query, query[i:n])
+            query = query[i:n]
+            self.subquery = Query.__new__(Query, query)
 
     def __str__(self):
         cdef str text = ''
@@ -1092,13 +1099,15 @@ cdef class Query:
             if self.kind is not None:
                 text += self.kind
             if self.tags:
-                text += '#' + '#'.join(self.tags)
+                text += '#' + '#'.join(sorted(self.tags))
         if self.stop:
             text += '.'
         if self.altquery is not None:
             text += '|' + str(self.altquery)
         if self.subquery is not None:
             text += ' ' + str(self.subquery)
+        if self.first:
+            text += '!'
         return text
 
     def __repr__(self):
@@ -1230,20 +1239,18 @@ cdef class Node:
             raise TypeError("No parent")
         parent.remove(self)
 
-    def select(self, query):
+    def select(self, qstring):
         cdef list nodes = []
-        if not isinstance(query, Query):
-            query = Query.__new__(Query, query)
-        self._select(query, nodes, False)
+        cdef Query query = qstring if isinstance(qstring, Query) else Query.__new__(Query, qstring)
+        self._select(query, nodes, query.first)
         return nodes
 
-    def select_below(self, query):
+    def select_below(self, qstring):
         cdef list nodes = []
-        if not isinstance(query, Query):
-            query = Query.__new__(Query, query)
+        cdef Query query = qstring if isinstance(qstring, Query) else Query.__new__(Query, qstring)
         cdef Node node = self.first_child
         while node is not None:
-            node._select(query, nodes, False)
+            node._select(query, nodes, query.first)
             node = node.next_sibling
         return nodes
 
@@ -1384,7 +1391,7 @@ cdef class Node:
             for i in range(indent):
                 parts.append("")
             parts.append("!" + node.kind)
-            for tag in node._tags:
+            for tag in sorted(node._tags):
                 parts.append("#" + tag)
             for key, value in node._attributes.items():
                 parts.append(key + "=" + value.repr())
@@ -1398,11 +1405,11 @@ cdef class Node:
                 node = node.next_sibling
             else:
                 while node is not self and node.next_sibling is None:
+                    indent -= 1
                     node = node._parent()
                 if node is self:
                     break
                 node = node.next_sibling
-                indent -= 1
         return '\n'.join(lines)
 
     def __repr__(self):
