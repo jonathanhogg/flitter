@@ -8,7 +8,7 @@ numpy
 pillow
 pyglet
 pyserial
-python-rtmidi
+git+https://github.com/SpotlightKid/python-rtmidi.git@eb16ab3268b29b94cd2baa6bfc777f5cf5f908ba#egg=python-rtmidi
 pyusb
 regex
 scipy

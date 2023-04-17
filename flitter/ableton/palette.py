@@ -2,8 +2,6 @@
 Push LED color management
 """
 
-# pylama:ignore=C0103
-
 import colorsys
 
 
@@ -48,7 +46,7 @@ class SimplePalette(Palette):
 
     def index_to_white_led(self, i):
         value = min(max(0, int(i)), 127)
-        return value//4 + int(224 * (value / 127)**2.4)
+        return value // 4 + int(224 * (value / 127) ** 2.4)
 
 
 class PrimaryPalette(SimplePalette):

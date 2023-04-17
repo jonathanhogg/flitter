@@ -2,13 +2,10 @@
 Ableton Push OSC controller for Flitter
 """
 
-# pylama:ignore=W0601,C0103,R0912,R0915,R0914,R0902,C901
-
 import argparse
 import asyncio
 from dataclasses import dataclass
 import math
-import sys
 
 from loguru import logger
 import skia
@@ -16,7 +13,7 @@ import skia
 import flitter
 from ..clock import TapTempo
 from ..ableton.constants import Encoder, Control, BUTTONS
-from ..ableton.events import (ButtonPressed, ButtonReleased, PadEvent, PadPressed, PadHeld, PadReleased,
+from ..ableton.events import (ButtonPressed, ButtonReleased, PadPressed, PadHeld, PadReleased,
                               EncoderTurned, EncoderTouched, EncoderReleased, MenuButtonReleased)
 from ..ableton.push import Push2
 from ..ableton.palette import HuePalette
@@ -88,7 +85,7 @@ class Controller:
                 if 0 <= column < 8 and 0 <= row < 8 and message.args:
                     state = PadState(*message.args)
                     brightness = 1 if state.touched or state.toggled else 0.5
-                    self.push.set_pad_rgb((7 - row) * 8 + column, state.r*brightness, state.g*brightness, state.b*brightness)
+                    self.push.set_pad_rgb((7 - row) * 8 + column, state.r * brightness, state.g * brightness, state.b * brightness)
                     self.pads[column, row] = state
                     if state.touched and (column, row) not in self.touched_pads:
                         await self.osc_sender.send_message(f'/pad/{column}/{row}/released', self.push.counter.clock())
@@ -100,7 +97,7 @@ class Controller:
                 if 0 <= number < 8 and message.args:
                     state = EncoderState(*message.args)
                     brightness = 1 if state.touched else 0.5
-                    self.push.set_menu_button_rgb(number + 8, state.r*brightness, state.g*brightness, state.b*brightness)
+                    self.push.set_menu_button_rgb(number + 8, state.r * brightness, state.g * brightness, state.b * brightness)
                     self.encoders[number] = state
                     if state.touched and number not in self.touched_encoders:
                         await self.osc_sender.send_message(f'/encoder/{number}/released', self.push.counter.clock())
@@ -128,7 +125,7 @@ class Controller:
 
     def reset(self):
         for column, row in self.pads:
-            self.push.set_pad_rgb((7-row) * 8 + column, 0, 0, 0)
+            self.push.set_pad_rgb((7 - row) * 8 + column, 0, 0, 0)
         self.pads.clear()
         for number in self.encoders:
             self.push.set_menu_button_rgb(number + 8, 0, 0, 0)
@@ -178,7 +175,7 @@ class Controller:
         tap_tempo_pressed = False
         tap_tempo = TapTempo(rounding=1)
         record_pressed_at = None
-        receive_task = asyncio.create_task(self.receive_messages())
+        asyncio.create_task(self.receive_messages())
         next_playback_event = None
         playback_release_pads = set()
         pad_shifts = {}
@@ -186,7 +183,7 @@ class Controller:
         try:
             wait_event = asyncio.create_task(self.push.get_event())
             wait_update = asyncio.create_task(self.updated.wait())
-            wait_beat = asyncio.create_task(self.push.counter.wait_for_beat(self.push.counter.beat*2//1/2 + 0.5))
+            wait_beat = asyncio.create_task(self.push.counter.wait_for_beat(self.push.counter.beat * 2 // 1 / 2 + 0.5))
             while True:
                 if self.playing and next_playback_event is None:
                     _, event = self.record_buffer[0]
@@ -196,7 +193,7 @@ class Controller:
                 events = {wait_event, wait_update, wait_beat}
                 if next_playback_event is not None:
                     events.add(next_playback_event)
-                done, _ = await asyncio.wait(events, timeout=1/10, return_when=asyncio.FIRST_COMPLETED)
+                done, _ = await asyncio.wait(events, timeout=1 / 10, return_when=asyncio.FIRST_COMPLETED)
                 if wait_event in done or next_playback_event in done:
                     synthetic = False
                     if wait_event in done:
@@ -217,7 +214,6 @@ class Controller:
                         case PadPressed():
                             if synthetic or not tap_tempo_pressed:
                                 row = 7 - event.row
-                                quantize = None
                                 if not synthetic:
                                     pad_state = self.pads.get((row, event.column))
                                     if pad_state and pad_state.quantize:
@@ -340,7 +336,7 @@ class Controller:
                     if wait_update in done:
                         wait_update = asyncio.create_task(self.updated.wait())
                     if wait_beat in done:
-                        wait_beat = asyncio.create_task(self.push.counter.wait_for_beat(self.push.counter.beat*2//1/2 + 0.5))
+                        wait_beat = asyncio.create_task(self.push.counter.wait_for_beat(self.push.counter.beat * 2 // 1 / 2 + 0.5))
                     async with self.push.screen_context() as ctx:
                         ctx.clear(skia.ColorBLACK)
                         paint = skia.Paint(Color=skia.ColorWHITE, AntiAlias=True)
@@ -360,7 +356,7 @@ class Controller:
                             if state.touched:
                                 paint.setColor4f(skia.Color4f(state.r, state.g, state.b, 1))
                             else:
-                                paint.setColor4f(skia.Color4f(state.r/2, state.g/2, state.b/2, 1))
+                                paint.setColor4f(skia.Color4f(state.r / 2, state.g / 2, state.b / 2, 1))
                             path = skia.Path()
                             paint.setStrokeWidth(2)
                             path.addArc(skia.Rect.MakeXYWH(20, 40, 80, 80), -240, 300)
@@ -393,12 +389,12 @@ class Controller:
                             if state.percent:
                                 text += '%'
                             width = font.measureText(text)
-                            ctx.drawString(text, (120-width) / 2, 84, font, paint)
+                            ctx.drawString(text, (120 - width) / 2, 84, font, paint)
                             font.setSize(16)
                             text = state.name
                             width = font.measureText(text)
                             paint.setColor(skia.ColorBLACK)
-                            ctx.drawString(text, (120-width) / 2, 20, font, paint)
+                            ctx.drawString(text, (120 - width) / 2, 20, font, paint)
                             ctx.restore()
                 else:
                     now = self.push.counter.clock()

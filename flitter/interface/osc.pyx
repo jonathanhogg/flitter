@@ -4,8 +4,6 @@
 Basic OSC protocol implementation
 """
 
-# pylama:ignore=C0103,R0912,R0903
-
 import asyncio
 import socket
 import struct

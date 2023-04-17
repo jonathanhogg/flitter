@@ -1,16 +1,21 @@
+"""
+Tests of the model.Vector class
+"""
 
 import math
 import unittest
 
-from ..model import *
+from ..model import Vector, true, false, null, Node
 
 
 def test_func():
     pass
 
+
 class test_class:
     def __len__(self):
         return 0
+
 
 def all_isclose(xs, ys):
     for x, y in zip(xs, ys):
@@ -84,15 +89,15 @@ class TestVector(unittest.TestCase):
 
     def test_range_slice(self):
         TESTS = [
-            ((None,),            []),
-            ((10,),              [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]),
-            ((9.9,),             [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]),
-            ((10.3,),            [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
-            ((0.5, 10.5),        [0.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5, 8.5, 9.5]),
-            ((10.5, 0.5),        []),
-            ((0.5, 10.5, 1.5),   [0.5, 2, 3.5, 5, 6.5, 8, 9.5]),
-            ((0.5, 10.5, -1.5),  []),
-            ((10.5, 0.5, -1.5),  [10.5, 9, 7.5, 6, 4.5, 3, 1.5]),
+            ((None,), []),
+            ((10,), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]),
+            ((9.9,), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]),
+            ((10.3,), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
+            ((0.5, 10.5), [0.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5, 8.5, 9.5]),
+            ((10.5, 0.5), []),
+            ((0.5, 10.5, 1.5), [0.5, 2, 3.5, 5, 6.5, 8, 9.5]),
+            ((0.5, 10.5, -1.5), []),
+            ((10.5, 0.5, -1.5), [10.5, 9, 7.5, 6, 4.5, 3, 1.5]),
             ((10.5, 0.5, -10.5), [10.5]),
         ]
         for s, values in TESTS:
@@ -106,11 +111,11 @@ class TestVector(unittest.TestCase):
 
     def test_isinstance(self):
         TESTS = [
-            (None,  []),
+            (None, []),
             (float, [0, 0.1, 1.5, -1e99, math.nan, math.inf]),
-            (str,   ["Hello", "world!"]),
-            (Node,  [Node('foo'), Node('bar', {'baz'}, {'color': Vector(1)})]),
-            (None,  [99, "red", "balloons"]),
+            (str, ["Hello", "world!"]),
+            (Node, [Node('foo'), Node('bar', {'baz'}, {'color': Vector(1)})]),
+            (None, [99, "red", "balloons"]),
         ]
         for t, values in TESTS:
             with self.subTest(type=t, values=values):
@@ -151,7 +156,7 @@ class TestVector(unittest.TestCase):
         TESTS = [
             (null, ""),
             (Vector([1, -2, 3.0, 1e99, 1.567e-9]), "1-231e+991.567e-09"),
-            (Vector([1/3]), "0.333333333"),
+            (Vector([1 / 3]), "0.333333333"),
             (Vector("Hello world!"), "Hello world!"),
             (Vector(["Hello ", "world!"]), "Hello world!"),
             (Vector(["testing", "testing", 1, 2.2, 3.0]), "testingtesting12.23"),
@@ -172,8 +177,8 @@ class TestVector(unittest.TestCase):
         self.assertRaises(StopIteration, next, i)
 
     def test_hash(self):
-        self.assertEqual(hash(null), 0xe220a8397b1dcdaf - (1<<64))
-        self.assertEqual(hash(Vector()), 0xe220a8397b1dcdaf - (1<<64))
+        self.assertEqual(hash(null), 0xe220a8397b1dcdaf - (1 << 64))
+        self.assertEqual(hash(Vector()), 0xe220a8397b1dcdaf - (1 << 64))
         self.assertEqual(hash(Vector(0)), -6411193824288604561)
         self.assertEqual(hash(Vector(0.1)), -7435092146473341298)
         self.assertEqual(hash(true), 258181728628715636)
@@ -223,7 +228,7 @@ class TestVector(unittest.TestCase):
         self.assertEqual(repr(null), "null")
         self.assertEqual(repr(true), "1")
         self.assertEqual(repr(false), "0")
-        self.assertEqual(repr(Vector(1/3)), "0.333333333")
+        self.assertEqual(repr(Vector(1 / 3)), "0.333333333")
         self.assertEqual(repr(Vector([1, 2, 3])), "1;2;3")
         self.assertEqual(repr(Vector([1, 2.5, 3])), "1;2.5;3")
         self.assertEqual(repr(Vector("Hello world!")), "'Hello world!'")
@@ -400,7 +405,7 @@ class TestVector(unittest.TestCase):
         self.assertTrue(x[10:100:5] == Vector.range(10, 100, 5))
         self.assertTrue(x[99:9:-1] == Vector.range(99, 9, -1))
         self.assertTrue(x[99:9:-2] == Vector.range(99, 9, -2))
-        self.assertTrue(x[99:9:-13/3] == Vector([99, 94, 90, 86, 81, 77, 73, 68, 64, 60, 55, 51, 47, 42, 38, 34, 29, 25, 21, 16, 12]))
+        self.assertTrue(x[99:9:-13 / 3] == Vector([99, 94, 90, 86, 81, 77, 73, 68, 64, 60, 55, 51, 47, 42, 38, 34, 29, 25, 21, 16, 12]))
 
     def test_normalize(self):
         self.assertEqual(null.normalize(), null)

@@ -2,12 +2,8 @@
 Multi-processing for rendering
 """
 
-# pylama:ignore=R0903,R1732,R0913
-
 import asyncio
 from multiprocessing import Process, Queue
-import os
-import sys
 import time
 
 from loguru import logger
@@ -65,6 +61,6 @@ class Proxy:
                 return
             nframes += 1
             if time.perf_counter() > stats_time + 5:
-                logger.info("{} render {:.1f}ms", obj.__class__.__name__, 1000*render/nframes)
+                logger.info("{} render {:.1f}ms", obj.__class__.__name__, 1000 * render / nframes)
                 nframes = render = 0
                 stats_time += 5

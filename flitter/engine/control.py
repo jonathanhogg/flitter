@@ -2,8 +2,6 @@
 The main Flitter engine
 """
 
-# pylama:ignore=W0703,R0902,R0912,R0913,R0914,R0915,R1702,C901
-
 import asyncio
 import gc
 from pathlib import Path
@@ -16,7 +14,6 @@ from ..cache import SharedCache
 from ..clock import BeatCounter
 from ..interface.controls import Pad, Encoder
 from ..interface.osc import OSCReceiver, OSCSender, OSCMessage, OSCBundle
-from ..language.parser import parse
 from ..model import Context, Vector, null
 from ..render import process, window, laser, dmx
 
@@ -88,8 +85,8 @@ class Controller:
                 logger.info("Restore counter at beat {:.1f}, tempo {:.1f}, quantum {}", self.counter.beat, self.counter.tempo, self.counter.quantum)
                 self.enqueue_tempo()
             self.enqueue_page_status()
-            for window in self.windows:
-                window.purge()
+            for win in self.windows:
+                win.purge()
 
     def get(self, key, default=None):
         if (value := self.state.get(Vector.coerce(key), None)) is not None:
@@ -143,10 +140,10 @@ class Controller:
             for i, node in enumerate(graph.select_below('laser.')):
                 if i == len(self.lasers):
                     if self.multiprocess:
-                        l = process.Proxy(laser.Laser)
+                        las = process.Proxy(laser.Laser)
                     else:
-                        l = laser.Laser()
-                    self.lasers.append(l)
+                        las = laser.Laser()
+                    self.lasers.append(las)
                 group.create_task(self.lasers[i].update(node))
                 count += 1
         while len(self.lasers) > count:
@@ -225,7 +222,7 @@ class Controller:
 
     def enqueue_page_status(self):
         self.queue.append(OSCMessage('/page_left', self.current_page > 0))
-        self.queue.append(OSCMessage('/page_right', self.current_page < len(self.pages)-1))
+        self.queue.append(OSCMessage('/page_right', self.current_page < len(self.pages) - 1))
 
     def process_message(self, message):
         if isinstance(message, OSCBundle):
@@ -350,15 +347,18 @@ class Controller:
                     logger.log(level, "Loaded page {}: {}", self.current_page, self.current_path)
                     run_top = current_top = program_top
 
-                if current_top is not None and self.state_eval_wait and \
-                        ((self.state_timestamp is not None and self.counter.clock() > self.state_timestamp + self.state_eval_wait) or
-                         (self.state_timestamp is None and run_top is current_top)):
-                    start = time.perf_counter()
-                    run_top = current_top.simplify(state=self.state)
-                    logger.debug("Partially-evaluated current program on state in {:.1f}ms", (time.perf_counter()-start)*1000)
-                    logger.opt(lazy=True).debug("Tree node count after partial-evaluation {after}",
-                                                after=lambda: run_top.reduce(lambda e, *rs: sum(rs) + 1))
-                    self.state_timestamp = None
+                if current_top is not None and self.state_eval_wait:
+                    if self.state_timestamp is not None:
+                        evaluate_state = self.counter.clock() > self.state_timestamp + self.state_eval_wait
+                    else:
+                        evaluate_state = run_top is current_top
+                    if evaluate_state:
+                        start = time.perf_counter()
+                        run_top = current_top.simplify(state=self.state)
+                        logger.debug("Partially-evaluated current program on state in {:.1f}ms", (time.perf_counter() - start) * 1000)
+                        logger.opt(lazy=True).debug("Tree node count after partial-evaluation {after}",
+                                                    after=lambda: run_top.reduce(lambda e, *rs: sum(rs) + 1))
+                        self.state_timestamp = None
 
                 beat = self.counter.beat_at_time(frame_time)
                 delta = beat - last
@@ -435,14 +435,14 @@ class Controller:
                 frame_time += 1 / self.target_fps
                 if self.realtime:
                     wait_time = frame_time - now
-                    performance = min(performance+0.001, 2) if wait_time > 0.001 else max(0.5, performance-0.01)
+                    performance = min(performance + 0.001, 2) if wait_time > 0.001 else max(0.5, performance - 0.01)
                 else:
                     wait_time = 0.001
                     performance = 1
                 if wait_time > 0:
                     await asyncio.sleep(wait_time)
                 else:
-                    logger.trace("Slow frame - {:.0f}ms", frame_period*1000)
+                    logger.trace("Slow frame - {:.0f}ms", frame_period * 1000)
                     await asyncio.sleep(0)
                     frame_time = self.counter.clock()
 
@@ -450,7 +450,7 @@ class Controller:
                     nframes = len(frames) - 1
                     fps = nframes / (frames[-1] - frames[0])
                     logger.info("{:.1f}fps; execute {:.1f}ms, render {:.1f}ms, housekeep {:.1f}ms; perf {:.2f}",
-                             fps, 1000*execution/nframes, 1000*render/nframes, 1000*housekeeping/nframes, performance)
+                                fps, 1000 * execution / nframes, 1000 * render / nframes, 1000 * housekeeping / nframes, performance)
                     frames = frames[-1:]
                     execution = render = housekeeping = 0
         finally:

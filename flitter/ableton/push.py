@@ -4,8 +4,6 @@ Ableton Push 2 API
 As per official hardware documentation at: https://github.com/Ableton/push-interface
 """
 
-# pylama:ignore=C0103,R0911,R0912,R0903,R0902,W0401,R0913,W0703
-
 import asyncio
 from contextlib import asynccontextmanager
 
@@ -153,7 +151,7 @@ class Push2:
             if Note.PAD_0_0 <= message[1] <= Note.PAD_7_7:
                 number = message[1] - Note.PAD_0_0
                 column, row = number % 8, number // 8
-                return PadPressed(timestamp=timestamp, number=number, column=column, row=row, pressure=message[2]/127)
+                return PadPressed(timestamp=timestamp, number=number, column=column, row=row, pressure=message[2] / 127)
             if message[1] in set(Encoder):
                 if message[2] == 0x7f:
                     return EncoderTouched(timestamp=timestamp, number=Encoder(message[1]))
@@ -168,7 +166,7 @@ class Push2:
             if Note.PAD_0_0 <= message[1] <= Note.PAD_7_7:
                 number = message[1] - Note.PAD_0_0
                 column, row = number % 8, number // 8
-                return PadHeld(timestamp=timestamp, number=number, column=column, row=row, pressure=message[2]/127)
+                return PadHeld(timestamp=timestamp, number=number, column=column, row=row, pressure=message[2] / 127)
         elif message[0] == MIDI.NOTE_OFF:
             if Note.PAD_0_0 <= message[1] <= Note.PAD_7_7:
                 number = message[1] - Note.PAD_0_0

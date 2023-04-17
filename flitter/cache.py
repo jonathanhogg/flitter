@@ -66,7 +66,6 @@ class CachePath:
         return text
 
     def read_flitter_program(self, definitions=None):
-        from .model import Vector, Context
         from .language.parser import parse, ParseError
         self._touched = time.monotonic()
         mtime = self._path.stat().st_mtime if self._path.exists() else None
@@ -88,7 +87,7 @@ class CachePath:
                 mid = time.perf_counter()
                 top = initial_top.simplify(variables=definitions)
                 end = time.perf_counter()
-                logger.debug("Parsed {} in {:.1f}ms, partial evaluation in {:.1f}ms", self._path, (mid-start)*1000, (end-mid)*1000)
+                logger.debug("Parsed {} in {:.1f}ms, partial evaluation in {:.1f}ms", self._path, (mid - start) * 1000, (end - mid) * 1000)
                 logger.opt(lazy=True).debug("Tree node count before partial-evaluation {before} and after {after}",
                                             before=lambda: initial_top.reduce(lambda e, *rs: sum(rs) + 1),
                                             after=lambda: top.reduce(lambda e, *rs: sum(rs) + 1))
@@ -107,7 +106,7 @@ class CachePath:
 
     def read_csv_vector(self, row_number):
         import csv
-        from . import model
+        from .model import Vector, null
         self._touched = time.monotonic()
         mtime = self._path.stat().st_mtime if self._path.exists() else None
         if 'csv' in self._cache and self._cache['csv'][0] == mtime:
@@ -136,7 +135,7 @@ class CachePath:
                     values.append(value)
                 while values and values[-1] == '':
                     values.pop()
-                rows.append(model.Vector.coerce(values))
+                rows.append(Vector.coerce(values))
             except StopIteration:
                 logger.debug("Closed CSV file: {}", self._path)
                 reader = None
@@ -147,7 +146,7 @@ class CachePath:
         self._cache['csv'] = mtime, reader, rows
         if 0 <= row_number < len(rows):
             return rows[row_number]
-        return model.null
+        return null
 
     def read_image(self):
         import skia
@@ -316,7 +315,7 @@ class CachePath:
                 options['crf'] = str(crf)
             if bitrate is not None:
                 options['maxrate'] = str(bitrate)
-                options['bufsize'] = str(2*bitrate)
+                options['bufsize'] = str(2 * bitrate)
             if preset is not None:
                 options['preset'] = preset
             try:

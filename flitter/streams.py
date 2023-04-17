@@ -5,8 +5,6 @@ streams
 Package for asynchronous serial IO.
 """
 
-# pylama:ignore=R0916,W0703
-
 import asyncio
 
 from loguru import logger
@@ -109,5 +107,5 @@ class SerialStream:
     async def readexactly(self, nbytes):
         data = b''
         while len(data) < nbytes:
-            data += await self.read(nbytes-len(data))
+            data += await self.read(nbytes - len(data))
         return data

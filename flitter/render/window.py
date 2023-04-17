@@ -2,8 +2,6 @@
 Flitter window management
 """
 
-# pylama:ignore=C0413,E402,W0703,R0914,R0902,R0912,R0201,R1702,C901,W0223,W0231,R0915
-
 import array
 from collections import namedtuple
 import math
@@ -13,8 +11,6 @@ import time
 from loguru import logger
 import skia
 import moderngl
-import numpy as np
-from pathlib import Path
 import pyglet
 if sys.platform == 'darwin':
     pyglet.options['shadow_window'] = False
@@ -33,7 +29,7 @@ def value_split(value, n, m):
         return value if n == 1 else list(value)
     elif n == 1:
         return tuple(value)
-    return [tuple(value[i*m:(i+1)*m]) for i in range(n)]
+    return [tuple(value[i * m:(i + 1) * m]) for i in range(n)]
 
 
 ColorFormat = namedtuple('ColorFormat', ('moderngl_dtype', 'gl_format', 'skia_colortype'))
@@ -101,7 +97,6 @@ class SceneNode:
         return node.tags and node.tags == self.tags
 
     async def descend(self, node, **kwargs):
-        count = 0
         existing = self.children
         updated = []
         for child in node.children:
@@ -219,7 +214,7 @@ class ProgramNode(SceneNode):
                 logger.trace("Failing source:\n{}", source)
             else:
                 end = time.perf_counter()
-                logger.debug("{} GL program compiled in {:.1f}ms", self.name, 1000*(end-start))
+                logger.debug("{} GL program compiled in {:.1f}ms", self.name, 1000 * (end - start))
 
     def render(self, node, **kwargs):
         self.compile(node)
@@ -332,12 +327,12 @@ class Window(ProgramNode):
             config = pyglet.gl.Config(major_version=self.GL_VERSION[0], minor_version=self.GL_VERSION[1], forward_compatible=True,
                                       double_buffer=True, sample_buffers=0)
             width, height = self.width, self.height
-            while width > screen.width*0.9 or height > screen.height*0.9:
-                width = width*2//3
-                height = height*2//3
+            while width > screen.width * 0.9 or height > screen.height * 0.9:
+                width = width * 2 // 3
+                height = height * 2 // 3
             self.window = self.WindowWrapper(width=width, height=height, resizable=resizable, caption=title,
                                              screen=screen, vsync=vsync, config=config)
-            self.window.set_location(screen.x + (screen.width-width)//2, screen.y + (screen.height-height)//2)
+            self.window.set_location(screen.x + (screen.width - width) // 2, screen.y + (screen.height - height) // 2)
             self.window.switch_to()
             self.glctx = moderngl.create_context(require=self.GL_VERSION[0] * 100 + self.GL_VERSION[1] * 10)
             self.glctx.gc_mode = 'context_gc'
@@ -473,7 +468,7 @@ class Record(ProgramNode):
 
     def render(self, node, **kwargs):
         if filename := node.get('filename', 1, str):
-            gamma = 1/2.2 if self.glctx.extra['linear'] else 1
+            gamma = 1 / 2.2 if self.glctx.extra['linear'] else 1
             super().render(node, gamma=gamma, **kwargs)
             path = SharedCache[filename]
             if path.suffix.lower() in ('.mp4', '.mov', '.m4v', '.mkv'):
@@ -540,15 +535,15 @@ class Canvas(SceneNode):
     def purge(self):
         total_count = self._stats['canvas'][0]
         logger.info("{} render stats - {:d} x {:.1f}ms = {:.1f}s", self.name, total_count,
-                    1e3*self._total_duration/total_count, self._total_duration)
+                    1e3 * self._total_duration / total_count, self._total_duration)
         draw_duration = 0
         for duration, count, key in sorted(((duration, count, key) for (key, (count, duration)) in self._stats.items()), reverse=True):
             logger.debug("{:15s}  - {:8d}  x {:6.1f}µs = {:5.1f}s  ({:4.1f}%)",
-                         key, count, 1e6*duration/count, duration, 100*duration/self._total_duration)
+                         key, count, 1e6 * duration / count, duration, 100 * duration / self._total_duration)
             draw_duration += duration
         overhead = self._total_duration - draw_duration
         logger.debug("{:15s}  - {:8d}  x {:6.1f}µs = {:5.1f}s  ({:4.1f}%)",
-                     '(surface)', total_count, 1e6*overhead/total_count, overhead, 100*overhead/self._total_duration)
+                     '(surface)', total_count, 1e6 * overhead / total_count, overhead, 100 * overhead / self._total_duration)
         self._stats = {}
         self._total_duration = 0
 
@@ -589,7 +584,7 @@ class Canvas3D(SceneNode):
 
     def purge(self):
         logger.info("{} draw stats - {:d} x {:.1f}ms = {:.1f}s", self.name, self._total_count,
-                    1e3*self._total_duration/self._total_count, self._total_duration)
+                    1e3 * self._total_duration / self._total_count, self._total_duration)
         self._total_duration = 0
         self._total_count = 0
 
@@ -599,7 +594,7 @@ class Canvas3D(SceneNode):
             colorbits = self.glctx.extra['colorbits']
         samples = max(0, node.get('samples', 1, int, 0))
         if samples:
-            samples = min(1<<int(math.log2(samples)), self.glctx.info['GL_MAX_SAMPLES'])
+            samples = min(1 << int(math.log2(samples)), self.glctx.info['GL_MAX_SAMPLES'])
         if resized or colorbits != self._colorbits or samples != self._samples:
             self.release()
             format = COLOR_FORMATS[colorbits]
@@ -672,7 +667,7 @@ class Video(Shader):
         if colorbits not in COLOR_FORMATS:
             colorbits = self.glctx.extra['colorbits']
         if self._texture is not None and (frame0 is None or (self.width, self.height) != (frame0.width, frame0.height)) \
-            or linear != self._linear or colorbits != self._colorbits:
+                or linear != self._linear or colorbits != self._colorbits:
             self.release()
         if frame0 is None:
             return

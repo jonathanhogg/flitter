@@ -2,56 +2,53 @@
 Ableton Push (and MIDI) constants
 """
 
-# pylama:ignore=E221
-
-
 import enum
 
 
 class MIDI(enum.IntEnum):
-    NOTE_OFF            = 0x80
-    NOTE_ON             = 0x90
+    NOTE_OFF = 0x80
+    NOTE_ON = 0x90
     POLYPHONIC_PRESSURE = 0xA0
-    CONTROL_CHANGE      = 0xB0
-    CHANNEL_PRESSURE    = 0xD0
-    PITCH_BEND_CHANGE   = 0xE0
-    START_OF_SYSEX      = 0xF0
-    END_OF_SYSEX        = 0xF7
-    CLOCK               = 0xF8
-    START               = 0xFA
-    CONTINUE            = 0xFB
-    STOP                = 0xFC
-    ACTIVE              = 0xFE
-    RESET               = 0xFF
+    CONTROL_CHANGE = 0xB0
+    CHANNEL_PRESSURE = 0xD0
+    PITCH_BEND_CHANGE = 0xE0
+    START_OF_SYSEX = 0xF0
+    END_OF_SYSEX = 0xF7
+    CLOCK = 0xF8
+    START = 0xFA
+    CONTINUE = 0xFB
+    STOP = 0xFC
+    ACTIVE = 0xFE
+    RESET = 0xFF
 
 
 class Command(enum.IntEnum):
     SET_COLOR_PALETTE_ENTRY = 0x03
-    REAPPLY_COLOR_PALETTE   = 0x05
-    SET_LED_BRIGHTNESS      = 0x06
-    SET_DISPLAY_BRIGHTNESS  = 0x08
-    SET_MIDI_MODE           = 0x0A
-    SET_TOUCHSTRIP_CONFIG   = 0x17
-    SET_AFTERTOUCH_MODE     = 0x1E
+    REAPPLY_COLOR_PALETTE = 0x05
+    SET_LED_BRIGHTNESS = 0x06
+    SET_DISPLAY_BRIGHTNESS = 0x08
+    SET_MIDI_MODE = 0x0A
+    SET_TOUCHSTRIP_CONFIG = 0x17
+    SET_AFTERTOUCH_MODE = 0x1E
 
 
 class Animation(enum.IntEnum):
-    NONE             = 0
-    ONE_SHOT_SIXTH   = 1
+    NONE = 0
+    ONE_SHOT_SIXTH = 1
     ONE_SHOT_QUARTER = 2
-    ONE_SHOT_HALF    = 3
-    ONE_SHOT_ONE     = 4
-    ONE_SHOT_TWO     = 5
-    PULSING_SIXTH    = 6
-    PULSING_QUARTER  = 7
-    PULSING_HALF     = 8
-    PULSING_ONE      = 9
-    PULSING_TWO      = 10
-    BLINKING_SIXTH   = 11
+    ONE_SHOT_HALF = 3
+    ONE_SHOT_ONE = 4
+    ONE_SHOT_TWO = 5
+    PULSING_SIXTH = 6
+    PULSING_QUARTER = 7
+    PULSING_HALF = 8
+    PULSING_ONE = 9
+    PULSING_TWO = 10
+    BLINKING_SIXTH = 11
     BLINKING_QUARTER = 12
-    BLINKING_HALF    = 13
-    BLINKING_ONE     = 14
-    BLINKING_TWO     = 15
+    BLINKING_HALF = 13
+    BLINKING_ONE = 14
+    BLINKING_TWO = 15
 
 
 class Note(enum.IntEnum):
@@ -134,105 +131,105 @@ class Note(enum.IntEnum):
 
 
 class Control(enum.IntEnum):
-    TAP_TEMPO         = 3
-    METRONOME         = 9
-    ENCODER_TEMPO     = 14
+    TAP_TEMPO = 3
+    METRONOME = 9
+    ENCODER_TEMPO = 14
     ENCODER_METRONOME = 15
-    MENU_0_0          = 20
-    MENU_0_1          = 21
-    MENU_0_2          = 22
-    MENU_0_3          = 23
-    MENU_0_4          = 24
-    MENU_0_5          = 25
-    MENU_0_6          = 26
-    MENU_0_7          = 27
-    MASTER            = 28
-    STOP_CLIP         = 29
-    SETUP             = 30
-    LAYOUT            = 31
-    CONVERT           = 35
-    ONE_4             = 36
-    ONE_4_T           = 37
-    ONE_8             = 38
-    ONE_8_T           = 39
-    ONE_16            = 40
-    ONE_16_T          = 41
-    ONE_32            = 42
-    ONE_32_T          = 43
-    LEFT              = 44
-    RIGHT             = 45
-    UP                = 46
-    DOWN              = 47
-    SELECT            = 48
-    SHIFT             = 49
-    NOTE              = 50
-    SESSION           = 51
-    ADD_DEVICE        = 52
-    ADD_TRACK         = 53
-    OCTAVE_DOWN       = 54
-    OCTAVE_UP         = 55
-    REPEAT            = 56
-    ACCENT            = 57
-    SCALE             = 58
-    USER              = 59
-    MUTE              = 60
-    SOLO              = 61
-    PAGE_LEFT         = 62
-    PAGE_RIGHT        = 63
-    ENCODER_0         = 71
-    ENCODER_1         = 72
-    ENCODER_2         = 73
-    ENCODER_3         = 74
-    ENCODER_4         = 75
-    ENCODER_5         = 76
-    ENCODER_6         = 77
-    ENCODER_7         = 78
-    ENCODER_MASTER    = 79
-    PLAY              = 85
-    RECORD            = 86
-    NEW               = 87
-    DUPLICATE         = 88
-    AUTOMATE          = 89
-    FIXED_LENGTH      = 90
-    MENU_1_0          = 102
-    MENU_1_1          = 103
-    MENU_1_2          = 104
-    MENU_1_3          = 105
-    MENU_1_4          = 106
-    MENU_1_5          = 107
-    MENU_1_6          = 108
-    MENU_1_7          = 109
-    DEVICE            = 110
-    BROWSE            = 111
-    MIX               = 112
-    CLIP              = 113
-    QUANTIZE          = 116
-    DOUBLE_LOOP       = 117
-    DELETE            = 118
-    UNDO              = 119
+    MENU_0_0 = 20
+    MENU_0_1 = 21
+    MENU_0_2 = 22
+    MENU_0_3 = 23
+    MENU_0_4 = 24
+    MENU_0_5 = 25
+    MENU_0_6 = 26
+    MENU_0_7 = 27
+    MASTER = 28
+    STOP_CLIP = 29
+    SETUP = 30
+    LAYOUT = 31
+    CONVERT = 35
+    ONE_4 = 36
+    ONE_4_T = 37
+    ONE_8 = 38
+    ONE_8_T = 39
+    ONE_16 = 40
+    ONE_16_T = 41
+    ONE_32 = 42
+    ONE_32_T = 43
+    LEFT = 44
+    RIGHT = 45
+    UP = 46
+    DOWN = 47
+    SELECT = 48
+    SHIFT = 49
+    NOTE = 50
+    SESSION = 51
+    ADD_DEVICE = 52
+    ADD_TRACK = 53
+    OCTAVE_DOWN = 54
+    OCTAVE_UP = 55
+    REPEAT = 56
+    ACCENT = 57
+    SCALE = 58
+    USER = 59
+    MUTE = 60
+    SOLO = 61
+    PAGE_LEFT = 62
+    PAGE_RIGHT = 63
+    ENCODER_0 = 71
+    ENCODER_1 = 72
+    ENCODER_2 = 73
+    ENCODER_3 = 74
+    ENCODER_4 = 75
+    ENCODER_5 = 76
+    ENCODER_6 = 77
+    ENCODER_7 = 78
+    ENCODER_MASTER = 79
+    PLAY = 85
+    RECORD = 86
+    NEW = 87
+    DUPLICATE = 88
+    AUTOMATE = 89
+    FIXED_LENGTH = 90
+    MENU_1_0 = 102
+    MENU_1_1 = 103
+    MENU_1_2 = 104
+    MENU_1_3 = 105
+    MENU_1_4 = 106
+    MENU_1_5 = 107
+    MENU_1_6 = 108
+    MENU_1_7 = 109
+    DEVICE = 110
+    BROWSE = 111
+    MIX = 112
+    CLIP = 113
+    QUANTIZE = 116
+    DOUBLE_LOOP = 117
+    DELETE = 118
+    UNDO = 119
 
 
 class Encoder(enum.IntEnum):
-    ZERO      = 0
-    ONE       = 1
-    TWO       = 2
-    THREE     = 3
-    FOUR      = 4
-    FIVE      = 5
-    SIX       = 6
-    SEVEN     = 7
-    MASTER    = 8
+    ZERO = 0
+    ONE = 1
+    TWO = 2
+    THREE = 3
+    FOUR = 4
+    FIVE = 5
+    SIX = 6
+    SEVEN = 7
+    MASTER = 8
     METRONOME = 9
-    TEMPO     = 10
+    TEMPO = 10
 
 
 class TouchStripFlags(enum.IntFlag):
-    HOST_SENDS    = 0b00000001
-    SYSEX         = 0b00000010
-    MOD_WHEEL     = 0b00000100
-    LED_POINT     = 0b00001000
-    BAR_CENTER    = 0b00010000
-    AUTO_RETURN   = 0b00100000
+    HOST_SENDS = 0b00000001
+    SYSEX = 0b00000010
+    MOD_WHEEL = 0b00000100
+    LED_POINT = 0b00001000
+    BAR_CENTER = 0b00010000
+    AUTO_RETURN = 0b00100000
     RETURN_CENTER = 0b01000000
 
 

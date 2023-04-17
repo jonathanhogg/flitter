@@ -2,8 +2,6 @@
 Flitter user interface controls
 """
 
-# pylama:ignore=R0902,R0903,R0912,R0914,C901
-
 import math
 
 
@@ -136,9 +134,9 @@ class Pad(TouchControl):
                 pressure_beat_key = (*self.state, "pressure", "beat")
                 pressure = self.pressure
                 if pressure_key in controller:
-                    alpha = math.exp(-delta/self.lag)
+                    alpha = math.exp(-delta / self.lag)
                     current_pressure = controller[pressure_key]
-                    pressure = pressure * (1-alpha) + current_pressure * alpha
+                    pressure = pressure * (1 - alpha) + current_pressure * alpha
                     if math.isclose(pressure, self.pressure, rel_tol=1e-3, abs_tol=1e-3):
                         pressure = self.pressure
                 controller[pressure_key] = pressure
@@ -257,7 +255,7 @@ class Encoder(TouchControl):
             if value_key in controller:
                 alpha = math.exp(-delta / self.lag)
                 current_value = controller[value_key]
-                new_value = value * (1-alpha) + current_value * alpha
+                new_value = value * (1 - alpha) + current_value * alpha
                 if not math.isclose(new_value, value, rel_tol=1e-3, abs_tol=1e-3):
                     value = new_value
             controller[value_key] = value
