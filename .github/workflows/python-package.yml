@@ -42,7 +42,7 @@ jobs:
         python -m build
     - name: Install package
       run: |
-        python -m pip install dist/flitter-*.whl
+        python -m pip install dist/flitter_lang-*.whl
     - name: Test with pytest
       run: |
         pytest
