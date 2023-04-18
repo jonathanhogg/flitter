@@ -397,12 +397,24 @@ def floorv(Vector xs not None):
 def sumv(Vector xs not None):
     if xs.objects is not None:
         return null_
-    cdef double y = 0;
+    cdef double y = 0
     for i in range(xs.length):
         y += xs.numbers[i]
     cdef Vector ys = Vector.__new__(Vector)
     ys.allocate_numbers(1)
     ys.numbers[0] = y
+    return ys
+
+
+def accumulate(Vector xs not None):
+    cdef int i, n = xs.length
+    if n == 0 or xs.objects is not None:
+        return null_
+    cdef Vector ys = Vector.__new__(Vector)
+    cdef double y = 0
+    for i in range(ys.allocate_numbers(n)):
+        y += xs.numbers[i]
+        ys.numbers[i] = y
     return ys
 
 
@@ -605,6 +617,7 @@ STATIC_FUNCTIONS = {
     'ceil': Vector(ceilv),
     'floor': Vector(floorv),
     'sum': Vector(sumv),
+    'accumulate': Vector(accumulate),
     'min': Vector(minv),
     'max': Vector(maxv),
     'hypot': Vector(hypot),
