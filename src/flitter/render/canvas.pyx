@@ -578,7 +578,7 @@ cpdef object draw(Node node, ctx, paint=None, font=None, path=None, dict stats=N
 
     elif kind == 'curve_to':
         if (point := node.get('point', 2, float)) is not None and (c1 := node.get('c1', 2, float)) is not None:
-            if c2 := node.get('c2', 2, float) is not None:
+            if (c2 := node.get('c2', 2, float)) is not None:
                 path.cubicTo(*c1, *c2, *point)
             else:
                 path.quadTo(*c1, *point)
