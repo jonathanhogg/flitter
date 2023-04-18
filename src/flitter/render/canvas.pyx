@@ -108,6 +108,13 @@ cdef dict FilterQuality = {
     'high': skia.FilterQuality.kHigh_FilterQuality,
 }
 
+cdef dict FillType = {
+    'even_odd': skia.PathFillType.kEvenOdd,
+    'inverse_even_odd': skia.PathFillType.kInverseEvenOdd,
+    'inverse_winding': skia.PathFillType.kInverseWinding,
+    'winding': skia.PathFillType.kWinding,
+}
+
 
 @cython.cdivision(True)
 cdef double turn_angle(double x0, double y0, double x1, double y1, double x2, double y2):
@@ -245,6 +252,15 @@ cdef object update_context(Node node, ctx):
         elif key == 'scale':
             if (scale := value.match(2, float)) is not None:
                 ctx.scale(*scale)
+
+
+cdef object update_path(Node node, path):
+    cdef str key
+    cdef Vector value
+    for key, value in node._attributes.items():
+        if key == 'fill_type':
+            if (fill_type := FillType.get(value.match(1, str))) is not None:
+                path.setFillType(fill_type)
 
 
 cdef object update_paint(Node node, start_paint):
@@ -529,6 +545,7 @@ cpdef object draw(Node node, ctx, paint=None, font=None, path=None, dict stats=N
     if kind == 'group':
         ctx.save()
         path = skia.Path()
+        update_path(node, path)
         update_context(node, ctx)
         group_paint = update_paint(node, paint)
         font = update_font(node, font)
@@ -563,6 +580,7 @@ cpdef object draw(Node node, ctx, paint=None, font=None, path=None, dict stats=N
 
     elif kind == 'path':
         path = skia.Path()
+        update_path(node, path)
         child = node.first_child
         while child is not None:
             paint = draw(child, ctx, paint, font, path, stats)
