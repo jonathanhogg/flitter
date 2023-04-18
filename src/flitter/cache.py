@@ -344,7 +344,16 @@ class CachePath:
             self._cache['video_output'] = writer, queue, start, *config
         if queue is not None and (not realtime or not queue.full()):
             frame = av.VideoFrame(width, height, 'rgba' if has_alpha else 'rgb24')
-            frame.planes[0].update(texture.read())
+            line_size = frame.planes[0].line_size
+            if line_size != width:
+                import numpy as np
+                components = 4 if has_alpha else 3
+                data = np.ndarray((height, width*components), dtype='uint8', buffer=texture.read())
+                array = np.empty((height, line_size), dtype='uint8')
+                array[:, :width*components] = data
+                frame.planes[0].update(array.data)
+            else:
+                frame.planes[0].update(texture.read())
             frame.pts = int(round((timestamp - start) * fps))
             try:
                 queue.put(frame, block=not realtime)
