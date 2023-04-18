@@ -39,11 +39,12 @@ dynamic_builtins.update(DYNAMIC_FUNCTIONS)
 cdef Literal NoOp = Literal(model.null_)
 
 
-cdef Expression sequence_pack(cls, list expressions):
+cdef Expression sequence_pack(list expressions):
     cdef Expression expr
     cdef Literal literal
     cdef model.Vector value
     cdef list vectors, remaining = []
+    cdef bint has_let = False
     while expressions:
         expr = <Expression>expressions.pop(0)
         if isinstance(expr, Literal):
@@ -59,15 +60,22 @@ cdef Expression sequence_pack(cls, list expressions):
             if vectors:
                 remaining.append(Literal(model.Vector._compose(vectors)))
         if expr is not None:
-            if isinstance(expr, Sequence):
-                expressions[:0] = (<Sequence>expr).expressions
+            if isinstance(expr, InlineSequence):
+                expressions[:0] = (<InlineSequence>expr).expressions
                 continue
+            if isinstance(expr, Let):
+                has_let = True
             remaining.append(expr)
     if len(remaining) == 0:
         return NoOp
+    if has_let:
+        for expr in remaining:
+            if not isinstance(expr, Let):
+                return Sequence(tuple(remaining))
+        return NoOp
     if len(remaining) == 1:
         return remaining[0]
-    return cls(tuple(remaining))
+    return InlineSequence(tuple(remaining))
 
 
 cdef class Expression:
@@ -260,7 +268,7 @@ cdef class Sequence(Expression):
         for expr in self.expressions:
             expressions.append(expr.partially_evaluate(context))
         context.variables = saved
-        return sequence_pack(Sequence, expressions)
+        return sequence_pack(expressions)
 
     cpdef object reduce(self, func):
         cdef list children = []
@@ -282,7 +290,7 @@ cdef class InlineSequence(Sequence):
         cdef Expression expr
         for expr in self.expressions:
             expressions.append(expr.partially_evaluate(context))
-        return sequence_pack(InlineSequence, expressions)
+        return sequence_pack(expressions)
 
 
 cdef class Literal(Expression):
@@ -1216,7 +1224,7 @@ cdef class For(Expression):
                 i += 1
             remaining.append(self.body.partially_evaluate(context))
         context.variables = saved
-        return sequence_pack(Sequence, remaining)
+        return sequence_pack(remaining)
 
     cpdef object reduce(self, func):
         return func(self, self.source.reduce(func), self.body.reduce(func))
