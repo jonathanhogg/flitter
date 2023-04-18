@@ -13,9 +13,14 @@ out vec4 fragment_color;
 uniform int nlights;
 uniform vec3 lights[${max_lights * 4}];
 uniform vec3 view_position;
+uniform float fog_max;
+uniform float fog_min;
+uniform vec3 fog_color;
 
 void main() {
-    vec3 view_direction = normalize(view_position - world_position);
+    vec3 view_direction = view_position - world_position;
+    float view_distance = length(view_direction);
+    view_direction = normalize(view_direction);
     vec3 color = colors * vec3(0, 0, 1);
     vec3 normal = normalize(world_normal);
     int n = shininess == 0 && colors[0] == vec3(0) ? 0 : nlights * 4;
@@ -56,5 +61,7 @@ void main() {
         }
     }
     float opacity = 1 - transparency;
-    fragment_color = vec4(color * opacity, opacity);
+    vec4 model_color = vec4(color * opacity, opacity);
+    float fog_alpha = (fog_max > fog_min) ? clamp((view_distance - fog_min) / (fog_max - fog_min), 0, 1) : 0;
+    fragment_color = mix(model_color, vec4(fog_color, 1), fog_alpha);
 }

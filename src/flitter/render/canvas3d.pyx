@@ -219,6 +219,9 @@ def draw(Node node, tuple size, glctx, dict objects):
     cdef double fov = node.get('fov', 1, float, 0.25)
     cdef double near = node.get('near', 1, float, 1)
     cdef double far = node.get('far', 1, float, width)
+    cdef double fog_min = node.get('fog_min', 1, float, 0)
+    cdef double fog_max = node.get('fog_max', 1, float, 0)
+    cdef Vector fog_color = node.get_fvec('fog_color', 3, Zero3)
     cdef int max_lights = node.get_int('max_lights', DEFAULT_MAX_LIGHTS)
     cdef Matrix44 pv_matrix = Matrix44._project(width/height, fov, near, far).mmul(Matrix44._look(viewpoint, focus, up))
     cdef Matrix44 model_matrix = update_model_matrix(Matrix44.__new__(Matrix44), node)
@@ -230,7 +233,7 @@ def draw(Node node, tuple size, glctx, dict objects):
         child = child.next_sibling
     for render_set in render_sets:
         if render_set.instances:
-            render(render_set, pv_matrix, viewpoint, max_lights, glctx, objects)
+            render(render_set, pv_matrix, viewpoint, max_lights, fog_min, fog_max, fog_color, glctx, objects)
 
 
 cdef Matrix44 update_model_matrix(Matrix44 model_matrix, Node node):
@@ -380,7 +383,8 @@ cdef void add_instance(dict render_instances, Model model, Node node, Matrix44 m
         render_instances[model] = [instance]
 
 
-cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, int max_lights, glctx, dict objects):
+cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, int max_lights,
+                 double fog_min, double fog_max, Vector fog_color, glctx, dict objects):
     cdef list instances, lights, buffers
     cdef cython.float[:, :] matrices, materials, lights_data
     cdef Material material
@@ -403,6 +407,9 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, int
         objects[shader_name] = standard_shader
     standard_shader['pv_matrix'] = pv_matrix
     standard_shader['view_position'] = viewpoint
+    standard_shader['fog_min'] = fog_min
+    standard_shader['fog_max'] = fog_max
+    standard_shader['fog_color'] = fog_color
     lights_data = view.array((max_lights, 12), 4, 'f')
     i = 0
     for lights in render_set.lights:

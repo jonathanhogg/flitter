@@ -614,7 +614,13 @@ class Canvas3D(SceneNode):
     def render(self, node, **kwargs):
         self._total_duration -= time.perf_counter()
         self._render_framebuffer.use()
-        self._render_framebuffer.clear()
+        fog_min = node.get('fog_min', 1, float, 0)
+        fog_max = node.get('fog_max', 1, float, 0)
+        if fog_max > fog_min:
+            fog_color = node.get('fog_color', 3, float, (0, 0, 0))
+            self._render_framebuffer.clear(*fog_color)
+        else:
+            self._render_framebuffer.clear()
         self.glctx.enable(moderngl.DEPTH_TEST | moderngl.CULL_FACE)
         objects = self.glctx.extra.setdefault('canvas3d_objects', {})
         canvas3d.draw(node, (self.width, self.height), self.glctx, objects)
