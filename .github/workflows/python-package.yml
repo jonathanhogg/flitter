@@ -6,7 +6,7 @@ name: Python package
 on:
   push:
     branches: ["main"]
-    paths: [".github/workflows/python-package.yml", src/**/*", "tests/*"]
+    paths: [".github/workflows/python-package.yml", "src/**/*", "tests/*"]
   pull_request:
     branches: ["main"]
 
