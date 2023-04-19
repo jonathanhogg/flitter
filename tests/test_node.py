@@ -235,8 +235,7 @@ class TestNode(unittest.TestCase):
         self.node2.append(self.node3)
         self.node3.append(self.node4)
         self.node1.append(self.node5)
-        self.assertEqual(repr(self.node1),
-"""
+        self.assertEqual(repr(self.node1), """
 !node1
  !node2 #bar #baz
   !node3 #bar #baz color=1
