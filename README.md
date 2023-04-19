@@ -98,7 +98,7 @@ For reference, the runtime dependencies are:
 
 - `numpy` - for fast memory crunching
 - `lark` and `regex` - for the language parser
-- `python-rtmidi` - for talking MIDI to the Push 2
+- `rtmidi2` - for talking MIDI (to the Push 2)
 - `pyusb` - for sending screen data to the Push 2 and for talking to LaserCubes
 - `skia-python` - for 2D drawing
 - `pyglet` - for OpenGL windowing

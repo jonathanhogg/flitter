@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 
 from loguru import logger
 import numpy as np
-import rtmidi
+import rtmidi2
 import skia
 import usb.core
 
@@ -44,15 +44,15 @@ class Push2:
             raise RuntimeError("Cannot locate USB device")
         self._usb_device.set_configuration()
         self._screen_endpoint = self._usb_device.get_active_configuration()[0, 0][0]
-        self._midi_out = rtmidi.MidiOut()
-        for i, name in enumerate(self._midi_out.get_ports()):
+        self._midi_out = rtmidi2.MidiOut()
+        for i, name in enumerate(rtmidi2.get_out_ports()):
             if name == self.MIDI_PORT_NAME:
                 self._midi_out.open_port(i)
                 break
         else:
             raise RuntimeError("Cannot open MIDI output port: " + self.MIDI_PORT_NAME)
-        self._midi_in = rtmidi.MidiIn()
-        for i, name in enumerate(self._midi_in.get_ports()):
+        self._midi_in = rtmidi2.MidiIn()
+        for i, name in enumerate(rtmidi2.get_in_ports()):
             if name == self.MIDI_PORT_NAME:
                 self._midi_in.open_port(i)
                 break
@@ -71,7 +71,7 @@ class Push2:
 
     def start(self):
         self._loop = asyncio.get_event_loop()
-        self._midi_in.set_callback(self._receive_callback)
+        self._midi_in.callback = self._receive_callback
         self._send_midi([MIDI.STOP])
         self._send_sysex(Command.SET_MIDI_MODE, 1)
         self._send_sysex(Command.SET_AFTERTOUCH_MODE, 1)
@@ -86,11 +86,10 @@ class Push2:
 
     def _send_midi(self, message):
         logger.trace("Send MIDI - {}", " ".join(f"{b:02x}" for b in message))
-        self._midi_out.send_message(message)
+        self._midi_out.send_raw(*message)
 
-    def _receive_callback(self, message_delta, _):
+    def _receive_callback(self, message, delta):
         now = self.counter.clock()
-        message, delta = message_delta
         timestamp = now if self._last_receive_timestamp is None else min(now, self._last_receive_timestamp + delta)
         self._last_receive_timestamp = timestamp
         logger.trace("Received @ {:.2f} MIDI - {}", timestamp, " ".join(f"{b:02x}" for b in message))
