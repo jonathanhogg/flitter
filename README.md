@@ -1,3 +1,6 @@
+![Screenshot from a flitter program showing colourful distorted ellipse shapes
+with trails moving outwards from the centre of the screen.](docs/header.jpg)
+
 # flitter
 
 **flitter** is a 2D and basic 3D visuals language and engine designed for live
