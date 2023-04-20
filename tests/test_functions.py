@@ -5,7 +5,7 @@ Tests of the flitter language built-in functions
 import unittest
 
 from flitter.model import Vector, null
-from flitter.language.functions import *
+from flitter.language.functions import Uniform, Normal, Beta
 
 
 class TestUniform(unittest.TestCase):
@@ -76,7 +76,7 @@ class TestUniform(unittest.TestCase):
     def test_apparent_entropy(self):
         from struct import pack
         from zlib import compress
-        data = pack('<1000L', *(int(n * (1<<32)) for n in self.FACTORY()[:1000]))
+        data = pack('<1000L', *(int(n * (1 << 32)) for n in self.FACTORY()[:1000]))
         compressed = compress(data, 9)
         self.assertGreater(len(compressed) / len(data), 0.99)
 
