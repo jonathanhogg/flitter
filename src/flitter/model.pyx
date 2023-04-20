@@ -266,9 +266,7 @@ cdef class Vector:
                         y = <unsigned long long>(0xcbf29ce484222325)
                         for c in <str>value:
                             y = (y ^ ord(c)) * <unsigned long long>(0x100000001b3)
-                    elif isinstance(value, int):
-                        y = <unsigned long long>(<long long>value)
-                    elif isinstance(value, float):
+                    elif isinstance(value, (float, int)):
                         if floor_floats:
                             y = <unsigned long long>(<long long>floor(value))
                         else:

@@ -194,9 +194,22 @@ class TestVector(unittest.TestCase):
         self.assertEqual(hash(Vector(1.0)), 258181728628715636)
         self.assertEqual(hash(Vector("Hello world!")), 2211555187250521325)
         self.assertEqual(hash(Vector(["Hello ", "world!"])), -463109597642348796)
+        self.assertEqual(hash(Vector(["foo", 1])), hash(Vector(["foo", 1.0])))
+        self.assertNotEqual(hash(Vector(["foo", 1.0])), hash(Vector(["foo", 1.1])))
         self.assertRaises(TypeError, hash, Vector(Node('foo')))
         self.assertRaises(TypeError, hash, Vector(test_func))
         self.assertRaises(TypeError, hash, Vector(test_class))
+
+    def test_hash_uniformity(self):
+        from scipy.stats import kstest
+        hashes = []
+        scale = 1 << 64
+        for c0 in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ':
+            for c1 in 'abcdefghijklmnopqrstuvwxyz':
+                for i in range(100):
+                    hashes.append((hash(Vector([c0 + c1, i])) % scale) / scale)
+        result = kstest(hashes, 'uniform')
+        self.assertGreater(result.pvalue, 0.05)
 
     def test_match(self):
         self.assertEqual(null.match(1, float), None)
