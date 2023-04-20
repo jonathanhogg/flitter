@@ -91,9 +91,13 @@ cdef class Beta(Uniform):
 
 cdef class Normal(Uniform):
     cdef double _item(self, unsigned long long i):
+        # Use the Box-Muller transform to approximate the normal distribution
+        # [https://en.wikipedia.org/wiki/Box–Muller_transform]
         i <<= 1
         cdef double u1 = Uniform._item(self, i)
         cdef double u2 = Uniform._item(self, i + 1)
+        if u1 < 1 / (1<<32):
+            u1, u2 = u2, u1
         return sqrt(-2 * log(u1)) * sin(Tau * u2)
 
 
