@@ -7,10 +7,10 @@ Flitter language functions
 
 import cython
 
-from libc.math cimport isnan, floor, round, sin, cos, asin, acos, sqrt, exp, ceil, atan2
+from libc.math cimport isnan, floor, round, sin, cos, asin, acos, sqrt, exp, ceil, atan2, log
 
 from ..cache import SharedCache
-from ..model cimport Vector, null_, true_
+from ..model cimport Vector, null_, true_, false_
 
 
 cdef double Pi = 3.141592653589793
@@ -25,6 +25,17 @@ cdef class Uniform(Vector):
         self.deallocate_numbers()
         self.length = 0
         self.objects = None
+
+    def __hash__(self):
+        return self.seed
+
+    def __eq__(self, other):
+        return self.eq(Vector._coerce(other)).numbers[0] != 0
+
+    cdef Vector eq(self, Vector other):
+        if isinstance(other, self.__class__) and (<Uniform>other).seed == self.seed:
+            return true_
+        return false_
 
     cdef Vector item(self, int i):
         cdef Vector value = Vector.__new__(Vector)
@@ -62,7 +73,7 @@ cdef class Uniform(Vector):
         return True
 
     def __repr__(self):
-        return f"{self.__class__.__name__}({self.hash!r})"
+        return f"{self.__class__.__name__}({self.seed!r})"
 
 
 cdef class Beta(Uniform):
@@ -80,12 +91,10 @@ cdef class Beta(Uniform):
 
 cdef class Normal(Uniform):
     cdef double _item(self, unsigned long long i):
-        i <<= 4
-        cdef double u = -6
-        cdef int j
-        for j in range(12):
-            u += Uniform._item(self, i + j)
-        return u
+        i <<= 1
+        cdef double u1 = Uniform._item(self, i)
+        cdef double u2 = Uniform._item(self, i + 1)
+        return sqrt(-2 * log(u1)) * sin(Tau * u2)
 
 
 def read_text(Vector filename):
