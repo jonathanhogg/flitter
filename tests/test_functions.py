@@ -11,6 +11,8 @@ from flitter.language.functions import *
 class TestUniform(unittest.TestCase):
     FACTORY = Uniform
     DISTRIBUTION = ('uniform',)
+    LOWER = 0
+    UPPER = 1
 
     def test_creation(self):
         self.assertIsInstance(self.FACTORY(), self.FACTORY)
@@ -63,6 +65,21 @@ class TestUniform(unittest.TestCase):
                 result = kstest(self.FACTORY(i)[:1_000_000], *self.DISTRIBUTION)
                 self.assertGreater(result.pvalue, 0.05)
 
+    def test_range(self):
+        source = self.FACTORY()
+        for i in range(1000):
+            with self.subTest(i=i):
+                x = source[i]
+                self.assertTrue(x >= self.LOWER)
+                self.assertTrue(x < self.UPPER)
+
+    def test_apparent_entropy(self):
+        from struct import pack
+        from zlib import compress
+        data = pack('<1000L', *(int(n * (1<<32)) for n in self.FACTORY()[:1000]))
+        compressed = compress(data, 9)
+        self.assertGreater(len(compressed) / len(data), 0.99)
+
 
 class TestBeta(TestUniform):
     FACTORY = Beta
@@ -72,6 +89,11 @@ class TestBeta(TestUniform):
 class TestNormal(TestUniform):
     FACTORY = Normal
     DISTRIBUTION = ('norm',)
+    LOWER = -25
+    UPPER = 25
+
+    def test_apparent_entropy(self):
+        pass
 
 
 #     'len': Vector(length),
