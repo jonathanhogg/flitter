@@ -1118,7 +1118,10 @@ cdef class Node:
     def __cinit__(self, str kind, set tags=None, dict attributes=None):
         self.kind = kind
         self._tags = set() if tags is None else tags.copy()
-        self._attributes = {} if attributes is None else attributes.copy()
+        self._attributes = {}
+        if attributes is not None:
+            for key, value in attributes.items():
+                self._attributes[key] = Vector._coerce(value)
 
     def __setstate__(self, set tags):
         if tags is not None:
@@ -1414,10 +1417,82 @@ cdef class Node:
         return self.repr()
 
 
+cdef class StateDict:
+    def __cinit__(self, state=None):
+        cdef Vector value_vector
+        self._state = {}
+        self.changed = False
+        if state is not None:
+            for key, value in state.items():
+                value_vector = Vector._coerce(value)
+                if value_vector.length:
+                    self._state[Vector._coerce(key)] = value_vector
+
+    def __reduce__(self):
+        return StateDict, (self._state,)
+
+    def clear_changed(self):
+        self.changed = False
+
+    cdef Vector get_item(self, Vector key):
+        if key in self._state:
+            return self._state[key]
+        return null_
+
+    def __setitem__(self, key, value):
+        cdef Vector key_vector = Vector._coerce(key)
+        cdef Vector value_vector = Vector._coerce(value)
+        cdef Vector current = self.get_item(key_vector)
+        if value_vector.length:
+            if value_vector.ne(current):
+                self._state[key_vector] = value_vector
+                self.changed = True
+        elif current.length:
+            del self._state[key_vector]
+            self.changed = True
+
+    def __getitem__(self, key):
+        return self.get_item(Vector._coerce(key))
+
+    def __contains__(self, key):
+        return Vector._coerce(key) in self._state
+
+    def __delitem__(self, key):
+        cdef Vector key_vector = Vector._coerce(key)
+        if key_vector in self._state:
+            del self._state[key_vector]
+            self.changed = True
+
+    def __iter__(self):
+        return iter(self._state)
+
+    def clear(self):
+        cdef Vector key, value
+        cdef dict new_state = {}
+        for key, value in self._state.items():
+            if key.length == 1 and key.objects is not None and isinstance(key.objects[0], str) and key.objects[0].startswith('_'):
+                new_state[key] = value
+        self._state = new_state
+        self.changed = True
+
+    def items(self):
+        return self._state.items()
+
+    def keys(self):
+        return self._state.keys()
+
+    def values(self):
+        return self._state.values()
+
+    def __repr__(self):
+        return f"StateDict({self._state!r})"
+
+
+
 cdef class Context:
-    def __cinit__(self, dict variables=None, dict state=None, Node graph=None, dict pragmas=None, str path=None, Context parent=None):
+    def __cinit__(self, dict variables=None, StateDict state=None, Node graph=None, dict pragmas=None, str path=None, Context parent=None):
         self.variables = variables if variables is not None else {}
-        self.state = state if state is not None else {}
+        self.state = state if state is not None else StateDict.__new__(StateDict)
         self.graph = graph if graph is not None else Node.__new__(Node, 'root')
         self.pragmas = pragmas if pragmas is not None else {}
         self.path = path

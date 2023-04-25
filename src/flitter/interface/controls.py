@@ -18,7 +18,7 @@ class Control:
         self.state = None
         self._changed = False
 
-    def update(self, node, _):
+    def update(self, node, beat, state_dict):
         changed = self._changed
         self._changed = False
         if 'state' in node:
@@ -50,15 +50,15 @@ class TouchControl(Control):
         self._touched_beat = None
         self._released_beat = None
 
-    def update(self, node, controller):
-        changed = super().update(node, controller)
+    def update(self, node, beat, state_dict):
+        changed = super().update(node, beat, state_dict)
         if self.state is not None:
             if self.touched is not None:
-                controller[(*self.state, "touched")] = self.touched
+                state_dict[(*self.state, "touched")] = self.touched
             if self._touched_beat is not None:
-                controller[(*self.state, "touched", "beat")] = self._touched_beat
+                state_dict[(*self.state, "touched", "beat")] = self._touched_beat
             if self._released_beat is not None:
-                controller[(*self.state, "released", "beat")] = self._released_beat
+                state_dict[(*self.state, "released", "beat")] = self._released_beat
         return changed
 
     def on_touched(self, beat):
@@ -97,8 +97,8 @@ class Pad(TouchControl):
         self._can_toggle = False
         self._clock = None
 
-    def update(self, node, controller):
-        changed = super().update(node, controller)
+    def update(self, node, beat, state_dict):
+        changed = super().update(node, beat, state_dict)
         if self.state is not None:
             now = system_clock()
             delta = 0.0 if self._clock is None else now - self._clock
@@ -116,13 +116,13 @@ class Pad(TouchControl):
                 self.toggle = toggle
                 if not self.toggle and self.toggled:
                     self.toggled = False
-                    self._toggled_beat = controller.counter.beat
+                    self._toggled_beat = beat
                 self._can_toggle = False
                 changed = True
             if self.toggle and self.toggled is None:
-                if toggled_key in controller:
-                    self.toggled = bool(controller[toggled_key])
-                    self._toggled_beat = controller[toggled_beat_key]
+                if toggled_key in state_dict:
+                    self.toggled = bool(state_dict[toggled_key])
+                    self._toggled_beat = state_dict[toggled_beat_key].match(1, float)
                 else:
                     self.toggled = self.initial
                     self._toggled_beat = 0 if self.initial else None
@@ -135,22 +135,22 @@ class Pad(TouchControl):
                 max_pressure_key = (*self.state, "max_pressure")
                 pressure_beat_key = (*self.state, "pressure", "beat")
                 pressure = self.pressure
-                if pressure_key in controller:
+                if pressure_key in state_dict:
                     alpha = math.exp(-delta / self.lag)
-                    current_pressure = controller[pressure_key]
+                    current_pressure = float(state_dict[pressure_key])
                     pressure = pressure * (1 - alpha) + current_pressure * alpha
                     if math.isclose(pressure, self.pressure, rel_tol=1e-3, abs_tol=1e-3):
                         pressure = self.pressure
-                controller[pressure_key] = pressure
-                controller[pressure_beat_key] = self._pressure_beat
-                controller[max_pressure_key] = self._max_pressure
+                state_dict[pressure_key] = pressure
+                state_dict[pressure_beat_key] = self._pressure_beat
+                state_dict[max_pressure_key] = self._max_pressure
             if self.toggled is not None:
-                controller[toggled_key] = self.toggled
-                controller[toggled_beat_key] = self._toggled_beat
+                state_dict[toggled_key] = self.toggled
+                state_dict[toggled_beat_key] = self._toggled_beat
                 if self.toggled:
-                    controller[(*self.state, "toggled_on", "beat")] = self._toggled_beat
+                    state_dict[(*self.state, "toggled_on", "beat")] = self._toggled_beat
                 else:
-                    controller[(*self.state, "toggled_off", "beat")] = self._toggled_beat
+                    state_dict[(*self.state, "toggled_off", "beat")] = self._toggled_beat
         return changed
 
     def on_touched(self, beat):
@@ -209,8 +209,8 @@ class Encoder(TouchControl):
         self._value_beat = None
         self._clock = None
 
-    def update(self, node, controller):
-        changed = super().update(node, controller)
+    def update(self, node, beat, state_dict):
+        changed = super().update(node, beat, state_dict)
         if self.state is not None:
             now = system_clock()
             delta = 0.0 if self._clock is None else now - self._clock
@@ -246,22 +246,22 @@ class Encoder(TouchControl):
             value_key = self.state
             value_beat_key = (*self.state, "beat")
             if self.value is None:
-                if value_key in controller:
-                    self.value = controller[value_key]
-                    self._value_beat = controller[value_beat_key]
+                if value_key in state_dict:
+                    self.value = float(state_dict[value_key])
+                    self._value_beat = state_dict[value_beat_key].match(1, float)
                 else:
                     self.value = self.initial
                     self._value_beat = 0
             precision = 10**(self.decimals + (2 if self.percent else 1))
             value = int(self.value * precision) / precision
-            if value_key in controller:
+            if value_key in state_dict:
                 alpha = math.exp(-delta / self.lag)
-                current_value = controller[value_key]
+                current_value = float(state_dict[value_key])
                 new_value = value * (1 - alpha) + current_value * alpha
                 if not math.isclose(new_value, value, rel_tol=1e-3, abs_tol=1e-3):
                     value = new_value
-            controller[value_key] = value
-            controller[value_beat_key] = self._value_beat
+            state_dict[value_key] = value
+            state_dict[value_beat_key] = self._value_beat
         return changed
 
     def on_turned(self, beat, amount):

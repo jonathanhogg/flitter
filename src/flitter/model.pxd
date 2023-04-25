@@ -114,11 +114,18 @@ cdef class Node:
     cdef str repr(self)
 
 
+cdef class StateDict:
+    cdef readonly bint changed
+    cdef dict _state
+
+    cdef Vector get_item(self, Vector key)
+
+
 cdef class Context:
     cdef readonly dict variables
     cdef readonly set unbound
     cdef readonly dict pragmas
-    cdef readonly dict state
+    cdef readonly StateDict state
     cdef readonly Node graph
     cdef readonly str path
     cdef readonly Context parent

@@ -13,7 +13,7 @@ from ..cache import SharedCache
 from ..clock import BeatCounter, system_clock
 from ..interface.controls import Pad, Encoder
 from ..interface.osc import OSCReceiver, OSCSender, OSCMessage, OSCBundle
-from ..model import Context, Vector, null
+from ..model import Context, StateDict, Vector
 from ..render import process, window, laser, dmx
 
 
@@ -35,7 +35,6 @@ class Controller:
             self.defined_variables = {key: Vector.coerce(value) for key, value in defined_variables.items()}
         else:
             self.defined_variables = {}
-        self.state_timestamp = None
         self.state_file = Path(state_file) if state_file is not None else None
         if self.state_file is not None and self.state_file.exists():
             logger.info("Recover state from state file: {}", self.state_file)
@@ -45,6 +44,7 @@ class Controller:
             self.global_state = {}
         self.global_state_dirty = False
         self.state = None
+        self.state_timestamp = None
         self.windows = []
         self.lasers = []
         self.dmx = []
@@ -62,7 +62,7 @@ class Controller:
     def load_page(self, filename):
         page_number = len(self.pages)
         path = SharedCache[filename]
-        self.pages.append((path, self.global_state.setdefault(page_number, {})))
+        self.pages.append((path, self.global_state.setdefault(page_number, StateDict())))
         logger.info("Added code page {}: {}", page_number, path)
 
     def switch_to_page(self, page_number):
@@ -77,8 +77,7 @@ class Controller:
             SharedCache.set_root(self.current_path)
             logger.info("Switched to page {}: {}", page_number, self.current_path)
             self.enqueue_reset()
-            counter_state = self.get(('_counter',))
-            if counter_state is not None:
+            if counter_state := self.state['_counter']:
                 tempo, quantum, start = counter_state
                 self.counter.update(tempo, int(quantum), start)
                 logger.info("Restore counter at beat {:.1f}, tempo {:.1f}, quantum {}", self.counter.beat, self.counter.tempo, self.counter.quantum)
@@ -86,36 +85,6 @@ class Controller:
             self.enqueue_page_status()
             for win in self.windows:
                 win.purge()
-
-    def get(self, key, default=None):
-        if (value := self.state.get(Vector.coerce(key), None)) is not None:
-            if value == null:
-                return None
-            elif len(value) == 1:
-                return value[0]
-            return tuple(value)
-        return default
-
-    def __contains__(self, key):
-        return Vector.coerce(key) in self.state
-
-    def __getitem__(self, key):
-        if (value := self.state.get(Vector.coerce(key), None)) is not None:
-            if value == null:
-                return None
-            elif len(value) == 1:
-                return value[0]
-            return tuple(value)
-        raise KeyError(key)
-
-    def __setitem__(self, key, value):
-        key = Vector.coerce(key)
-        value = Vector.coerce(value)
-        if key not in self.state or value != self.state[key]:
-            self.state[key] = value
-            self.global_state_dirty = True
-            self.state_timestamp = system_clock()
-            logger.trace("State changed: {!r} = {!r}", key, value)
 
     async def update_windows(self, graph, **kwargs):
         async with asyncio.TaskGroup() as group:
@@ -176,7 +145,7 @@ class Controller:
                     remaining.remove(number)
                 else:
                     continue
-                if pad.update(node, self):
+                if pad.update(node, self.counter.beat, self.state):
                     self.enqueue_pad_status(pad)
         for number in remaining:
             self.enqueue_pad_status(self.pads[number], deleted=True)
@@ -192,7 +161,7 @@ class Controller:
                     remaining.remove(number)
                 else:
                     continue
-                if encoder.update(node, self):
+                if encoder.update(node, self.counter.beat, self.state):
                     self.enqueue_encoder_status(encoder)
         for number in remaining:
             self.enqueue_encoder_status(self.encoders[number], deleted=True)
@@ -228,7 +197,7 @@ class Controller:
             for element in message.elements:
                 self.process_message(element)
             return
-        logger.debug("Received OSC message: {!r}", message)
+        logger.trace("Received OSC message: {!r}", message)
         parts = message.address.strip('/').split('/')
         if parts[0] == 'hello':
             self.enqueue_tempo()
@@ -240,7 +209,7 @@ class Controller:
         elif parts[0] == 'tempo':
             tempo, quantum, start = message.args
             self.counter.update(tempo, int(quantum), start)
-            self[('_counter',)] = tempo, int(quantum), start
+            self.state['_counter'] = tempo, int(quantum), start
             self.enqueue_tempo()
         elif parts[0] == 'pad':
             number = tuple(int(n) for n in parts[1:-1])
@@ -291,7 +260,7 @@ class Controller:
             self.process_message(message)
 
     def handle_pragmas(self, pragmas):
-        if '_counter' not in self:
+        if '_counter' not in self.state:
             tempo = pragmas.get('tempo')
             if tempo is not None and len(tempo) == 1 and isinstance(tempo[0], float) and tempo[0] > 0:
                 tempo = tempo[0]
@@ -303,13 +272,12 @@ class Controller:
             else:
                 quantum = 4
             self.counter.update(tempo, quantum, system_clock())
-            self['_counter'] = self.counter.tempo, self.counter.quantum, self.counter.start
+            self.state['_counter'] = self.counter.tempo, self.counter.quantum, self.counter.start
             self.enqueue_tempo()
             logger.info("Start counter, tempo {}, quantum {}", self.counter.tempo, self.counter.quantum)
 
     def reset_state(self):
-        for key in [key for key in self.state.keys() if not (len(key) == 1 and key[0].startswith('_'))]:
-            del self.state[key]
+        self.state.clear()
         for pad in self.pads.values():
             pad.reset()
         for encoder in self.encoders.values():
@@ -336,28 +304,27 @@ class Controller:
             while True:
                 housekeeping -= system_clock()
 
-                if self.state_timestamp is not None and run_top is not current_top:
-                    logger.debug("Undo partial-evaluation on state")
-                    run_top = current_top
-
                 program_top = self.current_path.read_flitter_program(self.defined_variables)
                 if program_top is not current_top:
                     level = 'SUCCESS' if current_top is None else 'INFO'
                     logger.log(level, "Loaded page {}: {}", self.current_page, self.current_path)
                     run_top = current_top = program_top
 
-                if current_top is not None and self.state_eval_wait:
-                    if self.state_timestamp is not None:
-                        evaluate_state = system_clock() > self.state_timestamp + self.state_eval_wait
-                    else:
-                        evaluate_state = run_top is current_top
-                    if evaluate_state:
-                        start = system_clock()
-                        run_top = current_top.simplify(state=self.state)
-                        logger.debug("Partially-evaluated current program on state in {:.1f}ms", (system_clock() - start) * 1000)
-                        logger.opt(lazy=True).debug("Tree node count after partial-evaluation {after}",
-                                                    after=lambda: run_top.reduce(lambda e, *rs: sum(rs) + 1))
-                        self.state_timestamp = None
+                if current_top is not None and run_top is current_top and self.state_eval_wait and self.state_timestamp is not None and \
+                        system_clock() > self.state_timestamp + self.state_eval_wait:
+                    start = system_clock()
+                    run_top = current_top.simplify(state=self.state)
+                    logger.debug("Partially-evaluated current program on state in {:.1f}ms", (system_clock() - start) * 1000)
+                    logger.opt(lazy=True).debug("Tree node count after partial-evaluation {after}",
+                                                after=lambda: run_top.reduce(lambda e, *rs: sum(rs) + 1))
+
+                if self.state.changed:
+                    self.global_state_dirty = True
+                    self.state_timestamp = system_clock()
+                    self.state.clear_changed()
+                    if run_top is not current_top:
+                        logger.debug("Undo partial-evaluation on state")
+                        run_top = current_top
 
                 beat = self.counter.beat_at_time(frame_time)
                 delta = beat - last
@@ -402,10 +369,10 @@ class Controller:
                 if self.queue:
                     await self.osc_sender.send_bundle_from_queue(self.queue)
 
-                if self.autoreset and self.state_timestamp and system_clock() > self.state_timestamp + self.autoreset:
+                if self.autoreset and self.state_timestamp is not None and system_clock() > self.state_timestamp + self.autoreset:
                     logger.debug("Auto-reset state")
                     self.reset_state()
-                    program_top = self.program_top
+                    current_top = program_top
 
                 if self.global_state_dirty and self.state_file is not None and frame_time > dump_time + 1:
                     logger.debug("Saving state")

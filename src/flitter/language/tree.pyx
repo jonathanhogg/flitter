@@ -99,7 +99,7 @@ cdef class Top(Expression):
     def set_path(self, str path):
         self.path = path
 
-    def run(self, dict state=None, dict variables=None):
+    def run(self, model.StateDict state=None, dict variables=None):
         cdef dict context_vars = None
         cdef str key
         if variables is not None:
@@ -110,7 +110,7 @@ cdef class Top(Expression):
         self.evaluate(context)
         return context
 
-    def simplify(self, dict state=None, dict variables=None):
+    def simplify(self, model.StateDict state=None, dict variables=None):
         cdef dict context_vars = None
         cdef str key
         if variables is not None:
@@ -358,13 +358,13 @@ cdef class Lookup(Expression):
 
     cpdef model.Vector evaluate(self, model.Context context):
         cdef model.Vector key = self.key.evaluate(context)
-        return context.state.get(key, model.null_)
+        return context.state.get_item(key)
 
     cpdef Expression partially_evaluate(self, model.Context context):
         cdef Expression key = self.key.partially_evaluate(context)
         cdef model.Vector value
         if isinstance(key, Literal):
-            value = context.state.get((<Literal>key).value, model.null_)
+            value = context.state.get_item((<Literal>key).value)
             if value.length:
                 return Literal(value)
         return Lookup(key)
