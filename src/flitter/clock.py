@@ -13,14 +13,13 @@ import time
 from numpy.polynomial.polynomial import polyfit
 
 
-class BeatCounter:
-    @staticmethod
-    def clock():
-        return time.clock_gettime(time.CLOCK_MONOTONIC_RAW)
+system_clock = time.perf_counter
 
+
+class BeatCounter:
     def __init__(self, tempo=120, quantum=4, start=None):
         if start is None:
-            start = self.clock()
+            start = system_clock()
         self._start = start
         self._period = 60 / tempo
         self._quantum = quantum
@@ -48,11 +47,11 @@ class BeatCounter:
 
     @property
     def beat(self):
-        return self.beat_at_time(self.clock())
+        return self.beat_at_time(system_clock())
 
     @property
     def phase(self):
-        return self.beat_at_time(self.clock()) % self._quantum
+        return self.beat_at_time(system_clock()) % self._quantum
 
     def update(self, tempo, quantum, start):
         self._start = start
@@ -71,7 +70,7 @@ class BeatCounter:
 
     def set_tempo(self, tempo, timestamp=None):
         if timestamp is None:
-            timestamp = self.clock()
+            timestamp = system_clock()
         period = 60 / tempo
         beat = (timestamp - self._start) / self._period
         self._start = timestamp - beat * period
@@ -80,7 +79,7 @@ class BeatCounter:
 
     def set_quantum(self, quantum, timestamp=None):
         if timestamp is None:
-            timestamp = self.clock()
+            timestamp = system_clock()
         beat = (timestamp - self._start) / self._period
         phase = beat % self._quantum
         self._quantum = quantum
@@ -88,7 +87,7 @@ class BeatCounter:
 
     def set_phase(self, phase, timestamp=None, backslip_limit=0):
         if timestamp is None:
-            timestamp = self.clock()
+            timestamp = system_clock()
         beat = (timestamp - self._start) / self._period
         adjustment = (phase - beat) % self._quantum
         if adjustment > self._quantum - backslip_limit:
@@ -106,7 +105,7 @@ class BeatCounter:
         try:
             while True:
                 timestamp = self.time_at_beat(beat)
-                now = self.clock()
+                now = system_clock()
                 if now >= timestamp:
                     return
                 try:
@@ -135,7 +134,7 @@ class TapTempo:
 
     def apply(self, counter, timestamp=None, backslip_limit=0):
         if timestamp is None:
-            timestamp = counter.clock()
+            timestamp = system_clock()
         if self._taps:
             if len(self._taps) > 1:
                 tzero, period = polyfit(range(len(self._taps)), self._taps, 1)

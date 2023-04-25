@@ -11,7 +11,7 @@ from loguru import logger
 import skia
 
 import flitter
-from ..clock import TapTempo
+from ..clock import TapTempo, system_clock
 from ..ableton.constants import Encoder, Control, BUTTONS
 from ..ableton.events import (ButtonPressed, ButtonReleased, PadPressed, PadHeld, PadReleased,
                               EncoderTurned, EncoderTouched, EncoderReleased, MenuButtonReleased)
@@ -88,7 +88,7 @@ class Controller:
                     self.push.set_pad_rgb((7 - row) * 8 + column, state.r * brightness, state.g * brightness, state.b * brightness)
                     self.pads[column, row] = state
                     if state.touched and (column, row) not in self.touched_pads:
-                        await self.osc_sender.send_message(f'/pad/{column}/{row}/released', self.push.counter.clock())
+                        await self.osc_sender.send_message(f'/pad/{column}/{row}/released', system_clock())
                 elif (column, row) in self.pads:
                     self.push.set_pad_rgb((7 - row) * 8 + column, 0, 0, 0)
                     del self.pads[column, row]
@@ -100,7 +100,7 @@ class Controller:
                     self.push.set_menu_button_rgb(number + 8, state.r * brightness, state.g * brightness, state.b * brightness)
                     self.encoders[number] = state
                     if state.touched and number not in self.touched_encoders:
-                        await self.osc_sender.send_message(f'/encoder/{number}/released', self.push.counter.clock())
+                        await self.osc_sender.send_message(f'/encoder/{number}/released', system_clock())
                 elif number in self.encoders:
                     self.push.set_menu_button_rgb(number + 8, 0, 0, 0)
                     del self.encoders[number]
@@ -133,7 +133,7 @@ class Controller:
         for control in self.buttons:
             self.push.set_button_white(control, 0)
         self.buttons.clear()
-        self.push.counter.update(120, 4, self.push.counter.clock())
+        self.push.counter.update(120, 4, system_clock())
         self.last_received = None
         self.recording = False
         self.playing = False
@@ -143,7 +143,7 @@ class Controller:
     async def receive_messages(self):
         while True:
             message = await self.osc_receiver.receive()
-            self.last_received = self.push.counter.clock()
+            self.last_received = system_clock()
             await self.process_message(message)
             self.updated.set()
 
@@ -345,7 +345,7 @@ class Controller:
                         if self.tempo_control:
                             ctx.drawSimpleText(f"BPM: {self.push.counter.tempo:5.1f}", 10, 150, font, paint)
                             ctx.drawSimpleText(f"Quantum: {self.push.counter.quantum}", 130, 150, font, paint)
-                            if record_pressed_at is not None and self.push.counter.clock() > record_pressed_at + 0.5:
+                            if record_pressed_at is not None and system_clock() > record_pressed_at + 0.5:
                                 ctx.drawSimpleText(f"Phase: {int(self.push.counter.phase):2d}", 250, 150, font, red_paint)
                             else:
                                 ctx.drawSimpleText(f"Phase: {int(self.push.counter.phase):2d}", 250, 150, font, paint)
@@ -397,7 +397,7 @@ class Controller:
                             ctx.drawString(text, (120 - width) / 2, 20, font, paint)
                             ctx.restore()
                 else:
-                    now = self.push.counter.clock()
+                    now = system_clock()
                     if (self.last_hello is None or now > self.last_hello + self.HELLO_RETRY_INTERVAL) \
                             and (self.last_received is None or now > self.last_received + self.RECEIVE_TIMEOUT):
                         await self.osc_sender.send_message('/hello')

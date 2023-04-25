@@ -6,12 +6,11 @@ import asyncio
 import gc
 from pathlib import Path
 import pickle
-import time
 
 from loguru import logger
 
 from ..cache import SharedCache
-from ..clock import BeatCounter
+from ..clock import BeatCounter, system_clock
 from ..interface.controls import Pad, Encoder
 from ..interface.osc import OSCReceiver, OSCSender, OSCMessage, OSCBundle
 from ..model import Context, Vector, null
@@ -72,7 +71,7 @@ class Controller:
             self.encoders = {}
             path, state = self.pages[page_number]
             self.state = state
-            self.state_timestamp = self.counter.clock()
+            self.state_timestamp = system_clock()
             self.current_path = path
             self.current_page = page_number
             SharedCache.set_root(self.current_path)
@@ -115,7 +114,7 @@ class Controller:
         if key not in self.state or value != self.state[key]:
             self.state[key] = value
             self.global_state_dirty = True
-            self.state_timestamp = self.counter.clock()
+            self.state_timestamp = system_clock()
             logger.trace("State changed: {!r} = {!r}", key, value)
 
     async def update_windows(self, graph, **kwargs):
@@ -303,7 +302,7 @@ class Controller:
                 quantum = int(quantum[0])
             else:
                 quantum = 4
-            self.counter.update(tempo, quantum, self.counter.clock())
+            self.counter.update(tempo, quantum, system_clock())
             self['_counter'] = self.counter.tempo, self.counter.quantum, self.counter.start
             self.enqueue_tempo()
             logger.info("Start counter, tempo {}, quantum {}", self.counter.tempo, self.counter.quantum)
@@ -325,7 +324,7 @@ class Controller:
             frames = []
             self.enqueue_reset()
             self.enqueue_page_status()
-            frame_time = self.counter.clock()
+            frame_time = system_clock()
             last = self.counter.beat_at_time(frame_time)
             dump_time = frame_time
             execution = render = housekeeping = 0
@@ -335,7 +334,7 @@ class Controller:
             errors = set()
             logs = set()
             while True:
-                housekeeping -= self.counter.clock()
+                housekeeping -= system_clock()
 
                 if self.state_timestamp is not None and run_top is not current_top:
                     logger.debug("Undo partial-evaluation on state")
@@ -349,13 +348,13 @@ class Controller:
 
                 if current_top is not None and self.state_eval_wait:
                     if self.state_timestamp is not None:
-                        evaluate_state = self.counter.clock() > self.state_timestamp + self.state_eval_wait
+                        evaluate_state = system_clock() > self.state_timestamp + self.state_eval_wait
                     else:
                         evaluate_state = run_top is current_top
                     if evaluate_state:
-                        start = time.perf_counter()
+                        start = system_clock()
                         run_top = current_top.simplify(state=self.state)
-                        logger.debug("Partially-evaluated current program on state in {:.1f}ms", (time.perf_counter() - start) * 1000)
+                        logger.debug("Partially-evaluated current program on state in {:.1f}ms", (system_clock() - start) * 1000)
                         logger.opt(lazy=True).debug("Tree node count after partial-evaluation {after}",
                                                     after=lambda: run_top.reduce(lambda e, *rs: sum(rs) + 1))
                         self.state_timestamp = None
@@ -367,7 +366,7 @@ class Controller:
                          'delta': delta, 'clock': frame_time, 'performance': performance,
                          'fps': self.target_fps, 'realtime': self.realtime}
 
-                now = self.counter.clock()
+                now = system_clock()
                 housekeeping += now
                 execution -= now
                 if current_top is not None:
@@ -382,7 +381,7 @@ class Controller:
                 logs = context.logs
                 for log in new_logs:
                     print(log)
-                now = self.counter.clock()
+                now = system_clock()
                 execution += now
                 render -= now
 
@@ -393,7 +392,7 @@ class Controller:
                     group.create_task(self.update_lasers(context.graph))
                     group.create_task(self.update_dmx(context.graph))
 
-                now = self.counter.clock()
+                now = system_clock()
                 render += now
                 housekeeping -= now
 
@@ -403,7 +402,7 @@ class Controller:
                 if self.queue:
                     await self.osc_sender.send_bundle_from_queue(self.queue)
 
-                if self.autoreset and self.state_timestamp and self.counter.clock() > self.state_timestamp + self.autoreset:
+                if self.autoreset and self.state_timestamp and system_clock() > self.state_timestamp + self.autoreset:
                     logger.debug("Auto-reset state")
                     self.reset_state()
                     program_top = self.program_top
@@ -428,7 +427,7 @@ class Controller:
                 elif count := gc.collect(0):
                     logger.trace("Collected {} objects", count)
 
-                now = self.counter.clock()
+                now = system_clock()
                 frames.append(now)
                 frame_period = now - frame_time
                 housekeeping += now
@@ -444,7 +443,7 @@ class Controller:
                 else:
                     logger.trace("Slow frame - {:.0f}ms", frame_period * 1000)
                     await asyncio.sleep(0)
-                    frame_time = self.counter.clock()
+                    frame_time = system_clock()
 
                 if len(frames) > 1 and frames[-1] - frames[0] > 5:
                     nframes = len(frames) - 1

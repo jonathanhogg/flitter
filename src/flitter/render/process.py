@@ -4,11 +4,11 @@ Multi-processing for rendering
 
 import asyncio
 from multiprocessing import Process, Queue
-import time
 
 from loguru import logger
 
 import flitter
+from ..clock import system_clock
 
 
 class Proxy:
@@ -47,20 +47,20 @@ class Proxy:
     @staticmethod
     async def loop(queue, obj):
         nframes = render = 0
-        stats_time = time.perf_counter()
+        stats_time = system_clock()
         while True:
             method, args, kwargs = queue.get()
             if method == 'update':
-                render -= time.perf_counter()
+                render -= system_clock()
                 await obj.update(*args, **kwargs)
-                render += time.perf_counter()
+                render += system_clock()
             elif method == 'purge':
                 obj.purge()
             elif method == 'destroy':
                 obj.destroy()
                 return
             nframes += 1
-            if time.perf_counter() > stats_time + 5:
+            if system_clock() > stats_time + 5:
                 logger.info("{} render {:.1f}ms", obj.__class__.__name__, 1000 * render / nframes)
                 nframes = render = 0
                 stats_time += 5

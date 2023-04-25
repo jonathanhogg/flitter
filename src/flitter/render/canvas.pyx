@@ -7,7 +7,6 @@ Flitter drawing canvas based on Skia
 import array
 import functools
 from pathlib import Path
-import time
 
 from cpython cimport array
 import cython
@@ -17,6 +16,7 @@ import skia
 
 from flitter import name_patch
 from ..cache import SharedCache
+from ..clock import system_clock
 from ..model cimport Vector, Node
 
 
@@ -536,7 +536,7 @@ cdef object make_path_effect(Node node):
 
 
 cpdef object draw(Node node, ctx, paint=None, font=None, path=None, dict stats=None):
-    cdef double start_time = time.perf_counter()
+    cdef double start_time = system_clock()
     cdef Vector points
     cdef Node child
     cdef str kind = node.kind
@@ -750,7 +750,7 @@ cpdef object draw(Node node, ctx, paint=None, font=None, path=None, dict stats=N
     cdef int count
     cdef str parent_kind
     if stats is not None:
-        duration = time.perf_counter() - start_time
+        duration = system_clock() - start_time
         count, total = stats.get(kind, (0, 0))
         stats[kind] = count+1, total+duration
         if kind != 'canvas':

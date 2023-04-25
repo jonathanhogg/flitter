@@ -6,7 +6,6 @@ import array
 from collections import namedtuple
 import math
 import sys
-import time
 
 from loguru import logger
 import skia
@@ -21,6 +20,7 @@ import pyglet.gl
 from ..cache import SharedCache
 from . import canvas
 from . import canvas3d
+from ..clock import system_clock
 from .glsl import TemplateLoader
 
 
@@ -202,7 +202,7 @@ class ProgramNode(SceneNode):
             self._program = None
             self._rectangle = None
             try:
-                start = time.perf_counter()
+                start = system_clock()
                 self._program = self.glctx.program(vertex_shader=self._vertex_source, fragment_shader=self._fragment_source)
                 vertices = self.glctx.buffer(array.array('f', [-1, 1, -1, -1, 1, 1, 1, -1]))
                 self._rectangle = self.glctx.vertex_array(self._program, [(vertices, '2f', 'position')])
@@ -213,7 +213,7 @@ class ProgramNode(SceneNode):
                 source = '\n'.join(f'{i+1:3d}|{line}' for i, line in enumerate(source.split('\n')))
                 logger.trace("Failing source:\n{}", source)
             else:
-                end = time.perf_counter()
+                end = system_clock()
                 logger.debug("{} GL program compiled in {:.1f}ms", self.name, 1000 * (end - start))
 
     def render(self, node, **kwargs):
@@ -548,12 +548,12 @@ class Canvas(SceneNode):
         self._total_duration = 0
 
     def render(self, node, **kwargs):
-        self._total_duration -= time.perf_counter()
+        self._total_duration -= system_clock()
         self._graphics_context.resetContext()
         self._framebuffer.clear()
         canvas.draw(node, self._canvas, stats=self._stats)
         self._surface.flushAndSubmit()
-        self._total_duration += time.perf_counter()
+        self._total_duration += system_clock()
 
 
 class Canvas3D(SceneNode):
@@ -612,7 +612,7 @@ class Canvas3D(SceneNode):
         pass
 
     def render(self, node, **kwargs):
-        self._total_duration -= time.perf_counter()
+        self._total_duration -= system_clock()
         self._render_framebuffer.use()
         fog_min = node.get('fog_min', 1, float, 0)
         fog_max = node.get('fog_max', 1, float, 0)
@@ -626,7 +626,7 @@ class Canvas3D(SceneNode):
         canvas3d.draw(node, (self.width, self.height), self.glctx, objects)
         self.glctx.disable(moderngl.DEPTH_TEST | moderngl.CULL_FACE)
         self.glctx.copy_framebuffer(self._image_framebuffer, self._render_framebuffer)
-        self._total_duration += time.perf_counter()
+        self._total_duration += system_clock()
         self._total_count += 1
 
 

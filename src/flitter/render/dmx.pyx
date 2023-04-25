@@ -7,13 +7,13 @@ Flitter DMX control
 import asyncio
 import enum
 import struct
-import time
 
 import cython
 from libc.math cimport round
 from loguru import logger
 
 from .. import name_patch
+from ..clock import system_clock
 from .. cimport model
 from ..streams import SerialStream
 
@@ -93,10 +93,10 @@ class EntecDMXDriver(DMXDriver):
         self._stream.write(data)
 
     async def _readexactly(self, nbytes, until_time):
-        return await asyncio.wait_for(self._stream.readexactly(nbytes), max(0, until_time - time.monotonic()))
+        return await asyncio.wait_for(self._stream.readexactly(nbytes), max(0, until_time - system_clock()))
 
     async def recv_packet(self):
-        fail_time = time.monotonic() + self._timeout
+        fail_time = system_clock() + self._timeout
         data = bytearray()
         junk = 0
         while True:

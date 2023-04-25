@@ -4,8 +4,6 @@
 Flitter OpenGL 3D drawing canvas
 """
 
-import time
-
 import cython
 from cython cimport view
 from loguru import logger
@@ -17,6 +15,7 @@ from libc.math cimport cos
 
 from .. import name_patch
 from ..cache import SharedCache
+from ..clock import system_clock
 from ..model cimport Node, Vector, Matrix44, null_
 from .glsl import TemplateLoader
 

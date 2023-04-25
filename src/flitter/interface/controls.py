@@ -4,6 +4,8 @@ Flitter user interface controls
 
 import math
 
+from ..clock import system_clock
+
 
 class Control:
     DEFAULT_NAME = "?"
@@ -98,7 +100,7 @@ class Pad(TouchControl):
     def update(self, node, controller):
         changed = super().update(node, controller)
         if self.state is not None:
-            now = controller.counter.clock()
+            now = system_clock()
             delta = 0.0 if self._clock is None else now - self._clock
             self._clock = now
             toggled_key = (*self.state, "toggled")
@@ -210,7 +212,7 @@ class Encoder(TouchControl):
     def update(self, node, controller):
         changed = super().update(node, controller)
         if self.state is not None:
-            now = controller.counter.clock()
+            now = system_clock()
             delta = 0.0 if self._clock is None else now - self._clock
             self._clock = now
             if (lower := node.get('lower', 1, float, self.DEFAULT_LOWER)) != self.lower:

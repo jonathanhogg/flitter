@@ -6,14 +6,15 @@ import fractions
 from pathlib import Path
 from queue import Queue, Full
 import threading
-import time
 
 from loguru import logger
+
+from .clock import system_clock
 
 
 class CachePath:
     def __init__(self, path, absolute):
-        self._touched = time.monotonic()
+        self._touched = system_clock()
         self._path = path
         self._absolute = absolute
         self._cache = {}
@@ -44,7 +45,7 @@ class CachePath:
                         logger.success("Flushed and closed video output file: {}", self._path)
 
     def read_text(self, encoding=None, errors=None):
-        self._touched = time.monotonic()
+        self._touched = system_clock()
         key = 'text', encoding, errors
         mtime = self._path.stat().st_mtime if self._path.exists() else None
         if key in self._cache:
@@ -67,7 +68,7 @@ class CachePath:
 
     def read_flitter_program(self, definitions=None):
         from .language.parser import parse, ParseError
-        self._touched = time.monotonic()
+        self._touched = system_clock()
         mtime = self._path.stat().st_mtime if self._path.exists() else None
         if 'flitter' in self._cache:
             cache_mtime, top = self._cache['flitter']
@@ -80,13 +81,13 @@ class CachePath:
             top = None
         else:
             try:
-                start = time.perf_counter()
+                start = system_clock()
                 source = self._path.read_text(encoding='utf8')
                 initial_top = parse(source)
                 initial_top.set_path(self._absolute)
-                mid = time.perf_counter()
+                mid = system_clock()
                 top = initial_top.simplify(variables=definitions)
-                end = time.perf_counter()
+                end = system_clock()
                 logger.debug("Parsed {} in {:.1f}ms, partial evaluation in {:.1f}ms", self._path, (mid - start) * 1000, (end - mid) * 1000)
                 logger.opt(lazy=True).debug("Tree node count before partial-evaluation {before} and after {after}",
                                             before=lambda: initial_top.reduce(lambda e, *rs: sum(rs) + 1),
@@ -107,7 +108,7 @@ class CachePath:
     def read_csv_vector(self, row_number):
         import csv
         from .model import Vector, null
-        self._touched = time.monotonic()
+        self._touched = system_clock()
         mtime = self._path.stat().st_mtime if self._path.exists() else None
         if 'csv' in self._cache and self._cache['csv'][0] == mtime:
             _, reader, rows = self._cache['csv']
@@ -150,7 +151,7 @@ class CachePath:
 
     def read_image(self):
         import skia
-        self._touched = time.monotonic()
+        self._touched = system_clock()
         mtime = self._path.stat().st_mtime if self._path.exists() else None
         if 'image' in self._cache:
             cache_mtime, image = self._cache['image']
@@ -172,7 +173,7 @@ class CachePath:
 
     def read_video_frames(self, obj, position, loop=False):
         import av
-        self._touched = time.monotonic()
+        self._touched = system_clock()
         key = 'video', id(obj)
         container = decoder = current_frame = next_frame = None
         frames = []
@@ -242,7 +243,7 @@ class CachePath:
 
     def read_trimesh_model(self):
         import trimesh
-        self._touched = time.monotonic()
+        self._touched = system_clock()
         mtime = self._path.stat().st_mtime if self._path.exists() else None
         if 'trimesh' in self._cache:
             cache_mtime, trimesh_model = self._cache['trimesh']
@@ -265,7 +266,7 @@ class CachePath:
     def write_image(self, texture, quality=None):
         import PIL.Image
         import PIL.ImageCms
-        self._touched = time.monotonic()
+        self._touched = system_clock()
         if 'write_image' in self._cache:
             return
         suffix = self._path.suffix.lower()
@@ -293,7 +294,7 @@ class CachePath:
 
     def write_video_frame(self, texture, timestamp, codec='h264', fps=60, realtime=False, crf=None, bitrate=None, preset=None):
         import av
-        self._touched = time.monotonic()
+        self._touched = system_clock()
         writer = queue = start = None
         width, height = texture.width, texture.height
         has_alpha = texture.components == 4
@@ -382,7 +383,7 @@ class FileCache:
         self._root = Path('.')
 
     def clean(self, max_age=5):
-        cutoff = time.monotonic() - max_age
+        cutoff = system_clock() - max_age
         for path in list(self._cache):
             cache_path = self._cache[path]
             if cache_path._touched < cutoff:

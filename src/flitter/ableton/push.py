@@ -13,7 +13,7 @@ import rtmidi2
 import skia
 import usb.core
 
-from ..clock import BeatCounter
+from ..clock import BeatCounter, system_clock
 from .constants import (MIDI, Command, Animation, Control, Note, Encoder, TouchStripFlags,
                         BUTTONS, COLOR_BUTTONS, ENCODER_CONTROLS, MENU_CONTROLS, MENU_NUMBERS)
 from .events import (PadPressed, PadHeld, PadReleased, ButtonPressed, ButtonReleased,
@@ -89,7 +89,7 @@ class Push2:
         self._midi_out.send_raw(*message)
 
     def _receive_callback(self, message, delta):
-        now = self.counter.clock()
+        now = system_clock()
         timestamp = now if self._last_receive_timestamp is None else min(now, self._last_receive_timestamp + delta)
         self._last_receive_timestamp = timestamp
         logger.trace("Received @ {:.2f} MIDI - {}", timestamp, " ".join(f"{b:02x}" for b in message))
