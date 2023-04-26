@@ -15,9 +15,9 @@ from loguru import logger
 import skia
 
 from flitter import name_patch
-from ..cache import SharedCache
-from ..clock import system_clock
-from ..model cimport Vector, Node
+from ...cache import SharedCache
+from ...clock import system_clock
+from ...model cimport Vector, Node
 
 
 logger = name_patch(logger, __name__)

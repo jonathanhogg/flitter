@@ -13,10 +13,10 @@ import trimesh
 
 from libc.math cimport cos
 
-from .. import name_patch
-from ..cache import SharedCache
-from ..clock import system_clock
-from ..model cimport Node, Vector, Matrix44, null_
+from ... import name_patch
+from ...cache import SharedCache
+from ...clock import system_clock
+from ...model cimport Node, Vector, Matrix44, null_
 from .glsl import TemplateLoader
 
 
@@ -257,6 +257,9 @@ cdef Matrix44 update_model_matrix(Matrix44 model_matrix, Node node):
                 model_matrix = model_matrix.mmul(matrix)
         elif attribute == 'rotate_z':
             if vector.numbers !=  NULL and vector.length == 1 and (matrix := Matrix44._rotate_z(vector.numbers[0])) is not None:
+                model_matrix = model_matrix.mmul(matrix)
+        elif attribute == 'matrix':
+            if (matrix := Matrix44(vector)) is not None:
                 model_matrix = model_matrix.mmul(matrix)
     return model_matrix
 

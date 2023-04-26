@@ -17,10 +17,10 @@ import pyglet.canvas
 import pyglet.window
 import pyglet.gl
 
-from ..cache import SharedCache
+from ...cache import SharedCache
 from . import canvas
 from . import canvas3d
-from ..clock import system_clock
+from ...clock import system_clock
 from .glsl import TemplateLoader
 
 
@@ -281,7 +281,7 @@ class Window(ProgramNode):
         def on_close(self):
             pass
 
-    def __init__(self, screen=0, fullscreen=False, vsync=False):
+    def __init__(self, screen=0, fullscreen=False, vsync=False, **kwargs):
         super().__init__(None)
         self.window = None
         self.default_screen = screen
@@ -706,3 +706,6 @@ class Video(Shader):
             self._frame1 = frame1
         interpolate = node.get('interpolate', 1, bool, False)
         self.render(node, ratio=ratio if interpolate else 0, **kwargs)
+
+
+RENDERER_CLASS = Window

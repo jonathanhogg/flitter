@@ -317,15 +317,18 @@ cdef class AffineTransform:
 cdef class Laser:
     cdef LaserDriver driver
 
-    def __init__(self):
+    def __init__(self, **kwargs):
         self.driver = None
+
+    def purge(self):
+        pass
 
     def destroy(self):
         if self.driver is not None:
             self.driver.close()
             self.driver = None
 
-    async def update(self, model.Node node):
+    async def update(self, model.Node node, **kwargs):
         driver = node.get('driver', 1, str, '').lower()
         cls = {'lasercube': LaserCubeDriver}.get(driver)
         if cls is not None:
@@ -428,3 +431,6 @@ cdef class Laser:
                     th = TWO_PI * i/n
                     path.append(transform.t(x + sx*cos(th), y + sy*sin(th)))
                 paths.append((path, color))
+
+
+RENDERER_CLASS = Laser

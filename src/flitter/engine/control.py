@@ -14,7 +14,7 @@ from ..clock import BeatCounter, system_clock
 from ..interface.controls import Pad, Encoder
 from ..interface.osc import OSCReceiver, OSCSender, OSCMessage, OSCBundle
 from ..model import Context, StateDict, Vector
-from ..render import process, window, laser, dmx
+from ..render import process, get_renderer
 
 
 class Controller:
@@ -45,9 +45,7 @@ class Controller:
         self.global_state_dirty = False
         self.state = None
         self.state_timestamp = None
-        self.windows = []
-        self.lasers = []
-        self.dmx = []
+        self.renderers = {}
         self.counter = BeatCounter()
         self.pads = {}
         self.encoders = {}
@@ -83,54 +81,32 @@ class Controller:
                 logger.info("Restore counter at beat {:.1f}, tempo {:.1f}, quantum {}", self.counter.beat, self.counter.tempo, self.counter.quantum)
                 self.enqueue_tempo()
             self.enqueue_page_status()
-            for win in self.windows:
-                win.purge()
+            for renderers in self.renderers.values():
+                for renderer in renderers:
+                    renderer.purge()
 
-    async def update_windows(self, graph, **kwargs):
+    async def update_renderers(self, graph, **kwargs):
+        nodes_by_kind = {}
+        for node in graph.children:
+            nodes_by_kind.setdefault(node.kind, []).append(node)
         async with asyncio.TaskGroup() as group:
-            references = {}
-            count = 0
-            for node in graph.select_below('window.'):
-                if count == len(self.windows):
-                    if self.multiprocess:
-                        w = process.Proxy(window.Window, screen=self.screen, fullscreen=self.fullscreen, vsync=self.vsync)
-                    else:
-                        w = window.Window(screen=self.screen, fullscreen=self.fullscreen, vsync=self.vsync)
-                    self.windows.append(w)
-                group.create_task(self.windows[count].update(node, references=references, **kwargs))
-                count += 1
-        while len(self.windows) > count:
-            self.windows.pop().destroy()
-
-    async def update_lasers(self, graph):
-        count = 0
-        async with asyncio.TaskGroup() as group:
-            for i, node in enumerate(graph.select_below('laser.')):
-                if i == len(self.lasers):
-                    if self.multiprocess:
-                        las = process.Proxy(laser.Laser)
-                    else:
-                        las = laser.Laser()
-                    self.lasers.append(las)
-                group.create_task(self.lasers[i].update(node))
-                count += 1
-        while len(self.lasers) > count:
-            self.lasers.pop().destroy()
-
-    async def update_dmx(self, graph):
-        count = 0
-        async with asyncio.TaskGroup() as group:
-            for i, node in enumerate(graph.select_below('dmx.')):
-                if i == len(self.dmx):
-                    if self.multiprocess:
-                        d = process.Proxy(dmx.DMX)
-                    else:
-                        d = dmx.DMX()
-                    self.dmx.append(d)
-                group.create_task(self.dmx[i].update(node))
-                count += 1
-        while len(self.dmx) > count:
-            self.dmx.pop().destroy()
+            for kind, nodes in nodes_by_kind.items():
+                renderer_class = get_renderer(kind)
+                if renderer_class is not None:
+                    references = {}
+                    renderers = self.renderers.setdefault(node.kind, [])
+                    count = 0
+                    for node in nodes:
+                        if count == len(renderers):
+                            if self.multiprocess:
+                                renderer = process.Proxy(renderer_class, **kwargs)
+                            else:
+                                renderer = renderer_class(**kwargs)
+                            renderers.append(renderer)
+                        group.create_task(renderers[count].update(node, references=references, **kwargs))
+                        count += 1
+                    while len(renderers) > count:
+                        renderers.pop().destroy()
 
     def update_controls(self, graph):
         remaining = set(self.pads)
@@ -331,7 +307,8 @@ class Controller:
                 last = beat
                 names = {'beat': beat, 'quantum': self.counter.quantum, 'tempo': self.counter.tempo,
                          'delta': delta, 'clock': frame_time, 'performance': performance,
-                         'fps': self.target_fps, 'realtime': self.realtime}
+                         'fps': self.target_fps, 'realtime': self.realtime,
+                         'screen': self.screen, 'fullscreen': self.fullscreen, 'vsync': self.vsync}
 
                 now = system_clock()
                 housekeeping += now
@@ -354,10 +331,7 @@ class Controller:
 
                 self.handle_pragmas(context.pragmas)
                 self.update_controls(context.graph)
-                async with asyncio.TaskGroup() as group:
-                    group.create_task(self.update_windows(context.graph, **names))
-                    group.create_task(self.update_lasers(context.graph))
-                    group.create_task(self.update_dmx(context.graph))
+                await self.update_renderers(context.graph, **names)
 
                 now = system_clock()
                 render += now
@@ -421,12 +395,9 @@ class Controller:
                     execution = render = housekeeping = 0
         finally:
             SharedCache.clean(0)
-            while self.windows:
-                self.windows.pop().destroy()
-            while self.lasers:
-                self.lasers.pop().destroy()
-            while self.dmx:
-                self.dmx.pop().destroy()
+            for renderers in self.renderers.values():
+                while renderers:
+                    renderers.pop().destroy()
             count = gc.collect(2)
             logger.trace("Collected {} objects (full collection)", count)
             gc.enable()
