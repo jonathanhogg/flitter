@@ -10,7 +10,7 @@ import cython
 from libc.math cimport isnan, floor, round, sin, cos, asin, acos, sqrt, exp, ceil, atan2, log
 
 from ..cache import SharedCache
-from ..model cimport Vector, null_, true_, false_
+from ..model cimport Vector, Matrix44, null_, true_, false_
 
 
 cdef double Pi = 3.141592653589793
@@ -602,6 +602,13 @@ def hsv(Vector c):
     return hsl_to_rgb(h, 0 if l == 0 or l == 1 else (v - l) / min(l, 1 - l), l)
 
 
+def point_towards(Vector direction, Vector up):
+    cdef Matrix44 matrix = Matrix44._look(Vector([0, 0, 0]), direction, up)
+    if matrix is not None:
+        return matrix.inverse()
+    return null_
+
+
 STATIC_FUNCTIONS = {
     'uniform': Vector(Uniform),
     'beta': Vector(Beta),
@@ -640,6 +647,7 @@ STATIC_FUNCTIONS = {
     'zip': Vector(zipv),
     'hsl': Vector(hsl),
     'hsv': Vector(hsv),
+    'point_towards': Vector(point_towards),
 }
 
 DYNAMIC_FUNCTIONS = {
