@@ -50,6 +50,7 @@ class SceneNode:
         self.width = None
         self.height = None
         self.tags = set()
+        self.hidden = False
 
     @property
     def name(self):
@@ -64,7 +65,7 @@ class SceneNode:
         textures = {}
         i = 0
         for child in self.children:
-            if child.texture is not None:
+            if child.texture is not None and not child.hidden:
                 textures[f'texture{i}'] = child.texture
                 i += 1
         return textures
@@ -82,6 +83,7 @@ class SceneNode:
         references = kwargs.setdefault('references', {})
         if node_id := node.get('id', 1, str):
             references[node_id] = self
+        self.hidden = node.get('hidden', 1, bool, False)
         resized = False
         width, height = node.get('size', 2, int, default_size)
         if width != self.width or height != self.height:
