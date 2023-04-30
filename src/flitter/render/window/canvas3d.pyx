@@ -399,6 +399,8 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, int
     cdef Instance instance
     cdef tuple transparent_object
     cdef list transparent_objects = []
+    cdef double[:] zs
+    cdef long[:] indices
     cdef str shader_name = f'!standard_shader/{max_lights}'
     if (standard_shader := objects.get(shader_name)) is None:
         logger.debug("Compiling standard lighting shader for {} max lights", max_lights)
@@ -438,12 +440,17 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, int
         matrices = view.array((n, 16), 4, 'f')
         materials = view.array((n, 11), 4, 'f')
         k = 0
+        zs_array = np.empty(n)
+        zs = zs_array
         for i in range(n):
+            instance = instances[i]
+            zs[i] = pv_matrix.mmul(instance.model_matrix).numbers[14]
+        indices = zs_array.argsort()
+        for i in indices:
             instance = instances[i]
             material = instance.material
             if material.transparency > 0:
-                z = pv_matrix.mmul(instance.model_matrix).numbers[14]
-                transparent_objects.append((-z, model, instance))
+                transparent_objects.append((-zs[i], model, instance))
             else:
                 src = instance.model_matrix.numbers
                 dest = &matrices[k, 0]
