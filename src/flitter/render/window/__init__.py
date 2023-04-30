@@ -613,7 +613,7 @@ class Canvas3D(SceneNode):
         # A canvas3d is a leaf node from the perspective of the OpenGL world
         pass
 
-    def render(self, node, **kwargs):
+    def render(self, node, references=None, **kwargs):
         self._total_duration -= system_clock()
         self._render_framebuffer.use()
         fog_min = node.get('fog_min', 1, float, 0)
@@ -625,7 +625,7 @@ class Canvas3D(SceneNode):
             self._render_framebuffer.clear()
         self.glctx.enable(moderngl.DEPTH_TEST | moderngl.CULL_FACE)
         objects = self.glctx.extra.setdefault('canvas3d_objects', {})
-        canvas3d.draw(node, (self.width, self.height), self.glctx, objects)
+        canvas3d.draw(node, (self.width, self.height), self.glctx, objects, references)
         self.glctx.disable(moderngl.DEPTH_TEST | moderngl.CULL_FACE)
         self.glctx.copy_framebuffer(self._image_framebuffer, self._render_framebuffer)
         self._total_duration += system_clock()

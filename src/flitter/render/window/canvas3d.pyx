@@ -47,12 +47,23 @@ cdef class Light:
 
 
 @cython.dataclasses.dataclass
+cdef class Textures:
+    diffuse_id: str = None
+    specular_id: str = None
+    emissive_id: str = None
+
+    def __hash__(self):
+        return hash(self.diffuse_id) ^ hash(self.specular_id) ^ hash(self.emissive_id)
+
+
+@cython.dataclasses.dataclass
 cdef class Material:
     diffuse: Vector = Zero3
     specular: Vector = One3
     emissive: Vector = Zero3
     shininess: cython.double = 0
     transparency: cython.double = 0
+    textures: Textures = None
 
 
 @cython.dataclasses.dataclass
@@ -89,15 +100,18 @@ cdef class Model:
         logger.debug("Preparing model {}", name)
         cdef tuple buffers
         faces = trimesh_model.faces[:,::-1] if self.invert else trimesh_model.faces
+        cdef bint has_uv = trimesh_model.visual is not None and isinstance(trimesh_model.visual, trimesh.visual.texture.TextureVisuals)
+        vertex_uvs = trimesh_model.visual.uv if has_uv else np.zeros((len(trimesh_model.vertices), 2))
         if self.flat:
             face_normals = -trimesh_model.face_normals if self.invert else trimesh_model.face_normals
-            vertex_data = np.empty((len(faces), 3, 2, 3), dtype='f4')
-            vertex_data[:,:,0] = trimesh_model.vertices[faces]
-            vertex_data[:,:,1] = face_normals[:,None,:]
+            vertex_data = np.empty((len(faces), 3, 8), dtype='f4')
+            vertex_data[:,:,0:3] = trimesh_model.vertices[faces]
+            vertex_data[:,:,3:6] = face_normals[:,None,:]
+            vertex_data[:,:,6:8] = vertex_uvs[faces]
             buffers = (glctx.buffer(vertex_data), None)
         else:
             vertex_normals = -trimesh_model.vertex_normals if self.invert else trimesh_model.vertex_normals
-            vertex_data = np.hstack((trimesh_model.vertices, vertex_normals)).astype('f4')
+            vertex_data = np.hstack((trimesh_model.vertices, vertex_normals, vertex_uvs)).astype('f4')
             index_data = faces.astype('i4')
             buffers = (glctx.buffer(vertex_data), glctx.buffer(index_data))
         objects[name] = buffers
@@ -209,7 +223,7 @@ cdef object StandardVertexSource = TemplateLoader.get_template("standard_lightin
 cdef object StandardFragmentSource = TemplateLoader.get_template("standard_lighting.frag")
 
 
-def draw(Node node, tuple size, glctx, dict objects):
+def draw(Node node, tuple size, glctx, dict objects, dict references):
     cdef int width, height
     width, height = size
     cdef Vector viewpoint = node.get_fvec('viewpoint', 3, Vector((0, 0, width/2)))
@@ -232,7 +246,7 @@ def draw(Node node, tuple size, glctx, dict objects):
         child = child.next_sibling
     for render_set in render_sets:
         if render_set.instances:
-            render(render_set, pv_matrix, viewpoint, max_lights, fog_min, fog_max, fog_color, glctx, objects)
+            render(render_set, pv_matrix, viewpoint, max_lights, fog_min, fog_max, fog_color, glctx, objects, references)
 
 
 cdef Matrix44 update_model_matrix(Matrix44 model_matrix, Node node):
@@ -332,6 +346,13 @@ cdef void collect(Node node, Matrix44 model_matrix, Material material, RenderSet
         new_material.emissive = node.get_fvec('emissive', 3, material.emissive)
         new_material.shininess = node.get_float('shininess', material.shininess)
         new_material.transparency = node.get_float('transparency', material.transparency)
+        diffuse_id = node.get('texture_id', 1, str)
+        specular_id = node.get('specular_texture_id', 1, str)
+        emissive_id = node.get('emissive_texture_id', 1, str)
+        if diffuse_id is not None or specular_id is not None or emissive_id is not None:
+            new_material.textures = Textures(diffuse_id, specular_id, emissive_id)
+        else:
+            new_material.textures = None
         child = node.first_child
         while child is not None:
             collect(child, model_matrix, new_material, render_set, render_sets)
@@ -379,14 +400,15 @@ cdef void add_instance(dict render_instances, Model model, Node node, Matrix44 m
     instance.model_matrix = model_matrix
     instance.material = material
     cdef list instances
-    if (instances := render_instances.get(model)) is not None:
+    cdef tuple model_textures = (model, material.textures)
+    if (instances := render_instances.get(model_textures)) is not None:
         instances.append(instance)
     else:
-        render_instances[model] = [instance]
+        render_instances[model_textures] = [instance]
 
 
 cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, int max_lights,
-                 double fog_min, double fog_max, Vector fog_color, glctx, dict objects):
+                 double fog_min, double fog_max, Vector fog_color, glctx, dict objects, dict references):
     cdef list instances, lights, buffers
     cdef cython.float[:, :] matrices, materials, lights_data
     cdef Material material
@@ -435,7 +457,7 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, int
             i += 1
     standard_shader['nlights'] = i
     standard_shader['lights'].write(lights_data)
-    for model, instances in render_set.instances.items():
+    for (model, textures), instances in render_set.instances.items():
         n = len(instances)
         matrices = view.array((n, 16), 4, 'f')
         materials = view.array((n, 11), 4, 'f')
@@ -464,7 +486,7 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, int
                 dest[9] = material.shininess
                 dest[10] = 0
                 k += 1
-        dispatch_instances(glctx, objects, standard_shader, model, matrices, materials, k)
+        dispatch_instances(glctx, objects, standard_shader, model, k, matrices, materials, textures, references)
     if transparent_objects:
         transparent_objects.sort()
         matrices = view.array((1, 16), 4, 'f')
@@ -484,16 +506,37 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, int
                 dest[j+6] = material.emissive.numbers[j]
             dest[9] = material.shininess
             dest[10] = material.transparency
-            dispatch_instances(glctx, objects, standard_shader, model, matrices, materials, 1)
+            dispatch_instances(glctx, objects, standard_shader, model, 1, matrices, materials, material.textures, references)
 
 
-cdef void dispatch_instances(glctx, dict objects, shader, Model model, cython.float[:, :] matrices, cython.float[:, :] materials, int count):
+cdef void dispatch_instances(glctx, dict objects, shader, Model model, int count, cython.float[:, :] matrices,
+                             cython.float[:, :] materials, Textures textures, dict references):
     vertex_buffer, index_buffer = model.get_buffers(glctx, objects)
     if vertex_buffer is None:
         return
+    shader['use_diffuse_texture'] = False
+    shader['use_specular_texture'] = False
+    shader['use_emissive_texture'] = False
+    unit_id = 0
+    if references is not None and textures is not None:
+        if (scene_node := references.get(textures.diffuse_id)) is not None and scene_node.texture is not None:
+            scene_node.texture.use(location=unit_id)
+            shader['use_diffuse_texture'] = True
+            shader['diffuse_texture'] = unit_id
+            unit_id += 1
+        if (scene_node := references.get(textures.specular_id)) is not None and scene_node.texture is not None:
+            scene_node.texture.use(location=unit_id)
+            shader['use_specular_texture'] = True
+            shader['specular_texture'] = unit_id
+            unit_id += 1
+        if (scene_node := references.get(textures.emissive_id)) is not None and scene_node.texture is not None:
+            scene_node.texture.use(location=unit_id)
+            shader['use_emissive_texture'] = True
+            shader['emissive_texture'] = unit_id
+            unit_id += 1
     matrices_buffer = glctx.buffer(matrices)
     materials_buffer = glctx.buffer(materials)
-    buffers = [(vertex_buffer, '3f 3f', 'model_position', 'model_normal'),
+    buffers = [(vertex_buffer, '3f 3f 2f', 'model_position', 'model_normal', 'model_uv'),
                (matrices_buffer, '16f/i', 'model_matrix'),
                (materials_buffer, '9f 1f 1f/i', 'material_colors', 'material_shininess', 'material_transparency')]
     render_array = glctx.vertex_array(shader, buffers, index_buffer=index_buffer, mode=moderngl.TRIANGLES)
