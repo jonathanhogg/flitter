@@ -517,23 +517,23 @@ cdef void dispatch_instances(glctx, dict objects, shader, Model model, int count
     shader['use_diffuse_texture'] = False
     shader['use_specular_texture'] = False
     shader['use_emissive_texture'] = False
-    unit_id = 0
+    cdef dict unit_ids = {}
     if references is not None and textures is not None:
         if (scene_node := references.get(textures.diffuse_id)) is not None and scene_node.texture is not None:
+            unit_id = unit_ids.setdefault(textures.diffuse_id, len(unit_ids))
             scene_node.texture.use(location=unit_id)
             shader['use_diffuse_texture'] = True
             shader['diffuse_texture'] = unit_id
-            unit_id += 1
         if (scene_node := references.get(textures.specular_id)) is not None and scene_node.texture is not None:
+            unit_id = unit_ids.setdefault(textures.specular_id, len(unit_ids))
             scene_node.texture.use(location=unit_id)
             shader['use_specular_texture'] = True
             shader['specular_texture'] = unit_id
-            unit_id += 1
         if (scene_node := references.get(textures.emissive_id)) is not None and scene_node.texture is not None:
+            unit_id = unit_ids.setdefault(textures.emissive_id, len(unit_ids))
             scene_node.texture.use(location=unit_id)
             shader['use_emissive_texture'] = True
             shader['emissive_texture'] = unit_id
-            unit_id += 1
     matrices_buffer = glctx.buffer(matrices)
     materials_buffer = glctx.buffer(materials)
     buffers = [(vertex_buffer, '3f 3f 2f', 'model_position', 'model_normal', 'model_uv'),
