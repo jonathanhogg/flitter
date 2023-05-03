@@ -15,9 +15,9 @@ from loguru import logger
 import skia
 
 from flitter import name_patch
-from ..cache import SharedCache
-from ..clock import system_clock
-from ..model cimport Vector, Node
+from ...cache import SharedCache
+from ...clock import system_clock
+from ...model cimport Vector, Node
 
 
 logger = name_patch(logger, __name__)
@@ -540,7 +540,7 @@ cpdef object draw(Node node, ctx, paint=None, font=None, path=None, dict stats=N
     cdef Vector points
     cdef Node child
     cdef str kind = node.kind
-    cdef double x, y, rx, ry
+    cdef double x, y, rx, ry, sx, sy
 
     if kind == 'group':
         ctx.save()
@@ -625,9 +625,13 @@ cpdef object draw(Node node, ctx, paint=None, font=None, path=None, dict stats=N
 
     elif kind == 'rect':
         if (size := node.get('size', 2, float)) is not None:
-            rx, ry = size
+            sx, sy = size
             x, y = node.get('point', 2, float, (0, 0))
-            path.addRect(x, y, x+rx, y+ry)
+            rx, ry = node.get('radius', 2, float, (0, 0))
+            if rx or ry:
+                path.addRRect(skia.RRect(skia.Rect.MakeXYWH(x, y, sx, sy), rx, ry))
+            else:
+                path.addRect(x, y, x+sx, y+sy)
 
     elif kind == 'ellipse':
         if (radius := node.get('radius', 2, float)) is not None:

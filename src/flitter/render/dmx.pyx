@@ -176,15 +176,18 @@ class OutputArtsDMXDriver(DMXDriver):
 cdef class DMX:
     cdef object driver
 
-    def __init__(self):
+    def __init__(self, **kwargs):
         self.driver = None
+
+    def purge(self):
+        pass
 
     def destroy(self):
         if self.driver is not None:
             self.driver.close()
             self.driver = None
 
-    async def update(self, model.Node node):
+    async def update(self, model.Node node, **kwargs):
         driver = node.get('driver', 1, str, '').lower()
         cls = {'entec': EntecDMXDriver, 'outputarts': OutputArtsDMXDriver}.get(driver)
         if cls is not None:
@@ -220,3 +223,6 @@ cdef class DMX:
                         if end > n:
                             n = end
         return n
+
+
+RENDERER_CLASS = DMX

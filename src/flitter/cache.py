@@ -259,7 +259,8 @@ class CachePath:
                 logger.opt(exception=exc).warning("Error reading model file: {}", self._path)
                 trimesh_model = None
             else:
-                logger.debug("Read model file: {}", self._path)
+                logger.debug("Read model file '{}' with {} vertices and {} faces", self._path, len(trimesh_model.vertices),
+                             len(trimesh_model.faces))
         self._cache['trimesh'] = mtime, trimesh_model
         return trimesh_model
 

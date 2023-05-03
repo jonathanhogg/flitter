@@ -17,10 +17,10 @@ import pyglet.canvas
 import pyglet.window
 import pyglet.gl
 
-from ..cache import SharedCache
+from ...cache import SharedCache
 from . import canvas
 from . import canvas3d
-from ..clock import system_clock
+from ...clock import system_clock
 from .glsl import TemplateLoader
 
 
@@ -50,6 +50,7 @@ class SceneNode:
         self.width = None
         self.height = None
         self.tags = set()
+        self.hidden = False
 
     @property
     def name(self):
@@ -64,7 +65,7 @@ class SceneNode:
         textures = {}
         i = 0
         for child in self.children:
-            if child.texture is not None:
+            if child.texture is not None and not child.hidden:
                 textures[f'texture{i}'] = child.texture
                 i += 1
         return textures
@@ -82,6 +83,7 @@ class SceneNode:
         references = kwargs.setdefault('references', {})
         if node_id := node.get('id', 1, str):
             references[node_id] = self
+        self.hidden = node.get('hidden', 1, bool, False)
         resized = False
         width, height = node.get('size', 2, int, default_size)
         if width != self.width or height != self.height:
@@ -281,7 +283,7 @@ class Window(ProgramNode):
         def on_close(self):
             pass
 
-    def __init__(self, screen=0, fullscreen=False, vsync=False):
+    def __init__(self, screen=0, fullscreen=False, vsync=False, **kwargs):
         super().__init__(None)
         self.window = None
         self.default_screen = screen
@@ -611,7 +613,7 @@ class Canvas3D(SceneNode):
         # A canvas3d is a leaf node from the perspective of the OpenGL world
         pass
 
-    def render(self, node, **kwargs):
+    def render(self, node, references=None, **kwargs):
         self._total_duration -= system_clock()
         self._render_framebuffer.use()
         fog_min = node.get('fog_min', 1, float, 0)
@@ -623,7 +625,7 @@ class Canvas3D(SceneNode):
             self._render_framebuffer.clear()
         self.glctx.enable(moderngl.DEPTH_TEST | moderngl.CULL_FACE)
         objects = self.glctx.extra.setdefault('canvas3d_objects', {})
-        canvas3d.draw(node, (self.width, self.height), self.glctx, objects)
+        canvas3d.draw(node, (self.width, self.height), self.glctx, objects, references)
         self.glctx.disable(moderngl.DEPTH_TEST | moderngl.CULL_FACE)
         self.glctx.copy_framebuffer(self._image_framebuffer, self._render_framebuffer)
         self._total_duration += system_clock()
@@ -706,3 +708,6 @@ class Video(Shader):
             self._frame1 = frame1
         interpolate = node.get('interpolate', 1, bool, False)
         self.render(node, ratio=ratio if interpolate else 0, **kwargs)
+
+
+RENDERER_CLASS = Window
