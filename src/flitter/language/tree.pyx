@@ -12,6 +12,7 @@ from .. import name_patch
 from ..cache import SharedCache
 from .functions import STATIC_FUNCTIONS, DYNAMIC_FUNCTIONS
 from .. cimport model
+from .noise import NOISE_FUNCTIONS
 
 
 
@@ -30,6 +31,7 @@ cdef dict static_builtins = {
     'null': model.null_,
 }
 static_builtins.update(STATIC_FUNCTIONS)
+static_builtins.update(NOISE_FUNCTIONS)
 
 cdef dict dynamic_builtins = {
     'log': model.Vector(log_values),
