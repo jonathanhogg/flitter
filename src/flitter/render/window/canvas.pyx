@@ -128,25 +128,32 @@ cdef double turn_angle(double x0, double y0, double x1, double y1, double x2, do
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef object line_path(object path, Vector points, double curve, bint close):
-    cdef int nverbs = 0, npoints = 0
+cdef object line_path(object path, Vector points, double curve, bint closed):
+    cdef bint sharp = curve <= 0
+    cdef int nverbs = 0, npoints = 0, n = points.length // 2
     cdef array.array points_array = array.array('f')
-    array.resize(points_array, len(points)*2)
+    array.resize(points_array, n * 4 + 4)
     cdef float[:] ppoints = points_array
     cdef array.array verbs_array = array.array('B')
-    array.resize(verbs_array, len(points) + 4)
+    array.resize(verbs_array, n * 2 + 2)
     cdef unsigned char[:] pverbs = verbs_array
-    cdef int i=0, n=points.length-2
     cdef double last_mid_x, last_mid_y, last_x, last_y, x, y
-    while i <= n:
-        x, y = points.numbers[i], points.numbers[i+1]
+    cdef int i = 0, m = n, j
+    if closed and not sharp:
+        m += 2
+    while i < m:
+        j = i % n * 2
+        x, y = points.numbers[j], points.numbers[j + 1]
         if i == 0:
-            pverbs[nverbs] = 0
-            nverbs += 1
-            ppoints[npoints] = x
-            ppoints[npoints+1] = y
-            npoints += 2
-        elif curve <= 0:
+            if sharp or not closed:
+                # move to x,y
+                pverbs[nverbs] = 0
+                nverbs += 1
+                ppoints[npoints] = x
+                ppoints[npoints+1] = y
+                npoints += 2
+        elif sharp:
+            # line to x,y
             pverbs[nverbs] = 1
             nverbs += 1
             ppoints[npoints] = x
@@ -154,33 +161,46 @@ cdef object line_path(object path, Vector points, double curve, bint close):
             npoints += 2
         else:
             mid_x, mid_y = (last_x + x) / 2, (last_y + y) / 2
-            if i == 2:
-                pverbs[nverbs] = 1
-                nverbs += 1
-                ppoints[npoints] = mid_x
-                ppoints[npoints+1] = mid_y
-                npoints += 2
+            if i == 1:
+                if closed:
+                    # move to mid_x,mid_y
+                    pverbs[nverbs] = 0
+                    nverbs += 1
+                    ppoints[npoints] = mid_x
+                    ppoints[npoints+1] = mid_y
+                    npoints += 2
+                else:
+                    # line to mid_x,mid_y
+                    pverbs[nverbs] = 1
+                    nverbs += 1
+                    ppoints[npoints] = mid_x
+                    ppoints[npoints+1] = mid_y
+                    npoints += 2
             elif curve >= 0.5 or turn_angle(last_mid_x, last_mid_y, last_x, last_y, mid_x, mid_y) <= curve:
+                # curve to mid_x,mid_y via last_x,last_y
                 pverbs[nverbs] = 2
                 nverbs += 1
                 ppoints[npoints] = last_x
                 ppoints[npoints+1] = last_y
                 npoints += 2
-                pverbs[nverbs] = 1
                 ppoints[npoints] = mid_x
                 ppoints[npoints+1] = mid_y
                 npoints += 2
             else:
+                # line to last_x,last_y
                 pverbs[nverbs] = 1
                 nverbs += 1
                 ppoints[npoints] = last_x
                 ppoints[npoints+1] = last_y
                 npoints += 2
+                # line to mid_x,mid_y
                 pverbs[nverbs] = 1
+                nverbs += 1
                 ppoints[npoints] = mid_x
                 ppoints[npoints+1] = mid_y
                 npoints += 2
-            if i == n:
+            if not closed and i == m-1:
+                # line to x,y
                 pverbs[nverbs] = 1
                 nverbs += 1
                 ppoints[npoints] = x
@@ -188,8 +208,9 @@ cdef object line_path(object path, Vector points, double curve, bint close):
                 npoints += 2
             last_mid_x, last_mid_y = mid_x, mid_y
         last_x, last_y = x, y
-        i += 2
-    if close:
+        i += 1
+    if closed:
+        # close
         pverbs[nverbs] = 5
         nverbs += 1
     cdef bytearray data = bytearray()
