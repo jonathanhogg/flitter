@@ -35,7 +35,7 @@ cdef double STRETCH_CONSTANT3 = -1.0 / 6
 cdef double SQUISH_CONSTANT3 = 1.0 / 3
 cdef double NORM_CONSTANT3 = 103
 
-cdef int MAX_PERM_CACHE_ITEMS = 100
+cdef int MAX_PERM_CACHE_ITEMS = 200
 cdef dict PermCache = {}
 
 
@@ -537,18 +537,18 @@ cdef double noise3(Vector perm, double x, double y, double z) noexcept nogil:
     return value / NORM_CONSTANT3
 
 
-def noise(seed, *args):
+cdef Vector _noise(Vector seed, list args):
     cdef int i, j, k, count = 0, n = len(args)
     cdef Vector xx, yy, zz
     cdef double x, y
-    prng = Uniform(seed)
-    cdef Vector perm = PermCache.get(prng)
-    cdef Vector result = Vector.__new__(Vector)
+    cdef unsigned long long seed_hash = seed.hash(True)
+    cdef Vector perm = PermCache.get(seed_hash)
     if perm is None:
-        perm = shuffle(prng, Vector.range(256))
+        perm = shuffle(Uniform(seed), Vector.range(256))
         if len(PermCache) == MAX_PERM_CACHE_ITEMS:
             PermCache.pop(next(iter(PermCache)))
-        PermCache[prng] = perm
+        PermCache[seed_hash] = perm
+    cdef Vector result = Vector.__new__(Vector)
     if n == 1:
         xx = args[0]
         if xx.numbers != NULL:
@@ -584,6 +584,42 @@ def noise(seed, *args):
     return result
 
 
+def noise(seed, *args):
+    return _noise(seed, list(args))
+
+
+@cython.cdivision(True)
+def octnoise(Vector seed, Vector octaves, Vector roughness, *args):
+    if octaves.numbers == NULL or octaves.length != 1 or roughness.numbers == NULL or roughness.length != 1:
+        return null_
+    cdef Vector arg
+    cdef list coords = []
+    for arg in args:
+        if arg.numbers == NULL:
+            return null_
+        coords.append(Vector.__new__(Vector, arg))
+    cdef int i, j, n = <int>octaves.numbers[0]
+    cdef double weight_sum = 0, weight = 1, k = roughness.numbers[0]
+    cdef Vector seed_i, single, result = null_
+    for i in range(n):
+        if i == 0:
+            result = _noise(seed, coords)
+        else:
+            seed_i = Vector._compose([seed, Vector._coerce(i)])
+            single = _noise(seed_i, coords)
+            for j in range(result.length):
+                result.numbers[j] += single.numbers[j] * weight
+        for arg in coords:
+            for j in range(arg.length):
+                arg.numbers[j] *= 2
+        weight_sum += weight
+        weight *= k
+    for j in range(result.length):
+        result.numbers[j] /= weight_sum
+    return result
+
+
 NOISE_FUNCTIONS = {
     'noise': Vector(noise),
+    'octnoise': Vector(octnoise),
 }
