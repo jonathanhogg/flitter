@@ -323,7 +323,7 @@ cdef void collect(Node node, Matrix44 model_matrix, Material material, RenderSet
                 light.inner_cone = cos(inner * Pi)
                 light.outer_cone = cos(outer * Pi)
                 light.position = model_matrix.vmul(position)
-                light.direction = model_matrix.inverse().transpose().matrix33().vmul(direction.normalize())
+                light.direction = model_matrix.inverse().transpose().matrix33().vmul(direction).normalize()
             elif position.length:
                 light.type = LightType.Point
                 light.position = model_matrix.vmul(position)
@@ -331,7 +331,7 @@ cdef void collect(Node node, Matrix44 model_matrix, Material material, RenderSet
             elif direction.as_bool():
                 light.type = LightType.Directional
                 light.position = None
-                light.direction = model_matrix.inverse().transpose().matrix33().vmul(direction.normalize())
+                light.direction = model_matrix.inverse().transpose().matrix33().vmul(direction).normalize()
             else:
                 light.type = LightType.Ambient
                 light.position = None
