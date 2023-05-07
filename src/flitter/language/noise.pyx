@@ -35,7 +35,7 @@ cdef double STRETCH_CONSTANT3 = -1.0 / 6
 cdef double SQUISH_CONSTANT3 = 1.0 / 3
 cdef double NORM_CONSTANT3 = 103
 
-cdef int MAX_PERM_CACHE_ITEMS = 200
+cdef int MAX_PERM_CACHE_ITEMS = 1000
 cdef dict PermCache = {}
 
 
