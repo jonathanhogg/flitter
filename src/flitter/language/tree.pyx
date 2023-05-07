@@ -226,7 +226,11 @@ cdef class Import(Expression):
                     module_context = model.Context(parent=context, path=top.path)
                     result = top.evaluate(module_context)
                     for name in self.names:
-                        context.variables[name] = module_context.variables[name] if name in module_context.variables else model.null_
+                        if name in module_context.variables:
+                            context.variables[name] = module_context.variables[name]
+                        else:
+                            context.errors.add(f"Unable to import '{name}' from '{filename}'")
+                            context.variables[name] = model.null_
                     context.errors.update(module_context.errors)
                     return model.null_
         for name in self.names:
@@ -332,6 +336,7 @@ cdef class Name(Expression):
             return value
         if (value := dynamic_builtins.get(self.name)) is not None:
             return value
+        context.errors.add(f"Unbound name '{self.name}'")
         return model.null_
 
     cpdef Expression partially_evaluate(self, model.Context context):
