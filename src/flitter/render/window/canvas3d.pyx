@@ -286,7 +286,7 @@ cdef void collect(Node node, Matrix44 model_matrix, Material material, RenderSet
     cdef double shininess, inner, outer
     cdef Node child
     cdef str filename
-    cdef int subdivisions, sections
+    cdef int subdivisions, segments
     cdef bint flat
     cdef Model model
     cdef Material new_material
@@ -374,8 +374,8 @@ cdef void collect(Node node, Matrix44 model_matrix, Material material, RenderSet
     elif node.kind == 'cylinder':
         flat = node.get_bool('flat', False)
         invert = node.get_bool('invert', False)
-        sections = node.get_int('sections', 32)
-        model = Cylinder.get(flat, invert, sections)
+        segments = node.get_int('segments', 32)
+        model = Cylinder.get(flat, invert, segments)
         add_instance(render_set.instances, model, node, model_matrix, material)
 
     elif node.kind == 'model':
