@@ -29,6 +29,11 @@ uniform sampler2D emissive_texture;
 void main() {
     vec3 view_direction = view_position - world_position;
     float view_distance = length(view_direction);
+    float fog_alpha = (fog_max > fog_min) ? clamp((view_distance - fog_min) / (fog_max - fog_min), 0, 1) : 0;
+    if (fog_alpha == 1) {
+        fragment_color = vec4(fog_color, 1);
+        return;
+    }
     view_direction = normalize(view_direction);
     vec3 diffuse_color = colors[0];
     if (use_diffuse_texture) {
@@ -85,6 +90,5 @@ void main() {
     }
     float opacity = 1 - transparency;
     vec4 model_color = vec4(color * opacity, opacity);
-    float fog_alpha = (fog_max > fog_min) ? clamp((view_distance - fog_min) / (fog_max - fog_min), 0, 1) : 0;
     fragment_color = mix(model_color, vec4(fog_color, 1), fog_alpha);
 }
