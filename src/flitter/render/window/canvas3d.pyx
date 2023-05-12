@@ -407,6 +407,10 @@ cdef void add_instance(dict render_instances, Model model, Node node, Matrix44 m
         render_instances[model_textures] = [instance]
 
 
+def fst(tuple ab):
+    return ab[0]
+
+
 cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, int max_lights,
                  double fog_min, double fog_max, Vector fog_color, glctx, dict objects, dict references):
     cdef list instances, lights, buffers
@@ -488,7 +492,7 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, int
                 k += 1
         dispatch_instances(glctx, objects, standard_shader, model, k, matrices, materials, textures, references)
     if transparent_objects:
-        transparent_objects.sort()
+        transparent_objects.sort(key=fst)
         matrices = view.array((1, 16), 4, 'f')
         materials = view.array((1, 11), 4, 'f')
         for transparent_object in transparent_objects:
