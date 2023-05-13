@@ -522,20 +522,40 @@ cdef void dispatch_instances(glctx, dict objects, shader, Model model, int count
     shader['use_specular_texture'] = False
     shader['use_emissive_texture'] = False
     cdef dict unit_ids = {}
+    cdef list samplers = []
+    cdef int unit_id
     if references is not None and textures is not None:
         if (scene_node := references.get(textures.diffuse_id)) is not None and scene_node.texture is not None:
-            unit_id = unit_ids.setdefault(textures.diffuse_id, len(unit_ids))
-            scene_node.texture.use(location=unit_id)
+            if textures.diffuse_id in unit_ids:
+                unit_id = unit_ids[textures.diffuse_id]
+            else:
+                unit_id = len(unit_ids) + 1
+                unit_ids[textures.diffuse_id] = unit_id
+                sampler = glctx.sampler(texture=scene_node.texture, filter=(moderngl.LINEAR, moderngl.LINEAR))
+                sampler.use(unit_id)
+                samplers.append(sampler)
             shader['use_diffuse_texture'] = True
             shader['diffuse_texture'] = unit_id
         if (scene_node := references.get(textures.specular_id)) is not None and scene_node.texture is not None:
-            unit_id = unit_ids.setdefault(textures.specular_id, len(unit_ids))
-            scene_node.texture.use(location=unit_id)
+            if textures.diffuse_id in unit_ids:
+                unit_id = unit_ids[textures.specular_id]
+            else:
+                unit_id = len(unit_ids) + 1
+                unit_ids[textures.specular_id] = unit_id
+                sampler = glctx.sampler(texture=scene_node.texture, filter=(moderngl.LINEAR, moderngl.LINEAR))
+                sampler.use(unit_id)
+                samplers.append(sampler)
             shader['use_specular_texture'] = True
             shader['specular_texture'] = unit_id
         if (scene_node := references.get(textures.emissive_id)) is not None and scene_node.texture is not None:
-            unit_id = unit_ids.setdefault(textures.emissive_id, len(unit_ids))
-            scene_node.texture.use(location=unit_id)
+            if textures.diffuse_id in unit_ids:
+                unit_id = unit_ids[textures.emissive_id]
+            else:
+                unit_id = len(unit_ids) + 1
+                unit_ids[textures.emissive_id] = unit_id
+                sampler = glctx.sampler(texture=scene_node.texture, filter=(moderngl.LINEAR, moderngl.LINEAR))
+                sampler.use(unit_id)
+                samplers.append(sampler)
             shader['use_emissive_texture'] = True
             shader['emissive_texture'] = unit_id
     matrices_buffer = glctx.buffer(matrices)
@@ -545,3 +565,5 @@ cdef void dispatch_instances(glctx, dict objects, shader, Model model, int count
                (materials_buffer, '9f 1f 1f/i', 'material_colors', 'material_shininess', 'material_transparency')]
     render_array = glctx.vertex_array(shader, buffers, index_buffer=index_buffer, mode=moderngl.TRIANGLES)
     render_array.render(instances=count)
+    for sampler in samplers:
+        sampler.clear()
