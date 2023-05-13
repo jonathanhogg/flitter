@@ -232,7 +232,7 @@ class ProgramNode(SceneNode):
             child_textures = self.child_textures
             self.framebuffer.use()
             samplers = []
-            unit = 0
+            unit = 1
             for name in self._program:
                 member = self._program[name]
                 if isinstance(member, moderngl.Uniform):
