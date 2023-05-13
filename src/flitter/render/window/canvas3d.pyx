@@ -427,19 +427,22 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, int
     cdef list transparent_objects = []
     cdef double[:] zs
     cdef long[:] indices
-    cdef str shader_name = f'!standard_shader/{max_lights}'
-    if (standard_shader := objects.get(shader_name)) is None:
+    cdef str shader_name = f'!shader/{max_lights}'
+    if (shader := objects.get(shader_name)) is None:
         logger.debug("Compiling standard lighting shader for {} max lights", max_lights)
         variables = {'max_lights': max_lights, 'Ambient': LightType.Ambient, 'Directional': LightType.Directional,
                      'Point': LightType.Point, 'Spot': LightType.Spot}
-        standard_shader = glctx.program(vertex_shader=StandardVertexSource.render(**variables),
+        shader = glctx.program(vertex_shader=StandardVertexSource.render(**variables),
                                         fragment_shader=StandardFragmentSource.render(**variables))
-        objects[shader_name] = standard_shader
-    standard_shader['pv_matrix'] = pv_matrix
-    standard_shader['view_position'] = viewpoint
-    standard_shader['fog_min'] = fog_min
-    standard_shader['fog_max'] = fog_max
-    standard_shader['fog_color'] = fog_color
+        objects[shader_name] = shader
+    shader['pv_matrix'] = pv_matrix
+    shader['view_position'] = viewpoint
+    shader['fog_min'] = fog_min
+    shader['fog_max'] = fog_max
+    shader['fog_color'] = fog_color
+    shader['use_diffuse_texture'] = False
+    shader['use_specular_texture'] = False
+    shader['use_emissive_texture'] = False
     lights_data = view.array((max_lights, 12), 4, 'f')
     i = 0
     for lights in render_set.lights:
@@ -459,8 +462,8 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, int
                 for j in range(3):
                     dest[j+9] = light.direction.numbers[j]
             i += 1
-    standard_shader['nlights'] = i
-    standard_shader['lights'].write(lights_data)
+    shader['nlights'] = i
+    shader['lights'].write(lights_data)
     for (model, textures), instances in render_set.instances.items():
         n = len(instances)
         matrices = view.array((n, 16), 4, 'f')
@@ -490,7 +493,7 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, int
                 dest[9] = material.shininess
                 dest[10] = 0
                 k += 1
-        dispatch_instances(glctx, objects, standard_shader, model, k, matrices, materials, textures, references)
+        dispatch_instances(glctx, objects, shader, model, k, matrices, materials, textures, references)
     if transparent_objects:
         transparent_objects.sort(key=fst)
         matrices = view.array((1, 16), 4, 'f')
@@ -510,7 +513,7 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, int
                 dest[j+6] = material.emissive.numbers[j]
             dest[9] = material.shininess
             dest[10] = material.transparency
-            dispatch_instances(glctx, objects, standard_shader, model, 1, matrices, materials, material.textures, references)
+            dispatch_instances(glctx, objects, shader, model, 1, matrices, materials, material.textures, references)
 
 
 cdef void dispatch_instances(glctx, dict objects, shader, Model model, int count, cython.float[:, :] matrices,
@@ -518,13 +521,12 @@ cdef void dispatch_instances(glctx, dict objects, shader, Model model, int count
     vertex_buffer, index_buffer = model.get_buffers(glctx, objects)
     if vertex_buffer is None:
         return
-    shader['use_diffuse_texture'] = False
-    shader['use_specular_texture'] = False
-    shader['use_emissive_texture'] = False
-    cdef dict unit_ids = {}
-    cdef list samplers = []
+    cdef dict unit_ids
+    cdef list samplers = None
     cdef int unit_id
     if references is not None and textures is not None:
+        unit_ids = {}
+        samplers = []
         if (scene_node := references.get(textures.diffuse_id)) is not None and scene_node.texture is not None:
             if textures.diffuse_id in unit_ids:
                 unit_id = unit_ids[textures.diffuse_id]
@@ -565,5 +567,9 @@ cdef void dispatch_instances(glctx, dict objects, shader, Model model, int count
                (materials_buffer, '9f 1f 1f/i', 'material_colors', 'material_shininess', 'material_transparency')]
     render_array = glctx.vertex_array(shader, buffers, index_buffer=index_buffer, mode=moderngl.TRIANGLES)
     render_array.render(instances=count)
-    for sampler in samplers:
-        sampler.clear()
+    if samplers is not None:
+        for sampler in samplers:
+            sampler.clear()
+        shader['use_diffuse_texture'] = False
+        shader['use_specular_texture'] = False
+        shader['use_emissive_texture'] = False
