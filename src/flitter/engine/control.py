@@ -62,7 +62,7 @@ class EngineController:
     def load_page(self, filename):
         page_number = len(self.pages)
         path = SharedCache[filename]
-        self.pages.append((path, self.global_state.setdefault(page_number, StateDict())))
+        self.pages.append((path, self.global_state.setdefault(str(path), StateDict())))
         logger.info("Added code page {}: {}", page_number, path)
 
     def switch_to_page(self, page_number):
