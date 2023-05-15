@@ -2,7 +2,6 @@
 Flitter generic controller framework
 """
 
-import asyncio
 import importlib
 
 from loguru import logger
@@ -33,7 +32,7 @@ class Controller:
             try:
                 driver_module = importlib.import_module(f'.{driver}', __package__)
                 driver_class = driver_module.get_driver_class()
-            except (ImportError, NameError) as exc:
+            except (ImportError, NameError):
                 pass
         if self.driver is not None and (driver_class is None or not isinstance(self.driver, driver_class)):
             self.driver.stop()

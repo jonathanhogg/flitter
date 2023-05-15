@@ -433,7 +433,7 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, int
         variables = {'max_lights': max_lights, 'Ambient': LightType.Ambient, 'Directional': LightType.Directional,
                      'Point': LightType.Point, 'Spot': LightType.Spot}
         shader = glctx.program(vertex_shader=StandardVertexSource.render(**variables),
-                                        fragment_shader=StandardFragmentSource.render(**variables))
+                               fragment_shader=StandardFragmentSource.render(**variables))
         objects[shader_name] = shader
     shader['pv_matrix'] = pv_matrix
     shader['view_position'] = viewpoint
