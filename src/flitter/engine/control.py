@@ -414,6 +414,8 @@ class EngineController:
             for renderers in self.renderers.values():
                 while renderers:
                     renderers.pop().destroy()
+            while self.controllers:
+                self.controllers.pop().destroy()
             count = gc.collect(2)
             logger.trace("Collected {} objects (full collection)", count)
             gc.enable()

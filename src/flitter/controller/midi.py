@@ -97,10 +97,10 @@ class MidiPort:
 
     def close(self):
         if self._midi_in is not None:
-            self._midi_in.close()
+            self._midi_in.close_port()
             self._midi_in = None
         if self._midi_out is not None:
-            self._midi_out.close()
+            self._midi_out.close_port()
             self._midi_out = None
 
     def _message_received(self, message, delta):
