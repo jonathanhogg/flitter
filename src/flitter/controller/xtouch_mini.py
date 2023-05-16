@@ -182,9 +182,10 @@ class XTouchMiniDriver(driver.ControllerDriver):
                         case _:
                             logger.warning("Unhandled MIDI event: {}", event)
         except asyncio.CancelledError:
-            self._ready.clear()
-            self._midi_port.close()
-            self._midi_port = None
+            if self._midi_port is not None:
+                self._ready.clear()
+                self._midi_port.close()
+                self._midi_port = None
         except Exception as exc:
             logger.opt(exception=exc).error("Unhandled exception in X-Touch mini controller main loop")
 
