@@ -7,7 +7,7 @@ import asyncio
 from loguru import logger
 
 from . import driver, midi
-from ..model import Vector
+from ...model import Vector
 
 
 def get_driver_class():

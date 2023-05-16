@@ -15,7 +15,7 @@ from ..interface.controls import Pad, Encoder
 from ..interface.osc import OSCReceiver, OSCSender, OSCMessage, OSCBundle
 from ..model import Context, StateDict, Vector
 from ..render import process, get_renderer
-from ..controller import Controller
+from ..interact import get_interactor
 
 
 class EngineController:
@@ -47,7 +47,7 @@ class EngineController:
         self.state = None
         self.state_timestamp = None
         self.renderers = {}
-        self.controllers = []
+        self.interactors = {}
         self.counter = BeatCounter()
         self.pads = {}
         self.encoders = {}
@@ -110,17 +110,24 @@ class EngineController:
                     while len(renderers) > count:
                         renderers.pop().destroy()
 
-    async def update_controllers(self, graph, frame_time):
+    async def update_interactors(self, graph, frame_time):
+        nodes_by_kind = {}
+        for node in graph.children:
+            nodes_by_kind.setdefault(node.kind, []).append(node)
         async with asyncio.TaskGroup() as group:
-            count = 0
-            for node in graph.select('* > controller'):
-                if count == len(self.controllers):
-                    controller = Controller()
-                    self.controllers.append(controller)
-                group.create_task(self.controllers[count].update(node, self.counter, self.state, frame_time))
-                count += 1
-            while len(self.controllers) > count:
-                self.controllers.pop().destroy()
+            for kind, nodes in nodes_by_kind.items():
+                interactor_class = get_interactor(kind)
+                if interactor_class is not None:
+                    interactors = self.interactors.setdefault(node.kind, [])
+                    count = 0
+                    for node in nodes:
+                        if count == len(interactors):
+                            interactor = interactor_class()
+                            interactors.append(interactor)
+                        group.create_task(interactors[count].update(node, self.counter, self.state, frame_time))
+                        count += 1
+                    while len(interactors) > count:
+                        interactors.pop().destroy()
 
     def update_controls(self, graph):
         remaining = set(self.pads)
@@ -347,7 +354,7 @@ class EngineController:
                 self.update_controls(context.graph)
                 async with asyncio.TaskGroup() as group:
                     group.create_task(self.update_renderers(context.graph, **names))
-                    group.create_task(self.update_controllers(context.graph, frame_time))
+                    group.create_task(self.update_interactors(context.graph, frame_time))
 
                 now = system_clock()
                 render += now
@@ -414,8 +421,9 @@ class EngineController:
             for renderers in self.renderers.values():
                 while renderers:
                     renderers.pop().destroy()
-            while self.controllers:
-                self.controllers.pop().destroy()
+            for interactors in self.interactors.values():
+                while interactors:
+                    interactors.pop().destroy()
             count = gc.collect(2)
             logger.trace("Collected {} objects (full collection)", count)
             gc.enable()

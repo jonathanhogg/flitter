@@ -9,7 +9,7 @@ import enum
 from loguru import logger
 import rtmidi2
 
-from ..clock import system_clock
+from ...clock import system_clock
 
 
 class MIDI(enum.IntEnum):

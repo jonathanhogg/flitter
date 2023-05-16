@@ -4,8 +4,8 @@ Flitter controller driver API
 
 import math
 
-from ..clock import BeatCounter
-from ..model import Vector, Node, StateDict
+from ...clock import BeatCounter
+from ...model import Vector, Node, StateDict
 
 
 class Control:

@@ -59,3 +59,6 @@ class Controller:
                         control.update_representation()
         self.purge()
         self.controls = controls
+
+
+INTERACTOR_CLASS = Controller
