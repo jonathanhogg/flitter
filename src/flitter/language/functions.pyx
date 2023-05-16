@@ -111,7 +111,7 @@ def read_text(Vector filename):
 def read_csv(Vector filename, Vector row_number):
     cdef str path = str(filename)
     row = row_number.match(1, int)
-    if filename and row_number is not None:
+    if filename and row is not None:
         return SharedCache[path].read_csv_vector(row)
     return null_
 
