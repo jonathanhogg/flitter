@@ -252,7 +252,7 @@ cdef class LaserCubeDriver(LaserDriver):
                 output[i, 1] = <int>(round(samples[i, 4] * 255))
                 output[i, 2] = <int>(round((1 - samples[i+lag, 0]) * self._dac_range)) + self._dac_min
                 output[i, 3] = <int>(round((1 - samples[i+lag, 1]) * self._dac_range)) + self._dac_min
-            logger.debug("Writing {} sample frame", len(output))
+            logger.trace("Writing {} sample frame", len(output))
             await asyncio.to_thread(self._data_out.write, output_array.tobytes())
             self._sample_bunches = [samples_array[-lag:]]
         else:

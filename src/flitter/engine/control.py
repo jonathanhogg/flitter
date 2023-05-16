@@ -105,7 +105,7 @@ class EngineController:
                             else:
                                 renderer = renderer_class(**kwargs)
                             renderers.append(renderer)
-                        group.create_task(renderers[count].update(node, self.state, references=references, **kwargs))
+                        group.create_task(renderers[count].update(node, references=references, **kwargs))
                         count += 1
                     while len(renderers) > count:
                         renderers.pop().destroy()
