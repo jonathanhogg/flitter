@@ -66,7 +66,7 @@ def main():
     try:
         if args.profile:
             import cProfile
-            cProfile.run('asyncio.run(controller.run())', sort='tottime')
+            cProfile.runctx('asyncio.run(controller.run())', globals(), locals(), sort='tottime')
         else:
             asyncio.run(controller.run())
     except KeyboardInterrupt:
