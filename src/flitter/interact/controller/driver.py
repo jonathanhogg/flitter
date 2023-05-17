@@ -85,6 +85,7 @@ class EncoderControl(PositionControl):
     def reset(self):
         super().reset()
         self._style = None
+        self._initial = None
         self._turns = None
 
     def update(self, engine, node, now):
@@ -95,16 +96,18 @@ class EncoderControl(PositionControl):
         if style != self._style:
             self._style = style
             changed = True
-        turns = node.get('turns', 1, float, 1)
-        if turns != self._turns:
+        position_range = self._upper - self._lower
+        if (initial := node.get('initial', 1, float, self._lower + position_range / 2 if self._style == 'pan' else self._lower)) != self._initial:
+            self._initial = initial
+            changed = True
+        if (turns := node.get('turns', 1, float, 1)) != self._turns:
             self._turns = turns
             changed = True
         if self._raw_position is None:
-            position_range = self._upper - self._lower
             if self._state_prefix and self._state_prefix in engine.state:
                 initial = float(engine.state[self._state_prefix])
             else:
-                initial = node.get('initial', 1, float, self._lower + position_range / 2 if self._style == 'pan' else self._lower)
+                initial = self._initial
             self._position = min(max(self._lower, initial), self._upper)
             self._position_time = now
             self._raw_position = (self._position - self._lower) / position_range * self.get_raw_divisor() if position_range else 0

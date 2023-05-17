@@ -16,8 +16,6 @@ def get_driver_class():
 
 
 BUTTON_NOTE_MAPPING = {
-    Vector(("rotary", 1)): 32, Vector(("rotary", 2)): 33, Vector(("rotary", 3)): 34, Vector(("rotary", 4)): 35,
-    Vector(("rotary", 5)): 36, Vector(("rotary", 6)): 37, Vector(("rotary", 7)): 38, Vector(("rotary", 8)): 39,
     Vector(1): 89, Vector(2): 90, Vector(3): 40, Vector(4): 41,
     Vector(5): 42, Vector(6): 43, Vector(7): 44, Vector(8): 45,
     Vector(9): 87, Vector(10): 88, Vector(11): 91, Vector(12): 92,
@@ -30,6 +28,11 @@ NOTE_BUTTON_MAPPING = {note: button_id for button_id, note in BUTTON_NOTE_MAPPIN
 ROTARY_CONTROLS_MAPPING = {
     Vector(1): (16, 48), Vector(2): (17, 49), Vector(3): (18, 50), Vector(4): (19, 51),
     Vector(5): (20, 52), Vector(6): (21, 53), Vector(7): (22, 54), Vector(8): (23, 55),
+}
+
+NOTE_ROTARY_MAPPING = {
+    32: Vector(1), 33: Vector(2), 34: Vector(3), 35: Vector(4),
+    36: Vector(5), 37: Vector(6), 38: Vector(7), 39: Vector(8),
 }
 
 TURN_CONTROL_ROTARY_MAPPING = {turn_control: rotary_id for rotary_id, (turn_control, light_control) in ROTARY_CONTROLS_MAPPING.items()}
@@ -78,15 +81,24 @@ class XTouchMiniRotary(driver.EncoderControl):
     def _handle_event(self, event):
         if not self._initialised:
             return
-        raw_position = self._raw_position
-        delta = 64 - event.value if event.value > 64 else event.value
-        raw_position += delta
-        if self._style != 'continuous':
-            raw_position = min(max(0, raw_position), self.get_raw_divisor())
-        if raw_position != self._raw_position:
-            self._raw_position = raw_position
-            self._position_time = event.timestamp
-            self.update_representation()
+        match event:
+            case midi.ControlChangeEvent(value=value):
+                delta = 64 - value if value > 64 else value
+                raw_position = self._raw_position + delta
+                if self._style != 'continuous':
+                    raw_position = min(max(0, raw_position), self.get_raw_divisor())
+                if raw_position != self._raw_position:
+                    self._raw_position = raw_position
+                    self._position_time = event.timestamp
+                    self.update_representation()
+            case midi.NoteOnEvent(velocity=127, timestamp=now):
+                position_range = self._upper - self._lower
+                self._position = min(max(self._lower, self._initial), self._upper)
+                self._position_time = now
+                self._raw_position = (self._position - self._lower) / position_range * self.get_raw_divisor() if position_range else 0
+                self.update_representation()
+            case _:
+                return
 
 
 class XTouchMiniButton(driver.ButtonControl):
@@ -198,6 +210,9 @@ class XTouchMiniDriver(driver.ControllerDriver):
                         case midi.NoteOnEvent(note=note, channel=0) if note in NOTE_BUTTON_MAPPING:
                             button = self._buttons[NOTE_BUTTON_MAPPING[note]]
                             button._handle_event(event)
+                        case midi.NoteOnEvent(note=note, channel=0) if note in NOTE_ROTARY_MAPPING:
+                            rotary = self._rotaries[NOTE_ROTARY_MAPPING[note]]
+                            rotary._handle_event(event)
                         case midi.ControlChangeEvent(control=control, channel=0) if control in TURN_CONTROL_ROTARY_MAPPING:
                             rotary = self._rotaries[TURN_CONTROL_ROTARY_MAPPING[control]]
                             rotary._handle_event(event)
