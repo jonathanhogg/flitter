@@ -5,6 +5,7 @@ Behringer X-Touch Mini controller driver
 import asyncio
 
 from loguru import logger
+import usb.core
 
 from . import driver, midi
 from ...model import Vector
@@ -130,6 +131,9 @@ class XTouchMiniFader(driver.PositionControl):
 
 
 class XTouchMiniDriver(driver.ControllerDriver):
+    VENDOR_ID = 0x1397
+    PRODUCT_ID = 0x00b3
+
     def __init__(self, node):
         self._port_name = node.get('port', 1, str, 'X-TOUCH MINI')
         self._rotaries = {}
@@ -199,11 +203,14 @@ class XTouchMiniDriver(driver.ControllerDriver):
             slider.update_representation()
 
     def _try_connect(self):
-        try:
-            self._midi_port = midi.MidiPort(self._port_name)
-        except ValueError:
-            return False
-        return True
+        if usb.core.find(idVendor=self.VENDOR_ID, idProduct=self.PRODUCT_ID):
+            try:
+                self._midi_port = midi.MidiPort(self._port_name)
+            except ValueError:
+                pass
+            else:
+                return True
+        return False
 
     def get_control(self, kind, control_id):
         control_id = ALIASES.get((kind, control_id), control_id)
