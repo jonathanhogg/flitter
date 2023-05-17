@@ -747,7 +747,10 @@ cdef class Call(Expression):
         for func in (<model.Vector>function).objects:
             if callable(func):
                 try:
-                    results.append(func(*args))
+                    if hasattr(func, 'state_transformer') and func.state_transformer:
+                        results.append(func(context.state, *args))
+                    else:
+                        results.append(func(*args))
                 except LogException as exc:
                     log_message = ""
                     for value in exc.args:

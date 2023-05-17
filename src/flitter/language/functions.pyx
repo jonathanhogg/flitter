@@ -10,11 +10,16 @@ import cython
 from libc.math cimport isnan, floor, round, sin, cos, asin, acos, sqrt, exp, ceil, atan2, log
 
 from ..cache import SharedCache
-from ..model cimport Vector, Matrix44, null_, true_, false_
+from ..model cimport StateDict, Vector, Matrix44, null_, true_, false_
 
 
 cdef double Pi = 3.141592653589793
 cdef double Tau = 6.283185307179586
+
+
+def state_transformer(func):
+    func.state_transformer = True
+    return func
 
 
 cdef class Uniform(Vector):
@@ -99,6 +104,67 @@ cdef class Normal(Uniform):
         if u1 < 1 / (1<<32):
             u1, u2 = u2, u1
         return sqrt(-2 * log(u1)) * sin(Tau * u2)
+
+
+@state_transformer
+def counter(StateDict state, Vector counter_id, Vector clockv, Vector speedv=None, Vector quantumv=None):
+    if counter_id.length == 0 or clockv.numbers == NULL or clockv.length != 1:
+        return null_
+    cdef double clock = clockv.numbers[0]
+    cdef double speed
+    if speedv is None:
+        speed = 1
+    elif speedv.numbers != NULL and speedv.length == 1:
+        speed = speedv.numbers[0]
+    else:
+        speed = 0
+    cdef double quantum = floor(quantumv.numbers[0]) if quantumv is not None and quantumv.numbers != NULL and quantumv.length == 1 else 0
+    cdef double clock_start = clock if speed != 0 else 0
+    cdef double current_speed = speed
+    cdef Vector counter_state
+    cdef bint update = True
+    if counter_id in state:
+        counter_state = state[counter_id]
+        if counter_state.numbers != NULL and counter_state.length == 2:
+            clock_start = counter_state.numbers[0]
+            current_speed = counter_state.numbers[1]
+            update = False
+    cdef double count = (clock - clock_start) * current_speed if current_speed != 0 else clock_start
+    if speed != current_speed:
+        clock_start = clock - count / speed if speed != 0 else count
+        current_speed = speed
+        update = True
+    cdef double clock_phase, phase, phase_delta, ratio
+    if speed != 0 and quantum > 0:
+        clock_phase = clock * speed % quantum
+        phase = count % quantum
+        phase_delta = clock_phase - phase
+        if phase_delta > quantum / 2:
+            phase_delta -= quantum
+        elif phase_delta < -quantum / 2:
+            phase_delta += quantum
+        if abs(phase_delta) > 1/1024:
+            if abs(phase_delta) < 1/8:
+                clock_start -= phase_delta / speed
+            else:
+                if speed > 0:
+                    ratio = (quantum - phase) / (quantum - clock_phase)
+                else:
+                    ratio = phase / clock_phase
+                ratio = min(max(0.8, ratio), 1.25)
+                current_speed *= ratio
+                clock_start = clock - count / current_speed
+            update = True
+    if update:
+        counter_state = Vector.__new__(Vector)
+        counter_state.allocate_numbers(2)
+        counter_state.numbers[0] = clock_start
+        counter_state.numbers[1] = current_speed
+        state[counter_id] = counter_state
+    cdef Vector countv = Vector.__new__(Vector)
+    countv.allocate_numbers(1)
+    countv.numbers[0] = count
+    return countv
 
 
 def read_text(Vector filename):
@@ -653,4 +719,5 @@ STATIC_FUNCTIONS = {
 DYNAMIC_FUNCTIONS = {
     'read': Vector(read_text),
     'csv': Vector(read_csv),
+    'counter': Vector(counter),
 }
