@@ -25,7 +25,7 @@ class Controller:
             self.driver.stop()
             self.driver = None
 
-    async def update(self, node, counter, state, now):
+    async def update(self, engine, node, now):
         driver = node.get('driver', 1, str)
         driver_class = None
         if driver:
@@ -55,7 +55,7 @@ class Controller:
                     controls[key] = control
                     if key in self.controls:
                         del self.controls[key]
-                    if control.update(child, counter, now, state):
+                    if control.update(engine, child, now):
                         control.update_representation()
         self.purge()
         self.controls = controls

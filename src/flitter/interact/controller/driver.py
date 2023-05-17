@@ -4,8 +4,7 @@ Flitter controller driver API
 
 import math
 
-from ...clock import BeatCounter
-from ...model import Vector, Node, StateDict
+from ...model import Vector, Node
 
 
 class Control:
@@ -19,7 +18,7 @@ class Control:
         self._name = None
         self._color = None
 
-    def update(self, node: Node, counter: BeatCounter, now: float, state: StateDict):
+    def update(self, engine, node: Node, now: float):
         self._initialised = True
         changed = False
         if (state_prefix := node.get('state')) != self._state_prefix:
@@ -52,8 +51,8 @@ class PositionControl(Control):
     def get_raw_divisor(self):
         raise NotImplementedError()
 
-    def update(self, node, counter, now, state):
-        changed = super().update(node, counter, now, state)
+    def update(self, engine, node, now):
+        changed = super().update(engine, node, now)
         if (lag := node.get('lag', 1, float, self.DEFAULT_LAG)) != self._lag:
             self._lag = lag
             changed = True
@@ -68,7 +67,7 @@ class PositionControl(Control):
             raw_divisor = self.get_raw_divisor()
             position = self._raw_position / raw_divisor * position_range + self._lower
             if self._position is not None and abs(position - self._position) > position_range / 1000:
-                delta = counter.beat_at_time(now) - counter.beat_at_time(self._position_time)
+                delta = engine.counter.beat_at_time(now) - engine.counter.beat_at_time(self._position_time)
                 alpha = math.exp(-delta / self._lag)
                 self._position = self._position * alpha + position * (1 - alpha)
                 self._position_time = now
@@ -76,7 +75,7 @@ class PositionControl(Control):
                 self._position = position
                 self._position_time = now
         if self._state_prefix and self._position is not None:
-            state[self._state_prefix] = self._position
+            engine.state[self._state_prefix] = self._position
         return changed
 
 
@@ -88,8 +87,8 @@ class EncoderControl(PositionControl):
         self._style = None
         self._turns = None
 
-    def update(self, node, counter, now, state):
-        changed = super().update(node, counter, now, state)
+    def update(self, engine, node, now):
+        changed = super().update(engine, node, now)
         style = node.get('style', 1, str, 'volume').lower()
         if style not in self.STYLES:
             style = 'volume'
@@ -102,8 +101,8 @@ class EncoderControl(PositionControl):
             changed = True
         if self._raw_position is None:
             position_range = self._upper - self._lower
-            if self._state_prefix and self._state_prefix in state:
-                initial = float(state[self._state_prefix])
+            if self._state_prefix and self._state_prefix in engine.state:
+                initial = float(engine.state[self._state_prefix])
             else:
                 initial = node.get('initial', 1, float, self._lower + position_range / 2 if self._style == 'pan' else self._lower)
             self._position = min(max(self._lower, initial), self._upper)
@@ -123,8 +122,8 @@ class ButtonControl(Control):
         self._toggled = None
         self._toggle_time = None
 
-    def update(self, node, counter, now, state):
-        changed = super().update(node, counter, now, state)
+    def update(self, engine, node, now):
+        changed = super().update(engine, node, now)
         toggle = node.get('toggle', 1, bool, False)
         if toggle != self._toggle:
             self._toggle = toggle
@@ -138,15 +137,15 @@ class ButtonControl(Control):
         if self._pushed is None:
             self._pushed = False
         if self._state_prefix:
-            state[self._state_prefix] = self._pushed if not self._toggle else self._toggled
-            state[self._state_prefix + ['pushed']] = self._pushed
+            engine.state[self._state_prefix] = self._pushed if not self._toggle else self._toggled
+            engine.state[self._state_prefix + ['pushed']] = self._pushed
             if self._push_time is not None:
-                state[self._state_prefix + ['pushed', 'beat']] = counter.beat_at_time(self._push_time)
+                engine.state[self._state_prefix + ['pushed', 'beat']] = engine.counter.beat_at_time(self._push_time)
             if self._release_time is not None:
-                state[self._state_prefix + ['released', 'beat']] = counter.beat_at_time(self._release_time)
-            state[self._state_prefix + ['toggled']] = self._toggled
+                engine.state[self._state_prefix + ['released', 'beat']] = engine.counter.beat_at_time(self._release_time)
+            engine.state[self._state_prefix + ['toggled']] = self._toggled
             if self._toggle_time is not None:
-                state[self._state_prefix + ['toggled', 'beat']] = counter.beat_at_time(self._toggle_time)
+                engine.state[self._state_prefix + ['toggled', 'beat']] = engine.counter.beat_at_time(self._toggle_time)
         return changed
 
 

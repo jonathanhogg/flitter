@@ -55,7 +55,7 @@ class EngineController:
         self.osc_receiver = OSCReceiver('localhost', self.RECEIVE_PORT)
         self.queue = []
         self.pages = []
-        self.next_page = None
+        self.switch_page = None
         self.current_page = None
         self.current_path = None
 
@@ -86,6 +86,20 @@ class EngineController:
             for renderers in self.renderers.values():
                 for renderer in renderers:
                     renderer.purge()
+
+    def has_next_page(self):
+        return self.current_page < len(self.pages) - 1
+
+    def next_page(self):
+        if self.current_page < len(self.pages) - 1:
+            self.switch_page = self.current_page + 1
+
+    def has_previous_page(self):
+        return self.current_page > 0
+
+    def previous_page(self):
+        if self.current_page > 0:
+            self.switch_page = self.current_page - 1
 
     async def update_renderers(self, graph, **kwargs):
         nodes_by_kind = {}
@@ -124,7 +138,7 @@ class EngineController:
                         if count == len(interactors):
                             interactor = interactor_class()
                             interactors.append(interactor)
-                        group.create_task(interactors[count].update(node, self.counter, self.state, frame_time))
+                        group.create_task(interactors[count].update(self, node, frame_time))
                         count += 1
                     while len(interactors) > count:
                         interactors.pop().destroy()
@@ -186,8 +200,8 @@ class EngineController:
         self.queue.append(OSCMessage('/tempo', self.counter.tempo, self.counter.quantum, self.counter.start))
 
     def enqueue_page_status(self):
-        self.queue.append(OSCMessage('/page_left', self.current_page > 0))
-        self.queue.append(OSCMessage('/page_right', self.current_page < len(self.pages) - 1))
+        self.queue.append(OSCMessage('/page_left', self.has_previous_page()))
+        self.queue.append(OSCMessage('/page_right', self.has_next_page()))
 
     def process_message(self, message):
         if isinstance(message, OSCBundle):
@@ -244,11 +258,9 @@ class EngineController:
                 elif parts[-1] == 'reset':
                     encoder.on_reset(beat)
         elif parts == ['page_left']:
-            if self.current_page > 0:
-                self.next_page = self.current_page - 1
+            self.previous_page()
         elif parts == ['page_right']:
-            if self.current_page < len(self.pages) - 1:
-                self.next_page = self.current_page + 1
+            self.next_page()
 
     async def receive_messages(self):
         logger.info("Listening for OSC control messages on port {}", self.RECEIVE_PORT)
@@ -378,11 +390,11 @@ class EngineController:
                     self.global_state_dirty = False
                     dump_time = frame_time
 
-                if self.next_page is not None:
+                if self.switch_page is not None:
                     if self.autoreset:
                         self.reset_state()
-                    self.switch_to_page(self.next_page)
-                    self.next_page = None
+                    self.switch_to_page(self.switch_page)
+                    self.switch_page = None
                     run_top = current_top = None
                     performance = 1
                     count = gc.collect(2)
