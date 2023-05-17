@@ -185,6 +185,7 @@ class XTouchMiniDriver(driver.ControllerDriver):
             while True:
                 while not self._try_connect():
                     await asyncio.sleep(1)
+                self._midi_port.send_control_change(127, 1, channel=11)  # Switch to Mackie Control mode
                 self.refresh()
                 self._ready.set()
                 logger.debug("X-Touch Mini controller driver ready")
@@ -206,6 +207,7 @@ class XTouchMiniDriver(driver.ControllerDriver):
                             logger.warning("Unhandled MIDI event: {}", event)
         except asyncio.CancelledError:
             if self._midi_port is not None:
+                self._midi_port.send_control_change(127, 0, channel=11)
                 self._ready.clear()
                 self._midi_port.close()
                 self._midi_port = None
@@ -213,7 +215,6 @@ class XTouchMiniDriver(driver.ControllerDriver):
             logger.opt(exception=exc).error("Unhandled exception in X-Touch mini controller main loop")
 
     def refresh(self):
-        self._midi_port.send_control_change(1, 127, channel=11)  # Switch to Mackie Control mode
         for rotary in self._rotaries.values():
             rotary.update_representation()
         for button in self._buttons.values():
