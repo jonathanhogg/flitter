@@ -44,7 +44,7 @@ class Controller:
             else:
                 return
         controls = {}
-        for child in node.children:
+        for child in list(node.children) + self.driver.DEFAULT_CONFIG:
             if 'id' in child:
                 control_id = child['id']
                 control = self.driver.get_control(child.kind, control_id)

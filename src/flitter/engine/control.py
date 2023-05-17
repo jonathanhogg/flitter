@@ -86,6 +86,9 @@ class EngineController:
             for renderers in self.renderers.values():
                 for renderer in renderers:
                     renderer.purge()
+            for interactors in self.interactors.values():
+                for interactor in interactors:
+                    interactor.purge()
 
     def has_next_page(self):
         return self.current_page < len(self.pages) - 1

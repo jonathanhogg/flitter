@@ -68,7 +68,7 @@ class PositionControl(Control):
             position = self._raw_position / raw_divisor * position_range + self._lower
             if self._position is not None and abs(position - self._position) > position_range / 1000:
                 delta = engine.counter.beat_at_time(now) - engine.counter.beat_at_time(self._position_time)
-                alpha = math.exp(-delta / self._lag)
+                alpha = math.exp(-delta / self._lag) if self._lag > 0 else 0
                 self._position = self._position * alpha + position * (1 - alpha)
                 self._position_time = now
             elif self._position != position:
@@ -118,21 +118,37 @@ class ButtonControl(Control):
         self._pushed = None
         self._push_time = None
         self._release_time = None
+        self._action = None
+        self._action_can_trigger = None
+        self._action_triggered = None
         self._toggle = None
         self._toggled = None
         self._toggle_time = None
 
     def update(self, engine, node, now):
         changed = super().update(engine, node, now)
+        action = node.get('action', 1, str)
         toggle = node.get('toggle', 1, bool, False)
+        if action != self._action:
+            self._action = action
+            if self._action is None:
+                self._action_can_trigger = None
+                self._action_triggered = None
+            changed = True
         if toggle != self._toggle:
             self._toggle = toggle
             self._toggled = None
             self._toggle_time = None
             changed = True
         if self._toggle and self._toggled is None:
-            self._toggled = node.get('initial', 1, bool, False)
-            self._toggle_time = now
+            key = self._state_prefix + ['toggled'] if self._state_prefix else None
+            if key and key in engine.state:
+                self._toggled = bool(engine.state[key])
+                toggled_beat = float(engine.state[key + ['beat']])
+                self._toggle_time = engine.counter.time_at_beat(toggled_beat)
+            else:
+                self._toggled = node.get('initial', 1, bool, False)
+                self._toggle_time = now
             changed = True
         if self._pushed is None:
             self._pushed = False
@@ -146,6 +162,19 @@ class ButtonControl(Control):
             engine.state[self._state_prefix + ['toggled']] = self._toggled
             if self._toggle_time is not None:
                 engine.state[self._state_prefix + ['toggled', 'beat']] = engine.counter.beat_at_time(self._toggle_time)
+        if self._action is not None:
+            match self._action:
+                case 'next':
+                    self._action_can_trigger = engine.has_next_page()
+                case 'previous':
+                    self._action_can_trigger = engine.has_previous_page()
+            if self._action_triggered:
+                match self._action:
+                    case 'next':
+                        engine.next_page()
+                    case 'previous':
+                        engine.previous_page()
+                self._action_triggered = False
         return changed
 
 

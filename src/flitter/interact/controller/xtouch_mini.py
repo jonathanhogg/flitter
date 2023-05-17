@@ -8,7 +8,7 @@ from loguru import logger
 import usb.core
 
 from . import driver, midi
-from ...model import Vector
+from ...model import Vector, Node
 
 
 def get_driver_class():
@@ -42,6 +42,10 @@ ALIASES = {
     ('button', Vector('stop')): Vector(14),
     ('button', Vector('play')): Vector(15),
     ('button', Vector('record')): Vector(16),
+}
+
+SPECIAL_ACTIONS = {
+    Vector("a"): 'next', Vector("b"): 'previous',
 }
 
 
@@ -95,7 +99,11 @@ class XTouchMiniButton(driver.ButtonControl):
         if self._driver._midi_port is None:
             return
         if self._initialised:
-            if self._toggle:
+            if self._action:
+                velocity = 127 if self._action_can_trigger else 0
+            elif self._color is not None:
+                velocity = 127 if self._color != [0, 0, 0] else 0
+            elif self._toggle:
                 velocity = 127 if self._toggled else 0
             else:
                 velocity = 127 if self._pushed else 0
@@ -111,7 +119,9 @@ class XTouchMiniButton(driver.ButtonControl):
             self._pushed = pushed
             if self._pushed:
                 self._push_time = event.timestamp
-                if self._toggle:
+                if self._action is not None:
+                    self._action_triggered = True
+                elif self._toggle:
                     self._toggled = not self._toggled
                     self._toggle_time = event.timestamp
             else:
@@ -120,6 +130,11 @@ class XTouchMiniButton(driver.ButtonControl):
 
 
 class XTouchMiniFader(driver.PositionControl):
+    def reset(self):
+        raw_position = self._raw_position if hasattr(self, '_raw_position') else None
+        super().reset()
+        self._raw_position = raw_position
+
     def update_representation(self):
         pass
 
@@ -133,6 +148,10 @@ class XTouchMiniFader(driver.PositionControl):
 class XTouchMiniDriver(driver.ControllerDriver):
     VENDOR_ID = 0x1397
     PRODUCT_ID = 0x00b3
+    DEFAULT_CONFIG = [
+        Node('button', attributes={'id': 'a', 'action': 'next'}),
+        Node('button', attributes={'id': 'b', 'action': 'previous'}),
+    ]
 
     def __init__(self, node):
         self._port_name = node.get('port', 1, str, 'X-TOUCH MINI')
@@ -220,51 +239,3 @@ class XTouchMiniDriver(driver.ControllerDriver):
             return self._buttons.get(control_id)
         if kind == 'slider':
             return self._sliders.get(control_id)
-
-
-async def main():
-    import flitter
-    from flitter.clock import BeatCounter, system_clock
-    from flitter.model import Node, StateDict
-    flitter.configure_logger('TRACE')
-    driver = XTouchMiniDriver(Node('controller'))
-    await driver.start()
-    await driver._ready.wait()
-    counter = BeatCounter()
-    state = StateDict()
-    while True:
-        now = system_clock()
-        state.set_time(now)
-        rotary = driver.get_rotary(Vector(1))
-        if rotary.update(Node('rotary'), counter, now, state):
-            rotary.update_representation()
-        rotary = driver.get_rotary(Vector(2))
-        if rotary.update(Node('rotary', set(), {'state': 2, 'style': 'pan', 'turns': 2}), counter, now, state):
-            rotary.update_representation()
-        rotary = driver.get_rotary(Vector(3))
-        if rotary.update(Node('rotary', set(), {'state': 3, 'style': 'pan', 'lower': -10, 'upper': 10}), counter, now, state):
-            rotary.update_representation()
-        rotary = driver.get_rotary(Vector(4))
-        if rotary.update(Node('rotary', set(), {'state': 4, 'style': 'continuous'}), counter, now, state):
-            rotary.update_representation()
-        rotary = driver.get_rotary(Vector(8))
-        if rotary.update(Node('rotary', set(), {'state': 8, 'upper': 0}), counter, now, state):
-            rotary.update_representation()
-        button = driver.get_button(Vector(1))
-        if button.update(Node('button', set(), {'state': 'button1'}), counter, now, state):
-            button.update_representation()
-        button = driver.get_button(Vector('a'))
-        if button.update(Node('button', set(), {'state': 'a', 'toggle': True}), counter, now, state):
-            button.update_representation()
-        button = driver.get_button(Vector('b'))
-        if button.update(Node('button', set(), {'state': 'b', 'toggle': True, 'initial': True}), counter, now, state):
-            button.update_representation()
-        slider = driver.get_slider(Vector(None))
-        if slider.update(Node('slider', set(), {'state': 'fader'}), counter, now, state):
-            slider.update_representation()
-        print(state)
-        await asyncio.sleep(1/10)
-
-
-if __name__ == '__main__':
-    asyncio.run(main())
