@@ -10,13 +10,13 @@ from unittest.mock import patch
 from loguru import logger
 
 from flitter.clock import system_clock
-from flitter.controller import midi
+from flitter.interact.controller import midi
 
 
-logger.disable('flitter.controller.midi')
+logger.disable('flitter.interact.controller.midi')
 
 
-@patch('flitter.controller.midi.rtmidi2')
+@patch('flitter.interact.controller.midi.rtmidi2')
 class TestMidiPortCreation(unittest.IsolatedAsyncioTestCase):
     async def test_create_input(self, rtmidi2_mock):
         port = midi.MidiPort('TEST_MIDI_PORT', output=False)
@@ -58,7 +58,7 @@ class TestMidiPortCreation(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(port2._midi_out.called_with('TEST_MIDI_PORT2'))
 
 
-@patch('flitter.controller.midi.rtmidi2')
+@patch('flitter.interact.controller.midi.rtmidi2')
 class TestMidiPortClose(unittest.IsolatedAsyncioTestCase):
     def test_close_input_output(self, rtmidi2_mock):
         port = midi.MidiPort('TEST_MIDI_PORT')
@@ -87,7 +87,7 @@ class TestMidiPortClose(unittest.IsolatedAsyncioTestCase):
 
 class TestReceiveMidi(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
-        self.rtmidi2_patcher = patch('flitter.controller.midi.rtmidi2')
+        self.rtmidi2_patcher = patch('flitter.interact.controller.midi.rtmidi2')
         self.rtmidi2_mock = self.rtmidi2_patcher.start()
         self.port = midi.MidiPort('TEST_MIDI_PORT', output=False)
 
@@ -183,7 +183,7 @@ class TestReceiveMidi(unittest.IsolatedAsyncioTestCase):
 
 class TestSendMidi(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
-        self.rtmidi2_patcher = patch('flitter.controller.midi.rtmidi2')
+        self.rtmidi2_patcher = patch('flitter.interact.controller.midi.rtmidi2')
         self.rtmidi2_mock = self.rtmidi2_patcher.start()
         self.port = midi.MidiPort('TEST_MIDI_PORT', input=False, sysex_id=(0x01, 0x02, 0x03))
 
