@@ -5,17 +5,11 @@ Flitter window management
 import array
 from collections import namedtuple
 import math
-import sys
 
+import glfw
 from loguru import logger
 import skia
 import moderngl
-import pyglet
-if sys.platform == 'darwin':
-    pyglet.options['shadow_window'] = False
-import pyglet.canvas
-import pyglet.window
-import pyglet.gl
 
 from ...cache import SharedCache
 from . import canvas
@@ -32,12 +26,18 @@ def value_split(value, n, m):
     return [tuple(value[i * m:(i + 1) * m]) for i in range(n)]
 
 
+GL_RGBA8 = 32856
+GL_RGBA16F = 34842
+GL_RGBA32F = 34836
+GL_SRGB8 = 35905
+GL_FRAMEBUFFER_SRGB = 36281
+
 ColorFormat = namedtuple('ColorFormat', ('moderngl_dtype', 'gl_format', 'skia_colortype'))
 
 COLOR_FORMATS = {
-    8: ColorFormat('f1', pyglet.gl.GL_RGBA8, skia.kRGBA_8888_ColorType),
-    16: ColorFormat('f2', pyglet.gl.GL_RGBA16F, skia.kRGBA_F16_ColorType),
-    32: ColorFormat('f4', pyglet.gl.GL_RGBA32F, skia.kRGBA_F32_ColorType)  # Canvas currently fails with 32bit color
+    8: ColorFormat('f1', GL_RGBA8, skia.kRGBA_8888_ColorType),
+    16: ColorFormat('f2', GL_RGBA16F, skia.kRGBA_F16_ColorType),
+    32: ColorFormat('f4', GL_RGBA32F, skia.kRGBA_F32_ColorType)  # Canvas currently fails with 32bit color
 }
 
 DEFAULT_COLORBITS = 8
@@ -272,16 +272,7 @@ class ProgramNode(SceneNode):
 
 
 class Window(ProgramNode):
-    class WindowWrapper(pyglet.window.Window):  # noqa
-        """Disable some pyglet functionality that is broken with moderngl"""
-        def on_resize(self, width, height):
-            pass
-
-        def on_draw(self):
-            pass
-
-        def on_close(self):
-            pass
+    Windows = []
 
     def __init__(self, screen=0, fullscreen=False, vsync=False, **kwargs):
         super().__init__(None)
@@ -299,8 +290,11 @@ class Window(ProgramNode):
                 logger.trace("Collected {} OpenGL objects", count)
             self.glctx.release()
             self.glctx = None
-            self.window.close()
+            glfw.destroy_window(self.window)
             self.window = None
+            Window.Windows.remove(self)
+            if not Window.Windows:
+                glfw.terminate()
             logger.debug("{} closed", self.name)
         super().release()
 
@@ -319,24 +313,37 @@ class Window(ProgramNode):
     def create(self, node, resized, **kwargs):
         super().create(node, resized)
         if self.window is None:
-            vsync = node.get('vsync', 1, bool, self.default_vsync)
-            screen = node.get('screen', 1, int, self.default_screen)
             title = node.get('title', 1, str, "flitter")
-            self._deferred_fullscreen = node.get('fullscreen', 1, bool, self.default_fullscreen)
+            screen = node.get('screen', 1, int, self.default_screen)
+            fullscreen = node.get('fullscreen', 1, bool, self.default_fullscreen)
             resizable = node.get('resizable', 1, bool, True)
-            screens = pyglet.canvas.get_display().get_screens()
-            screen = screens[screen] if screen < len(screens) else screens[0]
-            config = pyglet.gl.Config(major_version=self.GL_VERSION[0], minor_version=self.GL_VERSION[1], forward_compatible=True,
-                                      double_buffer=True, sample_buffers=0)
+            if not Window.Windows:
+                glfw.init()
+            monitors = glfw.get_monitors()
+            monitor = monitors[screen] if screen < len(monitors) else monitors[0]
+            mx, my, mw, mh = glfw.get_monitor_workarea(monitor)
             width, height = self.width, self.height
-            while width > screen.width * 0.9 or height > screen.height * 0.9:
+            while width > mw * 0.95 or height > mh * 0.95:
                 width = width * 2 // 3
                 height = height * 2 // 3
-            self.window = self.WindowWrapper(width=width, height=height, resizable=resizable, caption=title,
-                                             screen=screen, vsync=vsync, config=config)
-            self.window.set_location(screen.x + (screen.width - width) // 2, screen.y + (screen.height - height) // 2)
-            self.window.switch_to()
-            self.glctx = moderngl.create_context(require=self.GL_VERSION[0] * 100 + self.GL_VERSION[1] * 10)
+            glfw.window_hint(glfw.CLIENT_API, glfw.OPENGL_API)
+            glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
+            glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, self.GL_VERSION[0])
+            glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, self.GL_VERSION[1])
+            glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, glfw.TRUE)
+            glfw.window_hint(glfw.DOUBLEBUFFER, glfw.TRUE)
+            glfw.window_hint(glfw.SAMPLES, 0)
+            glfw.window_hint(glfw.AUTO_ICONIFY, glfw.FALSE)
+            glfw.window_hint(glfw.CENTER_CURSOR, glfw.FALSE)
+            glfw.window_hint(glfw.RESIZABLE, glfw.TRUE if resizable else glfw.FALSE)
+            self.window = glfw.create_window(width, height, title, None, Window.Windows[0].window if Window.Windows else None)
+            glfw.set_window_pos(self.window, mx + (mw - width) // 2, my + (mh - height) // 2)
+            if fullscreen:
+                mode = glfw.get_video_mode(monitor)
+                glfw.set_window_monitor(self.window, monitor, 0, 0, mode.size.width, mode.size.height, mode.refresh_rate)
+            Window.Windows.append(self)
+            glfw.make_context_current(self.window)
+            self.glctx = moderngl.create_context(self.GL_VERSION[0] * 100 + self.GL_VERSION[1] * 10)
             self.glctx.gc_mode = 'context_gc'
             self.glctx.extra = {}
             self.glctx.enable(moderngl.BLEND)
@@ -346,15 +353,7 @@ class Window(ProgramNode):
             logger.debug("OpenGL info: {GL_RENDERER} {GL_VERSION}", **self.glctx.info)
             logger.trace("{!r}", self.glctx.info)
         else:
-            if self._deferred_fullscreen:
-                logger.debug("{} going full screen", self.name)
-                self.window.set_mouse_visible(False)
-                if sys.platform == 'darwin':
-                    self.window._nswindow.enterFullScreenMode_(self.window._nswindow.screen())  # noqa
-                else:
-                    self.window.set_fullscreen(True)
-                self._deferred_fullscreen = False
-            self.window.switch_to()
+            glfw.make_context_current(self.window)
             self.recalculate_viewport()
         self.glctx.extra['linear'] = node.get('linear', 1, bool, False)
         colorbits = node.get('colorbits', 1, int, DEFAULT_COLORBITS)
@@ -365,7 +364,7 @@ class Window(ProgramNode):
 
     def recalculate_viewport(self, force=False):
         aspect_ratio = self.width / self.height
-        width, height = self.window.get_framebuffer_size()
+        width, height = glfw.get_framebuffer_size(self.window)
         if width / height > aspect_ratio:
             view_width = int(height * aspect_ratio)
             viewport = ((width - view_width) // 2, 0, view_width, height)
@@ -373,8 +372,8 @@ class Window(ProgramNode):
             view_height = int(width / aspect_ratio)
             viewport = (0, (height - view_height) // 2, width, view_height)
         if force or viewport != self.glctx.screen.viewport:
-            width, height = self.window.width, self.window.height
             self.glctx.screen.viewport = viewport
+            width, height = glfw.get_window_size(self.window)
             if viewport != (0, 0, width, height):
                 logger.debug("{0} resized to {1}x{2} (viewport {5}x{6} x={3} y={4})", self.name, width, height, *viewport)
             else:
@@ -382,15 +381,16 @@ class Window(ProgramNode):
 
     def render(self, node, **kwargs):
         if self.glctx.extra['linear']:
-            self.glctx.enable_direct(pyglet.gl.GL_FRAMEBUFFER_SRGB)
+            self.glctx.enable_direct(GL_FRAMEBUFFER_SRGB)
         super().render(node, **kwargs)
         if self.glctx.extra['linear']:
-            self.glctx.disable_direct(pyglet.gl.GL_FRAMEBUFFER_SRGB)
-        self.window.flip()
+            self.glctx.disable_direct(GL_FRAMEBUFFER_SRGB)
+        vsync = node.get('vsync', 1, bool, self.default_vsync)
+        glfw.swap_interval(1 if vsync else 0)
+        glfw.swap_buffers(self.window)
+        glfw.poll_events()
         if count := self.glctx.gc():
             logger.trace("Collected {} OpenGL objects", count)
-        from pyglet.app import platform_event_loop
-        platform_event_loop.step(0)
 
     def make_last(self):
         width, height = self.window.get_framebuffer_size()
@@ -684,7 +684,7 @@ class Video(Shader):
             depth = COLOR_FORMATS[colorbits]
             self._texture = self.glctx.texture((self.width, self.height), 4, dtype=depth.moderngl_dtype)
             self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
-            format = pyglet.gl.GL_SRGB8 if linear else None
+            format = GL_SRGB8 if linear else None
             self._frame0_texture = self.glctx.texture((self.width, self.height), 3, internal_format=format)
             self._frame1_texture = self.glctx.texture((self.width, self.height), 3, internal_format=format)
             self._linear = linear

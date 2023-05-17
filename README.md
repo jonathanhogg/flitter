@@ -101,7 +101,7 @@ For reference, the runtime dependencies are:
 - `rtmidi2` - for talking MIDI (to the Push 2)
 - `pyusb` - for sending screen data to the Push 2 and for talking to LaserCubes
 - `skia-python` - for 2D drawing
-- `pyglet` - for OpenGL windowing
+- `glfw` - for OpenGL windowing
 - `moderngl` - because the OpenGL API is too hard
 - `trimesh` - for generating/loading 3D triangular mesh models
 - `scipy` - because `trimesh` needs it for some operations
