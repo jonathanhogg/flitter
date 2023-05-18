@@ -103,21 +103,22 @@ class SceneNode:
         updated = []
         for child in node.children:
             cls = {'reference': Reference, 'shader': Shader, 'canvas': Canvas, 'canvas3d': Canvas3D,
-                   'record': Record, 'video': Video}[child.kind]
-            index = None
-            for i, scene_node in enumerate(existing):
-                if type(scene_node) == cls:
-                    if scene_node.similar_to(child):
-                        index = i
-                        break
-                    if index is None:
-                        index = i
-            if index is not None:
-                scene_node = existing.pop(index)
-            else:
-                scene_node = cls(self.glctx)
-            await scene_node.update(child, default_size=(self.width, self.height), **kwargs)
-            updated.append(scene_node)
+                   'record': Record, 'video': Video}.get(child.kind)
+            if cls is not None:
+                index = None
+                for i, scene_node in enumerate(existing):
+                    if type(scene_node) == cls:
+                        if scene_node.similar_to(child):
+                            index = i
+                            break
+                        if index is None:
+                            index = i
+                if index is not None:
+                    scene_node = existing.pop(index)
+                else:
+                    scene_node = cls(self.glctx)
+                await scene_node.update(child, default_size=(self.width, self.height), **kwargs)
+                updated.append(scene_node)
         while existing:
             existing.pop().destroy()
         self.children = updated
