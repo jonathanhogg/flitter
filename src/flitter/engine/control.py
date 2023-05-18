@@ -126,6 +126,10 @@ class EngineController:
                         count += 1
                     while len(renderers) > count:
                         renderers.pop().destroy()
+        for kind in list(self.renderers):
+            if kind not in nodes_by_kind:
+                for renderer in self.renderers.pop(kind):
+                    renderer.destroy()
 
     async def update_interactors(self, graph, frame_time):
         nodes_by_kind = {}
@@ -145,6 +149,10 @@ class EngineController:
                         count += 1
                     while len(interactors) > count:
                         interactors.pop().destroy()
+        for kind in list(self.interactors):
+            if kind not in nodes_by_kind:
+                for interactor in self.interactors.pop(kind):
+                    interactor.destroy()
 
     def update_controls(self, graph):
         remaining = set(self.pads)
