@@ -5,9 +5,16 @@ Flitter generic rendering
 import importlib
 
 
+_class_cache = {}
+
+
 def get_renderer(kind):
+    if kind in _class_cache:
+        return _class_cache[kind]
     try:
-        module = importlib.import_module(f'flitter.render.{kind}')
+        module = importlib.import_module(f'.{kind}', __package__)
+        cls = module.RENDERER_CLASS
     except ImportError:
-        return None
-    return module.RENDERER_CLASS
+        cls = None
+    _class_cache[kind] = cls
+    return cls
