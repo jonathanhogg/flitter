@@ -113,7 +113,7 @@ class EngineController:
                 renderer_class = get_renderer(kind)
                 if renderer_class is not None:
                     references = {}
-                    renderers = self.renderers.setdefault(node.kind, [])
+                    renderers = self.renderers.setdefault(kind, [])
                     count = 0
                     for node in nodes:
                         if count == len(renderers):
@@ -139,7 +139,7 @@ class EngineController:
             for kind, nodes in nodes_by_kind.items():
                 interactor_class = get_interactor(kind)
                 if interactor_class is not None:
-                    interactors = self.interactors.setdefault(node.kind, [])
+                    interactors = self.interactors.setdefault(kind, [])
                     count = 0
                     for node in nodes:
                         if count == len(interactors):
