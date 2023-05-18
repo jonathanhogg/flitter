@@ -6,10 +6,20 @@ import importlib
 
 from loguru import logger
 
+from . import midi
+
 
 class Controller:
+    VIRTUAL_MIDI_PORT = None
+
+    @classmethod
+    def open_virtual_midi_port(cls):
+        if cls.VIRTUAL_MIDI_PORT is None:
+            cls.VIRTUAL_MIDI_PORT = midi.MidiPort('flitter', virtual=True)
+
     def __init__(self):
         logger.debug("Create controller")
+        self.open_virtual_midi_port()
         self.driver = None
         self.controls = {}
 

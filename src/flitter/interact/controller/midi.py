@@ -73,7 +73,7 @@ class PitchBendEvent(MidiEvent):
 
 
 class MidiPort:
-    def __init__(self, name, input=True, output=True, sysex_id=None):
+    def __init__(self, name, input=True, output=True, sysex_id=None, virtual=False):
         self.name = name
         self.sysex_id = bytes(sysex_id) if sysex_id is not None else None
         self._midi_in = None
@@ -81,14 +81,20 @@ class MidiPort:
         try:
             if input:
                 self._midi_in = rtmidi2.MidiIn()
-                self._midi_in.open_port(self.name)
+                if virtual:
+                    self._midi_in.open_virtual_port(self.name)
+                else:
+                    self._midi_in.open_port(self.name)
                 self._last_receive_timestamp = None
                 self._loop = asyncio.get_event_loop()
                 self._receive_queue = asyncio.Queue()
                 self._midi_in.callback = self._message_received
             if output:
                 self._midi_out = rtmidi2.MidiOut()
-                self._midi_out.open_port(self.name)
+                if virtual:
+                    self._midi_out.open_virtual_port(self.name)
+                else:
+                    self._midi_out.open_port(self.name)
         except RuntimeError as exc:
             if self._midi_in is not None:
                 self._midi_in.close()

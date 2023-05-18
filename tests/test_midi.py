@@ -20,16 +20,16 @@ logger.disable('flitter.interact.controller.midi')
 class TestMidiPortCreation(unittest.IsolatedAsyncioTestCase):
     async def test_create_input(self, rtmidi2_mock):
         port = midi.MidiPort('TEST_MIDI_PORT', output=False)
-        self.assertTrue(port._midi_in.called_with('TEST_MIDI_PORT'))
+        port._midi_in.open_port.assert_called_with('TEST_MIDI_PORT')
 
     def test_create_output(self, rtmidi2_mock):
         port = midi.MidiPort('TEST_MIDI_PORT', input=False)
-        self.assertTrue(port._midi_out.called_with('TEST_MIDI_PORT'))
+        port._midi_out.open_port.assert_called_with('TEST_MIDI_PORT')
 
     async def test_create_input_output(self, rtmidi2_mock):
         port = midi.MidiPort('TEST_MIDI_PORT')
-        self.assertTrue(port._midi_in.called_with('TEST_MIDI_PORT'))
-        self.assertTrue(port._midi_out.called_with('TEST_MIDI_PORT'))
+        port._midi_in.open_port.assert_called_with('TEST_MIDI_PORT')
+        port._midi_out.open_port.assert_called_with('TEST_MIDI_PORT')
 
     def test_attempt_create_missing(self, rtmidi2_mock):
         rtmidi2_mock.MidiIn.side_effect = RuntimeError()
@@ -51,11 +51,16 @@ class TestMidiPortCreation(unittest.IsolatedAsyncioTestCase):
 
     async def test_create_multiple_ports(self, rtmidi2_mock):
         port1 = midi.MidiPort('TEST_MIDI_PORT1')
+        port1._midi_in.open_port.assert_called_with('TEST_MIDI_PORT1')
+        port1._midi_out.open_port.assert_called_with('TEST_MIDI_PORT1')
         port2 = midi.MidiPort('TEST_MIDI_PORT2')
-        self.assertTrue(port1._midi_in.called_with('TEST_MIDI_PORT1'))
-        self.assertTrue(port1._midi_out.called_with('TEST_MIDI_PORT1'))
-        self.assertTrue(port2._midi_in.called_with('TEST_MIDI_PORT2'))
-        self.assertTrue(port2._midi_out.called_with('TEST_MIDI_PORT2'))
+        port2._midi_in.open_port.assert_called_with('TEST_MIDI_PORT2')
+        port2._midi_out.open_port.assert_called_with('TEST_MIDI_PORT2')
+
+    async def test_virtual_port(self, rtmidi2_mock):
+        port = midi.MidiPort('TEST_VIRTUAL_PORT', virtual=True)
+        port._midi_in.open_virtual_port.assert_called_with('TEST_VIRTUAL_PORT')
+        port._midi_out.open_virtual_port.assert_called_with('TEST_VIRTUAL_PORT')
 
 
 @patch('flitter.interact.controller.midi.rtmidi2')
@@ -65,8 +70,8 @@ class TestMidiPortClose(unittest.IsolatedAsyncioTestCase):
         midi_in_mock = port._midi_in
         midi_out_mock = port._midi_out
         port.close()
-        self.assertTrue(midi_in_mock.close.called_with())
-        self.assertTrue(midi_out_mock.close.called_with())
+        midi_in_mock.close_port.assert_called_with()
+        midi_out_mock.close_port.assert_called_with()
         self.assertIsNone(port._midi_in)
         self.assertIsNone(port._midi_out)
 
@@ -196,62 +201,62 @@ class TestSendMidi(unittest.IsolatedAsyncioTestCase):
 
     def test_send_note_off(self):
         self.port.send_note_off(10)
-        self.assertTrue(self.port._midi_out.send_raw.called_with(0x80, 0x0a))
+        self.port._midi_out.send_raw.assert_called_with(0x80, 0x0a)
 
     def test_send_note_on(self):
         self.port.send_note_on(10, channel=1)
-        self.assertTrue(self.port._midi_out.send_raw.called_with(0x91, 0x0a, 0x7f))
+        self.port._midi_out.send_raw.assert_called_with(0x91, 0x0a, 0x7f)
         self.port.send_note_on(10, 55, channel=2)
-        self.assertTrue(self.port._midi_out.send_raw.called_with(0x92, 0x0a, 0x37))
+        self.port._midi_out.send_raw.assert_called_with(0x92, 0x0a, 0x37)
 
     def test_send_note_pressure(self):
         self.port.send_note_pressure(10, 55, channel=2)
-        self.assertTrue(self.port._midi_out.send_raw.called_with(0xa2, 0x0a, 0x37))
+        self.port._midi_out.send_raw.assert_called_with(0xa2, 0x0a, 0x37)
 
     def test_send_control_change(self):
         self.port.send_control_change(16, 33, channel=3)
-        self.assertTrue(self.port._midi_out.send_raw.called_with(0xb3, 0x10, 0x21))
+        self.port._midi_out.send_raw.assert_called_with(0xb3, 0x10, 0x21)
 
     def test_send_program_change(self):
         self.port.send_program_change(19, channel=9)
-        self.assertTrue(self.port._midi_out.send_raw.called_with(0xc9, 0x13))
+        self.port._midi_out.send_raw.assert_called_with(0xc9, 0x13)
 
     def test_send_channel_pressure(self):
         self.port.send_channel_pressure(55, channel=4)
-        self.assertTrue(self.port._midi_out.send_raw.called_with(0xd4, 0x37))
+        self.port._midi_out.send_raw.assert_called_with(0xd4, 0x37)
 
     def test_send_pitch_bend_change(self):
         self.port.send_pitch_bend_change(16370, channel=5)
-        self.assertTrue(self.port._midi_out.send_raw.called_with(0xe5, 0x72, 0x7f))
+        self.port._midi_out.send_raw.assert_called_with(0xe5, 0x72, 0x7f)
 
     def test_send_sysex(self):
         self.port.send_sysex(0x04, 0x05, 0x06)
-        self.assertTrue(self.port._midi_out.send_raw.called_with(0xf0, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0xf7))
+        self.port._midi_out.send_raw.assert_called_with(0xf0, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0xf7)
 
     def test_send_sysex_explicit_id(self):
         self.port.send_sysex(0x04, 0x05, 0x06, sysex_id=(0x71, 0x72, 0x73))
-        self.assertTrue(self.port._midi_out.send_raw.called_with(0xf0, 0x71, 0x72, 0x73, 0x04, 0x05, 0x06, 0xf7))
+        self.port._midi_out.send_raw.assert_called_with(0xf0, 0x71, 0x72, 0x73, 0x04, 0x05, 0x06, 0xf7)
 
     def test_send_clock(self):
         self.port.send_clock()
-        self.assertTrue(self.port._midi_out.send_raw.called_with(0xf8))
+        self.port._midi_out.send_raw.assert_called_with(0xf8)
 
     def test_send_start(self):
         self.port.send_start()
-        self.assertTrue(self.port._midi_out.send_raw.called_with(0xfa))
+        self.port._midi_out.send_raw.assert_called_with(0xfa)
 
     def test_send_continue(self):
         self.port.send_continue()
-        self.assertTrue(self.port._midi_out.send_raw.called_with(0xfb))
+        self.port._midi_out.send_raw.assert_called_with(0xfb)
 
     def test_send_stop(self):
         self.port.send_stop()
-        self.assertTrue(self.port._midi_out.send_raw.called_with(0xfc))
+        self.port._midi_out.send_raw.assert_called_with(0xfc)
 
     def test_send_active(self):
         self.port.send_active()
-        self.assertTrue(self.port._midi_out.send_raw.called_with(0xfd))
+        self.port._midi_out.send_raw.assert_called_with(0xfe)
 
     def test_send_reset(self):
         self.port.send_reset()
-        self.assertTrue(self.port._midi_out.send_raw.called_with(0xff))
+        self.port._midi_out.send_raw.assert_called_with(0xff)
