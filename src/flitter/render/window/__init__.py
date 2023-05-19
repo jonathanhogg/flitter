@@ -670,7 +670,10 @@ class Video(Shader):
         self._filename = node.get('filename', 1, str)
         position = node.get('position', 1, float, 0)
         loop = node.get('loop', 1, bool, False)
-        ratio, frame0, frame1 = SharedCache[self._filename].read_video_frames(self, position, loop)
+        if self._filename is not None:
+            ratio, frame0, frame1 = SharedCache[self._filename].read_video_frames(self, position, loop)
+        else:
+            ratio, frame0, frame1 = 0, None, None
         linear = self.glctx.extra['linear']
         colorbits = node.get('colorbits', 1, int, self.glctx.extra['colorbits'])
         if colorbits not in COLOR_FORMATS:
