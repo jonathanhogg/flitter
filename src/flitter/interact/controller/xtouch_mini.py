@@ -104,6 +104,20 @@ class XTouchMiniButton(driver.ButtonControl):
         super().__init__(control_id)
         self._driver = driver
         self._light_note = light_note
+        self._group = None
+
+    def update(self, engine, node, now):
+        changed = super().update(engine, node, now)
+        group = node.get('group')
+        if group is not None:
+            group = tuple(group)
+        if group != self._group:
+            if self._group is not None:
+                self._driver._toggle_groups[self._group].remove(self)
+            self._group = group
+            self._driver._toggle_groups.setdefault(self._group, set()).add(self)
+            changed = True
+        return changed
 
     def update_representation(self):
         if self._driver._midi_port is None:
@@ -134,6 +148,12 @@ class XTouchMiniButton(driver.ButtonControl):
                 elif self._toggle:
                     self._toggled = not self._toggled
                     self._toggle_time = event.timestamp
+                    if self._group is not None and self._toggled:
+                        for button in self._driver._toggle_groups[self._group]:
+                            if button is not self and button._toggle and button._toggled:
+                                button._toggled = False
+                                button._toggle_time = event.timestamp
+                                button.update_representation()
             else:
                 self._release_time = event.timestamp
             self.update_representation()
@@ -168,6 +188,7 @@ class XTouchMiniDriver(driver.ControllerDriver):
         self._rotaries = {}
         self._buttons = {}
         self._sliders = {}
+        self._toggle_groups = {}
         self._run_task = None
         self._midi_port = None
         self._ready = asyncio.Event()
