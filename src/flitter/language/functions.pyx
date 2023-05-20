@@ -251,7 +251,7 @@ def angle(Vector xy not None):
     for i in range(0, n):
         x = xy.numbers[i*2]
         y = xy.numbers[i*2+1]
-        theta[i] = atan2(y, x) / Tau
+        theta.numbers[i] = atan2(y, x) / Tau
     return theta
 
 
