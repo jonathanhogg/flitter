@@ -670,8 +670,9 @@ class Video(Shader):
         self._filename = node.get('filename', 1, str)
         position = node.get('position', 1, float, 0)
         loop = node.get('loop', 1, bool, False)
+        threading = node.get('thread', 1, bool, False)
         if self._filename is not None:
-            ratio, frame0, frame1 = SharedCache[self._filename].read_video_frames(self, position, loop)
+            ratio, frame0, frame1 = SharedCache[self._filename].read_video_frames(self, position, loop, threading=threading)
         else:
             ratio, frame0, frame1 = 0, None, None
         linear = self.glctx.extra['linear']

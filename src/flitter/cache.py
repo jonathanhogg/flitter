@@ -174,7 +174,7 @@ class CachePath:
         self._cache['image'] = mtime, image
         return image
 
-    def read_video_frames(self, obj, position, loop=False):
+    def read_video_frames(self, obj, position, loop=False, threading=False):
         import av
         self._touched = system_clock()
         key = 'video', id(obj)
@@ -190,6 +190,8 @@ class CachePath:
             try:
                 container = av.container.open(str(self._path))
                 stream = container.streams.video[0]
+                if threading:
+                    stream.thread_type = 'AUTO'
                 ctx = stream.codec_context
                 logger.debug("Opened {}x{} {:.0f}fps video file: {}", ctx.width, ctx.height, float(stream.average_rate), self._path)
             except Exception as exc:
