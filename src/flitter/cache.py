@@ -205,7 +205,7 @@ class CachePath:
                 count = 0
                 while True:
                     if len(frames) >= 2:
-                        if timestamp >= frames[0].pts and (frames[-1] is None or timestamp <= frames[-1].pts):
+                        if timestamp >= frames[0].pts and (frames[-1] is None or timestamp < frames[-1].pts):
                             break
                         if timestamp < frames[0].pts or (timestamp > frames[1].pts and frames[-1].key_frame):
                             frames = []
