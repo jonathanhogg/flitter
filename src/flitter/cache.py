@@ -12,6 +12,9 @@ from loguru import logger
 from .clock import system_clock
 
 
+DEFAULT_CLEAN_TIME = 30
+
+
 class CachePath:
     def __init__(self, path, absolute):
         self._touched = system_clock()
@@ -383,7 +386,7 @@ class FileCache:
         self._cache = {}
         self._root = Path('.')
 
-    def clean(self, max_age=5):
+    def clean(self, max_age=DEFAULT_CLEAN_TIME):
         cutoff = system_clock() - max_age
         for path in list(self._cache):
             cache_path = self._cache[path]
