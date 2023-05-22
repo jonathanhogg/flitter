@@ -7,7 +7,7 @@ Flitter language functions
 
 import cython
 
-from libc.math cimport isnan, floor, round, sin, cos, asin, acos, sqrt, exp, ceil, atan2, log
+from libc.math cimport isnan, isinf, floor, round, sin, cos, asin, acos, sqrt, exp, ceil, atan2, log
 
 from ..cache import SharedCache
 from ..model cimport StateDict, Vector, Matrix44, null_, true_, false_
@@ -111,14 +111,14 @@ def counter(StateDict state, Vector counter_id, Vector clockv, Vector speedv=Non
     if counter_id.length == 0 or clockv.numbers == NULL or clockv.length != 1:
         return null_
     cdef double clock = clockv.numbers[0]
-    cdef double speed
+    cdef double speed = 0
     if speedv is None:
         speed = 1
-    elif speedv.numbers != NULL and speedv.length == 1:
+    elif speedv.numbers != NULL and speedv.length == 1 and not isnan(speedv.numbers[0]) and not isinf(speedv.numbers[0]):
         speed = speedv.numbers[0]
-    else:
-        speed = 0
-    cdef double quantum = floor(quantumv.numbers[0]) if quantumv is not None and quantumv.numbers != NULL and quantumv.length == 1 else 0
+    cdef double quantum = 0
+    if quantumv is not None and quantumv.numbers != NULL and quantumv.length == 1:
+        quantum = floor(quantumv.numbers[0])
     cdef double clock_start = clock if speed != 0 else 0
     cdef double current_speed = speed
     cdef Vector counter_state
