@@ -17,7 +17,7 @@ sources with (currently shadowless) Phong lighting/shading; simple fog
 - rendering videos
 - running GLSL shaders as stacked image generators and filters (a la ShaderToy)
 - driving arbitrary DMX fixtures via a USB DMX interface (currently via an
-Entec/-compatible interface or my own crazy hand-built interfaces)
+Entec-compatible interface or my own crazy hand-built interfaces)
 - driving a LaserCube plugged in over USB (other lasers probably easy to
 support)
 
@@ -53,7 +53,7 @@ The work was partially supported by Ableton, who gave me an artist discount on
 a Push 2. I've been working on **flitter** off-and-on since then developing it
 as a live tool.
 
-While **flitter** supports live coding, but that's not primarily why I designed
+While **flitter** supports live coding, that's not primarily why I designed
 it. As a programmer, I enjoy using code to create visual artwork and I am
 fascinated by how generating all of the visuals live affords me the ability to
 improvise a performance. However, I'm interested in complex, narrative visuals
