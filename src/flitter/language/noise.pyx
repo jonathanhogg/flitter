@@ -8,7 +8,6 @@ https://gist.github.com/KdotJPG/b1270127455a94ac5d19
 """
 
 import cython
-import numpy as np
 
 from libc.math cimport floor
 
