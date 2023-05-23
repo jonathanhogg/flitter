@@ -131,6 +131,8 @@ cdef double turn_angle(double x0, double y0, double x1, double y1, double x2, do
 cdef object line_path(object path, Vector points, double curve, bint closed):
     cdef bint sharp = curve <= 0
     cdef int nverbs = 0, npoints = 0, n = points.length // 2
+    if n == 0:
+        return
     cdef array.array points_array = array.array('f')
     array.resize(points_array, n * 4 + 4)
     cdef float[:] ppoints = points_array
