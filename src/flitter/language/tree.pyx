@@ -782,15 +782,46 @@ cdef class Call(Expression):
         cdef Expression function = self.function.partially_evaluate(context)
         cdef list args = []
         cdef Expression arg
-        cdef bint literal = isinstance(function, Literal)
+        cdef bint literal = isinstance(function, Literal) and (<Literal>function).value.objects is not None
         for arg in self.args:
             arg = arg.partially_evaluate(context)
             args.append(arg)
             if not isinstance(arg, Literal):
                 literal = False
-        cdef Call call = Call(function, tuple(args))
+        cdef list vector_args, results
+        cdef Literal literal_arg
+        cdef Function func_expr
+        cdef dict saved, params
+        cdef Binding parameter
+        cdef int i
         if literal:
-            return Literal(call.evaluate(context))
+            vector_args = [literal_arg.value for literal_arg in args]
+            results = []
+            for func in (<Literal>function).value.objects:
+                if callable(func):
+                    try:
+                        if hasattr(func, 'state_transformer') and func.state_transformer:
+                            results.append(Literal(func(context.state, *vector_args)))
+                        else:
+                            results.append(Literal(func(*vector_args)))
+                    except Exception:
+                        break
+                elif isinstance(func, Function):
+                    func_expr = func
+                    saved = context.variables
+                    context.variables = {}
+                    for i, parameter in enumerate(func_expr.parameters):
+                        if i < len(vector_args):
+                            context.variables[parameter.name] = vector_args[i]
+                        elif parameter.expr is not None:
+                            context.variables[parameter.name] = (<Literal>parameter.expr).value
+                        else:
+                            context.variables[parameter.name] = model.null_
+                    results.append(func_expr.expr.partially_evaluate(context))
+                    context.variables = saved
+            else:
+                return sequence_pack(results)
+        cdef Call call = Call(function, tuple(args))
         return call
 
     cpdef object reduce(self, func):
