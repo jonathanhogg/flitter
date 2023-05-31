@@ -49,9 +49,9 @@ cdef Expression sequence_pack(list expressions):
     cdef bint has_let = False
     while expressions:
         expr = <Expression>expressions.pop(0)
-        if isinstance(expr, Literal):
+        if isinstance(expr, Literal) and type((<Literal>expr).value) == model.Vector:
             vectors = []
-            while isinstance(expr, Literal):
+            while isinstance(expr, Literal) and type((<Literal>expr).value) == model.Vector:
                 value = (<Literal>expr).value
                 if value.length:
                     vectors.append(value)
