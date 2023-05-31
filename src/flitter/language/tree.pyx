@@ -364,16 +364,17 @@ cdef class Lookup(Expression):
         self.key = key
 
     cpdef model.Vector evaluate(self, model.Context context):
+        if context.state is None:
+            return model.null_
         cdef model.Vector key = self.key.evaluate(context)
         return context.state.get_item(key)
 
     cpdef Expression partially_evaluate(self, model.Context context):
         cdef Expression key = self.key.partially_evaluate(context)
         cdef model.Vector value
-        if isinstance(key, Literal):
+        if isinstance(key, Literal) and context.state is not None:
             value = context.state.get_item((<Literal>key).value)
-            if value.length:
-                return Literal(value)
+            return Literal(value)
         return Lookup(key)
 
     cpdef object reduce(self, func):
