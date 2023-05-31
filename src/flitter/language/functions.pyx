@@ -528,6 +528,36 @@ def minv(Vector xs not None, *args):
     return ys
 
 
+def minindex(Vector xs not None, *args):
+    cdef Vector ys
+    cdef double f
+    cdef int i, j = 0, n = xs.length
+    if not args:
+        if n:
+            if xs.objects is None:
+                f = xs.numbers[0]
+                for i in range(1, n):
+                    if xs.numbers[i] < f:
+                        f = xs.numbers[i]
+                        j = i
+            else:
+                y = xs.objects[0]
+                for i in range(1, n):
+                    x = xs.objects[i]
+                    if x < y:
+                        y = x
+                        j = i
+    else:
+        for i, ys in enumerate(args):
+            if ys.compare(xs) == -1:
+                xs = ys
+                j = i + 1
+    ys = Vector.__new__(Vector)
+    ys.allocate_numbers(1)
+    ys.numbers[0] = j
+    return ys
+
+
 def maxv(Vector xs not None, *args):
     cdef Vector ys = null_
     cdef double f
@@ -556,6 +586,36 @@ def maxv(Vector xs not None, *args):
         for xs in args:
             if xs.compare(ys) == 1:
                 ys = xs
+    return ys
+
+
+def maxindex(Vector xs not None, *args):
+    cdef Vector ys
+    cdef double f
+    cdef int i, j = 0, n = xs.length
+    if not args:
+        if n:
+            if xs.objects is None:
+                f = xs.numbers[0]
+                for i in range(1, n):
+                    if xs.numbers[i] > f:
+                        f = xs.numbers[i]
+                        j = i
+            else:
+                y = xs.objects[0]
+                for i in range(1, n):
+                    x = xs.objects[i]
+                    if x > y:
+                        y = x
+                        j = i
+    else:
+        for i, ys in enumerate(args):
+            if ys.compare(xs) == 1:
+                xs = ys
+                j = i + 1
+    ys = Vector.__new__(Vector)
+    ys.allocate_numbers(1)
+    ys.numbers[0] = j
     return ys
 
 
@@ -705,7 +765,9 @@ STATIC_FUNCTIONS = {
     'sum': Vector(sumv),
     'accumulate': Vector(accumulate),
     'min': Vector(minv),
+    'minindex': Vector(minindex),
     'max': Vector(maxv),
+    'maxindex': Vector(maxindex),
     'hypot': Vector(hypot),
     'angle': Vector(angle),
     'normalize': Vector(normalize),
