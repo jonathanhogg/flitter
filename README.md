@@ -68,16 +68,28 @@ really value the ability to immediately see the effects of the code changes I am
 making. However, during a performance I prefer to use physical knobs and buttons
 to riff on the themes I have developed in advance. So **flitter** is designed to
 interface with a MIDI surface and then provide different ways to parameterise
-the running code and the ability to manipulate and alter the graph that
-describes the visuals.
+the running code and manipulate and alter the graph that describes the visuals.
 
 Nothing about **flitter** is in any sense "finished". It is still a testbed for
 my ideas. The language and graph semantics are in near constant flux and I
 semi-frequently rethink how something works and introduce breaking changes. I've
-put this on GitHub in case anyone finds something in this interesting.
+put this on GitHub in case anyone finds something in this interesting. You'll
+find that the frequency of my commits is in direct proportion to how close I am
+to a big visuals gig.
 
 **Jonathan Hogg**
 <me@jonathanhogg.com>
+
+### A note about the name
+
+Much like the tortured path of the software, the name has evolved over time.
+The *very* original version of this idea was called **flight**, which stood for
+"functional lighting", as my first 2D visuals system was actually an extension
+of a framework I wrote to control DMX lights. The name **flitter** was a sort
+of extension of this from the standard meaning of "flitter", which is to fly
+back and forth. However, "flitter" has a number of other meanings in different
+dialects of old Scots (I am a secret Scot), including "a small shiny piece of
+metal" – like a sequin. I like the name encompassing both movement and light.
 
 ## Requirements
 
