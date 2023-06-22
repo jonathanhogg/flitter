@@ -550,11 +550,11 @@ class Canvas(SceneNode):
         self._stats = {}
         self._total_duration = 0
 
-    def render(self, node, **kwargs):
+    def render(self, node, references=None, **kwargs):
         self._total_duration -= system_clock()
         self._graphics_context.resetContext()
         self._framebuffer.clear()
-        canvas.draw(node, self._canvas, stats=self._stats)
+        canvas.draw(node, self._canvas, stats=self._stats, references=references)
         self._surface.flushAndSubmit()
         self._total_duration += system_clock()
 
@@ -667,6 +667,7 @@ class Video(Shader):
         references = kwargs.setdefault('references', {})
         if node_id := node.get('id', 1, str):
             references[node_id] = self
+        self.hidden = node.get('hidden', 1, bool, False)
         self._filename = node.get('filename', 1, str)
         position = node.get('position', 1, float, 0)
         loop = node.get('loop', 1, bool, False)

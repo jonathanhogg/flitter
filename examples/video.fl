@@ -1,4 +1,11 @@
 
-!window size=640;480
-    !video filename="badapple.m4v" position=60*beat/tempo loop=true interpolate=true
-    !video filename="badapple.m4v" position=-60*beat/tempo loop=true alpha=0.5
+!window size=640;480 colorbits=16 linear=true
+    !video filename="badapple.m4v" position=-60*beat/tempo loop=true interpolate=true
+    !video filename="badapple.m4v" position=60*beat/tempo loop=true hidden=true id=:badapple
+    !canvas
+        !blend ratio=0.5
+            !pattern id=:badapple scale=0.25 rotate=-1/6
+            !color color=0;0;0;0
+        !path
+            !ellipse radius=240 point=320;240
+            !fill
