@@ -90,7 +90,7 @@ class XTouchMiniRotary(driver.EncoderControl):
                     self._raw_position = raw_position
                     self._position_time = event.timestamp
                     self.update_representation()
-            case midi.NoteOnEvent(velocity=127, timestamp=now):
+            case midi.NoteOnEvent(velocity=127):
                 position_range = self._upper - self._lower
                 position = min(max(self._lower, self._initial), self._upper)
                 self._raw_position = (position - self._lower) / position_range * self.get_raw_divisor() if position_range else 0
