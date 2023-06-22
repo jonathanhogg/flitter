@@ -115,7 +115,7 @@ cdef class Node:
 
 
 cdef class StateDict:
-    cdef readonly bint changed
+    cdef set _changed_keys
     cdef dict _state
 
     cdef Vector get_item(self, Vector key)

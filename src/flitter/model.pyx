@@ -1421,7 +1421,7 @@ cdef class StateDict:
     def __cinit__(self, state=None):
         cdef Vector value_vector
         self._state = {}
-        self.changed = False
+        self._changed_keys = set()
         if state is not None:
             for key, value in state.items():
                 value_vector = Vector._coerce(value)
@@ -1431,8 +1431,16 @@ cdef class StateDict:
     def __reduce__(self):
         return StateDict, (self._state,)
 
+    @property
+    def changed(self):
+        return bool(self._changed_keys)
+
+    @property
+    def changed_keys(self):
+        return frozenset(self._changed_keys)
+
     def clear_changed(self):
-        self.changed = False
+        self._changed_keys = set()
 
     cdef Vector get_item(self, Vector key):
         if key in self._state:
@@ -1446,10 +1454,10 @@ cdef class StateDict:
         if value_vector.length:
             if value_vector.ne(current):
                 self._state[key_vector] = value_vector
-                self.changed = True
+                self._changed_keys.add(key_vector)
         elif current.length:
             del self._state[key_vector]
-            self.changed = True
+            self._changed_keys.add(key_vector)
 
     def __getitem__(self, key):
         return self.get_item(Vector._coerce(key))
@@ -1461,7 +1469,7 @@ cdef class StateDict:
         cdef Vector key_vector = Vector._coerce(key)
         if key_vector in self._state:
             del self._state[key_vector]
-            self.changed = True
+            self._changed_keys.add(key_vector)
 
     def __iter__(self):
         return iter(self._state)
@@ -1473,7 +1481,7 @@ cdef class StateDict:
             if key.length == 1 and key.objects is not None and isinstance(key.objects[0], str) and key.objects[0].startswith('_'):
                 new_state[key] = value
         self._state = new_state
-        self.changed = True
+        self._changed_keys = set()
 
     def items(self):
         return self._state.items()
