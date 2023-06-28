@@ -9,6 +9,7 @@ setup(
         Extension("flitter.language.tree", ["src/flitter/language/tree.pyx"]),
         Extension("flitter.render.window.canvas", ["src/flitter/render/window/canvas.pyx"]),
         Extension("flitter.render.window.canvas3d", ["src/flitter/render/window/canvas3d.pyx"]),
+        Extension("flitter.render.window.models", ["src/flitter/render/window/models.pyx"]),
         Extension("flitter.render.dmx", ["src/flitter/render/dmx.pyx"]),
         Extension("flitter.render.laser", ["src/flitter/render/laser.pyx"]),
     ]
