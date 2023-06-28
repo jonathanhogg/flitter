@@ -478,21 +478,22 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, int
         for i in indices:
             instance = instances[i]
             material = instance.material
-            if material.transparency > 0:
-                transparent_objects.append((-zs[i], model, instance))
-            else:
-                src = instance.model_matrix.numbers
-                dest = &matrices[k, 0]
-                for j in range(16):
-                    dest[j] = src[j]
-                dest = &materials[k, 0]
-                for j in range(3):
-                    dest[j] = material.diffuse.numbers[j]
-                    dest[j+3] = material.specular.numbers[j]
-                    dest[j+6] = material.emissive.numbers[j]
-                dest[9] = material.shininess
-                dest[10] = 0
-                k += 1
+            if  material.transparency < 1:
+                if material.transparency > 0:
+                    transparent_objects.append((-zs[i], model, instance))
+                else:
+                    src = instance.model_matrix.numbers
+                    dest = &matrices[k, 0]
+                    for j in range(16):
+                        dest[j] = src[j]
+                    dest = &materials[k, 0]
+                    for j in range(3):
+                        dest[j] = material.diffuse.numbers[j]
+                        dest[j+3] = material.specular.numbers[j]
+                        dest[j+6] = material.emissive.numbers[j]
+                    dest[9] = material.shininess
+                    dest[10] = 0
+                    k += 1
         dispatch_instances(glctx, objects, shader, model, k, matrices, materials, textures, references)
     if transparent_objects:
         transparent_objects.sort(key=fst)
