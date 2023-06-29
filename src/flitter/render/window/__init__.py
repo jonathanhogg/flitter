@@ -347,8 +347,6 @@ class Window(ProgramNode):
             self.glctx = moderngl.create_context(self.GL_VERSION[0] * 100 + self.GL_VERSION[1] * 10)
             self.glctx.gc_mode = 'context_gc'
             self.glctx.extra = {}
-            self.glctx.enable(moderngl.BLEND)
-            self.glctx.blend_func = moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA
             logger.debug("{} opened on {}", self.name, screen)
             self.recalculate_viewport(True)
             logger.debug("OpenGL info: {GL_RENDERER} {GL_VERSION}", **self.glctx.info)
@@ -625,10 +623,11 @@ class Canvas3D(SceneNode):
             self._render_framebuffer.clear(*fog_color)
         else:
             self._render_framebuffer.clear()
-        self.glctx.enable(moderngl.DEPTH_TEST | moderngl.CULL_FACE)
+        self.glctx.enable(moderngl.DEPTH_TEST | moderngl.CULL_FACE | moderngl.BLEND)
+        self.glctx.blend_func = moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA
         objects = self.glctx.extra.setdefault('canvas3d_objects', {})
         canvas3d.draw(node, (self.width, self.height), self.glctx, objects, references)
-        self.glctx.disable(moderngl.DEPTH_TEST | moderngl.CULL_FACE)
+        self.glctx.disable(moderngl.DEPTH_TEST | moderngl.CULL_FACE | moderngl.BLEND)
         self.glctx.copy_framebuffer(self._image_framebuffer, self._render_framebuffer)
         self._total_duration += system_clock()
         self._total_count += 1
