@@ -554,7 +554,8 @@ class Canvas(SceneNode):
         self._total_duration -= system_clock()
         self._graphics_context.resetContext()
         self._framebuffer.clear()
-        canvas.draw(node, self._canvas, stats=self._stats, references=references)
+        linear = self.glctx.extra['linear']
+        canvas.draw(node, self._canvas, stats=self._stats, references=references, linear=linear)
         self._surface.flushAndSubmit()
         self._total_duration += system_clock()
 

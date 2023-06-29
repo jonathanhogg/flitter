@@ -358,7 +358,7 @@ cdef object update_font(Node node, font):
     return font
 
 
-cdef object make_image(ctx, Node node, dict references):
+cdef object make_image(ctx, Node node, dict references, bint linear):
     if (filename := node.get('filename', 1, str)):
         return SharedCache[filename].read_image()
     elif references is not None and (id := node.get('texture_id', 1, str)) and id in references:
@@ -370,17 +370,18 @@ cdef object make_image(ctx, Node node, dict references):
             backend_texture = skia.GrBackendTexture(texture.width, texture.height, skia.GrMipmapped.kNo, texture_info)
             return skia.Image.MakeFromTexture(ctx.getSurface().recordingContext(), backend_texture,
                                               skia.GrSurfaceOrigin.kBottomLeft_GrSurfaceOrigin,
-                                              colortype, skia.AlphaType.kPremul_AlphaType)
+                                              colortype, skia.AlphaType.kPremul_AlphaType,
+                                              skia.ColorSpace.MakeSRGBLinear() if linear else skia.ColorSpace.MakeSRGB())
 
 
-cdef object make_shader(ctx, Node node, paint, dict references):
+cdef object make_shader(ctx, Node node, paint, dict references, bint linear):
     cdef list colors, positions, shaders = []
     cdef int i, nstops
     cdef str noise_type, key
 
     cdef Node child = node.first_child
     while child is not None:
-        shader = make_shader(ctx, child, paint, references)
+        shader = make_shader(ctx, child, paint, references, linear)
         if shader is not None:
             shaders.append(shader)
         child = child.next_sibling
@@ -433,7 +434,7 @@ cdef object make_shader(ctx, Node node, paint, dict references):
                 return skia.Shaders.Blend(skia.BlendMode(mode), *shaders)
 
     elif kind == 'pattern':
-        if (image := make_image(ctx, node, references)) is not None:
+        if (image := make_image(ctx, node, references, linear)) is not None:
             matrix = skia.Matrix()
             for key, value in node._attributes.items():
                 if key == 'translate':
@@ -593,7 +594,7 @@ cdef object make_path_effect(Node node):
     return None
 
 
-cpdef object draw(Node node, ctx, paint=None, font=None, path=None, dict stats=None, dict references=None):
+cpdef object draw(Node node, ctx, paint=None, font=None, path=None, dict stats=None, dict references=None, bint linear=False):
     cdef double start_time = system_clock()
     cdef Vector points
     cdef Node child
@@ -609,7 +610,7 @@ cpdef object draw(Node node, ctx, paint=None, font=None, path=None, dict stats=N
         font = update_font(node, font)
         child = node.first_child
         while child is not None:
-            group_paint = draw(child, ctx, group_paint, font, path, stats, references)
+            group_paint = draw(child, ctx, group_paint, font, path, stats, references, linear)
             child = child.next_sibling
         ctx.restore()
 
@@ -618,7 +619,7 @@ cpdef object draw(Node node, ctx, paint=None, font=None, path=None, dict stats=N
         update_context(node, ctx)
         child = node.first_child
         while child is not None:
-            paint = draw(child, ctx, paint, font, path, stats, references)
+            paint = draw(child, ctx, paint, font, path, stats, references, linear)
             child = child.next_sibling
         ctx.restore()
 
@@ -626,14 +627,14 @@ cpdef object draw(Node node, ctx, paint=None, font=None, path=None, dict stats=N
         paint_paint = update_paint(node, paint)
         child = node.first_child
         while child is not None:
-            paint_paint = draw(child, ctx, paint_paint, font, path, stats, references)
+            paint_paint = draw(child, ctx, paint_paint, font, path, stats, references, linear)
             child = child.next_sibling
 
     elif kind == 'font':
         font = update_font(node, font)
         child = node.first_child
         while child is not None:
-            paint = draw(child, ctx, paint, font, path, stats, references)
+            paint = draw(child, ctx, paint, font, path, stats, references, linear)
             child = child.next_sibling
 
     elif kind == 'path':
@@ -641,7 +642,7 @@ cpdef object draw(Node node, ctx, paint=None, font=None, path=None, dict stats=N
         update_path(node, path)
         child = node.first_child
         while child is not None:
-            paint = draw(child, ctx, paint, font, path, stats, references)
+            paint = draw(child, ctx, paint, font, path, stats, references, linear)
             child = child.next_sibling
 
     elif kind == 'move_to':
@@ -739,7 +740,7 @@ cpdef object draw(Node node, ctx, paint=None, font=None, path=None, dict stats=N
                 ctx.drawString(text, x, y, font, text_paint)
 
     elif kind == 'image':
-        if (image := make_image(ctx, node, references)) is not None:
+        if (image := make_image(ctx, node, references, linear)) is not None:
             width, height = image.width(), image.height()
             point = node.get('point', 2, float, (0, 0))
             if (fill := node.get('fill', 2, float)) is not None:
@@ -780,7 +781,7 @@ cpdef object draw(Node node, ctx, paint=None, font=None, path=None, dict stats=N
             font = update_font(node, font)
             child = node.first_child
             while child is not None:
-                layer_paint = draw(child, ctx, layer_paint, font, path, stats, references)
+                layer_paint = draw(child, ctx, layer_paint, font, path, stats, references, linear)
                 child = child.next_sibling
             ctx.restore()
 
@@ -792,11 +793,11 @@ cpdef object draw(Node node, ctx, paint=None, font=None, path=None, dict stats=N
         path = skia.Path()
         child = node.first_child
         while child is not None:
-            paint = draw(child, ctx, paint, font, path, stats, references)
+            paint = draw(child, ctx, paint, font, path, stats, references, linear)
             child = child.next_sibling
         ctx.restore()
 
-    elif shader := make_shader(ctx, node, paint, references):
+    elif shader := make_shader(ctx, node, paint, references, linear):
         paint = skia.Paint(paint)
         paint.setShader(shader)
 
