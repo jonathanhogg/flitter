@@ -107,7 +107,7 @@ class SceneNode:
             if cls is not None:
                 index = None
                 for i, scene_node in enumerate(existing):
-                    if type(scene_node) == cls:
+                    if type(scene_node) is cls:
                         if scene_node.similar_to(child):
                             index = i
                             break
