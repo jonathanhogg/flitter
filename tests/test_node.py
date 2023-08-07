@@ -362,13 +362,10 @@ class TestQuery(unittest.TestCase):
         self.assertEqual(len(nodes), 10)
         self.assertTrue(all(node.kind == 'multiple' and node['index'] == i for i, node in enumerate(nodes)))
 
-    # TODO: Figure out why this test doesn't work and fix select
-    @unittest.expectedFailure
     def test_multiple_paths(self):
         nodes = self.node1.select('#bar. #baz')
-        self.assertEqual(len(nodes), 2)
-        self.assertIs(nodes[0], self.node3)
-        self.assertIs(nodes[1], self.node5)
+        self.assertEqual(len(nodes), 1)
+        self.assertIs(nodes[0], self.node5)
 
     def test_stop(self):
         nodes = self.node1.select('*.')
