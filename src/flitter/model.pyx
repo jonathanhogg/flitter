@@ -1447,20 +1447,24 @@ cdef class StateDict:
             return self._state[key]
         return null_
 
-    def __setitem__(self, key, value):
-        cdef Vector key_vector = Vector._coerce(key)
-        cdef Vector value_vector = Vector._coerce(value)
-        cdef Vector current = self.get_item(key_vector)
-        if value_vector.length:
-            if value_vector.ne(current):
-                self._state[key_vector] = value_vector
-                self._changed_keys.add(key_vector)
+    cdef void set_item(self, Vector key, Vector value):
+        cdef Vector current = self.get_item(key)
+        if value.length:
+            if value.ne(current):
+                self._state[key] = value
+                self._changed_keys.add(key)
         elif current.length:
-            del self._state[key_vector]
-            self._changed_keys.add(key_vector)
+            del self._state[key]
+            self._changed_keys.add(key)
+
+    cdef bint contains(self, Vector key):
+        return key in self._state
 
     def __getitem__(self, key):
         return self.get_item(Vector._coerce(key))
+
+    def __setitem__(self, key, value):
+        self.set_item(Vector._coerce(key), Vector._coerce(value))
 
     def __contains__(self, key):
         return Vector._coerce(key) in self._state

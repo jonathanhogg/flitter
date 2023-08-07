@@ -119,6 +119,8 @@ cdef class StateDict:
     cdef dict _state
 
     cdef Vector get_item(self, Vector key)
+    cdef void set_item(self, Vector key, Vector value)
+    cdef bint contains(self, Vector key)
 
 
 cdef class Context:
