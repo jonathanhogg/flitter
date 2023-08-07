@@ -107,7 +107,7 @@ cdef class Normal(Uniform):
 
 
 @state_transformer
-def counter(StateDict state, Vector counter_id, Vector clockv, Vector speedv=None, Vector quantumv=None):
+def counter(StateDict state, Vector counter_id, Vector clockv, Vector speedv=None):
     if counter_id.length == 0 or clockv.numbers == NULL or clockv.length != 1:
         return null_
     cdef double clock = clockv.numbers[0]
@@ -116,9 +116,6 @@ def counter(StateDict state, Vector counter_id, Vector clockv, Vector speedv=Non
         speed = 1
     elif speedv.numbers != NULL and speedv.length == 1 and not isnan(speedv.numbers[0]) and not isinf(speedv.numbers[0]):
         speed = speedv.numbers[0]
-    cdef double quantum = 0
-    if quantumv is not None and quantumv.numbers != NULL and quantumv.length == 1:
-        quantum = floor(quantumv.numbers[0])
     cdef double clock_start = clock if speed != 0 else 0
     cdef double current_speed = speed
     cdef Vector counter_state
@@ -134,27 +131,6 @@ def counter(StateDict state, Vector counter_id, Vector clockv, Vector speedv=Non
         clock_start = clock - count / speed if speed != 0 else count
         current_speed = speed
         update = True
-    cdef double clock_phase, phase, phase_delta, ratio
-    if speed != 0 and quantum > 0:
-        clock_phase = clock * speed % quantum
-        phase = count % quantum
-        phase_delta = clock_phase - phase
-        if phase_delta > quantum / 2:
-            phase_delta -= quantum
-        elif phase_delta < -quantum / 2:
-            phase_delta += quantum
-        if abs(phase_delta) > 1/1024:
-            if abs(phase_delta) < 1/8:
-                clock_start -= phase_delta / speed
-            else:
-                if speed > 0:
-                    ratio = (quantum - phase) / (quantum - clock_phase)
-                else:
-                    ratio = phase / clock_phase
-                ratio = min(max(0.8, ratio), 1.25)
-                current_speed *= ratio
-                clock_start = clock - count / current_speed
-            update = True
     if update:
         counter_state = Vector.__new__(Vector)
         counter_state.allocate_numbers(2)
