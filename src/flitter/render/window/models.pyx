@@ -123,7 +123,7 @@ cdef class Cylinder(TrimeshModel):
         return model
 
     cdef object get_trimesh_model(self):
-        return trimesh.primitives.Cylinder(segments=self.segments) if self.trimesh_model is None else self.trimesh_model
+        return trimesh.primitives.Cylinder(sections=self.segments) if self.trimesh_model is None else self.trimesh_model
 
 
 cdef class LoadedModel(TrimeshModel):
