@@ -116,27 +116,27 @@ def counter(StateDict state, Vector counter_id, Vector clockv, Vector speedv=Non
         speed = 1
     elif speedv.numbers != NULL and speedv.length == 1 and not isnan(speedv.numbers[0]) and not isinf(speedv.numbers[0]):
         speed = speedv.numbers[0]
-    cdef double clock_start = clock if speed != 0 else 0
+    cdef double offset = clock * speed
     cdef double current_speed = speed
     cdef Vector counter_state
     cdef bint update = True
-    if counter_id in state:
-        counter_state = state[counter_id]
+    if state.contains(counter_id):
+        counter_state = state.get_item(counter_id)
         if counter_state.numbers != NULL and counter_state.length == 2:
-            clock_start = counter_state.numbers[0]
+            offset = counter_state.numbers[0]
             current_speed = counter_state.numbers[1]
             update = False
-    cdef double count = (clock - clock_start) * current_speed if current_speed != 0 else clock_start
+    cdef double count = clock * current_speed - offset
     if speed != current_speed:
-        clock_start = clock - count / speed if speed != 0 else count
+        offset = clock * speed - count
         current_speed = speed
         update = True
     if update:
         counter_state = Vector.__new__(Vector)
         counter_state.allocate_numbers(2)
-        counter_state.numbers[0] = clock_start
+        counter_state.numbers[0] = offset
         counter_state.numbers[1] = current_speed
-        state[counter_id] = counter_state
+        state.set_item(counter_id, counter_state)
     cdef Vector countv = Vector.__new__(Vector)
     countv.allocate_numbers(1)
     countv.numbers[0] = count
