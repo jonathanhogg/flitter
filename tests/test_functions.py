@@ -197,6 +197,19 @@ class TestCounter(unittest.TestCase):
             clock += [1, 0.5]
             count += [1, 1]
 
+    def test_state_changes(self):
+        clock = Vector([0, 0])
+        count = counter(self.state, self.counter_id, clock, Vector([1, 2]))
+        self.assertTrue(self.counter_id in self.state.changed_keys)
+        self.state.clear_changed()
+        while clock < 5:
+            self.assertEqual(counter(self.state, self.counter_id, clock, Vector([1, 2])), count)
+            self.assertFalse(self.counter_id in self.state.changed_keys)
+            clock += [1, 0.5]
+            count += [1, 1]
+        self.assertEqual(counter(self.state, self.counter_id, clock, Vector([1, -2])), count)
+        self.assertTrue(self.counter_id in self.state.changed_keys)
+
 
 #     'len': Vector(length),
 #     'sin': Vector(sinv),
