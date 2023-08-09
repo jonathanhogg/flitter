@@ -173,6 +173,30 @@ class TestCounter(unittest.TestCase):
             clock += 0.5
             count -= 1.0
 
+    def test_vector_speed(self):
+        clock = Vector(0)
+        count = Vector([0, 0])
+        while clock < 5:
+            self.assertEqual(counter(self.state, self.counter_id, clock, Vector([1, 2])), count)
+            clock += 0.5
+            count += [0.5, 1]
+
+    def test_vector_clock(self):
+        clock = Vector([0, 0])
+        count = Vector([0, 0])
+        while clock < 5:
+            self.assertEqual(counter(self.state, self.counter_id, clock, Vector(2)), count)
+            clock += [0.5, 1]
+            count += [1, 2]
+
+    def test_vector_clock_and_speed(self):
+        clock = Vector([0, 0])
+        count = Vector([0, 0])
+        while clock < 5:
+            self.assertEqual(counter(self.state, self.counter_id, clock, Vector([1, 2])), count)
+            clock += [1, 0.5]
+            count += [1, 1]
+
 
 #     'len': Vector(length),
 #     'sin': Vector(sinv),

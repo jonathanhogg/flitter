@@ -107,39 +107,35 @@ cdef class Normal(Uniform):
 
 
 @state_transformer
-def counter(StateDict state, Vector counter_id, Vector clockv, Vector speedv=None):
-    if counter_id.length == 0 or clockv.numbers == NULL or clockv.length != 1:
+def counter(StateDict state, Vector counter_id, Vector clockv, Vector speedv=true_):
+    if counter_id.length == 0:
         return null_
-    cdef double clock = clockv.numbers[0]
-    cdef double speed = 0
-    if speedv is None:
-        speed = 1
-    elif speedv.numbers != NULL and speedv.length == 1 and not isnan(speedv.numbers[0]) and not isinf(speedv.numbers[0]):
-        speed = speedv.numbers[0]
-    cdef double offset = clock * speed
-    cdef double current_speed = speed
-    cdef Vector counter_state
-    cdef bint update = True
-    if state.contains(counter_id):
-        counter_state = state.get_item(counter_id)
-        if counter_state.numbers != NULL and counter_state.length == 2:
-            offset = counter_state.numbers[0]
-            current_speed = counter_state.numbers[1]
-            update = False
-    cdef double count = clock * current_speed - offset
-    if speed != current_speed:
-        offset = clock * speed - count
-        current_speed = speed
-        update = True
-    if update:
-        counter_state = Vector.__new__(Vector)
-        counter_state.allocate_numbers(2)
-        counter_state.numbers[0] = offset
-        counter_state.numbers[1] = current_speed
-        state.set_item(counter_id, counter_state)
+    cdef int n = max(clockv.length, speedv.length), m = n * 2, i, j
+    cdef Vector counter_state = state.get_item(counter_id)
+    if counter_state.numbers == NULL:
+        counter_state = null_
     cdef Vector countv = Vector.__new__(Vector)
-    countv.allocate_numbers(1)
-    countv.numbers[0] = count
+    countv.allocate_numbers(n)
+    cdef double offset, current_speed, clock, speed, count
+    cdef Vector new_state = Vector.__new__(Vector)
+    new_state.allocate_numbers(m)
+    for i in range(n):
+        j = i * 2
+        clock = clockv.numbers[i%clockv.length]
+        speed = speedv.numbers[i%speedv.length]
+        if j+1 < counter_state.length:
+            offset = counter_state.numbers[j]
+            current_speed = counter_state.numbers[j+1]
+        else:
+            offset = clock * speed
+            current_speed = speed
+        count = clock * current_speed - offset
+        countv.numbers[i] = count
+        if speed != current_speed:
+            offset = clock * speed - count
+        new_state.numbers[j] = offset
+        new_state.numbers[j+1] = speed
+    state.set_item(counter_id, new_state)
     return countv
 
 
