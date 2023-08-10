@@ -112,14 +112,21 @@ def draw(Node node, tuple size, glctx, dict objects, dict references):
     cdef Vector viewpoint = node.get_fvec('viewpoint', 3, Vector((0, 0, width/2)))
     cdef Vector focus = node.get_fvec('focus', 3, Zero3)
     cdef Vector up = node.get_fvec('up', 3, Vector((0, 1, 0)))
-    cdef double fov = node.get('fov', 1, float, 0.25)
-    cdef double near = node.get('near', 1, float, 1)
-    cdef double far = node.get('far', 1, float, width)
-    cdef double fog_min = node.get('fog_min', 1, float, 0)
-    cdef double fog_max = node.get('fog_max', 1, float, 0)
+    cdef double fov = node.get_float('fov', 0.25)
+    cdef bint ortho = node.get_bool('orthographic', False)
+    cdef double ortho_width = node.get('width', 1, float, width)
+    cdef double near = node.get_float('near', 1)
+    cdef double far = node.get_float('far', width)
+    cdef double fog_min = node.get_float('fog_min', 0)
+    cdef double fog_max = node.get_float('fog_max', 0)
     cdef Vector fog_color = node.get_fvec('fog_color', 3, Zero3)
     cdef int max_lights = node.get_int('max_lights', DEFAULT_MAX_LIGHTS)
-    cdef Matrix44 pv_matrix = Matrix44._project(width/height, fov, near, far).mmul(Matrix44._look(viewpoint, focus, up))
+    cdef Matrix44 pv_matrix
+    if ortho:
+        pv_matrix = Matrix44._ortho(width/height, ortho_width, near, far)
+    else:
+        pv_matrix = Matrix44._project(width/height, fov, near, far)
+    pv_matrix = pv_matrix.mmul(Matrix44._look(viewpoint, focus, up))
     cdef Matrix44 model_matrix = update_model_matrix(Matrix44.__new__(Matrix44), node)
     cdef Node child = node.first_child
     cdef bint depth_test = node.get_bool('depth_test', True)

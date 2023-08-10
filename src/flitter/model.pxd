@@ -59,6 +59,8 @@ cdef class Matrix44(Vector):
     @staticmethod
     cdef Matrix44 _project(double aspect_ratio, double fov, double near, double far)
     @staticmethod
+    cdef Matrix44 _ortho(double aspect_ratio, double width, double near, double far)
+    @staticmethod
     cdef Matrix44 _look(Vector from_position, Vector to_position, Vector up_direction)
     @staticmethod
     cdef Matrix44 _translate(Vector v)

@@ -754,6 +754,22 @@ cdef class Matrix44(Vector):
     def project(aspect_ratio, fov, near, far):
         return Matrix44._project(aspect_ratio, fov, near, far)
 
+    @cython.cdivision(True)
+    @staticmethod
+    cdef Matrix44 _ortho(double aspect_ratio, double width, double near, double far):
+        cdef Matrix44 result = Matrix44.__new__(Matrix44)
+        cdef double* numbers = result.numbers
+        numbers[0] = 2 / width
+        numbers[5] = 2 * aspect_ratio / width
+        numbers[10] = -2 / (far-near)
+        numbers[14] = -(far+near) / (far-near)
+        numbers[15] = 1
+        return result
+
+    @staticmethod
+    def ortho(aspect_ratio, width, near, far):
+        return Matrix44._ortho(aspect_ratio, width, near, far)
+
     @staticmethod
     cdef Matrix44 _look(Vector from_position, Vector to_position, Vector up_direction):
         cdef Vector z = from_position.sub(to_position).normalize()
