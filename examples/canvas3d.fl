@@ -19,17 +19,19 @@ let SIZE=1920;1080
         !light color=0;0.02;0 direction=0;-1;0
         -- Spotlight:
         !light color=500000;0;0 position=1000;1000;0 direction=-1;-1;0 inner=10/360 outer=20/360
+        -- Ground:
+        !material color=0.25 shininess=100
+            !cylinder size=500;500;1 rotation=0.25;0;0
+        -- Spinning cube:
         !material color=1 shininess=100
             !transform translate=0;100;0 rotate=beat/11;0;beat/7
                 !box flat=true size=100
+        -- Rotating sphere lights:
         let n=6
         for i in ..n
             !transform rotate_x=sin(beat/30)/30 rotate_y=beat/9+i/n translate=150;100;0
                 let c=hsv(i/n;1;1)
-                !material emissive=c
-                    !sphere size=7.5
+                !material emissive=c*2
+                    !sphere size=15
                 -- Point light source:
-                !light color=c*1000 position=0
-        !transform rotate_x=0.25
-            !material color=0.25 --shininess=100
-                !cylinder size=500;500;1
+                !light color=c*2000 position=0
