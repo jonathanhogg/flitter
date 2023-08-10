@@ -352,6 +352,36 @@ A key is any vector of numbers and/or strings (/symbols). As the `;` operator
 binds with very low precedence, a non-singleton key needs to be surrounded with
 brackets, e.g., `$(:circle;:radius)`.
 
+## Counters
+
+Arbitrary counters can be managed with the `counter()` function. This takes
+either two or three arguments and **has state side-effects**.
+
+In the three-argument form, `counter(counter_id, clock, speed)`, the function
+will create or update a counter with a specific `clock` value and `speed`,
+storing the current state of the counter in the state mapping with the given
+`counter_id` key. The function returns the current count.
+
+Counters begin at zero and increment upwards by `speed` every unit increase of
+`clock`. The counter speed can be changed at any point and the counter will
+return the count at the previous speed before switching to counting with the
+new speed. The stored state only changes when the speed changes. `clock`
+*should* be a monotonically increasing number, such as `beat`. `speed` is
+allowed to be zero to stop the counter or negative to count downwards.
+
+Either `clock` or `speed` can be given as an n-vector to create a
+multi-dimensional counter. This can be useful, for instance, to move an object
+through space with a velocity vector:
+
+```
+let velocity = 0.2;-1.5;3.0
+    position = counter(:thing_position, beat, velocity)
+```
+
+The two argument form of the function omits the speed and returns the count
+matching the value of `clock` at the last counter speed. If the counter has not
+already been initialised, then the speed will default to 1.
+
 ## Pragmas
 
 There are two supported pragmas that may be placed at the top-level of a source
