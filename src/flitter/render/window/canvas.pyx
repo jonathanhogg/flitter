@@ -10,7 +10,7 @@ from pathlib import Path
 
 from cpython cimport array
 import cython
-from libc.math cimport acos, sqrt
+from libc.math cimport acos, sqrt, round
 from loguru import logger
 import skia
 
@@ -120,9 +120,13 @@ cdef dict FillType = {
     'winding': skia.PathFillType.kWinding,
 }
 
+cdef FillStyle = skia.Paint.Style.kFill_Style
+cdef StrokeStyle = skia.Paint.Style.kStroke_Style
+cdef StrokeAndFillStyle = skia.Paint.Style.kStrokeAndFill_Style
+
 
 @cython.cdivision(True)
-cdef double turn_angle(double x0, double y0, double x1, double y1, double x2, double y2):
+cdef double turn_angle(double x0, double y0, double x1, double y1, double x2, double y2) noexcept:
     cdef double xa=x1-x0, ya=y1-y0, xb=x2-x1, yb=y2-y1
     cdef double la=sqrt(xa*xa + ya*ya), lb=sqrt(xb*xb + yb*yb)
     if la == 0 or lb == 0:
@@ -251,18 +255,18 @@ cdef object get_color(Node node, default=None):
     cdef unsigned int r, g, b, a, color
     if v is not None and v.numbers != NULL:
         if v.length == 1:
-            r = min(max(0, <int>(v.numbers[0] * 255)), 255)
+            r = min(max(0, <unsigned int>round(v.numbers[0] * 255)), 255)
             return <unsigned int>0xff000000 + r * 0x010101
         if v.length == 3:
-            r = min(max(0, <unsigned int>(v.numbers[0] * 255)), 255)
-            g = min(max(0, <unsigned int>(v.numbers[1] * 255)), 255)
-            b = min(max(0, <unsigned int>(v.numbers[2] * 255)), 255)
+            r = min(max(0, <unsigned int>round(v.numbers[0] * 255)), 255)
+            g = min(max(0, <unsigned int>round(v.numbers[1] * 255)), 255)
+            b = min(max(0, <unsigned int>round(v.numbers[2] * 255)), 255)
             return <unsigned int>0xff000000 + (r << 16) + (g << 8) + b
         if v.length == 4:
-            a = min(max(0, <unsigned int>(v.numbers[3] * 255)), 255)
-            r = min(max(0, <unsigned int>(v.numbers[0] * a)), 255)
-            g = min(max(0, <unsigned int>(v.numbers[1] * a)), 255)
-            b = min(max(0, <unsigned int>(v.numbers[2] * a)), 255)
+            a = min(max(0, <unsigned int>round(v.numbers[3] * 255)), 255)
+            r = min(max(0, <unsigned int>round(v.numbers[0] * a)), 255)
+            g = min(max(0, <unsigned int>round(v.numbers[1] * a)), 255)
+            b = min(max(0, <unsigned int>round(v.numbers[2] * a)), 255)
             return (a << 24) + (r << 16) + (g << 8) + b
     return default
 
@@ -600,6 +604,7 @@ cpdef object draw(Node node, ctx, paint=None, font=None, path=None, dict stats=N
     cdef Node child
     cdef str kind = node.kind
     cdef double x, y, rx, ry, sx, sy
+    cdef bint fill, stroke
 
     if kind == 'group':
         ctx.save()
@@ -687,22 +692,40 @@ cpdef object draw(Node node, ctx, paint=None, font=None, path=None, dict stats=N
             sx, sy = size
             x, y = node.get('point', 2, float, (0, 0))
             rx, ry = node.get('radius', 2, float, (0, 0))
+            if (fill := node.get_bool('fill', False)) or (stroke := node.get_bool('stroke', False)):
+                path = skia.Path()
             if rx or ry:
                 path.addRRect(skia.RRect(skia.Rect.MakeXYWH(x, y, sx, sy), rx, ry))
             else:
                 path.addRect(x, y, x+sx, y+sy)
+            if fill or stroke:
+                draw_paint = update_paint(node, paint)
+                draw_paint.setStyle((FillStyle if not stroke else StrokeAndFillStyle) if fill else StrokeStyle)
+                ctx.drawPath(path, draw_paint)
 
     elif kind == 'ellipse':
         if (radius := node.get('radius', 2, float)) is not None:
             rx, ry = radius
             x, y = node.get('point', 2, float, (0, 0))
+            if (fill := node.get_bool('fill', False)) or (stroke := node.get_bool('stroke', False)):
+                path = skia.Path()
             path.addOval(skia.Rect(x-rx, y-ry, x+rx, y+ry))
+            if fill or stroke:
+                draw_paint = update_paint(node, paint)
+                draw_paint.setStyle((FillStyle if not stroke else StrokeAndFillStyle) if fill else StrokeStyle)
+                ctx.drawPath(path, draw_paint)
 
     elif kind == 'line':
         if (points := node._attributes.get('points')) is not None and points.numbers is not NULL:
             curve = node.get('curve', 1, float, 0)
             close = node.get('close', 1, bool, False)
+            if (fill := node.get_bool('fill', False)) or (stroke := node.get_bool('stroke', False)):
+                path = skia.Path()
             line_path(path, points, curve, close)
+            if fill or stroke:
+                draw_paint = update_paint(node, paint)
+                draw_paint.setStyle((FillStyle if not stroke else StrokeAndFillStyle) if fill else StrokeStyle)
+                ctx.drawPath(path, draw_paint)
 
     elif kind == 'close':
         path.close()
@@ -715,12 +738,12 @@ cpdef object draw(Node node, ctx, paint=None, font=None, path=None, dict stats=N
 
     elif kind == 'fill':
         fill_paint = update_paint(node, paint)
-        fill_paint.setStyle(skia.Paint.Style.kFill_Style)
+        fill_paint.setStyle(FillStyle)
         ctx.drawPath(path, fill_paint)
 
     elif kind == 'stroke':
         stroke_paint = update_paint(node, paint)
-        stroke_paint.setStyle(skia.Paint.Style.kStroke_Style)
+        stroke_paint.setStyle(StrokeStyle)
         ctx.drawPath(path, stroke_paint)
 
     elif kind == 'text':
@@ -729,7 +752,7 @@ cpdef object draw(Node node, ctx, paint=None, font=None, path=None, dict stats=N
             text_paint = update_paint(node, paint)
             font = update_font(node, font)
             stroke = node.get('stroke', 1, bool, False)
-            text_paint.setStyle(skia.Paint.Style.kStroke_Style if stroke else skia.Paint.Style.kFill_Style)
+            text_paint.setStyle(StrokeStyle if stroke else FillStyle)
             if node.get('center', 1, bool, True):
                 bounds = skia.Rect(0, 0, 0, 0)
                 font.measureText(text, bounds=bounds)
@@ -743,15 +766,15 @@ cpdef object draw(Node node, ctx, paint=None, font=None, path=None, dict stats=N
         if (image := make_image(ctx, node, references, linear)) is not None:
             width, height = image.width(), image.height()
             point = node.get('point', 2, float, (0, 0))
-            if (fill := node.get('fill', 2, float)) is not None:
-                aspect = fill[0] / fill[1]
+            if (fill_size := node.get('fill', 2, float)) is not None:
+                aspect = fill_size[0] / fill_size[1]
                 if width/height > aspect:
                     w = height * aspect
                     src = skia.Rect.MakeXYWH((width-w)/2, 0, w, height)
                 else:
                     h = width / aspect
                     src = skia.Rect.MakeXYWH(0, (height-h)/2, width, h)
-                dst = skia.Rect.MakeXYWH(*point, *fill)
+                dst = skia.Rect.MakeXYWH(*point, *fill_size)
             elif (fit := node.get('fit', 2, float)) is not None:
                 aspect = width / height
                 src = skia.Rect.MakeXYWH(0, 0, width, height)
