@@ -113,7 +113,7 @@ def draw(Node node, tuple size, glctx, dict objects, dict references):
     cdef Vector focus = node.get_fvec('focus', 3, Zero3)
     cdef Vector up = node.get_fvec('up', 3, Vector((0, 1, 0)))
     cdef double fov = node.get_float('fov', 0.25)
-    cdef bint ortho = node.get_bool('orthographic', False)
+    cdef bint orthographic = node.get_bool('orthographic', False)
     cdef double ortho_width = node.get('width', 1, float, width)
     cdef double near = node.get_float('near', 1)
     cdef double far = node.get_float('far', width)
@@ -122,7 +122,7 @@ def draw(Node node, tuple size, glctx, dict objects, dict references):
     cdef Vector fog_color = node.get_fvec('fog_color', 3, Zero3)
     cdef int max_lights = node.get_int('max_lights', DEFAULT_MAX_LIGHTS)
     cdef Matrix44 pv_matrix
-    if ortho:
+    if orthographic:
         pv_matrix = Matrix44._ortho(width/height, ortho_width, near, far)
     else:
         pv_matrix = Matrix44._project(width/height, fov, near, far)
@@ -131,15 +131,17 @@ def draw(Node node, tuple size, glctx, dict objects, dict references):
     cdef Node child = node.first_child
     cdef bint depth_test = node.get_bool('depth_test', True)
     cdef bint cull_face = node.get_bool('cull_face', True)
-    cdef str composite = node.get_str('composite', 'over').lower()
-    cdef RenderSet render_set = RenderSet(lights=[[]], instances={}, depth_test=depth_test, cull_face=cull_face, composite=composite)
+    cdef str composite = node.get_str('composite', 'over')
+    cdef RenderSet render_set = RenderSet(lights=[[]], instances={}, depth_test=depth_test, cull_face=cull_face,
+                                          composite=composite.lower())
     cdef list render_sets = [render_set]
     while child is not None:
         collect(child, model_matrix, Material(), render_set, render_sets)
         child = child.next_sibling
     for render_set in render_sets:
         if render_set.instances:
-            render(render_set, pv_matrix, viewpoint, max_lights, fog_min, fog_max, fog_color, glctx, objects, references)
+            render(render_set, pv_matrix, orthographic, viewpoint, focus, max_lights, fog_min, fog_max, fog_color,
+                   glctx, objects, references)
 
 
 cdef Matrix44 update_model_matrix(Matrix44 model_matrix, Node node):
@@ -197,8 +199,8 @@ cdef void collect(Node node, Matrix44 model_matrix, Material material, RenderSet
         lights.append([])
         depth_test = node.get_bool('depth_test', True)
         cull_face = node.get_bool('cull_face', True)
-        composite = node.get_str('composite', 'over').lower()
-        render_set = RenderSet(lights=lights, instances={}, depth_test=depth_test, cull_face=cull_face, composite=composite)
+        composite = node.get_str('composite', 'over')
+        render_set = RenderSet(lights=lights, instances={}, depth_test=depth_test, cull_face=cull_face, composite=composite.lower())
         render_sets.append(render_set)
         child = node.first_child
         while child is not None:
@@ -307,7 +309,7 @@ def fst(tuple ab):
     return ab[0]
 
 
-cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, int max_lights,
+cdef void render(RenderSet render_set, Matrix44 pv_matrix, bint orthographic, Vector viewpoint, Vector focus, int max_lights,
                  double fog_min, double fog_max, Vector fog_color, glctx, dict objects, dict references):
     cdef list instances, lights, buffers
     cdef cython.float[:, :] matrices, materials, lights_data
@@ -332,7 +334,9 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, int
                                fragment_shader=StandardFragmentSource.render(**variables))
         objects[shader_name] = shader
     shader['pv_matrix'] = pv_matrix
+    shader['orthographic'] = orthographic
     shader['view_position'] = viewpoint
+    shader['focus'] = focus
     shader['fog_min'] = fog_min
     shader['fog_max'] = fog_max
     shader['fog_color'] = fog_color
@@ -375,8 +379,7 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, int
         if render_set.depth_test:
             zs_array = np.empty(n)
             zs = zs_array
-            for i in range(n):
-                instance = instances[i]
+            for i, instance in enumerate(instances):
                 zs[i] = pv_matrix.mmul(instance.model_matrix).numbers[14]
             indices = zs_array.argsort()
         else:

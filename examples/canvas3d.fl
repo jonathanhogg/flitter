@@ -21,7 +21,7 @@ let SIZE=1920;1080
         !light color=500000;0;0 position=1000;1000;0 direction=-1;-1;0 inner=10/360 outer=20/360
         -- Ground:
         !material color=0.25 shininess=100
-            !cylinder size=500;500;1 rotation=0.25;0;0
+            !cylinder size=1000;1000;1 rotation=0.25;0;0
         -- Spinning cube:
         !material color=1 shininess=100
             !transform translate=0;100;0 rotate=beat/11;0;beat/7

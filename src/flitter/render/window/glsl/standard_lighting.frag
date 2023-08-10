@@ -14,6 +14,8 @@ out vec4 fragment_color;
 uniform int nlights;
 uniform vec3 lights[${max_lights * 4}];
 uniform vec3 view_position;
+uniform vec3 focus;
+uniform bool orthographic;
 uniform float fog_max;
 uniform float fog_min;
 uniform vec3 fog_color;
@@ -27,14 +29,21 @@ uniform sampler2D emissive_texture;
 
 
 void main() {
-    vec3 view_direction = view_position - world_position;
-    float view_distance = length(view_direction);
+    vec3 view_direction;
+    float view_distance;
+    if (orthographic) {
+        view_direction = normalize(view_position - focus);
+        view_distance = dot(view_position - world_position, view_direction);
+    } else {
+        view_direction = view_position - world_position;
+        view_distance = length(view_direction);
+        view_direction = normalize(view_direction);
+    }
     float fog_alpha = (fog_max > fog_min) ? clamp((view_distance - fog_min) / (fog_max - fog_min), 0, 1) : 0;
     if (fog_alpha == 1) {
         fragment_color = vec4(fog_color, 1);
         return;
     }
-    view_direction = normalize(view_direction);
     vec3 diffuse_color = colors[0];
     if (use_diffuse_texture) {
         vec4 diffuse_texture_color = texture(diffuse_texture, uv);
