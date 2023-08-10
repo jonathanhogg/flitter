@@ -210,6 +210,17 @@ class TestCounter(unittest.TestCase):
         self.assertEqual(counter(self.state, self.counter_id, clock, Vector([1, -2])), count)
         self.assertTrue(self.counter_id in self.state.changed_keys)
 
+    def test_read_without_update(self):
+        clock = count = Vector(0)
+        count = counter(self.state, self.counter_id, clock, Vector(2))
+        self.assertTrue(self.counter_id in self.state.changed_keys)
+        self.state.clear_changed()
+        clock += 0.5
+        count += 1.0
+        read_count = counter(self.state, self.counter_id, clock)
+        self.assertFalse(self.counter_id in self.state.changed_keys)
+        self.assertEqual(count, read_count)
+
 
 #     'len': Vector(length),
 #     'sin': Vector(sinv),
