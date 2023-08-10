@@ -111,6 +111,7 @@ cdef class Node:
     cdef double get_float(self, str name, double default)
     cdef int get_int(self, str name, long long default)
     cdef bint get_bool(self, str name, bint default)
+    cdef str get_str(self, str name, str default)
     cdef str repr(self)
 
 
