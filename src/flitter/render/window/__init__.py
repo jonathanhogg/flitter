@@ -623,11 +623,8 @@ class Canvas3D(SceneNode):
             self._render_framebuffer.clear(*fog_color)
         else:
             self._render_framebuffer.clear()
-        self.glctx.enable(moderngl.DEPTH_TEST | moderngl.CULL_FACE | moderngl.BLEND)
-        self.glctx.blend_func = moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA
         objects = self.glctx.extra.setdefault('canvas3d_objects', {})
         canvas3d.draw(node, (self.width, self.height), self.glctx, objects, references)
-        self.glctx.disable(moderngl.DEPTH_TEST | moderngl.CULL_FACE | moderngl.BLEND)
         self.glctx.copy_framebuffer(self._image_framebuffer, self._render_framebuffer)
         self._total_duration += system_clock()
         self._total_count += 1

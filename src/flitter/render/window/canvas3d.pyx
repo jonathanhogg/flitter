@@ -74,10 +74,36 @@ cdef class Instance:
 cdef class RenderSet:
     lights: list[list[Light]]
     instances: dict[Model, list[Instance]]
+    depth_test: bool
+    cull_face: bool
+    composite: str
 
 
 cdef object StandardVertexSource = TemplateLoader.get_template("standard_lighting.vert")
 cdef object StandardFragmentSource = TemplateLoader.get_template("standard_lighting.frag")
+
+
+cdef void set_blend(glctx, str composite):
+    glctx.blend_equation = moderngl.FUNC_ADD
+    if composite == 'source':
+        glctx.blend_func = moderngl.ONE, moderngl.ZERO
+    elif composite == 'dest':
+        glctx.blend_func = moderngl.ZERO, moderngl.ONE
+    elif composite == 'dest_over':
+        glctx.blend_func = moderngl.ONE_MINUS_DST_ALPHA, moderngl.ONE
+    elif composite == 'add':
+        glctx.blend_func = moderngl.ONE, moderngl.ONE
+    elif composite == 'subtract':
+        glctx.blend_equation = moderngl.FUNC_SUBTRACT
+        glctx.blend_func = moderngl.ONE, moderngl.ONE
+    elif composite == 'lighten':
+        glctx.blend_equation = moderngl.MAX
+        glctx.blend_func = moderngl.ONE, moderngl.ONE
+    elif composite == 'darken':
+        glctx.blend_equation = moderngl.MIN
+        glctx.blend_func = moderngl.ONE, moderngl.ONE
+    else: # over
+        glctx.blend_func = moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA
 
 
 def draw(Node node, tuple size, glctx, dict objects, dict references):
@@ -96,7 +122,10 @@ def draw(Node node, tuple size, glctx, dict objects, dict references):
     cdef Matrix44 pv_matrix = Matrix44._project(width/height, fov, near, far).mmul(Matrix44._look(viewpoint, focus, up))
     cdef Matrix44 model_matrix = update_model_matrix(Matrix44.__new__(Matrix44), node)
     cdef Node child = node.first_child
-    cdef RenderSet render_set = RenderSet(lights=[[]], instances={})
+    cdef bint depth_test = node.get_bool('depth_test', True)
+    cdef bint cull_face = node.get_bool('cull_face', True)
+    cdef str composite = node.get_str('composite', 'over').lower()
+    cdef RenderSet render_set = RenderSet(lights=[[]], instances={}, depth_test=depth_test, cull_face=cull_face, composite=composite)
     cdef list render_sets = [render_set]
     while child is not None:
         collect(child, model_matrix, Material(), render_set, render_sets)
@@ -142,9 +171,9 @@ cdef void collect(Node node, Matrix44 model_matrix, Material material, RenderSet
     cdef Vector color, position, direction, emissive, diffuse, specular
     cdef double shininess, inner, outer
     cdef Node child
-    cdef str filename
+    cdef str filename, composite
     cdef int subdivisions, segments
-    cdef bint flat
+    cdef bint flat, depth_test, cull_face
     cdef Model model
     cdef Material new_material
 
@@ -159,7 +188,10 @@ cdef void collect(Node node, Matrix44 model_matrix, Material material, RenderSet
         model_matrix = update_model_matrix(model_matrix, node)
         lights = list(render_set.lights)
         lights.append([])
-        render_set = RenderSet(lights, {})
+        depth_test = node.get_bool('depth_test', True)
+        cull_face = node.get_bool('cull_face', True)
+        composite = node.get_str('composite', 'over').lower()
+        render_set = RenderSet(lights=lights, instances={}, depth_test=depth_test, cull_face=cull_face, composite=composite)
         render_sets.append(render_set)
         child = node.first_child
         while child is not None:
@@ -321,22 +353,32 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, int
             i += 1
     shader['nlights'] = i
     shader['lights'].write(lights_data)
+    cdef int flags = moderngl.BLEND
+    if render_set.depth_test:
+        flags |= moderngl.DEPTH_TEST
+    if render_set.cull_face:
+        flags |= moderngl.CULL_FACE
+    glctx.enable(flags)
+    set_blend(glctx, render_set.composite)
     for (model, textures), instances in render_set.instances.items():
         n = len(instances)
         matrices = view.array((n, 16), 4, 'f')
         materials = view.array((n, 11), 4, 'f')
         k = 0
-        zs_array = np.empty(n)
-        zs = zs_array
-        for i in range(n):
-            instance = instances[i]
-            zs[i] = pv_matrix.mmul(instance.model_matrix).numbers[14]
-        indices = zs_array.argsort()
+        if render_set.depth_test:
+            zs_array = np.empty(n)
+            zs = zs_array
+            for i in range(n):
+                instance = instances[i]
+                zs[i] = pv_matrix.mmul(instance.model_matrix).numbers[14]
+            indices = zs_array.argsort()
+        else:
+            indices = np.arange(n, dtype='long')
         for i in indices:
             instance = instances[i]
             material = instance.material
-            if  material.transparency < 1:
-                if material.transparency > 0:
+            if material.transparency < 1:
+                if material.transparency > 0 and render_set.depth_test:
                     transparent_objects.append((-zs[i], model, instance))
                 else:
                     src = instance.model_matrix.numbers
@@ -349,7 +391,7 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, int
                         dest[j+3] = material.specular.numbers[j]
                         dest[j+6] = material.emissive.numbers[j]
                     dest[9] = material.shininess
-                    dest[10] = 0
+                    dest[10] = material.transparency
                     k += 1
         dispatch_instances(glctx, objects, shader, model, k, matrices, materials, textures, references)
     if transparent_objects:
@@ -372,6 +414,7 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, Vector viewpoint, int
             dest[9] = material.shininess
             dest[10] = material.transparency
             dispatch_instances(glctx, objects, shader, model, 1, matrices, materials, material.textures, references)
+    glctx.disable(flags)
 
 
 cdef void dispatch_instances(glctx, dict objects, shader, Model model, int count, cython.float[:, :] matrices,
