@@ -477,9 +477,10 @@ class Record(ProgramNode):
                 crf = node.get('crf', 1, int)
                 bitrate = node.get('bitrate', 1, int)
                 preset = node.get('preset', 1, str)
+                limit = node.get('limit', 1, float)
                 path.write_video_frame(self._texture, kwargs['clock'],
-                                       fps=kwargs['fps'], realtime=kwargs['realtime'], codec=codec,
-                                       crf=crf, bitrate=bitrate, preset=preset)
+                                       fps=int(kwargs['fps']), realtime=kwargs['realtime'], codec=codec,
+                                       crf=crf, bitrate=bitrate, preset=preset, limit=limit)
             else:
                 quality = node.get('quality', 1, int)
                 path.write_image(self._texture, quality=quality)

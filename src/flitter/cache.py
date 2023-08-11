@@ -45,7 +45,6 @@ class CachePath:
                     if queue is not None:
                         queue.put(None)
                         writer.join()
-                        logger.success("Flushed and closed video output file: {}", self._path)
 
     def read_text(self, encoding=None, errors=None):
         self._touched = system_clock()
@@ -298,13 +297,14 @@ class CachePath:
                 logger.success("Saved image to file: {}", self._path)
         self._cache['write_image'] = True
 
-    def write_video_frame(self, texture, timestamp, codec='h264', fps=60, realtime=False, crf=None, bitrate=None, preset=None):
+    def write_video_frame(self, texture, timestamp, codec='h264', fps=60, realtime=False, crf=None, bitrate=None,
+                          preset=None, limit=None):
         import av
         self._touched = system_clock()
         writer = queue = start = None
         width, height = texture.width, texture.height
         has_alpha = texture.components == 4
-        config = [width, height, has_alpha, codec, fps, crf, bitrate, preset]
+        config = [width, height, has_alpha, codec, fps, crf, bitrate, preset, limit]
         if 'video_output' in self._cache:
             writer, queue, start, *cached_config = self._cache['video_output']
             if cached_config != config:
@@ -313,16 +313,16 @@ class CachePath:
                     queue.put(None)
                     writer.join()
                 container = queue = writer = start = None
-        if writer is None:
+        if start is None:
             self.cleanup()
             if self._path.exists():
                 logger.warning("Existing video file will be overwritten: {}", self._path)
             options = {}
             if crf is not None:
                 options['crf'] = str(crf)
-            if bitrate is not None:
+            elif bitrate is not None:
                 options['maxrate'] = str(bitrate)
-                options['bufsize'] = str(2 * bitrate)
+                options['bufsize'] = str(bitrate * 2)
             if preset is not None:
                 options['preset'] = preset
             try:
@@ -350,6 +350,12 @@ class CachePath:
             start = timestamp
             self._cache['video_output'] = writer, queue, start, *config
         if queue is not None and (not realtime or not queue.full()):
+            frame_time = timestamp - start
+            if limit is not None and frame_time >= limit:
+                queue.put(None)
+                writer.join()
+                self._cache['video_output'] = None, None, start, *config
+                return
             frame = av.VideoFrame(width, height, 'rgba' if has_alpha else 'rgb24')
             line_size = frame.planes[0].line_size
             if line_size != width:
@@ -361,7 +367,7 @@ class CachePath:
                 frame.planes[0].update(array.data)
             else:
                 frame.planes[0].update(texture.read())
-            frame.pts = int(round((timestamp - start) * fps))
+            frame.pts = int(round(frame_time * fps))
             try:
                 queue.put(frame, block=not realtime)
             except Full:
@@ -378,6 +384,7 @@ class CachePath:
         except Exception as exc:
             logger.error("Error encoding video frame: {}", str(exc))
         container.close()
+        logger.success("Flushed and closed video output file: {}", self._path)
 
     def __str__(self):
         return self._absolute
