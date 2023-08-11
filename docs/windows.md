@@ -109,5 +109,5 @@ values will just get clipped in the final window render.
 The `hsl()` and `hsv()` color functions do not support values of `l` or `v` that
 are greater than 1, so multiply the resulting RGB vector to construct high
 brightness colors, e.g., `hsv(hue;0.9;1) * 100`. You'll need these bright colors
-when setting the `color` of point `!light` sources in `!canvas3d` as these
-have an inverse-squared fall-off and so get dim very quickly.
+when setting the `color` of point and spot `!light` sources in `!canvas3d` as
+these have an inverse-squared fall-off and so get dim very quickly.

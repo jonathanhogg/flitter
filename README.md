@@ -11,18 +11,25 @@ reload of source files), it is designed primarily for driving via a MIDI surface
 The engine that runs the language is capable of:
 
 - 2D drawing (loosely based on the HTML canvas/SVG model)
-- 3D rendering with primitive shapes and triangular mesh models in a bunch of
-formats (including OBJ and STL); ambient, directional, point and spot- light
-sources with (currently shadowless) Phong lighting/shading; simple fog
-- rendering videos
-- running GLSL shaders as stacked image generators and filters (a la ShaderToy)
+- 3D rendering of primitive shapes and external triangular mesh models (in a
+bunch of formats including OBJ and STL); ambient, directional, point and
+spot- light sources with (currently shadowless) Phong lighting/shading; simple
+fog; perspective and orthographic projections; texture-mapping with the output
+of other visual units (like a drawing canvas)
+- playing videos
+- running GLSL shaders as stacked generators and filters, with live manipulation
+of uniforms and live reload/recompilation of source
+- compositing all of the above and rendering to one or more windows
+- saving output to image and video files
 - driving arbitrary DMX fixtures via a USB DMX interface (currently via an
-Entec-compatible interface or my own crazy hand-built interfaces)
+Entec-compatible interface or my own crazy hand-built devices)
 - driving a LaserCube plugged in over USB (other lasers probably easy to
 support)
+- taking live inputs from Ableton Push 2 or Behringer X-Touch mini MIDI
+surfaces (other controllers relatively easy to add)
 
 Fundamentally, the system consists of an engine that repeatedly evaluates a
-program with a beat counter and the output of the MIDI surface as input. The
+program with a beat counter and the current state of the MIDI surface. The
 output of the program is a tree of nodes that describe the visuals. A series of
 renderers turn these nodes into 2D and 3D drawing commands (or DMX packets, or
 laser DAC values). It's sort of like using a functional language to build a
@@ -110,18 +117,18 @@ For reference, the runtime dependencies are:
 
 - `numpy` - for fast memory crunching
 - `lark` and `regex` - for the language parser
-- `rtmidi2` - for talking MIDI (to the Push 2)
+- `rtmidi2` - for talking MIDI
 - `pyusb` - for sending screen data to the Push 2 and for talking to LaserCubes
 - `skia-python` - for 2D drawing
 - `glfw` - for OpenGL windowing
-- `moderngl` - because the OpenGL API is too hard
+- `moderngl` - because the raw OpenGL API is too low-level
 - `trimesh` - for generating/loading 3D triangular mesh models
 - `scipy` - because `trimesh` needs it for some operations
 - `av` - for encoding and decoding video
 - `pillow` - for saving screenshots as image files
 - `mako` - for templating of the GLSL source
 - `pyserial` - for talking to DMX interfaces and lasers
-- `loguru` - because the standard library `logging` is just too antiquated
+- `loguru` - because the standard `logging` library is just too antiquated
 
 and the install-time dependencies are:
 
@@ -135,6 +142,9 @@ built code and let `pyximport` (re)compile it on-the-fly as you go:
 pip3 install --editable .
 rm **/*.c **/*.so
 ```
+
+You might also want to install `flake8` and `pytest`, which is what I use for
+linting the code and running the (few) unit tests.
 
 ## Running
 
