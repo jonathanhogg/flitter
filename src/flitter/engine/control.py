@@ -13,7 +13,7 @@ from ..cache import SharedCache
 from ..clock import BeatCounter, system_clock
 from ..interface.controls import Pad, Encoder
 from ..interface.osc import OSCReceiver, OSCSender, OSCMessage, OSCBundle
-from ..model import Context, StateDict, Vector
+from ..model import Context, StateDict, Vector, null
 from ..render import process, get_renderer
 from ..interact import get_interactor
 
@@ -24,6 +24,7 @@ class EngineController:
 
     def __init__(self, target_fps=60, screen=0, fullscreen=False, vsync=False, state_file=None, multiprocess=True,
                  autoreset=None, state_eval_wait=0, realtime=True, defined_variables=None):
+        self.default_fps = target_fps
         self.target_fps = target_fps
         self.realtime = realtime
         self.screen = screen
@@ -281,20 +282,13 @@ class EngineController:
 
     def handle_pragmas(self, pragmas):
         if '_counter' not in self.state:
-            tempo = pragmas.get('tempo')
-            if tempo is not None and len(tempo) == 1 and isinstance(tempo[0], float) and tempo[0] > 0:
-                tempo = tempo[0]
-            else:
-                tempo = 120
-            quantum = pragmas.get('quantum')
-            if quantum is not None and len(quantum) == 1 and isinstance(quantum[0], float) and quantum[0] >= 2:
-                quantum = int(quantum[0])
-            else:
-                quantum = 4
+            tempo = pragmas.get('tempo', null).match(1, float, 120)
+            quantum = pragmas.get('quantum', null).match(1, float, 4)
             self.counter.update(tempo, quantum, system_clock())
             self.state['_counter'] = self.counter.tempo, self.counter.quantum, self.counter.start
             self.enqueue_tempo()
             logger.info("Start counter, tempo {}, quantum {}", self.counter.tempo, self.counter.quantum)
+        self.target_fps = pragmas.get('fps', null).match(1, float, self.default_fps)
 
     def reset_state(self):
         self.state.clear()

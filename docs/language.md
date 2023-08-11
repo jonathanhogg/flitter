@@ -384,16 +384,19 @@ already been initialised, then the speed will default to 1.
 
 ## Pragmas
 
-There are two supported pragmas that may be placed at the top-level of a source
-file:
+There are three supported pragmas that may be placed at the top-level of a
+source file:
 
 ```
 %pragma tempo 110
 %pragma quantum 3
+%pragma fps 30
 ```
 
-These set the initial tempo and/or quantum of the main clock (the defaults are
-120 and 4, respectively).
+These respectively set the initial tempo and/or quantum of the main clock (the
+defaults are 120 and 4, respectively), and the *current* target frame rate of
+the engine (default is 60 or the value specified with the `--fps` command-line
+option).
 
 ## Partial evaluation
 
