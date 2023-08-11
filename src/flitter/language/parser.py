@@ -15,6 +15,9 @@ from .. import model
 from . import tree
 
 
+SI_PREFIXES = {'p': 1e-12, 'n': 1e-9, 'u': 1e-6, 'µ': 1e-6, 'm': 1e-3, 'k': 1e3, 'M': 1e6, 'G': 1e9, 'T': 1e12}
+
+
 class FlitterIndenter(Indenter):
     NL_type = '_NL'
     OPEN_PAREN_types = ['_LPAR', '_LBRA']
@@ -38,7 +41,11 @@ class FlitterTransformer(Transformer):
         return intern(str(token))
 
     def NUMBER(self, token):
-        return model.Vector.coerce(float(token))
+        multiplier = 1
+        if token[-1] in SI_PREFIXES:
+            multiplier = SI_PREFIXES[token[-1]]
+            token = token[:-1]
+        return model.Vector.coerce(float(token) * multiplier)
 
     def TAG(self, token):
         return intern(str(token)[1:])
