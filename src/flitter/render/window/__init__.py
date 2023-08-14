@@ -529,6 +529,7 @@ class Canvas(SceneNode):
             self._canvas = self._surface.getCanvas()
             self._colorbits = colorbits
             self._linear = linear
+            logger.debug("Created {:d}x{:d} canvas; skia version {}", self.width, self.height, skia.__version__)
 
     async def descend(self, node, **kwargs):
         # A canvas is a leaf node from the perspective of the OpenGL world

@@ -23,6 +23,7 @@ from ...model cimport Vector, Node
 logger = name_patch(logger, __name__)
 
 cdef double Tau = 6.283185307179586
+cdef int GL_TEXTURE_2D = 3553
 
 cdef dict TextureFormatColorType = {
     'f1': (32856, skia.kRGBA_8888_ColorType),
@@ -104,13 +105,6 @@ cdef dict FontSlant = {
     'italic': skia.FontStyle.Slant.kItalic_Slant,
     'oblique': skia.FontStyle.Slant.kOblique_Slant,
     'upright': skia.FontStyle.Slant.kUpright_Slant,
-}
-
-cdef dict FilterQuality = {
-    'none': skia.FilterQuality.kNone_FilterQuality,
-    'low': skia.FilterQuality.kLow_FilterQuality,
-    'medium': skia.FilterQuality.kMedium_FilterQuality,
-    'high': skia.FilterQuality.kHigh_FilterQuality,
 }
 
 cdef dict FillType = {
@@ -337,11 +331,6 @@ cdef object update_paint(Node node, start_paint):
                 if paint is start_paint:
                     paint = skia.Paint(paint)
                 paint.setDither(dither)
-        elif key == 'quality':
-            if (quality := FilterQuality.get(value.match(1, str))) is not None:
-                if paint is start_paint:
-                    paint = skia.Paint(paint)
-                paint.setFilterQuality(quality)
     return paint
 
 
@@ -370,7 +359,7 @@ cdef object make_image(ctx, Node node, dict references, bint linear):
         if scene_node.texture is not None:
             texture = scene_node.texture
             format, colortype = TextureFormatColorType[texture.dtype]
-            texture_info = skia.GrGLTextureInfo(3553, texture.glo, format)
+            texture_info = skia.GrGLTextureInfo(GL_TEXTURE_2D, texture.glo, format)
             backend_texture = skia.GrBackendTexture(texture.width, texture.height, skia.GrMipmapped.kNo, texture_info)
             return skia.Image.MakeFromTexture(ctx.getSurface().recordingContext(), backend_texture,
                                               skia.GrSurfaceOrigin.kBottomLeft_GrSurfaceOrigin,
@@ -433,7 +422,7 @@ cdef object make_shader(ctx, Node node, paint, dict references, bint linear):
     elif kind == 'blend':
         if len(shaders) == 2:
             if (ratio := node.get('ratio', 1, float)) is not None:
-                return skia.Shaders.Lerp(ratio, *shaders)
+                return skia.Shaders.Lerp(min(max(0, ratio), 1), *shaders)
             if (mode := Composite.get(node.get('mode', 1, str))) is not None:
                 return skia.Shaders.Blend(skia.BlendMode(mode), *shaders)
 
@@ -450,7 +439,7 @@ cdef object make_shader(ctx, Node node, paint, dict references, bint linear):
                 elif key == 'scale':
                     if (scale := value.match(2, float)) is not None:
                         matrix.postScale(*scale)
-            return image.makeShader(skia.TileMode.kRepeat, skia.TileMode.kRepeat, matrix)
+            return image.makeShader(skia.TileMode.kRepeat, skia.TileMode.kRepeat, localMatrix=matrix)
 
     return None
 
