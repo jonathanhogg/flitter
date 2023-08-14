@@ -15,6 +15,7 @@ from ...cache import SharedCache
 from . import canvas
 from . import canvas3d
 from ...clock import system_clock
+from .glconstants import GL_RGBA8, GL_RGBA16F, GL_RGBA32F, GL_SRGB8, GL_FRAMEBUFFER_SRGB
 from .glsl import TemplateLoader
 
 
@@ -25,12 +26,6 @@ def value_split(value, n, m):
         return tuple(value)
     return [tuple(value[i * m:(i + 1) * m]) for i in range(n)]
 
-
-GL_RGBA8 = 32856
-GL_RGBA16F = 34842
-GL_RGBA32F = 34836
-GL_SRGB8 = 35905
-GL_FRAMEBUFFER_SRGB = 36281
 
 ColorFormat = namedtuple('ColorFormat', ('moderngl_dtype', 'gl_format', 'skia_colortype'))
 

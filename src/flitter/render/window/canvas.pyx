@@ -18,17 +18,17 @@ from flitter import name_patch
 from ...cache import SharedCache
 from ...clock import system_clock
 from ...model cimport Vector, Node
+from .glconstants import GL_TEXTURE_2D, GL_RGBA8, GL_RGBA16F, GL_RGBA32F
 
 
 logger = name_patch(logger, __name__)
 
 cdef double Tau = 6.283185307179586
-cdef int GL_TEXTURE_2D = 3553
 
 cdef dict TextureFormatColorType = {
-    'f1': (32856, skia.kRGBA_8888_ColorType),
-    'f2': (34842, skia.kRGBA_F16_ColorType),
-    'f4': (34836, skia.kRGBA_F32_ColorType)
+    'f1': (GL_RGBA8, skia.kRGBA_8888_ColorType),
+    'f2': (GL_RGBA16F, skia.kRGBA_F16_ColorType),
+    'f4': (GL_RGBA32F, skia.kRGBA_F32_ColorType)
 }
 
 cdef dict Composite = {
