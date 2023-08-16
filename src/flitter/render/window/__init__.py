@@ -181,12 +181,12 @@ class ProgramNode(SceneNode):
     def get_vertex_source(self, node):
         if vertex := node.get('vertex', 1, str):
             return vertex
-        return self.DEFAULT_VERTEX_SOURCE.render(child_textures=list(self.child_textures), node=node)
+        return self.DEFAULT_VERTEX_SOURCE.render(child_textures=list(self.child_textures))
 
     def get_fragment_source(self, node):
         if fragment := node.get('fragment', 1, str):
             return fragment
-        return self.DEFAULT_FRAGMENT_SOURCE.render(child_textures=list(self.child_textures), node=node)
+        return self.DEFAULT_FRAGMENT_SOURCE.render(child_textures=list(self.child_textures), blend=node.get('blend', 1, str, 'over'))
 
     def make_last(self):
         raise NotImplementedError()

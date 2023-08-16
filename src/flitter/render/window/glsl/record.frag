@@ -8,11 +8,6 @@ uniform sampler2D ${name};
 % endfor
 
 <%include file="blend_functions.glsl"/>
-<%
-blend_mode = node.get('blend', 1, str);
-if blend_mode not in {'over', 'dest_over', 'lighten', 'darken'}:
-    blend_mode = 'over'
-%>
 
 void main() {
 % if child_textures:
@@ -21,10 +16,10 @@ void main() {
     vec4 merged = texture(${name}, coord);
 %         elif loop.index == 1:
     vec4 child = texture(${name}, coord);
-    merged = blend_${blend_mode}(child, merged);
+    merged = blend_${blend}(child, merged);
 %         else:
     child = texture(${name}, coord);
-    merged = blend_${blend_mode}(child, merged);
+    merged = blend_${blend}(child, merged);
 %         endif
 %     endfor
     color = pow(merged, vec4(gamma));
