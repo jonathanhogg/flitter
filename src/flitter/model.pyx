@@ -1359,7 +1359,7 @@ cdef class Node:
                 return value.as_string()
         return value.match(n, t, default)
 
-    cdef Vector get_fvec(self, str name, int n, Vector default=null_):
+    cdef Vector get_fvec(self, str name, int n, Vector default):
         cdef Vector result, value = self._attributes.get(name)
         cdef int m, i
         if value is not None and value.numbers != NULL:

@@ -25,6 +25,8 @@ cdef Vector Zero3 = Vector((0, 0, 0))
 cdef Vector One3 = Vector((1, 1, 1))
 cdef int DEFAULT_MAX_LIGHTS = 50
 cdef double Pi = 3.141592653589793
+cdef tuple MaterialAttributes = ('color', 'specular', 'emissive', 'shininess', 'transparency',
+                                 'texture_id', 'specular_texture_id', 'emissive_texture_id')
 
 
 cdef enum LightType:
@@ -104,6 +106,28 @@ cdef void set_blend(glctx, str composite):
         glctx.blend_func = moderngl.ONE, moderngl.ONE
     else: # over
         glctx.blend_func = moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA
+
+
+cdef Material update_material(Node node, Material material):
+    for attr in MaterialAttributes:
+        if attr in node._attributes:
+            break
+    else:
+        return material
+    cdef Material new_material = Material.__new__(Material)
+    new_material.diffuse = node.get_fvec('color', 3, material.diffuse)
+    new_material.specular = node.get_fvec('specular', 3, material.specular)
+    new_material.emissive = node.get_fvec('emissive', 3, material.emissive)
+    new_material.shininess = node.get_float('shininess', material.shininess)
+    new_material.transparency = node.get_float('transparency', material.transparency)
+    diffuse_id = node.get('texture_id', 1, str)
+    specular_id = node.get('specular_texture_id', 1, str)
+    emissive_id = node.get('emissive_texture_id', 1, str)
+    if diffuse_id is not None or specular_id is not None or emissive_id is not None:
+        new_material.textures = Textures(diffuse_id, specular_id, emissive_id)
+    else:
+        new_material.textures = None
+    return new_material
 
 
 def draw(Node node, tuple size, glctx, dict objects, dict references):
@@ -208,10 +232,10 @@ cdef void collect(Node node, Matrix44 model_matrix, Material material, RenderSet
             child = child.next_sibling
 
     elif node.kind == 'light':
-        color = node.get_fvec('color', 3)
+        color = node.get_fvec('color', 3, null_)
         if color.as_bool():
-            position = node.get_fvec('position', 3)
-            direction = node.get_fvec('direction', 3)
+            position = node.get_fvec('position', 3, null_)
+            direction = node.get_fvec('direction', 3, null_)
             light = Light.__new__(Light)
             light.color = color
             if position.length and direction.as_bool():
@@ -238,19 +262,7 @@ cdef void collect(Node node, Matrix44 model_matrix, Material material, RenderSet
             lights.append(light)
 
     elif node.kind == 'material':
-        new_material = Material.__new__(Material)
-        new_material.diffuse = node.get_fvec('color', 3, material.diffuse)
-        new_material.specular = node.get_fvec('specular', 3, material.specular)
-        new_material.emissive = node.get_fvec('emissive', 3, material.emissive)
-        new_material.shininess = node.get_float('shininess', material.shininess)
-        new_material.transparency = node.get_float('transparency', material.transparency)
-        diffuse_id = node.get('texture_id', 1, str)
-        specular_id = node.get('specular_texture_id', 1, str)
-        emissive_id = node.get('emissive_texture_id', 1, str)
-        if diffuse_id is not None or specular_id is not None or emissive_id is not None:
-            new_material.textures = Textures(diffuse_id, specular_id, emissive_id)
-        else:
-            new_material.textures = None
+        new_material = update_material(node, material)
         child = node.first_child
         while child is not None:
             collect(child, model_matrix, new_material, render_set, render_sets)
@@ -260,6 +272,7 @@ cdef void collect(Node node, Matrix44 model_matrix, Material material, RenderSet
         flat = node.get_bool('flat', False)
         invert = node.get_bool('invert', False)
         model = Box.get(flat, invert)
+        material = update_material(node, material)
         add_instance(render_set.instances, model, node, model_matrix, material)
 
     elif node.kind == 'sphere':
@@ -267,6 +280,7 @@ cdef void collect(Node node, Matrix44 model_matrix, Material material, RenderSet
         invert = node.get_bool('invert', False)
         subdivisions = node.get_int('subdivisions', 2)
         model = Sphere.get(flat, invert, subdivisions)
+        material = update_material(node, material)
         add_instance(render_set.instances, model, node, model_matrix, material)
 
     elif node.kind == 'cylinder':
@@ -274,6 +288,7 @@ cdef void collect(Node node, Matrix44 model_matrix, Material material, RenderSet
         invert = node.get_bool('invert', False)
         segments = node.get_int('segments', 32)
         model = Cylinder.get(flat, invert, segments)
+        material = update_material(node, material)
         add_instance(render_set.instances, model, node, model_matrix, material)
 
     elif node.kind == 'model':
@@ -282,6 +297,7 @@ cdef void collect(Node node, Matrix44 model_matrix, Material material, RenderSet
             flat = node.get_bool('flat', False)
             invert = node.get_bool('invert', False)
             model = LoadedModel.get(flat, invert, filename)
+            material = update_material(node, material)
             add_instance(render_set.instances, model, node, model_matrix, material)
 
 
