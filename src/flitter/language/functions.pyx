@@ -213,17 +213,23 @@ def polar(Vector theta not None):
     return ys
 
 
-def angle(Vector xy not None):
-    if xy.numbers == NULL:
+def angle(Vector xy not None, Vector ys=None):
+    if xy.numbers == NULL or (ys is not None and ys.numbers == NULL):
         return null_
-    cdef int i, n = xy.length // 2
+    cdef int i, n = xy.length // 2 if ys is None else max(xy.length, ys.length)
     cdef double x, y
     cdef Vector theta = Vector.__new__(Vector)
     theta.allocate_numbers(n)
-    for i in range(0, n):
-        x = xy.numbers[i*2]
-        y = xy.numbers[i*2+1]
-        theta.numbers[i] = atan2(y, x) / Tau
+    if ys is None:
+        for i in range(n):
+            x = xy.numbers[i*2]
+            y = xy.numbers[i*2+1]
+            theta.numbers[i] = atan2(y, x) / Tau
+    else:
+        for i in range(n):
+            x = xy.numbers[i % xy.length]
+            y = ys.numbers[i % ys.length]
+            theta.numbers[i] = atan2(y, x) / Tau
     return theta
 
 
@@ -591,18 +597,35 @@ def maxindex(Vector xs not None, *args):
     return ys
 
 
-def hypot(Vector xs not None):
-    cdef int i, n = xs.length
-    if n == 0 or xs.objects is not None:
-        return null_
+def hypot(*args):
+    cdef int i, n = 0
     cdef double x, y = 0
-    for i in range(n):
-        x = xs.numbers[i]
-        y += x * x
-    y = sqrt(y)
-    cdef Vector ys = Vector.__new__(Vector)
-    ys.allocate_numbers(1)
-    ys.numbers[0] = y
+    cdef Vector xs, ys = null_
+    if len(args) == 1:
+        xs = args[0]
+        if xs.numbers == NULL:
+            return null_
+        for i in range(xs.length):
+            x = xs.numbers[i]
+            y += x * x
+        y = sqrt(y)
+        ys = Vector.__new__(Vector)
+        ys.allocate_numbers(1)
+        ys.numbers[0] = y
+    elif len(args) > 1:
+        for xs in args:
+            if xs.numbers == NULL:
+                return null_
+            if xs.length > n:
+                n = xs.length
+        ys = Vector.__new__(Vector)
+        ys.allocate_numbers(n)
+        for i in range(n):
+            y = 0
+            for xs in args:
+                x = xs.numbers[i % xs.length]
+                y += x * x
+            ys.numbers[i] = sqrt(y)
     return ys
 
 

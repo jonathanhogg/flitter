@@ -2,10 +2,21 @@
 Tests of the flitter language built-in functions
 """
 
+import math
 import unittest
 
 from flitter.model import Vector, null, StateDict
-from flitter.language.functions import Uniform, Normal, Beta, counter
+from flitter.language.functions import (Uniform, Normal, Beta, counter, hypot, angle)
+
+
+Tau = 2*math.pi
+
+
+def all_isclose(xs, ys, rel_tol=1e-9, abs_tol=0):
+    for x, y in zip(xs, ys):
+        if not math.isclose(x, y, rel_tol=rel_tol, abs_tol=abs_tol):
+            return False
+    return True
 
 
 class TestUniform(unittest.TestCase):
@@ -222,6 +233,38 @@ class TestCounter(unittest.TestCase):
         self.assertEqual(count, read_count)
 
 
+class TestTrig(unittest.TestCase):
+    def setUp(self):
+        self.a = Vector([1, 2, 3, 4])
+        self.b = Vector([4, 5, 6, 7])
+        self.c = Vector([2])
+
+    def test_hypot_one_arg(self):
+        self.assertEqual(hypot(), null)
+        self.assertEqual(hypot(null), null)
+        self.assertTrue(all_isclose(hypot(self.a), Vector(math.sqrt(30))))
+        self.assertTrue(all_isclose(hypot(self.c), self.c))
+
+    def test_hypot_multiple_args(self):
+        self.assertEqual(hypot(self.a, null), null)
+        self.assertTrue(all_isclose(hypot(self.a, self.b), Vector([math.sqrt(17), math.sqrt(29), math.sqrt(45), math.sqrt(65)])))
+        self.assertTrue(all_isclose(hypot(self.a, self.c), Vector([math.sqrt(5), math.sqrt(8), math.sqrt(13), math.sqrt(20)])))
+        self.assertTrue(all_isclose(hypot(self.a, self.b, self.c),
+                                    Vector([math.sqrt(21), math.sqrt(33), math.sqrt(49), math.sqrt(69)])))
+
+    def test_angle_one_arg(self):
+        self.assertEqual(angle(null), null)
+        self.assertTrue(all_isclose(angle(self.a), Vector([math.atan2(2, 1)/Tau, math.atan2(4, 3)/Tau])))
+
+    def test_angle_multiple_args(self):
+        self.assertEqual(angle(self.a, null), null)
+        self.assertEqual(angle(null, self.a), null)
+        self.assertTrue(all_isclose(angle(self.a, self.b),
+                                    Vector([math.atan2(4, 1)/Tau, math.atan2(5, 2)/Tau, math.atan2(6, 3)/Tau, math.atan2(7, 4)/Tau])))
+        self.assertTrue(all_isclose(angle(self.a, self.c),
+                                    Vector([math.atan2(2, 1)/Tau, math.atan2(2, 2)/Tau, math.atan2(2, 3)/Tau, math.atan2(2, 4)/Tau])))
+
+
 #     'len': Vector(length),
 #     'sin': Vector(sinv),
 #     'cos': Vector(cosv),
@@ -249,8 +292,6 @@ class TestCounter(unittest.TestCase):
 #     'accumulate': Vector(accumulate),
 #     'min': Vector(minv),
 #     'max': Vector(maxv),
-#     'hypot': Vector(hypot),
-#     'angle': Vector(angle),
 #     'normalize': Vector(normalize),
 #     'map': Vector(mapv),
 #     'zip': Vector(zipv),
