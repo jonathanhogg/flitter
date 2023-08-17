@@ -7,7 +7,7 @@ uniform float alpha = 1;
 uniform sampler2D ${name};
 % endfor
 
-<%include file="blend_functions.glsl"/>
+<%include file="composite_functions.glsl"/>
 
 void main() {
 % if child_textures:
@@ -16,10 +16,10 @@ void main() {
     vec4 merged = texture(${name}, coord);
 %         elif loop.index == 1:
     vec4 child = texture(${name}, coord);
-    merged = blend_${blend}(child, merged);
+    merged = composite_${composite}(child, merged);
 %         else:
     child = texture(${name}, coord);
-    merged = blend_${blend}(child, merged);
+    merged = composite_${composite}(child, merged);
 %         endif
 %     endfor
     color = merged * alpha;

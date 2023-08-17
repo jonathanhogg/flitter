@@ -186,7 +186,8 @@ class ProgramNode(SceneNode):
     def get_fragment_source(self, node):
         if fragment := node.get('fragment', 1, str):
             return fragment
-        return self.DEFAULT_FRAGMENT_SOURCE.render(child_textures=list(self.child_textures), blend=node.get('blend', 1, str, 'over'))
+        composite = node.get('composite', 1, str, node.get('blend', 1, str, 'over'))
+        return self.DEFAULT_FRAGMENT_SOURCE.render(child_textures=list(self.child_textures), composite=composite)
 
     def make_last(self):
         raise NotImplementedError()
