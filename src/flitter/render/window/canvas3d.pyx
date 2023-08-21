@@ -51,9 +51,10 @@ cdef class Textures:
     diffuse_id: str = None
     specular_id: str = None
     emissive_id: str = None
+    transparency_id: str = None
 
     def __hash__(self):
-        return hash(self.diffuse_id) ^ hash(self.specular_id) ^ hash(self.emissive_id)
+        return hash(self.diffuse_id) ^ hash(self.specular_id) ^ hash(self.emissive_id) ^ hash(self.transparency_id)
 
 
 @cython.dataclasses.dataclass
@@ -123,8 +124,9 @@ cdef Material update_material(Node node, Material material):
     diffuse_id = node.get('texture_id', 1, str)
     specular_id = node.get('specular_texture_id', 1, str)
     emissive_id = node.get('emissive_texture_id', 1, str)
-    if diffuse_id is not None or specular_id is not None or emissive_id is not None:
-        new_material.textures = Textures(diffuse_id, specular_id, emissive_id)
+    transparency_id = node.get('transparency_texture_id', 1, str)
+    if diffuse_id is not None or specular_id is not None or emissive_id is not None or transparency_id is not None:
+        new_material.textures = Textures(diffuse_id, specular_id, emissive_id, transparency_id)
     else:
         new_material.textures = None
     return new_material
@@ -337,6 +339,7 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, bint orthographic, Ve
     cdef double* src
     cdef float* dest
     cdef Instance instance
+    cdef bint has_transparency_texture
     cdef tuple transparent_object
     cdef list transparent_objects = []
     cdef double[:] zs
@@ -359,6 +362,7 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, bint orthographic, Ve
     shader['use_diffuse_texture'] = False
     shader['use_specular_texture'] = False
     shader['use_emissive_texture'] = False
+    shader['use_transparency_texture'] = False
     lights_data = view.array((max_lights, 12), 4, 'f')
     i = 0
     for lights in render_set.lights:
@@ -388,6 +392,7 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, bint orthographic, Ve
     glctx.enable(flags)
     set_blend(glctx, render_set.composite)
     for (model, textures), instances in render_set.instances.items():
+        has_transparency_texture = textures is not None and textures.transparency_id is not None
         n = len(instances)
         matrices = view.array((n, 16), 4, 'f')
         materials = view.array((n, 11), 4, 'f')
@@ -403,8 +408,8 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, bint orthographic, Ve
         for i in indices:
             instance = instances[i]
             material = instance.material
-            if material.transparency < 1:
-                if material.transparency > 0 and render_set.depth_test:
+            if material.transparency < 1 or has_transparency_texture:
+                if (material.transparency > 0 or has_transparency_texture) and render_set.depth_test:
                     transparent_objects.append((-zs[i], model, instance))
                 else:
                     src = instance.model_matrix.numbers
@@ -487,6 +492,17 @@ cdef void dispatch_instances(glctx, dict objects, shader, Model model, int count
                 samplers.append(sampler)
             shader['use_emissive_texture'] = True
             shader['emissive_texture'] = unit_id
+        if (scene_node := references.get(textures.transparency_id)) is not None and scene_node.texture is not None:
+            if textures.transparency_id in unit_ids:
+                unit_id = unit_ids[textures.transparency_id]
+            else:
+                unit_id = len(unit_ids) + 1
+                unit_ids[textures.transparency_id] = unit_id
+                sampler = glctx.sampler(texture=scene_node.texture, filter=(moderngl.LINEAR, moderngl.LINEAR))
+                sampler.use(unit_id)
+                samplers.append(sampler)
+            shader['use_transparency_texture'] = True
+            shader['transparency_texture'] = unit_id
     matrices_buffer = glctx.buffer(matrices)
     materials_buffer = glctx.buffer(materials)
     buffers = [(vertex_buffer, '3f 3f 2f', 'model_position', 'model_normal', 'model_uv'),
@@ -500,3 +516,4 @@ cdef void dispatch_instances(glctx, dict objects, shader, Model model, int count
         shader['use_diffuse_texture'] = False
         shader['use_specular_texture'] = False
         shader['use_emissive_texture'] = False
+        shader['use_transparency_texture'] = False

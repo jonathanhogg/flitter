@@ -23,9 +23,11 @@ uniform vec3 fog_color;
 uniform bool use_diffuse_texture;
 uniform bool use_specular_texture;
 uniform bool use_emissive_texture;
+uniform bool use_transparency_texture;
 uniform sampler2D diffuse_texture;
 uniform sampler2D specular_texture;
 uniform sampler2D emissive_texture;
+uniform sampler2D transparency_texture;
 
 
 void main() {
@@ -58,6 +60,12 @@ void main() {
     if (use_emissive_texture) {
         vec4 emissive_texture_color = texture(emissive_texture, uv);
         color = color * (1 - emissive_texture_color.a) + emissive_texture_color.rgb;
+    }
+    float opacity = 1 - transparency;
+    if (use_transparency_texture) {
+        vec4 transparency_texture_color = texture(transparency_texture, uv);
+        float mono = dot(transparency_texture_color.rgb, vec3(0.2989, 0.5870, 0.1140));
+        opacity = opacity * (1 - transparency_texture_color.a) + mono;
     }
     vec3 normal = normalize(world_normal);
     int n = shininess == 0 && colors[0] == vec3(0) ? 0 : nlights * 4;
@@ -97,7 +105,6 @@ void main() {
             color += (diffuse_color * diffuse_strength + specular_color * specular_strength) * light_color * light_attenuation;
         }
     }
-    float opacity = 1 - transparency;
     vec4 model_color = vec4(color * opacity, opacity);
     fragment_color = mix(model_color, vec4(fog_color, 1), fog_alpha);
 }
