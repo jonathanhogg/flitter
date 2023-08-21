@@ -466,7 +466,7 @@ cdef void dispatch_instances(glctx, dict objects, shader, Model model, int count
             shader['use_diffuse_texture'] = True
             shader['diffuse_texture'] = unit_id
         if (scene_node := references.get(textures.specular_id)) is not None and scene_node.texture is not None:
-            if textures.diffuse_id in unit_ids:
+            if textures.specular_id in unit_ids:
                 unit_id = unit_ids[textures.specular_id]
             else:
                 unit_id = len(unit_ids) + 1
@@ -477,7 +477,7 @@ cdef void dispatch_instances(glctx, dict objects, shader, Model model, int count
             shader['use_specular_texture'] = True
             shader['specular_texture'] = unit_id
         if (scene_node := references.get(textures.emissive_id)) is not None and scene_node.texture is not None:
-            if textures.diffuse_id in unit_ids:
+            if textures.emissive_id in unit_ids:
                 unit_id = unit_ids[textures.emissive_id]
             else:
                 unit_id = len(unit_ids) + 1
