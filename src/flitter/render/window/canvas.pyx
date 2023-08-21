@@ -423,7 +423,7 @@ cdef object make_shader(ctx, Node node, paint, dict references, bint linear):
         if len(shaders) == 2:
             if (ratio := node.get('ratio', 1, float)) is not None:
                 return skia.Shaders.Lerp(min(max(0, ratio), 1), *shaders)
-            if (mode := Composite.get(node.get('mode', 1, str))) is not None:
+            if (mode := Composite.get(node.get('mode', 1, str, 'over'))) is not None:
                 return skia.Shaders.Blend(skia.BlendMode(mode), *shaders)
 
     elif kind == 'pattern':
