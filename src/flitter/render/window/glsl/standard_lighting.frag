@@ -64,8 +64,8 @@ void main() {
     float opacity = 1 - transparency;
     if (use_transparency_texture) {
         vec4 transparency_texture_color = texture(transparency_texture, uv);
-        float mono = dot(transparency_texture_color.rgb, vec3(0.2989, 0.5870, 0.1140));
-        opacity = opacity * (1 - transparency_texture_color.a) + mono;
+        float mono = clamp(dot(transparency_texture_color.rgb, vec3(0.299, 0.587, 0.114)), 0, 1);
+        opacity = opacity * (1 - clamp(transparency_texture_color.a, 0, 1)) + mono;
     }
     vec3 normal = normalize(world_normal);
     int n = shininess == 0 && colors[0] == vec3(0) ? 0 : nlights * 4;
