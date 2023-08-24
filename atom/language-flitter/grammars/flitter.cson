@@ -147,8 +147,8 @@ patterns: [
         name: "keyword.operator.logical.flitter"
     }
     {
-        match: "!\\s*[_a-zA-Z][_a-zA-Z0-9]*"
-        name: "keyword.operator.node.flitter"
+        match: "![_a-zA-Z][_a-zA-Z0-9]*"
+        name: "constant.node.flitter"
     }
     {
         match: "@\\s*[_a-zA-Z][_a-zA-Z0-9]*"

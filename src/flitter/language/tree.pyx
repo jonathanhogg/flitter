@@ -835,23 +835,6 @@ cdef class Call(Expression):
         return f'Call({self.function!r}, {self.args!r})'
 
 
-cdef class Node(Expression):
-    cdef readonly str kind
-
-    def __init__(self, str kind):
-        self.kind = kind
-
-    cpdef model.Vector evaluate(self, model.Context context):
-        cdef model.Node node = model.Node.__new__(model.Node, self.kind)
-        return model.Vector.__new__(model.Vector, node)
-
-    cpdef Expression partially_evaluate(self, model.Context context):
-        return Literal(self.evaluate(context))
-
-    def __repr__(self):
-        return f'Node({self.kind!r})'
-
-
 cdef class Tag(Expression):
     cdef readonly Expression node
     cdef readonly str tag

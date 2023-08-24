@@ -40,6 +40,9 @@ class FlitterTransformer(Transformer):
     def NAME(self, token):
         return intern(str(token))
 
+    def NODE(self, token):
+        return model.Vector(model.Node(intern(str(token)[1:])))
+
     def NUMBER(self, token):
         multiplier = 1
         if token[-1] in SI_PREFIXES:
@@ -101,7 +104,6 @@ class FlitterTransformer(Transformer):
     name = tree.Name
     ne = tree.NotEqualTo
     neg = tree.Negative
-    node = tree.Node
     poly_binding = tree.PolyBinding
     pos = tree.Positive
     power = tree.Power
