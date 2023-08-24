@@ -43,8 +43,7 @@ void main() {
     }
     float fog_alpha = (fog_max > fog_min) ? clamp((view_distance - fog_min) / (fog_max - fog_min), 0, 1) : 0;
     if (fog_alpha == 1) {
-        fragment_color = vec4(fog_color, 1);
-        return;
+        discard;
     }
     vec3 diffuse_color = colors[0];
     if (use_diffuse_texture) {

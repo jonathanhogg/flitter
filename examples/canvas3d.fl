@@ -11,27 +11,31 @@
 
 let SIZE=1920;1080
 
-!window size=SIZE linear=true colorbits=16
-    !canvas3d samples=4 viewpoint=0;250;-750 focus=0;100;0 up=0;1;0 fov=60/360 near=1 far=2000
+!window size=SIZE linear=true colorbits=16 vsync=true
+    !canvas3d samples=4 viewpoint=0;150;-750 focus=0;100;0 up=0;1;0 fov=60/360 near=1 far=1500 \
+              fog_color=0;0;0.02 fog_min=0 fog_max=1500
         -- Ambient (directionless) light source:
-        !light color=0;0;0.02
+        !light color=0;0;0.1
         -- Directional light source:
-        !light color=0;0.02;0 direction=0;-1;0
+        !light color=0;0.1;0 direction=0;-1;0
         -- Spotlight:
-        !light color=500000;0;0 position=1000;1000;0 direction=-1;-1;0 inner=10/360 outer=20/360
-        -- Ground:
-        !material color=0.25 shininess=100
-            !cylinder size=1000;1000;1 rotation=0.25;0;0
-        -- Spinning cube:
-        !material color=1 shininess=100
-            !transform translate=0;100;0 rotate=beat/11;0;beat/7
-                !box flat=true size=100
-        -- Rotating sphere lights:
-        let n=6
-        for i in ..n
-            !transform rotate_x=sin(beat/30)/30 rotate_y=beat/9+i/n translate=150;100;0
-                let c=hsv(i/n;1;1)
-                !material emissive=c*2
-                    !sphere size=15
-                -- Point light source:
-                !light color=c*2000 position=0
+        !light color=500k;0;0 position=1050;1000;0 direction=-1;-1;0 inner=5/360 outer=20/360
+        -- Ground and pedestal:
+        !material color=0.1 shininess=200
+            !cylinder size=2000;2000;1 rotation=0.25;0;0
+            !cylinder size=100;100;20 rotation=0.25;0;0 flat=true segments=50
+        !transform translate=0;100;0
+            -- Spinning semi-transparent cube:
+            !material color=1 shininess=100 transparency=2/3
+                !transform rotate=beat/11;0;beat/7
+                    !box flat=true size=100 invert=true -- draw back faces...
+                    !box flat=true size=100             -- ...then front
+            -- Rotating sphere lights:
+            let n=6
+            for i in ..n
+                !transform rotate_x=sin(beat/25)*0.02 rotate_y=beat/9+i/n translate=150+150*sine(beat/16);0;0
+                    let c=hsv(i/n;1;1)
+                    !material emissive=c*2
+                        !sphere size=15
+                    -- Point light source:
+                    !light color=c*5k position=0
