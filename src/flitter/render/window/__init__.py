@@ -598,20 +598,16 @@ class Canvas3D(SceneNode):
         if resized or colorbits != self._colorbits or samples != self._samples:
             self.release()
             format = COLOR_FORMATS[colorbits]
+            self._image_texture = self.glctx.texture((self.width, self.height), 4, dtype=format.moderngl_dtype)
+            self._depth_renderbuffer = self.glctx.depth_renderbuffer((self.width, self.height), samples=samples)
             if samples:
-                logger.debug("Creating canvas3d render targets with {} color bits and {}x MSAA", colorbits, samples)
-                self._image_texture = self.glctx.texture((self.width, self.height), 4, dtype=format.moderngl_dtype)
-                self._image_framebuffer = self.glctx.framebuffer(self._image_texture)
                 self._color_renderbuffer = self.glctx.renderbuffer((self.width, self.height), 4, samples=samples, dtype=format.moderngl_dtype)
-                self._depth_renderbuffer = self.glctx.depth_renderbuffer((self.width, self.height), samples=samples)
                 self._render_framebuffer = self.glctx.framebuffer(color_attachments=(self._color_renderbuffer,), depth_attachment=self._depth_renderbuffer)
+                self._image_framebuffer = self.glctx.framebuffer(self._image_texture)
+                logger.debug("Created canvas3d {}x{}/{}-bit render target with {}x sampling", self.width, self.height, colorbits, samples)
             else:
-                logger.debug("Creating canvas3d render targets with {} color bits", colorbits)
-                self._image_texture = self.glctx.texture((self.width, self.height), 4, dtype=format.moderngl_dtype)
-                self._image_framebuffer = None
-                self._color_renderbuffer = None
-                self._depth_renderbuffer = self.glctx.depth_renderbuffer((self.width, self.height))
                 self._render_framebuffer = self.glctx.framebuffer(color_attachments=(self._image_texture,), depth_attachment=self._depth_renderbuffer)
+                logger.debug("Created canvas3d {}x{}/{}-bit render target", self.width, self.height, colorbits)
             self._colorbits = colorbits
             self._samples = samples
 
