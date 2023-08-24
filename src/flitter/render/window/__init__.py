@@ -598,12 +598,20 @@ class Canvas3D(SceneNode):
         if resized or colorbits != self._colorbits or samples != self._samples:
             self.release()
             format = COLOR_FORMATS[colorbits]
-            logger.debug("Creating canvas3d render targets with {} color bits", colorbits)
-            self._image_texture = self.glctx.texture((self.width, self.height), 4, dtype=format.moderngl_dtype)
-            self._image_framebuffer = self.glctx.framebuffer(self._image_texture)
-            self._color_renderbuffer = self.glctx.renderbuffer((self.width, self.height), 4, samples=samples, dtype=format.moderngl_dtype)
-            self._depth_renderbuffer = self.glctx.depth_renderbuffer((self.width, self.height), samples=samples)
-            self._render_framebuffer = self.glctx.framebuffer(color_attachments=(self._color_renderbuffer,), depth_attachment=self._depth_renderbuffer)
+            if samples:
+                logger.debug("Creating canvas3d render targets with {} color bits and {}x MSAA", colorbits, samples)
+                self._image_texture = self.glctx.texture((self.width, self.height), 4, dtype=format.moderngl_dtype)
+                self._image_framebuffer = self.glctx.framebuffer(self._image_texture)
+                self._color_renderbuffer = self.glctx.renderbuffer((self.width, self.height), 4, samples=samples, dtype=format.moderngl_dtype)
+                self._depth_renderbuffer = self.glctx.depth_renderbuffer((self.width, self.height), samples=samples)
+                self._render_framebuffer = self.glctx.framebuffer(color_attachments=(self._color_renderbuffer,), depth_attachment=self._depth_renderbuffer)
+            else:
+                logger.debug("Creating canvas3d render targets with {} color bits", colorbits)
+                self._image_texture = self.glctx.texture((self.width, self.height), 4, dtype=format.moderngl_dtype)
+                self._image_framebuffer = None
+                self._color_renderbuffer = None
+                self._depth_renderbuffer = self.glctx.depth_renderbuffer((self.width, self.height))
+                self._render_framebuffer = self.glctx.framebuffer(color_attachments=(self._image_texture,), depth_attachment=self._depth_renderbuffer)
             self._colorbits = colorbits
             self._samples = samples
 
@@ -623,7 +631,8 @@ class Canvas3D(SceneNode):
             self._render_framebuffer.clear()
         objects = self.glctx.extra.setdefault('canvas3d_objects', {})
         canvas3d.draw(node, (self.width, self.height), self.glctx, objects, references)
-        self.glctx.copy_framebuffer(self._image_framebuffer, self._render_framebuffer)
+        if self._image_framebuffer is not None:
+            self.glctx.copy_framebuffer(self._image_framebuffer, self._render_framebuffer)
         self._total_duration += system_clock()
         self._total_count += 1
 
