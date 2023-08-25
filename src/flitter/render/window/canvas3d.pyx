@@ -28,6 +28,9 @@ cdef double Pi = 3.141592653589793
 cdef tuple MaterialAttributes = ('color', 'specular', 'emissive', 'shininess', 'transparency',
                                  'texture_id', 'specular_texture_id', 'emissive_texture_id')
 
+cdef object StandardVertexSource = TemplateLoader.get_template("standard_lighting.vert")
+cdef object StandardFragmentSource = TemplateLoader.get_template("standard_lighting.frag")
+
 
 cdef enum LightType:
     Ambient = 1
@@ -36,141 +39,108 @@ cdef enum LightType:
     Spot = 4
 
 
-@cython.dataclasses.dataclass
 cdef class Light:
-    type: LightType
-    inner_cone: float
-    outer_cone: float
-    color: Vector
-    position: Vector
-    direction: Vector
+    cdef LightType type
+    cdef float inner_cone
+    cdef float outer_cone
+    cdef Vector color
+    cdef Vector position
+    cdef Vector direction
 
 
-@cython.dataclasses.dataclass
 cdef class Textures:
-    diffuse_id: str = None
-    specular_id: str = None
-    emissive_id: str = None
-    transparency_id: str = None
+    cdef str diffuse_id
+    cdef str specular_id
+    cdef str emissive_id
+    cdef str transparency_id
+
+    def __eq__(self, Textures other):
+        return other.diffuse_id == self.diffuse_id and \
+               other.specular_id == self.specular_id and \
+               other.emissive_id == self.emissive_id and \
+               other.transparency_id == self.transparency_id
 
     def __hash__(self):
         return hash(self.diffuse_id) ^ hash(self.specular_id) ^ hash(self.emissive_id) ^ hash(self.transparency_id)
 
 
-@cython.dataclasses.dataclass
 cdef class Material:
-    diffuse: Vector = Zero3
-    specular: Vector = One3
-    emissive: Vector = Zero3
-    shininess: cython.double = 0
-    transparency: cython.double = 0
-    textures: Textures = None
+    cdef Vector diffuse
+    cdef Vector specular
+    cdef Vector emissive
+    cdef double shininess
+    cdef double transparency
+    cdef Textures textures
 
-
-@cython.dataclasses.dataclass
-cdef class Instance:
-    model_matrix: Matrix44
-    material: Material
-
-
-@cython.dataclasses.dataclass
-cdef class RenderSet:
-    lights: list[list[Light]]
-    instances: dict[Model, list[Instance]]
-    depth_test: bool
-    cull_face: bool
-    composite: str
-
-
-cdef object StandardVertexSource = TemplateLoader.get_template("standard_lighting.vert")
-cdef object StandardFragmentSource = TemplateLoader.get_template("standard_lighting.frag")
-
-
-cdef void set_blend(glctx, str composite):
-    glctx.blend_equation = moderngl.FUNC_ADD
-    if composite == 'source':
-        glctx.blend_func = moderngl.ONE, moderngl.ZERO
-    elif composite == 'dest':
-        glctx.blend_func = moderngl.ZERO, moderngl.ONE
-    elif composite == 'dest_over':
-        glctx.blend_func = moderngl.ONE_MINUS_DST_ALPHA, moderngl.ONE
-    elif composite == 'add':
-        glctx.blend_func = moderngl.ONE, moderngl.ONE
-    elif composite == 'subtract':
-        glctx.blend_equation = moderngl.FUNC_SUBTRACT
-        glctx.blend_func = moderngl.ONE, moderngl.ONE
-    elif composite == 'lighten':
-        glctx.blend_equation = moderngl.MAX
-        glctx.blend_func = moderngl.ONE, moderngl.ONE
-    elif composite == 'darken':
-        glctx.blend_equation = moderngl.MIN
-        glctx.blend_func = moderngl.ONE, moderngl.ONE
-    else: # over
-        glctx.blend_func = moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA
-
-
-cdef Material update_material(Node node, Material material):
-    for attr in MaterialAttributes:
-        if attr in node._attributes:
-            break
-    else:
+    cdef Material update(Material self, Node node):
+        for attr in MaterialAttributes:
+            if attr in node._attributes:
+                break
+        else:
+            return self
+        cdef Material material = Material.__new__(Material)
+        material.diffuse = node.get_fvec('color', 3, self.diffuse)
+        material.specular = node.get_fvec('specular', 3, self.specular)
+        material.emissive = node.get_fvec('emissive', 3, self.emissive)
+        material.shininess = node.get_float('shininess', self.shininess)
+        material.transparency = node.get_float('transparency', self.transparency)
+        if self.textures is not None:
+            diffuse_id = node.get_str('texture_id', self.textures.diffuse_id)
+            specular_id = node.get_str('specular_texture_id', self.textures.specular_id)
+            emissive_id = node.get_str('emissive_texture_id', self.textures.emissive_id)
+            transparency_id = node.get_str('transparency_texture_id', self.textures.transparency_id)
+        else:
+            diffuse_id = node.get_str('texture_id', None)
+            specular_id = node.get_str('specular_texture_id', None)
+            emissive_id = node.get_str('emissive_texture_id', None)
+            transparency_id = node.get_str('transparency_texture_id', None)
+        cdef Textures textures
+        if diffuse_id is not None or specular_id is not None or emissive_id is not None or transparency_id is not None:
+            textures = Textures.__new__(Textures)
+            textures.diffuse_id = diffuse_id
+            textures.specular_id = specular_id
+            textures.emissive_id = emissive_id
+            textures.transparency_id = transparency_id
+            material.textures = textures
         return material
-    cdef Material new_material = Material.__new__(Material)
-    new_material.diffuse = node.get_fvec('color', 3, material.diffuse)
-    new_material.specular = node.get_fvec('specular', 3, material.specular)
-    new_material.emissive = node.get_fvec('emissive', 3, material.emissive)
-    new_material.shininess = node.get_float('shininess', material.shininess)
-    new_material.transparency = node.get_float('transparency', material.transparency)
-    diffuse_id = node.get('texture_id', 1, str)
-    specular_id = node.get('specular_texture_id', 1, str)
-    emissive_id = node.get('emissive_texture_id', 1, str)
-    transparency_id = node.get('transparency_texture_id', 1, str)
-    if diffuse_id is not None or specular_id is not None or emissive_id is not None or transparency_id is not None:
-        new_material.textures = Textures(diffuse_id, specular_id, emissive_id, transparency_id)
-    else:
-        new_material.textures = None
-    return new_material
 
 
-def draw(Node node, tuple size, glctx, dict objects, dict references):
-    cdef int width, height
-    width, height = size
-    cdef Vector viewpoint = node.get_fvec('viewpoint', 3, Vector((0, 0, width/2)))
-    cdef Vector focus = node.get_fvec('focus', 3, Zero3)
-    cdef Vector up = node.get_fvec('up', 3, Vector((0, 1, 0)))
-    cdef double fov = node.get_float('fov', 0.25)
-    cdef bint orthographic = node.get_bool('orthographic', False)
-    cdef double ortho_width = node.get('width', 1, float, width)
-    cdef double near = node.get_float('near', 1)
-    cdef double far = node.get_float('far', width)
-    cdef double fog_min = node.get_float('fog_min', 0)
-    cdef double fog_max = node.get_float('fog_max', 0)
-    cdef Vector fog_color = node.get_fvec('fog_color', 3, Zero3)
-    cdef int max_lights = node.get_int('max_lights', DEFAULT_MAX_LIGHTS)
-    cdef Matrix44 pv_matrix
-    if orthographic:
-        pv_matrix = Matrix44._ortho(width/height, ortho_width, near, far)
-    else:
-        pv_matrix = Matrix44._project(width/height, fov, near, far)
-    pv_matrix = pv_matrix.mmul(Matrix44._look(viewpoint, focus, up))
-    cdef Matrix44 model_matrix = update_model_matrix(Matrix44.__new__(Matrix44), node)
-    cdef Node child = node.first_child
-    cdef bint depth_test = node.get_bool('depth_test', True)
-    cdef bint cull_face = node.get_bool('cull_face', True)
-    cdef str composite = node.get_str('composite', 'over')
-    cdef RenderSet render_set = RenderSet(lights=[[]], instances={}, depth_test=depth_test, cull_face=cull_face,
-                                          composite=composite.lower())
-    cdef list render_sets = [render_set]
-    while child is not None:
-        collect(child, model_matrix, Material(), render_set, render_sets)
-        child = child.next_sibling
-    for render_set in render_sets:
-        if render_set.instances:
-            render(render_set, pv_matrix, orthographic, viewpoint, focus, max_lights, fog_min, fog_max, fog_color,
-                   glctx, objects, references)
+cdef class Instance:
+    cdef Matrix44 model_matrix
+    cdef Material material
 
 
-cdef Matrix44 update_model_matrix(Matrix44 model_matrix, Node node):
+cdef class RenderSet:
+    cdef list lights
+    cdef dict instances
+    cdef bint depth_test
+    cdef bint cull_face
+    cdef str composite
+
+    cdef void set_blend(self, glctx):
+        glctx.blend_equation = moderngl.FUNC_ADD
+        if self.composite == 'source':
+            glctx.blend_func = moderngl.ONE, moderngl.ZERO
+        elif self.composite == 'dest':
+            glctx.blend_func = moderngl.ZERO, moderngl.ONE
+        elif self.composite == 'dest_over':
+            glctx.blend_func = moderngl.ONE_MINUS_DST_ALPHA, moderngl.ONE
+        elif self.composite == 'add':
+            glctx.blend_func = moderngl.ONE, moderngl.ONE
+        elif self.composite == 'subtract':
+            glctx.blend_equation = moderngl.FUNC_SUBTRACT
+            glctx.blend_func = moderngl.ONE, moderngl.ONE
+        elif self.composite == 'lighten':
+            glctx.blend_equation = moderngl.MAX
+            glctx.blend_func = moderngl.ONE, moderngl.ONE
+        elif self.composite == 'darken':
+            glctx.blend_equation = moderngl.MIN
+            glctx.blend_func = moderngl.ONE, moderngl.ONE
+        else: # over
+            glctx.blend_func = moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA
+
+
+cdef Matrix44 update_model_matrix(Node node, Matrix44 model_matrix):
     cdef Matrix44 matrix
     cdef str attribute
     cdef Vector vector
@@ -199,6 +169,41 @@ cdef Matrix44 update_model_matrix(Matrix44 model_matrix, Node node):
     return model_matrix
 
 
+def draw(Node node, tuple size, glctx, dict objects, dict references):
+    cdef int width, height
+    width, height = size
+    cdef Vector viewpoint = node.get_fvec('viewpoint', 3, Vector((0, 0, width/2)))
+    cdef Vector focus = node.get_fvec('focus', 3, Zero3)
+    cdef Vector up = node.get_fvec('up', 3, Vector((0, 1, 0)))
+    cdef double fov = node.get_float('fov', 0.25)
+    cdef bint orthographic = node.get_bool('orthographic', False)
+    cdef double ortho_width = node.get_float('width', width)
+    cdef double near = node.get_float('near', 1)
+    cdef double far = node.get_float('far', width)
+    cdef double fog_min = node.get_float('fog_min', 0)
+    cdef double fog_max = node.get_float('fog_max', 0)
+    cdef Vector fog_color = node.get_fvec('fog_color', 3, Zero3)
+    cdef int max_lights = node.get_int('max_lights', DEFAULT_MAX_LIGHTS)
+    cdef Matrix44 pv_matrix
+    if orthographic:
+        pv_matrix = Matrix44._ortho(width/height, ortho_width, near, far)
+    else:
+        pv_matrix = Matrix44._project(width/height, fov, near, far)
+    pv_matrix = pv_matrix.mmul(Matrix44._look(viewpoint, focus, up))
+    cdef Material material = Material.__new__(Material)
+    material.diffuse = Zero3
+    material.specular = One3
+    material.emissive = Zero3
+    cdef Matrix44 model_matrix = Matrix44.__new__(Matrix44)
+    cdef RenderSet render_set = RenderSet.__new__(RenderSet)
+    cdef list render_sets = []
+    collect(node, model_matrix, material, None, render_sets)
+    for render_set in render_sets:
+        if render_set.instances:
+            render(render_set, pv_matrix, orthographic, viewpoint, focus, max_lights, fog_min, fog_max, fog_color,
+                   glctx, objects, references)
+
+
 cdef void collect(Node node, Matrix44 model_matrix, Material material, RenderSet render_set, list render_sets):
     cdef str kind = node.kind
     cdef Light light
@@ -210,23 +215,67 @@ cdef void collect(Node node, Matrix44 model_matrix, Material material, RenderSet
     cdef int subdivisions, segments
     cdef bint flat, depth_test, cull_face
     cdef Model model
-    cdef Material new_material
 
-    if node.kind == 'transform':
-        model_matrix = update_model_matrix(model_matrix, node)
+    if node.kind == 'box':
+        flat = node.get_bool('flat', False)
+        invert = node.get_bool('invert', False)
+        model = Box.get(flat, invert)
+        material = material.update(node)
+        add_instance(render_set.instances, model, node, model_matrix, material)
+
+    elif node.kind == 'sphere':
+        flat = node.get_bool('flat', False)
+        invert = node.get_bool('invert', False)
+        subdivisions = node.get_int('subdivisions', 2)
+        model = Sphere.get(flat, invert, subdivisions)
+        material = material.update(node)
+        add_instance(render_set.instances, model, node, model_matrix, material)
+
+    elif node.kind == 'cylinder':
+        flat = node.get_bool('flat', False)
+        invert = node.get_bool('invert', False)
+        segments = node.get_int('segments', 32)
+        model = Cylinder.get(flat, invert, segments)
+        material = material.update(node)
+        add_instance(render_set.instances, model, node, model_matrix, material)
+
+    elif node.kind == 'model':
+        filename = node.get_str('filename', None)
+        if filename:
+            flat = node.get_bool('flat', False)
+            invert = node.get_bool('invert', False)
+            model = LoadedModel.get(flat, invert, filename)
+            material = material.update(node)
+            add_instance(render_set.instances, model, node, model_matrix, material)
+
+    elif node.kind == 'material':
+        material = material.update(node)
         child = node.first_child
         while child is not None:
             collect(child, model_matrix, material, render_set, render_sets)
             child = child.next_sibling
 
-    elif node.kind == 'group':
-        model_matrix = update_model_matrix(model_matrix, node)
-        lights = list(render_set.lights)
+    elif node.kind == 'transform':
+        model_matrix = update_model_matrix(node, model_matrix)
+        child = node.first_child
+        while child is not None:
+            collect(child, model_matrix, material, render_set, render_sets)
+            child = child.next_sibling
+
+    elif node.kind == 'group' or node.kind == 'canvas3d':
+        model_matrix = update_model_matrix(node, model_matrix)
+        material = material.update(node)
+        lights = list(render_set.lights) if render_set is not None else []
         lights.append([])
         depth_test = node.get_bool('depth_test', True)
         cull_face = node.get_bool('cull_face', True)
         composite = node.get_str('composite', 'over')
-        render_set = RenderSet(lights=lights, instances={}, depth_test=depth_test, cull_face=cull_face, composite=composite.lower())
+        render_set = RenderSet.__new__(RenderSet)
+        render_set.lights = lights
+        render_set.instances = {}
+        render_set.depth_test = depth_test
+        render_set.cull_face = cull_face
+        render_set.composite = composite.lower()
         render_sets.append(render_set)
         child = node.first_child
         while child is not None:
@@ -263,64 +312,21 @@ cdef void collect(Node node, Matrix44 model_matrix, Material material, RenderSet
             lights = render_set.lights[-1]
             lights.append(light)
 
-    elif node.kind == 'material':
-        new_material = update_material(node, material)
-        child = node.first_child
-        while child is not None:
-            collect(child, model_matrix, new_material, render_set, render_sets)
-            child = child.next_sibling
-
-    elif node.kind == 'box':
-        flat = node.get_bool('flat', False)
-        invert = node.get_bool('invert', False)
-        model = Box.get(flat, invert)
-        material = update_material(node, material)
-        add_instance(render_set.instances, model, node, model_matrix, material)
-
-    elif node.kind == 'sphere':
-        flat = node.get_bool('flat', False)
-        invert = node.get_bool('invert', False)
-        subdivisions = node.get_int('subdivisions', 2)
-        model = Sphere.get(flat, invert, subdivisions)
-        material = update_material(node, material)
-        add_instance(render_set.instances, model, node, model_matrix, material)
-
-    elif node.kind == 'cylinder':
-        flat = node.get_bool('flat', False)
-        invert = node.get_bool('invert', False)
-        segments = node.get_int('segments', 32)
-        model = Cylinder.get(flat, invert, segments)
-        material = update_material(node, material)
-        add_instance(render_set.instances, model, node, model_matrix, material)
-
-    elif node.kind == 'model':
-        filename = node.get('filename', 1, str)
-        if filename:
-            flat = node.get_bool('flat', False)
-            invert = node.get_bool('invert', False)
-            model = LoadedModel.get(flat, invert, filename)
-            material = update_material(node, material)
-            add_instance(render_set.instances, model, node, model_matrix, material)
-
 
 cdef void add_instance(dict render_instances, Model model, Node node, Matrix44 model_matrix, Material material):
-    cdef dict attrs = node._attributes
-    cdef Matrix44 matrix
-    if (matrix := Matrix44._translate(attrs.get('position'))) is not None:
+    cdef Vector vec = None
+    cdef Matrix44 matrix = None
+    if (vec := node.get_fvec('position', 3, None)) is not None and (matrix := Matrix44._translate(vec)) is not None:
         model_matrix = model_matrix.mmul(matrix)
-    if (matrix := Matrix44._rotate(attrs.get('rotation'))) is not None:
+    if (vec := node.get_fvec('rotation', 3, None)) is not None and (matrix := Matrix44._rotate(vec)) is not None:
         model_matrix = model_matrix.mmul(matrix)
-    if (matrix := Matrix44._scale(attrs.get('size'))) is not None:
+    if (vec := node.get_fvec('size', 3, None)) is not None and (matrix := Matrix44._scale(vec)) is not None:
         model_matrix = model_matrix.mmul(matrix)
     cdef Instance instance = Instance.__new__(Instance)
     instance.model_matrix = model_matrix
     instance.material = material
-    cdef list instances
     cdef tuple model_textures = (model, material.textures)
-    if (instances := render_instances.get(model_textures)) is not None:
-        instances.append(instance)
-    else:
-        render_instances[model_textures] = [instance]
+    (<list>render_instances.setdefault(model_textures, [])).append(instance)
 
 
 def fst(tuple ab):
@@ -334,6 +340,7 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, bint orthographic, Ve
     cdef Material material
     cdef Light light
     cdef Model model
+    cdef Textures textures
     cdef int i, j, k, n
     cdef double z
     cdef double* src
@@ -390,7 +397,7 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, bint orthographic, Ve
     if render_set.cull_face:
         flags |= moderngl.CULL_FACE
     glctx.enable(flags)
-    set_blend(glctx, render_set.composite)
+    render_set.set_blend(glctx)
     for (model, textures), instances in render_set.instances.items():
         has_transparency_texture = textures is not None and textures.transparency_id is not None
         n = len(instances)
