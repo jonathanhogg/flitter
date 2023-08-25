@@ -3,9 +3,9 @@
 func objects(nodes, count=10)
     !group translate=0.5 rotate=beat/10
         for i in ..10
-            let period=2*beta("beta")[i]+1 phase=uniform("phase")[i] b=beat/period+phase
-            let x=map(quad(b%1), beta("x";i)[b], beta("x";i)[b+1])-0.5 y=map(quad(b%1), beta("y";i)[b], beta("y";i)[b+1])-0.5
-            let c=map(quad(b%1), hsv(uniform("hue";i)[b];1;0.5), hsv(uniform("hue";i)[b+1];1;1))
+            let period=2*beta(:beta)[i]+1 phase=uniform(:phase)[i] b=beat/period+phase
+            let x=map(quad(b%1), beta(:x;i)[b], beta(:x;i)[b+1])-0.5 y=map(quad(b%1), beta(:y;i)[b], beta(:y;i)[b+1])-0.5
+            let c=map(quad(b%1), hsv(uniform(:hue;i)[b];1;0.5), hsv(uniform(:hue;i)[b+1];1;1))
             !group translate=x;y rotate=phase color=c
                 if i % 2
                     !ellipse radius=0.05
@@ -14,10 +14,10 @@ func objects(nodes, count=10)
                 nodes
 
 
-!laser driver="lasercube" accelleration=50
+!laser driver=:lasercube accelleration=50
     @objects
 
 !window size=1000
-    !canvas scale=1000 composite="add" stroke_join="round"
+    !canvas scale=1000 composite=:add stroke_join=:round
         @objects
             !stroke stroke_width=0.01

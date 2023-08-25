@@ -4,7 +4,7 @@ func cube_light(color)
         fader=1 mode=0 white=min(corrected) rgb=corrected-white
     fader;mode;rgb;white
 
-!dmx driver="outputarts"
+!dmx driver=:outputarts
     let n=19
     for i in ..n
         !fixture#cube address=1+6*i channels=cube_light(hsl(i/n + beat/16;1;0.5))
