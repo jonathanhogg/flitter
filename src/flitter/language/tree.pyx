@@ -14,6 +14,7 @@ from .functions import STATIC_FUNCTIONS, DYNAMIC_FUNCTIONS
 from .. cimport model
 from .noise import NOISE_FUNCTIONS
 
+from libc.math cimport floor
 
 
 logger = name_patch(logger, __name__)
@@ -331,10 +332,12 @@ cdef class Name(Expression):
     cpdef model.Vector evaluate(self, model.Context context):
         cdef model.Vector value
         if (value := context.variables.get(self.name)) is not None:
-            return value.copynodes()
-        if (value := static_builtins.get(self.name)) is not None:
+            if value.objects is not None:
+                return value.copynodes()
             return value
         if (value := dynamic_builtins.get(self.name)) is not None:
+            return value
+        if (value := static_builtins.get(self.name)) is not None:
             return value
         context.errors.add(f"Unbound name '{self.name}'")
         return model.null_
@@ -708,10 +711,16 @@ cdef class Slice(Expression):
         cdef Expression index = self.index.partially_evaluate(context)
         cdef model.Vector expr_value
         cdef model.Vector index_value
+        cdef str name
         if isinstance(expr, Literal) and isinstance(index, Literal):
             expr_value = (<Literal>expr).value
             index_value = (<Literal>index).value
             return Literal(expr_value.slice(index_value))
+        elif isinstance(expr, Name) and isinstance(index, Literal):
+            name = (<Name>expr).name
+            index_value = (<Literal>index).value
+            if name in context.variables and index_value.length == 1 and index_value.numbers != NULL:
+                return FastVariableIndex(name, <int>floor(index_value.numbers[0]))
         return Slice(expr, index)
 
     cpdef object reduce(self, func):
@@ -719,6 +728,29 @@ cdef class Slice(Expression):
 
     def __repr__(self):
         return f'Slice({self.expr!r}, {self.index!r})'
+
+
+cdef class FastVariableIndex(Expression):
+    cdef readonly str name
+    cdef readonly int index
+
+    def __init__(self, str name, int index):
+        self.name = name
+        self.index = index
+
+    cpdef model.Vector evaluate(self, model.Context context):
+        cdef model.Vector value
+        value = context.variables[self.name]
+        value = value.item(self.index)
+        if value.objects is not None and isinstance(value.objects[0], model.Node):
+            return value.copynodes()
+        return value
+
+    cpdef Expression partially_evaluate(self, model.Context context):
+        return self
+
+    def __repr__(self):
+        return f'FastVariableIndex({self.name!r}, {self.index!r})'
 
 
 cdef class Call(Expression):
@@ -782,7 +814,8 @@ cdef class Call(Expression):
         cdef Expression function = self.function.partially_evaluate(context)
         cdef list args = []
         cdef Expression arg
-        cdef bint literal = isinstance(function, Literal) and (<Literal>function).value.objects is not None
+        cdef bint literal_function = isinstance(function, Literal) and (<Literal>function).value.objects is not None
+        cdef bint literal = literal_function
         for arg in self.args:
             arg = arg.partially_evaluate(context)
             args.append(arg)
@@ -821,8 +854,57 @@ cdef class Call(Expression):
                     context.variables = saved
             else:
                 return sequence_pack(results)
+        elif literal_function and (<Literal>function).value.length == 1:
+            func = (<Literal>function).value.objects[0]
+            if callable(func) and not hasattr(func, 'state_transformer'):
+                return FastCall(func, tuple(args))
         cdef Call call = Call(function, tuple(args))
         return call
+
+    cpdef object reduce(self, func):
+        cdef list children = []
+        children.append(self.function.reduce(func))
+        cdef Expression arg
+        for arg in self.args:
+            children.append(arg.reduce(func))
+        return func(self, *children)
+
+    def __repr__(self):
+        return f'Call({self.function!r}, {self.args!r})'
+
+
+cdef class FastCall(Expression):
+    cdef readonly object function
+    cdef readonly tuple args
+
+    def __init__(self, function, tuple args):
+        self.function = function
+        self.args = args
+
+    cpdef model.Vector evaluate(self, model.Context context):
+        cdef list args = []
+        cdef Expression arg
+        for arg in self.args:
+            args.append(arg.evaluate(context))
+        try:
+            return self.function(*args)
+        except LogException as exc:
+            results = []
+            log_message = ""
+            for value in exc.args:
+                results.append(value)
+                if log_message:
+                    log_message += " "
+                log_message += value.repr()
+            context.logs.add(log_message)
+            return model.Vector.compose(results)
+        except Exception as exc:
+            context.errors.add(f"Error calling function {self.function.__name__}\n{str(exc)}")
+            return model.null_
+
+    cpdef Expression partially_evaluate(self, model.Context context):
+        cdef Call call = Call(Literal(model.Vector._coerce(self.function)), self.args)
+        return call.partially_evaluate(context)
 
     cpdef object reduce(self, func):
         cdef list children = []
@@ -832,7 +914,7 @@ cdef class Call(Expression):
         return func(self, *children)
 
     def __repr__(self):
-        return f'Call({self.function!r}, {self.args!r})'
+        return f'FastCall({self.function!r}, {self.args!r})'
 
 
 cdef class Tag(Expression):
