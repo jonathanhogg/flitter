@@ -15,10 +15,11 @@ The engine that runs the language is capable of:
 bunch of formats including OBJ and STL); ambient, directional, point and
 spot- light sources with (currently shadowless) Phong lighting/shading; simple
 fog; perspective and orthographic projections; texture-mapping with the output
-of other visual units (like a drawing canvas)
-- playing videos
-- running GLSL shaders as stacked generators and filters, with live manipulation
-of uniforms and live reload/recompilation of source
+of other visual units (like a drawing canvas or a video)
+- playing videos at arbitrary speeds (including in reverse, although video will
+stutter if it makes extensive use of P-frames)
+- running GLSL shaders as stacked image generators and filters, with live
+manipulation of uniforms and live reload/recompilation of source
 - compositing all of the above and rendering to one or more windows
 - saving output to image and video files
 - driving arbitrary DMX fixtures via a USB DMX interface (currently via an
