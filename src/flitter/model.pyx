@@ -1134,10 +1134,7 @@ cdef class Node:
     def __cinit__(self, str kind, set tags=None, dict attributes=None):
         self.kind = kind
         self._tags = set() if tags is None else tags.copy()
-        self._attributes = {}
-        if attributes is not None:
-            for key, value in attributes.items():
-                self._attributes[key] = Vector._coerce(value)
+        self._attributes = {} if attributes is None else attributes.copy()
 
     def __setstate__(self, set tags):
         if tags is not None:
