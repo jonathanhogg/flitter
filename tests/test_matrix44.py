@@ -38,6 +38,13 @@ class TestMatrix44(unittest.TestCase):
         self.assertTrue(all_isclose(Matrix44.project(2, 1 / 6, 1, 3),
                                     [1.7320508075688776, 0, 0, 0, 0, 3.4641016151377553, 0, 0, 0, 0, -2, -1, 0, 0, -3, 0]))
 
+    def test_ortho(self):
+        self.assertTrue(all_isclose(Matrix44.ortho(1, 2, 0, 2), [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, -1, 0, 0, 0, -1, 1]))
+        self.assertTrue(all_isclose(Matrix44.ortho(2, 2, 0, 2), [1, 0, 0, 0, 0, 2, 0, 0, 0, 0, -1, 0, 0, 0, -1, 1]))
+        self.assertTrue(all_isclose(Matrix44.ortho(2, 1, 0, 2), [2, 0, 0, 0, 0, 4, 0, 0, 0, 0, -1, 0, 0, 0, -1, 1]))
+        self.assertTrue(all_isclose(Matrix44.ortho(2, 1, 1, 2), [2, 0, 0, 0, 0, 4, 0, 0, 0, 0, -2, 0, 0, 0, -3, 1]))
+        self.assertTrue(all_isclose(Matrix44.ortho(2, 1, 1, 3), [2, 0, 0, 0, 0, 4, 0, 0, 0, 0, -1, 0, 0, 0, -2, 1]))
+
     def test_look(self):
         self.assertIsNone(Matrix44.look([0], None, "Hello world!"))
         self.assertTrue(all_isclose(Matrix44.look([0, 0, 0], [0, 0, -1], [0, 1, 0]), Matrix44()))
