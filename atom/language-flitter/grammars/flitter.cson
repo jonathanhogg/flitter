@@ -152,7 +152,7 @@ patterns: [
     }
     {
         match: "@\\s*[_a-zA-Z][_a-zA-Z0-9]*"
-        name: "keyword.operator.template.flitter"
+        name: "entity.name.function.flitter"
     }
     {
         match: "{([^}]*)}"
@@ -204,6 +204,23 @@ patterns: [
             '1':
                 name: "keyword.control.flow.flitter"
             '2':
-                name: "variable.name.flitter"
+                name: "entity.name.function.flitter"
+    }
+    {
+        begin: '([_a-zA-Z][_a-zA-Z0-9]*)\\s*(\\()'
+        beginCaptures:
+            '1':
+                name: 'entity.name.function.flitter'
+            '2':
+                name: 'punctuation.definition.arguments.begin.flitter'
+        end: '\\)'
+        endCaptures:
+            '0':
+                name: 'punctuation.definition.arguments.end.flitter'
+        patterns: [
+            {
+                include: '$self'
+            }
+        ]
     }
 ]
