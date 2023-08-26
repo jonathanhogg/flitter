@@ -51,25 +51,20 @@ cdef class Vector:
             return args[0]
         if len(args) == 0:
             return null_
-        cdef list objects
-        cdef Vector v
-        cdef int i, j, n = 0
-        cdef Vector result = Vector.__new__(Vector)
+        cdef int i = 0, j, n = 0
+        cdef Vector v, result = Vector.__new__(Vector)
         for v in args:
             if v.objects is not None:
                 break
             n += v.length
         else:
-            if n == 0:
-                return null_
             result.allocate_numbers(n)
-            i = 0
             for v in args:
                 for j in range(v.length):
                     result.numbers[i] = v.numbers[j]
                     i += 1
             return result
-        objects = []
+        cdef list objects = []
         for v in args:
             if v.objects is None:
                 for j in range(v.length):
@@ -132,18 +127,24 @@ cdef class Vector:
             self.numbers = <double*>PyMem_Malloc(n * sizeof(double))
             if not self.numbers:
                 raise MemoryError()
-        else:
+        elif n:
             self.numbers = self._numbers
         self.length = n
         return n
 
     cdef void deallocate_numbers(self):
-        if self.numbers and self.length > 16:
+        if self.numbers != NULL and self.numbers != self._numbers:
             PyMem_Free(self.numbers)
         self.numbers = NULL
 
     def __reduce__(self):
-        return Vector, (list(self),)
+        if self.objects is not None:
+            return Vector, (self.objects,)
+        cdef list values = []
+        cdef int i
+        for i in range(self.length):
+            values.append(self.numbers[i])
+        return Vector, (values,)
 
     @cython.cdivision(True)
     cdef void fill_range(self, Vector startv, Vector stopv, Vector stepv):

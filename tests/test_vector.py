@@ -94,6 +94,7 @@ class TestVector(unittest.TestCase):
         self.assertEqual(Vector.compose([null, null]), null)
         self.assertEqual(Vector.compose([true, null]), true)
         self.assertEqual(Vector.compose([true, true]), Vector([1, 1]))
+        self.assertEqual(Vector.compose([Vector.range(i*100, (i+1)*100) for i in range(10)]), Vector.range(1000))
         self.assertEqual(Vector.compose([Vector("Hello world!"), Vector([1, 2, 3])]), Vector(["Hello world!", 1, 2, 3]))
 
     def test_range_slice(self):
