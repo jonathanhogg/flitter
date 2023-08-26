@@ -14,8 +14,6 @@ from .functions import STATIC_FUNCTIONS, DYNAMIC_FUNCTIONS
 from .. cimport model
 from .noise import NOISE_FUNCTIONS
 
-from libc.math cimport floor
-
 
 logger = name_patch(logger, __name__)
 
@@ -290,7 +288,11 @@ cdef class Sequence(Expression):
 
 cdef class InlineSequence(Sequence):
     cpdef model.Vector evaluate(self, model.Context context):
-        return model.Vector._compose([(<Expression>expr).evaluate(context) for expr in self.expressions])
+        cdef list values = []
+        cdef Expression expr
+        for expr in self.expressions:
+            values.append(expr.evaluate(context))
+        return model.Vector._compose(values)
 
     cpdef Expression partially_evaluate(self, model.Context context):
         cdef list expressions = []
@@ -719,8 +721,8 @@ cdef class Slice(Expression):
         elif isinstance(expr, Name) and isinstance(index, Literal):
             name = (<Name>expr).name
             index_value = (<Literal>index).value
-            if name in context.variables and index_value.length == 1 and index_value.numbers != NULL:
-                return FastVariableIndex(name, <int>floor(index_value.numbers[0]))
+            if name in context.variables:
+                return FastVariableSlice(name, index_value)
         return Slice(expr, index)
 
     cpdef object reduce(self, func):
@@ -730,27 +732,23 @@ cdef class Slice(Expression):
         return f'Slice({self.expr!r}, {self.index!r})'
 
 
-cdef class FastVariableIndex(Expression):
+cdef class FastVariableSlice(Expression):
     cdef readonly str name
-    cdef readonly int index
+    cdef readonly model.Vector index
 
-    def __init__(self, str name, int index):
+    def __init__(self, str name, model.Vector index):
         self.name = name
         self.index = index
 
     cpdef model.Vector evaluate(self, model.Context context):
-        cdef model.Vector value
-        value = context.variables[self.name]
-        value = value.item(self.index)
-        if value.objects is not None and isinstance(value.objects[0], model.Node):
-            return value.copynodes()
-        return value
+        cdef model.Vector value = context.variables[self.name]
+        return value.slice(self.index).copynodes()
 
     cpdef Expression partially_evaluate(self, model.Context context):
         return self
 
     def __repr__(self):
-        return f'FastVariableIndex({self.name!r}, {self.index!r})'
+        return f'FastVariableSlice({self.name!r}, {self.index!r})'
 
 
 cdef class Call(Expression):
@@ -969,7 +967,7 @@ cdef class Attributes(Expression):
         cdef int i, n=len(self.bindings)
         if nodes.objects is not None:
             saved = context.variables
-            for item in (<model.Vector>nodes).objects:
+            for item in nodes.objects:
                 if isinstance(item, model.Node):
                     node = item
                     if node._attributes or n > 1:
