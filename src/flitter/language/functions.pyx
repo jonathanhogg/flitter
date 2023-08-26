@@ -10,7 +10,7 @@ import cython
 from libc.math cimport isnan, isinf, floor, round, sin, cos, asin, acos, sqrt, exp, ceil, atan2, log
 
 from ..cache import SharedCache
-from ..model cimport StateDict, Vector, Matrix44, null_, true_, false_
+from ..model cimport Vector, Matrix44, null_, true_, false_
 
 
 cdef double Pi = 3.141592653589793
@@ -107,10 +107,10 @@ cdef class Normal(Uniform):
 
 
 @state_transformer
-def counter(StateDict state, Vector counter_id, Vector clockv, Vector speedv=None):
+def counter(state, Vector counter_id, Vector clockv, Vector speedv=None):
     if counter_id.length == 0 or clockv.numbers == NULL or (speedv is not None and speedv.numbers == NULL):
         return null_
-    cdef Vector counter_state = state.get_item(counter_id)
+    cdef Vector counter_state = state[counter_id]
     if counter_state.numbers == NULL:
         counter_state = null_
     cdef int n = max(clockv.length, counter_state.length//2 if speedv is None else speedv.length), m = n * 2, i, j
@@ -135,7 +135,7 @@ def counter(StateDict state, Vector counter_id, Vector clockv, Vector speedv=Non
             offset = clock * speed - count
         new_state.numbers[j] = offset
         new_state.numbers[j+1] = speed
-    state.set_item(counter_id, new_state)
+    state[counter_id] = new_state
     return countv
 
 

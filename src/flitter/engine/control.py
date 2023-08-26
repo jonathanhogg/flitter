@@ -13,7 +13,8 @@ from ..cache import SharedCache
 from ..clock import BeatCounter, system_clock
 from ..interface.controls import Pad, Encoder
 from ..interface.osc import OSCReceiver, OSCSender, OSCMessage, OSCBundle
-from ..model import Context, StateDict, Vector, null
+from ..language.tree import StateDict, Context
+from ..model import Vector, null
 from ..render import process, get_renderer
 from ..interact import get_interactor
 
