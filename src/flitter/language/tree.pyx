@@ -17,13 +17,6 @@ from .noise import NOISE_FUNCTIONS
 
 logger = name_patch(logger, __name__)
 
-class LogException(Exception):
-    pass
-
-def log_values(*args):
-    raise LogException(*args)
-
-
 cdef dict static_builtins = {
     'true': model.true_,
     'false': model.false_,
@@ -32,8 +25,11 @@ cdef dict static_builtins = {
 static_builtins.update(STATIC_FUNCTIONS)
 static_builtins.update(NOISE_FUNCTIONS)
 
+def log(value):
+    return value
+
 cdef dict dynamic_builtins = {
-    'log': model.Vector(log_values),
+    'log': model.Vector(log),
 }
 dynamic_builtins.update(DYNAMIC_FUNCTIONS)
 
@@ -782,14 +778,9 @@ cdef class Call(Expression):
                         results.append(func(context.state, *args))
                     else:
                         results.append(func(*args))
-                except LogException as exc:
-                    log_message = ""
-                    for value in exc.args:
-                        results.append(value)
-                        if log_message:
-                            log_message += " "
-                        log_message += value.repr()
-                    context.logs.add(log_message)
+                        if func is log:
+                            value = args[0]
+                            context.logs.add(value.repr())
                 except Exception as exc:
                     context.errors.add(f"Error calling function {func.__name__}\n{str(exc)}")
                     results.append(model.null_)
@@ -854,7 +845,7 @@ cdef class Call(Expression):
                 return sequence_pack(results)
         elif literal_function and (<Literal>function).value.length == 1:
             func = (<Literal>function).value.objects[0]
-            if callable(func) and not hasattr(func, 'state_transformer'):
+            if callable(func) and not hasattr(func, 'state_transformer') and func is not log:
                 return FastCall(func, tuple(args))
         cdef Call call = Call(function, tuple(args))
         return call
@@ -886,16 +877,6 @@ cdef class FastCall(Expression):
             args.append(arg.evaluate(context))
         try:
             return self.function(*args)
-        except LogException as exc:
-            results = []
-            log_message = ""
-            for value in exc.args:
-                results.append(value)
-                if log_message:
-                    log_message += " "
-                log_message += value.repr()
-            context.logs.add(log_message)
-            return model.Vector.compose(results)
         except Exception as exc:
             context.errors.add(f"Error calling function {self.function.__name__}\n{str(exc)}")
             return model.null_
@@ -1636,7 +1617,6 @@ cdef class StateDict:
 
     def __repr__(self):
         return f"StateDict({self._state!r})"
-
 
 
 cdef class Context:
