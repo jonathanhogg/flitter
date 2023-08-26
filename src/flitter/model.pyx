@@ -736,6 +736,159 @@ true = true_
 false = false_
 
 
+cdef class Matrix33(Vector):
+    @staticmethod
+    cdef Matrix33 _translate(Vector v):
+        cdef Matrix33 result
+        cdef double* numbers
+        if v is not None and v.numbers is not NULL and v.length < 3:
+            result = Matrix33.__new__(Matrix33)
+            numbers = result.numbers
+            if v.length == 1:
+                numbers[6] = v.numbers[0]
+                numbers[7] = v.numbers[0]
+            else:
+                numbers[6] = v.numbers[0]
+                numbers[7] = v.numbers[1]
+            return result
+        return None
+
+    @staticmethod
+    def translate(v):
+        return Matrix33._translate(Vector._coerce(v))
+
+    @staticmethod
+    cdef Matrix33 _scale(Vector v):
+        cdef Matrix33 result
+        cdef double* numbers
+        if v is not None and v.numbers is not NULL and v.length < 3:
+            result = Matrix33.__new__(Matrix33)
+            numbers = result.numbers
+            if v.length == 1:
+                numbers[0] = v.numbers[0]
+                numbers[4] = v.numbers[0]
+            elif v.length == 2:
+                numbers[0] = v.numbers[0]
+                numbers[4] = v.numbers[1]
+            return result
+        return None
+
+    @staticmethod
+    def scale(v):
+        return Matrix33._scale(Vector._coerce(v))
+
+    @staticmethod
+    cdef Matrix33 _rotate(double turns):
+        if isnan(turns):
+            return None
+        cdef double theta = turns*Tau, cth = cos(theta), sth = sin(theta)
+        cdef Matrix33 result = Matrix33.__new__(Matrix33)
+        cdef double* numbers = result.numbers
+        numbers[0] = cth
+        numbers[1] = sth
+        numbers[3] = -sth
+        numbers[4] = cth
+        return result
+
+    @staticmethod
+    def rotate(turns):
+        return Matrix33._rotate(float(turns))
+
+    @cython.cdivision(True)
+    def __cinit__(self, obj=None):
+        if self.objects is not None:
+            raise ValueError("Argument must be a float or a sequence of 9 floats")
+        if self.length == 9:
+            return
+        cdef double k
+        if self.length == 0:
+            k = 1
+            self.numbers = self._numbers
+        elif self.length == 1:
+            k = self.numbers[0]
+        else:
+            raise ValueError("Argument must be a float or a sequence of 9 floats")
+        cdef int i
+        for i in range(9):
+            self.numbers[i] = k if i % 4 == 0 else 0
+        self.length = 9
+
+    cdef Matrix33 mmul(self, Matrix33 b):
+        cdef Matrix33 result = Matrix33.__new__(Matrix33)
+        cdef double* numbers = result.numbers
+        cdef double* a_numbers = self.numbers
+        cdef double* b_numbers = b.numbers
+        cdef int i, j
+        for i in range(0, 9, 3):
+            for j in range(3):
+                numbers[i+j] = a_numbers[j]*b_numbers[i] + a_numbers[j+3]*b_numbers[i+1] + a_numbers[j+6]*b_numbers[i+2]
+        return result
+
+    cdef Vector vmul(self, Vector b):
+        if b.numbers is NULL or b.length not in (2, 3):
+            return None
+        cdef Vector result = Vector.__new__(Vector)
+        cdef double* a_numbers = self.numbers
+        cdef double* b_numbers = b.numbers
+        cdef int j
+        if b.length == 2:
+            result.allocate_numbers(2)
+            result.numbers[0] = a_numbers[0]*b_numbers[0] + a_numbers[3]*b_numbers[1] + a_numbers[6]
+            result.numbers[1] = a_numbers[1]*b_numbers[0] + a_numbers[4]*b_numbers[1] + a_numbers[7]
+        else:
+            result.allocate_numbers(3)
+            result.numbers[0] = a_numbers[0]*b_numbers[0] + a_numbers[3]*b_numbers[1] + a_numbers[6]*b_numbers[2]
+            result.numbers[1] = a_numbers[1]*b_numbers[0] + a_numbers[4]*b_numbers[1] + a_numbers[7]*b_numbers[2]
+            result.numbers[2] = a_numbers[2]*b_numbers[0] + a_numbers[5]*b_numbers[1] + a_numbers[8]*b_numbers[2]
+        return result
+
+    def __matmul__(self, other):
+        if isinstance(other, Matrix33):
+            return self.mmul(<Matrix33>other)
+        return self.vmul(Vector._coerce(other))
+
+    @cython.cdivision(True)
+    cpdef Matrix33 inverse(self):
+        cdef double* numbers = self.numbers
+        cdef double s0 = numbers[0]*numbers[4]*numbers[8];
+        cdef double s1 = numbers[7]*numbers[5];
+        cdef double s2 = numbers[1]*numbers[3]*numbers[8];
+        cdef double s3 = numbers[5]*numbers[6];
+        cdef double s4 = numbers[2]*numbers[3]*numbers[7];
+        cdef double s5 = numbers[4]*numbers[6];
+        cdef double invdet = 1 / (s0 - s1 - s2 - s3 + s4 - s5);
+        cdef Matrix33 result = Matrix33.__new__(Matrix33)
+        cdef double* result_numbers = result.numbers
+        result_numbers[0] = (numbers[4]*numbers[8] - numbers[7]*numbers[5]) * invdet;
+        result_numbers[1] = (numbers[2]*numbers[7] - numbers[1]*numbers[8]) * invdet;
+        result_numbers[2] = (numbers[1]*numbers[5] - numbers[2]*numbers[4]) * invdet;
+        result_numbers[3] = (numbers[5]*numbers[6] - numbers[3]*numbers[8]) * invdet;
+        result_numbers[4] = (numbers[0]*numbers[8] - numbers[2]*numbers[6]) * invdet;
+        result_numbers[5] = (numbers[3]*numbers[2] - numbers[0]*numbers[5]) * invdet;
+        result_numbers[6] = (numbers[3]*numbers[7] - numbers[6]*numbers[4]) * invdet;
+        result_numbers[7] = (numbers[6]*numbers[1] - numbers[0]*numbers[7]) * invdet;
+        result_numbers[8] = (numbers[0]*numbers[4] - numbers[3]*numbers[1]) * invdet;
+        return result
+
+    cpdef Matrix33 transpose(self):
+        cdef double* numbers = self.numbers
+        cdef Matrix33 result = Matrix33.__new__(Matrix33)
+        cdef double* result_numbers = result.numbers
+        cdef int i, j
+        for i in range(3):
+            for j in range(3):
+                result_numbers[i*3+j] = numbers[j*3+i]
+        return result
+
+    def __repr__(self):
+        cdef list rows = []
+        cdef double* numbers = self.numbers
+        cdef int i
+        for i in range(3):
+            rows.append(f"| {numbers[i]:7.3f} {numbers[i+3]:7.3f} {numbers[i+6]:7.3f} |")
+        return '\n'.join(rows)
+
+
 cdef class Matrix44(Vector):
     @cython.cdivision(True)
     @staticmethod
@@ -1029,14 +1182,14 @@ cdef class Matrix44(Vector):
                 result_numbers[i*4+j] = numbers[j*4+i]
         return result
 
-    cpdef Matrix44 matrix33(self):
+    cpdef Matrix33 matrix33(self):
         cdef double* numbers = self.numbers
-        cdef Matrix44 result = Matrix44.__new__(Matrix44)
+        cdef Matrix33 result = Matrix33.__new__(Matrix33)
         cdef double* result_numbers = result.numbers
         cdef int i, j
         for i in range(3):
             for j in range(3):
-                result_numbers[4*i+j] = numbers[4*i+j]
+                result_numbers[3*i+j] = numbers[4*i+j]
         return result
 
     def __repr__(self):

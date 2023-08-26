@@ -55,6 +55,20 @@ cdef Vector false_
 cdef Vector minusone_
 
 
+cdef class Matrix33(Vector):
+    @staticmethod
+    cdef Matrix33 _translate(Vector v)
+    @staticmethod
+    cdef Matrix33 _scale(Vector v)
+    @staticmethod
+    cdef Matrix33 _rotate(double turns)
+
+    cdef Matrix33 mmul(self, Matrix33 b)
+    cdef Vector vmul(self, Vector b)
+    cpdef Matrix33 inverse(self)
+    cpdef Matrix33 transpose(self)
+
+
 cdef class Matrix44(Vector):
     @staticmethod
     cdef Matrix44 _project(double aspect_ratio, double fov, double near, double far)
@@ -79,7 +93,7 @@ cdef class Matrix44(Vector):
     cdef Vector vmul(self, Vector b)
     cpdef Matrix44 inverse(self)
     cpdef Matrix44 transpose(self)
-    cpdef Matrix44 matrix33(self)
+    cpdef Matrix33 matrix33(self)
 
 
 cdef class Query:

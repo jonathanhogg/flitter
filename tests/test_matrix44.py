@@ -5,7 +5,7 @@ Tests of the model.Matrix44 class
 import math
 import unittest
 
-from flitter.model import Matrix44
+from flitter.model import Matrix44, Matrix33
 
 
 def all_isclose(xs, ys, rel_tol=1e-9, abs_tol=0):
@@ -134,8 +134,8 @@ class TestMatrix44(unittest.TestCase):
         self.assertEqual(Matrix44(range(16)).transpose(), [0, 4, 8, 12, 1, 5, 9, 13, 2, 6, 10, 14, 3, 7, 11, 15])
 
     def test_matrix33(self):
-        self.assertEqual(Matrix44().matrix33(), Matrix44())
-        self.assertEqual(Matrix44(range(16)).matrix33(), [0, 1, 2, 0, 4, 5, 6, 0, 8, 9, 10, 0, 0, 0, 0, 1])
+        self.assertEqual(Matrix44().matrix33(), Matrix33())
+        self.assertEqual(Matrix44(range(16)).matrix33(), [0, 1, 2, 4, 5, 6, 8, 9, 10])
 
     def test_repr(self):
         self.assertEqual(repr(Matrix44()), """|   1.000   0.000   0.000   0.000 |
