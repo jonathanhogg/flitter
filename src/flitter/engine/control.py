@@ -319,7 +319,15 @@ class EngineController:
             while True:
                 housekeeping -= system_clock()
 
-                program_top = self.current_path.read_flitter_program(self.defined_variables)
+                beat = self.counter.beat_at_time(frame_time)
+                delta = beat - last
+                last = beat
+                names = {'beat': beat, 'quantum': self.counter.quantum, 'tempo': self.counter.tempo,
+                         'delta': delta, 'clock': frame_time, 'performance': performance,
+                         'fps': self.target_fps, 'realtime': self.realtime,
+                         'screen': self.screen, 'fullscreen': self.fullscreen, 'vsync': self.vsync}
+
+                program_top = self.current_path.read_flitter_program(variables=self.defined_variables, undefined=names)
                 if program_top is not current_top:
                     level = 'SUCCESS' if current_top is None else 'INFO'
                     logger.log(level, "Loaded page {}: {}", self.current_page, self.current_path)
@@ -340,14 +348,6 @@ class EngineController:
                     if run_top is not current_top:
                         logger.debug("Undo partial-evaluation on state")
                         run_top = current_top
-
-                beat = self.counter.beat_at_time(frame_time)
-                delta = beat - last
-                last = beat
-                names = {'beat': beat, 'quantum': self.counter.quantum, 'tempo': self.counter.tempo,
-                         'delta': delta, 'clock': frame_time, 'performance': performance,
-                         'fps': self.target_fps, 'realtime': self.realtime,
-                         'screen': self.screen, 'fullscreen': self.fullscreen, 'vsync': self.vsync}
 
                 now = system_clock()
                 housekeeping += now

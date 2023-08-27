@@ -68,7 +68,7 @@ class CachePath:
         self._cache[key] = mtime, text
         return text
 
-    def read_flitter_program(self, definitions=None):
+    def read_flitter_program(self, variables=None, undefined=None):
         from .language.parser import parse, ParseError
         self._touched = system_clock()
         mtime = self._path.stat().st_mtime if self._path.exists() and self._path.is_file() else None
@@ -88,7 +88,7 @@ class CachePath:
                 initial_top = parse(source)
                 initial_top.set_path(self._absolute)
                 mid = system_clock()
-                top = initial_top.simplify(variables=definitions)
+                top = initial_top.simplify(variables=variables, undefined=undefined)
                 end = system_clock()
                 logger.debug("Parsed {} in {:.1f}ms, partial evaluation in {:.1f}ms", self._path, (mid - start) * 1000, (end - mid) * 1000)
                 logger.opt(lazy=True).debug("Tree node count before partial-evaluation {before} and after {after}",

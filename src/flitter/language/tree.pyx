@@ -122,13 +122,15 @@ cdef class Top(Expression):
             self.evaluate(context)
         return context
 
-    def simplify(self, StateDict state=None, dict variables=None):
-        cdef dict context_vars = None
+    def simplify(self, StateDict state=None, dict variables=None, undefined=None):
+        cdef dict context_vars = {}
         cdef str key
         if variables is not None:
-            context_vars = {}
             for key, value in variables.items():
                 context_vars[key] = model.Vector._coerce(value)
+        if undefined is not None:
+            for key in undefined:
+                context_vars[key] = None
         cdef Context context = Context(state=state, variables=context_vars)
         cdef Top top
         try:
@@ -1189,11 +1191,15 @@ cdef class Attributes(Expression):
         cdef list bindings = []
         cdef Attributes attrs
         cdef Binding binding
+        cdef set unbound = context.unbound
+        context.unbound = set()
         while isinstance(node, Attributes):
             attrs = <Attributes>node
             for binding in reversed(attrs.bindings):
                 bindings.append(Binding(binding.name, binding.expr.partially_evaluate(context)))
             node = attrs.node
+        cdef bint fast = not context.unbound
+        context.unbound = unbound
         node = node.partially_evaluate(context)
         cdef model.Vector nodes
         cdef model.Node n
@@ -1207,6 +1213,8 @@ cdef class Attributes(Expression):
         if not bindings:
             return node
         bindings.reverse()
+        if fast:
+            return FastAttributes(node, tuple(bindings))
         return Attributes(node, tuple(bindings))
 
     cpdef object reduce(self, func):
@@ -1218,6 +1226,28 @@ cdef class Attributes(Expression):
 
     def __repr__(self):
         return f'Attributes({self.node!r}, {self.bindings!r})'
+
+
+cdef class FastAttributes(Attributes):
+    cpdef model.Vector evaluate(self, Context context):
+        cdef model.Node node
+        cdef model.Vector value
+        cdef Binding binding
+        cdef model.Vector nodes = self.node.evaluate(context)
+        if nodes.objects is not None:
+            for item in nodes.objects:
+                if isinstance(item, model.Node):
+                    node = item
+                    for binding in self.bindings:
+                        value = binding.expr.evaluate(context)
+                        if value.length:
+                            node._attributes[binding.name] = value
+                        elif binding.name in node._attributes:
+                            del node._attributes[binding.name]
+        return nodes
+
+    def __repr__(self):
+        return f'FastAttributes({self.node!r}, {self.bindings!r})'
 
 
 cdef class Search(Expression):
