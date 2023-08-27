@@ -97,11 +97,12 @@ cdef class Top(Expression):
 
     def __init__(self, tuple expressions):
         self.expressions = expressions
+        self.program = None
 
     def set_path(self, str path):
         self.path = path
 
-    def run(self, StateDict state=None, dict variables=None, compile=False):
+    def run(self, StateDict state=None, dict variables=None, bint compile=False):
         cdef dict context_vars = None
         cdef str key
         if variables is not None:
@@ -110,14 +111,7 @@ cdef class Top(Expression):
                 context_vars[key] = model.Vector._coerce(value)
         cdef Context context = Context(state=state, variables=context_vars, path=self.path)
         if compile:
-            report_stack = False
-            if self.program is None:
-                self.program = self.compile()
-                logger.debug("Compiled evaluation graph to {} instruction program", len(self.program))
-                report_stack = True
-            self.program.execute(context)
-            if report_stack:
-                logger.debug("Maximum stack depth on first execution was {}", self.program.free_count())
+            self.compile().execute(context)
         else:
             self.evaluate(context)
         return context
@@ -158,12 +152,14 @@ cdef class Top(Expression):
         return model.null_
 
     cpdef Program compile(self):
-        cdef Program program = Program.__new__(Program)
         cdef Expression expr
-        for expr in self.expressions:
-            program.extend(expr.compile())
-            program.append_root()
-        return program
+        if self.program is None:
+            self.program = Program.__new__(Program)
+            for expr in self.expressions:
+                self.program.extend(expr.compile())
+                self.program.append_root()
+            logger.debug("Compiled tree to {} instructions", len(self.program))
+        return self.program
 
     cpdef Expression partially_evaluate(self, Context context):
         cdef list expressions = []
@@ -262,6 +258,12 @@ cdef class Import(Expression):
         for name in self.names:
             context.variables[name] = model.null_
         return model.null_
+
+    cpdef Program compile(self):
+        cdef Program program = Program.__new__(Program)
+        program.extend(self.filename.compile())
+        program.import_(self.names)
+        return program
 
     cpdef Expression partially_evaluate(self, Context context):
         cdef str name
@@ -1180,10 +1182,20 @@ cdef class Attributes(Expression):
     cpdef Program compile(self):
         cdef Program program = Program.__new__(Program)
         program.extend(self.node.compile())
+        program.begin_for()
+        START = program.new_label()
+        END = program.new_label()
+        program.label(START)
+        program.push_next(END)
+        program.set_node_scope()
         cdef Binding binding
         for binding in self.bindings:
             program.extend(binding.expr.compile())
             program.attribute(binding.name)
+        program.jump(START)
+        program.label(END)
+        program.end_for()
+        program.clear_node_scope()
         return program
 
     cpdef Expression partially_evaluate(self, Context context):
@@ -1245,6 +1257,15 @@ cdef class FastAttributes(Attributes):
                         elif binding.name in node._attributes:
                             del node._attributes[binding.name]
         return nodes
+
+    cpdef Program compile(self):
+        cdef Program program = Program.__new__(Program)
+        program.extend(self.node.compile())
+        cdef Binding binding
+        for binding in self.bindings:
+            program.extend(binding.expr.compile())
+            program.attribute(binding.name)
+        return program
 
     def __repr__(self):
         return f'FastAttributes({self.node!r}, {self.bindings!r})'

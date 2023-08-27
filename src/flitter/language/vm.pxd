@@ -3,14 +3,11 @@
 from ..model cimport Vector, Node
 
 
-cdef class StackItem:
-    cdef Vector value
-    cdef StackItem prev
-
-
 cdef class Program:
     cdef readonly list instructions
-    cdef StackItem free
+    cdef bint linked
+
+    cdef void link(self)
 
 
 cdef class StateDict:

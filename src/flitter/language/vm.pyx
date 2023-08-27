@@ -2,6 +2,7 @@
 
 import cython
 
+from ..cache import SharedCache
 from .functions import STATIC_FUNCTIONS, DYNAMIC_FUNCTIONS
 from ..model cimport Vector, Node, null_, true_, false_
 from .noise import NOISE_FUNCTIONS
@@ -35,6 +36,7 @@ cdef enum OpCode:
     BranchFalse
     BranchTrue
     Call
+    ClearNodeScope
     Compose
     Drop
     Dup
@@ -44,6 +46,7 @@ cdef enum OpCode:
     FloorDiv
     Ge
     Gt
+    Import
     Jump
     Label
     Le
@@ -58,12 +61,15 @@ cdef enum OpCode:
     Neg
     Next
     NodeLiteral
+    NodeScope
     Not
     Pos
     Pow
     Pragma
     Prepend
+    PushNext
     Range
+    SetNodeScope
     Slice
     Sub
     Tag
@@ -80,6 +86,7 @@ cdef dict OpCodeNames = {
     OpCode.BranchFalse: 'BranchFalse',
     OpCode.BranchTrue: 'BranchTrue',
     OpCode.Call: 'Call',
+    OpCode.ClearNodeScope: 'ClearNodeScope',
     OpCode.Compose: 'Compose',
     OpCode.Drop: 'Drop',
     OpCode.Dup: 'Dup',
@@ -89,6 +96,7 @@ cdef dict OpCodeNames = {
     OpCode.FloorDiv: 'FloorDiv',
     OpCode.Ge: 'Ge',
     OpCode.Gt: 'Gt',
+    OpCode.Import: 'Import',
     OpCode.Jump: 'Jump',
     OpCode.Label: 'Label',
     OpCode.Le: 'Le',
@@ -108,7 +116,9 @@ cdef dict OpCodeNames = {
     OpCode.Pow: 'Pow',
     OpCode.Pragma: 'Pragma',
     OpCode.Prepend: 'Prepend',
+    OpCode.PushNext: 'PushNext',
     OpCode.Range: 'Range',
+    OpCode.SetNodeScope: 'SetNodeScope',
     OpCode.Slice: 'Slice',
     OpCode.Sub: 'Sub',
     OpCode.Tag: 'Tag',
@@ -209,30 +219,42 @@ cdef class InstructionJumpTuple(InstructionJump):
         return f'{OpCodeNames[self.code]} {self.value!r} .L{self.label}'
 
 
+cdef class Function:
+    cdef readonly tuple arguments
+    cdef readonly tuple default_values
+    cdef readonly Program program
+
+
 cdef class LoopSource:
     cdef Vector source
     cdef int position
     cdef int iterations
 
 
+cdef Vector call_helper(Context context, object function, tuple args):
+    if callable(function):
+        try:
+            if hasattr(function, 'state_transformer') and function.state_transformer:
+                return function(context.state, *args)
+            else:
+                return function(*args)
+        except Exception as exc:
+            context.errors.add(f"Error calling function {function.__name__}\n{str(exc)}")
+            return null_
+    else:
+        raise NotImplementedError()
+
+
 cdef class Program:
     def __cinit__(self):
         self.instructions = []
+        self.linked = False
 
     def __len__(self):
         return len(self.instructions)
 
     def __str__(self):
         return '\n'.join(str(instruction) for instruction in self.instructions)
-
-    def free_count(self):
-        cdef int i = 0
-        cdef StackItem free = self.free
-        while free is not None:
-            assert free.value is null_
-            free = free.prev
-            i += 1
-        return i
 
     @staticmethod
     def new_label():
@@ -245,24 +267,40 @@ cdef class Program:
         self.instructions.extend(program.instructions)
         return self
 
-    def link(self):
-        cdef dict jumps = {}
-        cdef dict labels = {}
+    cdef void link(self):
         cdef Instruction instruction
         cdef int label, address, target
+        cdef list addresses
+        cdef InstructionJump jump
+        cdef dict jumps={}, labels={}
         for address, instruction in enumerate(self.instructions):
             if instruction.code == OpCode.Label:
                 labels[(<InstructionLabel>instruction).label] = address
             elif isinstance(instruction, InstructionJump):
                 (<list>jumps.setdefault((<InstructionJump>instruction).label, [])).append(address)
-        cdef list addresses
-        cdef InstructionJump jump
         for label, addresses in jumps.items():
             target = labels[label]
             for address in addresses:
                 jump = self.instructions[address]
                 jump.offset = target - address
-        return self
+        self.linked = True
+
+    def _import(self, Context context, str filename):
+        cdef Context import_context
+        code = SharedCache.get_with_root(filename, context.path).read_flitter_program()
+        if code is not None:
+            import_context = context
+            while import_context is not None:
+                if import_context.path == context.path:
+                    context.errors.add(f"Circular import with {filename}")
+                    break
+                import_context = import_context.parent
+            else:
+                import_context = Context(parent=context, path=code.path)
+                code.compile().execute(import_context)
+                context.errors.update(import_context.errors)
+                return import_context.variables
+        return None
 
     def dup(self):
         self.instructions.append(Instruction(OpCode.Dup))
@@ -284,6 +322,9 @@ cdef class Program:
 
     def pragma(self, str name):
         self.instructions.append(InstructionStr(OpCode.Pragma, name))
+
+    def import_(self, tuple names):
+        self.instructions.append(InstructionTuple(OpCode.Import, names))
 
     def literal(self, value):
         cdef Vector vector = Vector._coerce(value)
@@ -381,11 +422,20 @@ cdef class Program:
     def end_scope(self):
         self.instructions.append(Instruction(OpCode.EndScope))
 
+    def set_node_scope(self):
+        self.instructions.append(Instruction(OpCode.SetNodeScope))
+
+    def clear_node_scope(self):
+        self.instructions.append(Instruction(OpCode.ClearNodeScope))
+
     def begin_for(self):
         self.instructions.append(Instruction(OpCode.BeginFor))
 
     def next(self, tuple names, int label):
         self.instructions.append(InstructionJumpTuple(OpCode.Next, label, names))
+
+    def push_next(self, int label):
+        self.instructions.append(InstructionJump(OpCode.PushNext, label))
 
     def end_for(self):
         self.instructions.append(Instruction(OpCode.EndFor))
@@ -412,28 +462,36 @@ cdef class Program:
     def execute(self, Context context):
         cdef int i, n, pc=0, program_end=len(self.instructions)
         cdef Instruction instruction=None
-        cdef StackItem item=None, item2=None, top=None, free=self.free
-        cdef list args, values, loop_sources=[]
-        cdef list scopes = [dynamic_builtins, static_builtins, context.variables]
+        cdef list stack = []
+        cdef int top=-1, limit=0
+        cdef list values, loop_sources=[]
+        cdef dict empty_node_scope = {}
+        cdef list scopes = [empty_node_scope, dynamic_builtins, static_builtins, context.variables]
         cdef str name
-        cdef tuple names
-        cdef Vector vector
+        cdef tuple names, args
+        cdef Vector r1, r2
         cdef LoopSource loop_source = None
+        cdef dict variables
+
+        if not self.linked:
+            self.link()
+
         while pc < program_end:
             instruction = <Instruction>self.instructions[pc]
             pc += 1
 
+            # print(instruction, stack[:top+1], stack[top+1:])
+
             if instruction.code == OpCode.Dup:
-                if free is None:
-                    free = StackItem.__new__(StackItem)
-                item, free = free, free.prev
-                item.value = top.value
-                item.prev, top = top, item
+                top += 1
+                if top == limit:
+                    stack.append(stack[top-1])
+                    limit += 1
+                else:
+                    stack[top] = stack[top-1]
 
             elif instruction.code == OpCode.Drop:
-                item, top = top, top.prev
-                item.prev, free = free, item
-                free.value = null_
+                top -= 1
 
             elif instruction.code == OpCode.Label:
                 pass
@@ -442,268 +500,245 @@ cdef class Program:
                 pc += (<InstructionJump>instruction).offset
 
             elif instruction.code == OpCode.BranchTrue:
-                item, top = top, top.prev
-                item.prev, free = free, item
-                if item.value.as_bool():
+                if (<Vector>stack[top]).as_bool():
                     pc += (<InstructionJump>instruction).offset
-                free.value = null_
+                top -= 1
 
             elif instruction.code == OpCode.BranchFalse:
-                item, top = top, top.prev
-                item.prev, free = free, item
-                if not item.value.as_bool():
+                if not (<Vector>stack[top]).as_bool():
                     pc += (<InstructionJump>instruction).offset
-                free.value = null_
+                top -= 1
 
             elif instruction.code == OpCode.Pragma:
-                context.pragmas[(<InstructionStr>instruction).value] = top.value
-                top.value = null_
+                context.pragmas[(<InstructionStr>instruction).value] = <Vector>stack[top]
+                stack[top] = null_
+
+            elif instruction.code == OpCode.Import:
+                filename = (<Vector>stack[top]).as_string()
+                stack[top] = null_
+                names = (<InstructionTuple>instruction).value
+                variables = self._import(context, filename)
+                if variables is not None:
+                    scope = <dict>scopes[len(scopes)-1]
+                    for name in names:
+                        if name in variables:
+                            scope[name] = variables[name]
+                        else:
+                            context.errors.add(f"Unable to import '{name}' from '{filename}'")
+                            scope[name] = null_
 
             elif instruction.code == OpCode.Literal:
-                if free is None:
-                    free = StackItem.__new__(StackItem)
-                item, free = free, free.prev
-                item.value = (<InstructionVector>instruction).value
-                item.prev, top = top, item
+                top += 1
+                if top == limit:
+                    stack.append((<InstructionVector>instruction).value)
+                    limit += 1
+                else:
+                    stack[top] = (<InstructionVector>instruction).value
 
             elif instruction.code == OpCode.NodeLiteral:
-                if free is None:
-                    free = StackItem.__new__(StackItem)
-                item, free = free, free.prev
-                item.value = (<InstructionVector>instruction).value.copynodes()
-                item.prev, top = top, item
+                top += 1
+                if top == limit:
+                    stack.append((<InstructionVector>instruction).value.copynodes())
+                    limit += 1
+                else:
+                    stack[top] = (<InstructionVector>instruction).value.copynodes()
 
             elif instruction.code == OpCode.Name:
-                if free is None:
-                    free = StackItem.__new__(StackItem)
-                item, free = free, free.prev
-                item.prev, top = top, item
+                top += 1
+                if top == limit:
+                    stack.append(None)
+                    limit += 1
                 name = (<InstructionStr>instruction).value
                 for scope in reversed(scopes):
-                    top.value = <Vector>(<dict>scope).get(name)
-                    if top.value is not None:
+                    r1 = <Vector>(<dict>scope).get(name)
+                    if r1 is not None:
+                        stack[top] = r1
                         break
                 else:
-                    top.value = null_
+                    stack[top] = null_
 
             elif instruction.code == OpCode.Lookup:
-                top.value = context.state.get_item(top.value) if context.state is not None else null_
+                stack[top] = context.state.get_item(<Vector>stack[top]) if context.state is not None else null_
 
             elif instruction.code == OpCode.Range:
-                item2, top = top, top.prev
-                item2.prev = free
-                item, top = top, top.prev
-                item.prev, free = item2, item
-                top.value = Vector.__new__(Vector)
-                top.value.fill_range(top.value, item.value, item2.value)
-                item.value = null_
-                item2.value = null_
+                r1 = Vector.__new__(Vector)
+                r1.fill_range(<Vector>stack[top-2], <Vector>stack[top-1], <Vector>stack[top])
+                top -= 2
+                stack[top] = r1
 
             elif instruction.code == OpCode.Neg:
-                top.value = top.value.neg()
+                stack[top] = (<Vector>stack[top]).neg()
 
             elif instruction.code == OpCode.Pos:
-                top.value = top.value.pos()
+                stack[top] = (<Vector>stack[top]).pos()
 
             elif instruction.code == OpCode.Not:
-                top.value = false_ if top.value.as_bool() else true_
+                stack[top] = false_ if (<Vector>stack[top]).as_bool() else true_
 
             elif instruction.code == OpCode.Add:
-                item, top = top, top.prev
-                item.prev, free = free, item
-                top.value = top.value.add(item.value)
-                free.value = null_
+                r1 = <Vector>stack[top-1]
+                stack[top-1] = r1.add((<Vector>stack[top]))
+                top -= 1
 
             elif instruction.code == OpCode.Sub:
-                item, top = top, top.prev
-                item.prev, free = free, item
-                top.value = top.value.sub(item.value)
-                free.value = null_
+                r1 = <Vector>stack[top-1]
+                stack[top-1] = r1.sub((<Vector>stack[top]))
+                top -= 1
 
             elif instruction.code == OpCode.Mul:
-                item, top = top, top.prev
-                item.prev, free = free, item
-                top.value = top.value.mul(item.value)
-                free.value = null_
+                r1 = <Vector>stack[top-1]
+                stack[top-1] = r1.mul((<Vector>stack[top]))
+                top -= 1
 
             elif instruction.code == OpCode.TrueDiv:
-                item, top = top, top.prev
-                item.prev, free = free, item
-                top.value = top.value.truediv(item.value)
-                free.value = null_
+                r1 = <Vector>stack[top-1]
+                stack[top-1] = r1.truediv((<Vector>stack[top]))
+                top -= 1
 
             elif instruction.code == OpCode.FloorDiv:
-                item, top = top, top.prev
-                item.prev, free = free, item
-                top.value = top.value.floordiv(item.value)
-                free.value = null_
+                r1 = <Vector>stack[top-1]
+                stack[top-1] = r1.floordiv((<Vector>stack[top]))
+                top -= 1
 
             elif instruction.code == OpCode.Mod:
-                item, top = top, top.prev
-                item.prev, free = free, item
-                top.value = top.value.mod(item.value)
-                free.value = null_
+                r1 = <Vector>stack[top-1]
+                stack[top-1] = r1.mod((<Vector>stack[top]))
+                top -= 1
 
             elif instruction.code == OpCode.Pow:
-                item, top = top, top.prev
-                item.prev, free = free, item
-                top.value = top.value.pow(item.value)
-                free.value = null_
+                r1 = <Vector>stack[top-1]
+                stack[top-1] = r1.pow((<Vector>stack[top]))
+                top -= 1
 
             elif instruction.code == OpCode.Eq:
-                item, top = top, top.prev
-                item.prev, free = free, item
-                top.value = top.value.eq(item.value)
-                free.value = null_
+                r1 = <Vector>stack[top-1]
+                stack[top-1] = r1.eq((<Vector>stack[top]))
+                top -= 1
 
             elif instruction.code == OpCode.Ne:
-                item, top = top, top.prev
-                item.prev, free = free, item
-                top.value = top.value.ne(item.value)
-                free.value = null_
+                r1 = <Vector>stack[top-1]
+                stack[top-1] = r1.ne((<Vector>stack[top]))
+                top -= 1
 
             elif instruction.code == OpCode.Gt:
-                item, top = top, top.prev
-                item.prev, free = free, item
-                top.value = top.value.gt(item.value)
-                free.value = null_
+                r1 = <Vector>stack[top-1]
+                stack[top-1] = r1.gt((<Vector>stack[top]))
+                top -= 1
 
             elif instruction.code == OpCode.Lt:
-                item, top = top, top.prev
-                item.prev, free = free, item
-                top.value = top.value.lt(item.value)
-                free.value = null_
+                r1 = <Vector>stack[top-1]
+                stack[top-1] = r1.lt((<Vector>stack[top]))
+                top -= 1
 
             elif instruction.code == OpCode.Ge:
-                item, top = top, top.prev
-                item.prev, free = free, item
-                top.value = top.value.ge(item.value)
-                free.value = null_
+                r1 = <Vector>stack[top-1]
+                stack[top-1] = r1.ge((<Vector>stack[top]))
+                top -= 1
 
             elif instruction.code == OpCode.Le:
-                item, top = top, top.prev
-                item.prev, free = free, item
-                top.value = top.value.le(item.value)
-                free.value = null_
+                r1 = <Vector>stack[top-1]
+                stack[top-1] = r1.le((<Vector>stack[top]))
+                top -= 1
 
             elif instruction.code == OpCode.Xor:
-                item, top = top, top.prev
-                item.prev, free = free, item
-                if not top.value.as_bool():
-                    top.value = item.value
-                elif not item.value.as_bool():
-                    pass
-                else:
-                    top.value = false_
-                free.value = null_
+                r1 = <Vector>stack[top-1]
+                r2 = <Vector>stack[top]
+                top -= 1
+                if not r1.as_bool():
+                    stack[top] = r2
+                elif r2.as_bool():
+                    stack[top] = false_
 
             elif instruction.code == OpCode.Slice:
-                item, top = top, top.prev
-                item.prev, free = free, item
-                top.value = top.value.slice(item.value)
-                free.value = null_
+                r1 = <Vector>stack[top-1]
+                stack[top-1] = r1.slice((<Vector>stack[top]))
+                top -= 1
 
             elif instruction.code == OpCode.Call:
-                item2, top = top, top.prev
-                item2.prev, free = free, item2
-                vector, item2.value = item2.value, null_
-                args = []
-                for i in range((<InstructionInt>instruction).value - 1):
-                    item, top = top, top.prev
-                    item.prev, free = free, item
-                    args.append(item.value)
-                    item.value = null_
-                args.append(top.value)
-                args.reverse()
-                values = []
-                if vector.objects:
-                    for function in vector.objects:
-                        if callable(function):
-                            try:
-                                if hasattr(function, 'state_transformer') and function.state_transformer:
-                                    values.append(function(context.state, *args))
-                                else:
-                                    values.append(function(*args))
-                            except Exception as exc:
-                                context.errors.add(f"Error calling function {function.__name__}\n{str(exc)}")
-                        else:
-                            raise NotImplementedError()
-                top.value = Vector._compose(values)
+                r1 = <Vector>stack[top]
+                n = (<InstructionInt>instruction).value
+                args = tuple(stack[top-n:top])
+                top -= n
+                if r1.objects:
+                    if r1.length == 1:
+                        stack[top] = call_helper(context, r1.objects[0], args)
+                    else:
+                        values = []
+                        for function in r1.objects:
+                            values.append(call_helper(context, function, args))
+                        stack[top] = Vector._compose(values)
+                else:
+                    stack[top] = null_
 
             elif instruction.code == OpCode.Tag:
                 name = (<InstructionStr>instruction).value
-                for node in top.value.objects:
-                    if isinstance(node, Node):
-                        (<Node>node)._tags.add(name)
+                r1 = <Vector>stack[top]
+                if r1.objects is not None:
+                    for node in r1.objects:
+                        if isinstance(node, Node):
+                            (<Node>node)._tags.add(name)
 
             elif instruction.code == OpCode.Attribute:
-                item, top = top, top.prev
-                item.prev, free = free, item
-                if top.value.objects is not None:
-                    for node in top.value.objects:
+                r1 = <Vector>stack[top-1]
+                r2 = <Vector>stack[top]
+                name = (<InstructionStr>instruction).value
+                if r1.objects is not None:
+                    for node in r1.objects:
                         if isinstance(node, Node):
-                            if item.value.length:
-                                (<Node>node)._attributes[(<InstructionStr>instruction).value] = item.value
-                            elif (<InstructionStr>instruction).value in (<Node>node)._attributes:
-                                del (<Node>node)._attributes[(<InstructionStr>instruction).value]
-                free.value = null_
+                            if r2.length:
+                                (<Node>node)._attributes[name] = r2
+                            elif name in (<Node>node)._attributes:
+                                del (<Node>node)._attributes[name]
+                top -= 1
 
             elif instruction.code == OpCode.Append:
-                item, top = top, top.prev
-                item.prev, free = free, item
-                if top.value.objects is not None and item.value.objects is not None:
-                    n = top.value.length - 1
-                    for i, node in enumerate(top.value.objects):
+                r1 = <Vector>stack[top-1]
+                r2 = <Vector>stack[top]
+                if r1.objects is not None and r2.objects is not None:
+                    n = r1.length - 1
+                    for i, node in enumerate(r1.objects):
                         if isinstance(node, Node):
                             if i == n:
-                                for child in item.value.objects:
+                                for child in r2.objects:
                                     if isinstance(child, Node):
                                         (<Node>node).append(<Node>child)
                             else:
-                                for child in item.value.objects:
+                                for child in r2.objects:
                                     if isinstance(child, Node):
                                         (<Node>node).append((<Node>child).copy())
-                free.value = null_
+                top -= 1
 
             elif instruction.code == OpCode.Prepend:
-                item, top = top, top.prev
-                item.prev, free = free, item
-                if top.value.objects is not None and item.value.objects is not None:
-                    n = top.value.length - 1
-                    for i, node in enumerate(top.value.objects):
+                r1 = <Vector>stack[top-1]
+                r2 = <Vector>stack[top]
+                if r1.objects is not None and r2.objects is not None:
+                    n = r1.length - 1
+                    for i, node in enumerate(r1.objects):
                         if isinstance(node, Node):
                             if i == n:
-                                for child in reversed(item.value.objects):
+                                for child in reversed(r2.objects):
                                     if isinstance(child, Node):
                                         (<Node>node).insert(<Node>child)
                             else:
-                                for child in reversed(item.value.objects):
+                                for child in reversed(r2.objects):
                                     if isinstance(child, Node):
                                         (<Node>node).insert((<Node>child).copy())
-                free.value = null_
+                top -= 1
 
             elif instruction.code == OpCode.Compose:
-                values = []
-                for i in range((<InstructionInt>instruction).value - 1):
-                    item, top = top, top.prev
-                    item.prev, free = free, item
-                    values.append(item.value)
-                    free.value = null_
-                values.append(top.value)
-                values.reverse()
-                top.value = Vector._compose(values)
+                n = (<InstructionInt>instruction).value - 1
+                values = stack[top-n:top+1]
+                top -= n
+                stack[top] = Vector._compose(values)
 
             elif instruction.code == OpCode.BeginFor:
-                item, top = top, top.prev
-                item.prev, free = free, item
                 if loop_source is not None:
                     loop_sources.append(loop_source)
                 loop_source = LoopSource.__new__(LoopSource)
-                loop_source.source = item.value
+                loop_source.source = <Vector>stack[top]
+                top -= 1
                 loop_source.position = 0
                 loop_source.iterations = 0
-                loop_sources.append(loop_source)
-                item.value = null_
                 scopes.append({})
 
             elif instruction.code == OpCode.Next:
@@ -717,25 +752,44 @@ cdef class Program:
                     loop_source.position += len(names)
                     loop_source.iterations += 1
 
+            elif instruction.code == OpCode.PushNext:
+                if loop_source.position == loop_source.source.length:
+                    pc += (<InstructionJump>instruction).offset
+                else:
+                    r1 = loop_source.source.item(loop_source.position)
+                    top += 1
+                    if top == limit:
+                        stack.append(r1)
+                        limit += 1
+                    else:
+                        stack[top] = r1
+                    loop_source.position += 1
+                    loop_source.iterations += 1
+
             elif instruction.code == OpCode.EndFor:
                 scopes.pop()
-                if loop_source.iterations:
-                    values = []
-                    for i in range(loop_source.iterations - 1):
-                        item, top = top, top.prev
-                        item.prev, free = free, item
-                        values.append(item.value)
-                        free.value = null_
-                    values.append(top.value)
-                    values.reverse()
-                    top.value = Vector._compose(values)
+                n = loop_source.iterations
+                if n:
+                    n -= 1
+                    values = stack[top-n:top+1]
+                    top -= n
+                    stack[top] = Vector._compose(values)
                 else:
-                    if free is None:
-                        free = StackItem.__new__(StackItem)
-                    item, free = free, free.prev
-                    item.value = null_
-                    item.prev, top = top, item
+                    top += 1
+                    if top == limit:
+                        stack.append(null_)
+                        limit += 1
+                    else:
+                        stack[top] = null_
                 loop_source = loop_sources.pop() if loop_sources else None
+
+            elif instruction.code == OpCode.SetNodeScope:
+                r1 = <Vector>stack[top]
+                if r1.objects is not None and r1.length == 1 and isinstance(r1.objects[0], Node):
+                    scopes[0] = (<Node>r1.objects[0])._attributes
+
+            elif instruction.code == OpCode.ClearNodeScope:
+                scopes[0] = empty_node_scope
 
             elif instruction.code == OpCode.BeginScope:
                 scopes.append({})
@@ -744,33 +798,28 @@ cdef class Program:
                 scopes.pop()
 
             elif instruction.code == OpCode.Let:
-                item, top = top, top.prev
-                item.prev, free = free, item
+                r1 = <Vector>stack[top]
+                top -= 1
                 names = (<InstructionTuple>instruction).value
                 n = len(names)
                 scope = <dict>scopes[len(scopes)-1]
                 if n == 1:
-                    scope[names[0]] = item.value
+                    scope[names[0]] = r1
                 else:
                     for i in range(n):
-                        scope[names[i]] = item.value.item(i)
-                free.value = null_
+                        scope[names[i]] = r1.item(i)
 
             elif instruction.code == OpCode.AppendRoot:
-                item, top = top, top.prev
-                item.prev, free = free, item
-                if item.value.objects is not None:
-                    for value in item.value.objects:
+                r1 = <Vector>stack[top]
+                top -= 1
+                if r1.objects is not None:
+                    for value in r1.objects:
                         if isinstance(value, Node):
                             if (<Node>value)._parent is None:
                                 context.graph.append(<Node>value)
-                free.value = null_
 
             else:
                 raise ValueError(f"Unrecognised instruction: {instruction}")
-
-        self.free = free
-        return top.value if top is not None else None
 
 
 cdef class StateDict:
