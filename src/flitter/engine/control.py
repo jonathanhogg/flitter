@@ -13,7 +13,7 @@ from ..cache import SharedCache
 from ..clock import BeatCounter, system_clock
 from ..interface.controls import Pad, Encoder
 from ..interface.osc import OSCReceiver, OSCSender, OSCMessage, OSCBundle
-from ..language.tree import StateDict, Context
+from ..language.vm import StateDict, Context
 from ..model import Vector, null
 from ..render import process, get_renderer
 from ..interact import get_interactor
@@ -353,7 +353,7 @@ class EngineController:
                 housekeeping += now
                 execution -= now
                 if current_top is not None:
-                    context = run_top.run(state=self.state, variables=names)
+                    context = run_top.run(state=self.state, variables=names, compile=True)
                 else:
                     context = Context()
                 new_errors = context.errors.difference(errors)
