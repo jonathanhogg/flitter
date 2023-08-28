@@ -13,26 +13,11 @@ from ..cache import SharedCache
 from .functions import STATIC_FUNCTIONS, DYNAMIC_FUNCTIONS
 from .. cimport model
 from .noise import NOISE_FUNCTIONS
-from .vm cimport Context, StateDict, Program
+from .vm cimport Context, StateDict, Program, builtins, static_builtins, dynamic_builtins
+from .vm import log
 
 
 logger = name_patch(logger, __name__)
-
-cdef dict static_builtins = {
-    'true': model.true_,
-    'false': model.false_,
-    'null': model.null_,
-}
-static_builtins.update(STATIC_FUNCTIONS)
-static_builtins.update(NOISE_FUNCTIONS)
-
-def log(value):
-    return value
-
-cdef dict dynamic_builtins = {
-    'log': model.Vector(log),
-}
-dynamic_builtins.update(DYNAMIC_FUNCTIONS)
 
 cdef Literal NoOp = Literal(model.null_)
 
@@ -389,9 +374,7 @@ cdef class Name(Expression):
             if value.objects is not None:
                 return value.copynodes()
             return value
-        if (value := dynamic_builtins.get(self.name)) is not None:
-            return value
-        if (value := static_builtins.get(self.name)) is not None:
+        if (value := builtins.get(self.name)) is not None:
             return value
         context.errors.add(f"Unbound name '{self.name}'")
         return model.null_
@@ -502,13 +485,6 @@ cdef class UnaryOperation(Expression):
     def __init__(self, Expression expr):
         self.expr = expr
 
-    cpdef Expression partially_evaluate(self, Context context):
-        cdef Expression expr = self.expr.partially_evaluate(context)
-        cdef Expression unary = type(self)(expr)
-        if isinstance(expr, Literal):
-            return Literal(unary.evaluate(context))
-        return unary
-
     cpdef object reduce(self, func):
         return func(self, self.expr.reduce(func))
 
@@ -529,9 +505,8 @@ cdef class Negative(UnaryOperation):
 
     cpdef Expression partially_evaluate(self, Context context):
         cdef Expression expr = self.expr.partially_evaluate(context)
-        cdef Expression unary = type(self)(expr)
         if isinstance(expr, Literal):
-            return Literal(unary.evaluate(context))
+            return Literal((<Literal>expr).value.neg())
         if isinstance(expr, Negative):
             expr = Positive((<Negative>expr).expr)
             return expr.partially_evaluate(context)
@@ -544,7 +519,7 @@ cdef class Negative(UnaryOperation):
             if isinstance(maths.right, Literal):
                 expr = type(expr)(maths.left, Negative(maths.right))
                 return expr.partially_evaluate(context)
-        return unary
+        return Negative(expr)
 
 
 cdef class Positive(UnaryOperation):
@@ -560,12 +535,11 @@ cdef class Positive(UnaryOperation):
 
     cpdef Expression partially_evaluate(self, Context context):
         cdef Expression expr = self.expr.partially_evaluate(context)
-        cdef Expression unary = type(self)(expr)
         if isinstance(expr, Literal):
-            return Literal(unary.evaluate(context))
+            return Literal((<Literal>expr).value.pos())
         if isinstance(expr, (Negative, Positive, MathsBinaryOperation)):
             return expr.partially_evaluate(context)
-        return unary
+        return Positive(expr)
 
 
 cdef class Not(UnaryOperation):
@@ -578,6 +552,12 @@ cdef class Not(UnaryOperation):
         program.extend(self.expr.compile())
         program.not_()
         return program
+
+    cpdef Expression partially_evaluate(self, Context context):
+        cdef Expression expr = self.expr.partially_evaluate(context)
+        if isinstance(expr, Literal):
+            return Literal((<Literal>expr).value.not_())
+        return Not(expr)
 
 
 cdef class BinaryOperation(Expression):
@@ -606,18 +586,17 @@ cdef class BinaryOperation(Expression):
     cpdef Expression partially_evaluate(self, Context context):
         cdef Expression left = self.left.partially_evaluate(context)
         cdef Expression right = self.right.partially_evaluate(context)
-        cdef Expression binary = type(self)(left, right)
         cdef bint literal_left = isinstance(left, Literal)
         cdef bint literal_right = isinstance(right, Literal)
         if literal_left and literal_right:
-            return Literal(binary.evaluate(context))
+            return Literal(self.op((<Literal>left).value, (<Literal>right).value))
         elif literal_left:
             if (expr := self.constant_left((<Literal>left).value, right)) is not None:
                 return expr.partially_evaluate(context)
         elif literal_right:
             if (expr := self.constant_right(left, (<Literal>right).value)) is not None:
                 return expr.partially_evaluate(context)
-        return binary
+        return type(self)(left, right)
 
     cdef model.Vector op(self, model.Vector left, model.Vector right):
         raise NotImplementedError()
@@ -888,11 +867,9 @@ cdef class Slice(Expression):
             expr_value = (<Literal>expr).value
             index_value = (<Literal>index).value
             return Literal(expr_value.slice(index_value))
-        elif isinstance(expr, Name) and isinstance(index, Literal):
-            name = (<Name>expr).name
+        elif isinstance(index, Literal):
             index_value = (<Literal>index).value
-            if name in context.variables:
-                return FastVariableSlice(name, index_value)
+            return FastSlice(expr, index_value)
         return Slice(expr, index)
 
     cpdef object reduce(self, func):
@@ -902,30 +879,29 @@ cdef class Slice(Expression):
         return f'Slice({self.expr!r}, {self.index!r})'
 
 
-cdef class FastVariableSlice(Expression):
-    cdef readonly str name
+cdef class FastSlice(Expression):
+    cdef readonly Expression expr
     cdef readonly model.Vector index
 
-    def __init__(self, str name, model.Vector index):
-        self.name = name
+    def __init__(self, Expression expr, model.Vector index):
+        self.expr = expr
         self.index = index
 
     cpdef model.Vector evaluate(self, Context context):
-        cdef model.Vector value = context.variables[self.name]
+        cdef model.Vector value = self.expr.evaluate(context)
         return value.slice(self.index)
 
     cpdef Program compile(self):
         cdef Program program = Program.__new__(Program)
-        program.name(self.name)
-        program.literal(self.index)
-        program.slice()
+        program.extend(self.expr.compile())
+        program.slice_literal(self.index)
         return program
 
     cpdef Expression partially_evaluate(self, Context context):
         return self
 
     def __repr__(self):
-        return f'FastVariableSlice({self.name!r}, {self.index!r})'
+        return f'FastSlice({self.expr!r}, {self.index!r})'
 
 
 cdef class Call(Expression):
@@ -1159,7 +1135,7 @@ cdef class Attributes(Expression):
                     if node._attributes or n > 1:
                         variables = saved.copy()
                         for attr, value in node._attributes.items():
-                            if attr not in static_builtins and attr not in dynamic_builtins:
+                            if attr not in builtins:
                                 variables.setdefault(attr, value)
                         context.variables = variables
                     else:
@@ -1168,13 +1144,11 @@ cdef class Attributes(Expression):
                         value = binding.expr.evaluate(context)
                         if value.length:
                             node._attributes[binding.name] = value
-                            if i < n-1 and binding.name not in saved and binding.name not in static_builtins \
-                                                                     and binding.name not in dynamic_builtins:
+                            if i < n-1 and binding.name not in saved and binding.name not in builtins:
                                 context.variables[binding.name] = value
                         elif binding.name in node._attributes:
                             del node._attributes[binding.name]
-                            if i < n-1 and binding.name not in saved and binding.name not in static_builtins \
-                                                                     and binding.name not in dynamic_builtins:
+                            if i < n-1 and binding.name not in saved and binding.name not in builtins:
                                 del context.variables[binding.name]
             context.variables = saved
         return nodes
@@ -1237,7 +1211,7 @@ cdef class Attributes(Expression):
         return func(self, *children)
 
     def __repr__(self):
-        return f'Attributes({self.node!r}, {self.bindings!r})'
+        return f'{self.__class__.__name__}({self.node!r}, {self.bindings!r})'
 
 
 cdef class FastAttributes(Attributes):
@@ -1267,9 +1241,6 @@ cdef class FastAttributes(Attributes):
             program.attribute(binding.name)
         return program
 
-    def __repr__(self):
-        return f'FastAttributes({self.node!r}, {self.bindings!r})'
-
 
 cdef class Search(Expression):
     cdef readonly model.Query query
@@ -1284,6 +1255,11 @@ cdef class Search(Expression):
             node._select(self.query, nodes, False)
             node = node.next_sibling
         return model.Vector.__new__(model.Vector, nodes)
+
+    cpdef Program compile(self):
+        cdef Program program = Program.__new__(Program)
+        program.search(self.query)
+        return program
 
     cpdef Expression partially_evaluate(self, Context context):
         return self
@@ -1734,6 +1710,22 @@ cdef class Function(Expression):
         context.variables[self.name] = model.Vector.__new__(model.Vector, Function(self.name, tuple(parameters), expr))
         return model.null_
 
+    cpdef Program compile(self):
+        cdef Program program = Program.__new__(Program)
+        program.literal(self.expr.compile())
+        cdef Binding parameter
+        cdef list names = []
+        for parameter in self.parameters:
+            names.append(parameter.name)
+            if parameter.expr is None:
+                program.literal(model.null_)
+            else:
+                program.extend(parameter.expr.compile())
+        program.func((self.name, *names))
+        program.let((self.name,))
+        program.literal(model.null_)
+        return program
+
     cpdef Expression partially_evaluate(self, Context context):
         cdef list parameters = []
         cdef Binding parameter
@@ -1756,16 +1748,10 @@ cdef class Function(Expression):
             context.variables[parameter.name] = None
         context.unbound = set()
         expr = self.expr.partially_evaluate(context)
-        if literal:
-            literal = not context.unbound
         context.variables = saved
         context.unbound = unbound
-        cdef function = Function(self.name, tuple(parameters), expr)
-        if literal:
-            context.variables[self.name] = model.Vector.__new__(model.Vector, function)
-            return NoOp
         context.variables[self.name] = None
-        return function
+        return Function(self.name, tuple(parameters), expr)
 
     cpdef object reduce(self, func):
         cdef list children = []
@@ -1823,6 +1809,22 @@ cdef class TemplateCall(Expression):
                 results.append(func_expr.expr.evaluate(context))
                 context.variables = saved
         return model.Vector._compose(results)
+
+    cpdef Program compile(self):
+        cdef Program program = Program.__new__(Program)
+        cdef Binding arg
+        cdef list names = []
+        if self.children is not None:
+            program.extend(self.children.compile())
+        else:
+            program.literal(model.null_)
+        if self.args:
+            for arg in self.args:
+                names.append(arg.name)
+                program.extend(arg.expr.compile())
+        program.extend(self.function.compile())
+        program.call_template(tuple(names))
+        return program
 
     cpdef Expression partially_evaluate(self, Context context):
         cdef Expression function = self.function.partially_evaluate(context)

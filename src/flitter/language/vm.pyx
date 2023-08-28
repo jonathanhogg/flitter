@@ -1,10 +1,14 @@
 # cython: language_level=3, profile=False
 
+"""
+Flitter language stack-based virtual machine
+"""
+
 import cython
 
 from ..cache import SharedCache
 from .functions import STATIC_FUNCTIONS, DYNAMIC_FUNCTIONS
-from ..model cimport Vector, Node, null_, true_, false_
+from ..model cimport Vector, Node, Query, null_, true_, false_
 from .noise import NOISE_FUNCTIONS
 
 
@@ -24,6 +28,10 @@ cdef dict dynamic_builtins = {
 }
 dynamic_builtins.update(DYNAMIC_FUNCTIONS)
 
+cdef dict builtins = {}
+builtins.update(dynamic_builtins)
+builtins.update(static_builtins)
+
 cdef int NextLabel = 1
 
 cdef enum OpCode:
@@ -36,6 +44,7 @@ cdef enum OpCode:
     BranchFalse
     BranchTrue
     Call
+    CallTemplate
     ClearNodeScope
     Compose
     Drop
@@ -44,6 +53,7 @@ cdef enum OpCode:
     EndScope
     Eq
     FloorDiv
+    Func
     Ge
     Gt
     Import
@@ -69,8 +79,10 @@ cdef enum OpCode:
     Prepend
     PushNext
     Range
+    Search
     SetNodeScope
     Slice
+    SliceLiteral
     Sub
     Tag
     TrueDiv
@@ -86,6 +98,7 @@ cdef dict OpCodeNames = {
     OpCode.BranchFalse: 'BranchFalse',
     OpCode.BranchTrue: 'BranchTrue',
     OpCode.Call: 'Call',
+    OpCode.CallTemplate: 'CallTemplate',
     OpCode.ClearNodeScope: 'ClearNodeScope',
     OpCode.Compose: 'Compose',
     OpCode.Drop: 'Drop',
@@ -94,6 +107,7 @@ cdef dict OpCodeNames = {
     OpCode.EndScope: 'EndScope',
     OpCode.Eq: 'Eq',
     OpCode.FloorDiv: 'FloorDiv',
+    OpCode.Func: 'Func',
     OpCode.Ge: 'Ge',
     OpCode.Gt: 'Gt',
     OpCode.Import: 'Import',
@@ -118,8 +132,10 @@ cdef dict OpCodeNames = {
     OpCode.Prepend: 'Prepend',
     OpCode.PushNext: 'PushNext',
     OpCode.Range: 'Range',
+    OpCode.Search: 'Search',
     OpCode.SetNodeScope: 'SetNodeScope',
     OpCode.Slice: 'Slice',
+    OpCode.Slice: 'SliceLiteral',
     OpCode.Sub: 'Sub',
     OpCode.Tag: 'Tag',
     OpCode.TrueDiv: 'TrueDiv',
@@ -181,6 +197,17 @@ cdef class InstructionInt(Instruction):
         return f'{OpCodeNames[self.code]} {self.value!r}'
 
 
+cdef class InstructionQuery(Instruction):
+    cdef readonly Query value
+
+    def __init__(self, OpCode code, Query value):
+        super().__init__(code)
+        self.value = value
+
+    def __str__(self):
+        return f'{OpCodeNames[self.code]} {self.value!r}'
+
+
 cdef class InstructionLabel(Instruction):
     cdef readonly int label
 
@@ -220,9 +247,25 @@ cdef class InstructionJumpTuple(InstructionJump):
 
 
 cdef class Function:
-    cdef readonly tuple arguments
-    cdef readonly tuple default_values
+    cdef readonly str __name__
+    cdef readonly tuple parameters
+    cdef readonly tuple defaults
+    cdef readonly dict scope
     cdef readonly Program program
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    def __call__(Program self, *args, **kwargs):
+        cdef Context context = Context()
+        cdef int i
+        for i, name in enumerate(self.parameters):
+            if i < len(args):
+                context.variables[name] = args[i]
+            else:
+                context.variables[name] = kwargs.get(name, self.defaults[i])
+        cdef list stack = self.program.execute(context, self.scope)
+        assert len(stack) == 1
+        return stack[0]
 
 
 cdef class LoopSource:
@@ -231,18 +274,21 @@ cdef class LoopSource:
     cdef int iterations
 
 
-cdef Vector call_helper(Context context, object function, tuple args):
+cdef Vector call_helper(Context context, object function, tuple args, dict kwargs=None):
     if callable(function):
         try:
             if hasattr(function, 'state_transformer') and function.state_transformer:
-                return function(context.state, *args)
-            else:
+                if kwargs is None:
+                    return function(context.state, *args)
+                else:
+                    return function(context.state, *args, **kwargs)
+            elif kwargs is None:
                 return function(*args)
+            else:
+                return function(*args, **kwargs)
         except Exception as exc:
             context.errors.add(f"Error calling function {function.__name__}\n{str(exc)}")
-            return null_
-    else:
-        raise NotImplementedError()
+    return null_
 
 
 cdef class Program:
@@ -289,9 +335,9 @@ cdef class Program:
         cdef Context import_context
         code = SharedCache.get_with_root(filename, context.path).read_flitter_program()
         if code is not None:
-            import_context = context
+            import_context = context.parent
             while import_context is not None:
-                if import_context.path == context.path:
+                if import_context.path == code.path:
                     context.errors.add(f"Circular import with {filename}")
                     break
                 import_context = import_context.parent
@@ -327,6 +373,9 @@ cdef class Program:
         self.instructions.append(InstructionTuple(OpCode.Import, names))
 
     def literal(self, value):
+        if isinstance(value, Program):
+            (<Program>value).link()
+            value = (<Program>value).instructions
         cdef Vector vector = Vector._coerce(value)
         if vector.objects is not None:
             for obj in vector.objects:
@@ -398,8 +447,14 @@ cdef class Program:
     def slice(self):
         self.instructions.append(Instruction(OpCode.Slice))
 
+    def slice_literal(self, Vector value):
+        self.instructions.append(InstructionVector(OpCode.SliceLiteral, value))
+
     def call(self, int count):
         self.instructions.append(InstructionInt(OpCode.Call, count))
+
+    def call_template(self, tuple names):
+        self.instructions.append(InstructionTuple(OpCode.CallTemplate, names))
 
     def tag(self, str name):
         self.instructions.append(InstructionStr(OpCode.Tag, name))
@@ -443,6 +498,12 @@ cdef class Program:
     def let(self, tuple names):
         self.instructions.append(InstructionTuple(OpCode.Let, names))
 
+    def search(self, Query query):
+        self.instructions.append(InstructionQuery(OpCode.Search, query))
+
+    def func(self, tuple names):
+        self.instructions.append(InstructionTuple(OpCode.Func, names))
+
     def append_root(self):
         self.instructions.append(Instruction(OpCode.AppendRoot))
 
@@ -459,19 +520,23 @@ cdef class Program:
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
-    def execute(self, Context context):
+    cpdef list execute(self, Context context, dict additional_scope=None):
         cdef int i, n, pc=0, program_end=len(self.instructions)
         cdef Instruction instruction=None
-        cdef list stack = []
-        cdef int top=-1, limit=0
-        cdef list values, loop_sources=[]
-        cdef dict empty_node_scope = {}
-        cdef list scopes = [empty_node_scope, dynamic_builtins, static_builtins, context.variables]
+        cdef int limit=0, top=-1
+        cdef list stack=[], values, loop_sources=[]
+        cdef list scopes
+        if additional_scope:
+            scopes = [None, builtins, additional_scope, context.variables]
+        else:
+            scopes = [None, builtins, context.variables]
         cdef str name
         cdef tuple names, args
         cdef Vector r1, r2
         cdef LoopSource loop_source = None
         cdef dict variables
+        cdef Query query
+        cdef Function function
 
         if not self.linked:
             self.link()
@@ -479,8 +544,6 @@ cdef class Program:
         while pc < program_end:
             instruction = <Instruction>self.instructions[pc]
             pc += 1
-
-            # print(instruction, stack[:top+1], stack[top+1:])
 
             if instruction.code == OpCode.Dup:
                 top += 1
@@ -550,10 +613,11 @@ cdef class Program:
                     limit += 1
                 name = (<InstructionStr>instruction).value
                 for scope in reversed(scopes):
-                    r1 = <Vector>(<dict>scope).get(name)
-                    if r1 is not None:
-                        stack[top] = r1
-                        break
+                    if scope:
+                        r1 = <Vector>(<dict>scope).get(name)
+                        if r1 is not None:
+                            stack[top] = r1
+                            break
                 else:
                     stack[top] = null_
 
@@ -654,6 +718,10 @@ cdef class Program:
                 stack[top-1] = r1.slice((<Vector>stack[top]))
                 top -= 1
 
+            elif instruction.code == OpCode.SliceLiteral:
+                r1 = <Vector>stack[top]
+                stack[top] = r1.slice((<InstructionVector>instruction).value)
+
             elif instruction.code == OpCode.Call:
                 r1 = <Vector>stack[top]
                 n = (<InstructionInt>instruction).value
@@ -664,11 +732,48 @@ cdef class Program:
                         stack[top] = call_helper(context, r1.objects[0], args)
                     else:
                         values = []
-                        for function in r1.objects:
-                            values.append(call_helper(context, function, args))
+                        for func in r1.objects:
+                            values.append(call_helper(context, func, args))
                         stack[top] = Vector._compose(values)
                 else:
                     stack[top] = null_
+
+            elif instruction.code == OpCode.CallTemplate:
+                r1 = <Vector>stack[top]
+                names = (<InstructionTuple>instruction).value
+                n = len(names)
+                args = tuple(stack[top-n:top])
+                kwargs = dict(zip(names, args))
+                top -= n + 1
+                r2 = <Vector>stack[top]
+                if r1.objects:
+                    if r1.length == 1:
+                        stack[top] = call_helper(context, r1.objects[0], (r2,), kwargs)
+                    else:
+                        values = []
+                        for i in range(r1.length):
+                            func = r1.objects[i]
+                            if i == r1.length-1:
+                                values.append(call_helper(context, func, (r2,), kwargs))
+                            else:
+                                values.append(call_helper(context, func, (r2.copynodes(),), kwargs))
+                        stack[top] = Vector._compose(values)
+                else:
+                    stack[top] = null_
+
+            elif instruction.code == OpCode.Func:
+                function = Function.__new__(Function)
+                function.scope = {}
+                for scope in scopes[len(scopes)-1:1:-1]:
+                    function.scope.update(scope)
+                function.__name__ = (<InstructionTuple>instruction).value[0]
+                function.parameters = (<InstructionTuple>instruction).value[1:]
+                n = len(function.parameters)
+                function.defaults = tuple(stack[top-n+1:top+1])
+                top -= n
+                function.program = Program.__new__(Program)
+                function.program.instructions = (<Vector>stack[top]).objects
+                stack[top] = Vector.__new__(Vector, function)
 
             elif instruction.code == OpCode.Tag:
                 name = (<InstructionStr>instruction).value
@@ -789,7 +894,7 @@ cdef class Program:
                     scopes[0] = (<Node>r1.objects[0])._attributes
 
             elif instruction.code == OpCode.ClearNodeScope:
-                scopes[0] = empty_node_scope
+                scopes[0] = None
 
             elif instruction.code == OpCode.BeginScope:
                 scopes.append({})
@@ -809,6 +914,26 @@ cdef class Program:
                     for i in range(n):
                         scope[names[i]] = r1.item(i)
 
+            elif instruction.code == OpCode.Search:
+                node = context.graph.first_child
+                values = []
+                query = (<InstructionQuery>instruction).value
+                while node is not None:
+                    (<Node>node)._select(query, values, False)
+                    node = (<Node>node).next_sibling
+                if values:
+                    r1 = Vector.__new__(Vector)
+                    r1.objects = values
+                    r1.length = len(values)
+                else:
+                    r1 = null_
+                top += 1
+                if top == limit:
+                    stack.append(r1)
+                    limit += 1
+                else:
+                    stack[top] = r1
+
             elif instruction.code == OpCode.AppendRoot:
                 r1 = <Vector>stack[top]
                 top -= 1
@@ -820,6 +945,8 @@ cdef class Program:
 
             else:
                 raise ValueError(f"Unrecognised instruction: {instruction}")
+
+        return stack[:top+1]
 
 
 cdef class StateDict:
@@ -848,12 +975,10 @@ cdef class StateDict:
         self._changed_keys = set()
 
     cdef Vector get_item(self, Vector key):
-        if key in self._state:
-            return self._state[key]
-        return null_
+        return <Vector>self._state.get(key, null_)
 
     cdef void set_item(self, Vector key, Vector value):
-        cdef Vector current = self.get_item(key)
+        cdef Vector current = <Vector>self._state.get(key, null_)
         if value.length:
             if value.ne(current):
                 self._state[key] = value

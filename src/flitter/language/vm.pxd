@@ -3,11 +3,17 @@
 from ..model cimport Vector, Node
 
 
+cdef dict static_builtins
+cdef dict dynamic_builtins
+cdef dict builtins
+
+
 cdef class Program:
     cdef readonly list instructions
     cdef bint linked
 
     cdef void link(self)
+    cpdef list execute(self, Context context, dict additional_scope=?)
 
 
 cdef class StateDict:
