@@ -1,4 +1,4 @@
-# cython: language_level=3, profile=False
+# cython: language_level=3, profile=False, boundscheck=False, wraparound=False
 
 import re
 from weakref import ref as weak
@@ -69,6 +69,8 @@ cdef class Vector:
             if v.objects is None:
                 for j in range(v.length):
                     objects.append(v.numbers[j])
+            elif v.length == 1:
+                objects.append(v.objects[0])
             else:
                 objects.extend(v.objects)
         result.objects = objects
