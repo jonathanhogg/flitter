@@ -778,6 +778,9 @@ cdef class And(BinaryOperation):
         cdef model.Vector left = self.left.evaluate(context)
         return self.right.evaluate(context) if left.as_bool() else left
 
+    cdef model.Vector op(self, model.Vector left, model.Vector right):
+        return right if left.as_bool() else left
+
     cpdef Program compile(self):
         cdef Program program = Program.__new__(Program)
         end_label = program.new_label()
@@ -801,6 +804,9 @@ cdef class Or(BinaryOperation):
         cdef model.Vector left = self.left.evaluate(context)
         return left if left.as_bool() else self.right.evaluate(context)
 
+    cdef model.Vector op(self, model.Vector left, model.Vector right):
+        return left if left.as_bool() else right
+
     cpdef Program compile(self):
         cdef Program program = Program.__new__(Program)
         end_label = program.new_label()
@@ -823,6 +829,13 @@ cdef class Xor(BinaryOperation):
     cpdef model.Vector evaluate(self, Context context):
         cdef model.Vector left = self.left.evaluate(context)
         cdef model.Vector right = self.right.evaluate(context)
+        if not left.as_bool():
+            return right
+        if not right.as_bool():
+            return left
+        return model.false_
+
+    cdef model.Vector op(self, model.Vector left, model.Vector right):
         if not left.as_bool():
             return right
         if not right.as_bool():
