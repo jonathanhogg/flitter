@@ -24,7 +24,7 @@ class EngineController:
     RECEIVE_PORT = 47178
 
     def __init__(self, target_fps=60, screen=0, fullscreen=False, vsync=False, state_file=None, multiprocess=True,
-                 autoreset=None, state_eval_wait=0, realtime=True, defined_variables=None):
+                 autoreset=None, state_eval_wait=0, realtime=True, defined_variables=None, vm_stats=False):
         self.default_fps = target_fps
         self.target_fps = target_fps
         self.realtime = realtime
@@ -38,6 +38,7 @@ class EngineController:
             self.defined_variables = {key: Vector.coerce(value) for key, value in defined_variables.items()}
         else:
             self.defined_variables = {}
+        self.vm_stats = vm_stats
         self.state_file = Path(state_file) if state_file is not None else None
         if self.state_file is not None and self.state_file.exists():
             logger.info("Recover state from state file: {}", self.state_file)
@@ -313,7 +314,7 @@ class EngineController:
             execution = render = housekeeping = 0
             performance = 1
             gc.disable()
-            run_top = current_top = None
+            run_program = current_program = None
             errors = set()
             logs = set()
             while True:
@@ -327,33 +328,33 @@ class EngineController:
                          'fps': self.target_fps, 'realtime': self.realtime,
                          'screen': self.screen, 'fullscreen': self.fullscreen, 'vsync': self.vsync}
 
-                program_top = self.current_path.read_flitter_program(variables=self.defined_variables, undefined=names)
-                if program_top is not current_top:
-                    level = 'SUCCESS' if current_top is None else 'INFO'
+                program = self.current_path.read_flitter_program(variables=self.defined_variables, undefined=names)
+                if program is not current_program:
+                    level = 'SUCCESS' if current_program is None else 'INFO'
                     logger.log(level, "Loaded page {}: {}", self.current_page, self.current_path)
-                    run_top = current_top = program_top
+                    run_program = current_program = program
 
-                if current_top is not None and run_top is current_top and self.state_eval_wait and self.state_timestamp is not None and \
+                if current_program is not None and run_program is current_program and self.state_eval_wait and self.state_timestamp is not None and \
                         system_clock() > self.state_timestamp + self.state_eval_wait:
                     start = system_clock()
-                    run_top = current_top.simplify(state=self.state)
+                    run_program = current_program.top.simplify(state=self.state, undefined=names).compile()
+                    run_program.set_path(current_program.path)
                     logger.debug("Partially-evaluated current program on state in {:.1f}ms", (system_clock() - start) * 1000)
-                    logger.opt(lazy=True).debug("Tree node count after partial-evaluation {after}",
-                                                after=lambda: run_top.reduce(lambda e, *rs: sum(rs) + 1))
+                    logger.debug("Compiled to {} instruction program", len(program))
 
                 if self.state.changed:
                     self.global_state_dirty = True
                     self.state_timestamp = system_clock()
                     self.state.clear_changed()
-                    if run_top is not current_top:
+                    if run_program is not current_program:
                         logger.debug("Undo partial-evaluation on state")
-                        run_top = current_top
+                        run_program = current_program
 
                 now = system_clock()
                 housekeeping += now
                 execution -= now
-                if current_top is not None:
-                    context = run_top.run(state=self.state, variables=names, compile=True)
+                if run_program is not None:
+                    context = run_program.run(state=self.state, variables=names, record_stats=self.vm_stats)
                 else:
                     context = Context()
                 new_errors = context.errors.difference(errors)
@@ -387,7 +388,7 @@ class EngineController:
                 if self.autoreset and self.state_timestamp is not None and system_clock() > self.state_timestamp + self.autoreset:
                     logger.debug("Auto-reset state")
                     self.reset_state()
-                    current_top = program_top
+                    current_program = program
 
                 if self.global_state_dirty and self.state_file is not None and frame_time > dump_time + 1:
                     logger.debug("Saving state")
@@ -401,7 +402,7 @@ class EngineController:
                         self.reset_state()
                     self.switch_to_page(self.switch_page)
                     self.switch_page = None
-                    run_top = current_top = None
+                    run_program = current_program = None
                     performance = 1
                     count = gc.collect(2)
                     logger.trace("Collected {} objects (full collection)", count)
@@ -434,6 +435,7 @@ class EngineController:
                                 fps, 1000 * execution / nframes, 1000 * render / nframes, 1000 * housekeeping / nframes, performance)
                     frames = frames[-1:]
                     execution = render = housekeeping = 0
+
         finally:
             SharedCache.clean(0)
             for renderers in self.renderers.values():
@@ -445,3 +447,5 @@ class EngineController:
             count = gc.collect(2)
             logger.trace("Collected {} objects (full collection)", count)
             gc.enable()
+            if self.vm_stats:
+                run_program.log_stats()

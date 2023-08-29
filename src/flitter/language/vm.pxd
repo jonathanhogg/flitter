@@ -11,9 +11,12 @@ cdef dict builtins
 cdef class Program:
     cdef readonly list instructions
     cdef bint linked
+    cdef readonly dict stats
+    cdef readonly str path
+    cdef readonly object top
 
-    cdef void link(self)
-    cpdef list execute(self, Context context, dict additional_scope=?)
+    cpdef void link(self)
+    cpdef list execute(self, Context context, dict additional_scope=?, bint record_stats=?)
 
 
 cdef class StateDict:

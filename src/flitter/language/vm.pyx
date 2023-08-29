@@ -4,13 +4,21 @@
 Flitter language stack-based virtual machine
 """
 
-import cython
+import time
 
+import cython
+from loguru import logger
+
+from .. import name_patch
 from ..cache import SharedCache
 from .functions import STATIC_FUNCTIONS, DYNAMIC_FUNCTIONS
 from ..model cimport Vector, Node, Query, null_, true_, false_
 from .noise import NOISE_FUNCTIONS
 
+from libc.math cimport floor
+
+
+logger = name_patch(logger, __name__)
 
 cdef dict static_builtins = {
     'true': true_,
@@ -318,12 +326,30 @@ cdef class Program:
     def __cinit__(self):
         self.instructions = []
         self.linked = False
+        self.stats = None
 
     def __len__(self):
         return len(self.instructions)
 
     def __str__(self):
         return '\n'.join(str(instruction) for instruction in self.instructions)
+
+    def set_path(self, str path):
+        self.path = path
+
+    def set_top(self, object top):
+        self.top = top
+
+    def run(self, StateDict state=None, dict variables=None, bint record_stats=False):
+        cdef dict context_vars = None
+        cdef str key
+        if variables is not None:
+            context_vars = {}
+            for key, value in variables.items():
+                context_vars[key] = Vector._coerce(value)
+        cdef Context context = Context(state=state, variables=context_vars, path=self.path)
+        self.execute(context, record_stats=record_stats)
+        return context
 
     @staticmethod
     def new_label():
@@ -336,7 +362,13 @@ cdef class Program:
         self.instructions.extend(program.instructions)
         return self
 
-    cdef void link(self):
+    def log_stats(self):
+        if self.stats:
+            for duration, code in sorted([(duration, code) for (code, duration) in self.stats.items()], reverse=True):
+                logger.info("{:20s} {:7.1f}s", OpCodeNames[code], duration)
+        self.stats = None
+
+    cpdef void link(self):
         cdef Instruction instruction
         cdef int label, address, target
         cdef list addresses
@@ -356,17 +388,17 @@ cdef class Program:
 
     def _import(self, Context context, str filename):
         cdef Context import_context
-        code = SharedCache.get_with_root(filename, context.path).read_flitter_program()
-        if code is not None:
+        program = SharedCache.get_with_root(filename, context.path).read_flitter_program()
+        if program is not None:
             import_context = context.parent
             while import_context is not None:
-                if import_context.path == code.path:
+                if import_context.path == program.path:
                     context.errors.add(f"Circular import with {filename}")
                     break
                 import_context = import_context.parent
             else:
-                import_context = Context(parent=context, path=code.path)
-                code.compile().execute(import_context)
+                import_context = Context(parent=context, path=program.path)
+                program.execute(import_context)
                 context.errors.update(import_context.errors)
                 return import_context.variables
         return None
@@ -530,20 +562,9 @@ cdef class Program:
     def append_root(self):
         self.instructions.append(Instruction(OpCode.AppendRoot))
 
-    def run(self, StateDict state=None, dict variables=None):
-        cdef dict context_vars = None
-        cdef str key
-        if variables is not None:
-            context_vars = {}
-            for key, value in variables.items():
-                context_vars[key] = Vector._coerce(value)
-        cdef Context context = Context(state=state, variables=context_vars)
-        self.execute(context)
-        return context
-
     @cython.wraparound(False)
     @cython.boundscheck(False)
-    cpdef list execute(self, Context context, dict additional_scope=None):
+    cpdef list execute(self, Context context, dict additional_scope=None, bint record_stats=False):
         cdef int i, n, pc=0, program_end=len(self.instructions)
         cdef Instruction instruction=None
         cdef int limit=0, top=-1
@@ -560,9 +581,15 @@ cdef class Program:
         cdef dict variables
         cdef Query query
         cdef Function function
+        cdef double now, timestamp
 
         if not self.linked:
             self.link()
+
+        if record_stats:
+            if self.stats is None:
+                self.stats = {}
+            timestamp = time.perf_counter()
 
         while pc < program_end:
             instruction = <Instruction>self.instructions[pc]
@@ -956,6 +983,11 @@ cdef class Program:
 
             else:
                 raise ValueError(f"Unrecognised instruction: {instruction}")
+
+            if record_stats:
+                now = time.perf_counter()
+                self.stats[instruction.code] = (<double>self.stats.get(instruction.code, 0)) + now - timestamp
+                timestamp = now
 
         return stack[:top+1]
 

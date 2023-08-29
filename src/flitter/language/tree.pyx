@@ -1,7 +1,11 @@
 # cython: language_level=3, profile=False
 
 """
-Language syntax/evaluation tree
+Language abstract syntax tree
+
+The tree supports reasonably sophisticated partial evaluation that will reduce
+the tree down to a "simpler" form by propogating constants. As this can result
+in unrolling loops, "simpler" does not necessarily mean "smaller."
 """
 
 cimport cython
@@ -9,30 +13,27 @@ cimport cython
 from loguru import logger
 
 from .. import name_patch
-from ..cache import SharedCache
-from .functions import STATIC_FUNCTIONS, DYNAMIC_FUNCTIONS
-from .. cimport model
-from .noise import NOISE_FUNCTIONS
+from ..model cimport Vector, Node, Query, null_, true_, false_, minusone_
 from .vm cimport Context, StateDict, Program, builtins, static_builtins, dynamic_builtins
 from .vm import log
 
 
 logger = name_patch(logger, __name__)
 
-cdef Literal NoOp = Literal(model.null_)
+cdef Literal NoOp = Literal(null_)
 
 
 cdef Expression sequence_pack(list expressions):
     cdef Expression expr
     cdef Literal literal
-    cdef model.Vector value
+    cdef Vector value
     cdef list vectors, remaining = []
     cdef bint has_let = False
     while expressions:
         expr = <Expression>expressions.pop(0)
-        if isinstance(expr, Literal) and type((<Literal>expr).value) == model.Vector:
+        if isinstance(expr, Literal) and type((<Literal>expr).value) == Vector:
             vectors = []
-            while isinstance(expr, Literal) and type((<Literal>expr).value) == model.Vector:
+            while isinstance(expr, Literal) and type((<Literal>expr).value) == Vector:
                 value = (<Literal>expr).value
                 if value.length:
                     vectors.append(value)
@@ -41,7 +42,7 @@ cdef Expression sequence_pack(list expressions):
                     break
                 expr = <Expression>expressions.pop(0)
             if vectors:
-                remaining.append(Literal(model.Vector._compose(vectors)))
+                remaining.append(Literal(Vector._compose(vectors)))
         if expr is not None:
             if isinstance(expr, InlineSequence):
                 expressions[:0] = (<InlineSequence>expr).expressions
@@ -73,37 +74,17 @@ cdef class Expression:
 
 
 cdef class Top(Expression):
-    cdef readonly str path
     cdef readonly tuple expressions
-    cdef readonly Program program
 
     def __init__(self, tuple expressions):
         self.expressions = expressions
-        self.program = None
-
-    def set_path(self, str path):
-        self.path = path
-
-    def run(self, StateDict state=None, dict variables=None, bint compile=False):
-        cdef dict context_vars = None
-        cdef str key
-        if variables is not None:
-            context_vars = {}
-            for key, value in variables.items():
-                context_vars[key] = model.Vector._coerce(value)
-        cdef Context context = Context(state=state, variables=context_vars, path=self.path)
-        if compile:
-            self.compile().execute(context)
-        else:
-            self.evaluate(context)
-        return context
 
     def simplify(self, StateDict state=None, dict variables=None, undefined=None):
         cdef dict context_vars = {}
         cdef str key
         if variables is not None:
             for key, value in variables.items():
-                context_vars[key] = model.Vector._coerce(value)
+                context_vars[key] = Vector._coerce(value)
         if undefined is not None:
             for key in undefined:
                 context_vars[key] = None
@@ -121,13 +102,12 @@ cdef class Top(Expression):
 
     cpdef Program compile(self):
         cdef Expression expr
-        if self.program is None:
-            self.program = Program.__new__(Program)
-            for expr in self.expressions:
-                self.program.extend(expr.compile())
-                self.program.append_root()
-            logger.debug("Compiled tree to {} instructions", len(self.program))
-        return self.program
+        program = Program.__new__(Program)
+        for expr in self.expressions:
+            program.extend(expr.compile())
+            program.append_root()
+        program.link()
+        return program
 
     cpdef Expression partially_evaluate(self, Context context):
         cdef list expressions = []
@@ -137,16 +117,14 @@ cdef class Top(Expression):
             if not isinstance(expr, Literal) or (<Literal>expr).value.length:
                 expressions.append(expr)
         cdef str name
-        cdef model.Vector value
+        cdef Vector value
         cdef list bindings = []
         for name, value in context.variables.items():
             if value is not None:
                 bindings.append(PolyBinding((name,), Literal(value)))
         if bindings:
             expressions.append(Let(tuple(bindings)))
-        cdef Top top = Top(tuple(expressions))
-        top.set_path(self.path)
-        return top
+        return Top(tuple(expressions))
 
     cpdef object reduce(self, func):
         cdef list children = []
@@ -265,15 +243,15 @@ cdef class InlineSequence(Sequence):
 
 
 cdef class Literal(Expression):
-    cdef readonly model.Vector value
+    cdef readonly Vector value
     cdef bint copynodes
 
-    def __init__(self, model.Vector value):
+    def __init__(self, Vector value):
         self.value = value
         self.copynodes = False
         if self.value.objects is not None:
             for obj in self.value.objects:
-                if isinstance(obj, model.Node):
+                if isinstance(obj, Node):
                     self.copynodes = True
                     break
 
@@ -301,7 +279,7 @@ cdef class Name(Expression):
         return program
 
     cpdef Expression partially_evaluate(self, Context context):
-        cdef model.Vector value
+        cdef Vector value
         if self.name in context.variables:
             value = context.variables[self.name]
             if value is not None:
@@ -332,7 +310,7 @@ cdef class Lookup(Expression):
 
     cpdef Expression partially_evaluate(self, Context context):
         cdef Expression key = self.key.partially_evaluate(context)
-        cdef model.Vector value
+        cdef Vector value
         if isinstance(key, Literal) and context.state is not None:
             value = context.state.get_item((<Literal>key).value)
             return Literal(value)
@@ -367,9 +345,9 @@ cdef class Range(Expression):
         cdef Expression start = self.start.partially_evaluate(context)
         cdef Expression stop = self.stop.partially_evaluate(context)
         cdef Expression step = self.step.partially_evaluate(context)
-        cdef model.Vector result
+        cdef Vector result
         if isinstance(start, Literal) and isinstance(stop, Literal) and isinstance(step, Literal):
-            result = model.Vector.__new__(model.Vector)
+            result = Vector.__new__(Vector)
             result.fill_range((<Literal>start).value, (<Literal>stop).value, (<Literal>step).value)
             return Literal(result)
         return Range(start, stop, step)
@@ -483,13 +461,13 @@ cdef class BinaryOperation(Expression):
                 return expr.partially_evaluate(context)
         return type(self)(left, right)
 
-    cdef model.Vector op(self, model.Vector left, model.Vector right):
+    cdef Vector op(self, Vector left, Vector right):
         raise NotImplementedError()
 
-    cdef Expression constant_left(self, model.Vector left, Expression right):
+    cdef Expression constant_left(self, Vector left, Expression right):
         return None
 
-    cdef Expression constant_right(self, Expression left, model.Vector right):
+    cdef Expression constant_right(self, Expression left, Vector right):
         return None
 
     cpdef object reduce(self, func):
@@ -504,47 +482,47 @@ cdef class MathsBinaryOperation(BinaryOperation):
 
 
 cdef class Add(MathsBinaryOperation):
-    cdef model.Vector op(self, model.Vector left, model.Vector right):
+    cdef Vector op(self, Vector left, Vector right):
         return left.add(right)
 
     cdef void compile_op(self, Program program):
         program.add()
 
-    cdef Expression constant_left(self, model.Vector left, Expression right):
-        if left.eq(model.false_):
+    cdef Expression constant_left(self, Vector left, Expression right):
+        if left.eq(false_):
             return Positive(right)
 
-    cdef Expression constant_right(self, Expression left, model.Vector right):
+    cdef Expression constant_right(self, Expression left, Vector right):
         return self.constant_left(right, left)
 
 
 cdef class Subtract(MathsBinaryOperation):
-    cdef model.Vector op(self, model.Vector left, model.Vector right):
+    cdef Vector op(self, Vector left, Vector right):
         return left.sub(right)
 
     cdef void compile_op(self, Program program):
         program.sub()
 
-    cdef Expression constant_left(self, model.Vector left, Expression right):
-        if left.eq(model.false_):
+    cdef Expression constant_left(self, Vector left, Expression right):
+        if left.eq(false_):
             return Negative(right)
 
-    cdef Expression constant_right(self, Expression left, model.Vector right):
-        if right.eq(model.false_):
+    cdef Expression constant_right(self, Expression left, Vector right):
+        if right.eq(false_):
             return Positive(left)
 
 
 cdef class Multiply(MathsBinaryOperation):
-    cdef model.Vector op(self, model.Vector left, model.Vector right):
+    cdef Vector op(self, Vector left, Vector right):
         return left.mul(right)
 
     cdef void compile_op(self, Program program):
         program.mul()
 
-    cdef Expression constant_left(self, model.Vector left, Expression right):
-        if left.eq(model.true_):
+    cdef Expression constant_left(self, Vector left, Expression right):
+        if left.eq(true_):
             return Positive(right)
-        if left.eq(model.minusone_):
+        if left.eq(minusone_):
             return Negative(right)
         cdef MathsBinaryOperation maths
         if isinstance(right, Add) or isinstance(right, Subtract):
@@ -562,24 +540,24 @@ cdef class Multiply(MathsBinaryOperation):
             if isinstance(maths.left, Literal):
                 return Divide(Multiply(Literal(left), maths.left), maths.right)
 
-    cdef Expression constant_right(self, Expression left, model.Vector right):
+    cdef Expression constant_right(self, Expression left, Vector right):
         return self.constant_left(right, left)
 
 
 cdef class Divide(MathsBinaryOperation):
-    cdef model.Vector op(self, model.Vector left, model.Vector right):
+    cdef Vector op(self, Vector left, Vector right):
         return left.truediv(right)
 
     cdef void compile_op(self, Program program):
         program.truediv()
 
-    cdef Expression constant_right(self, Expression left, model.Vector right):
-        if right.eq(model.true_):
+    cdef Expression constant_right(self, Expression left, Vector right):
+        if right.eq(true_):
             return Positive(left)
 
 
 cdef class FloorDivide(MathsBinaryOperation):
-    cdef model.Vector op(self, model.Vector left, model.Vector right):
+    cdef Vector op(self, Vector left, Vector right):
         return left.floordiv(right)
 
     cdef void compile_op(self, Program program):
@@ -587,7 +565,7 @@ cdef class FloorDivide(MathsBinaryOperation):
 
 
 cdef class Modulo(MathsBinaryOperation):
-    cdef model.Vector op(self, model.Vector left, model.Vector right):
+    cdef Vector op(self, Vector left, Vector right):
         return left.mod(right)
 
     cdef void compile_op(self, Program program):
@@ -595,14 +573,14 @@ cdef class Modulo(MathsBinaryOperation):
 
 
 cdef class Power(MathsBinaryOperation):
-    cdef model.Vector op(self, model.Vector left, model.Vector right):
+    cdef Vector op(self, Vector left, Vector right):
         return left.pow(right)
 
     cdef void compile_op(self, Program program):
         program.pow()
 
-    cdef Expression constant_right(self, Expression left, model.Vector right):
-        if right.eq(model.true_):
+    cdef Expression constant_right(self, Expression left, Vector right):
+        if right.eq(true_):
             return Positive(left)
 
 
@@ -611,7 +589,7 @@ cdef class Comparison(BinaryOperation):
 
 
 cdef class EqualTo(Comparison):
-    cdef model.Vector op(self, model.Vector left, model.Vector right):
+    cdef Vector op(self, Vector left, Vector right):
         return left.eq(right)
 
     cdef void compile_op(self, Program program):
@@ -619,7 +597,7 @@ cdef class EqualTo(Comparison):
 
 
 cdef class NotEqualTo(Comparison):
-    cdef model.Vector op(self, model.Vector left, model.Vector right):
+    cdef Vector op(self, Vector left, Vector right):
         return left.ne(right)
 
     cdef void compile_op(self, Program program):
@@ -627,7 +605,7 @@ cdef class NotEqualTo(Comparison):
 
 
 cdef class LessThan(Comparison):
-    cdef model.Vector op(self, model.Vector left, model.Vector right):
+    cdef Vector op(self, Vector left, Vector right):
         return left.lt(right)
 
     cdef void compile_op(self, Program program):
@@ -635,7 +613,7 @@ cdef class LessThan(Comparison):
 
 
 cdef class GreaterThan(Comparison):
-    cdef model.Vector op(self, model.Vector left, model.Vector right):
+    cdef Vector op(self, Vector left, Vector right):
         return left.gt(right)
 
     cdef void compile_op(self, Program program):
@@ -643,7 +621,7 @@ cdef class GreaterThan(Comparison):
 
 
 cdef class LessThanOrEqualTo(Comparison):
-    cdef model.Vector op(self, model.Vector left, model.Vector right):
+    cdef Vector op(self, Vector left, Vector right):
         return left.le(right)
 
     cdef void compile_op(self, Program program):
@@ -651,7 +629,7 @@ cdef class LessThanOrEqualTo(Comparison):
 
 
 cdef class GreaterThanOrEqualTo(Comparison):
-    cdef model.Vector op(self, model.Vector left, model.Vector right):
+    cdef Vector op(self, Vector left, Vector right):
         return left.ge(right)
 
     cdef void compile_op(self, Program program):
@@ -659,7 +637,7 @@ cdef class GreaterThanOrEqualTo(Comparison):
 
 
 cdef class And(BinaryOperation):
-    cdef model.Vector op(self, model.Vector left, model.Vector right):
+    cdef Vector op(self, Vector left, Vector right):
         return right if left.as_bool() else left
 
     cpdef Program compile(self):
@@ -673,7 +651,7 @@ cdef class And(BinaryOperation):
         program.label(end_label)
         return program
 
-    cdef Expression constant_left(self, model.Vector left, Expression right):
+    cdef Expression constant_left(self, Vector left, Expression right):
         if left.as_bool():
             return right
         else:
@@ -681,7 +659,7 @@ cdef class And(BinaryOperation):
 
 
 cdef class Or(BinaryOperation):
-    cdef model.Vector op(self, model.Vector left, model.Vector right):
+    cdef Vector op(self, Vector left, Vector right):
         return left if left.as_bool() else right
 
     cpdef Program compile(self):
@@ -695,7 +673,7 @@ cdef class Or(BinaryOperation):
         program.label(end_label)
         return program
 
-    cdef Expression constant_left(self, model.Vector left, Expression right):
+    cdef Expression constant_left(self, Vector left, Expression right):
         if left.as_bool():
             return Literal(left)
         else:
@@ -703,17 +681,17 @@ cdef class Or(BinaryOperation):
 
 
 cdef class Xor(BinaryOperation):
-    cdef model.Vector op(self, model.Vector left, model.Vector right):
+    cdef Vector op(self, Vector left, Vector right):
         if not left.as_bool():
             return right
         if not right.as_bool():
             return left
-        return model.false_
+        return false_
 
     cdef void compile_op(self, Program program):
         program.xor()
 
-    cdef Expression constant_left(self, model.Vector left, Expression right):
+    cdef Expression constant_left(self, Vector left, Expression right):
         if not left.as_bool():
             return right
 
@@ -736,8 +714,8 @@ cdef class Slice(Expression):
     cpdef Expression partially_evaluate(self, Context context):
         cdef Expression expr = self.expr.partially_evaluate(context)
         cdef Expression index = self.index.partially_evaluate(context)
-        cdef model.Vector expr_value
-        cdef model.Vector index_value
+        cdef Vector expr_value
+        cdef Vector index_value
         cdef str name
         if isinstance(expr, Literal) and isinstance(index, Literal):
             expr_value = (<Literal>expr).value
@@ -757,9 +735,9 @@ cdef class Slice(Expression):
 
 cdef class FastSlice(Expression):
     cdef readonly Expression expr
-    cdef readonly model.Vector index
+    cdef readonly Vector index
 
-    def __init__(self, Expression expr, model.Vector index):
+    def __init__(self, Expression expr, Vector index):
         self.expr = expr
         self.index = index
 
@@ -832,7 +810,7 @@ cdef class Call(Expression):
                         elif parameter.expr is not None:
                             context.variables[parameter.name] = (<Literal>parameter.expr).value
                         else:
-                            context.variables[parameter.name] = model.null_
+                            context.variables[parameter.name] = null_
                     results.append(func_expr.expr.partially_evaluate(context))
                     context.variables = saved
             else:
@@ -869,12 +847,12 @@ cdef class FastCall(Expression):
         cdef Expression expr
         for expr in self.args:
             program.extend(expr.compile())
-        program.literal(model.Vector._coerce(self.function))
+        program.literal(Vector._coerce(self.function))
         program.call(len(self.args))
         return program
 
     cpdef Expression partially_evaluate(self, Context context):
-        cdef Call call = Call(Literal(model.Vector._coerce(self.function)), self.args)
+        cdef Call call = Call(Literal(Vector._coerce(self.function)), self.args)
         return call.partially_evaluate(context)
 
     cpdef object reduce(self, func):
@@ -904,11 +882,11 @@ cdef class Tag(Expression):
 
     cpdef Expression partially_evaluate(self, Context context):
         cdef Expression node = self.node.partially_evaluate(context)
-        cdef model.Vector nodes
-        cdef model.Node n
+        cdef Vector nodes
+        cdef Node n
         if isinstance(node, Literal):
             nodes = (<Literal>node).value
-            if nodes.isinstance(model.Node):
+            if nodes.isinstance(Node):
                 for n in nodes.objects:
                     n.add_tag(self.tag)
                 return node
@@ -963,11 +941,11 @@ cdef class Attributes(Expression):
         cdef bint fast = not context.unbound
         context.unbound = unbound
         node = node.partially_evaluate(context)
-        cdef model.Vector nodes
-        cdef model.Node n
+        cdef Vector nodes
+        cdef Node n
         if isinstance(node, Literal):
             nodes = (<Literal>node).value
-            if nodes.isinstance(model.Node):
+            if nodes.isinstance(Node):
                 while bindings and isinstance((<Binding>bindings[-1]).expr, Literal):
                     binding = bindings.pop()
                     for n in nodes.objects:
@@ -1002,9 +980,9 @@ cdef class FastAttributes(Attributes):
 
 
 cdef class Search(Expression):
-    cdef readonly model.Query query
+    cdef readonly Query query
 
-    def __init__(self, model.Query query):
+    def __init__(self, Query query):
         self.query = query
 
     cpdef Program compile(self):
@@ -1037,12 +1015,12 @@ cdef class Append(Expression):
     cpdef Expression partially_evaluate(self, Context context):
         cdef Expression node = self.node.partially_evaluate(context)
         cdef Expression children = self.children.partially_evaluate(context)
-        cdef model.Vector nodes, childs
-        cdef model.Node n, c
+        cdef Vector nodes, childs
+        cdef Node n, c
         if isinstance(node, Literal) and isinstance(children, Literal):
             nodes = (<Literal>node).value
             childs = (<Literal>children).value
-            if nodes.isinstance(model.Node) and childs.isinstance(model.Node):
+            if nodes.isinstance(Node) and childs.isinstance(Node):
                 for n in nodes.objects:
                     for c in childs.objects:
                         n.append(c.copy())
@@ -1067,12 +1045,12 @@ cdef class Prepend(Append):
     cpdef Expression partially_evaluate(self, Context context):
         cdef Expression node = self.node.partially_evaluate(context)
         cdef Expression children = self.children.partially_evaluate(context)
-        cdef model.Vector nodes, childs
-        cdef model.Node n, c
+        cdef Vector nodes, childs
+        cdef Node n, c
         if isinstance(node, Literal) and isinstance(children, Literal):
             nodes = (<Literal>node).value
             childs = (<Literal>children).value
-            if nodes.isinstance(model.Node) and childs.isinstance(model.Node):
+            if nodes.isinstance(Node) and childs.isinstance(Node):
                 for n in nodes.objects:
                     for c in reversed(childs.objects):
                         n.insert(c.copy())
@@ -1116,14 +1094,14 @@ cdef class Let(Expression):
         for binding in self.bindings:
             program.extend(binding.expr.compile())
             program.let(binding.names)
-        program.literal(model.null_)
+        program.literal(null_)
         return program
 
     cpdef Expression partially_evaluate(self, Context context):
         cdef list remaining = []
         cdef PolyBinding binding
         cdef Expression expr
-        cdef model.Vector value
+        cdef Vector value
         cdef str name
         cdef int i, n
         for binding in self.bindings:
@@ -1181,7 +1159,7 @@ cdef class InlineLet(Expression):
         cdef list remaining = []
         cdef PolyBinding binding
         cdef Expression expr
-        cdef model.Vector value
+        cdef Vector value
         cdef str name
         cdef int i, n
         for binding in self.bindings:
@@ -1243,7 +1221,7 @@ cdef class For(Expression):
     cpdef Expression partially_evaluate(self, Context context):
         cdef Expression body, source=self.source.partially_evaluate(context)
         cdef list remaining = []
-        cdef model.Vector values, single
+        cdef Vector values, single
         cdef dict saved = context.variables
         context.variables = saved.copy()
         cdef str name
@@ -1304,7 +1282,7 @@ cdef class IfElse(Expression):
         if self.else_ is not None:
             program.extend(self.else_.compile())
         else:
-            program.literal(model.null_)
+            program.literal(null_)
         program.label(END)
         return program
 
@@ -1360,12 +1338,12 @@ cdef class Function(Expression):
         for parameter in self.parameters:
             names.append(parameter.name)
             if parameter.expr is None:
-                program.literal(model.null_)
+                program.literal(null_)
             else:
                 program.extend(parameter.expr.compile())
         program.func((self.name, *names))
         program.let((self.name,))
-        program.literal(model.null_)
+        program.literal(null_)
         return program
 
     cpdef Expression partially_evaluate(self, Context context):
@@ -1381,7 +1359,7 @@ cdef class Function(Expression):
         cdef dict saved = context.variables
         cdef set unbound = context.unbound
         cdef str key
-        cdef model.Vector value
+        cdef Vector value
         context.variables = {}
         for key, value in saved.items():
             if value is not None:
@@ -1425,7 +1403,7 @@ cdef class TemplateCall(Expression):
         if self.children is not None:
             program.extend(self.children.compile())
         else:
-            program.literal(model.null_)
+            program.literal(null_)
         if self.args:
             for arg in self.args:
                 names.append(arg.name)

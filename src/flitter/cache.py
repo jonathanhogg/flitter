@@ -73,20 +73,19 @@ class CachePath:
         self._touched = system_clock()
         mtime = self._path.stat().st_mtime if self._path.exists() and self._path.is_file() else None
         if 'flitter' in self._cache:
-            cache_mtime, top = self._cache['flitter']
+            cache_mtime, program = self._cache['flitter']
             if mtime == cache_mtime:
-                return top
+                return program
         else:
-            top = None
+            program = None
         if mtime is None:
             logger.warning("Program file not found: {}", self._path)
-            top = None
+            program = None
         else:
             try:
                 start = system_clock()
                 source = self._path.read_text(encoding='utf8')
                 initial_top = parse(source)
-                initial_top.set_path(self._absolute)
                 mid = system_clock()
                 top = initial_top.simplify(variables=variables, undefined=undefined)
                 end = system_clock()
@@ -94,6 +93,10 @@ class CachePath:
                 logger.opt(lazy=True).debug("Tree node count before partial-evaluation {before} and after {after}",
                                             before=lambda: initial_top.reduce(lambda e, *rs: sum(rs) + 1),
                                             after=lambda: top.reduce(lambda e, *rs: sum(rs) + 1))
+                program = top.compile()
+                logger.debug("Compiled tree to {} instruction program", len(program))
+                program.set_top(top)
+                program.set_path(self._absolute)
             except ParseError as exc:
                 if top is None:
                     logger.error("Error parsing {} at line {} column {}:\n{}",
@@ -103,9 +106,9 @@ class CachePath:
                                    self._path, exc.line, exc.column, exc.context)
             except Exception as exc:
                 logger.opt(exception=exc).error("Error reading program file: {}", self._path)
-                top = None
-        self._cache['flitter'] = mtime, top
-        return top
+                program = None
+        self._cache['flitter'] = mtime, program
+        return program
 
     def read_csv_vector(self, row_number):
         import csv
