@@ -284,6 +284,9 @@ cdef Vector call_helper(Context context, object function, tuple args, dict kwarg
         stack = func.program.execute(func_context, func.scope)
         assert len(stack) == 1
         return stack[0]
+    elif function is log and len(args) == 1 and not kwargs:
+        context.logs.add((<Vector>args[0]).repr())
+        return <Vector>args[0]
     elif callable(function):
         try:
             if hasattr(function, 'state_transformer') and function.state_transformer:
