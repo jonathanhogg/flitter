@@ -16,6 +16,8 @@ from ..model cimport Vector, Node, Query, null_, true_, false_
 from .noise import NOISE_FUNCTIONS
 
 from libc.math cimport floor
+from cpython cimport PyObject
+from cpython.dict cimport PyDict_Update, PyDict_GetItem, PyDict_Size
 
 
 logger = name_patch(logger, __name__)
@@ -386,7 +388,7 @@ cdef class Program:
                 jump.offset = target - address
         self.linked = True
 
-    def _import(self, Context context, str filename):
+    cdef dict _import(self, Context context, str filename):
         cdef Context import_context
         program = SharedCache.get_with_root(filename, context.path).read_flitter_program()
         if program is not None:
@@ -406,8 +408,8 @@ cdef class Program:
     def dup(self):
         self.instructions.append(Instruction(OpCode.Dup))
 
-    def drop(self):
-        self.instructions.append(Instruction(OpCode.Drop))
+    def drop(self, int count=1):
+        self.instructions.append(InstructionInt(OpCode.Drop, count))
 
     def label(self, int label):
         self.instructions.append(InstructionLabel(label))
@@ -508,7 +510,7 @@ cdef class Program:
         else:
             self.instructions.append(InstructionVector(OpCode.SliceLiteral, value))
 
-    def call(self, int count, tuple names=()):
+    def call(self, int count, tuple names=None):
         self.instructions.append(InstructionIntTuple(OpCode.Call, count, names))
 
     def tag(self, str name):
@@ -574,14 +576,16 @@ cdef class Program:
             scopes = [None, builtins, additional_scope, context.variables]
         else:
             scopes = [None, builtins, context.variables]
+        cdef int scopes_top = len(scopes) - 1
         cdef str name
         cdef tuple names, args
         cdef Vector r1, r2
         cdef LoopSource loop_source = None
-        cdef dict variables
+        cdef dict scope, variables, kwargs
         cdef Query query
         cdef Function function
         cdef double now, timestamp
+        cdef PyObject* objptr
 
         if not self.linked:
             self.link()
@@ -591,7 +595,7 @@ cdef class Program:
                 self.stats = {}
             timestamp = time.perf_counter()
 
-        while pc < program_end:
+        while 0 <= pc < program_end:
             instruction = <Instruction>self.instructions[pc]
             pc += 1
 
@@ -604,7 +608,7 @@ cdef class Program:
                     stack[top] = stack[top-1]
 
             elif instruction.code == OpCode.Drop:
-                top -= 1
+                top -= (<InstructionInt>instruction).value
 
             elif instruction.code == OpCode.Label:
                 pass
@@ -632,7 +636,7 @@ cdef class Program:
                 names = (<InstructionTuple>instruction).value
                 variables = self._import(context, filename)
                 if variables is not None:
-                    scope = <dict>scopes[len(scopes)-1]
+                    scope = <dict>scopes[scopes_top]
                     for name in names:
                         if name in variables:
                             scope[name] = variables[name]
@@ -662,11 +666,12 @@ cdef class Program:
                     stack.append(None)
                     limit += 1
                 name = (<InstructionStr>instruction).value
-                for scope in reversed(scopes):
-                    if scope:
-                        r1 = <Vector>(<dict>scope).get(name)
-                        if r1 is not None:
-                            stack[top] = r1
+                for i in range(scopes_top, -1, -1):
+                    scope = <dict>scopes[i]
+                    if scope is not None and PyDict_Size(scope):
+                        objptr = PyDict_GetItem(scope, name)
+                        if objptr != NULL:
+                            stack[top] = <Vector>objptr
                             break
                 else:
                     stack[top] = null_
@@ -780,19 +785,30 @@ cdef class Program:
             elif instruction.code == OpCode.Call:
                 r1 = <Vector>stack[top]
                 names = (<InstructionIntTuple>instruction).tvalue
-                n = len(names)
-                kwargs = dict(zip(names, stack[top-n:top])) if n else None
+                n = len(names) if names is not None else 0
                 top -= n
+                if n:
+                    kwargs = {}
+                    for i in range(n):
+                        kwargs[names[i]] = stack[top+i]
+                else:
+                    kwargs = None
                 n = (<InstructionIntTuple>instruction).ivalue
-                args = tuple(stack[top-n:top]) if n else ()
+                if n == 1:
+                    r2 = <Vector>stack[top-1]
+                    args = (r2,)
+                elif n:
+                    args = tuple(stack[top-n:top])
+                else:
+                    args = ()
                 top -= n
                 if r1.objects:
                     if r1.length == 1:
                         stack[top] = call_helper(context, r1.objects[0], args, kwargs)
                     else:
                         values = []
-                        for func in r1.objects:
-                            values.append(call_helper(context, func, args, kwargs))
+                        for i in range(r1.length):
+                            values.append(call_helper(context, r1.objects[i], args, kwargs))
                         stack[top] = Vector._compose(values)
                 else:
                     stack[top] = null_
@@ -800,16 +816,19 @@ cdef class Program:
             elif instruction.code == OpCode.Func:
                 function = Function.__new__(Function)
                 function.scope = {}
-                for scope in scopes[len(scopes)-1:1:-1]:
-                    function.scope.update(scope)
-                function.__name__ = (<InstructionTuple>instruction).value[0]
+                for i in range(2, len(scopes)):
+                    PyDict_Update(function.scope, scopes[i])
+                function.__name__ = <str>(<InstructionTuple>instruction).value[0]
                 function.parameters = (<InstructionTuple>instruction).value[1:]
                 n = len(function.parameters)
                 function.defaults = tuple(stack[top-n+1:top+1])
                 top -= n
                 function.program = Program.__new__(Program)
                 function.program.instructions = (<Vector>stack[top]).objects
-                stack[top] = Vector.__new__(Vector, function)
+                r1 = Vector.__new__(Vector)
+                r1.objects = [function]
+                r1.length = 1
+                stack[top] = r1
 
             elif instruction.code == OpCode.Tag:
                 name = (<InstructionStr>instruction).value
@@ -822,21 +841,22 @@ cdef class Program:
                             (<Node>node)._tags.add(name)
 
             elif instruction.code == OpCode.Attribute:
-                r1 = <Vector>stack[top-1]
                 r2 = <Vector>stack[top]
-                name = (<InstructionStr>instruction).value
+                top -= 1
+                r1 = <Vector>stack[top]
                 if r1.objects is not None:
+                    name = (<InstructionStr>instruction).value
                     for node in r1.objects:
                         if isinstance(node, Node):
                             if r2.length:
                                 (<Node>node)._attributes[name] = r2
                             elif name in (<Node>node)._attributes:
                                 del (<Node>node)._attributes[name]
-                top -= 1
 
             elif instruction.code == OpCode.Append:
-                r1 = <Vector>stack[top-1]
                 r2 = <Vector>stack[top]
+                top -= 1
+                r1 = <Vector>stack[top]
                 if r1.objects is not None and r2.objects is not None:
                     n = r1.length - 1
                     for i, node in enumerate(r1.objects):
@@ -849,11 +869,11 @@ cdef class Program:
                                 for child in r2.objects:
                                     if isinstance(child, Node):
                                         (<Node>node).append((<Node>child).copy())
-                top -= 1
 
             elif instruction.code == OpCode.Prepend:
-                r1 = <Vector>stack[top-1]
                 r2 = <Vector>stack[top]
+                top -= 1
+                r1 = <Vector>stack[top]
                 if r1.objects is not None and r2.objects is not None:
                     n = r1.length - 1
                     for i, node in enumerate(r1.objects):
@@ -866,7 +886,6 @@ cdef class Program:
                                 for child in reversed(r2.objects):
                                     if isinstance(child, Node):
                                         (<Node>node).insert((<Node>child).copy())
-                top -= 1
 
             elif instruction.code == OpCode.Compose:
                 n = (<InstructionInt>instruction).value - 1
@@ -883,14 +902,17 @@ cdef class Program:
                 loop_source.position = 0
                 loop_source.iterations = 0
                 scopes.append({})
+                scopes_top += 1
 
             elif instruction.code == OpCode.Next:
                 if loop_source.position >= loop_source.source.length:
                     pc += (<InstructionJump>instruction).offset
                 else:
-                    scope = <dict>scopes[len(scopes)-1]
+                    scope = <dict>scopes[scopes_top]
                     names = (<InstructionJumpTuple>instruction).value
-                    for i, name in enumerate(names):
+                    n = len(names)
+                    for i in range(n):
+                        name = <str>names[i]
                         scope[name] = loop_source.source.item(loop_source.position + i)
                     loop_source.position += len(names)
                     loop_source.iterations += 1
@@ -911,6 +933,7 @@ cdef class Program:
 
             elif instruction.code == OpCode.EndFor:
                 scopes.pop()
+                scopes_top -= 1
                 n = loop_source.iterations
                 if n:
                     n -= 1
@@ -936,16 +959,18 @@ cdef class Program:
 
             elif instruction.code == OpCode.BeginScope:
                 scopes.append({})
+                scopes_top += 1
 
             elif instruction.code == OpCode.EndScope:
                 scopes.pop()
+                scopes_top -= 1
 
             elif instruction.code == OpCode.Let:
                 r1 = <Vector>stack[top]
                 top -= 1
                 names = (<InstructionTuple>instruction).value
                 n = len(names)
-                scope = <dict>scopes[len(scopes)-1]
+                scope = <dict>scopes[scopes_top]
                 if n == 1:
                     scope[names[0]] = r1
                 else:
@@ -984,11 +1009,14 @@ cdef class Program:
             else:
                 raise ValueError(f"Unrecognised instruction: {instruction}")
 
+            assert -1 <= top < limit
+
             if record_stats:
                 now = time.perf_counter()
                 self.stats[instruction.code] = (<double>self.stats.get(instruction.code, 0)) + now - timestamp
                 timestamp = now
 
+        assert pc == program_end
         return stack[:top+1]
 
 

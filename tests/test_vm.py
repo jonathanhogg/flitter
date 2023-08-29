@@ -580,7 +580,24 @@ class TestCalls(unittest.TestCase):
         self.variables = {'test': Vector(self.test_function), 'state': Vector(self.state_function)}
         self.context = Context(state=self.state, variables=self.variables)
 
-    def test_args(self):
+    def test_no_args(self):
+        self.test_function.return_value = Vector(12)
+        self.program.name('test')
+        self.program.call(0)
+        stack = self.program.execute(self.context)
+        self.assertEqual(stack, [12])
+        self.test_function.assert_called_once_with()
+
+    def test_one_arg(self):
+        self.test_function.return_value = Vector(12)
+        self.program.literal(1)
+        self.program.name('test')
+        self.program.call(1)
+        stack = self.program.execute(self.context)
+        self.assertEqual(stack, [12])
+        self.test_function.assert_called_once_with(Vector(1))
+
+    def test_multiple_args(self):
         self.test_function.return_value = Vector(12)
         self.program.literal(1)
         self.program.literal(2)
