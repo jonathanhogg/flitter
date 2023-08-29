@@ -1034,7 +1034,7 @@ cdef class Context:
     def __cinit__(self, dict variables=None, StateDict state=None, Node graph=None, dict pragmas=None, str path=None, Context parent=None):
         self.variables = variables if variables is not None else {}
         self.state = state
-        self.graph = graph if graph is not None else Node.__new__(Node, 'root')
+        self.graph = graph if graph is not None else Node('root')
         self.pragmas = pragmas if pragmas is not None else {}
         self.path = path
         self.parent = parent

@@ -1,13 +1,13 @@
 # cython: language_level=3, profile=False, boundscheck=False, wraparound=False
 
 import re
-from weakref import ref as weak
 
 import cython
 from cython cimport view
 
 from libc.math cimport isnan, floor, ceil, abs, sqrt, sin, cos, tan, isnan
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
+from cpython.weakref cimport PyWeakref_NewRef, PyWeakref_GetObject
 
 
 cdef double Pi = 3.141592653589793
@@ -640,9 +640,9 @@ cdef class Vector:
         return result
 
     cdef Vector slice(self, Vector index):
-        cdef int i, j, m = 0, n = self.length
         if index.numbers == NULL:
             return null_
+        cdef int i, j, m = 0, n = self.length
         cdef list values
         cdef int o = index.length
         cdef Vector result = Vector.__new__(Vector)
@@ -1285,9 +1285,9 @@ cdef class Query:
 
 
 @cython.final
-@cython.freelist(1000)
+@cython.freelist(10000)
 cdef class Node:
-    def __cinit__(self, str kind, set tags=None, dict attributes=None):
+    def __init__(self, str kind, set tags=None, dict attributes=None):
         self.kind = kind
         self._tags = set() if tags is None else tags.copy()
         self._attributes = {} if attributes is None else attributes.copy()
@@ -1326,13 +1326,16 @@ cdef class Node:
 
     @property
     def parent(self):
-        return self._parent() if self._parent is not None else None
+        return <Node>PyWeakref_GetObject(self._parent) if self._parent is not None else None
 
     cpdef Node copy(self):
-        cdef Node node = Node.__new__(Node, self.kind, self._tags, self._attributes)
+        cdef Node node = Node.__new__(Node)
+        node.kind = self.kind
+        node._tags = set(self._tags)
+        node._attributes = dict(self._attributes)
         cdef Node copy, child = self.first_child
         if child is not None:
-            parent = node.weak_self = weak(node)
+            parent = node.weak_self = PyWeakref_NewRef(node, None)
             copy = child.copy()
             copy._parent = parent
             node.first_child = node.last_child = copy
@@ -1352,11 +1355,11 @@ cdef class Node:
         self._tags.discard(tag)
 
     cpdef void append(self, Node node):
-        cdef Node parent = node._parent() if node._parent is not None else None
+        cdef Node parent = <Node>PyWeakref_GetObject(node._parent) if node._parent is not None else None
         if parent is not None:
             parent.remove(node)
         if self.weak_self is None:
-            self.weak_self = weak(self)
+            self.weak_self = PyWeakref_NewRef(self, None)
         node._parent = self.weak_self
         if self.last_child is not None:
             self.last_child.next_sibling = node
@@ -1365,11 +1368,11 @@ cdef class Node:
             self.first_child = self.last_child = node
 
     cpdef void insert(self, Node node):
-        cdef Node parent = node._parent() if node._parent is not None else None
+        cdef Node parent = <Node>PyWeakref_GetObject(node._parent) if node._parent is not None else None
         if parent is not None:
             parent.remove(node)
         if self.weak_self is None:
-            self.weak_self = weak(self)
+            self.weak_self = PyWeakref_NewRef(self, None)
         node._parent = self.weak_self
         node.next_sibling = self.first_child
         self.first_child = node
@@ -1387,7 +1390,7 @@ cdef class Node:
             self.insert(node)
 
     cpdef void remove(self, Node node):
-        cdef Node parent = node._parent() if node._parent is not None else None
+        cdef Node parent = <Node>PyWeakref_GetObject(node._parent) if node._parent is not None else None
         if parent is not self:
             raise ValueError("Not a child of this node")
         cdef Node child = self.first_child, previous = None
@@ -1404,7 +1407,7 @@ cdef class Node:
         node.next_sibling = None
 
     def delete(self):
-        cdef Node parent = self._parent() if self._parent is not None else None
+        cdef Node parent = <Node>PyWeakref_GetObject(self._parent) if self._parent is not None else None
         if parent is None:
             raise TypeError("No parent")
         parent.remove(self)
@@ -1579,7 +1582,7 @@ cdef class Node:
             else:
                 while node is not self and node.next_sibling is None:
                     indent -= 1
-                    node = node._parent()
+                    node = <Node>PyWeakref_GetObject(node._parent)
                 if node is self:
                     break
                 node = node.next_sibling
