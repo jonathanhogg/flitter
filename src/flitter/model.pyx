@@ -1436,7 +1436,7 @@ cdef class Node:
         while altquery is not None:
             tags = altquery.tags
             if (altquery.kind is None or altquery.kind == self.kind) and \
-               (tags is None or tags.issubset(self._tags)):
+               (tags is None or (self._tags and tags.issubset(self._tags))):
                 if altquery.stop:
                     descend = False
                 if query.subquery is not None:
@@ -1568,8 +1568,9 @@ cdef class Node:
             for i in range(indent):
                 parts.append("")
             parts.append("!" + node.kind)
-            for tag in sorted(node._tags):
-                parts.append("#" + tag)
+            if node._tags:
+                for tag in sorted(node._tags):
+                    parts.append("#" + tag)
             for key, value in node._attributes.items():
                 parts.append(key + "=" + value.repr())
             lines.append(" ".join(parts))
