@@ -57,8 +57,10 @@ cdef enum OpCode:
     Ge
     Gt
     Import
+    IndexLiteral
     Jump
     Label
+    LiteralNode
     Le
     Let
     Literal
@@ -70,7 +72,6 @@ cdef enum OpCode:
     Ne
     Neg
     Next
-    NodeLiteral
     NodeScope
     Not
     Pos
@@ -111,8 +112,10 @@ cdef dict OpCodeNames = {
     OpCode.Ge: 'Ge',
     OpCode.Gt: 'Gt',
     OpCode.Import: 'Import',
+    OpCode.IndexLiteral: 'IndexLiteral',
     OpCode.Jump: 'Jump',
     OpCode.Label: 'Label',
+    OpCode.LiteralNode: 'LiteralNode',
     OpCode.Le: 'Le',
     OpCode.Let: 'Let',
     OpCode.Literal: 'Literal',
@@ -124,7 +127,7 @@ cdef dict OpCodeNames = {
     OpCode.Ne: 'Ne',
     OpCode.Neg: 'Neg',
     OpCode.Next: 'Next',
-    OpCode.NodeLiteral: 'NodeLiteral',
+    OpCode.NodeScope: 'NodeScope',
     OpCode.Not: 'Not',
     OpCode.Pos: 'Pos',
     OpCode.Pow: 'Pow',
@@ -135,7 +138,7 @@ cdef dict OpCodeNames = {
     OpCode.Search: 'Search',
     OpCode.SetNodeScope: 'SetNodeScope',
     OpCode.Slice: 'Slice',
-    OpCode.Slice: 'SliceLiteral',
+    OpCode.SliceLiteral: 'SliceLiteral',
     OpCode.Sub: 'Sub',
     OpCode.Tag: 'Tag',
     OpCode.TrueDiv: 'TrueDiv',
@@ -253,20 +256,6 @@ cdef class Function:
     cdef readonly dict scope
     cdef readonly Program program
 
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
-    def __call__(Program self, *args, **kwargs):
-        cdef Context context = Context()
-        cdef int i
-        for i, name in enumerate(self.parameters):
-            if i < len(args):
-                context.variables[name] = args[i]
-            else:
-                context.variables[name] = kwargs.get(name, self.defaults[i])
-        cdef list stack = self.program.execute(context, self.scope)
-        assert len(stack) == 1
-        return stack[0]
-
 
 cdef class LoopSource:
     cdef Vector source
@@ -274,8 +263,28 @@ cdef class LoopSource:
     cdef int iterations
 
 
+@cython.boundscheck(False)
+@cython.wraparound(False)
 cdef Vector call_helper(Context context, object function, tuple args, dict kwargs=None):
-    if callable(function):
+    cdef Context func_context
+    cdef int i
+    cdef list stack
+    cdef Function func
+    if isinstance(function, Function):
+        func = <Function>function
+        func_context = Context.__new__(Context)
+        func_context.path = context.path
+        func_context.errors = context.errors
+        func_context.graph = context.graph
+        for i, name in enumerate(func.parameters):
+            if i < len(args):
+                func_context.variables[name] = args[i]
+            else:
+                func_context.variables[name] = kwargs.get(name, func.defaults[i])
+        stack = func.program.execute(func_context, func.scope)
+        assert len(stack) == 1
+        return stack[0]
+    elif callable(function):
         try:
             if hasattr(function, 'state_transformer') and function.state_transformer:
                 if kwargs is None:
@@ -380,7 +389,7 @@ cdef class Program:
         if vector.objects is not None:
             for obj in vector.objects:
                 if isinstance(obj, Node):
-                    self.instructions.append(InstructionVector(OpCode.NodeLiteral, vector))
+                    self.instructions.append(InstructionVector(OpCode.LiteralNode, vector))
                     return
         self.instructions.append(InstructionVector(OpCode.Literal, vector))
 
@@ -448,7 +457,10 @@ cdef class Program:
         self.instructions.append(Instruction(OpCode.Slice))
 
     def slice_literal(self, Vector value):
-        self.instructions.append(InstructionVector(OpCode.SliceLiteral, value))
+        if value.length == 1 and value.numbers != NULL:
+            self.instructions.append(InstructionInt(OpCode.IndexLiteral, <int>floor(value.numbers[0])))
+        else:
+            self.instructions.append(InstructionVector(OpCode.SliceLiteral, value))
 
     def call(self, int count):
         self.instructions.append(InstructionInt(OpCode.Call, count))
@@ -598,7 +610,7 @@ cdef class Program:
                 else:
                     stack[top] = (<InstructionVector>instruction).value
 
-            elif instruction.code == OpCode.NodeLiteral:
+            elif instruction.code == OpCode.LiteralNode:
                 top += 1
                 if top == limit:
                     stack.append((<InstructionVector>instruction).value.copynodes())
@@ -620,6 +632,7 @@ cdef class Program:
                             break
                 else:
                     stack[top] = null_
+                    context.errors.add(f"Unbound name '{name}'")
 
             elif instruction.code == OpCode.Lookup:
                 stack[top] = context.state.get_item(<Vector>stack[top]) if context.state is not None else null_
@@ -721,6 +734,10 @@ cdef class Program:
             elif instruction.code == OpCode.SliceLiteral:
                 r1 = <Vector>stack[top]
                 stack[top] = r1.slice((<InstructionVector>instruction).value)
+
+            elif instruction.code == OpCode.IndexLiteral:
+                r1 = <Vector>stack[top]
+                stack[top] = r1.item((<InstructionInt>instruction).value)
 
             elif instruction.code == OpCode.Call:
                 r1 = <Vector>stack[top]
