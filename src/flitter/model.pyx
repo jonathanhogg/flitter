@@ -20,7 +20,7 @@ cdef union double_long:
     unsigned long long l
 
 
-@cython.freelist(1000)
+@cython.freelist(8)
 cdef class Vector:
     @staticmethod
     def coerce(other):
@@ -1207,7 +1207,6 @@ NAME_REGEX = re.compile(r'[_a-z][_a-z0-9]*', re.IGNORECASE)
 
 
 @cython.final
-@cython.freelist(100)
 cdef class Query:
     def __cinit__(self, str query):
         cdef int i = 0, j, n = len(query)
@@ -1285,7 +1284,6 @@ cdef class Query:
 
 
 @cython.final
-@cython.freelist(10000)
 cdef class Node:
     def __init__(self, str kind, set tags=None, dict attributes=None):
         self.kind = kind
