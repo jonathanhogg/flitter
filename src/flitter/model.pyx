@@ -1335,7 +1335,7 @@ cdef class Node:
         node._attributes = dict(self._attributes)
         cdef Node copy, child = self.first_child
         if child is not None:
-            parent = node.weak_self = PyWeakref_NewRef(node, None)
+            parent = PyWeakref_NewRef(node, None)
             copy = child.copy()
             copy._parent = parent
             node.first_child = node.last_child = copy
@@ -1358,9 +1358,7 @@ cdef class Node:
         cdef Node parent = <Node>PyWeakref_GetObject(node._parent) if node._parent is not None else None
         if parent is not None:
             parent.remove(node)
-        if self.weak_self is None:
-            self.weak_self = PyWeakref_NewRef(self, None)
-        node._parent = self.weak_self
+        node._parent = PyWeakref_NewRef(self, None)
         if self.last_child is not None:
             self.last_child.next_sibling = node
             self.last_child = node
@@ -1371,9 +1369,7 @@ cdef class Node:
         cdef Node parent = <Node>PyWeakref_GetObject(node._parent) if node._parent is not None else None
         if parent is not None:
             parent.remove(node)
-        if self.weak_self is None:
-            self.weak_self = PyWeakref_NewRef(self, None)
-        node._parent = self.weak_self
+        node._parent = PyWeakref_NewRef(self, None)
         node.next_sibling = self.first_child
         self.first_child = node
         if self.last_child is None:

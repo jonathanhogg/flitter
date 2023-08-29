@@ -107,7 +107,6 @@ cdef class Query:
 
 cdef class Node:
     cdef object __weakref__
-    cdef object weak_self
     cdef readonly str kind
     cdef set _tags
     cdef dict _attributes
