@@ -13,6 +13,7 @@ from cpython.weakref cimport PyWeakref_NewRef, PyWeakref_GetObject
 cdef double Pi = 3.141592653589793
 cdef double Tau = 6.283185307179586
 cdef double NaN = float("nan")
+cdef frozenset EmptySet = frozenset()
 
 
 cdef union double_long:
@@ -1287,15 +1288,14 @@ cdef class Query:
 cdef class Node:
     def __init__(self, str kind, set tags=None, dict attributes=None):
         self.kind = kind
-        self._tags = set() if tags is None else tags.copy()
+        self._tags = None if tags is None else tags.copy()
         self._attributes = {} if attributes is None else attributes.copy()
 
     def __setstate__(self, set tags):
-        if tags is not None:
-            self._tags = tags
+        self._tags = tags
 
     def __reduce__(self):
-        return Node, (self.kind,), self._tags or None, self.children, self.__attributes()
+        return Node, (self.kind,), self._tags, self.children, self.__attributes()
 
     @property
     def children(self):
@@ -1320,7 +1320,10 @@ cdef class Node:
 
     @property
     def tags(self):
-        return frozenset(self._tags)
+        if self._tags is not None:
+            return frozenset(self._tags)
+        else:
+            return EmptySet
 
     @property
     def parent(self):
@@ -1329,7 +1332,8 @@ cdef class Node:
     cpdef Node copy(self):
         cdef Node node = Node.__new__(Node)
         node.kind = self.kind
-        node._tags = set(self._tags)
+        if self._tags:
+            node._tags = set(self._tags)
         node._attributes = dict(self._attributes)
         cdef Node copy, child = self.first_child
         if child is not None:
@@ -1347,10 +1351,13 @@ cdef class Node:
         return node
 
     cpdef void add_tag(self, str tag):
+        if self._tags is None:
+            self._tags = set()
         self._tags.add(tag)
 
     cpdef void remove_tag(self, str tag):
-        self._tags.discard(tag)
+        if self._tags is not None:
+            self._tags.discard(tag)
 
     cpdef void append(self, Node node):
         cdef Node parent = <Node>PyWeakref_GetObject(node._parent) if node._parent is not None else None

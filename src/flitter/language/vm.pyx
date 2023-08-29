@@ -781,6 +781,8 @@ cdef class Program:
                 if r1.objects is not None:
                     for node in r1.objects:
                         if isinstance(node, Node):
+                            if (<Node>node)._tags is None:
+                                (<Node>node)._tags = set()
                             (<Node>node)._tags.add(name)
 
             elif instruction.code == OpCode.Attribute:
