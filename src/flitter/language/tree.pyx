@@ -1431,7 +1431,7 @@ cdef class TemplateCall(Expression):
                 names.append(arg.name)
                 program.extend(arg.expr.compile())
         program.extend(self.function.compile())
-        program.call_template(tuple(names))
+        program.call(1, tuple(names))
         return program
 
     cpdef Expression partially_evaluate(self, Context context):

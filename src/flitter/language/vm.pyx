@@ -44,7 +44,6 @@ cdef enum OpCode:
     BranchFalse
     BranchTrue
     Call
-    CallTemplate
     ClearNodeScope
     Compose
     Drop
@@ -72,7 +71,6 @@ cdef enum OpCode:
     Ne
     Neg
     Next
-    NodeScope
     Not
     Pos
     Pow
@@ -99,7 +97,6 @@ cdef dict OpCodeNames = {
     OpCode.BranchFalse: 'BranchFalse',
     OpCode.BranchTrue: 'BranchTrue',
     OpCode.Call: 'Call',
-    OpCode.CallTemplate: 'CallTemplate',
     OpCode.ClearNodeScope: 'ClearNodeScope',
     OpCode.Compose: 'Compose',
     OpCode.Drop: 'Drop',
@@ -127,7 +124,6 @@ cdef dict OpCodeNames = {
     OpCode.Ne: 'Ne',
     OpCode.Neg: 'Neg',
     OpCode.Next: 'Next',
-    OpCode.NodeScope: 'NodeScope',
     OpCode.Not: 'Not',
     OpCode.Pos: 'Pos',
     OpCode.Pow: 'Pow',
@@ -198,6 +194,19 @@ cdef class InstructionInt(Instruction):
 
     def __str__(self):
         return f'{OpCodeNames[self.code]} {self.value!r}'
+
+
+cdef class InstructionIntTuple(Instruction):
+    cdef readonly int ivalue
+    cdef readonly tuple tvalue
+
+    def __init__(self, OpCode code, int ivalue, tuple tvalue):
+        super().__init__(code)
+        self.ivalue = ivalue
+        self.tvalue = tvalue
+
+    def __str__(self):
+        return f'{OpCodeNames[self.code]} {self.ivalue!r} {self.tvalue!r}'
 
 
 cdef class InstructionQuery(Instruction):
@@ -279,8 +288,10 @@ cdef Vector call_helper(Context context, object function, tuple args, dict kwarg
         for i, name in enumerate(func.parameters):
             if i < len(args):
                 func_context.variables[name] = args[i]
-            else:
+            elif kwargs:
                 func_context.variables[name] = kwargs.get(name, func.defaults[i])
+            else:
+                func_context.variables[name] = func.defaults[i]
         stack = func.program.execute(func_context, func.scope)
         assert len(stack) == 1
         return stack[0]
@@ -465,11 +476,8 @@ cdef class Program:
         else:
             self.instructions.append(InstructionVector(OpCode.SliceLiteral, value))
 
-    def call(self, int count):
-        self.instructions.append(InstructionInt(OpCode.Call, count))
-
-    def call_template(self, tuple names):
-        self.instructions.append(InstructionTuple(OpCode.CallTemplate, names))
+    def call(self, int count, tuple names=()):
+        self.instructions.append(InstructionIntTuple(OpCode.Call, count, names))
 
     def tag(self, str name):
         self.instructions.append(InstructionStr(OpCode.Tag, name))
@@ -744,39 +752,20 @@ cdef class Program:
 
             elif instruction.code == OpCode.Call:
                 r1 = <Vector>stack[top]
-                n = (<InstructionInt>instruction).value
-                args = tuple(stack[top-n:top])
+                names = (<InstructionIntTuple>instruction).tvalue
+                n = len(names)
+                kwargs = dict(zip(names, stack[top-n:top])) if n else None
+                top -= n
+                n = (<InstructionIntTuple>instruction).ivalue
+                args = tuple(stack[top-n:top]) if n else ()
                 top -= n
                 if r1.objects:
                     if r1.length == 1:
-                        stack[top] = call_helper(context, r1.objects[0], args)
+                        stack[top] = call_helper(context, r1.objects[0], args, kwargs)
                     else:
                         values = []
                         for func in r1.objects:
-                            values.append(call_helper(context, func, args))
-                        stack[top] = Vector._compose(values)
-                else:
-                    stack[top] = null_
-
-            elif instruction.code == OpCode.CallTemplate:
-                r1 = <Vector>stack[top]
-                names = (<InstructionTuple>instruction).value
-                n = len(names)
-                args = tuple(stack[top-n:top])
-                kwargs = dict(zip(names, args))
-                top -= n + 1
-                r2 = <Vector>stack[top]
-                if r1.objects:
-                    if r1.length == 1:
-                        stack[top] = call_helper(context, r1.objects[0], (r2,), kwargs)
-                    else:
-                        values = []
-                        for i in range(r1.length):
-                            func = r1.objects[i]
-                            if i == r1.length-1:
-                                values.append(call_helper(context, func, (r2,), kwargs))
-                            else:
-                                values.append(call_helper(context, func, (r2.copynodes(),), kwargs))
+                            values.append(call_helper(context, func, args, kwargs))
                         stack[top] = Vector._compose(values)
                 else:
                     stack[top] = null_
