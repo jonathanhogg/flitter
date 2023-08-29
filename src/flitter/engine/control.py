@@ -336,11 +336,17 @@ class EngineController:
 
                 if current_program is not None and run_program is current_program and self.state_eval_wait and self.state_timestamp is not None and \
                         system_clock() > self.state_timestamp + self.state_eval_wait:
-                    start = system_clock()
-                    run_program = current_program.top.simplify(state=self.state, undefined=names).compile()
+                    simplify_time = -system_clock()
+                    top = current_program.top.simplify(state=self.state, undefined=names)
+                    now = system_clock()
+                    simplify_time += now
+                    compile_time = -now
+                    run_program = top.compile()
                     run_program.set_path(current_program.path)
-                    logger.debug("Partially-evaluated current program on state in {:.1f}ms", (system_clock() - start) * 1000)
-                    logger.debug("Compiled to {} instruction program", len(program))
+                    run_program.set_top(top)
+                    compile_time += system_clock()
+                    logger.debug("Re-simplified on state to {} instructions in {:.1f}/{:.1f}ms (simplify/compile)",
+                                 len(run_program), simplify_time*1000, compile_time*1000)
 
                 if self.state.changed:
                     self.global_state_dirty = True

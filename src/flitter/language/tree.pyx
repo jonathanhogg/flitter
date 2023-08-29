@@ -66,11 +66,8 @@ cdef class Expression:
     cpdef Program compile(self):
         raise NotImplementedError()
 
-    cpdef Expression partially_evaluate(self, Context context):
+    cpdef Expression evaluate(self, Context context):
         raise NotImplementedError()
-
-    cpdef object reduce(self, func):
-        return func(self)
 
 
 cdef class Top(Expression):
@@ -91,7 +88,7 @@ cdef class Top(Expression):
         cdef Context context = Context(state=state, variables=context_vars)
         cdef Top top
         try:
-            top = self.partially_evaluate(context)
+            top = self.evaluate(context)
         except Exception as exc:
             logger.opt(exception=exc).warning("Unable to partially-evaluate program")
             return self
@@ -109,11 +106,11 @@ cdef class Top(Expression):
         program.link()
         return program
 
-    cpdef Expression partially_evaluate(self, Context context):
+    cpdef Expression evaluate(self, Context context):
         cdef list expressions = []
         cdef Expression expr
         for expr in self.expressions:
-            expr = expr.partially_evaluate(context)
+            expr = expr.evaluate(context)
             if not isinstance(expr, Literal) or (<Literal>expr).value.length:
                 expressions.append(expr)
         cdef str name
@@ -125,13 +122,6 @@ cdef class Top(Expression):
         if bindings:
             expressions.append(Let(tuple(bindings)))
         return Top(tuple(expressions))
-
-    cpdef object reduce(self, func):
-        cdef list children = []
-        cdef Expression expr
-        for expr in self.expressions:
-            children.append(expr.reduce(func))
-        return func(self, *children)
 
     def __repr__(self):
         return f'Top({self.expressions!r})'
@@ -151,11 +141,8 @@ cdef class Pragma(Expression):
         program.pragma(self.name)
         return program
 
-    cpdef Expression partially_evaluate(self, Context context):
-        return Pragma(self.name, self.expr.partially_evaluate(context))
-
-    cpdef object reduce(self, func):
-        return func(self, self.expr.reduce(func))
+    cpdef Expression evaluate(self, Context context):
+        return Pragma(self.name, self.expr.evaluate(context))
 
     def __repr__(self):
         return f'Pragma({self.name!r}, {self.expr!r})'
@@ -175,14 +162,11 @@ cdef class Import(Expression):
         program.import_(self.names)
         return program
 
-    cpdef Expression partially_evaluate(self, Context context):
+    cpdef Expression evaluate(self, Context context):
         cdef str name
         for name in self.names:
             context.variables[name] = None
-        return Import(self.names, self.filename.partially_evaluate(context))
-
-    cpdef object reduce(self, func):
-        return func(self, self.filename.reduce(func))
+        return Import(self.names, self.filename.evaluate(context))
 
     def __repr__(self):
         return f'Import({self.names!r}, {self.filename!r})'
@@ -204,22 +188,15 @@ cdef class Sequence(Expression):
         program.end_scope()
         return program
 
-    cpdef Expression partially_evaluate(self, Context context):
+    cpdef Expression evaluate(self, Context context):
         cdef list expressions = []
         cdef Expression expr
         cdef dict saved = context.variables
         context.variables = saved.copy()
         for expr in self.expressions:
-            expressions.append(expr.partially_evaluate(context))
+            expressions.append(expr.evaluate(context))
         context.variables = saved
         return sequence_pack(expressions)
-
-    cpdef object reduce(self, func):
-        cdef list children = []
-        cdef Expression expr
-        for expr in self.expressions:
-            children.append(expr.reduce(func))
-        return func(self, *children)
 
     def __repr__(self):
         return f'{self.__class__.__name__}({self.expressions!r})'
@@ -234,11 +211,11 @@ cdef class InlineSequence(Sequence):
         program.compose(len(self.expressions))
         return program
 
-    cpdef Expression partially_evaluate(self, Context context):
+    cpdef Expression evaluate(self, Context context):
         cdef list expressions = []
         cdef Expression expr
         for expr in self.expressions:
-            expressions.append(expr.partially_evaluate(context))
+            expressions.append(expr.evaluate(context))
         return sequence_pack(expressions)
 
 
@@ -260,7 +237,7 @@ cdef class Literal(Expression):
         program.literal(self.value)
         return program
 
-    cpdef Expression partially_evaluate(self, Context context):
+    cpdef Expression evaluate(self, Context context):
         return Literal(self.value.copynodes()) if self.copynodes else self
 
     def __repr__(self):
@@ -278,7 +255,7 @@ cdef class Name(Expression):
         program.name(self.name)
         return program
 
-    cpdef Expression partially_evaluate(self, Context context):
+    cpdef Expression evaluate(self, Context context):
         cdef Vector value
         if self.name in context.variables:
             value = context.variables[self.name]
@@ -308,16 +285,13 @@ cdef class Lookup(Expression):
         program.lookup()
         return program
 
-    cpdef Expression partially_evaluate(self, Context context):
-        cdef Expression key = self.key.partially_evaluate(context)
+    cpdef Expression evaluate(self, Context context):
+        cdef Expression key = self.key.evaluate(context)
         cdef Vector value
         if isinstance(key, Literal) and context.state is not None:
             value = context.state.get_item((<Literal>key).value)
             return Literal(value)
         return Lookup(key)
-
-    cpdef object reduce(self, func):
-        return func(self, self.key.reduce(func))
 
     def __repr__(self):
         return f'Lookup({self.key!r})'
@@ -341,19 +315,16 @@ cdef class Range(Expression):
         program.range()
         return program
 
-    cpdef Expression partially_evaluate(self, Context context):
-        cdef Expression start = self.start.partially_evaluate(context)
-        cdef Expression stop = self.stop.partially_evaluate(context)
-        cdef Expression step = self.step.partially_evaluate(context)
+    cpdef Expression evaluate(self, Context context):
+        cdef Expression start = self.start.evaluate(context)
+        cdef Expression stop = self.stop.evaluate(context)
+        cdef Expression step = self.step.evaluate(context)
         cdef Vector result
         if isinstance(start, Literal) and isinstance(stop, Literal) and isinstance(step, Literal):
             result = Vector.__new__(Vector)
             result.fill_range((<Literal>start).value, (<Literal>stop).value, (<Literal>step).value)
             return Literal(result)
         return Range(start, stop, step)
-
-    cpdef object reduce(self, func):
-        return func(self, self.start.reduce(func), self.stop.reduce(func), self.step.reduce(func))
 
     def __repr__(self):
         return f'Range({self.start!r}, {self.stop!r}, {self.step!r})'
@@ -364,9 +335,6 @@ cdef class UnaryOperation(Expression):
 
     def __init__(self, Expression expr):
         self.expr = expr
-
-    cpdef object reduce(self, func):
-        return func(self, self.expr.reduce(func))
 
     def __repr__(self):
         return f'{self.__class__.__name__}({self.expr!r})'
@@ -379,22 +347,22 @@ cdef class Negative(UnaryOperation):
         program.neg()
         return program
 
-    cpdef Expression partially_evaluate(self, Context context):
-        cdef Expression expr = self.expr.partially_evaluate(context)
+    cpdef Expression evaluate(self, Context context):
+        cdef Expression expr = self.expr.evaluate(context)
         if isinstance(expr, Literal):
             return Literal((<Literal>expr).value.neg())
         if isinstance(expr, Negative):
             expr = Positive((<Negative>expr).expr)
-            return expr.partially_evaluate(context)
+            return expr.evaluate(context)
         cdef MathsBinaryOperation maths
         if isinstance(expr, (Multiply, Divide)):
             maths = expr
             if isinstance(maths.left, Literal):
                 expr = type(expr)(Negative(maths.left), maths.right)
-                return expr.partially_evaluate(context)
+                return expr.evaluate(context)
             if isinstance(maths.right, Literal):
                 expr = type(expr)(maths.left, Negative(maths.right))
-                return expr.partially_evaluate(context)
+                return expr.evaluate(context)
         return Negative(expr)
 
 
@@ -405,12 +373,12 @@ cdef class Positive(UnaryOperation):
         program.pos()
         return program
 
-    cpdef Expression partially_evaluate(self, Context context):
-        cdef Expression expr = self.expr.partially_evaluate(context)
+    cpdef Expression evaluate(self, Context context):
+        cdef Expression expr = self.expr.evaluate(context)
         if isinstance(expr, Literal):
             return Literal((<Literal>expr).value.pos())
         if isinstance(expr, (Negative, Positive, MathsBinaryOperation)):
-            return expr.partially_evaluate(context)
+            return expr.evaluate(context)
         return Positive(expr)
 
 
@@ -421,8 +389,8 @@ cdef class Not(UnaryOperation):
         program.not_()
         return program
 
-    cpdef Expression partially_evaluate(self, Context context):
-        cdef Expression expr = self.expr.partially_evaluate(context)
+    cpdef Expression evaluate(self, Context context):
+        cdef Expression expr = self.expr.evaluate(context)
         if isinstance(expr, Literal):
             return Literal((<Literal>expr).value.not_())
         return Not(expr)
@@ -446,19 +414,19 @@ cdef class BinaryOperation(Expression):
     cdef void compile_op(self, Program program):
         raise NotImplementedError()
 
-    cpdef Expression partially_evaluate(self, Context context):
-        cdef Expression left = self.left.partially_evaluate(context)
-        cdef Expression right = self.right.partially_evaluate(context)
+    cpdef Expression evaluate(self, Context context):
+        cdef Expression left = self.left.evaluate(context)
+        cdef Expression right = self.right.evaluate(context)
         cdef bint literal_left = isinstance(left, Literal)
         cdef bint literal_right = isinstance(right, Literal)
         if literal_left and literal_right:
             return Literal(self.op((<Literal>left).value, (<Literal>right).value))
         elif literal_left:
             if (expr := self.constant_left((<Literal>left).value, right)) is not None:
-                return expr.partially_evaluate(context)
+                return expr.evaluate(context)
         elif literal_right:
             if (expr := self.constant_right(left, (<Literal>right).value)) is not None:
-                return expr.partially_evaluate(context)
+                return expr.evaluate(context)
         return type(self)(left, right)
 
     cdef Vector op(self, Vector left, Vector right):
@@ -469,9 +437,6 @@ cdef class BinaryOperation(Expression):
 
     cdef Expression constant_right(self, Expression left, Vector right):
         return None
-
-    cpdef object reduce(self, func):
-        return func(self, self.left.reduce(func), self.right.reduce(func))
 
     def __repr__(self):
         return f'{self.__class__.__name__}({self.left!r}, {self.right!r})'
@@ -711,9 +676,9 @@ cdef class Slice(Expression):
         program.slice()
         return program
 
-    cpdef Expression partially_evaluate(self, Context context):
-        cdef Expression expr = self.expr.partially_evaluate(context)
-        cdef Expression index = self.index.partially_evaluate(context)
+    cpdef Expression evaluate(self, Context context):
+        cdef Expression expr = self.expr.evaluate(context)
+        cdef Expression index = self.index.evaluate(context)
         cdef Vector expr_value
         cdef Vector index_value
         cdef str name
@@ -725,9 +690,6 @@ cdef class Slice(Expression):
             index_value = (<Literal>index).value
             return FastSlice(expr, index_value)
         return Slice(expr, index)
-
-    cpdef object reduce(self, func):
-        return func(self, self.expr.reduce(func), self.index.reduce(func))
 
     def __repr__(self):
         return f'Slice({self.expr!r}, {self.index!r})'
@@ -747,7 +709,7 @@ cdef class FastSlice(Expression):
         program.slice_literal(self.index)
         return program
 
-    cpdef Expression partially_evaluate(self, Context context):
+    cpdef Expression evaluate(self, Context context):
         return self
 
     def __repr__(self):
@@ -771,14 +733,14 @@ cdef class Call(Expression):
         program.call(len(self.args))
         return program
 
-    cpdef Expression partially_evaluate(self, Context context):
-        cdef Expression function = self.function.partially_evaluate(context)
+    cpdef Expression evaluate(self, Context context):
+        cdef Expression function = self.function.evaluate(context)
         cdef list args = []
         cdef Expression arg
         cdef bint literal_function = isinstance(function, Literal) and (<Literal>function).value.objects is not None
         cdef bint literal = literal_function
         for arg in self.args:
-            arg = arg.partially_evaluate(context)
+            arg = arg.evaluate(context)
             args.append(arg)
             if not isinstance(arg, Literal):
                 literal = False
@@ -811,7 +773,7 @@ cdef class Call(Expression):
                             context.variables[parameter.name] = (<Literal>parameter.expr).value
                         else:
                             context.variables[parameter.name] = null_
-                    results.append(func_expr.expr.partially_evaluate(context))
+                    results.append(func_expr.expr.evaluate(context))
                     context.variables = saved
             else:
                 return sequence_pack(results)
@@ -821,14 +783,6 @@ cdef class Call(Expression):
                 return FastCall(func, tuple(args))
         cdef Call call = Call(function, tuple(args))
         return call
-
-    cpdef object reduce(self, func):
-        cdef list children = []
-        children.append(self.function.reduce(func))
-        cdef Expression arg
-        for arg in self.args:
-            children.append(arg.reduce(func))
-        return func(self, *children)
 
     def __repr__(self):
         return f'Call({self.function!r}, {self.args!r})'
@@ -851,16 +805,9 @@ cdef class FastCall(Expression):
         program.call(len(self.args))
         return program
 
-    cpdef Expression partially_evaluate(self, Context context):
+    cpdef Expression evaluate(self, Context context):
         cdef Call call = Call(Literal(Vector._coerce(self.function)), self.args)
-        return call.partially_evaluate(context)
-
-    cpdef object reduce(self, func):
-        cdef list children = []
-        cdef Expression arg
-        for arg in self.args:
-            children.append(arg.reduce(func))
-        return func(self, *children)
+        return call.evaluate(context)
 
     def __repr__(self):
         return f'FastCall({self.function!r}, {self.args!r})'
@@ -880,8 +827,8 @@ cdef class Tag(Expression):
         program.tag(self.tag)
         return program
 
-    cpdef Expression partially_evaluate(self, Context context):
-        cdef Expression node = self.node.partially_evaluate(context)
+    cpdef Expression evaluate(self, Context context):
+        cdef Expression node = self.node.evaluate(context)
         cdef Vector nodes
         cdef Node n
         if isinstance(node, Literal):
@@ -891,9 +838,6 @@ cdef class Tag(Expression):
                     n.add_tag(self.tag)
                 return node
         return Tag(node, self.tag)
-
-    cpdef object reduce(self, func):
-        return func(self, self.node.reduce(func))
 
     def __repr__(self):
         return f'Tag({self.node!r}, {self.tag!r})'
@@ -926,7 +870,7 @@ cdef class Attributes(Expression):
         program.clear_node_scope()
         return program
 
-    cpdef Expression partially_evaluate(self, Context context):
+    cpdef Expression evaluate(self, Context context):
         cdef Expression node = self
         cdef list bindings = []
         cdef Attributes attrs
@@ -936,11 +880,11 @@ cdef class Attributes(Expression):
         while isinstance(node, Attributes):
             attrs = <Attributes>node
             for binding in reversed(attrs.bindings):
-                bindings.append(Binding(binding.name, binding.expr.partially_evaluate(context)))
+                bindings.append(Binding(binding.name, binding.expr.evaluate(context)))
             node = attrs.node
         cdef bint fast = not context.unbound
         context.unbound = unbound
-        node = node.partially_evaluate(context)
+        node = node.evaluate(context)
         cdef Vector nodes
         cdef Node n
         if isinstance(node, Literal):
@@ -956,13 +900,6 @@ cdef class Attributes(Expression):
         if fast:
             return FastAttributes(node, tuple(bindings))
         return Attributes(node, tuple(bindings))
-
-    cpdef object reduce(self, func):
-        cdef list children = [self.node.reduce(func)]
-        cdef Binding binding
-        for binding in self.bindings:
-            children.append(binding.expr.reduce(func))
-        return func(self, *children)
 
     def __repr__(self):
         return f'{self.__class__.__name__}({self.node!r}, {self.bindings!r})'
@@ -990,7 +927,7 @@ cdef class Search(Expression):
         program.search(self.query)
         return program
 
-    cpdef Expression partially_evaluate(self, Context context):
+    cpdef Expression evaluate(self, Context context):
         return self
 
     def __repr__(self):
@@ -1012,9 +949,9 @@ cdef class Append(Expression):
         program.append()
         return program
 
-    cpdef Expression partially_evaluate(self, Context context):
-        cdef Expression node = self.node.partially_evaluate(context)
-        cdef Expression children = self.children.partially_evaluate(context)
+    cpdef Expression evaluate(self, Context context):
+        cdef Expression node = self.node.evaluate(context)
+        cdef Expression children = self.children.evaluate(context)
         cdef Vector nodes, childs
         cdef Node n, c
         if isinstance(node, Literal) and isinstance(children, Literal):
@@ -1026,9 +963,6 @@ cdef class Append(Expression):
                         n.append(c.copy())
                 return node
         return Append(node, children)
-
-    cpdef object reduce(self, func):
-        return func(self, self.node.reduce(func), self.children.reduce(func))
 
     def __repr__(self):
         return f'{self.__class__.__name__}({self.node!r}, {self.children!r})'
@@ -1042,9 +976,9 @@ cdef class Prepend(Append):
         program.prepend()
         return program
 
-    cpdef Expression partially_evaluate(self, Context context):
-        cdef Expression node = self.node.partially_evaluate(context)
-        cdef Expression children = self.children.partially_evaluate(context)
+    cpdef Expression evaluate(self, Context context):
+        cdef Expression node = self.node.evaluate(context)
+        cdef Expression children = self.children.evaluate(context)
         cdef Vector nodes, childs
         cdef Node n, c
         if isinstance(node, Literal) and isinstance(children, Literal):
@@ -1097,7 +1031,7 @@ cdef class Let(Expression):
         program.literal(null_)
         return program
 
-    cpdef Expression partially_evaluate(self, Context context):
+    cpdef Expression evaluate(self, Context context):
         cdef list remaining = []
         cdef PolyBinding binding
         cdef Expression expr
@@ -1105,7 +1039,7 @@ cdef class Let(Expression):
         cdef str name
         cdef int i, n
         for binding in self.bindings:
-            expr = binding.expr.partially_evaluate(context)
+            expr = binding.expr.evaluate(context)
             if isinstance(expr, Literal):
                 value = (<Literal>expr).value
                 n = len(binding.names)
@@ -1122,13 +1056,6 @@ cdef class Let(Expression):
         if remaining:
             return Let(tuple(remaining))
         return NoOp
-
-    cpdef object reduce(self, func):
-        cdef list children = []
-        cdef PolyBinding binding
-        for binding in self.bindings:
-            children.append(binding.expr.reduce(func))
-        return func(self, *children)
 
     def __repr__(self):
         return f'Let({self.bindings!r})'
@@ -1153,7 +1080,7 @@ cdef class InlineLet(Expression):
         program.end_scope()
         return program
 
-    cpdef Expression partially_evaluate(self, Context context):
+    cpdef Expression evaluate(self, Context context):
         cdef dict saved = context.variables
         context.variables = saved.copy()
         cdef list remaining = []
@@ -1163,7 +1090,7 @@ cdef class InlineLet(Expression):
         cdef str name
         cdef int i, n
         for binding in self.bindings:
-            expr = binding.expr.partially_evaluate(context)
+            expr = binding.expr.evaluate(context)
             if isinstance(expr, Literal):
                 value = (<Literal>expr).value
                 n = len(binding.names)
@@ -1177,18 +1104,11 @@ cdef class InlineLet(Expression):
                 for name in binding.names:
                     context.variables[name] = None
                 remaining.append(PolyBinding(binding.names, expr))
-        body = self.body.partially_evaluate(context)
+        body = self.body.evaluate(context)
         context.variables = saved
         if remaining:
             return InlineLet(body, tuple(remaining))
         return body
-
-    cpdef object reduce(self, func):
-        cdef list children = [self.body.reduce(func)]
-        cdef PolyBinding binding
-        for binding in self.bindings:
-            children.append(binding.expr.reduce(func))
-        return func(self, *children)
 
     def __repr__(self):
         return f'InlineLet({self.body!r}, {self.bindings!r})'
@@ -1218,8 +1138,8 @@ cdef class For(Expression):
         program.end_for()
         return program
 
-    cpdef Expression partially_evaluate(self, Context context):
-        cdef Expression body, source=self.source.partially_evaluate(context)
+    cpdef Expression evaluate(self, Context context):
+        cdef Expression body, source=self.source.evaluate(context)
         cdef list remaining = []
         cdef Vector values, single
         cdef dict saved = context.variables
@@ -1228,7 +1148,7 @@ cdef class For(Expression):
         if not isinstance(source, Literal):
             for name in self.names:
                 context.variables[name] = None
-            body = self.body.partially_evaluate(context)
+            body = self.body.evaluate(context)
             context.variables = saved
             return For(self.names, source, body)
         values = (<Literal>source).value
@@ -1237,12 +1157,9 @@ cdef class For(Expression):
             for name in self.names:
                 context.variables[name] = values.item(i)
                 i += 1
-            remaining.append(self.body.partially_evaluate(context))
+            remaining.append(self.body.evaluate(context))
         context.variables = saved
         return sequence_pack(remaining)
-
-    cpdef object reduce(self, func):
-        return func(self, self.source.reduce(func), self.body.reduce(func))
 
     def __repr__(self):
         return f'For({self.names!r}, {self.source!r}, {self.body!r})'
@@ -1286,13 +1203,13 @@ cdef class IfElse(Expression):
         program.label(END)
         return program
 
-    cpdef Expression partially_evaluate(self, Context context):
+    cpdef Expression evaluate(self, Context context):
         cdef list remaining = []
         cdef Test test
         cdef Expression condition, then
         for test in self.tests:
-            condition = test.condition.partially_evaluate(context)
-            then = test.then.partially_evaluate(context)
+            condition = test.condition.evaluate(context)
+            then = test.then.evaluate(context)
             if isinstance(condition, Literal):
                 if (<Literal>condition).value.as_bool():
                     if not remaining:
@@ -1301,20 +1218,10 @@ cdef class IfElse(Expression):
                         return IfElse(tuple(remaining), then)
             else:
                 remaining.append(Test(condition, then))
-        else_ = self.else_.partially_evaluate(context) if self.else_ is not None else None
+        else_ = self.else_.evaluate(context) if self.else_ is not None else None
         if remaining:
             return IfElse(tuple(remaining), else_)
         return NoOp if else_ is None else else_
-
-    cpdef object reduce(self, func):
-        cdef list children = []
-        cdef Test test
-        for test in self.tests:
-            children.append(test.condition.reduce(func))
-            children.append(test.then.reduce(func))
-        if self.else_ is not None:
-            children.append(self.else_.reduce(func))
-        return func(self, *children)
 
     def __repr__(self):
         return f'IfElse({self.tests!r}, {self.else_!r})'
@@ -1346,13 +1253,13 @@ cdef class Function(Expression):
         program.literal(null_)
         return program
 
-    cpdef Expression partially_evaluate(self, Context context):
+    cpdef Expression evaluate(self, Context context):
         cdef list parameters = []
         cdef Binding parameter
         cdef Expression expr
         cdef bint literal = True
         for parameter in self.parameters:
-            expr = parameter.expr.partially_evaluate(context) if parameter.expr is not None else None
+            expr = parameter.expr.evaluate(context) if parameter.expr is not None else None
             if expr is not None and not isinstance(expr, Literal):
                 literal = False
             parameters.append(Binding(parameter.name, expr))
@@ -1367,20 +1274,11 @@ cdef class Function(Expression):
         for parameter in parameters:
             context.variables[parameter.name] = None
         context.unbound = set()
-        expr = self.expr.partially_evaluate(context)
+        expr = self.expr.evaluate(context)
         context.variables = saved
         context.unbound = unbound
         context.variables[self.name] = None
         return Function(self.name, tuple(parameters), expr)
-
-    cpdef object reduce(self, func):
-        cdef list children = []
-        cdef Binding parameter
-        for parameter in self.parameters:
-            if parameter.expr is not None:
-                children.append(parameter.expr.reduce(func))
-        children.append(self.expr.reduce(func))
-        return func(self, *children)
 
     def __repr__(self):
         return f'Function({self.name!r}, {self.parameters!r}, {self.expr!r})'
@@ -1412,12 +1310,12 @@ cdef class TemplateCall(Expression):
         program.call(1, tuple(names))
         return program
 
-    cpdef Expression partially_evaluate(self, Context context):
-        cdef Expression function = self.function.partially_evaluate(context)
+    cpdef Expression evaluate(self, Context context):
+        cdef Expression function = self.function.evaluate(context)
         cdef literal = isinstance(function, Literal)
         cdef Expression children = None
         if self.children is not None:
-            children = self.children.partially_evaluate(context)
+            children = self.children.evaluate(context)
             literal = literal and isinstance(children, Literal)
         cdef list args = None
         cdef Binding arg
@@ -1425,7 +1323,7 @@ cdef class TemplateCall(Expression):
         if self.args is not None:
             args = []
             for arg in self.args:
-                value = arg.expr.partially_evaluate(context)
+                value = arg.expr.evaluate(context)
                 if not isinstance(value, Literal):
                     literal = False
                 args.append(Binding(arg.name, value))
@@ -1433,16 +1331,6 @@ cdef class TemplateCall(Expression):
         if literal:
             return Literal(call.evaluate(context))
         return call
-
-    cpdef object reduce(self, func):
-        cdef list children = [self.function.reduce(func)]
-        cdef Binding binding
-        if self.args is not None:
-            for arg in self.args:
-                children.append(arg.expr.reduce(func))
-        if self.children is not None:
-            children.append(self.children.reduce(func))
-        return func(self, *children)
 
     def __repr__(self):
         return f'TemplateCall({self.function!r}, {self.args!r}, {self.children!r})'

@@ -83,20 +83,22 @@ class CachePath:
             program = None
         else:
             try:
-                start = system_clock()
+                parse_time = -system_clock()
                 source = self._path.read_text(encoding='utf8')
                 initial_top = parse(source)
-                mid = system_clock()
+                now = system_clock()
+                parse_time += now
+                simplify_time = -now
                 top = initial_top.simplify(variables=variables, undefined=undefined)
-                end = system_clock()
-                logger.debug("Parsed {} in {:.1f}ms, partial evaluation in {:.1f}ms", self._path, (mid - start) * 1000, (end - mid) * 1000)
-                logger.opt(lazy=True).debug("Tree node count before partial-evaluation {before} and after {after}",
-                                            before=lambda: initial_top.reduce(lambda e, *rs: sum(rs) + 1),
-                                            after=lambda: top.reduce(lambda e, *rs: sum(rs) + 1))
+                now = system_clock()
+                simplify_time += now
+                compile_time = -now
                 program = top.compile()
-                logger.debug("Compiled tree to {} instruction program", len(program))
                 program.set_top(top)
                 program.set_path(self._absolute)
+                compile_time += system_clock()
+                logger.debug("Compiled {} to {} instructions in {:.1f}/{:.1f}/{:.1f}ms (parse/simplify/compile)",
+                             self._path, len(program), parse_time*1000, simplify_time*1000, compile_time*1000)
             except ParseError as exc:
                 if top is None:
                     logger.error("Error parsing {} at line {} column {}:\n{}",
