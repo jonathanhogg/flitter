@@ -704,19 +704,24 @@ cdef class Program:
 
             elif instruction.code == OpCode.Name:
                 top += 1
-                if top == limit:
-                    stack.append(None)
-                    limit += 1
                 name = (<InstructionStr>instruction).value
                 for i in range(scopes_top, -1, -1):
                     scope = <dict>scopes[i]
                     if scope is not None and PyDict_Size(scope):
                         objptr = PyDict_GetItem(scope, name)
                         if objptr != NULL:
-                            stack[top] = <Vector>objptr
+                            if top == limit:
+                                stack.append(<Vector>objptr)
+                                limit += 1
+                            else:
+                                stack[top] = <Vector>objptr
                             break
                 else:
-                    stack[top] = null_
+                    if top == limit:
+                        stack.append(null_)
+                        limit += 1
+                    else:
+                        stack[top] = null_
                     context.errors.add(f"Unbound name '{name}'")
 
             elif instruction.code == OpCode.Lookup:
