@@ -68,44 +68,50 @@ class CachePath:
         self._cache[key] = mtime, text
         return text
 
-    def read_flitter_program(self, definitions=None):
+    def read_flitter_program(self, variables=None, undefined=None):
         from .language.parser import parse, ParseError
         self._touched = system_clock()
         mtime = self._path.stat().st_mtime if self._path.exists() and self._path.is_file() else None
         if 'flitter' in self._cache:
-            cache_mtime, top = self._cache['flitter']
+            cache_mtime, program = self._cache['flitter']
             if mtime == cache_mtime:
-                return top
+                return program
         else:
-            top = None
+            program = None
         if mtime is None:
             logger.warning("Program file not found: {}", self._path)
-            top = None
+            program = None
         else:
             try:
-                start = system_clock()
+                parse_time = -system_clock()
                 source = self._path.read_text(encoding='utf8')
                 initial_top = parse(source)
-                initial_top.set_path(self._absolute)
-                mid = system_clock()
-                top = initial_top.simplify(variables=definitions)
-                end = system_clock()
-                logger.debug("Parsed {} in {:.1f}ms, partial evaluation in {:.1f}ms", self._path, (mid - start) * 1000, (end - mid) * 1000)
-                logger.opt(lazy=True).debug("Tree node count before partial-evaluation {before} and after {after}",
-                                            before=lambda: initial_top.reduce(lambda e, *rs: sum(rs) + 1),
-                                            after=lambda: top.reduce(lambda e, *rs: sum(rs) + 1))
+                now = system_clock()
+                parse_time += now
+                simplify_time = -now
+                top = initial_top.simplify(variables=variables, undefined=undefined)
+                now = system_clock()
+                simplify_time += now
+                compile_time = -now
+                program = top.compile()
+                program.set_top(top)
+                program.set_path(self)
+                compile_time += system_clock()
+                logger.debug("Read program file: {}", self._path)
+                logger.debug("Compiled to {} instructions in {:.1f}/{:.1f}/{:.1f}ms",
+                             len(program), parse_time*1000, simplify_time*1000, compile_time*1000)
             except ParseError as exc:
                 if top is None:
                     logger.error("Error parsing {} at line {} column {}:\n{}",
-                                 self._path, exc.line, exc.column, exc.context)
+                                 self._path.name, exc.line, exc.column, exc.context)
                 else:
                     logger.warning("Unable to re-parse {}, error at line {} column {}:\n{}",
-                                   self._path, exc.line, exc.column, exc.context)
+                                   self._path.name, exc.line, exc.column, exc.context)
             except Exception as exc:
                 logger.opt(exception=exc).error("Error reading program file: {}", self._path)
-                top = None
-        self._cache['flitter'] = mtime, top
-        return top
+                program = None
+        self._cache['flitter'] = mtime, program
+        return program
 
     def read_csv_vector(self, row_number):
         import csv
@@ -263,8 +269,7 @@ class CachePath:
                 logger.opt(exception=exc).warning("Error reading model file: {}", self._path)
                 trimesh_model = None
             else:
-                logger.debug("Read model file '{}' with {} vertices and {} faces", self._path, len(trimesh_model.vertices),
-                             len(trimesh_model.faces))
+                logger.debug("Read {}v/{}f mesh model file: {}", len(trimesh_model.vertices), len(trimesh_model.faces), self._path)
         self._cache['trimesh'] = mtime, trimesh_model
         return trimesh_model
 
@@ -417,6 +422,8 @@ class FileCache:
             self._root = Path('.')
 
     def get_with_root(self, path, root):
+        if isinstance(root, CachePath):
+            root = root._path
         path = Path(path)
         if not path.is_absolute():
             root = Path(root)

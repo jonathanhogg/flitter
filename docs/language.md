@@ -398,22 +398,28 @@ defaults are 120 and 4, respectively), and the *current* target frame rate of
 the engine (default is 60 or the value specified with the `--fps` command-line
 option).
 
-## Partial evaluation
+## Execution
 
-When a source file is loaded it is parsed into an evaluation tree and then that
-tree is *partially-evaluated*. This attempts to evaluate all literal/constant
-expressions. The partial-evaluator is able to construct parts of node graphs,
-unroll loops with a constant source vector, evaluate conditionals with constant
-tests, call functions with constant arguments (including creating pseudo-random
-streams), replace `let` names with constant values and generally reduce as much
-of the evaluation tree as possible to literal values.
-
-The partial-evaluator will also run again incorporating the state if it has
-been stable for a period of time (configurable with the `--evalstate`
-command-line option). If the state is touched again (i.e., a pad or encoder
-is touched) then this partially-evaluated tree is discarded and the engine will
-return to dynamically evaluating state expressions.
+When a source file is loaded it is parsed into an abstract syntax tree and then
+that is *partially-evaluated*. This attempts to evaluate all static expressions.
+The partial-evaluator is quite sophisticated and is able to construct static
+parts of node graphs, unroll loops with constant source vectors, evaluate
+conditionals with constant tests, call functions with constant arguments
+(including creating pseudo-random streams), replace `let` names with literal
+values, evaluate mathematical expressions (including some rearranging where
+necessary to achieve this) and generally reduces as much of the evaluation tree
+as possible to constant values.
 
 Unbound names (which includes all of the globals listed above, like `beat`) and
-queries (`{...}`) are always dynamic, as are obviously any expressions that
-then include these.
+queries (`{...}`) are always dynamic, as will then obviously be any expressions
+that include these.
+
+After partial-evaluation has simplified the tree (and note that thanks to loop
+unrolling, "simpler" doesn't necessarily mean "smaller"), the tree is compiled
+into instructions for a stack-based virtual machine. These instructions are
+interpreted to run the program.
+
+The partial-evaluator and compiler will run again incorporating the state if
+that has been stable for a period of time (configurable with the `--evalstate`
+command-line option). If the state then changes (i.e., a pad or encoder is
+touched) the engine will return to the original compiled program again.

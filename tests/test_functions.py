@@ -7,7 +7,7 @@ import unittest
 
 from flitter.model import Vector, null
 from flitter.language.functions import (Uniform, Normal, Beta, counter, hypot, angle)
-from flitter.language.tree import StateDict
+from flitter.language.vm import StateDict
 
 
 Tau = 2*math.pi
