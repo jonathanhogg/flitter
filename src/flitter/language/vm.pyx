@@ -336,7 +336,7 @@ cdef class Program:
     def __str__(self):
         return '\n'.join(str(instruction) for instruction in self.instructions)
 
-    def set_path(self, str path):
+    def set_path(self, object path):
         self.path = path
 
     def set_top(self, object top):
@@ -388,14 +388,14 @@ cdef class Program:
                 jump.offset = target - address
         self.linked = True
 
-    cdef dict _import(self, Context context, str filename):
+    cdef dict import_module(self, Context context, str filename):
         cdef Context import_context
         program = SharedCache.get_with_root(filename, context.path).read_flitter_program()
         if program is not None:
             import_context = context.parent
             while import_context is not None:
-                if import_context.path == program.path:
-                    context.errors.add(f"Circular import with {filename}")
+                if import_context.path is program.path:
+                    context.errors.add(f"Circular import of {filename}")
                     break
                 import_context = import_context.parent
             else:
@@ -634,7 +634,7 @@ cdef class Program:
                 filename = (<Vector>stack[top]).as_string()
                 stack[top] = null_
                 names = (<InstructionTuple>instruction).value
-                variables = self._import(context, filename)
+                variables = self.import_module(context, filename)
                 if variables is not None:
                     scope = <dict>scopes[scopes_top]
                     for name in names:
@@ -643,6 +643,8 @@ cdef class Program:
                         else:
                             context.errors.add(f"Unable to import '{name}' from '{filename}'")
                             scope[name] = null_
+                else:
+                    context.errors.add(f"Unable to import from '{filename}'")
 
             elif instruction.code == OpCode.Literal:
                 top += 1
@@ -1102,7 +1104,7 @@ cdef class StateDict:
 
 
 cdef class Context:
-    def __cinit__(self, dict variables=None, StateDict state=None, Node graph=None, dict pragmas=None, str path=None, Context parent=None):
+    def __cinit__(self, dict variables=None, StateDict state=None, Node graph=None, dict pragmas=None, object path=None, Context parent=None):
         self.variables = variables if variables is not None else {}
         self.state = state
         self.graph = graph if graph is not None else Node('root')

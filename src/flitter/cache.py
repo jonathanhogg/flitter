@@ -95,17 +95,18 @@ class CachePath:
                 compile_time = -now
                 program = top.compile()
                 program.set_top(top)
-                program.set_path(self._absolute)
+                program.set_path(self)
                 compile_time += system_clock()
-                logger.debug("Compiled {} to {} instructions in {:.1f}/{:.1f}/{:.1f}ms (parse/simplify/compile)",
-                             self._path, len(program), parse_time*1000, simplify_time*1000, compile_time*1000)
+                logger.debug("Read program file: {}", self._path)
+                logger.debug("Compiled to {} instructions in {:.1f}/{:.1f}/{:.1f}ms",
+                             len(program), parse_time*1000, simplify_time*1000, compile_time*1000)
             except ParseError as exc:
                 if top is None:
                     logger.error("Error parsing {} at line {} column {}:\n{}",
-                                 self._path, exc.line, exc.column, exc.context)
+                                 self._path.name, exc.line, exc.column, exc.context)
                 else:
                     logger.warning("Unable to re-parse {}, error at line {} column {}:\n{}",
-                                   self._path, exc.line, exc.column, exc.context)
+                                   self._path.name, exc.line, exc.column, exc.context)
             except Exception as exc:
                 logger.opt(exception=exc).error("Error reading program file: {}", self._path)
                 program = None
@@ -268,8 +269,7 @@ class CachePath:
                 logger.opt(exception=exc).warning("Error reading model file: {}", self._path)
                 trimesh_model = None
             else:
-                logger.debug("Read model file '{}' with {} vertices and {} faces", self._path, len(trimesh_model.vertices),
-                             len(trimesh_model.faces))
+                logger.debug("Read {}v/{}f mesh model file: {}", len(trimesh_model.vertices), len(trimesh_model.faces), self._path)
         self._cache['trimesh'] = mtime, trimesh_model
         return trimesh_model
 
@@ -422,6 +422,8 @@ class FileCache:
             self._root = Path('.')
 
     def get_with_root(self, path, root):
+        if isinstance(root, CachePath):
+            root = root._path
         path = Path(path)
         if not path.is_absolute():
             root = Path(root)

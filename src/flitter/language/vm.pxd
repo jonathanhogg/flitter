@@ -12,10 +12,10 @@ cdef class Program:
     cdef readonly list instructions
     cdef bint linked
     cdef readonly dict stats
-    cdef readonly str path
+    cdef readonly object path
     cdef readonly object top
 
-    cdef dict _import(self, Context context, str filename)
+    cdef dict import_module(self, Context context, str filename)
     cpdef void link(self)
     cpdef list execute(self, Context context, dict additional_scope=?, bint record_stats=?)
 
@@ -35,7 +35,7 @@ cdef class Context:
     cdef readonly dict pragmas
     cdef readonly StateDict state
     cdef readonly Node graph
-    cdef readonly str path
+    cdef readonly object path
     cdef readonly Context parent
     cdef readonly set errors
     cdef readonly set logs

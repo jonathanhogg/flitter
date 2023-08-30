@@ -345,7 +345,7 @@ class EngineController:
                     run_program.set_path(current_program.path)
                     run_program.set_top(top)
                     compile_time += system_clock()
-                    logger.debug("Re-simplified on state to {} instructions in {:.1f}/{:.1f}ms (simplify/compile)",
+                    logger.debug("Simplified on state to {} instructions in -/{:.1f}/{:.1f}ms",
                                  len(run_program), simplify_time*1000, compile_time*1000)
 
                 if self.state.changed:
