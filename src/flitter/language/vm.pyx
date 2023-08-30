@@ -382,17 +382,6 @@ cdef class Program:
         self.execute(context, record_stats=record_stats)
         return context
 
-    @staticmethod
-    def new_label():
-        global NextLabel
-        label = NextLabel
-        NextLabel += 1
-        return label
-
-    def extend(self, Program program):
-        self.instructions.extend(program.instructions)
-        return self
-
     cpdef void link(self):
         cdef Instruction instruction
         cdef int label, address, target
@@ -427,6 +416,17 @@ cdef class Program:
                 context.errors.update(import_context.errors)
                 return import_context.variables
         return None
+
+    @staticmethod
+    def new_label():
+        global NextLabel
+        label = NextLabel
+        NextLabel += 1
+        return label
+
+    def extend(self, Program program):
+        self.instructions.extend(program.instructions)
+        return self
 
     def dup(self):
         self.instructions.append(Instruction(OpCode.Dup))
@@ -598,7 +598,7 @@ cdef class Program:
     cpdef list execute(self, Context context, dict additional_scope=None, bint record_stats=False):
         cdef int i, n, pc=0, program_end=len(self.instructions)
         cdef Instruction instruction=None
-        cdef int limit=0, top=-1
+        cdef int top=-1
         cdef list stack=[], values, loop_sources=[]
         cdef list scopes
         if additional_scope:
@@ -606,7 +606,8 @@ cdef class Program:
         else:
             scopes = [None, builtins, context.variables]
         cdef int scopes_top = len(scopes) - 1
-        cdef str name
+        cdef object name, arg
+        cdef str filename
         cdef tuple names, args
         cdef Vector r1, r2
         cdef LoopSource loop_source = None
@@ -628,9 +629,8 @@ cdef class Program:
 
             if instruction.code == OpCode.Dup:
                 top += 1
-                if top == limit:
+                if top == len(stack):
                     stack.append(stack[top-1])
-                    limit += 1
                 else:
                     stack[top] = stack[top-1]
 
@@ -670,16 +670,15 @@ cdef class Program:
                         if name in variables:
                             scope[name] = variables[name]
                         else:
-                            context.errors.add(f"Unable to import '{name}' from '{filename}'")
+                            context.errors.add(f"Unable to import '{<str>name}' from '{filename}'")
                             scope[name] = null_
                 else:
                     context.errors.add(f"Unable to import from '{filename}'")
 
             elif instruction.code == OpCode.Literal:
                 top += 1
-                if top == limit:
+                if top == len(stack):
                     stack.append((<InstructionVector>instruction).value)
-                    limit += 1
                 else:
                     stack[top] = (<InstructionVector>instruction).value
 
@@ -688,17 +687,15 @@ cdef class Program:
                 r1.objects = [(<InstructionNode>instruction).value.copy()]
                 r1.length = 1
                 top += 1
-                if top == limit:
+                if top == len(stack):
                     stack.append(r1)
-                    limit += 1
                 else:
                     stack[top] = r1
 
             elif instruction.code == OpCode.LiteralNodes:
                 top += 1
-                if top == limit:
+                if top == len(stack):
                     stack.append((<InstructionVector>instruction).value.copynodes())
-                    limit += 1
                 else:
                     stack[top] = (<InstructionVector>instruction).value.copynodes()
 
@@ -710,19 +707,17 @@ cdef class Program:
                     if scope is not None and PyDict_Size(scope):
                         objptr = PyDict_GetItem(scope, name)
                         if objptr != NULL:
-                            if top == limit:
+                            if top == len(stack):
                                 stack.append(<Vector>objptr)
-                                limit += 1
                             else:
                                 stack[top] = <Vector>objptr
                             break
                 else:
-                    if top == limit:
+                    if top == len(stack):
                         stack.append(null_)
-                        limit += 1
                     else:
                         stack[top] = null_
-                    context.errors.add(f"Unbound name '{name}'")
+                    context.errors.add(f"Unbound name '{<str>name}'")
 
             elif instruction.code == OpCode.Lookup:
                 stack[top] = context.state.get_item(<Vector>stack[top]) if context.state is not None else null_
@@ -743,83 +738,97 @@ cdef class Program:
                 stack[top] = false_ if (<Vector>stack[top]).as_bool() else true_
 
             elif instruction.code == OpCode.Add:
-                r1 = <Vector>stack[top-1]
-                stack[top-1] = r1.add((<Vector>stack[top]))
-                top -= 1
-
-            elif instruction.code == OpCode.Sub:
-                r1 = <Vector>stack[top-1]
-                stack[top-1] = r1.sub((<Vector>stack[top]))
-                top -= 1
-
-            elif instruction.code == OpCode.Mul:
-                r1 = <Vector>stack[top-1]
-                stack[top-1] = r1.mul((<Vector>stack[top]))
-                top -= 1
-
-            elif instruction.code == OpCode.TrueDiv:
-                r1 = <Vector>stack[top-1]
-                stack[top-1] = r1.truediv((<Vector>stack[top]))
-                top -= 1
-
-            elif instruction.code == OpCode.FloorDiv:
-                r1 = <Vector>stack[top-1]
-                stack[top-1] = r1.floordiv((<Vector>stack[top]))
-                top -= 1
-
-            elif instruction.code == OpCode.Mod:
-                r1 = <Vector>stack[top-1]
-                stack[top-1] = r1.mod((<Vector>stack[top]))
-                top -= 1
-
-            elif instruction.code == OpCode.Pow:
-                r1 = <Vector>stack[top-1]
-                stack[top-1] = r1.pow((<Vector>stack[top]))
-                top -= 1
-
-            elif instruction.code == OpCode.Eq:
-                r1 = <Vector>stack[top-1]
-                stack[top-1] = r1.eq((<Vector>stack[top]))
-                top -= 1
-
-            elif instruction.code == OpCode.Ne:
-                r1 = <Vector>stack[top-1]
-                stack[top-1] = r1.ne((<Vector>stack[top]))
-                top -= 1
-
-            elif instruction.code == OpCode.Gt:
-                r1 = <Vector>stack[top-1]
-                stack[top-1] = r1.gt((<Vector>stack[top]))
-                top -= 1
-
-            elif instruction.code == OpCode.Lt:
-                r1 = <Vector>stack[top-1]
-                stack[top-1] = r1.lt((<Vector>stack[top]))
-                top -= 1
-
-            elif instruction.code == OpCode.Ge:
-                r1 = <Vector>stack[top-1]
-                stack[top-1] = r1.ge((<Vector>stack[top]))
-                top -= 1
-
-            elif instruction.code == OpCode.Le:
-                r1 = <Vector>stack[top-1]
-                stack[top-1] = r1.le((<Vector>stack[top]))
-                top -= 1
-
-            elif instruction.code == OpCode.Xor:
-                r1 = <Vector>stack[top-1]
                 r2 = <Vector>stack[top]
                 top -= 1
+                r1 = <Vector>stack[top]
+                stack[top] = r1.add(r2)
+
+            elif instruction.code == OpCode.Sub:
+                r2 = <Vector>stack[top]
+                top -= 1
+                r1 = <Vector>stack[top]
+                stack[top] = r1.sub(r2)
+
+            elif instruction.code == OpCode.Mul:
+                r2 = <Vector>stack[top]
+                top -= 1
+                r1 = <Vector>stack[top]
+                stack[top] = r1.mul(r2)
+
+            elif instruction.code == OpCode.TrueDiv:
+                r2 = <Vector>stack[top]
+                top -= 1
+                r1 = <Vector>stack[top]
+                stack[top] = r1.truediv(r2)
+
+            elif instruction.code == OpCode.FloorDiv:
+                r2 = <Vector>stack[top]
+                top -= 1
+                r1 = <Vector>stack[top]
+                stack[top] = r1.floordiv(r2)
+
+            elif instruction.code == OpCode.Mod:
+                r2 = <Vector>stack[top]
+                top -= 1
+                r1 = <Vector>stack[top]
+                stack[top] = r1.mod(r2)
+
+            elif instruction.code == OpCode.Pow:
+                r2 = <Vector>stack[top]
+                top -= 1
+                r1 = <Vector>stack[top]
+                stack[top] = r1.pow(r2)
+
+            elif instruction.code == OpCode.Eq:
+                r2 = <Vector>stack[top]
+                top -= 1
+                r1 = <Vector>stack[top]
+                stack[top] = r1.eq(r2)
+
+            elif instruction.code == OpCode.Ne:
+                r2 = <Vector>stack[top]
+                top -= 1
+                r1 = <Vector>stack[top]
+                stack[top] = r1.ne(r2)
+
+            elif instruction.code == OpCode.Gt:
+                r2 = <Vector>stack[top]
+                top -= 1
+                r1 = <Vector>stack[top]
+                stack[top] = r1.gt(r2)
+
+            elif instruction.code == OpCode.Lt:
+                r2 = <Vector>stack[top]
+                top -= 1
+                r1 = <Vector>stack[top]
+                stack[top] = r1.lt(r2)
+
+            elif instruction.code == OpCode.Ge:
+                r2 = <Vector>stack[top]
+                top -= 1
+                r1 = <Vector>stack[top]
+                stack[top] = r1.ge(r2)
+
+            elif instruction.code == OpCode.Le:
+                r2 = <Vector>stack[top]
+                top -= 1
+                r1 = <Vector>stack[top]
+                stack[top] = r1.le(r2)
+
+            elif instruction.code == OpCode.Xor:
+                r2 = <Vector>stack[top]
+                top -= 1
+                r1 = <Vector>stack[top]
                 if not r1.as_bool():
                     stack[top] = r2
                 elif r2.as_bool():
                     stack[top] = false_
 
             elif instruction.code == OpCode.Slice:
-                r1 = <Vector>stack[top-1]
-                stack[top-1] = r1.slice((<Vector>stack[top]))
+                r2 = <Vector>stack[top]
                 top -= 1
+                r1 = <Vector>stack[top]
+                stack[top] = r1.slice(r2)
 
             elif instruction.code == OpCode.SliceLiteral:
                 r1 = <Vector>stack[top]
@@ -842,8 +851,8 @@ cdef class Program:
                     kwargs = None
                 n = (<InstructionIntTuple>instruction).ivalue
                 if n == 1:
-                    r2 = <Vector>stack[top-1]
-                    args = (r2,)
+                    arg = stack[top-1]
+                    args = (arg,)
                 elif n:
                     args = tuple(stack[top-n:top])
                 else:
@@ -967,11 +976,9 @@ cdef class Program:
                 else:
                     scope = <dict>scopes[scopes_top]
                     names = (<InstructionJumpTuple>instruction).value
-                    n = len(names)
-                    for i in range(n):
-                        name = <str>names[i]
-                        scope[name] = loop_source.source.item(loop_source.position + i)
-                    loop_source.position += len(names)
+                    for name in names:
+                        scope[name] = loop_source.source.item(loop_source.position)
+                        loop_source.position += 1
                     loop_source.iterations += 1
 
             elif instruction.code == OpCode.PushNext:
@@ -980,9 +987,8 @@ cdef class Program:
                 else:
                     r1 = loop_source.source.item(loop_source.position)
                     top += 1
-                    if top == limit:
+                    if top == len(stack):
                         stack.append(r1)
-                        limit += 1
                     else:
                         stack[top] = r1
                     loop_source.position += 1
@@ -998,9 +1004,8 @@ cdef class Program:
                     stack[top] = Vector._compose(values)
                 else:
                     top += 1
-                    if top == limit:
+                    if top == len(stack):
                         stack.append(null_)
-                        limit += 1
                     else:
                         stack[top] = null_
                 loop_source = loop_sources.pop() if loop_sources else None
@@ -1049,9 +1054,8 @@ cdef class Program:
                 else:
                     r1 = null_
                 top += 1
-                if top == limit:
+                if top == len(stack):
                     stack.append(r1)
-                    limit += 1
                 else:
                     stack[top] = r1
 
@@ -1072,7 +1076,7 @@ cdef class Program:
                 StatsCount[<int>instruction.code] += 1
                 StatsDuration[<int>instruction.code] += duration
 
-            assert -1 <= top < limit
+            assert -1 <= top < len(stack)
 
         assert pc == program_end
         return stack[:top+1]
