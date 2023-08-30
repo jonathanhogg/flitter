@@ -70,6 +70,7 @@ cdef enum OpCode:
     Jump
     Label
     LiteralNode
+    LiteralNodes
     Le
     Let
     Literal
@@ -123,6 +124,7 @@ cdef dict OpCodeNames = {
     OpCode.Jump: 'Jump',
     OpCode.Label: 'Label',
     OpCode.LiteralNode: 'LiteralNode',
+    OpCode.LiteralNodes: 'LiteralNodes',
     OpCode.Le: 'Le',
     OpCode.Let: 'Let',
     OpCode.Literal: 'Literal',
@@ -166,6 +168,17 @@ cdef class InstructionVector(Instruction):
     cdef readonly Vector value
 
     def __init__(self, OpCode code, Vector value):
+        super().__init__(code)
+        self.value = value
+
+    def __str__(self):
+        return f'{OpCodeNames[self.code]} {self.value!r}'
+
+
+cdef class InstructionNode(Instruction):
+    cdef readonly Node value
+
+    def __init__(self, OpCode code, Node value):
         super().__init__(code)
         self.value = value
 
@@ -365,9 +378,13 @@ cdef class Program:
         return self
 
     def log_stats(self):
+        cdef tuple stats
+        cdef double duration
+        cdef int count, code
         if self.stats:
-            for duration, code in sorted([(duration, code) for (code, duration) in self.stats.items()], reverse=True):
-                logger.info("{:20s} {:7.1f}s", OpCodeNames[code], duration)
+            for stats, code in sorted([(stats, code) for (code, stats) in self.stats.items()], reverse=True):
+                duration, count = stats
+                logger.info("{:15s} - {:8d} x {:8.3f}µs = {:7.3f}s", OpCodeNames[code], count, duration / count * 1e6, duration)
         self.stats = None
 
     cpdef void link(self):
@@ -435,10 +452,16 @@ cdef class Program:
             value = (<Program>value).instructions
         cdef Vector vector = Vector._coerce(value)
         if vector.objects is not None:
-            for obj in vector.objects:
+            if vector.length == 1:
+                obj = vector.objects[0]
                 if isinstance(obj, Node):
-                    self.instructions.append(InstructionVector(OpCode.LiteralNode, vector))
+                    self.instructions.append(InstructionNode(OpCode.LiteralNode, <Node>obj))
                     return
+            else:
+                for obj in vector.objects:
+                    if isinstance(obj, Node):
+                        self.instructions.append(InstructionVector(OpCode.LiteralNodes, vector))
+                        return
         self.instructions.append(InstructionVector(OpCode.Literal, vector))
 
     def name(self, str name):
@@ -584,20 +607,21 @@ cdef class Program:
         cdef dict scope, variables, kwargs
         cdef Query query
         cdef Function function
-        cdef double now, timestamp
         cdef PyObject* objptr
+        cdef int count
+        cdef double duration, total
 
         if not self.linked:
             self.link()
 
-        if record_stats:
-            if self.stats is None:
-                self.stats = {}
-            timestamp = time.perf_counter()
+        if record_stats and self.stats is None:
+            self.stats = {}
 
         while 0 <= pc < program_end:
             instruction = <Instruction>self.instructions[pc]
             pc += 1
+            if record_stats:
+                duration = -time.perf_counter()
 
             if instruction.code == OpCode.Dup:
                 top += 1
@@ -655,6 +679,17 @@ cdef class Program:
                     stack[top] = (<InstructionVector>instruction).value
 
             elif instruction.code == OpCode.LiteralNode:
+                r1 = Vector.__new__(Vector)
+                r1.objects = [(<InstructionNode>instruction).value.copy()]
+                r1.length = 1
+                top += 1
+                if top == limit:
+                    stack.append(r1)
+                    limit += 1
+                else:
+                    stack[top] = r1
+
+            elif instruction.code == OpCode.LiteralNodes:
                 top += 1
                 if top == limit:
                     stack.append((<InstructionVector>instruction).value.copynodes())
@@ -850,6 +885,9 @@ cdef class Program:
                     name = (<InstructionStr>instruction).value
                     for node in r1.objects:
                         if isinstance(node, Node):
+                            if (<Node>node)._attributes_shared:
+                                (<Node>node)._attributes = dict((<Node>node)._attributes)
+                                (<Node>node)._attributes_shared = False
                             if r2.length:
                                 (<Node>node)._attributes[name] = r2
                             elif name in (<Node>node)._attributes:
@@ -903,8 +941,11 @@ cdef class Program:
                 top -= 1
                 loop_source.position = 0
                 loop_source.iterations = 0
-                scopes.append({})
                 scopes_top += 1
+                if scopes_top == len(scopes):
+                    scopes.append({})
+                else:
+                    scopes[scopes_top] = {}
 
             elif instruction.code == OpCode.Next:
                 if loop_source.position >= loop_source.source.length:
@@ -934,7 +975,6 @@ cdef class Program:
                     loop_source.iterations += 1
 
             elif instruction.code == OpCode.EndFor:
-                scopes.pop()
                 scopes_top -= 1
                 n = loop_source.iterations
                 if n:
@@ -960,11 +1000,13 @@ cdef class Program:
                 scopes[0] = None
 
             elif instruction.code == OpCode.BeginScope:
-                scopes.append({})
                 scopes_top += 1
+                if scopes_top == len(scopes):
+                    scopes.append({})
+                else:
+                    scopes[scopes_top] = {}
 
             elif instruction.code == OpCode.EndScope:
-                scopes.pop()
                 scopes_top -= 1
 
             elif instruction.code == OpCode.Let:
@@ -1011,12 +1053,12 @@ cdef class Program:
             else:
                 raise ValueError(f"Unrecognised instruction: {instruction}")
 
-            assert -1 <= top < limit
-
             if record_stats:
-                now = time.perf_counter()
-                self.stats[instruction.code] = (<double>self.stats.get(instruction.code, 0)) + now - timestamp
-                timestamp = now
+                duration += time.perf_counter()
+                total, count = <tuple>self.stats.get(instruction.code, (0, 0))
+                self.stats[instruction.code] = total + duration, count + 1
+
+            assert -1 <= top < limit
 
         assert pc == program_end
         return stack[:top+1]
