@@ -11,9 +11,11 @@ import cython
 
 from libc.math cimport floor
 
-from .functions import Uniform, shuffle
+from .functions cimport Uniform, shuffle
 from ..model cimport Vector, null_
 
+
+cdef Vector PERM_RANGE = Vector.range(256)
 
 cdef Vector GRADIENTS2 = Vector([5, 2, 2, 5, -5, 2, -2, 5, 5, -2, 2, -5, -5, -2, -2, -5])
 cdef double STRETCH_CONSTANT2 = -0.211324865405187
@@ -536,17 +538,10 @@ cdef double noise3(Vector perm, double x, double y, double z) noexcept nogil:
     return value / NORM_CONSTANT3
 
 
-cdef Vector _noise(Vector seed, list args):
+cdef Vector _noise(Vector perm, list args):
     cdef int i, j, k, count = 0, n = len(args)
     cdef Vector xx, yy, zz
     cdef double x, y
-    cdef unsigned long long seed_hash = seed.hash(True)
-    cdef Vector perm = PermCache.get(seed_hash)
-    if perm is None:
-        perm = shuffle(Uniform(seed), Vector.range(256))
-        if len(PermCache) == MAX_PERM_CACHE_ITEMS:
-            PermCache.pop(next(iter(PermCache)))
-        PermCache[seed_hash] = perm
     cdef Vector result = Vector.__new__(Vector)
     if n == 1:
         xx = args[0]
@@ -583,8 +578,22 @@ cdef Vector _noise(Vector seed, list args):
     return result
 
 
-def noise(seed, *args):
-    return _noise(seed, list(args))
+cdef Vector get_perm(Vector seed, int i):
+    cdef unsigned long long seed_hash = seed.hash(True) ^ <unsigned long long>i
+    cdef Uniform uniform
+    cdef Vector perm = <Vector>PermCache.get(seed_hash)
+    if perm is None:
+        uniform = Uniform.__new__(Uniform)
+        uniform.seed = seed_hash
+        perm = shuffle(uniform, PERM_RANGE)
+        if len(PermCache) == MAX_PERM_CACHE_ITEMS:
+            PermCache.pop(next(iter(PermCache)))
+        PermCache[seed_hash] = perm
+    return perm
+
+
+def noise(Vector seed, *args):
+    return _noise(get_perm(seed, 0), list(args))
 
 
 @cython.cdivision(True)
@@ -602,10 +611,9 @@ def octnoise(Vector seed, Vector octaves, Vector roughness, *args):
     cdef Vector seed_i, single, result = null_
     for i in range(n):
         if i == 0:
-            result = _noise(seed, coords)
+            result = _noise(get_perm(seed, i), coords)
         else:
-            seed_i = Vector._compose([seed, Vector._coerce(i)])
-            single = _noise(seed_i, coords)
+            single = _noise(get_perm(seed, i), coords)
             for j in range(result.length):
                 result.numbers[j] += single.numbers[j] * weight
         for arg in coords:

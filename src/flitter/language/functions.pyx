@@ -23,8 +23,6 @@ def state_transformer(func):
 
 
 cdef class Uniform(Vector):
-    cdef unsigned long long seed
-
     def __cinit__(self, value=None):
         self.seed = self.hash(True)
         self.deallocate_numbers()
@@ -397,7 +395,7 @@ def snap(Vector xs not None):
     return ys
 
 
-def shuffle(Uniform source, Vector xs not None):
+cpdef shuffle(Uniform source, Vector xs):
     if xs.length == 0:
         return null_
     cdef int i, j, n = xs.length
