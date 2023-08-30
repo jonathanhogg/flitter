@@ -4,8 +4,6 @@
 Flitter language stack-based virtual machine
 """
 
-import time
-
 import cython
 from loguru import logger
 
@@ -17,7 +15,9 @@ from .noise import NOISE_FUNCTIONS
 
 from libc.math cimport floor
 from cpython cimport PyObject
+from cpython.array cimport array
 from cpython.dict cimport PyDict_Update, PyDict_GetItem, PyDict_Size
+from cpython.time cimport time
 
 
 logger = name_patch(logger, __name__)
@@ -43,6 +43,8 @@ builtins.update(dynamic_builtins)
 builtins.update(static_builtins)
 
 cdef int NextLabel = 1
+cdef int[:] StatsCount = array('i', [0] * OpCode.MAX)
+cdef double[:] StatsDuration = array('d', [0] * OpCode.MAX)
 
 cdef enum OpCode:
     Add
@@ -97,6 +99,7 @@ cdef enum OpCode:
     Tag
     TrueDiv
     Xor
+    MAX
 
 cdef dict OpCodeNames = {
     OpCode.Add: 'Add',
@@ -295,9 +298,23 @@ cdef class LoopSource:
     cdef int iterations
 
 
+def log_vm_stats():
+    cdef list stats
+    cdef double duration
+    cdef int count, code
+    stats = []
+    for i in range(<int>OpCode.MAX):
+        if StatsCount[i]:
+            stats.append((StatsDuration[i], StatsCount[i], i))
+    stats.sort(reverse=True)
+    logger.info("VM stats for current program:")
+    for duration, count, code in stats:
+        logger.info("- {:15s} {:9d} x {:8.3f}µs = {:7.3f}s", OpCodeNames[code], count, duration / count * 1e6, duration)
+
+
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef Vector call_helper(Context context, object function, tuple args, dict kwargs=None):
+cdef Vector call_helper(Context context, object function, tuple args, dict kwargs, bint record_stats):
     cdef Context func_context
     cdef int i
     cdef list stack
@@ -341,7 +358,6 @@ cdef class Program:
     def __cinit__(self):
         self.instructions = []
         self.linked = False
-        self.stats = None
 
     def __len__(self):
         return len(self.instructions)
@@ -377,16 +393,6 @@ cdef class Program:
         self.instructions.extend(program.instructions)
         return self
 
-    def log_stats(self):
-        cdef tuple stats
-        cdef double duration
-        cdef int count, code
-        if self.stats:
-            for stats, code in sorted([(stats, code) for (code, stats) in self.stats.items()], reverse=True):
-                duration, count = stats
-                logger.info("{:15s} - {:8d} x {:8.3f}µs = {:7.3f}s", OpCodeNames[code], count, duration / count * 1e6, duration)
-        self.stats = None
-
     cpdef void link(self):
         cdef Instruction instruction
         cdef int label, address, target
@@ -405,7 +411,7 @@ cdef class Program:
                 jump.offset = target - address
         self.linked = True
 
-    cdef dict import_module(self, Context context, str filename):
+    cdef dict import_module(self, Context context, str filename, bint record_stats):
         cdef Context import_context
         program = SharedCache.get_with_root(filename, context.path).read_flitter_program()
         if program is not None:
@@ -417,7 +423,7 @@ cdef class Program:
                 import_context = import_context.parent
             else:
                 import_context = Context(parent=context, path=program.path)
-                program.execute(import_context)
+                program.execute(import_context, record_stats=record_stats)
                 context.errors.update(import_context.errors)
                 return import_context.variables
         return None
@@ -614,14 +620,11 @@ cdef class Program:
         if not self.linked:
             self.link()
 
-        if record_stats and self.stats is None:
-            self.stats = {}
-
         while 0 <= pc < program_end:
             instruction = <Instruction>self.instructions[pc]
             pc += 1
             if record_stats:
-                duration = -time.perf_counter()
+                duration = -time()
 
             if instruction.code == OpCode.Dup:
                 top += 1
@@ -658,7 +661,9 @@ cdef class Program:
                 filename = (<Vector>stack[top]).as_string()
                 stack[top] = null_
                 names = (<InstructionTuple>instruction).value
-                variables = self.import_module(context, filename)
+                if record_stats: duration += time()
+                variables = self.import_module(context, filename, record_stats)
+                if record_stats: duration -= time()
                 if variables is not None:
                     scope = <dict>scopes[scopes_top]
                     for name in names:
@@ -841,11 +846,15 @@ cdef class Program:
                 top -= n
                 if r1.objects:
                     if r1.length == 1:
-                        stack[top] = call_helper(context, r1.objects[0], args, kwargs)
+                        if record_stats: duration += time()
+                        stack[top] = call_helper(context, r1.objects[0], args, kwargs, record_stats)
+                        if record_stats: duration -= time()
                     else:
                         values = []
                         for i in range(r1.length):
-                            values.append(call_helper(context, r1.objects[i], args, kwargs))
+                            if record_stats: duration += time()
+                            values.append(call_helper(context, r1.objects[i], args, kwargs, record_stats))
+                            if record_stats: duration -= time()
                         stack[top] = Vector._compose(values)
                 else:
                     stack[top] = null_
@@ -1054,9 +1063,9 @@ cdef class Program:
                 raise ValueError(f"Unrecognised instruction: {instruction}")
 
             if record_stats:
-                duration += time.perf_counter()
-                total, count = <tuple>self.stats.get(instruction.code, (0, 0))
-                self.stats[instruction.code] = total + duration, count + 1
+                duration += time()
+                StatsCount[<int>instruction.code] += 1
+                StatsDuration[<int>instruction.code] += duration
 
             assert -1 <= top < limit
 

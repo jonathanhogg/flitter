@@ -11,11 +11,10 @@ cdef dict builtins
 cdef class Program:
     cdef readonly list instructions
     cdef bint linked
-    cdef readonly dict stats
     cdef readonly object path
     cdef readonly object top
 
-    cdef dict import_module(self, Context context, str filename)
+    cdef dict import_module(self, Context context, str filename, bint record_stats)
     cpdef void link(self)
     cpdef list execute(self, Context context, dict additional_scope=?, bint record_stats=?)
 

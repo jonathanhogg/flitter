@@ -13,7 +13,7 @@ from ..cache import SharedCache
 from ..clock import BeatCounter, system_clock
 from ..interface.controls import Pad, Encoder
 from ..interface.osc import OSCReceiver, OSCSender, OSCMessage, OSCBundle
-from ..language.vm import StateDict, Context
+from ..language.vm import StateDict, Context, log_vm_stats
 from ..model import Vector, null
 from ..render import process, get_renderer
 from ..interact import get_interactor
@@ -454,4 +454,4 @@ class EngineController:
             logger.trace("Collected {} objects (full collection)", count)
             gc.enable()
             if self.vm_stats:
-                run_program.log_stats()
+                log_vm_stats()
