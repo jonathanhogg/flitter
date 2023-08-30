@@ -357,18 +357,25 @@ cdef class Vector:
 
     cpdef Vector copynodes(self):
         cdef Vector result = self
-        cdef Node node
         cdef int i
         if self.objects is not None:
-            for i, value in enumerate(self.objects):
+            if self.length == 1:
+                value = self.objects[0]
                 if isinstance(value, Node):
-                    node = value
-                    if node._parent is None:
-                        if result is self:
-                            result = Vector.__new__(Vector)
-                            result.objects = list(self.objects)
-                            result.length = self.length
-                        result.objects[i] = node.copy()
+                    if (<Node>value)._parent is None:
+                        result = Vector.__new__(Vector)
+                        result.objects = [(<Node>value).copy()]
+                        result.length = 1
+            else:
+                for i in range(self.length):
+                    value = self.objects[i]
+                    if isinstance(value, Node):
+                        if (<Node>value)._parent is None:
+                            if result is self:
+                                result = Vector.__new__(Vector)
+                                result.objects = list(self.objects)
+                                result.length = self.length
+                            result.objects[i] = (<Node>value).copy()
         return result
 
     def __repr__(self):
@@ -1290,6 +1297,7 @@ cdef class Node:
         self.kind = kind
         self._tags = None if tags is None else tags.copy()
         self._attributes = {} if attributes is None else attributes.copy()
+        self._attributes_shared = False
 
     def __setstate__(self, set tags):
         self._tags = tags
@@ -1334,7 +1342,9 @@ cdef class Node:
         node.kind = self.kind
         if self._tags:
             node._tags = set(self._tags)
-        node._attributes = dict(self._attributes)
+        node._attributes = self._attributes
+        node._attributes_shared = True
+        self._attributes_shared = True
         cdef Node copy, child = self.first_child
         if child is not None:
             parent = PyWeakref_NewRef(node, None)
@@ -1487,6 +1497,9 @@ cdef class Node:
         return self._attributes[name]
 
     def __setitem__(self, str name, value):
+        if self._attributes_shared:
+            self._attributes = dict(self._attributes)
+            self._attributes_shared = False
         cdef Vector vector = Vector._coerce(value)
         if vector.length:
             self._attributes[name] = vector
@@ -1494,6 +1507,9 @@ cdef class Node:
             del self._attributes[name]
 
     def __delitem__(self, str name):
+        if self._attributes_shared:
+            self._attributes = dict(self._attributes)
+            self._attributes_shared = True
         del self._attributes[name]
 
     def keys(self):
