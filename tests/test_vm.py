@@ -120,7 +120,11 @@ class TestBasicInstructions(unittest.TestCase):
 
     def test_LiteralNode(self):
         self.program.literal(Node('foo', {'test'}, {'x': Vector(1)}))
-        self.assertEqual(str(self.program.instructions[-1]), 'LiteralNode (!foo #test x=1)')
+        self.assertEqual(str(self.program.instructions[-1]), 'LiteralNode !foo #test x=1')
+
+    def test_LiteralNodes(self):
+        self.program.literal([Node('foo', {'test'}, {'x': Vector(1)}), Node('bar')])
+        self.assertEqual(str(self.program.instructions[-1]), 'LiteralNodes (!foo #test x=1);(!bar)')
 
     def test_Literal(self):
         self.program.literal(range(10))
