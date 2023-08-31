@@ -378,23 +378,15 @@ cdef class Vector:
         cdef Vector result = self
         cdef int i
         if self.objects is not None:
-            if self.length == 1:
-                value = self.objects[0]
-                if isinstance(value, Node):
-                    if (<Node>value)._parent is None:
-                        result = Vector.__new__(Vector)
-                        result.objects = [(<Node>value).copy()]
-                        result.length = 1
-            else:
-                for i in range(self.length):
-                    value = self.objects[i]
-                    if isinstance(value, Node):
-                        if (<Node>value)._parent is None:
-                            if result is self:
-                                result = Vector.__new__(Vector)
-                                result.objects = list(self.objects)
-                                result.length = self.length
-                            result.objects[i] = (<Node>value).copy()
+            result = Vector.__new__(Vector)
+            result.objects = PyList_New(self.length)
+            result.length = self.length
+            for i in range(self.length):
+                value = self.objects[i]
+                if isinstance(value, Node) and (<Node>value)._parent is None:
+                    value = (<Node>value).copy()
+                Py_INCREF(value)
+                PyList_SET_ITEM(result.objects, i, value)
         return result
 
     def __repr__(self):

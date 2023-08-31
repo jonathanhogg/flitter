@@ -237,7 +237,7 @@ class TestVector(unittest.TestCase):
         vector = Vector([1, 2, 3])
         self.assertIs(vector.copynodes(), vector)
         vector = Vector([1, 2, "Hello"])
-        self.assertIs(vector.copynodes(), vector)
+        self.assertEqual(vector.copynodes(), vector)
         color = Vector([1, 0, 1])
         vector = Vector(Node('foo', {'bar'}, {'color': color}))
         copy = vector.copynodes()
