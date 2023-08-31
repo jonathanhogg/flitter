@@ -6,7 +6,9 @@ import cython
 from cython cimport view
 
 from libc.math cimport isnan, floor, ceil, abs, sqrt, sin, cos, tan, isnan
+from cpython cimport Py_INCREF
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
+from cpython.list cimport PyList_New, PyList_SET_ITEM
 from cpython.weakref cimport PyWeakref_NewRef, PyWeakref_GetObject
 
 
@@ -43,37 +45,54 @@ cdef class Vector:
         return Vector.__new__(Vector, other)
 
     @staticmethod
-    def compose(args):
-        return Vector._compose(args if isinstance(args, list) else list(args))
+    def compose(vectors):
+        vectors = [Vector._coerce(v) for v in  vectors]
+        return Vector._compose(vectors, 0, len(vectors))
 
     @staticmethod
-    cdef Vector _compose(list args):
-        if len(args) == 1:
-            return args[0]
-        if len(args) == 0:
+    cdef Vector _compose(list vectors, int start, int end):
+        cdef int m = end - start
+        if m == 1:
+            return <Vector>vectors[start]
+        if m == 0:
             return null_
-        cdef int i = 0, j, n = 0
+        cdef int i, j, k, n = 0
+        cdef bint numeric = True
         cdef Vector v, result = Vector.__new__(Vector)
-        for v in args:
+        for i in range(start, end):
+            v = <Vector>vectors[i]
             if v.objects is not None:
-                break
+                numeric = False
             n += v.length
-        else:
+        if numeric:
             result.allocate_numbers(n)
-            for v in args:
-                for j in range(v.length):
-                    result.numbers[i] = v.numbers[j]
-                    i += 1
+            j = 0
+            for i in range(start, end):
+                v = <Vector>vectors[i]
+                for k in range(v.length):
+                    result.numbers[j] = v.numbers[k]
+                    j += 1
             return result
-        cdef list objects = []
-        for v in args:
+        cdef list objects = PyList_New(n)
+        j = 0
+        for i in range(start, end):
+            v = <Vector>vectors[i]
             if v.objects is None:
-                for j in range(v.length):
-                    objects.append(v.numbers[j])
+                for k in range(v.length):
+                    obj = <float>v.numbers[k]
+                    Py_INCREF(obj)
+                    PyList_SET_ITEM(objects, j, obj)
+                    j += 1
             elif v.length == 1:
-                objects.append(v.objects[0])
+                obj = v.objects[0]
+                Py_INCREF(obj)
+                PyList_SET_ITEM(objects, j, obj)
+                j += 1
             else:
-                objects.extend(v.objects)
+                for obj in v.objects:
+                    Py_INCREF(obj)
+                    PyList_SET_ITEM(objects, j, obj)
+                    j += 1
         result.objects = objects
         result.length = len(objects)
         return result

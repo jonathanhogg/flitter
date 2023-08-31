@@ -42,7 +42,7 @@ cdef Expression sequence_pack(list expressions):
                     break
                 expr = <Expression>expressions.pop(0)
             if vectors:
-                remaining.append(Literal(Vector._compose(vectors)))
+                remaining.append(Literal(Vector._compose(vectors, 0, len(vectors))))
         if expr is not None:
             if isinstance(expr, InlineSequence):
                 expressions[:0] = (<InlineSequence>expr).expressions

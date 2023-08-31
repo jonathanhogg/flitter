@@ -307,7 +307,7 @@ def log_vm_stats():
         if StatsCount[i]:
             stats.append((StatsDuration[i], StatsCount[i], i))
     stats.sort(reverse=True)
-    logger.info("VM stats for current program:")
+    logger.info("VM execution statistics:")
     for duration, count, code in stats:
         logger.info("- {:15s} {:9d} x {:8.3f}µs = {:7.3f}s", OpCodeNames[code], count, duration / count * 1e6, duration)
 
@@ -869,7 +869,7 @@ cdef class Program:
                             if record_stats: duration += time()
                             values.append(call_helper(context, r1.objects[i], args, kwargs, record_stats))
                             if record_stats: duration -= time()
-                        stack[top] = Vector._compose(values)
+                        stack[top] = Vector._compose(values, 0, len(values))
                 else:
                     stack[top] = null_
 
@@ -951,10 +951,9 @@ cdef class Program:
                                         (<Node>node).insert((<Node>child).copy())
 
             elif instruction.code == OpCode.Compose:
-                n = (<InstructionInt>instruction).value - 1
-                values = stack[top-n:top+1]
-                top -= n
-                stack[top] = Vector._compose(values)
+                n = (<InstructionInt>instruction).value
+                top -= n - 1
+                stack[top] = Vector._compose(stack, top, top+n)
 
             elif instruction.code == OpCode.BeginFor:
                 if loop_source is not None:
@@ -998,10 +997,8 @@ cdef class Program:
                 scopes_top -= 1
                 n = loop_source.iterations
                 if n:
-                    n -= 1
-                    values = stack[top-n:top+1]
-                    top -= n
-                    stack[top] = Vector._compose(values)
+                    top -= n - 1
+                    stack[top] = Vector._compose(stack, top, top+n)
                 else:
                     top += 1
                     if top == len(stack):

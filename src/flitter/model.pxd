@@ -12,7 +12,7 @@ cdef class Vector:
     @staticmethod
     cdef Vector _coerce(object other)
     @staticmethod
-    cdef Vector _compose(list args)
+    cdef Vector _compose(list vectors, int start, int end)
 
     cdef int allocate_numbers(self, int n) except -1
     cdef void deallocate_numbers(self)
