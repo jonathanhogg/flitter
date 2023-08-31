@@ -534,6 +534,23 @@ class TestFunc(unittest.TestCase):
         self.func_program.name('x')
         self.func_program.name('y')
         self.func_program.add()
+        self.func_program.name('z')
+        self.func_program.add()
+        LABEL1 = self.func_program.new_label()
+        self.func_program.literal('test')
+        self.func_program.lookup()
+        self.func_program.branch_false(LABEL1)
+        self.func_program.literal(1)
+        self.func_program.add()
+        self.func_program.label(LABEL1)
+        LABEL2 = self.func_program.new_label()
+        self.func_program.search(Query('#test'))
+        self.func_program.branch_false(LABEL2)
+        self.func_program.literal(2)
+        self.func_program.mul()
+        self.func_program.label(LABEL2)
+        self.program.literal(2)
+        self.program.let(('z',))
         self.program.literal(self.func_program)
         self.program.literal(null)
         self.program.literal(1)
@@ -556,23 +573,49 @@ class TestFunc(unittest.TestCase):
         self.program.name('f')
         self.program.call(2)
         stack = self.program.execute(self.context)
-        self.assertEqual(len(stack), 1)
-        self.assertEqual(stack, [7])
+        self.assertEqual(stack, [9])
+
+    def test_variable_capture(self):
+        self.program.literal(-2)
+        self.program.let(('z',))
+        self.program.literal(3)
+        self.program.literal(4)
+        self.program.name('f')
+        self.program.call(2)
+        stack = self.program.execute(self.context)
+        self.assertEqual(stack, [9])
 
     def test_default_arg(self):
         self.program.literal(3)
         self.program.name('f')
         self.program.call(1)
         stack = self.program.execute(self.context)
-        self.assertEqual(len(stack), 1)
-        self.assertEqual(stack, [4])
+        self.assertEqual(stack, [6])
 
     def test_default_arg2(self):
         self.program.name('f')
         self.program.call(0)
         stack = self.program.execute(self.context)
-        self.assertEqual(len(stack), 1)
         self.assertEqual(stack, [null])
+
+    def test_state(self):
+        self.state['test'] = Vector(1)
+        self.program.literal(3)
+        self.program.literal(4)
+        self.program.name('f')
+        self.program.call(2)
+        stack = self.program.execute(self.context)
+        self.assertEqual(stack, [10])
+
+    def test_graph(self):
+        node = Node('foo', {'test'})
+        self.context.graph.append(node)
+        self.program.literal(3)
+        self.program.literal(4)
+        self.program.name('f')
+        self.program.call(2)
+        stack = self.program.execute(self.context)
+        self.assertEqual(stack, [18])
 
 
 class TestCalls(unittest.TestCase):

@@ -33,6 +33,8 @@ static_builtins.update(NOISE_FUNCTIONS)
 def log(value):
     return value
 
+cdef object _log_func = log
+
 cdef dict dynamic_builtins = {
     'log': Vector(log),
 }
@@ -316,29 +318,32 @@ def log_vm_stats():
 @cython.wraparound(False)
 cdef Vector call_helper(Context context, object function, tuple args, dict kwargs, bint record_stats):
     cdef Context func_context
-    cdef int i
+    cdef int i, n=len(args)
     cdef list stack
     cdef Function func
-    if isinstance(function, Function):
+    if type(function) is Function:
         func = <Function>function
         func_context = Context.__new__(Context)
-        func_context.path = context.path
+        func_context.parent = context
         func_context.errors = context.errors
         func_context.graph = context.graph
+        func_context.pragmas = context.pragmas
+        func_context.state = context.state
+        func_context.variables = {}
         for i, name in enumerate(func.parameters):
-            if i < len(args):
+            if i < n:
                 func_context.variables[name] = args[i]
-            elif kwargs:
+            elif kwargs is not None:
                 func_context.variables[name] = kwargs.get(name, func.defaults[i])
             else:
                 func_context.variables[name] = func.defaults[i]
         stack = func.program.execute(func_context, func.scope)
         assert len(stack) == 1
         return stack[0]
-    elif function is log and len(args) == 1 and not kwargs:
+    elif function is _log_func and n == 1 and kwargs is None:
         context.logs.add((<Vector>args[0]).repr())
         return <Vector>args[0]
-    elif callable(function):
+    else:
         try:
             if hasattr(function, 'state_transformer') and function.state_transformer:
                 if kwargs is None:
@@ -350,7 +355,7 @@ cdef Vector call_helper(Context context, object function, tuple args, dict kwarg
             else:
                 return function(*args, **kwargs)
         except Exception as exc:
-            context.errors.add(f"Error calling function {function.__name__}\n{str(exc)}")
+            context.errors.add(f"Error calling {function!r}\n{str(exc)}")
     return null_
 
 
@@ -841,24 +846,24 @@ cdef class Program:
             elif instruction.code == OpCode.Call:
                 r1 = <Vector>stack[top]
                 names = (<InstructionIntTuple>instruction).tvalue
-                n = len(names) if names is not None else 0
-                top -= n
-                if n:
+                if names is not None:
+                    n = len(names)
+                    top -= n
                     kwargs = {}
                     for i in range(n):
                         kwargs[names[i]] = stack[top+i]
                 else:
                     kwargs = None
                 n = (<InstructionIntTuple>instruction).ivalue
+                top -= n
                 if n == 1:
-                    arg = stack[top-1]
+                    arg = stack[top]
                     args = (arg,)
                 elif n:
-                    args = tuple(stack[top-n:top])
+                    args = tuple(stack[top:top+n])
                 else:
                     args = ()
-                top -= n
-                if r1.objects:
+                if r1.objects is not None:
                     if r1.length == 1:
                         if record_stats: duration += time()
                         stack[top] = call_helper(context, r1.objects[0], args, kwargs, record_stats)
@@ -1161,7 +1166,7 @@ cdef class StateDict:
 
 
 cdef class Context:
-    def __cinit__(self, dict variables=None, StateDict state=None, Node graph=None, dict pragmas=None, object path=None, Context parent=None):
+    def __init__(self, dict variables=None, StateDict state=None, Node graph=None, dict pragmas=None, object path=None, Context parent=None):
         self.variables = variables if variables is not None else {}
         self.state = state
         self.graph = graph if graph is not None else Node('root')
