@@ -337,7 +337,7 @@ cdef Vector call_helper(Context context, object function, tuple args, dict kwarg
                 func_context.variables[name] = kwargs.get(name, func.defaults[i])
             else:
                 func_context.variables[name] = func.defaults[i]
-        stack = func.program.execute(func_context, func.scope)
+        stack = func.program._execute(func_context, func.scope, record_stats)
         assert len(stack) == 1
         return stack[0]
     elif function is _log_func and n == 1 and kwargs is None:
@@ -384,7 +384,7 @@ cdef class Program:
             for key, value in variables.items():
                 context_vars[key] = Vector._coerce(value)
         cdef Context context = Context(state=state, variables=context_vars, path=self.path)
-        self.execute(context, record_stats=record_stats)
+        self._execute(context, None, record_stats)
         return context
 
     cpdef void link(self):
@@ -407,7 +407,7 @@ cdef class Program:
 
     cdef dict import_module(self, Context context, str filename, bint record_stats):
         cdef Context import_context
-        program = SharedCache.get_with_root(filename, context.path).read_flitter_program()
+        cdef Program program = SharedCache.get_with_root(filename, context.path).read_flitter_program()
         if program is not None:
             import_context = context.parent
             while import_context is not None:
@@ -417,7 +417,7 @@ cdef class Program:
                 import_context = import_context.parent
             else:
                 import_context = Context(parent=context, path=program.path)
-                program.execute(import_context, record_stats=record_stats)
+                program._execute(import_context, None, record_stats)
                 context.errors.update(import_context.errors)
                 return import_context.variables
         return None
@@ -598,9 +598,12 @@ cdef class Program:
     def append_root(self):
         self.instructions.append(Instruction(OpCode.AppendRoot))
 
+    def execute(self, Context context, dict additional_scope=None, bint record_stats=False):
+        return self._execute(context, additional_scope, record_stats)
+
     @cython.wraparound(False)
     @cython.boundscheck(False)
-    cpdef list execute(self, Context context, dict additional_scope=None, bint record_stats=False):
+    cdef list _execute(self, Context context, dict additional_scope, bint record_stats):
         cdef int i, n, pc=0, program_end=len(self.instructions)
         cdef Instruction instruction=None
         cdef int top=-1
