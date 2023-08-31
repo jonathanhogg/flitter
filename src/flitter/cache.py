@@ -392,7 +392,7 @@ class CachePath:
         logger.success("Flushed and closed video output file: {}", self._path)
 
     def __str__(self):
-        return self._absolute
+        return str(self._path)
 
 
 class FileCache:
