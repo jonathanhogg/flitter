@@ -101,7 +101,7 @@ class CachePath:
                 logger.debug("Compiled to {} instructions in {:.1f}/{:.1f}/{:.1f}ms",
                              len(program), parse_time*1000, simplify_time*1000, compile_time*1000)
             except ParseError as exc:
-                if top is None:
+                if program is None:
                     logger.error("Error parsing {} at line {} column {}:\n{}",
                                  self._path.name, exc.line, exc.column, exc.context)
                 else:
