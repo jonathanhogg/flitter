@@ -1,6 +1,8 @@
 
 # The Language
 
+## Quick introduction
+
 **flitter** is a declarative graph-construction language (`Node` in the model).
 All values are arrays (`Vector` in the model), delimited with semicolons, and
 all maths is piece-wise. Short vectors are repeated as necessary in binary
@@ -82,6 +84,79 @@ The available global values are:
     the target frame rate; this value can be multiplied into variable loads
     in the code – e.g., number of things on screen – to maintain frame rate
 
+## Values
+
+All values are vectors of either floating point numbers, Unicode strings, nodes
+or functions (or a mix thereof). The vector implementation is optimised for
+vectors of numbers, particularly short vectors. There are no dedicated integer
+values in **flitter** and so one should be careful of relying on integer numbers
+outside of the safe integer range of a double-precision floating point
+(-2^53..2^53).
+
+Mathematical operators operate only on pure number vectors. Using them on
+anything else will return the empty vector (`null`). Unicode strings can be
+concatenated by vector composition, e.g., `"Hello";" world!"` - the result will
+be a 2-vector, but vectors are implicitly concatenated anywhere that strings
+are used in the language. Numbers will be turned into strings using
+general-purpose formatting and so `"Number ";1` is also a valid string.
+
+Binary mathematical operators on mixed-length vectors will return a vector with
+the same length as the longer of the two vectors. The shorter vector will be
+repeated as necessary. This means that:
+
+```
+(1;2;3;4;5;6;7;8;9) + 1       == (2;3;4;5;6;7;8;9;10)
+(1;2;3;4;5;6;7;8;9) + (1;2;3) == (2;4;6;5;7;9;8;10;12)
+```
+
+Note that the vector composition operator `;` has a very low precedence and so
+composed vectors will often have to be wrapped in parentheses when used with
+operators:
+
+```
+x;y+1 == x;(y+1)
+(x;y)+1 == (x+1);(y+1)
+```
+
+Most built-in functions will do something sensible with an n-vector, e.g.,
+`sin(0.1;0.2)` will return a vector equivalent to `sin(0.1);sin(0.2)`, but
+will be substantially faster for long vectors. Some functions operate with both
+multiple arguments *and* n-vectors, e.g.:
+
+```
+hypot(3, 4) == 5
+hypot(3;4) == 5
+hypot(3;4, 4;3) == (5;5)
+```
+
+As functions are themselves first-order objects in the language, they may be
+composed into vectors. The language takes the orthogonal approach that calling
+a function vector is identical to composing the result of calling each function
+with the arguments, i.e., `(sin;cos)(x) == (sin(x);cos(x))`. This is arguably
+obtuse behaviour.
+
+### Symbols
+
+Names can be turned into short Unicode strings with a preceding `:` character.
+E.g., `:foo` is equivalent to `"foo"`. These are particularly useful for
+short strings that are used as enumerations, e.g.:
+
+```
+!window
+    !canvas composite=:add
+        ...
+```
+
+The `composite` attribute of `!canvas` takes a string representing the name of
+the blend function to use when drawing. They are also useful when constructing
+state key vectors or seed vectors (see **State** and **Pseudo-random sources** below)
+
+## Sequences
+
+The result of evaluating a sequence of expressions - such as might be found in
+the body of a loop, conditional or function - is the vector composition of the
+result of each expression.
+
 ## Ranges
 
 ```
@@ -103,46 +178,110 @@ and increment by 1. Therefore:
 Ranges are *not* lazy like they are in Python, so `0..1000000` will create a
 vector with 1 million items.
 
-## Loops
+## Nodes
+
+The purpose of any **flitter** program is to construct a render tree.
+Individual literal nodes are represented by an exclamation mark followed by
+a name, e.g., `!window`. Nodes can be tagged with additional arbitrary names
+that aid in readability and in searching (see Queries below). A hash character
+followed by a name will tag the preceding node (or nodes) with that name, e.g.,
+`#top`. A name followed by an equals character will set that attribute on the
+preceding node. The resulting value in both of these instances is the
+tagged/attributed node.
+
+For example:
 
 ```
-for name[;name...] in expression
-    expression
-    ...
+!window #top size=1920;1080 vsync=true title="Hello world!"
 ```
 
-For loops iterate over vectors binding the values to the name(s). The result of
-evaluating the expressions within the loop body are concatenated into a single
-vector that represents the result value of the loop. Normally this would be a
-vector of nodes to be appended to some enclosing node.
-
-When multiple names are given, each iteration will take another value from the
-source vector. If there are not enough values left in the source vector to bind
-all names in the last iteration, then the names lacking values will be bound to
-`null`.
-
-Iterating with multiple names is particularly useful combined with the `zip()`
-function that merges multiple vectors together:
+constructs a literal `!window` node, adds the `#top` tag to it, then sets the
+`size`, `vsync` and `title` attributes. Note that everything here is an
+expression/operator and it is equivalent to:
 
 ```
-!group #clockface
-    let theta=(..12)/12
-    for x;y in zip(cos(theta), sin(theta)) * 100
-        !ellipse point=x;y radius=10
-    !fill color=1
+(((((!window) #top) size= 1920;1080) vsync= true) title= "Hello world!")
 ```
 
-Note that `cos()` and `sin()` here are taking a 12-vector and returning another
-12-vector, `zip()` combines these into a 24-vector and the multiplication by
-100 is applied to every element of this. Also of note here is that the flitter
-versions of `cos()` and `sin()` take values in *turns* not in radians. The
-dozen `!ellipse` nodes created by the loop are combined into a 12-vector, this
-has the final `!fill` node concatenated with it and then all of these nodes are
-appended to the `!group`.
+`!window`, `1920;1080`, `true` and `"Hello world!"` are literal vector values,
+`#top` is a unary postfix operator, and `size=`, `vsync=` and `title=` are
+binary operators.
 
-There is actually a more convenient `polar(theta)` function that does the same
-thing as `zip(cos(theta), sin(theta))`. Arguably, it would be even neater to
-implement a clock face using `rotate` transforms instead.
+Setting an attribute to `null` will *remove* that attribute from the node if it
+is already present, or do nothing otherwise.
+
+Block indentation below a node is a binary operation that evaluates the
+indented expressions as a sequence and then appends each node in the resulting
+vector to the node (or nodes) above.
+
+For example:
+
+```
+!window #top size=1280;720 vsync=true title="Hello world!"
+    !canvas
+        !rect point=0;0 size=1280;720
+        !fill color=1;0;0
+```
+
+constructs the `!rect` and `!fill` nodes and composes them into a vector, then
+constructs a `!canvas` node and appends these to it. The resulting tree is
+appended to a `!window` node, which is the final value of this expression.
+
+Running this program as-is will result in a red window with the title "Hello
+world!".
+
+## Let expressions
+
+Values may be bound to names with the `let` keyword. It is followed by one or
+more `name=expression`s. The expressions are immediately evaluated and the
+resulting values are added into the scope of the expressions below.
+
+Lets may be used at the top-level in a **flitter** script or anywhere within
+a block-structured sequence, i.e., within append, function, conditional and
+loop bodies. Each of these sequences represents a new let scope and names
+that are re-bound will hide the same name in an outer scope.
+
+For example:
+
+```
+let x=10
+
+if x > 5
+    let x=5
+    !foo x=x
+
+!bar x=x
+```
+
+will evaluate to the two top-level nodes:
+
+```
+!foo x=5
+!bar x=10
+```
+
+There is also an inline version of let known as `where`. This allows names to
+be bound within a non-sequence expression, e.g.:
+
+```
+!foo x=(x*x where x=10)
+```
+
+Note that `where` has higher precedence than `;` vector composition and so
+`x;x*x where x=10` is equivalent to `x;(x*x where x=10)` and thus the binding
+is only in scope for the `x*x` expression.
+
+A let binding may use multiple names separated with a semicolon, e.g.:
+
+```
+let x;y=SIZE/2
+```
+
+This will pick off the first two items from the vector result of evaluating the
+expression and bind each to the names `x` and `y`. If the vector is longer than
+the number of names given then additional items are not bound. If the vector is
+shorter then the unmatched names will be bound to `null`.
+
 
 ## Conditionals
 
@@ -163,6 +302,162 @@ non-empty vector containing something other than 0s or empty strings. So `0` is
 false, as is `null`, `""` and `0;0;0`. The result of evaluating the matching
 indented expressions is the result value of the `if`. In the absence of an
 `else` clause the result of an `if`/`elif` with no true tests is `null`.
+
+There is an in-line expression version of `if` that borrows its syntax from
+Python:
+
+```
+!fill color=(1 if x>10 else 0)
+```
+
+If the `else` is omitted then the expression will evaluate to `null` if the
+condition is not true. Importantly, this means that using a bare `if` in an
+attribute setting operation will result in the attribute being *unset* if the
+condition is false, i.e., in:
+
+```
+!window size=100;100
+    !canvas
+        !group color=1;0;0
+            for x in ..10
+                !path
+                    !rect point=x*10+2.5;0 size=5;100
+                    !fill color=((0;1;0) if x >= 5)
+```
+
+the `color` attribute will *not* be set on the second five `!fill` nodes and so
+they will inherit the color from the enclosing `!group`. Thus, this will draw
+five thick green lines followed by five red.
+
+In-line conditionals do not have an `elif` equivalent, group multiple
+conditional expressions as necessary to achieve this, e.g.:
+
+```
+!foo x=(x if x < 10 else (x*2 if x < 20 else x*3))
+```
+
+## Loops
+
+```
+for name[;name...] in expression
+    expression
+    ...
+```
+
+For loops iterate over vectors binding the values to the name(s). The result of
+evaluating the expressions within the loop body are concatenated into a single
+vector that represents the result value of the loop. Normally this would be a
+vector of nodes to be appended to some enclosing node.
+
+When multiple names are given, each iteration will take another value from the
+source vector. If there are not enough values left in the source vector to bind
+all names in the last iteration, then the names lacking values will be bound to
+`null`.
+
+Iterating with multiple names is particularly useful combined with the `zip()`
+function, which merges multiple vectors together:
+
+```
+!group #clockface
+    let theta=(..12)/12
+    for x;y in zip(cos(theta), sin(theta)) * 100
+        !ellipse point=x;y radius=10
+    !fill color=1
+```
+
+Note that `cos()` and `sin()` here are taking a 12-vector and returning another
+12-vector, `zip()` combines these into a 24-vector and the multiplication by
+100 is applied to every element of this. Also of note here is that the flitter
+versions of `cos()` and `sin()` take values in *turns* not in radians. The
+dozen `!ellipse` nodes created by the loop are combined into a 12-vector, this
+has the final `!fill` node concatenated with it and then all of these nodes are
+appended to the `!group`.
+
+There is actually a more convenient `polar(theta)` function that does the same
+thing as `zip(cos(theta), sin(theta))`. Arguably, it would be even neater to
+implement a clock face using `!transform rotate=` instead.
+
+Again, loops may also be used in-line in non-sequence expressions with syntax
+borrowed from Python:
+
+```
+!line points=((x;x*10) for x in ..5)
+```
+
+This will evaluate to:
+
+```
+!line points=0;0;1;5;2;10;3;15;4;20
+```
+
+## Functions
+
+```
+func name(parameter[=default], ...)
+    expression
+    ...
+```
+
+`func` will create a new function and bind it to `name`. Default values may be
+given for the parameters and will be used if the function is later called with
+an insufficient number of matching arguments, otherwise any parameters lacking
+matching arguments will be bound to `null`. The result of evaluating all
+body expressions will be returned as a single vector to the caller.
+
+Functions may refer to names bound in the enclosing scope(s) to the definition.
+These will be captured at definition time. Thus rebinding a name later in
+the same scope will be ignored: E.g.:
+
+```
+let x=10
+
+func add_x(y)
+    x+y
+
+let x=20
+
+!foo z=add_x(5)
+```
+
+will evaluate to `!foo z=15` *not* `!foo z=25`.
+
+A function definition is itself a let that binds the function definition to the
+function name in the definition scope.
+
+## Template Functions
+
+This is something of a hack, but the special `@` operator allows calling a
+function using similar syntax to constructing a node. The name following `@`
+should be the name of the function to be called, any named attributes placed
+after this are passed as arguments to the respectively-named function
+parameters. Any indented expressions are evaluated and the resulting
+vector passed as the first argument to the function. Function parameters that
+are not bound by a pseudo-attribute will have their default value if one was
+specified in the function or `null` otherwise.
+
+For example:
+
+```
+func shrink(nodes, percent=0)
+    !transform scale=1-percent/100
+        nodes
+
+!window size=1280;720
+    !canvas translate=640;360
+        @shrink
+            !path
+                !ellipse radius=100
+                !fill color=0;1;0
+        @shrink percent=25
+            !path
+                !ellipse radius=100
+                !fill color=1;0;0
+```
+
+This (rather pointless) example draws a 100px radius circle in green and then
+draws another circle 25% smaller in red on top. Both `!path` nodes will be
+wrapped with `!transform` nodes, the first with `scale=1` and the second with
+`scale=0.75`.
 
 ## Queries
 
@@ -226,47 +521,6 @@ if beat > 10
             {canvas>*}
 ```
 
-## Functions
-
-```
-func name(parameter[=default], ...)
-    expression
-    ...
-```
-
-`func` will create a new function and bind it to `name`. Default values may be
-given for the parameters and will be used if the function is later called with
-an insufficient number of matching arguments, otherwise any parameters lacking
-matching arguments will be bound to `null`. The result of evaluating all
-body expressions will be returned as a single vector.
-
-## Template Functions
-
-This is something of a hack, but the special `@` operator allows calling a
-function using similar syntax to constructing a node. The name following `@`
-should be the name of the function to be called, any named attributes placed
-after this are passed as arguments to the respectively-named function
-parameters. Any indented expressions are evaluated and the resulting
-vector passed as the first argument to the function. Function parameters that
-are not bound by a pseudo-attribute will have their default value if one was
-specified in the function or `null` otherwise.
-
-For example:
-
-```
-func shrink(nodes, percent=0)
-    !transform scale=1-percent/100
-        nodes
-
-!canvas ...
-    @shrink percent=25
-        !ellipse radius=10
-```
-
-This (rather pointless) example shows using a template function call to shrink
-a circle by 25%, by wrapping it in an equivalent `!transform scale=0.75`
-node.
-
 ## Pseudo-random sources
 
 **flitter** provides three useful sources of pseudo-randomness: `uniform()`,
@@ -290,7 +544,7 @@ specific number in the stream. For example:
 let SIZE=1280;720
 
 !window size=SIZE
-    !canvas size=SIZE
+    !canvas
         for i in ..10
             let x=uniform(:x;i)[beat] y=uniform(:y;i)[beat]
                 r=10*beta(:r;i)[beat] h=uniform(:h;i)[beat]
@@ -328,7 +582,7 @@ e.g., attempts to use them in mathematical expressions will evaluate to `null`.
 
 ## State
 
-The outside world (only in the form of a Push 2 at the moment) communicates with
+The outside world (only in the form of MIDI surfaces) communicates with
 a running **flitter** program via a *state* mapping. This can be queried with
 the `$` operator like so:
 
