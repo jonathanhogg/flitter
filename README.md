@@ -3,10 +3,9 @@ with trails moving outwards from the centre of the screen.](docs/header.jpg)
 
 # flitter
 
-**flitter** is a 2D and basic 3D visuals language and engine designed for live
-performances. While **flitter** supports a basic form of live-coding (live
-reload of source files), it is designed primarily for driving via a MIDI surface
-(an Ableton Push 2 controller at the moment).
+**flitter** is a 2D and 3D visuals language and engine designed for live
+performances. While **flitter** supports a basic of live-coding (live reload of
+source files), it is designed primarily for driving via a MIDI surface.
 
 The engine that runs the language is capable of:
 
@@ -16,6 +15,9 @@ bunch of formats including OBJ and STL); ambient, directional, point and
 spot- light sources with (currently shadowless) Phong lighting/shading; simple
 fog; perspective and orthographic projections; texture-mapping with the output
 of other visual units (like a drawing canvas or a video)
+- simulating simple physical particle systems (including gravity, electrostatic
+charge, inertia, drag and collisions) and hooking the results up to drawing
+instructions
 - playing videos at arbitrary speeds (including in reverse, although video will
 stutter if it makes extensive use of P-frames)
 - running GLSL shaders as stacked image generators and filters, with live
@@ -29,12 +31,13 @@ support)
 - taking live inputs from Ableton Push 2 or Behringer X-Touch mini MIDI
 surfaces (other controllers relatively easy to add)
 
-Fundamentally, the system consists of an engine that repeatedly evaluates a
-program with a beat counter and the current state of the MIDI surface. The
-output of the program is a tree of nodes that describe the visuals. A series of
-renderers turn these nodes into 2D and 3D drawing commands (or DMX packets, or
-laser DAC values). It's sort of like using a functional language to build a
-web page DOM - something akin to React.
+Fundamentally, the system repeatedly evaluates a program with a beat counter
+and the current state. The output of the program is a tree of nodes that
+describe visuals to be rendered, systems to be simulated and interfaces to be
+made available to the user. A series of renderers turn the nodes describing
+the visuals into 2D and 3D drawing commands (or DMX packets, or laser DAC
+values). It's sort of like using a functional language to build a web page
+DOM - something akin to React.
 
 It is implemented in a mix of Python and Cython. I use and develop **flitter**
 exclusively on macOS. It is notionally portable – in that there's no particular

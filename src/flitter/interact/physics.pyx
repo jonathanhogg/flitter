@@ -234,49 +234,57 @@ cdef class PhysicsSystem:
             elif child.kind == 'electrostatic':
                 pair_constraints.append(ElectrostaticConstraint.__new__(ElectrostaticConstraint, child, zero))
             child = child.next_sibling
+        cdef bint realtime = engine.realtime
         cdef double beat = engine.counter.beat_at_time(now)
-        cdef double last_beat = self.last_beat if self.last_beat else beat
-        cdef double delta = min(resolution, beat-last_beat)
+        if not self.last_beat:
+            self.last_beat = beat
+        cdef double delta
         cdef Particle particle1, particle2
         cdef Vector direction
         cdef double distance, distance_squared
         cdef PairConstraint pair_constraint
-        if particle_constraints or pair_constraints:
-            for i in range(len(particles)):
-                particle1 = <Particle>particles[i]
-                for constraint in particle_constraints:
-                    (<ParticleConstraint>constraint).apply(particle1)
-                if pair_constraints:
-                    for j in range(i):
-                        particle2 = <Particle>particles[j]
+        cdef dict particles_by_id
+        while True:
+            if particle_constraints or pair_constraints:
+                for i in range(len(particles)):
+                    particle1 = <Particle>particles[i]
+                    for constraint in particle_constraints:
+                        (<ParticleConstraint>constraint).apply(particle1)
+                    if pair_constraints:
+                        for j in range(i):
+                            particle2 = <Particle>particles[j]
+                            direction = particle2.position.sub(particle1.position)
+                            distance_squared = direction.squared_sum()
+                            distance = sqrt(distance_squared)
+                            direction = direction.ftruediv(distance)
+                            for constraint in pair_constraints:
+                                pair_constraint = <PairConstraint>constraint
+                                if not pair_constraint.max_distance or distance < pair_constraint.max_distance:
+                                    pair_constraint.apply(particle1, particle2, direction, distance, distance_squared)
+            if specific_pair_constraints:
+                particles_by_id = {}
+                for particle1 in particles:
+                    particles_by_id[particle1.id] = particle1
+                for constraint in specific_pair_constraints:
+                    particle1 = particles_by_id.get((<SpecificPairConstraint>constraint).from_particle_id)
+                    particle2 = particles_by_id.get((<SpecificPairConstraint>constraint).to_particle_id)
+                    pair_constraint = <PairConstraint>constraint
+                    if particle1 is not None and particle2 is not None:
                         direction = particle2.position.sub(particle1.position)
                         distance_squared = direction.squared_sum()
                         distance = sqrt(distance_squared)
                         direction = direction.ftruediv(distance)
-                        for constraint in pair_constraints:
-                            pair_constraint = <PairConstraint>constraint
-                            if not pair_constraint.max_distance or distance < pair_constraint.max_distance:
-                                pair_constraint.apply(particle1, particle2, direction, distance, distance_squared)
-        cdef dict particles_by_id
-        # cdef double planck_length = 1 / (speed_of_light * speed_of_light)
-        if specific_pair_constraints:
-            particles_by_id = {}
+                        if not pair_constraint.max_distance or distance < pair_constraint.max_distance:
+                            pair_constraint.apply(particle1, particle2, direction, distance, distance_squared)
+
+            delta = min(resolution, beat-self.last_beat) if realtime else resolution
             for particle1 in particles:
-                particles_by_id[particle1.id] = particle1
-            for constraint in specific_pair_constraints:
-                particle1 = particles_by_id.get((<SpecificPairConstraint>constraint).from_particle_id)
-                particle2 = particles_by_id.get((<SpecificPairConstraint>constraint).to_particle_id)
-                pair_constraint = <PairConstraint>constraint
-                if particle1 is not None and particle2 is not None:
-                    direction = particle2.position.sub(particle1.position)
-                    distance_squared = direction.squared_sum()
-                    distance = sqrt(distance_squared)
-                    direction = direction.ftruediv(distance)
-                    if not pair_constraint.max_distance or distance < pair_constraint.max_distance:
-                        pair_constraint.apply(particle1, particle2, direction, distance, distance_squared)
-        for particle1 in particles:
-            particle1.update(speed_of_light, delta, state)
-        self.last_beat = beat
+                particle1.update(speed_of_light, delta, state)
+            self.last_beat += delta
+            if realtime or self.last_beat >= beat:
+                break
+        if realtime:
+            self.last_beat = beat
 
 
 INTERACTOR_CLASS = PhysicsSystem
