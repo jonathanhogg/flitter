@@ -304,9 +304,9 @@ cdef class PhysicsSystem:
                             direction.numbers[k] = d
                             distance_squared += d * d
                         distance = sqrt(distance_squared)
-                        for k in range(dimensions):
-                            direction.numbers[k] /= distance
                         if not pair_constraint.max_distance or distance < pair_constraint.max_distance:
+                            for k in range(dimensions):
+                                direction.numbers[k] /= distance
                             pair_constraint.apply(particle1, particle2, direction, distance, distance_squared)
             delta = min(resolution, beat-self.last_beat) if realtime else resolution
             for particle1 in particles:
