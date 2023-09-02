@@ -311,7 +311,7 @@ class EngineController:
             frame_time = system_clock()
             last = self.counter.beat_at_time(frame_time)
             dump_time = frame_time
-            execution = render = housekeeping = 0
+            execution = interaction = render = housekeeping = 0
             performance = 1
             gc.disable()
             run_program = current_program = None
@@ -363,6 +363,7 @@ class EngineController:
                     context = run_program.run(state=self.state, variables=names, record_stats=self.vm_stats)
                 else:
                     context = Context()
+                self.handle_pragmas(context.pragmas)
                 new_errors = context.errors.difference(errors)
                 errors = context.errors
                 for error in new_errors:
@@ -373,13 +374,18 @@ class EngineController:
                     print(log)
                 now = system_clock()
                 execution += now
-                render -= now
+                interaction -= now
 
-                self.handle_pragmas(context.pragmas)
                 self.update_controls(context.graph)
                 async with asyncio.TaskGroup() as group:
-                    group.create_task(self.update_renderers(context.graph, **names))
                     group.create_task(self.update_interactors(context.graph, frame_time))
+
+                now = system_clock()
+                interaction += now
+                render -= now
+
+                async with asyncio.TaskGroup() as group:
+                    group.create_task(self.update_renderers(context.graph, **names))
 
                 now = system_clock()
                 render += now
@@ -437,10 +443,11 @@ class EngineController:
                 if len(frames) > 1 and frames[-1] - frames[0] > 5:
                     nframes = len(frames) - 1
                     fps = nframes / (frames[-1] - frames[0])
-                    logger.info("{:.1f}fps; execute {:.1f}ms, render {:.1f}ms, housekeep {:.1f}ms; perf {:.2f}",
-                                fps, 1000 * execution / nframes, 1000 * render / nframes, 1000 * housekeeping / nframes, performance)
+                    logger.info("{:4.1f}fps; {:4.1f}/{:4.1f}/{:4.1f}/{:4.1f}ms (run/interact/render/clean); perf {:.2f}",
+                                fps, 1000 * execution / nframes, 1000 * interaction / nframes,
+                                1000 * render / nframes, 1000 * housekeeping / nframes, performance)
                     frames = frames[-1:]
-                    execution = render = housekeeping = 0
+                    execution = interaction = render = housekeeping = 0
 
         finally:
             SharedCache.clean(0)
