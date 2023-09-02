@@ -10,7 +10,7 @@ from .. import name_patch
 from ..model cimport Vector, Node
 from ..language.vm cimport StateDict
 
-from libc.math cimport sqrt, isinf, isnan
+from libc.math cimport sqrt, isinf, isnan, abs
 
 
 logger = name_patch(logger, __name__)
@@ -43,7 +43,7 @@ cdef class Particle:
             self.velocity = velocity
         else:
             self.velocity = zero
-        self.force = zero
+        self.force = Vector.__new__(Vector, zero)
         self.radius = max(0, node.get_float('radius', 0))
         self.mass = max(0, node.get_float('mass', 1))
         self.charge = node.get_float('charge', 0)
@@ -120,59 +120,81 @@ cdef class DistanceConstraint(SpecificPairConstraint):
             self.maximum = node.get_float('max', 0)
 
     cdef void apply(self, Particle from_particle, Particle to_particle, Vector direction, double distance, double distance_squared):
-        cdef Vector force
+        cdef double f, k
+        cdef int i
         if self.minimum and distance < self.minimum:
-            force = direction.fmul(self.coefficient * (self.minimum - distance))
-            from_particle.force = from_particle.force.sub(force)
-            to_particle.force = to_particle.force.add(force)
+            k = self.coefficient * (self.minimum - distance)
+            for i in range(direction.length):
+                f = direction.numbers[i] * k
+                from_particle.force.numbers[i] -= f
+                to_particle.force.numbers[i] += f
         elif self.maximum and distance > self.maximum:
-            force = direction.fmul(self.coefficient * (distance - self.maximum))
-            from_particle.force = from_particle.force.add(force)
-            to_particle.force = to_particle.force.sub(force)
+            k = self.coefficient * (distance - self.maximum)
+            for i in range(direction.length):
+                f = direction.numbers[i] * k
+                from_particle.force.numbers[i] += f
+                to_particle.force.numbers[i] -= f
 
 
 cdef class DragConstraint(ParticleConstraint):
     cdef void apply(self, Particle particle):
-        cdef Vector force = particle.velocity.abs().fadd(1).mul(particle.velocity).fmul(self.coefficient)
-        particle.force = particle.force.sub(force)
+        cdef double v, f
+        cdef int i
+        for i in range(particle.velocity.length):
+            v = particle.velocity[i]
+            particle.force.numbers[i] -= (1 + abs(v)) * v * self.coefficient
 
 
 cdef class ConstantConstraint(ParticleConstraint):
     cdef Vector force
 
     def __cinit__(self, Node node, Vector zero):
-        self.force = node.get_fvec('direction', zero.length, zero).normalize().fmul(self.coefficient)
+        cdef Vector force = node.get_fvec('direction', zero.length, zero).normalize().fmul(self.coefficient)
+        self.force = force if force.as_bool() else None
 
     cdef void apply(self, Particle particle):
-        if self.force.as_bool():
-            particle.force = particle.force.add(self.force)
+        cdef int i
+        if self.force is not None:
+            for i in range(self.force.length):
+                particle.force.numbers[i] += self.force.numbers[i]
 
 
 cdef class CollisionConstraint(PairConstraint):
     cdef void apply(self, Particle from_particle, Particle to_particle, Vector direction, double distance, double distance_squared):
-        cdef double min_distance
+        cdef double min_distance, f, k
+        cdef int i
         if from_particle.radius and to_particle.radius:
             min_distance = from_particle.radius + to_particle.radius
             if distance < min_distance:
-                force = direction.fmul(self.coefficient * (min_distance - distance))
-                from_particle.force = from_particle.force.sub(force)
-                to_particle.force = to_particle.force.add(force)
+                k = self.coefficient * (min_distance - distance)
+                for i in range(direction.length):
+                    f = direction.numbers[i] * k
+                    from_particle.force.numbers[i] -= f
+                    to_particle.force.numbers[i] += f
 
 
 cdef class GravityConstraint(PairConstraint):
     cdef void apply(self, Particle from_particle, Particle to_particle, Vector direction, double distance, double distance_squared):
+        cdef double f, k
+        cdef int i
         if (not self.max_distance or distance < self.max_distance) and from_particle.mass and to_particle.mass:
-            force = direction.fmul(self.coefficient * from_particle.mass * to_particle.mass / distance_squared)
-            from_particle.force = from_particle.force.add(force)
-            to_particle.force = to_particle.force.sub(force)
+            k = self.coefficient * from_particle.mass * to_particle.mass / distance_squared
+            for i in range(direction.length):
+                f = direction.numbers[i] * k
+                from_particle.force.numbers[i] += f
+                to_particle.force.numbers[i] -= f
 
 
 cdef class ElectrostaticConstraint(PairConstraint):
     cdef void apply(self, Particle from_particle, Particle to_particle, Vector direction, double distance, double distance_squared):
+        cdef double f, k
+        cdef int i
         if from_particle.charge and to_particle.charge:
-            force = direction.fmul(self.coefficient * -from_particle.charge * to_particle.charge / distance_squared)
-            from_particle.force = from_particle.force.add(force)
-            to_particle.force = to_particle.force.sub(force)
+            k = self.coefficient * -from_particle.charge * to_particle.charge / distance_squared
+            for i in range(direction.length):
+                f = direction.numbers[i] * k
+                from_particle.force.numbers[i] += f
+                to_particle.force.numbers[i] -= f
 
 
 cdef class PhysicsSystem:
@@ -201,7 +223,7 @@ cdef class PhysicsSystem:
         cdef double speed_of_light = node.get_float('speed_of_light', 1e9)
         if speed_of_light <= 0:
             return
-        cdef int i, j
+        cdef int i, j, k
         cdef StateDict state = engine.state
         cdef Vector zero = Vector.__new__(Vector)
         zero.allocate_numbers(dimensions)
@@ -240,10 +262,12 @@ cdef class PhysicsSystem:
             self.last_beat = beat
         cdef double delta
         cdef Particle particle1, particle2
-        cdef Vector direction
+        cdef Vector direction = Vector.__new__(Vector)
+        direction.allocate_numbers(dimensions)
         cdef double distance, distance_squared
         cdef PairConstraint pair_constraint
         cdef dict particles_by_id
+        cdef double d
         while True:
             if particle_constraints or pair_constraints:
                 for i in range(len(particles)):
@@ -253,10 +277,14 @@ cdef class PhysicsSystem:
                     if pair_constraints:
                         for j in range(i):
                             particle2 = <Particle>particles[j]
-                            direction = particle2.position.sub(particle1.position)
-                            distance_squared = direction.squared_sum()
+                            distance_squared = 0
+                            for k in range(dimensions):
+                                d = particle2.position.numbers[k] - particle1.position.numbers[k]
+                                direction.numbers[k] = d
+                                distance_squared += d * d
                             distance = sqrt(distance_squared)
-                            direction = direction.ftruediv(distance)
+                            for k in range(dimensions):
+                                direction.numbers[k] /= distance
                             for constraint in pair_constraints:
                                 pair_constraint = <PairConstraint>constraint
                                 if not pair_constraint.max_distance or distance < pair_constraint.max_distance:
@@ -270,13 +298,16 @@ cdef class PhysicsSystem:
                     particle2 = particles_by_id.get((<SpecificPairConstraint>constraint).to_particle_id)
                     pair_constraint = <PairConstraint>constraint
                     if particle1 is not None and particle2 is not None:
-                        direction = particle2.position.sub(particle1.position)
-                        distance_squared = direction.squared_sum()
+                        distance_squared = 0
+                        for k in range(dimensions):
+                            d = particle2.position.numbers[k] - particle1.position.numbers[k]
+                            direction.numbers[k] = d
+                            distance_squared += d * d
                         distance = sqrt(distance_squared)
-                        direction = direction.ftruediv(distance)
+                        for k in range(dimensions):
+                            direction.numbers[k] /= distance
                         if not pair_constraint.max_distance or distance < pair_constraint.max_distance:
                             pair_constraint.apply(particle1, particle2, direction, distance, distance_squared)
-
             delta = min(resolution, beat-self.last_beat) if realtime else resolution
             for particle1 in particles:
                 particle1.update(speed_of_light, delta, state)
