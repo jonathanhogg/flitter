@@ -466,6 +466,15 @@ cdef class Vector:
                 result.numbers[i] = self.numbers[i % n] + other.numbers[i % m]
         return result
 
+    @cython.cdivision(True)
+    cdef Vector fadd(self, double other):
+        cdef int i, n = self.length
+        cdef Vector result = Vector.__new__(Vector)
+        if self.numbers != NULL:
+            for i in range(result.allocate_numbers(n)):
+                result.numbers[i] = self.numbers[i] + other
+        return result
+
     def __sub__(self, other):
         return self.sub(Vector._coerce(other))
 
@@ -496,6 +505,15 @@ cdef class Vector:
                 result.numbers[i] = self.numbers[i % n] * other.numbers[i % m]
         return result
 
+    @cython.cdivision(True)
+    cdef Vector fmul(self, double other):
+        cdef int i, n = self.length
+        cdef Vector result = Vector.__new__(Vector)
+        if self.numbers != NULL:
+            for i in range(result.allocate_numbers(n)):
+                result.numbers[i] = self.numbers[i] * other
+        return result
+
     def __truediv__(self, other):
         return self.truediv(Vector._coerce(other))
 
@@ -509,6 +527,15 @@ cdef class Vector:
         if self.numbers != NULL and other.numbers != NULL:
             for i in range(result.allocate_numbers(max(n, m))):
                 result.numbers[i] = self.numbers[i % n] / other.numbers[i % m]
+        return result
+
+    @cython.cdivision(True)
+    cdef Vector ftruediv(self, double other):
+        cdef int i, n = self.length
+        cdef Vector result = Vector.__new__(Vector)
+        if self.numbers != NULL:
+            for i in range(result.allocate_numbers(n)):
+                result.numbers[i] = self.numbers[i] / other
         return result
 
     def __floordiv__(Vector self, other):
@@ -702,6 +729,17 @@ cdef class Vector:
             result.allocate_numbers(1)
             result.numbers[0] = self.numbers[i]
         return result
+
+    @cython.cdivision(True)
+    cpdef double squared_sum(self):
+        cdef int i, n = self.length
+        if self.numbers == NULL:
+            return null_
+        cdef double x, y = 0
+        for i in range(n):
+            x = self.numbers[i]
+            y += x * x
+        return y
 
     @cython.cdivision(True)
     cpdef Vector normalize(self):

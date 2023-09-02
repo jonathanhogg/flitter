@@ -1,0 +1,40 @@
+
+%pragma tempo 60
+
+import bloom_filter from 'bloom.fl'
+
+let SIZE=1080;1080
+    CYCLE=beat/30
+    NBUBBLES=500
+    RADIUS=400+100*sine(0.5+CYCLE*2)
+    ROT=sine(CYCLE)
+    NOISE_T=CYCLE*10
+    NOISE_SCALE=1/5
+    MIN_BUBBLE_RADIUS=1
+    MAX_BUBBLE_RADIUS=50
+    BRIGHTNESS=(1+noise(:brightness, i*NOISE_SCALE, NOISE_T)) for i in ..NBUBBLES
+    START=(uniform(:start)[..3*NBUBBLES]-0.5)*RADIUS*2
+
+let bubble_radii=MIN_BUBBLE_RADIUS+(1+noise(:radii, i*NOISE_SCALE, NOISE_T))/2*(MAX_BUBBLE_RADIUS-MIN_BUBBLE_RADIUS) for i in ..NBUBBLES
+
+!physics dimensions=3 state=:bubble resolution=0.01 --speed_of_light=10000
+    !anchor id=:centre position=0;0;0
+    for i in ..NBUBBLES
+        let r=bubble_radii[i]
+        !particle id=i initial=START[i*3..(i+1)*3] mass=r*r/100 radius=r charge=r-(MAX_BUBBLE_RADIUS-MIN_BUBBLE_RADIUS)/2
+        !distance fixed=RADIUS from=i to=:centre coefficient=1000
+    !drag coefficient=0.1
+    !collision coefficient=1000
+    !electrostatic coefficient=100 max_distance=MAX_BUBBLE_RADIUS*5
+    !constant direction=0;0;-1 coefficient=100
+    -- !gravity coefficient=1000
+
+!window size=SIZE linear=true colorbits=16
+    @bloom_filter radius=hypot(SIZE)/200
+        !canvas3d viewpoint=0;0;1200 focus=0 near=1 far=2000 fov=60/360 samples=4
+            !light color=2;0;0
+            !light color=-1;0.1;0 direction=0;0;-1
+            !transform rotate_x=ROT/2 rotate_y=ROT/2
+                !sphere subdivisions=3 color=0.05 size=RADIUS transparency=0.1 position=$(:bubble;:centre)
+                for i in ..NBUBBLES
+                    !sphere subdivisions=3 position=$(:bubble;i) color=BRIGHTNESS[i] size=bubble_radii[i]

@@ -4,6 +4,7 @@ from setuptools import setup, Extension
 setup(
     ext_modules=[
         Extension("flitter.model", ["src/flitter/model.pyx"]),
+        Extension("flitter.interact.physics", ["src/flitter/interact/physics.pyx"]),
         Extension("flitter.language.functions", ["src/flitter/language/functions.pyx"]),
         Extension("flitter.language.noise", ["src/flitter/language/noise.pyx"]),
         Extension("flitter.language.tree", ["src/flitter/language/tree.pyx"]),
