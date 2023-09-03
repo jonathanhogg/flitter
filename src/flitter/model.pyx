@@ -45,6 +45,26 @@ cdef class Vector:
         return Vector.__new__(Vector, other)
 
     @staticmethod
+    def copy(other):
+        cdef Vector vector = Vector._coerce(other)
+        if vector is other:
+            return Vector._copy(vector)
+        return vector
+
+    @staticmethod
+    cdef Vector _copy(Vector other):
+        cdef Vector result = Vector.__new__(Vector)
+        cdef int i, n=other.length
+        if other.numbers != NULL:
+            result.allocate_numbers(n)
+            for i in range(n):
+                result.numbers[i] = other.numbers[i]
+        elif other.objects is not None:
+            result.objects = list(other.objects)
+            result.length = n
+        return result
+
+    @staticmethod
     def compose(vectors):
         vectors = [Vector._coerce(v) for v in  vectors]
         return Vector._compose(vectors, 0, len(vectors))
@@ -466,15 +486,6 @@ cdef class Vector:
                 result.numbers[i] = self.numbers[i % n] + other.numbers[i % m]
         return result
 
-    @cython.cdivision(True)
-    cdef Vector fadd(self, double other):
-        cdef int i, n = self.length
-        cdef Vector result = Vector.__new__(Vector)
-        if self.numbers != NULL:
-            for i in range(result.allocate_numbers(n)):
-                result.numbers[i] = self.numbers[i] + other
-        return result
-
     def __sub__(self, other):
         return self.sub(Vector._coerce(other))
 
@@ -505,15 +516,6 @@ cdef class Vector:
                 result.numbers[i] = self.numbers[i % n] * other.numbers[i % m]
         return result
 
-    @cython.cdivision(True)
-    cdef Vector fmul(self, double other):
-        cdef int i, n = self.length
-        cdef Vector result = Vector.__new__(Vector)
-        if self.numbers != NULL:
-            for i in range(result.allocate_numbers(n)):
-                result.numbers[i] = self.numbers[i] * other
-        return result
-
     def __truediv__(self, other):
         return self.truediv(Vector._coerce(other))
 
@@ -527,15 +529,6 @@ cdef class Vector:
         if self.numbers != NULL and other.numbers != NULL:
             for i in range(result.allocate_numbers(max(n, m))):
                 result.numbers[i] = self.numbers[i % n] / other.numbers[i % m]
-        return result
-
-    @cython.cdivision(True)
-    cdef Vector ftruediv(self, double other):
-        cdef int i, n = self.length
-        cdef Vector result = Vector.__new__(Vector)
-        if self.numbers != NULL:
-            for i in range(result.allocate_numbers(n)):
-                result.numbers[i] = self.numbers[i] / other
         return result
 
     def __floordiv__(Vector self, other):

@@ -9,7 +9,7 @@ let SIZE=(1080;1080) * (1 if RECORD else 2)
     CYCLE=beat/30
     NBUBBLES=600
     RADIUS=200+300*sine(0.5+CYCLE*2)
-    ROT=sine(CYCLE)
+    ROT=0 --sine(CYCLE)
     NOISE_T=CYCLE*10
     NOISE_SCALE=1/5
     MIN_BUBBLE_RADIUS=5
@@ -19,7 +19,7 @@ let SIZE=(1080;1080) * (1 if RECORD else 2)
 let bubble_radii=MIN_BUBBLE_RADIUS+(1+noise(:radii, i*NOISE_SCALE, NOISE_T))/2*(MAX_BUBBLE_RADIUS-MIN_BUBBLE_RADIUS) for i in ..NBUBBLES
     bubble_brightness=(1+noise(:brightness, i*NOISE_SCALE, NOISE_T)) for i in ..NBUBBLES
 
-!physics dimensions=3 state=:bubble resolution=1/60 --speed_of_light=10000
+!physics dimensions=3 state=:bubble
     let ease_in=linear(CYCLE)  -- ease in the main rules at the beginning to reduce instability
     !anchor id=:centre position=0;0;0
     for i in ..NBUBBLES
@@ -28,7 +28,7 @@ let bubble_radii=MIN_BUBBLE_RADIUS+(1+noise(:radii, i*NOISE_SCALE, NOISE_T))/2*(
         !distance fixed=RADIUS-r/2 from=i to=:centre coefficient=1000*ease_in
     !drag coefficient=0.2
     !collision coefficient=1000*ease_in
-    !electrostatic coefficient=100 max_distance=MAX_BUBBLE_RADIUS*10
+    !electrostatic coefficient=1000*ease_in max_distance=MAX_BUBBLE_RADIUS*10
     -- !constant direction=0;0;-1 coefficient=1000
     -- !gravity coefficient=1000
 

@@ -12,6 +12,8 @@ cdef class Vector:
     @staticmethod
     cdef Vector _coerce(object other)
     @staticmethod
+    cdef Vector _copy(Vector other)
+    @staticmethod
     cdef Vector _compose(list vectors, int start, int end)
 
     cdef int allocate_numbers(self, int n) except -1
@@ -29,11 +31,8 @@ cdef class Vector:
     cdef Vector pos(self)
     cdef Vector abs(self)
     cdef Vector add(self, Vector other)
-    cdef Vector fadd(self, double)
     cdef Vector sub(self, Vector other)
     cdef Vector mul(self, Vector other)
-    cdef Vector fmul(self, double other)
-    cdef Vector ftruediv(self, double other)
     cdef Vector truediv(self, Vector other)
     cdef Vector floordiv(self, Vector other)
     cdef Vector mod(self, Vector other)

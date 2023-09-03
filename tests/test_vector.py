@@ -88,6 +88,12 @@ class TestVector(unittest.TestCase):
         self.assertIs(Vector.coerce(0), false)
         self.assertIs(Vector.coerce(-1), Vector.coerce(-1))
 
+    def test_copy(self):
+        for x in (null, Vector(["Hello ", "world!"]), Vector.range(10)):
+            y = Vector.copy(x)
+            self.assertEqual(x, y)
+            self.assertFalse(x is y)
+
     def test_compose(self):
         self.assertEqual(Vector.compose([]), null)
         self.assertEqual(Vector.compose([null]), null)
