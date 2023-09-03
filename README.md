@@ -4,7 +4,7 @@ with trails moving outwards from the centre of the screen.](docs/header.jpg)
 # flitter
 
 **flitter** is a 2D and 3D visuals language and engine designed for live
-performances. While **flitter** supports a basic of live-coding (live reload of
+performances. While **flitter** supports basic live-coding (live reload of
 source files), it is designed primarily for driving via a MIDI surface.
 
 The engine that runs the language is capable of:
