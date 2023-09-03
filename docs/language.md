@@ -677,3 +677,18 @@ The partial-evaluator and compiler will run again incorporating the state if
 that has been stable for a period of time (configurable with the `--evalstate`
 command-line option). If the state then changes (i.e., a pad or encoder is
 touched) the engine will return to the original compiled program again.
+
+### A note on multi-processing
+
+I love Python, but the global interpreter lock basically makes any kind of
+serious multi-threading impossible. **flitter** supports a limited form of
+multi-processing instead. Adding the `--multiprocess` option on the command line
+will cause a separate renderer child process to be executed for each window,
+laser or DMX bus.
+
+The main process handles evaluating the script to produce an output tree. This
+tree is then fed to each renderer and all renderers are waited on before moving
+on to the next iteration. This works well if the script and the renderers are
+expensive to run, but the tree is small. As the tree grows large, the cost of
+pickling and un-pickling it across the process boundaries becomes a bottleneck,
+so your mileage may vary.
