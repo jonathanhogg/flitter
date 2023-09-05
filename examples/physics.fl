@@ -1,7 +1,6 @@
 
-%pragma tempo 60
-
--- flitter examples/physics.fl --verbose --lockstep --fps=60 --define RECORD=1
+-- To record a 30 second video, run:
+-- flitter examples/physics.fl --verbose --lockstep --define RECORD=1
 
 import bloom_filter from 'bloom.fl'
 
@@ -20,22 +19,7 @@ let bubble_radii=MIN_BUBBLE_RADIUS+(1+noise(:radii, i*NOISE_SCALE, NOISE_T))/2*(
     bubble_brightness=(1+noise(:brightness, i*NOISE_SCALE, NOISE_T)) for i in ..NBUBBLES
 
 !physics dimensions=3 state=:bubble
-    --
-    -- Force is determined by:
-    --   !distance      - strength x |distance - min/max/fixed|
-    --   !drag          - strength x speed^2 x radius^2
-    --   !collision     - strength x |distance - (radius_1 + radius_2)|
-    --   !electrostatic - strength x |charge_1 x charge_2| / distance^2
-    --   !gravity       - strength x mass_1 x mass_2 / distance^2
-    --   !constant      - strength
-    --
-    -- Particle accelleration = force / mass
-    -- Collisions are *elastic* and are the primary source of simulation instability
-    -- Time is measured in beats, so velocity is distance units per beat
-    -- An anchor ignored all forces applied to it, but can contribute to forces
-    -- on other particles (i.e., it can have gravity, charge, etc.)
-    --
-    let ease_in=linear(CYCLE)  -- ease in collision strength at the beginning to reduce instability
+    let ease_in=linear(CYCLE)
     !anchor id=:centre position=0;0;0
     for i in ..NBUBBLES
         let r=bubble_radii[i]
@@ -43,17 +27,14 @@ let bubble_radii=MIN_BUBBLE_RADIUS+(1+noise(:radii, i*NOISE_SCALE, NOISE_T))/2*(
         !distance fixed=RADIUS-r from=i to=:centre strength=100
     !drag strength=0.0001
     !collision strength=200*ease_in
-    -- !electrostatic strength=10000*ease_in max_distance=MAX_BUBBLE_RADIUS*5
-    -- !constant direction=0;0;-1 strength=1000
-    -- !gravity strength=1000*ease
 
 !window size=SIZE linear=true colorbits=16
-    !record filename=('blobs.mp4' if RECORD and CYCLE > 1) codec=:hevc crf=20 limit=30
-        @bloom_filter radius=hypot(SIZE)/300 size=SIZE/2
+    !record filename=('blobs.m4v' if RECORD and CYCLE > 1) codec=:hevc crf=20 limit=30
+        @bloom_filter size=SIZE/2 radius=hypot(SIZE)/300
             !canvas3d viewpoint=0;0;1200 focus=0 near=1 far=2000 fov=60/360 samples=4
                 !light color=2;0;0
                 !light color=-1.9;0;0 direction=0;0;-1
                 !transform rotate_x=ROT/2 rotate_y=ROT/2
-                    !sphere subdivisions=3 color=0.05 size=RADIUS position=$(:bubble;:centre) transparency=0.1
+                    !sphere subdivisions=3 color=0.01 size=RADIUS position=$(:bubble;:centre) transparency=0.05
                     for i in ..NBUBBLES
                         !sphere subdivisions=3 position=$(:bubble;i) color=bubble_brightness[i] size=bubble_radii[i]

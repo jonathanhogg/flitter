@@ -43,7 +43,7 @@ cdef class Particle:
             self.velocity = Vector._copy(velocity)
         else:
             self.velocity = Vector._copy(node.get_fvec('velocity', zero.length, zero))
-        self.force = Vector._copy(zero)
+        self.force = Vector._copy(node.get_fvec('force', zero.length, zero))
         self.radius = max(0, node.get_float('radius', 1))
         self.mass = max(0, node.get_float('mass', 1))
         self.charge = node.get_float('charge', 1)
@@ -90,7 +90,7 @@ cdef class ForceApplier:
 
 
 cdef class ParticleForceApplier(ForceApplier):
-    cdef void apply(self, Particle particle):
+    cdef void apply(self, Particle particle, double delta):
         raise NotImplementedError()
 
 
@@ -144,14 +144,14 @@ cdef class DistanceForceApplier(SpecificPairForceApplier):
 
 
 cdef class DragForceApplier(ParticleForceApplier):
-    cdef void apply(self, Particle particle):
+    cdef void apply(self, Particle particle, double delta):
         cdef double speed_squared=0, v, k
         cdef int i
         if particle.radius:
             for i in range(particle.velocity.length):
                 v = particle.velocity.numbers[i]
                 speed_squared += v * v
-            k = self.strength * sqrt(speed_squared) * (particle.radius * particle.radius)
+            k = min(self.strength * sqrt(speed_squared) * (particle.radius * particle.radius), particle.mass / delta)
             for i in range(particle.velocity.length):
                 particle.force.numbers[i] = particle.force.numbers[i] - particle.velocity.numbers[i] * k
 
@@ -160,14 +160,12 @@ cdef class ConstantForceApplier(ParticleForceApplier):
     cdef Vector force
 
     def __cinit__(self, Node node, Vector zero):
-        cdef Vector force = node.get_fvec('direction', zero.length, zero).normalize().fmul(self.strength)
-        self.force = force if force.as_bool() else None
+        self.force = node.get_fvec('direction', zero.length, zero).normalize()
 
-    cdef void apply(self, Particle particle):
+    cdef void apply(self, Particle particle, double delta):
         cdef int i
-        if self.force is not None:
-            for i in range(self.force.length):
-                particle.force.numbers[i] = particle.force.numbers[i] + self.force.numbers[i]
+        for i in range(self.force.length):
+            particle.force.numbers[i] = particle.force.numbers[i] + self.strength * self.force.numbers[i]
 
 
 cdef class CollisionForceApplier(PairForceApplier):
@@ -209,11 +207,8 @@ cdef class ElectrostaticForceApplier(PairForceApplier):
 
 
 cdef class PhysicsSystem:
-    cdef double last_beat
-
     def __init__(self):
         logger.debug("Create physics system")
-        self.last_beat = 0
 
     def destroy(self):
         pass
@@ -228,6 +223,7 @@ cdef class PhysicsSystem:
         cdef Vector state_prefix = <Vector>node._attributes.get('state')
         if state_prefix is None:
             return
+        cdef double time = node.get_float('time', now)
         cdef double resolution = node.get_float('resolution', 1/(<double>engine.target_fps))
         if resolution <= 0:
             return
@@ -236,6 +232,12 @@ cdef class PhysicsSystem:
             return
         cdef int i, j, k
         cdef StateDict state = engine.state
+        cdef double last_time
+        cdef Vector time_vector = state.get_item(state_prefix)
+        if time_vector.length == 1 and time_vector.numbers != NULL:
+            last_time = min(time, time_vector.numbers[0])
+        else:
+            last_time = time
         cdef Vector zero = Vector.__new__(Vector)
         zero.allocate_numbers(dimensions)
         for i in range(dimensions):
@@ -266,9 +268,6 @@ cdef class PhysicsSystem:
                 pair_constraints.append(ElectrostaticForceApplier.__new__(ElectrostaticForceApplier, child, zero))
             child = child.next_sibling
         cdef bint realtime = engine.realtime
-        cdef double beat = engine.counter.beat_at_time(now)
-        if not self.last_beat:
-            self.last_beat = beat
         cdef double delta
         cdef Particle particle1, particle2
         cdef Vector direction = Vector.__new__(Vector)
@@ -277,11 +276,12 @@ cdef class PhysicsSystem:
         cdef dict particles_by_id
         cdef double d
         while True:
+            delta = min(resolution, time-last_time)
             if particle_constraints or pair_constraints:
                 for i in range(len(particles)):
                     particle1 = <Particle>particles[i]
                     for constraint in particle_constraints:
-                        (<ParticleForceApplier>constraint).apply(particle1)
+                        (<ParticleForceApplier>constraint).apply(particle1, delta)
                     if pair_constraints:
                         for j in range(i):
                             particle2 = <Particle>particles[j]
@@ -314,14 +314,15 @@ cdef class PhysicsSystem:
                             for k in range(dimensions):
                                 direction.numbers[k] /= distance
                             (<PairForceApplier>constraint).apply(particle1, particle2, direction, distance, distance_squared)
-            delta = min(resolution, beat-self.last_beat) if realtime else resolution
             for particle in particles:
                 (<Particle>particle).update(speed_of_light, delta, state)
-            self.last_beat += delta
-            if realtime or self.last_beat >= beat:
+            last_time += delta
+            if realtime or last_time >= time:
                 break
-        if realtime:
-            self.last_beat = beat
+        time_vector = Vector.__new__(Vector)
+        time_vector.allocate_numbers(1)
+        time_vector.numbers[0] = time
+        state.set_item(state_prefix, time_vector)
 
 
 INTERACTOR_CLASS = PhysicsSystem
