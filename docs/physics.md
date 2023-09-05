@@ -59,7 +59,7 @@ position updated based on this.
 ```
 
 ```math
-\vec{p}_{t+\Delta t} = \vec{p}_t + \vec{v}_{t+\Delta t} \Delta t
+\vec{p}_{t+\Delta t} = \vec{p}_t + \vec{v}_{t+\Delta t} . \Delta t
 ```
 
 The attributes that specify properties of the particle are:
