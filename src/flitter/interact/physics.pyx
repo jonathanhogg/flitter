@@ -214,16 +214,13 @@ cdef class ElectrostaticForceApplier(PairForceApplier):
 
 
 cdef class PhysicsSystem:
-    def __init__(self):
-        logger.debug("Create physics system")
-
     def destroy(self):
         pass
 
     def purge(self):
         pass
 
-    async def update(self, engine, Node node, now):
+    async def update(self, engine, Node node, double now):
         cdef int dimensions = node.get_int('dimensions', 0)
         if dimensions < 1:
             return
@@ -239,17 +236,11 @@ cdef class PhysicsSystem:
             return
         cdef int i, j, k
         cdef StateDict state = engine.state
-        cdef double last_time
-        cdef Vector time_vector = state.get_item(state_prefix)
-        if time_vector.length == 1 and time_vector.numbers != NULL:
-            last_time = min(time, time_vector.numbers[0])
-        else:
-            last_time = time
         cdef Vector zero = Vector.__new__(Vector)
         zero.allocate_numbers(dimensions)
         for i in range(dimensions):
             zero.numbers[i] = 0
-        cdef list particles=[], particle_constraints=[], pair_constraints=[], specific_pair_constraints=[]
+        cdef list particles=[], particle_forces=[], pair_forces=[], specific_pair_forces=[]
         cdef Node child = node.first_child
         cdef Vector id
         while child is not None:
@@ -262,18 +253,26 @@ cdef class PhysicsSystem:
                 if id is not None:
                     particles.append(Anchor.__new__(Anchor, child, id, zero, state_prefix, state))
             elif child.kind == 'distance':
-                specific_pair_constraints.append(DistanceForceApplier.__new__(DistanceForceApplier, child, zero))
+                specific_pair_forces.append(DistanceForceApplier.__new__(DistanceForceApplier, child, zero))
             elif child.kind == 'drag':
-                particle_constraints.append(DragForceApplier.__new__(DragForceApplier, child, zero))
+                particle_forces.append(DragForceApplier.__new__(DragForceApplier, child, zero))
             elif child.kind == 'constant':
-                particle_constraints.append(ConstantForceApplier.__new__(ConstantForceApplier, child, zero))
+                particle_forces.append(ConstantForceApplier.__new__(ConstantForceApplier, child, zero))
             elif child.kind == 'collision':
-                pair_constraints.append(CollisionForceApplier.__new__(CollisionForceApplier, child, zero))
+                pair_forces.append(CollisionForceApplier.__new__(CollisionForceApplier, child, zero))
             elif child.kind == 'gravity':
-                pair_constraints.append(GravityForceApplier.__new__(GravityForceApplier, child, zero))
+                pair_forces.append(GravityForceApplier.__new__(GravityForceApplier, child, zero))
             elif child.kind == 'electrostatic':
-                pair_constraints.append(ElectrostaticForceApplier.__new__(ElectrostaticForceApplier, child, zero))
+                pair_forces.append(ElectrostaticForceApplier.__new__(ElectrostaticForceApplier, child, zero))
             child = child.next_sibling
+        cdef double last_time
+        cdef Vector time_vector = state.get_item(state_prefix)
+        if time_vector.length == 1 and time_vector.numbers != NULL:
+            last_time = min(time, time_vector.numbers[0])
+        else:
+            logger.debug("Create physics {!r} with {} particles and {} forces", state_prefix, len(particles),
+                         len(particle_forces) + len(pair_forces) + len(specific_pair_forces))
+            last_time = time
         cdef bint realtime = engine.realtime
         cdef double delta
         cdef Particle particle1, particle2
@@ -284,12 +283,12 @@ cdef class PhysicsSystem:
         cdef double d
         while True:
             delta = min(resolution, time-last_time)
-            if particle_constraints or pair_constraints:
+            if particle_forces or pair_forces:
                 for i in range(len(particles)):
                     particle1 = <Particle>particles[i]
-                    for constraint in particle_constraints:
-                        (<ParticleForceApplier>constraint).apply(particle1, delta)
-                    if pair_constraints:
+                    for force in particle_forces:
+                        (<ParticleForceApplier>force).apply(particle1, delta)
+                    if pair_forces:
                         for j in range(i):
                             particle2 = <Particle>particles[j]
                             distance_squared = 0
@@ -300,16 +299,16 @@ cdef class PhysicsSystem:
                             distance = sqrt(distance_squared)
                             for k in range(dimensions):
                                 direction.numbers[k] /= distance
-                            for constraint in pair_constraints:
-                                if not (<PairForceApplier>constraint).max_distance or distance < (<PairForceApplier>constraint).max_distance:
-                                    (<PairForceApplier>constraint).apply(particle1, particle2, direction, distance, distance_squared)
-            if specific_pair_constraints:
+                            for force in pair_forces:
+                                if not (<PairForceApplier>force).max_distance or distance < (<PairForceApplier>force).max_distance:
+                                    (<PairForceApplier>force).apply(particle1, particle2, direction, distance, distance_squared)
+            if specific_pair_forces:
                 particles_by_id = {}
                 for particle in particles:
                     particles_by_id[(<Particle>particle).id] = particle
-                for constraint in specific_pair_constraints:
-                    particle1 = <Particle>particles_by_id.get((<SpecificPairForceApplier>constraint).from_particle_id)
-                    particle2 = <Particle>particles_by_id.get((<SpecificPairForceApplier>constraint).to_particle_id)
+                for force in specific_pair_forces:
+                    particle1 = <Particle>particles_by_id.get((<SpecificPairForceApplier>force).from_particle_id)
+                    particle2 = <Particle>particles_by_id.get((<SpecificPairForceApplier>force).to_particle_id)
                     if particle1 is not None and particle2 is not None:
                         distance_squared = 0
                         for k in range(dimensions):
@@ -317,10 +316,10 @@ cdef class PhysicsSystem:
                             direction.numbers[k] = d
                             distance_squared += d * d
                         distance = sqrt(distance_squared)
-                        if not (<PairForceApplier>constraint).max_distance or distance < (<PairForceApplier>constraint).max_distance:
+                        if not (<PairForceApplier>force).max_distance or distance < (<PairForceApplier>force).max_distance:
                             for k in range(dimensions):
                                 direction.numbers[k] /= distance
-                            (<PairForceApplier>constraint).apply(particle1, particle2, direction, distance, distance_squared)
+                            (<PairForceApplier>force).apply(particle1, particle2, direction, distance, distance_squared)
             for particle in particles:
                 (<Particle>particle).update(speed_of_light, delta, state)
             last_time += delta
