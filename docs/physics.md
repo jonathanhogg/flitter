@@ -96,12 +96,29 @@ simulating the "down" acceleration from the gravity of a large body.
 
 - `direction` - specifies a vector representing the force direction (which
 will be normalized)
-- `strength` - specifies the magnitude of the constant force to be applied in
-this direction
+- `strength` - specifies the magnitude of the constant force along the
+direction vector
+- `force` - alternative to `direction` and `strength` for giving the force
+vector directly
 
 ```math
 \vec{F} = \textbf{strength} . \vec{d}
 ```
+
+`direction` and `strength` are available rather than just `force` as it allows
+one to easily specify a direction in terms of two points, e.g.:
+
+```
+!constant direction=bottom-top strength=100
+```
+
+is equivalent to:
+
+```
+!constant force=100*normalize(bottom-top)
+```
+
+but possibly more obvious.
 
 ### `!distance`
 
@@ -234,13 +251,41 @@ As drag scales with the square of both the speed and particle radius,
 limited to ensure that simulation granularity issues cannot cause a particle to
 reverse direction.
 
-## A reasonably complex example:
+## State interaction
 
-This example creates a "petri dish" of cells that randomly drift around thanks
-to a `force` attribute on each particle derived from noise. Random charges on
-the particles and an `!electrostatic` force applier mean that the particles
-will drift together or apart, clumping up into different shapes. Chains of
-particles with alternating charge will form and break up.
+For a `!physics` system with `state` set to *prefix*, and a particle with `id`
+set to *id*, the following key/value pairs will be stored in the state
+dictionary:
+
+- *prefix* - the last simulation timestamp (as provided with the `time`
+attribute or the internal frame time
+- *prefix*`;`*id* - the last position of the particle
+- *prefix*`;`*id*`;:velocity` - the last velocity of the particle
+
+`!anchor` particles still store their position and velocity in the state
+dictionary, even though position will always be whatever was provided with the
+`position` attribute and velocity will always be a zero vector.
+
+`state` and `id` can be any non-null vectors, but `id` must be unique within
+the system and `state` must be unique if multiple simultaneous systems are
+used. Obviously one should avoid using a `state` prefix that might collide with
+other users of the state dictionary, such as MIDI controllers.
+
+## Example
+
+This example creates a "petri dish" of "cell" particles with
+normally-distributed random charges. An `!electrostatic` force applier makes
+the cells drift together or apart, clumping up into different shapes. Chains of
+cells with alternating charge will form and break up.
+
+A `!collision` force applier stops them from overlapping with each other and a
+`!distance` force applier is used to constrain the particles within the dish
+by setting a maximum distance for each from an anchor in the middle. A `!drag`
+force applier slows the particles as if they are moving through a liquid.
+
+Without any external forces, this system will quickly come to a static
+equilibirum, so random forces are derived from the `noise()` function and
+applied directly to each particle with the `force` attribute.
 
 The `beat` clock is used as the simulation time, allowing the simulation to be
 sped up or slowed down by altering the tempo. `resolution` is calculated to
@@ -279,6 +324,6 @@ let SIZE=1080;1080
 ```
 
 Note that the `strength` coefficients for the `!electrostatic` and `!collision`
-force appliers is "eased in" by increasing these linearly over the first 10
-beats of the simulation. This allows particles with overlapping start positions
-to gently move apart at the beginning.
+force appliers are "eased in" by increasing them linearly over the first 10
+beats. This allows any particles with overlapping start positions to gently
+move apart at the beginning.

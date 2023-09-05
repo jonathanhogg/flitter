@@ -7,7 +7,7 @@ Flitter physics engine
 from loguru import logger
 
 from .. import name_patch
-from ..model cimport Vector, Node
+from ..model cimport Vector, Node, null_
 from ..language.vm cimport StateDict
 
 from libc.math cimport sqrt, isinf, isnan, abs
@@ -160,12 +160,19 @@ cdef class ConstantForceApplier(ParticleForceApplier):
     cdef Vector force
 
     def __cinit__(self, Node node, Vector zero):
-        self.force = node.get_fvec('direction', zero.length, zero).normalize()
+        cdef Vector force
+        cdef int i
+        force = node.get_fvec('force', zero.length, null_)
+        if force.length == 0:
+            force = node.get_fvec('direction', zero.length, zero).normalize()
+            for i in range(force.length):
+                force.numbers[i] = force.numbers[i] * self.strength
+        self.force = force
 
     cdef void apply(self, Particle particle, double delta):
         cdef int i
         for i in range(self.force.length):
-            particle.force.numbers[i] = particle.force.numbers[i] + self.strength * self.force.numbers[i]
+            particle.force.numbers[i] = particle.force.numbers[i] + self.force.numbers[i]
 
 
 cdef class CollisionForceApplier(PairForceApplier):
