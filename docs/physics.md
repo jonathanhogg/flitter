@@ -67,19 +67,26 @@ The attributes that specify properties of the particle are:
 - `id` - each particle must have a unique `id` attribute and this will be
 combined with the `!physics`' `state_prefix` value to produce keys against
 which the current state of the particle will be stored in the state dictionary
-- `position` - specifies an initial position to use for the particle at the
-first simulation step
-- `velocity` - specifies an initial velocity
+- `position` - specifies an initial position vector to use for the particle at
+the first simulation step (defaults to zero)
+- `velocity` - specifies an initial velocity vector (defaults to zero)
 - `force` - specifies a constant force vector to be applied to the particle,
 this may be changed at any point during the simulation to create custom forces,
-e.g., thrust from an engine
+e.g., thrust from an engine (defaults to zero)
 - `radius` - specifies a radius for a spherical particle, this is used both
-in collision detection and when calculating drag force (defaults to 1)
+in collision detection and when calculating drag force (defaults to 1 and will
+be clamped to zero if negative)
 - `mass` - specifies a value to be used both as the inertial component of
 converting forces into accelleration and as the mass for computing gravitic
-attraction (defaults to 1)
+attraction (defaults to 1 and will be clamped to zero if negative)
 - `charge` - specifies a value to be used for calculating electrostatic force
 (defaults to 1)
+
+As `mass` is used when calculating acceleration, particles with zero mass will
+cannot be the subject of a force, meaning they will always continue travelling
+at their initial velocity (or remain fixed at their initial position).
+However, particles with zero mass will still be considered when computing
+forces on other particles.
 
 ### `!anchor`
 
@@ -88,6 +95,11 @@ forces, but will not be affected by any force – including a `force`
 attribute. The attributes are otherwise the same as for `!particle`, with the
 added difference that `position` specifies the *current* position of the object
 rather than an initial value. Thus an `!anchor` may be arbitrarily moved around.
+
+While a zero-mass particle is similar to an anchor, a zero-mass particle cannot
+be moved once the simulation has started. An anchor can usefully have zero mass,
+for example if it is to be one side of a distance force, but should be ignored
+for the purposes of calculating attraction due to gravity.
 
 ### `!constant`
 
@@ -162,7 +174,7 @@ l = \left| \vec{p}_\textbf{to} - \vec{p}_\textbf{from} \right|
 
 This creates an implicit `!distance` force applier between all pairs of
 particles, with `min` set to the sum of the `radius` attributes of each
-particle. Particles with zero or negative `radius` will be ignored.
+particle. Particles with zero `radius` will be ignored.
 
 - `strength` - force magnitude coefficient
 
@@ -177,7 +189,7 @@ overlap each other.
 `!gravity` creates an attractive force that applies to all pairs of particles
 in proportion to the product of their `mass` attributes and inversely
 proportional to the square of the distance between the particles. Particles
-with zero or negative `mass` will be ignored.
+with zero `mass` will be ignored.
 
 - `strength` - force magnitude coefficient
 
