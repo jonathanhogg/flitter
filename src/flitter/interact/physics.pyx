@@ -75,7 +75,7 @@ cdef class Particle:
 cdef class Anchor(Particle):
     def __cinit__(self, Node node, Vector id, Vector zero, Vector prefix, StateDict state):
         self.position = node.get_fvec('position', zero.length, zero)
-        self.velocity = node.get_fvec('velocity', zero.length, zero)
+        self.velocity = Vector._copy(zero)
 
     cdef void update(self, double speed_of_light, double delta, StateDict state):
         state.set_item(self.position_state_key, self.position)

@@ -59,7 +59,7 @@ position updated based on this.
 ```
 
 ```math
-\vec{p}_{t+\Delta t} = \vec{p}_t + \vec{v}_{n+1} \Delta t
+\vec{p}_{t+\Delta t} = \vec{p}_t + \vec{v}_{t+\Delta t} \Delta t
 ```
 
 The attributes that specify properties of the particle are:
@@ -86,9 +86,8 @@ attraction (defaults to 1)
 An `!anchor` is a particle that is considered for the purposes of calculating
 forces, but will not be affected by any force – including a `force`
 attribute. The attributes are otherwise the same as for `!particle`, with the
-added difference that `position` and `velocity` specify the *current* position
-and velocity of the object rather than initial values. Thus an `!anchor` may
-be arbitrarily moved around.
+added difference that `position` specifies the *current* position of the object
+rather than an initial value. Thus an `!anchor` may be arbitrarily moved around.
 
 ### `!constant`
 
