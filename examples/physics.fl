@@ -23,8 +23,8 @@ let bubble_radii=MIN_BUBBLE_RADIUS+(1+noise(:radii, i*NOISE_SCALE, NOISE_T))/2*(
     !anchor id=:centre position=0;0;0
     for i in ..NBUBBLES
         let r=bubble_radii[i]
-        !particle id=i position=START[i*3..(i+1)*3] mass=r*r*r/1000 radius=r charge=r-(MAX_BUBBLE_RADIUS-MIN_BUBBLE_RADIUS)/2
-        !distance fixed=RADIUS-r from=i to=:centre strength=100
+        !particle id=i position=START[i*3..(i+1)*3] mass=r*r*r/1000 radius=r
+        !distance fixed=RADIUS-r from=i to=:centre strength=200
     !drag strength=0.0001
     !collision strength=200*ease_in
 

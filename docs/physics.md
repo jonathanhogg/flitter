@@ -22,17 +22,19 @@ prefixed by this
 - `dimensions` is a required attribute giving the number of dimensions of the
 system, i.e., the length of the position, value and force vectors
 - `time` is an optional attribute providing the simulation clock
-- `resolution` is an optional attribute specifying a minimum simulation step
-time
+- `resolution` is an optional attribute specifying a *minimum* simulation step
+interval
 
 If `time` and `resolution` are not specified then the system will default to
-**flitter**'s internal frame clock and the target frame-rate interval. If
-`time` is specified, then you should also provide a sensible matching
-`resolution` value. `time` cannot run backwards and the simulation will simply
-stop running in this instance. If `time` jumps backwards, or forwards by more
-than `resolution`, then the simulation will continue from the new `time` point.
+**flitter**'s internal frame clock and the target frame-rate interval. This
+means that the simulation time units will be seconds and the simulation will
+advance in time steps equal to the frame interval.
 
-> :warning: **Note**
+If specifying `time`, then `resolution` should be set to some sensible matching
+value somewhere at or above the expected increment in `time` at the engine
+frame-rate.
+
+> **Note**
 >
 > If the physics engine is called with sequential `time` values (or the actual
 > frame times) that have a delta greater than `resolution`, then the simulation
@@ -339,3 +341,22 @@ Note that the `strength` coefficients for the `!electrostatic` and `!collision`
 force appliers are "eased in" by increasing them linearly over the first 10
 beats. This allows any particles with overlapping start positions to gently
 move apart at the beginning.
+
+## Non-realtime mode
+
+If the **flitter** engine is run in non-realtime mode, with the `--lockstep`
+command-line option, then the simulation behaviour with regard to the
+`resolution` attribute is slightly different. In non-realtime mode,
+`resolution` still represents a minimum interval that the simulation will use
+but instead of lagging if the frame-rate is slower than this, additional
+simulation steps will be inserted to keep the simulation up to date.
+
+For example, if resolution is set to `1/60` and the engine is run with
+`--lockstep --fps=30` – for instance, to record a clean output video – then
+the simulation will advance *two* steps at each frame instead of subjectively
+slowing down.
+
+This behaviour is only supported in non-realtime mode as, when running realtime,
+if the engine is unable to keep up with the `resolution` interval then running
+additional frames of the simulation would make the problem worse and quickly
+result in the engine slowing to a halt.
