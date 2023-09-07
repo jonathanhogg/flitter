@@ -461,3 +461,15 @@ class TestVector(unittest.TestCase):
         self.assertEqual(Vector([1, 2, 3]).cross(Vector([-1, -2, -3])), Vector([0, 0, 0]))
         self.assertEqual(Vector([1, 2, 3]).cross(Vector([1, 2])), null)
         self.assertEqual(Vector([1, 2, 3]).cross(Vector([3, 2, 1])), Vector([-4, 8, -4]))
+
+    def test_concat(self):
+        a = Vector([1, 2, 3])
+        b = Vector([4, 5, 6])
+        self.assertIs(a.concat(null), a)
+        self.assertIs(null.concat(b), b)
+        self.assertEqual(a.concat(b), Vector([1, 2, 3, 4, 5, 6]))
+        self.assertEqual(b.concat(a), Vector([4, 5, 6, 1, 2, 3]))
+        self.assertTrue(a.concat(b).numeric)
+        self.assertEqual(Vector(['hello']).concat(b), Vector(['hello', 4, 5, 6]))
+        self.assertEqual(a.concat(Vector(['world'])), Vector([1, 2, 3, 'world']))
+        self.assertEqual(Vector(['hello']).concat(Vector(['world'])), Vector(['hello', 'world']))

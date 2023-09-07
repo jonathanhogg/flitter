@@ -50,6 +50,7 @@ cdef class Vector:
     cpdef Vector normalize(self)
     cpdef Vector dot(self, Vector other)
     cpdef Vector cross(self, Vector other)
+    cpdef Vector concat(self, Vector other)
 
 
 cdef Vector null_

@@ -777,6 +777,36 @@ cdef class Vector:
         result_numbers[2] = self_numbers[0]*other_numbers[1] - self_numbers[1]*other_numbers[0]
         return result
 
+    cpdef Vector concat(self, Vector other):
+        cdef int i, n=self.length, m=other.length
+        if m == 0:
+            return self
+        if n == 0:
+            return other
+        cdef Vector result = Vector.__new__(Vector)
+        cdef list objects
+        if self.numbers != NULL and other.numbers != NULL:
+            result.allocate_numbers(n + m)
+            for i in range(n):
+                result.numbers[i] = self.numbers[i]
+            for i in range(m):
+                result.numbers[n + i] = other.numbers[i]
+        else:
+            if self.objects is not None:
+                objects = list(self.objects)
+            else:
+                objects = []
+                for i in range(n):
+                    objects.append(self.numbers[i])
+            if other.objects is not None:
+                objects.extend(other.objects)
+            else:
+                for i in range(m):
+                    objects.append(other.numbers[i])
+            result.objects = objects
+            result.length = len(objects)
+        return result
+
 
 cdef Vector null_ = Vector()
 cdef Vector true_ = Vector(1)
