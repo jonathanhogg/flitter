@@ -25,11 +25,12 @@ class TestUniform(unittest.TestCase):
     DISTRIBUTION = ('uniform',)
     LOWER = 0
     UPPER = 1
+    P_VALUE = 0.05
 
     def test_creation(self):
         self.assertIsInstance(self.FACTORY(), self.FACTORY)
         self.assertEqual(hash(self.FACTORY()), hash(Vector()))
-        self.assertEqual(hash(self.FACTORY(1.0)), hash(Normal(1.9)))
+        self.assertEqual(hash(self.FACTORY(1.0)), hash(self.FACTORY(1.9)))
 
     def test_eq(self):
         source1 = self.FACTORY(1)
@@ -72,14 +73,14 @@ class TestUniform(unittest.TestCase):
 
     def test_distribution(self):
         from scipy.stats import kstest
-        for i in range(10):
+        for i in range(2):
             with self.subTest(i=i):
-                result = kstest(self.FACTORY(i)[:1_000_000], *self.DISTRIBUTION)
-                self.assertGreater(result.pvalue, 0.05)
+                result = kstest(self.FACTORY(i)[:10_000_000], *self.DISTRIBUTION)
+                self.assertGreater(result.pvalue, self.P_VALUE)
 
     def test_range(self):
         source = self.FACTORY()
-        for i in range(1000):
+        for i in range(10000):
             with self.subTest(i=i):
                 x = source[i]
                 self.assertTrue(x >= self.LOWER)
@@ -101,8 +102,8 @@ class TestBeta(TestUniform):
 class TestNormal(TestUniform):
     FACTORY = Normal
     DISTRIBUTION = ('norm',)
-    LOWER = -25
-    UPPER = 25
+    LOWER = -10
+    UPPER = 10
 
     def test_apparent_entropy(self):
         pass

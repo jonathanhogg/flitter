@@ -46,7 +46,7 @@ cdef class Uniform(Vector):
         value.numbers[0] = self._item(i)
         return value
 
-    cdef double _item(self, unsigned long long i):
+    cdef double _item(self, unsigned long long i) noexcept:
         cdef unsigned long long x, y, z
         # Compute a 32bit float PRN using the Squares algorithm [https://arxiv.org/abs/2004.06278]
         x = y = i * self.seed
@@ -56,6 +56,8 @@ cdef class Uniform(Vector):
         x = x*x + z
         x = (x >> 32) | (x << 32)
         x = x*x + y
+        x = (x >> 32) | (x << 32)
+        x = x*x + z
         return <double>(x >> 32) / <double>(1<<32)
 
     cpdef Vector slice(self, Vector index):
@@ -80,7 +82,7 @@ cdef class Uniform(Vector):
 
 
 cdef class Beta(Uniform):
-    cdef double _item(self, unsigned long long i):
+    cdef double _item(self, unsigned long long i) noexcept:
         i <<= 2
         cdef double u1 = Uniform._item(self, i)
         cdef double u2 = Uniform._item(self, i + 1)
@@ -93,15 +95,25 @@ cdef class Beta(Uniform):
 
 
 cdef class Normal(Uniform):
-    cdef double _item(self, unsigned long long i):
+    cdef double _item(self, unsigned long long i) noexcept:
         # Use the Box-Muller transform to approximate the normal distribution
         # [https://en.wikipedia.org/wiki/Box–Muller_transform]
-        i <<= 1
-        cdef double u1 = Uniform._item(self, i)
-        cdef double u2 = Uniform._item(self, i + 1)
-        if u1 < 1 / (1<<32):
-            u1, u2 = u2, u1
-        return sqrt(-2 * log(u1)) * sin(Tau * u2)
+        cdef double u1, u2
+        cdef bint odd = i & 1
+        if odd:
+            i ^= 1
+        if not self.cached or i != self.i:
+            u1 = Uniform._item(self, i)
+            u2 = Uniform._item(self, i + 1)
+            if u1 < 1 / (1<<32):
+                u1, u2 = u2, u1
+            self.R = sqrt(-2 * log(u1))
+            self.th = Tau * u2
+            self.i = i
+            self.cached = True
+        if odd:
+            return self.R * sin(self.th)
+        return self.R * cos(self.th)
 
 
 @state_transformer
