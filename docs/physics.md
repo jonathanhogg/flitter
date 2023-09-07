@@ -247,7 +247,7 @@ in the same way as gravity.
 >
 > The `!collision`, `!gravity` and `!electrostatic` force appliers are all
 > compute-intensive as they have to consider all particle *pairings* and thus
-> have $ O(n^2) $ time-complexity.
+> have $` O(n^2) `$ time-complexity.
 
 ### `!drag`
 
