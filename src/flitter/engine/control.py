@@ -443,7 +443,7 @@ class EngineController:
                 if len(frames) > 1 and frames[-1] - frames[0] > 5:
                     nframes = len(frames) - 1
                     fps = nframes / (frames[-1] - frames[0])
-                    logger.info("{:4.1f}fps; {:4.1f}/{:4.1f}/{:4.1f}/{:4.1f}ms (run/interact/render/clean); perf {:.2f}",
+                    logger.info("{:4.1f}fps; {:4.1f}/{:4.1f}/{:4.1f}/{:4.1f}ms (run/interact/render/sys); perf {:.2f}",
                                 fps, 1000 * execution / nframes, 1000 * interaction / nframes,
                                 1000 * render / nframes, 1000 * housekeeping / nframes, performance)
                     frames = frames[-1:]
