@@ -194,6 +194,7 @@ proportional to the square of the distance between the particles. Particles
 with zero `mass` will be ignored.
 
 - `strength` - force magnitude coefficient
+- `max_distance` - pairs of particles further apart than this will be ignored
 
 ```math
 \vec{F} = \textbf{strength} . \vec{d} .
@@ -209,7 +210,10 @@ with zero `mass` will be ignored.
 ```
 
 As gravity falls off with the square of the distance, `strength` will normally
-need to be quite a large number to see any noticable effect.
+need to be quite a large number to see any noticeable effect. `max_distance` is
+an optimization feature that allows running the simulation slightly faster by
+skipping over particle pairings where they are far apart and will have only a
+minimal effect on each other.
 
 ### `!electrostatic`
 
@@ -221,6 +225,7 @@ charge will repel each other and particles with oppositely signed charges will
 attract each other.
 
 - `strength` - force magnitude coefficient
+- `max_distance` - pairs of particles further apart than this will be ignored
 
 ```math
 \vec{F} = \textbf{strength} . \vec{d} .
@@ -235,8 +240,14 @@ attract each other.
 \vec{F}_{to} = -\vec{F}
 ```
 
-As electrostatic force falls off with the square of the distance, `strength`
-will normally need to be quite a large number to see any noticable effect.
+Except for the ability to have negative charges, electrostatic force operates
+in the same way as gravity.
+
+> **Note**
+>
+> The `!collision`, `!gravity` and `!electrostatic` force appliers are all
+> compute-intensive as they have to consider all particle *pairings* and thus
+> have $ O(n^2) $ time-complexity.
 
 ### `!drag`
 
