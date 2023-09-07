@@ -8,6 +8,7 @@ from loguru import logger
 
 from .. import name_patch
 from ..model cimport Vector, Node, null_
+from ..language.functions cimport Normal
 from ..language.vm cimport StateDict
 
 from libc.math cimport sqrt, isinf, isnan, abs
@@ -16,6 +17,9 @@ from libc.math cimport sqrt, isinf, isnan, abs
 logger = name_patch(logger, __name__)
 
 cdef Vector VELOCITY = Vector('velocity')
+
+cdef Normal RandomSource = Normal('_physics')
+cdef unsigned long long RandomIndex = 0
 
 
 cdef class Particle:
@@ -31,13 +35,13 @@ cdef class Particle:
 
     def __cinit__(self, Node node, Vector id, Vector zero, Vector prefix, StateDict state):
         self.id = id
-        self.position_state_key = Vector._compose([prefix, self.id], 0, 2)
+        self.position_state_key = prefix.concat(self.id)
         cdef Vector position = state.get_item(self.position_state_key)
         if position.length == zero.length and position.numbers != NULL:
             self.position = Vector._copy(position)
         else:
             self.position = Vector._copy(node.get_fvec('position', zero.length, zero))
-        self.velocity_state_key = Vector._compose([self.position_state_key, VELOCITY], 0, 2)
+        self.velocity_state_key = self.position_state_key.concat(VELOCITY)
         cdef Vector velocity = state.get_item(self.velocity_state_key)
         if velocity.length == zero.length and velocity.numbers != NULL:
             self.velocity = Vector._copy(velocity)
@@ -175,6 +179,15 @@ cdef class ConstantForceApplier(ParticleForceApplier):
             particle.force.numbers[i] = particle.force.numbers[i] + self.force.numbers[i]
 
 
+cdef class RandomForceApplier(ParticleForceApplier):
+    cdef void apply(self, Particle particle, double delta):
+        global RandomIndex
+        cdef int i
+        for i in range(particle.force.length):
+            particle.force.numbers[i] = particle.force.numbers[i] + self.strength * RandomSource._item(RandomIndex)
+            RandomIndex += 1
+
+
 cdef class CollisionForceApplier(PairForceApplier):
     cdef void apply(self, Particle from_particle, Particle to_particle, Vector direction, double distance, double distance_squared):
         cdef double min_distance, f, k
@@ -258,6 +271,8 @@ cdef class PhysicsSystem:
                 particle_forces.append(DragForceApplier.__new__(DragForceApplier, child, zero))
             elif child.kind == 'constant':
                 particle_forces.append(ConstantForceApplier.__new__(ConstantForceApplier, child, zero))
+            elif child.kind == 'random':
+                particle_forces.append(RandomForceApplier.__new__(RandomForceApplier, child, zero))
             elif child.kind == 'collision':
                 pair_forces.append(CollisionForceApplier.__new__(CollisionForceApplier, child, zero))
             elif child.kind == 'gravity':
