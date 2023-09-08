@@ -1263,8 +1263,17 @@ cdef class Function(Expression):
         self.expr = expr
 
     cpdef Program compile(self):
-        cdef Program program = Program.__new__(Program)
-        program.literal(self.expr.compile())
+        cdef Program body, program = Program.__new__(Program)
+        cdef Sequence sequence
+        if isinstance(self.expr, Sequence):
+            sequence = <Sequence>self.expr
+            body = Program.__new__(Program)
+            for expr in sequence.expressions:
+                body.extend(expr.compile())
+            body.compose(len(sequence.expressions))
+        else:
+            body = self.expr.compile()
+        program.literal(body)
         cdef Binding parameter
         cdef list names = []
         for parameter in self.parameters:
