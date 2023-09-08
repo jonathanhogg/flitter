@@ -158,6 +158,13 @@ class TestBasicInstructions(unittest.TestCase):
         stack = self.program.execute(self.context)
         self.assertEqual(stack, [null, 12])
 
+    def test_LookupLiteral(self):
+        self.state['y'] = 12
+        self.program.lookup_literal(Vector('x'))
+        self.program.lookup_literal(Vector('y'))
+        stack = self.program.execute(self.context)
+        self.assertEqual(stack, [null, 12])
+
     def test_Lt(self):
         self.program.literal(3)
         self.program.literal(3)
