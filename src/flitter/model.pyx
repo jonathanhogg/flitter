@@ -1506,7 +1506,8 @@ cdef class Node:
         cdef Query query = qstring if isinstance(qstring, Query) else Query.__new__(Query, qstring)
         cdef Node node = self.first_child
         while node is not None:
-            node._select(query, nodes, query.first)
+            if node._select(query, nodes, query.first):
+                break
             node = node.next_sibling
         return nodes
 

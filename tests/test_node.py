@@ -440,3 +440,12 @@ class TestQuery(unittest.TestCase):
         self.assertEqual(len(nodes), 1)
         self.assertEqual(nodes[0].parent.kind, 'multiple')
         self.assertEqual(nodes[0].parent['index'], 0)
+
+    def test_select_below(self):
+        nodes = self.node1.select_below('#bar.')
+        self.assertEqual(len(nodes), 2)
+        self.assertIs(nodes[0], self.node2)
+        self.assertIs(nodes[1], self.node3)
+        nodes = self.node1.select_below('#bar!')
+        self.assertEqual(len(nodes), 1)
+        self.assertIs(nodes[0], self.node2)
