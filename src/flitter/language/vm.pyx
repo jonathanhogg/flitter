@@ -1075,7 +1075,8 @@ cdef class Program:
                 values = []
                 query = (<InstructionQuery>instruction).value
                 while node is not None:
-                    (<Node>node)._select(query, values, False)
+                    if (<Node>node)._select(query, values, False):
+                        break
                     node = (<Node>node).next_sibling
                 if values:
                     r1 = Vector.__new__(Vector)
