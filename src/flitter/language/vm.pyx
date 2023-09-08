@@ -79,6 +79,7 @@ cdef enum OpCode:
     Let
     Literal
     Lookup
+    LookupLiteral
     Lt
     Mod
     Mul
@@ -134,6 +135,7 @@ cdef dict OpCodeNames = {
     OpCode.Let: 'Let',
     OpCode.Literal: 'Literal',
     OpCode.Lookup: 'Lookup',
+    OpCode.LookupLiteral: 'LookupLiteral',
     OpCode.Lt: 'Lt',
     OpCode.Mod: 'Mod',
     OpCode.Mul: 'Mul',
@@ -481,6 +483,9 @@ cdef class Program:
     def lookup(self):
         self.instructions.append(Instruction(OpCode.Lookup))
 
+    def lookup_literal(self, Vector value):
+        self.instructions.append(InstructionVector(OpCode.LookupLiteral, value))
+
     def range(self):
         self.instructions.append(Instruction(OpCode.Range))
 
@@ -729,6 +734,14 @@ cdef class Program:
 
             elif instruction.code == OpCode.Lookup:
                 stack[top] = context.state.get_item(<Vector>stack[top]) if context.state is not None else null_
+
+            elif instruction.code == OpCode.LookupLiteral:
+                r1 = context.state.get_item((<InstructionVector>instruction).value) if context.state is not None else null_
+                top += 1
+                if top == len(stack):
+                    stack.append(r1)
+                else:
+                    stack[top] = r1
 
             elif instruction.code == OpCode.Range:
                 r1 = Vector.__new__(Vector)

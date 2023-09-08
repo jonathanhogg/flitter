@@ -288,13 +288,37 @@ cdef class Lookup(Expression):
     cpdef Expression evaluate(self, Context context):
         cdef Expression key = self.key.evaluate(context)
         cdef Vector value
-        if isinstance(key, Literal) and context.state is not None:
-            value = context.state.get_item((<Literal>key).value)
-            return Literal(value)
+        if isinstance(key, Literal):
+            if context.state is not None:
+                value = context.state.get_item((<Literal>key).value)
+                return Literal(value)
+            return LookupLiteral((<Literal>key).value)
         return Lookup(key)
 
     def __repr__(self):
         return f'Lookup({self.key!r})'
+
+
+cdef class LookupLiteral(Expression):
+    cdef readonly Vector key
+
+    def __init__(self, Vector key):
+        self.key = key
+
+    cpdef Program compile(self):
+        cdef Program program = Program.__new__(Program)
+        program.lookup_literal(self.key)
+        return program
+
+    cpdef Expression evaluate(self, Context context):
+        cdef Vector value
+        if context.state is not None:
+            value = context.state.get_item(self.key)
+            return Literal(value)
+        return LookupLiteral(self.key)
+
+    def __repr__(self):
+        return f'LookupLiteral({self.key!r})'
 
 
 cdef class Range(Expression):
