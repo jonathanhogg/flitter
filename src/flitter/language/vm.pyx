@@ -47,6 +47,8 @@ builtins.update(static_builtins)
 cdef int NextLabel = 1
 cdef int[:] StatsCount = array('i', [0] * OpCode.MAX)
 cdef double[:] StatsDuration = array('d', [0] * OpCode.MAX)
+cdef double CallOutDuration = 0
+cdef int CallOutCount = 0
 
 cdef enum OpCode:
     Add
@@ -307,22 +309,26 @@ def log_vm_stats():
     cdef double duration
     cdef int count, code
     stats = []
+    if CallOutCount:
+        stats.append((CallOutDuration, CallOutCount, '(external code)'))
     for i in range(<int>OpCode.MAX):
         if StatsCount[i]:
-            stats.append((StatsDuration[i], StatsCount[i], i))
+            stats.append((StatsDuration[i], StatsCount[i], OpCodeNames[i]))
     stats.sort(reverse=True)
     logger.info("VM execution statistics:")
-    for duration, count, code in stats:
-        logger.info("- {:15s} {:9d} x {:8.3f}µs = {:7.3f}s", OpCodeNames[code], count, duration / count * 1e6, duration)
+    for duration, count, name in stats:
+        logger.info("- {:15s} {:9d} x {:8.3f}µs = {:7.3f}s", name, count, duration / count * 1e6, duration)
 
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
 cdef Vector call_helper(Context context, object function, tuple args, dict kwargs, bint record_stats):
+    global CallOutDuration, CallOutCount
     cdef Context func_context
     cdef int i, n=len(args)
     cdef list stack
     cdef Function func
+    cdef double start_time
     if type(function) is Function:
         func = <Function>function
         func_context = Context.__new__(Context)
@@ -346,6 +352,8 @@ cdef Vector call_helper(Context context, object function, tuple args, dict kwarg
         context.logs.add((<Vector>args[0]).repr())
         return <Vector>args[0]
     else:
+        if record_stats:
+            start_time = time()
         try:
             if hasattr(function, 'state_transformer') and function.state_transformer:
                 if kwargs is None:
@@ -358,6 +366,10 @@ cdef Vector call_helper(Context context, object function, tuple args, dict kwarg
                 return function(*args, **kwargs)
         except Exception as exc:
             context.errors.add(f"Error calling {function!r}\n{str(exc)}")
+        finally:
+            if record_stats:
+                CallOutDuration += time() - start_time
+                CallOutCount += 1
     return null_
 
 
