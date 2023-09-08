@@ -306,18 +306,22 @@ cdef class LoopSource:
 
 def log_vm_stats():
     cdef list stats
-    cdef double duration
+    cdef double duration, total=0
     cdef int count, code
     stats = []
     if CallOutCount:
         stats.append((CallOutDuration, CallOutCount, '(external code)'))
+        total += CallOutDuration
     for i in range(<int>OpCode.MAX):
         if StatsCount[i]:
-            stats.append((StatsDuration[i], StatsCount[i], OpCodeNames[i]))
+            duration = StatsDuration[i]
+            stats.append((duration, StatsCount[i], OpCodeNames[i]))
+            total += duration
     stats.sort(reverse=True)
     logger.info("VM execution statistics:")
     for duration, count, name in stats:
-        logger.info("- {:15s} {:9d} x {:8.3f}µs = {:7.3f}s", name, count, duration / count * 1e6, duration)
+        logger.info("- {:15s} {:9d} x {:8.3f}µs = {:7.3f}s ({:4.1f}%)", name, count, duration / count * 1e6,
+                    duration, 100*duration/total)
 
 
 @cython.boundscheck(False)
