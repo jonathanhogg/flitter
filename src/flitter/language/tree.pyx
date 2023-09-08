@@ -761,8 +761,7 @@ cdef class Call(Expression):
         cdef Expression function = self.function.evaluate(context)
         cdef list args = []
         cdef Expression arg
-        cdef bint literal_function = isinstance(function, Literal) and (<Literal>function).value.objects is not None
-        cdef bint literal = literal_function
+        cdef bint literal = isinstance(function, Literal) and (<Literal>function).value.objects is not None
         for arg in self.args:
             arg = arg.evaluate(context)
             args.append(arg)
@@ -801,40 +800,11 @@ cdef class Call(Expression):
                     context.variables = saved
             else:
                 return sequence_pack(results)
-        elif literal_function and (<Literal>function).value.length == 1:
-            func = (<Literal>function).value.objects[0]
-            if callable(func) and not hasattr(func, 'state_transformer') and func is not log:
-                return FastCall(func, tuple(args))
         cdef Call call = Call(function, tuple(args))
         return call
 
     def __repr__(self):
         return f'Call({self.function!r}, {self.args!r})'
-
-
-cdef class FastCall(Expression):
-    cdef readonly object function
-    cdef readonly tuple args
-
-    def __init__(self, function, tuple args):
-        self.function = function
-        self.args = args
-
-    cpdef Program compile(self):
-        cdef Program program = Program.__new__(Program)
-        cdef Expression expr
-        for expr in self.args:
-            program.extend(expr.compile())
-        program.literal(Vector._coerce(self.function))
-        program.call(len(self.args))
-        return program
-
-    cpdef Expression evaluate(self, Context context):
-        cdef Call call = Call(Literal(Vector._coerce(self.function)), self.args)
-        return call.evaluate(context)
-
-    def __repr__(self):
-        return f'FastCall({self.function!r}, {self.args!r})'
 
 
 cdef class Tag(Expression):
