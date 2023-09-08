@@ -266,7 +266,11 @@ cdef class Name(Expression):
         elif (value := static_builtins.get(self.name)) is not None:
             return Literal(value)
         elif self.name not in dynamic_builtins:
-            context.unbound.add(self.name)
+            if context.unbound is not None:
+                context.unbound.add(self.name)
+            else:
+                context.errors.add(f"Unbound name '{self.name}'")
+                return NoOp
         return self
 
     def __repr__(self):
@@ -883,10 +887,12 @@ cdef class Attributes(Expression):
                 bindings.append(Binding(binding.name, binding.expr.evaluate(context)))
             node = attrs.node
         cdef bint fast = not context.unbound
+        cdef bint unbound_names = bool(context.unbound)
         context.unbound = unbound
         node = node.evaluate(context)
         cdef Vector nodes
         cdef Node n
+        cdef dict saved
         if isinstance(node, Literal):
             nodes = (<Literal>node).value
             if nodes.isinstance(Node):
@@ -894,6 +900,25 @@ cdef class Attributes(Expression):
                     binding = bindings.pop()
                     for n in nodes.objects:
                         n[binding.name] = (<Literal>binding.expr).value
+                if unbound_names and bindings and nodes.length == 1:
+                    n = nodes.objects[0]
+                    saved = context.variables
+                    context.variables = saved.copy()
+                    for attr in n:
+                        if attr not in context.variables:
+                            context.variables[attr] = n[attr]
+                    while bindings:
+                        binding = bindings.pop()
+                        binding = Binding(binding.name, binding.expr.evaluate(context))
+                        if isinstance(binding.expr, Literal):
+                            value = (<Literal>binding.expr).value
+                            n[binding.name] = value
+                            if binding.name not in context.variables:
+                                context.variables[binding.name] = value
+                        else:
+                            bindings.append(binding)
+                            break
+                    context.variables = saved
         if not bindings:
             return node
         bindings.reverse()
@@ -1264,19 +1289,15 @@ cdef class Function(Expression):
                 literal = False
             parameters.append(Binding(parameter.name, expr))
         cdef dict saved = context.variables
-        cdef set unbound = context.unbound
         cdef str key
         cdef Vector value
         context.variables = {}
         for key, value in saved.items():
-            if value is not None:
-                context.variables[key] = value
+            context.variables[key] = value
         for parameter in parameters:
             context.variables[parameter.name] = None
-        context.unbound = set()
         expr = self.expr.evaluate(context)
         context.variables = saved
-        context.unbound = unbound
         context.variables[self.name] = None
         return Function(self.name, tuple(parameters), expr)
 

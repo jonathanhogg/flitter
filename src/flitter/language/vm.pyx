@@ -629,7 +629,7 @@ cdef class Program:
         cdef Function function
         cdef PyObject* objptr
         cdef int count
-        cdef double duration, total
+        cdef double duration
 
         if not self.linked:
             self.link()
@@ -1189,6 +1189,6 @@ cdef class Context:
         self.pragmas = pragmas if pragmas is not None else {}
         self.path = path
         self.parent = parent
-        self.unbound = set()
+        self.unbound = None
         self.errors = set()
         self.logs = set()
