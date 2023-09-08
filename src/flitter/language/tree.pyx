@@ -420,7 +420,7 @@ cdef class Not(UnaryOperation):
     cpdef Expression evaluate(self, Context context):
         cdef Expression expr = self.expr.evaluate(context)
         if isinstance(expr, Literal):
-            return Literal((<Literal>expr).value.not_())
+            return Literal(false_ if (<Literal>expr).value.as_bool() else true_)
         return Not(expr)
 
 
