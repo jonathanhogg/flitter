@@ -80,6 +80,9 @@ cdef enum OpCode:
     Le
     Let
     Literal
+    LocalDrop
+    LocalLoad
+    LocalPush
     Lookup
     LookupLiteral
     Lt
@@ -136,6 +139,9 @@ cdef dict OpCodeNames = {
     OpCode.Le: 'Le',
     OpCode.Let: 'Let',
     OpCode.Literal: 'Literal',
+    OpCode.LocalDrop: 'LocalDrop',
+    OpCode.LocalLoad: 'LocalLoad',
+    OpCode.LocalPush: 'LocalPush',
     OpCode.Lookup: 'Lookup',
     OpCode.LookupLiteral: 'LookupLiteral',
     OpCode.Lt: 'Lt',
@@ -277,10 +283,10 @@ cdef class InstructionJump(Instruction):
         return f'{OpCodeNames[self.code]} .L{self.label}'
 
 
-cdef class InstructionJumpTuple(InstructionJump):
-    cdef readonly tuple value
+cdef class InstructionJumpInt(InstructionJump):
+    cdef readonly int value
 
-    def __init__(self, OpCode code, int label, tuple value):
+    def __init__(self, OpCode code, int label, int value):
         super().__init__(code, label)
         self.value = value
 
@@ -308,13 +314,20 @@ def log_vm_stats():
     cdef list stats
     cdef double duration, total=0
     cdef int count, code
+    cdef int i
+    cdef double start, end, overhead
+    start = time()
+    for count in range(10000):
+        end = time()
+    overhead = (end - start) / 10000
     stats = []
     if CallOutCount:
-        stats.append((CallOutDuration, CallOutCount, '(external code)'))
-        total += CallOutDuration
+        duration = max(0, CallOutDuration - CallOutCount*overhead)
+        stats.append((duration, CallOutCount, '(external code)'))
+        total += duration
     for i in range(<int>OpCode.MAX):
         if StatsCount[i]:
-            duration = StatsDuration[i]
+            duration = max(0, StatsDuration[i] - StatsCount[i]*overhead)
             stats.append((duration, StatsCount[i], OpCodeNames[i]))
             total += duration
     stats.sort(reverse=True)
@@ -330,7 +343,7 @@ cdef Vector call_helper(Context context, object function, tuple args, dict kwarg
     global CallOutDuration, CallOutCount
     cdef Context func_context
     cdef int i, n=len(args)
-    cdef list stack
+    cdef list stack, lvars
     cdef Function func
     cdef double start_time
     if type(function) is Function:
@@ -338,18 +351,20 @@ cdef Vector call_helper(Context context, object function, tuple args, dict kwarg
         func_context = Context.__new__(Context)
         func_context.parent = context
         func_context.errors = context.errors
+        func_context.logs = context.logs
         func_context.graph = context.graph
         func_context.pragmas = context.pragmas
         func_context.state = context.state
         func_context.variables = {}
+        lvars = []
         for i, name in enumerate(func.parameters):
             if i < n:
-                func_context.variables[name] = args[i]
+                lvars.append(args[i])
             elif kwargs is not None:
-                func_context.variables[name] = kwargs.get(name, func.defaults[i])
+                lvars.append(kwargs.get(name, func.defaults[i]))
             else:
-                func_context.variables[name] = func.defaults[i]
-        stack = func.program._execute(func_context, func.scope, record_stats)
+                lvars.append(func.defaults[i])
+        stack = func.program._execute(func_context, lvars, func.scope, record_stats)
         assert len(stack) == 1
         return stack[0]
     elif function is _log_func and n == 1 and kwargs is None:
@@ -402,7 +417,7 @@ cdef class Program:
             for key, value in variables.items():
                 context_vars[key] = Vector._coerce(value)
         cdef Context context = Context(state=state, variables=context_vars, path=self.path)
-        self._execute(context, None, record_stats)
+        self._execute(context, None, None, record_stats)
         return context
 
     cpdef void link(self):
@@ -435,7 +450,7 @@ cdef class Program:
                 import_context = import_context.parent
             else:
                 import_context = Context(parent=context, path=program.path)
-                program._execute(import_context, None, record_stats)
+                program._execute(import_context, None, None, record_stats)
                 context.errors.update(import_context.errors)
                 return import_context.variables
         return None
@@ -492,6 +507,15 @@ cdef class Program:
                         self.instructions.append(InstructionVector(OpCode.LiteralNodes, vector))
                         return
         self.instructions.append(InstructionVector(OpCode.Literal, vector))
+
+    def local_push(self, int count):
+        self.instructions.append(InstructionInt(OpCode.LocalPush, count))
+
+    def local_load(self, int offset):
+        self.instructions.append(InstructionInt(OpCode.LocalLoad, offset))
+
+    def local_drop(self, int count):
+        self.instructions.append(InstructionInt(OpCode.LocalDrop, count))
 
     def name(self, str name):
         self.instructions.append(InstructionStr(OpCode.Name, name))
@@ -598,8 +622,8 @@ cdef class Program:
     def begin_for(self):
         self.instructions.append(Instruction(OpCode.BeginFor))
 
-    def next(self, tuple names, int label):
-        self.instructions.append(InstructionJumpTuple(OpCode.Next, label, names))
+    def next(self, int count, int label):
+        self.instructions.append(InstructionJumpInt(OpCode.Next, label, count))
 
     def push_next(self, int label):
         self.instructions.append(InstructionJump(OpCode.PushNext, label))
@@ -619,16 +643,18 @@ cdef class Program:
     def append_root(self):
         self.instructions.append(Instruction(OpCode.AppendRoot))
 
-    def execute(self, Context context, dict additional_scope=None, bint record_stats=False):
-        return self._execute(context, additional_scope, record_stats)
+    def execute(self, Context context, list lvars=None, dict additional_scope=None, bint record_stats=False):
+        return self._execute(context, lvars, additional_scope, record_stats)
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
-    cdef list _execute(self, Context context, dict additional_scope, bint record_stats):
+    cdef list _execute(self, Context context, list initial_lvars, dict additional_scope, bint record_stats):
         cdef int i, n, pc=0, program_end=len(self.instructions)
         cdef Instruction instruction=None
         cdef int top=-1
         cdef list stack=[], values, loop_sources=[]
+        cdef list lvars=initial_lvars if initial_lvars is not None else []
+        cdef int lvars_top=len(lvars)-1
         cdef list scopes
         if additional_scope:
             scopes = [None, builtins, additional_scope, context.variables]
@@ -694,13 +720,17 @@ cdef class Program:
                 variables = self.import_module(context, filename, record_stats)
                 if record_stats: duration -= time()
                 if variables is not None:
-                    scope = <dict>scopes[scopes_top]
                     for name in names:
                         if name in variables:
-                            scope[name] = variables[name]
+                            r1 = <Vector>variables[name]
                         else:
                             context.errors.add(f"Unable to import '{<str>name}' from '{filename}'")
-                            scope[name] = null_
+                            r1 = null_
+                        lvars_top += 1
+                        if lvars_top == len(lvars):
+                            lvars.append(r1)
+                        else:
+                            lvars[lvars_top] = r1
                 else:
                     context.errors.add(f"Unable to import from '{filename}'")
 
@@ -727,6 +757,36 @@ cdef class Program:
                     stack.append((<InstructionVector>instruction).value.copynodes())
                 else:
                     stack[top] = (<InstructionVector>instruction).value.copynodes()
+
+            elif instruction.code == OpCode.LocalDrop:
+                lvars_top -= (<InstructionInt>instruction).value
+
+            elif instruction.code == OpCode.LocalLoad:
+                r1 = <Vector>lvars[lvars_top-(<InstructionInt>instruction).value]
+                top += 1
+                if top == len(stack):
+                    stack.append(r1)
+                else:
+                    stack[top] = r1
+
+            elif instruction.code == OpCode.LocalPush:
+                n = (<InstructionInt>instruction).value
+                if n == 1:
+                    lvars_top += 1
+                    if lvars_top == len(lvars):
+                        lvars.append(stack[top])
+                    else:
+                        lvars[lvars_top] = stack[top]
+                    lvars.append(stack[top])
+                else:
+                    r1 = <Vector>stack[top]
+                    for i in range(n):
+                        lvars_top += 1
+                        if lvars_top == len(lvars):
+                            lvars.append(r1.item(i))
+                        else:
+                            lvars[lvars_top] = r1.item(i)
+                top -= 1
 
             elif instruction.code == OpCode.Name:
                 top += 1
@@ -917,11 +977,12 @@ cdef class Program:
                     PyDict_Update(function.scope, scopes[i])
                 function.__name__ = <str>(<InstructionTuple>instruction).value[0]
                 function.parameters = (<InstructionTuple>instruction).value[1:]
-                n = len(function.parameters)
-                function.defaults = tuple(stack[top-n+1:top+1])
-                top -= n
                 function.program = Program.__new__(Program)
                 function.program.instructions = (<Vector>stack[top]).objects
+                top -= 1
+                n = len(function.parameters)
+                function.defaults = tuple(stack[top-n+1:top+1])
+                top -= n-1
                 r1 = Vector.__new__(Vector)
                 r1.objects = [function]
                 r1.length = 1
@@ -1000,20 +1061,15 @@ cdef class Program:
                 top -= 1
                 loop_source.position = 0
                 loop_source.iterations = 0
-                scopes_top += 1
-                if scopes_top == len(scopes):
-                    scopes.append({})
-                else:
-                    scopes[scopes_top] = {}
 
             elif instruction.code == OpCode.Next:
                 if loop_source.position >= loop_source.source.length:
                     pc += (<InstructionJump>instruction).offset
                 else:
                     scope = <dict>scopes[scopes_top]
-                    names = (<InstructionJumpTuple>instruction).value
-                    for name in names:
-                        scope[name] = loop_source.source.item(loop_source.position)
+                    n = (<InstructionJumpInt>instruction).value
+                    for i in range(lvars_top-n+1, lvars_top+1):
+                        lvars[i] = loop_source.source.item(loop_source.position)
                         loop_source.position += 1
                     loop_source.iterations += 1
 
@@ -1031,7 +1087,6 @@ cdef class Program:
                     loop_source.iterations += 1
 
             elif instruction.code == OpCode.EndFor:
-                scopes_top -= 1
                 n = loop_source.iterations
                 if n:
                     top -= n - 1

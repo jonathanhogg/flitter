@@ -16,7 +16,7 @@ cdef class Program:
 
     cdef dict import_module(self, Context context, str filename, bint record_stats)
     cpdef void link(self)
-    cdef list _execute(self, Context context, dict additional_scope, bint record_stats)
+    cdef list _execute(self, Context context, list initial_lvars, dict additional_scope, bint record_stats)
 
 
 cdef class StateDict:
