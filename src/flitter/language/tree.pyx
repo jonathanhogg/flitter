@@ -847,20 +847,26 @@ cdef class Attributes(Expression):
 
     cpdef Program compile(self):
         cdef Program program = Program.__new__(Program)
-        program.extend(self.node.compile())
-        program.begin_for()
-        START = program.new_label()
-        END = program.new_label()
-        program.label(START)
-        program.push_next(END)
-        program.set_node_scope()
         cdef Binding binding
-        for binding in self.bindings:
-            program.extend(binding.expr.compile())
-            program.attribute(binding.name)
-        program.jump(START)
-        program.label(END)
-        program.end_for()
+        program.extend(self.node.compile())
+        if isinstance(self.node, Literal) and (<Literal>self.node).value.length == 1:
+            program.set_node_scope()
+            for binding in self.bindings:
+                program.extend(binding.expr.compile())
+                program.attribute(binding.name)
+        else:
+            program.begin_for()
+            START = program.new_label()
+            END = program.new_label()
+            program.label(START)
+            program.push_next(END)
+            program.set_node_scope()
+            for binding in self.bindings:
+                program.extend(binding.expr.compile())
+                program.attribute(binding.name)
+            program.jump(START)
+            program.label(END)
+            program.end_for()
         program.clear_node_scope()
         return program
 
