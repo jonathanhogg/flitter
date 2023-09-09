@@ -509,7 +509,7 @@ class TestLocalVars(unittest.TestCase):
         self.assertEqual(stack, [7, 12])
 
     def test_multiple(self):
-        self.program.literal([1,2,3])
+        self.program.literal([1, 2, 3])
         self.program.local_push(2)
         self.program.local_load(0)
         self.program.dup()
