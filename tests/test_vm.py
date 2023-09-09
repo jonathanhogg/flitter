@@ -140,14 +140,16 @@ class TestBasicInstructions(unittest.TestCase):
         stack = self.program.execute(self.context)
         self.assertEqual(stack, [true, false])
 
-    def test_Let(self):
+    def test_StoreGlobal(self):
         self.program.literal((1, 2))
-        self.program.let(('x',))
-        self.program.literal((3, 4))
-        self.program.let(('y', 'z'))
+        self.program.store_global('x')
+        self.program.literal(3)
+        self.program.store_global('y')
+        self.program.literal("Hello world!")
+        self.program.store_global('z')
         stack = self.program.execute(self.context)
         self.assertEqual(len(stack), 0)
-        self.assertEqual(self.variables, {'x': Vector([1, 2]), 'y': Vector(3), 'z': Vector(4)})
+        self.assertEqual(self.variables, {'x': Vector([1, 2]), 'y': Vector(3), 'z': Vector("Hello world!")})
 
     def test_Lookup(self):
         self.state['y'] = 12

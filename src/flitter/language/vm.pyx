@@ -76,7 +76,6 @@ cdef enum OpCode:
     Jump
     Label
     Le
-    Let
     Literal
     LiteralNode
     LiteralNodes
@@ -103,6 +102,7 @@ cdef enum OpCode:
     SetNodeScope
     Slice
     SliceLiteral
+    StoreGlobal
     Sub
     Tag
     TrueDiv
@@ -133,7 +133,6 @@ cdef dict OpCodeNames = {
     OpCode.Jump: 'Jump',
     OpCode.Label: 'Label',
     OpCode.Le: 'Le',
-    OpCode.Let: 'Let',
     OpCode.Literal: 'Literal',
     OpCode.LiteralNode: 'LiteralNode',
     OpCode.LiteralNodes: 'LiteralNodes',
@@ -160,6 +159,7 @@ cdef dict OpCodeNames = {
     OpCode.SetNodeScope: 'SetNodeScope',
     OpCode.Slice: 'Slice',
     OpCode.SliceLiteral: 'SliceLiteral',
+    OpCode.StoreGlobal: 'StoreGlobal',
     OpCode.Sub: 'Sub',
     OpCode.Tag: 'Tag',
     OpCode.TrueDiv: 'TrueDiv',
@@ -639,8 +639,8 @@ cdef class Program:
     def end_for(self):
         self.instructions.append(Instruction(OpCode.EndFor))
 
-    def let(self, tuple names):
-        self.instructions.append(InstructionTuple(OpCode.Let, names))
+    def store_global(self, str name):
+        self.instructions.append(InstructionStr(OpCode.StoreGlobal, name))
 
     def search(self, Query query):
         self.instructions.append(InstructionQuery(OpCode.Search, query))
@@ -1110,16 +1110,9 @@ cdef class Program:
             elif instruction.code == OpCode.ClearNodeScope:
                 node_scope = None
 
-            elif instruction.code == OpCode.Let:
-                r1 = <Vector>stack[top]
+            elif instruction.code == OpCode.StoreGlobal:
+                context.variables[(<InstructionStr>instruction).value] = <Vector>stack[top]
                 top -= 1
-                names = (<InstructionTuple>instruction).value
-                n = len(names)
-                if n == 1:
-                    context.variables[names[0]] = r1
-                else:
-                    for i in range(n):
-                        context.variables[names[i]] = r1.item(i)
 
             elif instruction.code == OpCode.Search:
                 node = context.graph.first_child

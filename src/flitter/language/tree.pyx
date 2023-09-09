@@ -109,7 +109,7 @@ cdef class Top(Expression):
         cdef int i
         for i, name in enumerate(reversed(lvars)):
             program.local_load(i)
-            program.let((name,))
+            program.store_global(name)
         program.local_drop(len(lvars))
         program.link()
         return program
