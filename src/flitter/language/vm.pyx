@@ -14,10 +14,12 @@ from ..model cimport Vector, Node, Query, null_, true_, false_
 from .noise import NOISE_FUNCTIONS
 
 from libc.math cimport floor
-from cpython cimport PyObject
-from cpython.array cimport array
+from cpython cimport PyObject, Py_INCREF
 from cpython.dict cimport PyDict_Update, PyDict_GetItem, PyDict_Size
+from cpython.list cimport PyList_New, PyList_SET_ITEM, PyList_GET_ITEM, PyList_Append
+from cpython.mem cimport PyMem_Malloc, PyMem_Free
 from cpython.time cimport time
+from cpython.tuple cimport PyTuple_GET_ITEM, PyTuple_GET_SIZE
 
 
 logger = name_patch(logger, __name__)
@@ -45,8 +47,8 @@ builtins.update(dynamic_builtins)
 builtins.update(static_builtins)
 
 cdef int NextLabel = 1
-cdef int[:] StatsCount = array('i', [0] * OpCode.MAX)
-cdef double[:] StatsDuration = array('d', [0] * OpCode.MAX)
+cdef int* StatsCount = NULL
+cdef double* StatsDuration = NULL
 cdef double CallOutDuration = 0
 cdef int CallOutCount = 0
 
@@ -75,11 +77,11 @@ cdef enum OpCode:
     IndexLiteral
     Jump
     Label
-    LiteralNode
-    LiteralNodes
     Le
     Let
     Literal
+    LiteralNode
+    LiteralNodes
     LocalDrop
     LocalLoad
     LocalPush
@@ -134,11 +136,11 @@ cdef dict OpCodeNames = {
     OpCode.IndexLiteral: 'IndexLiteral',
     OpCode.Jump: 'Jump',
     OpCode.Label: 'Label',
-    OpCode.LiteralNode: 'LiteralNode',
-    OpCode.LiteralNodes: 'LiteralNodes',
     OpCode.Le: 'Le',
     OpCode.Let: 'Let',
     OpCode.Literal: 'Literal',
+    OpCode.LiteralNode: 'LiteralNode',
+    OpCode.LiteralNodes: 'LiteralNodes',
     OpCode.LocalDrop: 'LocalDrop',
     OpCode.LocalLoad: 'LocalLoad',
     OpCode.LocalPush: 'LocalPush',
@@ -167,6 +169,18 @@ cdef dict OpCodeNames = {
     OpCode.TrueDiv: 'TrueDiv',
     OpCode.Xor: 'Xor',
 }
+
+
+cdef initialize_stats():
+    global StatsCount, StatsDuration
+    StatsCount = <int*>PyMem_Malloc(OpCode.MAX * sizeof(int))
+    StatsDuration = <double*>PyMem_Malloc(OpCode.MAX * sizeof(double))
+    cdef int i
+    for i in range(OpCode.MAX):
+        StatsCount[i] = 0
+        StatsDuration[i] = 0
+
+initialize_stats()
 
 
 cdef class Instruction:
@@ -300,8 +314,9 @@ cdef class Function:
     cdef readonly str __name__
     cdef readonly tuple parameters
     cdef readonly tuple defaults
-    cdef readonly dict scope
     cdef readonly Program program
+    cdef readonly list lvars
+    cdef readonly int lvars_top
 
 
 cdef class LoopSource:
@@ -341,32 +356,31 @@ def log_vm_stats():
 @cython.wraparound(False)
 cdef Vector call_helper(Context context, object function, tuple args, dict kwargs, bint record_stats):
     global CallOutDuration, CallOutCount
-    cdef Context func_context
-    cdef int i, n=len(args)
+    cdef int i, n=len(args), lvars_top
     cdef list stack, lvars
     cdef Function func
     cdef double start_time
+    cdef tuple defaults
     if type(function) is Function:
         func = <Function>function
-        func_context = Context.__new__(Context)
-        func_context.parent = context
-        func_context.errors = context.errors
-        func_context.logs = context.logs
-        func_context.graph = context.graph
-        func_context.pragmas = context.pragmas
-        func_context.state = context.state
-        func_context.variables = {}
-        lvars = []
+        defaults = <tuple>func.defaults
+        lvars = func.lvars
+        lvars_top = func.lvars_top
         for i, name in enumerate(func.parameters):
             if i < n:
-                lvars.append(args[i])
-            elif kwargs is not None:
-                lvars.append(kwargs.get(name, func.defaults[i]))
+                arg = args[i]
             else:
-                lvars.append(func.defaults[i])
-        stack = func.program._execute(func_context, lvars, func.scope, record_stats)
-        assert len(stack) == 1
-        return stack[0]
+                arg = defaults[i]
+                if kwargs is not None:
+                    arg = kwargs.get(name, arg)
+            lvars_top += 1
+            if lvars_top == len(lvars):
+                lvars.append(arg)
+            else:
+                lvars[lvars_top] = arg
+        stack = func.program._execute(context, lvars, lvars_top, record_stats)
+        assert len(stack) == 1, "Function returned bad stack"
+        return <Vector>PyList_GET_ITEM(stack, 0)
     elif function is _log_func and n == 1 and kwargs is None:
         context.logs.add((<Vector>args[0]).repr())
         return <Vector>args[0]
@@ -417,7 +431,7 @@ cdef class Program:
             for key, value in variables.items():
                 context_vars[key] = Vector._coerce(value)
         cdef Context context = Context(state=state, variables=context_vars, path=self.path)
-        self._execute(context, None, None, record_stats)
+        self._execute(context, [], -1, record_stats)
         return context
 
     cpdef void link(self):
@@ -449,8 +463,15 @@ cdef class Program:
                     break
                 import_context = import_context.parent
             else:
-                import_context = Context(parent=context, path=program.path)
-                program._execute(import_context, None, None, record_stats)
+                import_context = Context.__new__(Context)
+                import_context.parent = context
+                import_context.errors = context.errors
+                import_context.logs = context.logs
+                import_context.graph = context.graph
+                import_context.pragmas = context.pragmas
+                import_context.state = context.state
+                import_context.variables = context.variables
+                program._execute(import_context, [], -1, record_stats)
                 context.errors.update(import_context.errors)
                 return import_context.variables
         return None
@@ -491,9 +512,6 @@ cdef class Program:
         self.instructions.append(InstructionTuple(OpCode.Import, names))
 
     def literal(self, value):
-        if isinstance(value, Program):
-            (<Program>value).link()
-            value = (<Program>value).instructions
         cdef Vector vector = Vector._coerce(value)
         if vector.objects is not None:
             if vector.length == 1:
@@ -643,38 +661,32 @@ cdef class Program:
     def append_root(self):
         self.instructions.append(Instruction(OpCode.AppendRoot))
 
-    def execute(self, Context context, list lvars=None, dict additional_scope=None, bint record_stats=False):
-        return self._execute(context, lvars, additional_scope, record_stats)
+    def execute(self, Context context, list lvars=None, bint record_stats=False):
+        if lvars is None:
+            lvars = []
+        return self._execute(context, lvars, len(lvars)-1, record_stats)
 
     @cython.wraparound(False)
     @cython.boundscheck(False)
-    cdef list _execute(self, Context context, list initial_lvars, dict additional_scope, bint record_stats):
-        cdef int i, n, pc=0, program_end=len(self.instructions)
-        cdef Instruction instruction=None
-        cdef int top=-1
+    cdef list _execute(self, Context context, list lvars, int lvars_top, bint record_stats):
         cdef list stack=[], values, loop_sources=[]
-        cdef list lvars=initial_lvars if initial_lvars is not None else []
-        cdef int lvars_top=len(lvars)-1
-        cdef list scopes
-        if additional_scope:
-            scopes = [None, builtins, additional_scope, context.variables]
-        else:
-            scopes = [None, builtins, context.variables]
+        cdef int i, n, pc=0, program_end=len(self.instructions), top=-1
+        cdef list scopes = [None, builtins, context.variables]
         cdef int scopes_top = len(scopes) - 1
-        cdef object name, arg
+        cdef Instruction instruction
         cdef str filename
+        cdef object name, arg
         cdef tuple names, args
         cdef Vector r1, r2
         cdef LoopSource loop_source = None
-        cdef dict scope, variables, kwargs
+        cdef dict scope, variables, kwargs, state=context.state._state
         cdef Query query
         cdef Function function
         cdef PyObject* objptr
         cdef int count
         cdef double duration
 
-        if not self.linked:
-            self.link()
+        assert self.linked, "Program has not been linked"
 
         while 0 <= pc < program_end:
             instruction = <Instruction>self.instructions[pc]
@@ -770,23 +782,22 @@ cdef class Program:
                     stack[top] = r1
 
             elif instruction.code == OpCode.LocalPush:
+                r1 = <Vector>stack[top]
+                top -= 1
                 n = (<InstructionInt>instruction).value
                 if n == 1:
                     lvars_top += 1
                     if lvars_top == len(lvars):
-                        lvars.append(stack[top])
+                        lvars.append(r1)
                     else:
-                        lvars[lvars_top] = stack[top]
-                    lvars.append(stack[top])
+                        lvars[lvars_top] = r1
                 else:
-                    r1 = <Vector>stack[top]
                     for i in range(n):
                         lvars_top += 1
                         if lvars_top == len(lvars):
                             lvars.append(r1.item(i))
                         else:
                             lvars[lvars_top] = r1.item(i)
-                top -= 1
 
             elif instruction.code == OpCode.Name:
                 top += 1
@@ -809,10 +820,10 @@ cdef class Program:
                     context.errors.add(f"Unbound name '{<str>name}'")
 
             elif instruction.code == OpCode.Lookup:
-                stack[top] = context.state.get_item(<Vector>stack[top]) if context.state is not None else null_
+                stack[top] = state.get(stack[top], null_)
 
             elif instruction.code == OpCode.LookupLiteral:
-                r1 = context.state.get_item((<InstructionVector>instruction).value) if context.state is not None else null_
+                r1 = state.get((<InstructionVector>instruction).value, null_)
                 top += 1
                 if top == len(stack):
                     stack.append(r1)
@@ -972,13 +983,11 @@ cdef class Program:
 
             elif instruction.code == OpCode.Func:
                 function = Function.__new__(Function)
-                function.scope = {}
-                for i in range(2, len(scopes)):
-                    PyDict_Update(function.scope, scopes[i])
                 function.__name__ = <str>(<InstructionTuple>instruction).value[0]
                 function.parameters = (<InstructionTuple>instruction).value[1:]
-                function.program = Program.__new__(Program)
-                function.program.instructions = (<Vector>stack[top]).objects
+                function.program = <Program>(<Vector>stack[top]).objects[0]
+                function.lvars = lvars[:lvars_top+1]
+                function.lvars_top = lvars_top
                 top -= 1
                 n = len(function.parameters)
                 function.defaults = tuple(stack[top-n+1:top+1])
@@ -1050,8 +1059,12 @@ cdef class Program:
 
             elif instruction.code == OpCode.Compose:
                 n = (<InstructionInt>instruction).value
-                top -= n - 1
-                stack[top] = Vector._compose(stack, top, top+n)
+                if n == 2:
+                    top -= 1
+                    stack[top] = (<Vector>stack[top]).concat(<Vector>stack[top+1])
+                else:
+                    top -= n - 1
+                    stack[top] = Vector._compose(stack, top, top+n)
 
             elif instruction.code == OpCode.BeginFor:
                 if loop_source is not None:
@@ -1166,9 +1179,10 @@ cdef class Program:
                 StatsCount[<int>instruction.code] += 1
                 StatsDuration[<int>instruction.code] += duration
 
-            assert -1 <= top < len(stack)
+            assert -1 <= top < len(stack), "Stack out of bounds"
+            assert -1 <= lvars_top < len(lvars), "Lvars out of bounds"
 
-        assert pc == program_end
+        assert pc == program_end, "Jump outside of program"
         return stack[:top+1]
 
 

@@ -110,6 +110,7 @@ cdef class Top(Expression):
         for i, name in enumerate(reversed(lvars)):
             program.local_load(i)
             program.let((name,))
+        program.local_drop(len(lvars))
         program.link()
         return program
 
@@ -1298,14 +1299,10 @@ cdef class Function(Expression):
                 program.literal(null_)
             else:
                 program.extend(parameter.expr._compile(lvars))
-        program.begin_scope()
-        cdef int i
-        for i, name in enumerate(reversed(lvars)):
-            program.local_load(i)
-            program.let((name,))
-        program.literal(self.expr._compile(list(names)))
+        body = self.expr._compile(lvars + names)
+        body.link()
+        program.literal(body)
         program.func((self.name, *names))
-        program.end_scope()
         program.local_push(1)
         lvars.append(self.name)
         program.literal(null_)
