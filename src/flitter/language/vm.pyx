@@ -58,7 +58,6 @@ cdef enum OpCode:
     AppendRoot
     Attribute
     BeginFor
-    BeginScope
     BranchFalse
     BranchTrue
     Call
@@ -67,7 +66,6 @@ cdef enum OpCode:
     Drop
     Dup
     EndFor
-    EndScope
     Eq
     FloorDiv
     Func
@@ -117,7 +115,6 @@ cdef dict OpCodeNames = {
     OpCode.AppendRoot: 'AppendRoot',
     OpCode.Attribute: 'Attribute',
     OpCode.BeginFor: 'BeginFor',
-    OpCode.BeginScope: 'BeginScope',
     OpCode.BranchFalse: 'BranchFalse',
     OpCode.BranchTrue: 'BranchTrue',
     OpCode.Call: 'Call',
@@ -126,7 +123,6 @@ cdef dict OpCodeNames = {
     OpCode.Drop: 'Drop',
     OpCode.Dup: 'Dup',
     OpCode.EndFor: 'EndFor',
-    OpCode.EndScope: 'EndScope',
     OpCode.Eq: 'Eq',
     OpCode.FloorDiv: 'FloorDiv',
     OpCode.Func: 'Func',
@@ -625,12 +621,6 @@ cdef class Program:
     def compose(self, int count):
         self.instructions.append(InstructionInt(OpCode.Compose, count))
 
-    def begin_scope(self):
-        self.instructions.append(Instruction(OpCode.BeginScope))
-
-    def end_scope(self):
-        self.instructions.append(Instruction(OpCode.EndScope))
-
     def set_node_scope(self):
         self.instructions.append(Instruction(OpCode.SetNodeScope))
 
@@ -673,8 +663,7 @@ cdef class Program:
     cdef list _execute(self, Context context, list lvars, int lvars_top, bint record_stats):
         cdef list stack=[], values, loop_sources=[]
         cdef int i, n, pc=0, program_end=len(self.instructions), top=-1
-        cdef list scopes = [None, builtins, context.variables]
-        cdef int scopes_top = len(scopes) - 1
+        cdef dict node_scope = None
         cdef Instruction instruction
         cdef str filename
         cdef object name, arg
@@ -804,16 +793,16 @@ cdef class Program:
             elif instruction.code == OpCode.Name:
                 top += 1
                 name = (<InstructionStr>instruction).value
-                for i in range(scopes_top, -1, -1):
-                    scope = <dict>scopes[i]
-                    if scope is not None and PyDict_Size(scope):
-                        objptr = PyDict_GetItem(scope, name)
-                        if objptr != NULL:
-                            if top == len(stack):
-                                stack.append(<Vector>objptr)
-                            else:
-                                stack[top] = <Vector>objptr
-                            break
+                objptr = PyDict_GetItem(context.variables, name)
+                if objptr == NULL:
+                    objptr = PyDict_GetItem(builtins, name)
+                if  objptr == NULL and node_scope is not None:
+                    objptr = PyDict_GetItem(node_scope, name)
+                if objptr != NULL:
+                    if top == len(stack):
+                        stack.append(<Vector>objptr)
+                    else:
+                        stack[top] = <Vector>objptr
                 else:
                     if top == len(stack):
                         stack.append(null_)
@@ -1081,7 +1070,6 @@ cdef class Program:
                 if loop_source.position >= loop_source.source.length:
                     pc += (<InstructionJump>instruction).offset
                 else:
-                    scope = <dict>scopes[scopes_top]
                     n = (<InstructionJumpInt>instruction).value
                     for i in range(lvars_top-n+1, lvars_top+1):
                         lvars[i] = loop_source.source.item(loop_source.position)
@@ -1117,32 +1105,21 @@ cdef class Program:
             elif instruction.code == OpCode.SetNodeScope:
                 r1 = <Vector>stack[top]
                 if r1.objects is not None and r1.length == 1 and isinstance(r1.objects[0], Node):
-                    scopes[0] = (<Node>r1.objects[0])._attributes
+                    node_scope = (<Node>r1.objects[0])._attributes
 
             elif instruction.code == OpCode.ClearNodeScope:
-                scopes[0] = None
-
-            elif instruction.code == OpCode.BeginScope:
-                scopes_top += 1
-                if scopes_top == len(scopes):
-                    scopes.append({})
-                else:
-                    scopes[scopes_top] = {}
-
-            elif instruction.code == OpCode.EndScope:
-                scopes_top -= 1
+                node_scope = None
 
             elif instruction.code == OpCode.Let:
                 r1 = <Vector>stack[top]
                 top -= 1
                 names = (<InstructionTuple>instruction).value
                 n = len(names)
-                scope = <dict>scopes[scopes_top]
                 if n == 1:
-                    scope[names[0]] = r1
+                    context.variables[names[0]] = r1
                 else:
                     for i in range(n):
-                        scope[names[i]] = r1.item(i)
+                        context.variables[names[i]] = r1.item(i)
 
             elif instruction.code == OpCode.Search:
                 node = context.graph.first_child

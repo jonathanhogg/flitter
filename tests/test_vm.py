@@ -518,72 +518,6 @@ class TestLocalVars(unittest.TestCase):
         self.assertEqual(stack, [2, 3])
 
 
-class TestScopes(unittest.TestCase):
-    def setUp(self):
-        self.program = Program()
-        self.state = StateDict()
-        self.variables = {}
-        self.context = Context(state=self.state, variables=self.variables)
-
-    def test_scoped_let(self):
-        self.program.begin_scope()
-        self.program.literal(3)
-        self.program.let(('x',))
-        self.program.name('x')
-        self.program.end_scope()
-        stack = self.program.execute(self.context)
-        self.assertEqual(stack, [3])
-        self.assertEqual(self.variables, {})
-
-    def test_shadowed_name(self):
-        self.variables['x'] = Vector(12)
-        self.program.begin_scope()
-        self.program.literal(3)
-        self.program.let(('x',))
-        self.program.name('x')
-        self.program.end_scope()
-        self.program.name('x')
-        stack = self.program.execute(self.context)
-        self.assertEqual(stack, [3, 12])
-        self.assertEqual(self.variables, {'x': 12})
-
-    def test_nested_scopes(self):
-        self.program.begin_scope()
-        self.program.literal(12)
-        self.program.let(('x',))
-        self.program.begin_scope()
-        self.program.literal(3)
-        self.program.let(('x',))
-        self.program.name('x')
-        self.program.end_scope()
-        self.program.name('x')
-        self.program.end_scope()
-        stack = self.program.execute(self.context)
-        self.assertEqual(stack, [3, 12])
-        self.assertEqual(self.variables, {})
-
-    def test_simple_node_scope(self):
-        node = Node('foo', {'test'}, {'x': Vector(1)})
-        self.program.literal(node)
-        self.program.set_node_scope()
-        self.program.name('x')
-        self.program.clear_node_scope()
-        self.program.name('x')
-        stack = self.program.execute(self.context)
-        self.assertEqual(stack, [node, 1, null])
-
-    def test_shadowed_node_scope(self):
-        self.variables['x'] = Vector(12)
-        node = Node('foo', {'test'}, {'x': Vector(1)})
-        self.program.literal(node)
-        self.program.set_node_scope()
-        self.program.name('x')
-        self.program.clear_node_scope()
-        self.program.name('x')
-        stack = self.program.execute(self.context)
-        self.assertEqual(stack, [node, 12, 12])
-
-
 class TestFunc(unittest.TestCase):
     def setUp(self):
         self.program = Program()
@@ -616,22 +550,25 @@ class TestFunc(unittest.TestCase):
         self.program.literal(1)
         self.program.literal(self.func_program)
         self.program.func(('f', 'x', 'y'))
-        self.program.let(('f',))
+        self.program.local_push(1)
 
     def test_declare(self):
-        stack = self.program.execute(self.context)
+        lvars = []
+        stack = self.program.execute(self.context, lvars=lvars)
         self.assertEqual(len(stack), 0)
-        function, = self.variables['f']
+        self.assertEqual(len(lvars), 2)
+        self.assertEqual(lvars[0], 2)
+        function, = lvars[1]
         self.assertTrue(isinstance(function, Function))
         self.assertEqual(function.__name__, 'f')
         self.assertEqual(function.parameters, ('x', 'y'))
         self.assertEqual(function.defaults, (null, 1))
-        self.assertEqual(function.program.instructions, self.func_program.instructions)
+        self.assertIs(function.program, self.func_program)
 
     def test_call(self):
         self.program.literal(3)
         self.program.literal(4)
-        self.program.name('f')
+        self.program.local_load(0)
         self.program.call(2)
         stack = self.program.execute(self.context)
         self.assertEqual(stack, [9])
@@ -641,29 +578,20 @@ class TestFunc(unittest.TestCase):
         self.program.local_push(1)
         self.program.literal(3)
         self.program.literal(4)
-        self.program.name('f')
-        self.program.call(2)
-        stack = self.program.execute(self.context)
-        self.assertEqual(stack, [9])
-
-    def test_reduced_lvars(self):
-        self.program.local_drop(1)
-        self.program.literal(3)
-        self.program.literal(4)
-        self.program.name('f')
+        self.program.local_load(1)
         self.program.call(2)
         stack = self.program.execute(self.context)
         self.assertEqual(stack, [9])
 
     def test_default_arg(self):
         self.program.literal(3)
-        self.program.name('f')
+        self.program.local_load(0)
         self.program.call(1)
         stack = self.program.execute(self.context)
         self.assertEqual(stack, [6])
 
     def test_default_arg2(self):
-        self.program.name('f')
+        self.program.local_load(0)
         self.program.call(0)
         stack = self.program.execute(self.context)
         self.assertEqual(stack, [null])
@@ -672,7 +600,7 @@ class TestFunc(unittest.TestCase):
         self.state['test'] = Vector(1)
         self.program.literal(3)
         self.program.literal(4)
-        self.program.name('f')
+        self.program.local_load(0)
         self.program.call(2)
         stack = self.program.execute(self.context)
         self.assertEqual(stack, [10])
@@ -682,7 +610,7 @@ class TestFunc(unittest.TestCase):
         self.context.graph.append(node)
         self.program.literal(3)
         self.program.literal(4)
-        self.program.name('f')
+        self.program.local_load(0)
         self.program.call(2)
         stack = self.program.execute(self.context)
         self.assertEqual(stack, [18])
