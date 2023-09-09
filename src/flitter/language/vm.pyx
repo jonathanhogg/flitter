@@ -465,6 +465,7 @@ cdef class Program:
                 import_context.pragmas = context.pragmas
                 import_context.state = context.state
                 import_context.variables = context.variables
+                import_context.path = program.path
                 program._execute(import_context, [], -1, record_stats)
                 context.errors.update(import_context.errors)
                 return import_context.variables
