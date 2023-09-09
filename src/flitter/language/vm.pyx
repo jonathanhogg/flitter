@@ -1,4 +1,4 @@
-# cython: language_level=3, profile=False
+# cython: language_level=3, profile=False, wraparound=False, boundscheck=False
 
 """
 Flitter language stack-based virtual machine
@@ -15,11 +15,11 @@ from .noise import NOISE_FUNCTIONS
 
 from libc.math cimport floor
 from cpython cimport PyObject, Py_INCREF
-from cpython.dict cimport PyDict_Update, PyDict_GetItem, PyDict_Size
-from cpython.list cimport PyList_New, PyList_SET_ITEM, PyList_GET_ITEM, PyList_Append
-from cpython.mem cimport PyMem_Malloc, PyMem_Free
+from cpython.dict cimport PyDict_GetItem
+from cpython.list cimport PyList_GET_ITEM
+from cpython.mem cimport PyMem_Malloc
 from cpython.time cimport time
-from cpython.tuple cimport PyTuple_GET_ITEM, PyTuple_GET_SIZE
+from cpython.tuple cimport PyTuple_New, PyTuple_SET_ITEM
 
 
 logger = name_patch(logger, __name__)
@@ -42,9 +42,9 @@ cdef dict dynamic_builtins = {
 }
 dynamic_builtins.update(DYNAMIC_FUNCTIONS)
 
-cdef dict builtins = {}
-builtins.update(dynamic_builtins)
-builtins.update(static_builtins)
+cdef dict all_builtins = {}
+all_builtins.update(dynamic_builtins)
+all_builtins.update(static_builtins)
 
 cdef int NextLabel = 1
 cdef int* StatsCount = NULL
@@ -348,8 +348,6 @@ def log_vm_stats():
                     duration, 100*duration/total)
 
 
-@cython.boundscheck(False)
-@cython.wraparound(False)
 cdef Vector call_helper(Context context, object function, tuple args, dict kwargs, bint record_stats):
     global CallOutDuration, CallOutCount
     cdef int i, n=len(args), lvars_top
@@ -512,12 +510,12 @@ cdef class Program:
         if vector.objects is not None:
             if vector.length == 1:
                 obj = vector.objects[0]
-                if isinstance(obj, Node):
+                if type(obj) is Node:
                     self.instructions.append(InstructionNode(OpCode.LiteralNode, <Node>obj))
                     return
             else:
                 for obj in vector.objects:
-                    if isinstance(obj, Node):
+                    if type(obj) is Node:
                         self.instructions.append(InstructionVector(OpCode.LiteralNodes, vector))
                         return
         self.instructions.append(InstructionVector(OpCode.Literal, vector))
@@ -658,19 +656,17 @@ cdef class Program:
             lvars = []
         return self._execute(context, lvars, len(lvars)-1, record_stats)
 
-    @cython.wraparound(False)
-    @cython.boundscheck(False)
-    cdef list _execute(self, Context context, list lvars, int lvars_top, bint record_stats):
+    cdef list _execute(self, Context context, lvars: list, int lvars_top, bint record_stats):
         cdef list stack=[], values, loop_sources=[]
         cdef int i, n, pc=0, program_end=len(self.instructions), top=-1
-        cdef dict node_scope = None
+        cdef dict node_scope=None, variables=context.variables, builtins=all_builtins
         cdef Instruction instruction
         cdef str filename
         cdef object name, arg
         cdef tuple names, args
         cdef Vector r1, r2
         cdef LoopSource loop_source = None
-        cdef dict scope, variables, kwargs, state=context.state._state
+        cdef dict import_variables, kwargs, state=context.state._state
         cdef Query query
         cdef Function function
         cdef PyObject* objptr
@@ -720,12 +716,12 @@ cdef class Program:
                 stack[top] = null_
                 names = (<InstructionTuple>instruction).value
                 if record_stats: duration += time()
-                variables = self.import_module(context, filename, record_stats)
+                import_variables = self.import_module(context, filename, record_stats)
                 if record_stats: duration -= time()
-                if variables is not None:
+                if import_variables is not None:
                     for name in names:
-                        if name in variables:
-                            r1 = <Vector>variables[name]
+                        if name in import_variables:
+                            r1 = <Vector>import_variables[name]
                         else:
                             context.errors.add(f"Unable to import '{<str>name}' from '{filename}'")
                             r1 = null_
@@ -793,7 +789,7 @@ cdef class Program:
             elif instruction.code == OpCode.Name:
                 top += 1
                 name = (<InstructionStr>instruction).value
-                objptr = PyDict_GetItem(context.variables, name)
+                objptr = PyDict_GetItem(variables, name)
                 if objptr == NULL:
                     objptr = PyDict_GetItem(builtins, name)
                 if  objptr == NULL and node_scope is not None:
@@ -811,10 +807,10 @@ cdef class Program:
                     context.errors.add(f"Unbound name '{<str>name}'")
 
             elif instruction.code == OpCode.Lookup:
-                stack[top] = state.get(stack[top], null_)
+                stack[top] = <Vector>state.get(stack[top], null_)
 
             elif instruction.code == OpCode.LookupLiteral:
-                r1 = state.get((<InstructionVector>instruction).value, null_)
+                r1 = <Vector>state.get((<InstructionVector>instruction).value, null_)
                 top += 1
                 if top == len(stack):
                     stack.append(r1)
@@ -950,11 +946,12 @@ cdef class Program:
                     kwargs = None
                 n = (<InstructionIntTuple>instruction).ivalue
                 top -= n
-                if n == 1:
-                    arg = stack[top]
-                    args = (arg,)
-                elif n:
-                    args = tuple(stack[top:top+n])
+                if n:
+                    args = PyTuple_New(n)
+                    for i in range(n):
+                        r2 = <Vector>stack[top+i]
+                        Py_INCREF(r2)
+                        PyTuple_SET_ITEM(args, i, r2)
                 else:
                     args = ()
                 if r1.objects is not None:
@@ -993,7 +990,7 @@ cdef class Program:
                 r1 = <Vector>stack[top]
                 if r1.objects is not None:
                     for node in r1.objects:
-                        if isinstance(node, Node):
+                        if type(node) is Node:
                             if (<Node>node)._tags is None:
                                 (<Node>node)._tags = set()
                             (<Node>node)._tags.add(name)
@@ -1005,7 +1002,7 @@ cdef class Program:
                 if r1.objects is not None:
                     name = (<InstructionStr>instruction).value
                     for node in r1.objects:
-                        if isinstance(node, Node):
+                        if type(node) is Node:
                             if (<Node>node)._attributes_shared:
                                 (<Node>node)._attributes = dict((<Node>node)._attributes)
                                 (<Node>node)._attributes_shared = False
@@ -1021,14 +1018,14 @@ cdef class Program:
                 if r1.objects is not None and r2.objects is not None:
                     n = r1.length - 1
                     for i, node in enumerate(r1.objects):
-                        if isinstance(node, Node):
+                        if type(node) is Node:
                             if i == n:
                                 for child in r2.objects:
-                                    if isinstance(child, Node):
+                                    if type(child) is Node:
                                         (<Node>node).append(<Node>child)
                             else:
                                 for child in r2.objects:
-                                    if isinstance(child, Node):
+                                    if type(child) is Node:
                                         (<Node>node).append((<Node>child).copy())
 
             elif instruction.code == OpCode.Prepend:
@@ -1038,14 +1035,14 @@ cdef class Program:
                 if r1.objects is not None and r2.objects is not None:
                     n = r1.length - 1
                     for i, node in enumerate(r1.objects):
-                        if isinstance(node, Node):
+                        if type(node) is Node:
                             if i == n:
                                 for child in reversed(r2.objects):
-                                    if isinstance(child, Node):
+                                    if type(child) is Node:
                                         (<Node>node).insert(<Node>child)
                             else:
                                 for child in reversed(r2.objects):
-                                    if isinstance(child, Node):
+                                    if type(child) is Node:
                                         (<Node>node).insert((<Node>child).copy())
 
             elif instruction.code == OpCode.Compose:
@@ -1058,8 +1055,7 @@ cdef class Program:
                     stack[top] = Vector._compose(stack, top, top+n)
 
             elif instruction.code == OpCode.BeginFor:
-                if loop_source is not None:
-                    loop_sources.append(loop_source)
+                loop_sources.append(loop_source)
                 loop_source = LoopSource.__new__(LoopSource)
                 loop_source.source = <Vector>stack[top]
                 top -= 1
@@ -1104,14 +1100,16 @@ cdef class Program:
 
             elif instruction.code == OpCode.SetNodeScope:
                 r1 = <Vector>stack[top]
-                if r1.objects is not None and r1.length == 1 and isinstance(r1.objects[0], Node):
-                    node_scope = (<Node>r1.objects[0])._attributes
+                if r1.objects is not None and r1.length == 1:
+                    node = r1.objects[0]
+                    if type(node) is Node:
+                        node_scope = (<Node>node)._attributes
 
             elif instruction.code == OpCode.ClearNodeScope:
                 node_scope = None
 
             elif instruction.code == OpCode.StoreGlobal:
-                context.variables[(<InstructionStr>instruction).value] = <Vector>stack[top]
+                variables[(<InstructionStr>instruction).value] = <Vector>stack[top]
                 top -= 1
 
             elif instruction.code == OpCode.Search:
@@ -1139,7 +1137,7 @@ cdef class Program:
                 top -= 1
                 if r1.objects is not None:
                     for value in r1.objects:
-                        if isinstance(value, Node):
+                        if type(value) is Node:
                             if (<Node>value)._parent is None:
                                 context.graph.append(<Node>value)
 
