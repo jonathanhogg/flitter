@@ -662,6 +662,8 @@ cdef class Program:
         self.instructions.append(Instruction(OpCode.AppendRoot))
 
     def execute(self, Context context, list lvars=None, bint record_stats=False):
+        if not self.linked:
+            self.link()
         if lvars is None:
             lvars = []
         return self._execute(context, lvars, len(lvars)-1, record_stats)

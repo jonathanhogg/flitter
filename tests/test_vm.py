@@ -594,7 +594,7 @@ class TestFunc(unittest.TestCase):
         self.func_program.local_load(1)
         self.func_program.local_load(0)
         self.func_program.add()
-        self.func_program.name('z')
+        self.func_program.local_load(2)
         self.func_program.add()
         LABEL1 = self.func_program.new_label()
         self.func_program.literal('test')
@@ -609,8 +609,9 @@ class TestFunc(unittest.TestCase):
         self.func_program.literal(2)
         self.func_program.mul()
         self.func_program.label(LABEL2)
+        self.func_program.link()
         self.program.literal(2)
-        self.program.let(('z',))
+        self.program.local_push(1)
         self.program.literal(null)
         self.program.literal(1)
         self.program.literal(self.func_program)
@@ -635,9 +636,18 @@ class TestFunc(unittest.TestCase):
         stack = self.program.execute(self.context)
         self.assertEqual(stack, [9])
 
-    def test_variable_capture(self):
+    def test_additional_lvars(self):
         self.program.literal(-2)
-        self.program.let(('z',))
+        self.program.local_push(1)
+        self.program.literal(3)
+        self.program.literal(4)
+        self.program.name('f')
+        self.program.call(2)
+        stack = self.program.execute(self.context)
+        self.assertEqual(stack, [9])
+
+    def test_reduced_lvars(self):
+        self.program.local_drop(1)
         self.program.literal(3)
         self.program.literal(4)
         self.program.name('f')
