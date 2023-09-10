@@ -117,13 +117,13 @@ cdef class Normal(Uniform):
 
 
 @state_transformer
-def counter(state, Vector counter_id, Vector clockv, Vector speedv=None):
-    if counter_id.length == 0 or clockv.numbers == NULL or (speedv is not None and speedv.numbers == NULL):
+def counter(state, Vector counter_id, Vector clockv, Vector speedv=null_):
+    if counter_id.length == 0 or clockv.numbers == NULL or speedv.objects is not None:
         return null_
     cdef Vector counter_state = state[counter_id]
     if counter_state.numbers == NULL:
         counter_state = null_
-    cdef int n = max(clockv.length, counter_state.length//2 if speedv is None else speedv.length), m = n * 2, i, j
+    cdef int n = max(clockv.length, counter_state.length//2 if speedv.length == 0 else speedv.length), m = n * 2, i, j
     cdef Vector countv = Vector.__new__(Vector)
     countv.allocate_numbers(n)
     cdef double offset, current_speed, clock, speed, count
@@ -135,9 +135,9 @@ def counter(state, Vector counter_id, Vector clockv, Vector speedv=None):
         if j+1 < counter_state.length:
             offset = counter_state.numbers[j]
             current_speed = counter_state.numbers[j+1]
-            speed = speedv.numbers[i%speedv.length] if speedv is not None else current_speed
+            speed = speedv.numbers[i%speedv.length] if speedv.length else current_speed
         else:
-            current_speed = speed = speedv.numbers[i%speedv.length] if speedv is not None else 1
+            current_speed = speed = speedv.numbers[i%speedv.length] if speedv.length else 1
             offset = clock * speed
         count = clock * current_speed - offset
         countv.numbers[i] = count
