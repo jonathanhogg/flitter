@@ -297,6 +297,21 @@ class TestVector(unittest.TestCase):
         self.assertEqual(Vector([1, 2]) + x, Vector([2, 2.1, -4, 1000002, math.inf]))
         self.assertEqual(x + x, Vector([2, 0.2, -10, 2e6, math.inf]))
 
+    def test_mul_add(self):
+        x = Vector([1, 0.1, -5, 1e6, math.inf])
+        self.assertEqual(x.mul_add(Vector(1), null), null)
+        self.assertEqual(x.mul_add(null, Vector(1)), null)
+        self.assertEqual(null.mul_add(x, Vector(1)), null)
+        self.assertEqual(x.mul_add(Vector(1), Vector("Hello world!")), null)
+        self.assertEqual(Vector("Hello world!").mul_add(x, Vector(1)), null)
+        self.assertEqual(x.mul_add(Vector(0), Vector(1)), x)
+        self.assertEqual(x.mul_add(Vector(1), Vector(1)), x + 1)
+        self.assertEqual(x.mul_add(x, Vector(1)), x + x)
+        self.assertEqual(Vector(0).mul_add(x, Vector(1)), x)
+        self.assertEqual(Vector(1).mul_add(x, Vector(1)), x + 1)
+        self.assertEqual(Vector(0).mul_add(x, x), x * x)
+        self.assertEqual(Vector(x).mul_add(x, x), x * x + x)
+
     def test_sub(self):
         x = Vector([1, 0.1, -5, 1e6, math.inf])
         self.assertEqual(x - null, null)

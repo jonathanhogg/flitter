@@ -483,6 +483,15 @@ cdef class Vector:
                 result.numbers[i] = self.numbers[i % n] + other.numbers[i % m]
         return result
 
+    @cython.cdivision(True)
+    cpdef Vector mul_add(self, Vector left, Vector right):
+        cdef int i, n = self.length, m = left.length, o = right.length
+        cdef Vector result = Vector.__new__(Vector)
+        if self.numbers != NULL and left.numbers != NULL and right.numbers != NULL:
+            for i in range(result.allocate_numbers(max(n, m, o))):
+                result.numbers[i] = self.numbers[i % n] + left.numbers[i % m] * right.numbers[i % o]
+        return result
+
     def __sub__(self, other):
         return self.sub(Vector._coerce(other))
 

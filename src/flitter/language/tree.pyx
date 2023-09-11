@@ -495,8 +495,23 @@ cdef class Add(MathsBinaryOperation):
     cdef Vector op(self, Vector left, Vector right):
         return left.add(right)
 
-    cdef void _compile_op(self, Program program):
-        program.add()
+    cdef Program _compile(self, list lvars):
+        cdef Program program = Program.__new__(Program)
+        if isinstance(self.right, Multiply):
+            program.extend(self.left._compile(lvars))
+            program.extend((<Multiply>self.right).left._compile(lvars))
+            program.extend((<Multiply>self.right).right._compile(lvars))
+            program.mul_add()
+        elif isinstance(self.left, Multiply):
+            program.extend(self.right._compile(lvars))
+            program.extend((<Multiply>self.left).left._compile(lvars))
+            program.extend((<Multiply>self.left).right._compile(lvars))
+            program.mul_add()
+        else:
+            program.extend(self.left._compile(lvars))
+            program.extend(self.right._compile(lvars))
+            program.add()
+        return program
 
     cdef Expression constant_left(self, Vector left, Expression right):
         if left.eq(false_):
@@ -520,6 +535,7 @@ cdef class Subtract(MathsBinaryOperation):
     cdef Expression constant_right(self, Expression left, Vector right):
         if right.eq(false_):
             return Positive(left)
+        return Add(left, Literal(right.neg()))
 
 
 cdef class Multiply(MathsBinaryOperation):

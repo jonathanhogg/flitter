@@ -88,6 +88,7 @@ cdef enum OpCode:
     Lt
     Mod
     Mul
+    MulAdd
     Name
     Ne
     Neg
@@ -146,6 +147,7 @@ cdef dict OpCodeNames = {
     OpCode.Lt: 'Lt',
     OpCode.Mod: 'Mod',
     OpCode.Mul: 'Mul',
+    OpCode.MulAdd: 'MulAdd',
     OpCode.Name: 'Name',
     OpCode.Ne: 'Ne',
     OpCode.Neg: 'Neg',
@@ -810,6 +812,9 @@ cdef class Program:
     def mul(self):
         self.instructions.append(Instruction(OpCode.Mul))
 
+    def mul_add(self):
+        self.instructions.append(Instruction(OpCode.MulAdd))
+
     def truediv(self):
         self.instructions.append(Instruction(OpCode.TrueDiv))
 
@@ -1063,6 +1068,11 @@ cdef class Program:
             elif instruction.code == OpCode.Mul:
                 r1 = pop(stack)
                 poke(stack, peek(stack).mul(r1))
+
+            elif instruction.code == OpCode.MulAdd:
+                r2 = pop(stack)
+                r1 = pop(stack)
+                poke(stack, peek(stack).mul_add(r1, r2))
 
             elif instruction.code == OpCode.TrueDiv:
                 r1 = pop(stack)

@@ -31,6 +31,7 @@ cdef class Vector:
     cdef Vector pos(self)
     cdef Vector abs(self)
     cdef Vector add(self, Vector other)
+    cpdef Vector mul_add(self, Vector left, Vector right)
     cdef Vector sub(self, Vector other)
     cdef Vector mul(self, Vector other)
     cdef Vector truediv(self, Vector other)
