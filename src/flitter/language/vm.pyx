@@ -932,21 +932,22 @@ cdef class Program:
             stack = VectorStack.__new__(VectorStack)
         if lvars is None:
             lvars = VectorStack.__new__(VectorStack)
-        cdef list values, loop_sources=[]
         cdef int i, n, pc=0, program_end=len(self.instructions)
-        cdef dict node_scope=None, variables=context.variables, builtins=all_builtins
+        cdef dict node_scope=None, variables=context.variables, builtins=all_builtins, state=context.state._state
+        cdef list loop_sources=[]
+        cdef LoopSource loop_source = None
+        cdef double duration
+
         cdef Instruction instruction
         cdef str filename
-        cdef object name, arg
+        cdef object name, arg, node
         cdef tuple names, args
         cdef Vector r1, r2, r3
-        cdef LoopSource loop_source = None
-        cdef dict attributes, import_variables, kwargs, state=context.state._state
+        cdef dict attributes, import_variables, kwargs
+        cdef list values
         cdef Query query
         cdef Function function
         cdef PyObject* objptr
-        cdef int count
-        cdef double duration
 
         assert self.linked, "Program has not been linked"
 
@@ -995,6 +996,7 @@ cdef class Program:
                             push(lvars, null_)
                 else:
                     context.errors.add(f"Unable to import from '{filename}'")
+                filename = names = import_variables = name = None
 
             elif instruction.code == OpCode.Literal:
                 push(stack, (<InstructionVector>instruction).value)
@@ -1004,6 +1006,7 @@ cdef class Program:
                 r1.objects = [(<InstructionNode>instruction).value.copy()]
                 r1.length = 1
                 push(stack, r1)
+                r1 = None
 
             elif instruction.code == OpCode.LiteralNodes:
                 push(stack, (<InstructionVector>instruction).value.copynodes())
@@ -1022,6 +1025,7 @@ cdef class Program:
                 else:
                     for i in range(n):
                         push(lvars, r1.item(i))
+                r1 = None
 
             elif instruction.code == OpCode.Name:
                 name = (<InstructionStr>instruction).value
@@ -1035,12 +1039,24 @@ cdef class Program:
                 else:
                     push(stack, null_)
                     context.errors.add(f"Unbound name '{<str>name}'")
+                name = None
+                objptr = NULL
 
             elif instruction.code == OpCode.Lookup:
-                poke(stack, <Vector>state.get(peek(stack), null_))
+                objptr = PyDict_GetItem(state, peek(stack))
+                if objptr != NULL:
+                    poke(stack, <Vector>objptr)
+                else:
+                    poke(stack, null_)
+                objptr = NULL
 
             elif instruction.code == OpCode.LookupLiteral:
-                push(stack, <Vector>state.get((<InstructionVector>instruction).value, null_))
+                objptr = PyDict_GetItem(state, (<InstructionVector>instruction).value)
+                if objptr != NULL:
+                    push(stack, <Vector>objptr)
+                else:
+                    push(stack, null_)
+                objptr = NULL
 
             elif instruction.code == OpCode.Range:
                 r3 = pop(stack)
@@ -1048,6 +1064,7 @@ cdef class Program:
                 r1 = Vector.__new__(Vector)
                 r1.fill_range(peek(stack), r2, r3)
                 poke(stack, r1)
+                r1 = r2 = r3 = None
 
             elif instruction.code == OpCode.Neg:
                 poke(stack, peek(stack).neg())
@@ -1061,59 +1078,73 @@ cdef class Program:
             elif instruction.code == OpCode.Add:
                 r1 = pop(stack)
                 poke(stack, peek(stack).add(r1))
+                r1 = None
 
             elif instruction.code == OpCode.Sub:
                 r1 = pop(stack)
                 poke(stack, peek(stack).sub(r1))
+                r1 = None
 
             elif instruction.code == OpCode.Mul:
                 r1 = pop(stack)
                 poke(stack, peek(stack).mul(r1))
+                r1 = None
 
             elif instruction.code == OpCode.MulAdd:
                 r2 = pop(stack)
                 r1 = pop(stack)
                 poke(stack, peek(stack).mul_add(r1, r2))
+                r1 = r2 = None
 
             elif instruction.code == OpCode.TrueDiv:
                 r1 = pop(stack)
                 poke(stack, peek(stack).truediv(r1))
+                r1 = None
 
             elif instruction.code == OpCode.FloorDiv:
                 r1 = pop(stack)
                 poke(stack, peek(stack).floordiv(r1))
+                r1 = None
 
             elif instruction.code == OpCode.Mod:
                 r1 = pop(stack)
                 poke(stack, peek(stack).mod(r1))
+                r1 = None
 
             elif instruction.code == OpCode.Pow:
                 r1 = pop(stack)
                 poke(stack, peek(stack).pow(r1))
+                r1 = None
 
             elif instruction.code == OpCode.Eq:
                 r1 = pop(stack)
                 poke(stack, peek(stack).eq(r1))
+                r1 = None
 
             elif instruction.code == OpCode.Ne:
                 r1 = pop(stack)
                 poke(stack, peek(stack).ne(r1))
+                r1 = None
 
             elif instruction.code == OpCode.Gt:
                 r1 = pop(stack)
                 poke(stack, peek(stack).gt(r1))
+                r1 = None
 
             elif instruction.code == OpCode.Lt:
                 r1 = pop(stack)
                 poke(stack, peek(stack).lt(r1))
+                r1 = None
 
             elif instruction.code == OpCode.Ge:
                 r1 = pop(stack)
                 poke(stack, peek(stack).ge(r1))
+                r1 = None
 
             elif instruction.code == OpCode.Le:
                 r1 = pop(stack)
                 poke(stack, peek(stack).le(r1))
+                r1 = None
 
             elif instruction.code == OpCode.Xor:
                 r2 = pop(stack)
@@ -1122,10 +1153,12 @@ cdef class Program:
                     poke(stack, r2)
                 elif r2.as_bool():
                     poke(stack, false_)
+                r1 = r2 = None
 
             elif instruction.code == OpCode.Slice:
                 r1 = pop(stack)
                 poke(stack, peek(stack).slice(r1))
+                r1 = None
 
             elif instruction.code == OpCode.SliceLiteral:
                 poke(stack, peek(stack).slice((<InstructionVector>instruction).value))
@@ -1148,6 +1181,7 @@ cdef class Program:
                         push(stack, pop_composed(stack, r1.length))
                 else:
                     push(stack, null_)
+                r1 = names = kwargs = args = None
 
             elif instruction.code == OpCode.Func:
                 function = Function.__new__(Function)
@@ -1161,6 +1195,7 @@ cdef class Program:
                 r1.objects = [function]
                 r1.length = 1
                 push(stack, r1)
+                function = r1 = None
 
             elif instruction.code == OpCode.Tag:
                 name = (<InstructionStr>instruction).value
@@ -1171,6 +1206,7 @@ cdef class Program:
                             if (<Node>node)._tags is None:
                                 (<Node>node)._tags = set()
                             (<Node>node)._tags.add(name)
+                name = r1 = None
 
             elif instruction.code == OpCode.Attribute:
                 r2 = pop(stack)
@@ -1189,6 +1225,7 @@ cdef class Program:
                                 PyDict_SetItem(attributes, name, r2)
                             elif PyDict_Contains(attributes, name) == 1:
                                 PyDict_DelItem(attributes, name)
+                r1 = r2 = name = node = None
 
             elif instruction.code == OpCode.Append:
                 r2 = pop(stack)
@@ -1198,6 +1235,7 @@ cdef class Program:
                     for i, node in enumerate(r1.objects):
                         if type(node) is Node:
                             (<Node>node).append_vector(r2, i != n)
+                r1 = r2 = node = None
 
             elif instruction.code == OpCode.Prepend:
                 r2 = pop(stack)
@@ -1214,6 +1252,7 @@ cdef class Program:
                                 for child in reversed(r2.objects):
                                     if type(child) is Node:
                                         (<Node>node).insert((<Node>child).copy())
+                r1 = r2 = node = None
 
             elif instruction.code == OpCode.Compose:
                 push(stack, pop_composed(stack, (<InstructionInt>instruction).value))
@@ -1256,7 +1295,13 @@ cdef class Program:
                 if r1.objects is not None and r1.length == 1:
                     node = r1.objects[0]
                     if type(node) is Node:
-                        node_scope = (<Node>node)._attributes
+                        if (<Node>node)._attributes_shared:
+                            node_scope = dict((<Node>node)._attributes)
+                            (<Node>node)._attributes = node_scope
+                            (<Node>node)._attributes_shared = False
+                        else:
+                            node_scope = (<Node>node)._attributes
+                r1 = node = None
 
             elif instruction.code == OpCode.ClearNodeScope:
                 node_scope = None
@@ -1279,14 +1324,16 @@ cdef class Program:
                 else:
                     r1 = null_
                 push(stack, r1)
+                node = values = query = r1 = None
 
             elif instruction.code == OpCode.AppendRoot:
                 r1 = pop(stack)
                 if r1.objects is not None:
-                    for value in r1.objects:
-                        if type(value) is Node:
-                            if (<Node>value)._parent is None:
-                                context.graph.append(<Node>value)
+                    for node in r1.objects:
+                        if type(node) is Node:
+                            if (<Node>node)._parent is None:
+                                context.graph.append(<Node>node)
+                r1 = node = None
 
             else:
                 raise ValueError(f"Unrecognised instruction: {instruction}")
