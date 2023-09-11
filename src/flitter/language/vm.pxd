@@ -24,7 +24,7 @@ cdef class Program:
     cdef readonly VectorStack stack
     cdef readonly VectorStack lvars
 
-    cdef dict import_module(self, Context context, str filename, bint record_stats)
+    cdef dict import_module(self, Context context, str filename, bint record_stats, double* duration)
     cpdef void link(self)
     cdef VectorStack _execute(self, Context context, VectorStack stack, VectorStack lvars, bint record_stats)
 

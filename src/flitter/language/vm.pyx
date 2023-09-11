@@ -698,7 +698,7 @@ cdef class Program:
                 jump.offset = target - address
         self.linked = True
 
-    cdef dict import_module(self, Context context, str filename, bint record_stats):
+    cdef dict import_module(self, Context context, str filename, bint record_stats, double* duration):
         cdef Context import_context
         cdef Program program = SharedCache.get_with_root(filename, context.path).read_flitter_program()
         if program is not None:
@@ -716,10 +716,13 @@ cdef class Program:
                 import_context.graph = context.graph
                 import_context.pragmas = context.pragmas
                 import_context.state = context.state
-                import_context.variables = context.variables
+                import_context.variables = {}
                 import_context.path = program.path
+                if record_stats:
+                    duration[0] += time()
                 program._execute(import_context, None, None, record_stats)
-                context.errors.update(import_context.errors)
+                if record_stats:
+                    duration[0] -= time()
                 return import_context.variables
         return None
 
@@ -981,17 +984,15 @@ cdef class Program:
                 filename = peek(stack).as_string()
                 poke(stack, null_)
                 names = (<InstructionTuple>instruction).value
-                if record_stats: duration += time()
-                import_variables = self.import_module(context, filename, record_stats)
-                if record_stats: duration -= time()
+                import_variables = self.import_module(context, filename, record_stats, &duration)
                 if import_variables is not None:
                     for name in names:
-                        if name in import_variables:
-                            r1 = <Vector>import_variables[name]
+                        objptr = PyDict_GetItem(import_variables, name)
+                        if objptr != NULL:
+                            push(lvars, <Vector>objptr)
                         else:
                             context.errors.add(f"Unable to import '{<str>name}' from '{filename}'")
-                            r1 = null_
-                        push(lvars, r1)
+                            push(lvars, null_)
                 else:
                     context.errors.add(f"Unable to import from '{filename}'")
 
