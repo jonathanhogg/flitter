@@ -277,12 +277,18 @@ class TestBasicInstructions(unittest.TestCase):
         self.assertEqual(stack, [(0, 2, 4, 6, 8)])
 
     def test_Search(self):
-        node = Node('foo', {'test'}, {'x': Vector(1)})
-        self.context.graph.append(node)
+        foo = Node('foo', {'test'}, {'x': Vector(1)})
+        bar = Node('bar', {'test'}, {'x': Vector(2)})
+        self.context.graph.append(foo)
+        self.context.graph.append(bar)
         self.program.search(Query('#test'))
+        self.program.search(Query('bar'))
+        self.program.search(Query('#test!'))
         stack = self.program.execute(self.context)
-        self.assertEqual(len(stack), 1)
-        self.assertIs(stack[0][0], node)
+        self.assertEqual(len(stack), 3)
+        self.assertEqual(stack[0], Vector([foo, bar]))
+        self.assertEqual(stack[1], Vector([bar]))
+        self.assertEqual(stack[2], Vector([foo]))
 
     def test_Slice(self):
         self.program.literal(range(1, 11))

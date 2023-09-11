@@ -1268,7 +1268,7 @@ cdef class Program:
                 values = []
                 query = (<InstructionQuery>instruction).value
                 while node is not None:
-                    if (<Node>node)._select(query, values, False):
+                    if (<Node>node)._select(query, values, query.first):
                         break
                     node = (<Node>node).next_sibling
                 if values:
