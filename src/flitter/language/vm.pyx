@@ -15,7 +15,7 @@ from .noise import NOISE_FUNCTIONS
 
 from libc.math cimport floor
 from cpython cimport PyObject, Py_INCREF, Py_DECREF
-from cpython.dict cimport PyDict_GetItem, PyDict_SetItem
+from cpython.dict cimport PyDict_GetItem, PyDict_SetItem, PyDict_Contains, PyDict_DelItem
 from cpython.list cimport PyList_New, PyList_GET_ITEM, PyList_SET_ITEM
 from cpython.mem cimport PyMem_Malloc, PyMem_Free, PyMem_Realloc
 from cpython.time cimport time
@@ -938,7 +938,7 @@ cdef class Program:
         cdef tuple names, args
         cdef Vector r1, r2, r3
         cdef LoopSource loop_source = None
-        cdef dict import_variables, kwargs, state=context.state._state
+        cdef dict attributes, import_variables, kwargs, state=context.state._state
         cdef Query query
         cdef Function function
         cdef PyObject* objptr
@@ -1179,12 +1179,15 @@ cdef class Program:
                     for node in r1.objects:
                         if type(node) is Node:
                             if (<Node>node)._attributes_shared:
-                                (<Node>node)._attributes = dict((<Node>node)._attributes)
+                                attributes = dict((<Node>node)._attributes)
+                                (<Node>node)._attributes = attributes
                                 (<Node>node)._attributes_shared = False
+                            else:
+                                attributes = (<Node>node)._attributes
                             if r2.length:
-                                (<Node>node)._attributes[name] = r2
-                            elif name in (<Node>node)._attributes:
-                                del (<Node>node)._attributes[name]
+                                PyDict_SetItem(attributes, name, r2)
+                            elif PyDict_Contains(attributes, name) == 1:
+                                PyDict_DelItem(attributes, name)
 
             elif instruction.code == OpCode.Append:
                 r2 = pop(stack)
