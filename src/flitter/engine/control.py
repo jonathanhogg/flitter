@@ -448,6 +448,7 @@ class EngineController:
                                 1000 * render / nframes, 1000 * housekeeping / nframes, performance)
                     frames = frames[-1:]
                     execution = interaction = render = housekeeping = 0
+                    logger.trace("VM stack size: {:d}", program.stack.size)
 
         finally:
             SharedCache.clean(0)

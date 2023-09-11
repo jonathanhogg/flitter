@@ -876,6 +876,7 @@ cdef class Attributes(Expression):
                 program.extend(binding.expr._compile(lvars))
                 program.attribute(binding.name)
         else:
+            program.dup()
             program.begin_for()
             START = program.new_label()
             END = program.new_label()
@@ -885,6 +886,7 @@ cdef class Attributes(Expression):
             for binding in self.bindings:
                 program.extend(binding.expr._compile(lvars))
                 program.attribute(binding.name)
+            program.drop()
             program.jump(START)
             program.label(END)
             program.end_for()
@@ -1185,7 +1187,7 @@ cdef class For(Expression):
         program.jump(START)
         program.label(END)
         program.local_drop(n)
-        program.end_for()
+        program.end_for_compose()
         for i in range(n):
             lvars.pop()
         return program
@@ -1302,7 +1304,7 @@ cdef class Function(Expression):
         body = self.expr._compile(lvars + names)
         body.link()
         program.literal(body)
-        program.func((self.name, *names))
+        program.func(self.name, tuple(names))
         program.local_push(1)
         lvars.append(self.name)
         program.literal(null_)

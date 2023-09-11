@@ -23,7 +23,7 @@ cdef union double_long:
     unsigned long long l
 
 
-@cython.freelist(8)
+@cython.freelist(256)
 cdef class Vector:
     @staticmethod
     def coerce(other):
@@ -131,9 +131,6 @@ cdef class Vector:
         return result
 
     def __cinit__(self, value=None):
-        self.length = 0
-        self.objects = None
-        self.numbers = NULL
         if value is None:
             return
         cdef int i, n

@@ -8,7 +8,7 @@ import unittest
 import unittest.mock
 
 from flitter.model import Vector, Node, Query, null, true, false
-from flitter.language.vm import Program, Context, StateDict, Function
+from flitter.language.vm import Program, Context, StateDict, Function, VectorStack
 
 
 class TestBasicInstructions(unittest.TestCase):
@@ -397,7 +397,7 @@ class TestForLoops(unittest.TestCase):
         self.program.mul()
         self.program.jump(NEXT)
         self.program.label(END)
-        self.program.end_for()
+        self.program.end_for_compose()
         stack = self.program.execute(self.context)
         self.assertEqual(stack, [Vector.range(0, 20, 2)])
 
@@ -417,7 +417,7 @@ class TestForLoops(unittest.TestCase):
         self.program.compose(2)
         self.program.jump(NEXT)
         self.program.label(END)
-        self.program.end_for()
+        self.program.end_for_compose()
         stack = self.program.execute(self.context)
         self.assertEqual(stack, [(0, 1, 4, 3, 8, 5, 12, 7, 16, 9)])
 
@@ -437,7 +437,7 @@ class TestForLoops(unittest.TestCase):
         self.program.compose(2)
         self.program.jump(NEXT)
         self.program.label(END)
-        self.program.end_for()
+        self.program.end_for_compose()
         stack = self.program.execute(self.context)
         self.assertEqual(stack, [(0, 1, 4, 3, 8, 5, 12, 7, 16)])
 
@@ -455,14 +455,14 @@ class TestForLoops(unittest.TestCase):
         self.program.mul()
         self.program.jump(NEXT)
         self.program.label(END)
-        self.program.end_for()
+        self.program.end_for_compose()
         stack = self.program.execute(self.context)
         self.assertEqual(stack, [null])
 
     def test_next_push(self):
         NEXT = self.program.new_label()
         END = self.program.new_label()
-        self.program.literal(Vector.range(10))
+        self.program.literal(Vector.range(5))
         self.program.begin_for()
         self.program.label(NEXT)
         self.program.push_next(END)
@@ -472,7 +472,7 @@ class TestForLoops(unittest.TestCase):
         self.program.label(END)
         self.program.end_for()
         stack = self.program.execute(self.context)
-        self.assertEqual(stack, [Vector.range(0, 20, 2)])
+        self.assertEqual(stack, [0, 2, 4, 6, 8])
 
 
 class TestLocalVars(unittest.TestCase):
@@ -551,7 +551,7 @@ class TestFunc(unittest.TestCase):
         self.program.literal(null)
         self.program.literal(1)
         self.program.literal(self.func_program)
-        self.program.func(('f', 'x', 'y'))
+        self.program.func('f', ('x', 'y'))
         self.program.local_push(1)
 
     def test_declare(self):
@@ -674,3 +674,125 @@ class TestCalls(unittest.TestCase):
         stack = self.program.execute(self.context)
         self.assertEqual(stack, [12])
         self.test_function.assert_called_once_with(Vector(1), x=Vector(2), y=Vector(3))
+
+
+class TestStack(unittest.TestCase):
+    def test_create(self):
+        stack = VectorStack(10)
+        self.assertEqual(stack.size, 10)
+        self.assertEqual(len(stack), 0)
+
+    def test_basic_push_and_pop(self):
+        stack = VectorStack()
+        stack.push(Vector(0))
+        self.assertEqual(len(stack), 1)
+        stack.push(Vector(1))
+        self.assertEqual(len(stack), 2)
+        self.assertEqual(stack.pop(), Vector(1))
+        self.assertEqual(len(stack), 1)
+        self.assertEqual(stack.pop(), Vector(0))
+        self.assertEqual(len(stack), 0)
+
+    def test_drop(self):
+        stack = VectorStack()
+        stack.push(Vector(0))
+        stack.push(Vector(1))
+        stack.push(Vector(2))
+        stack.push(Vector(3))
+        self.assertEqual(len(stack), 4)
+        stack.drop()
+        self.assertEqual(len(stack), 3)
+        stack.drop(2)
+        self.assertEqual(len(stack), 1)
+        self.assertEqual(stack.pop(), Vector(0))
+        self.assertEqual(len(stack), 0)
+
+    def test_realloc(self):
+        stack = VectorStack(1)
+        stack.push(Vector(0))
+        self.assertEqual(stack.size, 1)
+        self.assertEqual(len(stack), 1)
+        stack.push(Vector(1))
+        self.assertEqual(stack.size, 2)
+        self.assertEqual(len(stack), 2)
+        stack.push(Vector(2))
+        self.assertEqual(stack.size, 4)
+        self.assertEqual(len(stack), 3)
+        stack.push(Vector(3))
+        self.assertEqual(stack.size, 4)
+        self.assertEqual(len(stack), 4)
+        stack.push(Vector(4))
+        self.assertEqual(stack.size, 8)
+        self.assertEqual(len(stack), 5)
+
+    def test_peek_and_poke(self):
+        stack = VectorStack()
+        stack.push(Vector(0))
+        self.assertEqual(len(stack), 1)
+        self.assertEqual(stack.peek(), Vector(0))
+        stack.poke(Vector(1))
+        self.assertEqual(len(stack), 1)
+        self.assertEqual(stack.pop(), Vector(1))
+        self.assertEqual(len(stack), 0)
+
+    def test_peek_at_and_poke_at(self):
+        stack = VectorStack()
+        stack.push(Vector(0))
+        stack.push(Vector(1))
+        stack.push(Vector(2))
+        self.assertEqual(len(stack), 3)
+        self.assertEqual(stack.peek_at(0), Vector(2))
+        self.assertEqual(stack.peek_at(1), Vector(1))
+        self.assertEqual(stack.peek_at(2), Vector(0))
+        stack.poke_at(0, Vector(3))
+        stack.poke_at(1, Vector(4))
+        stack.poke_at(2, Vector(5))
+        self.assertEqual(len(stack), 3)
+        self.assertEqual(stack.pop(), Vector(3))
+        self.assertEqual(stack.pop(), Vector(4))
+        self.assertEqual(stack.pop(), Vector(5))
+        self.assertEqual(len(stack), 0)
+
+    def test_pop_tuple(self):
+        stack = VectorStack()
+        stack.push(Vector(0))
+        stack.push(Vector(1))
+        stack.push(Vector(2))
+        self.assertEqual(len(stack), 3)
+        self.assertEqual(stack.pop_tuple(2), (Vector(1), Vector(2)))
+        self.assertEqual(len(stack), 1)
+        self.assertEqual(stack.pop(), Vector(0))
+        self.assertEqual(len(stack), 0)
+
+    def test_pop_list(self):
+        stack = VectorStack()
+        stack.push(Vector(0))
+        stack.push(Vector(1))
+        stack.push(Vector(2))
+        self.assertEqual(len(stack), 3)
+        self.assertEqual(stack.pop_list(2), [Vector(1), Vector(2)])
+        self.assertEqual(len(stack), 1)
+        self.assertEqual(stack.pop(), Vector(0))
+        self.assertEqual(len(stack), 0)
+
+    def test_pop_dict(self):
+        stack = VectorStack()
+        stack.push(Vector(0))
+        stack.push(Vector(1))
+        stack.push(Vector(2))
+        self.assertEqual(len(stack), 3)
+        self.assertEqual(stack.pop_dict(('x', 'y')), {'x': Vector(1), 'y': Vector(2)})
+        self.assertEqual(len(stack), 1)
+        self.assertEqual(stack.pop(), Vector(0))
+        self.assertEqual(len(stack), 0)
+
+    def test_pop_composed(self):
+        stack = VectorStack()
+        stack.push(Vector(0))
+        stack.push(Vector(1))
+        stack.push(Vector(2))
+        self.assertEqual(len(stack), 3)
+        self.assertEqual(stack.pop_composed(2), Vector([1, 2]))
+        self.assertEqual(len(stack), 1)
+        self.assertEqual(stack.pop(), Vector(0))
+        self.assertEqual(len(stack), 0)

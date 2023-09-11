@@ -2,10 +2,18 @@
 
 from ..model cimport Vector, Node
 
+from cpython cimport PyObject
+
 
 cdef dict static_builtins
 cdef dict dynamic_builtins
 cdef dict builtins
+
+
+cdef class VectorStack:
+    cdef PyObject** vectors
+    cdef int top
+    cdef readonly unsigned int size
 
 
 cdef class Program:
@@ -13,10 +21,12 @@ cdef class Program:
     cdef bint linked
     cdef readonly object path
     cdef readonly object top
+    cdef readonly VectorStack stack
+    cdef readonly VectorStack lvars
 
     cdef dict import_module(self, Context context, str filename, bint record_stats)
     cpdef void link(self)
-    cdef list _execute(self, Context context, list lvars, int lvars_top, bint record_stats)
+    cdef VectorStack _execute(self, Context context, VectorStack stack, VectorStack lvars, bint record_stats)
 
 
 cdef class StateDict:
