@@ -193,10 +193,11 @@ cdef class Sequence(Expression):
         cdef int n=len(lvars)
         for expr in self.expressions:
             program.extend(expr._compile(lvars))
+        if len(lvars) > n:
+            program.local_drop(len(lvars)-n)
+            while len(lvars) > n:
+                lvars.pop()
         program.compose(len(self.expressions))
-        program.local_drop(len(lvars)-n)
-        while len(lvars) > n:
-            lvars.pop()
         return program
 
     cpdef Expression evaluate(self, Context context):

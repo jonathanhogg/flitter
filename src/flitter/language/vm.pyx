@@ -1193,14 +1193,7 @@ cdef class Program:
                     n = r1.length - 1
                     for i, node in enumerate(r1.objects):
                         if type(node) is Node:
-                            if i == n:
-                                for child in r2.objects:
-                                    if type(child) is Node:
-                                        (<Node>node).append(<Node>child)
-                            else:
-                                for child in r2.objects:
-                                    if type(child) is Node:
-                                        (<Node>node).append((<Node>child).copy())
+                            (<Node>node).append_vector(r2, i != n)
 
             elif instruction.code == OpCode.Prepend:
                 r2 = pop(stack)
@@ -1219,12 +1212,7 @@ cdef class Program:
                                         (<Node>node).insert((<Node>child).copy())
 
             elif instruction.code == OpCode.Compose:
-                n = (<InstructionInt>instruction).value
-                if n == 2:
-                    r1 = pop(stack)
-                    poke(stack, peek(stack).concat(r1))
-                else:
-                    push(stack, pop_composed(stack, n))
+                push(stack, pop_composed(stack, (<InstructionInt>instruction).value))
 
             elif instruction.code == OpCode.BeginFor:
                 if loop_source is not None:
@@ -1304,8 +1292,8 @@ cdef class Program:
                 StatsCount[<int>instruction.code] += 1
                 StatsDuration[<int>instruction.code] += duration
 
-            assert -1 <= stack.top, "Stack out of bounds"
-            assert -1 <= lvars.top, "Lvars out of bounds"
+            assert -1 <= stack.top < stack.size, "Stack out of bounds"
+            assert -1 <= lvars.top < lvars.size, "Lvars out of bounds"
 
         assert pc == program_end, "Jump outside of program"
         return stack

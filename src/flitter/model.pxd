@@ -123,6 +123,7 @@ cdef class Node:
     cpdef void add_tag(self, str tag)
     cpdef void remove_tag(self, str tag)
     cpdef void append(self, Node node)
+    cdef void append_vector(self, Vector nodes, bint copy)
     cpdef void insert(self, Node node)
     cpdef void remove(self, Node node)
     cdef bint _select(self, Query query, list nodes, bint first)

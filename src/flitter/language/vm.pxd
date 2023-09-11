@@ -13,7 +13,7 @@ cdef dict builtins
 cdef class VectorStack:
     cdef PyObject** vectors
     cdef int top
-    cdef readonly unsigned int size
+    cdef readonly int size
 
 
 cdef class Program:

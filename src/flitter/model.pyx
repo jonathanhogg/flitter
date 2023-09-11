@@ -6,7 +6,7 @@ import cython
 from cython cimport view
 
 from libc.math cimport isnan, floor, ceil, abs, sqrt, sin, cos, tan, isnan
-from cpython cimport Py_INCREF
+from cpython cimport PyObject, Py_INCREF
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
 from cpython.list cimport PyList_New, PyList_SET_ITEM
 from cpython.weakref cimport PyWeakref_NewRef, PyWeakref_GetObject
@@ -1457,6 +1457,29 @@ cdef class Node:
             self.last_child = node
         else:
             self.first_child = self.last_child = node
+
+    cdef void append_vector(self, Vector nodes, bint copy):
+        if nodes.objects is None:
+            return
+        weak_self = PyWeakref_NewRef(self, None)
+        cdef Node node, last=self.last_child
+        cdef PyObject* parent
+        for obj in nodes.objects:
+            if not isinstance(obj, Node):
+                continue
+            if copy:
+                node = (<Node>obj).copy()
+            else:
+                node = <Node>obj
+                if node._parent is not None and (parent := PyWeakref_GetObject(node._parent)) != NULL:
+                    (<Node>parent).remove(node)
+            node._parent = weak_self
+            if last is not None:
+                last.next_sibling = node
+            else:
+                self.first_child = node
+            last = node
+        self.last_child = last
 
     cpdef void insert(self, Node node):
         cdef Node parent = <Node>PyWeakref_GetObject(node._parent) if node._parent is not None else None
