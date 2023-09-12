@@ -4,6 +4,8 @@ Tests of the flitter language virtual machine
 Note that `Import` is currently not tested.
 """
 
+import gc
+import tracemalloc
 import unittest
 import unittest.mock
 
@@ -696,6 +698,23 @@ class TestCalls(unittest.TestCase):
 
 
 class TestStack(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        tracemalloc.start()
+
+    @classmethod
+    def tearDownClass(cls):
+        tracemalloc.stop()
+
+    def setUp(self):
+        gc.collect()
+        gc.disable()
+
+    def tearDown(self):
+        for obj in gc.get_objects(0):
+            self.assertNotIsInstance(obj, Vector, "Memory leak")
+        gc.enable()
+
     def test_create(self):
         stack = VectorStack(10)
         self.assertEqual(stack.size, 10)
