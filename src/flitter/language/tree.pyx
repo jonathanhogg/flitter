@@ -110,7 +110,8 @@ cdef class Top(Expression):
         for i, name in enumerate(reversed(lvars)):
             program.local_load(i)
             program.store_global(name)
-        program.local_drop(len(lvars))
+        if lvars:
+            program.local_drop(len(lvars))
         program.link()
         return program
 
@@ -489,7 +490,14 @@ cdef class BinaryOperation(Expression):
 
 
 cdef class MathsBinaryOperation(BinaryOperation):
-    pass
+    cpdef Expression evaluate(self, Context context):
+        cdef Expression expr=BinaryOperation.evaluate(self, context)
+        if isinstance(expr, MathsBinaryOperation):
+            if isinstance(expr.left, Positive):
+                return (type(expr)(expr.left.expr, expr.right)).evaluate(context)
+            elif isinstance(expr.right, Positive):
+                return (type(expr)(expr.left, expr.right.expr)).evaluate(context)
+        return expr
 
 
 cdef class Add(MathsBinaryOperation):
@@ -517,6 +525,8 @@ cdef class Add(MathsBinaryOperation):
     cdef Expression constant_left(self, Vector left, Expression right):
         if left.eq(false_):
             return Positive(right)
+        if isinstance(right, Negative):
+            return Subtract(Literal(left), right.expr)
 
     cdef Expression constant_right(self, Expression left, Vector right):
         return self.constant_left(right, left)
@@ -566,6 +576,8 @@ cdef class Multiply(MathsBinaryOperation):
             maths = right
             if isinstance(maths.left, Literal):
                 return Divide(Multiply(Literal(left), maths.left), maths.right)
+        elif isinstance(right, Negative):
+            return Multiply(Literal(left.neg()), (<Negative>right).expr)
 
     cdef Expression constant_right(self, Expression left, Vector right):
         return self.constant_left(right, left)
@@ -581,6 +593,7 @@ cdef class Divide(MathsBinaryOperation):
     cdef Expression constant_right(self, Expression left, Vector right):
         if right.eq(true_):
             return Positive(left)
+        return Multiply(left, Literal(true_.truediv(right)))
 
 
 cdef class FloorDivide(MathsBinaryOperation):
