@@ -432,6 +432,7 @@ cdef inline int push(VectorStack stack, Vector vector) except 0:
     return stack.size
 
 cdef inline Vector pop(VectorStack stack) noexcept:
+    assert stack.top > -1, "Stack empty"
     cdef Vector vector = <Vector>stack.vectors[stack.top]
     stack.vectors[stack.top] = NULL
     stack.top -= 1
@@ -698,6 +699,37 @@ cdef class Program:
                 jump.offset = target - address
         self.linked = True
 
+    cpdef optimize(self):
+        cdef Instruction instruction, last=None
+        cdef list instructions=[]
+        cdef int n
+        assert not self.linked, "Cannot optimize a linked program"
+        for instruction in self.instructions:
+            if instructions:
+                last = instructions[len(instructions)-1]
+                if last.code == OpCode.Compose:
+                    if instruction.code == OpCode.Compose:
+                        instructions.pop()
+                        n = (<InstructionInt>instruction).value - 1 + (<InstructionInt>last).value
+                        instruction = InstructionInt(OpCode.Compose, n)
+                    elif instruction.code == OpCode.Append:
+                        instructions.pop()
+                        n = (<InstructionInt>instruction).value - 1 + (<InstructionInt>last).value
+                        instruction = InstructionInt(OpCode.Append, n)
+                elif last.code == OpCode.Mul:
+                    if instruction.code == OpCode.Add:
+                        instructions.pop()
+                        instruction = Instruction(OpCode.MulAdd)
+                elif last.code == OpCode.Literal:
+                    if (<InstructionVector>last).value.length == 0:
+                        if instruction.code == OpCode.Append or instruction.code == OpCode.AppendRoot:
+                            instructions.pop()
+                            continue
+            instructions.append(instruction)
+        if len(instructions) < len(self.instructions):
+            logger.debug("Optimizer reduced program by {} instructions", len(self.instructions) - len(instructions))
+            self.instructions = instructions
+
     cdef dict import_module(self, Context context, str filename, bint record_stats, double* duration):
         cdef Context import_context
         cdef Program program = SharedCache.get_with_root(filename, context.path).read_flitter_program()
@@ -869,8 +901,8 @@ cdef class Program:
     def attribute(self, str name):
         self.instructions.append(InstructionStr(OpCode.Attribute, name))
 
-    def append(self):
-        self.instructions.append(Instruction(OpCode.Append))
+    def append(self, int count=1):
+        self.instructions.append(InstructionInt(OpCode.Append, count))
 
     def prepend(self):
         self.instructions.append(Instruction(OpCode.Prepend))
@@ -938,7 +970,7 @@ cdef class Program:
         cdef LoopSource loop_source = None
         cdef double duration
 
-        cdef Instruction instruction
+        cdef Instruction instruction=None
         cdef str filename
         cdef object name, arg, node
         cdef tuple names, args
@@ -951,400 +983,410 @@ cdef class Program:
 
         assert self.linked, "Program has not been linked"
 
-        while 0 <= pc < program_end:
-            instruction = <Instruction>self.instructions[pc]
-            pc += 1
-            if record_stats:
-                duration = -time()
+        try:
+            while 0 <= pc < program_end:
+                instruction = <Instruction>self.instructions[pc]
+                pc += 1
+                if record_stats:
+                    duration = -time()
 
-            if instruction.code == OpCode.Dup:
-                push(stack, peek(stack))
+                if instruction.code == OpCode.Dup:
+                    push(stack, peek(stack))
 
-            elif instruction.code == OpCode.Drop:
-                drop(stack, (<InstructionInt>instruction).value)
+                elif instruction.code == OpCode.Drop:
+                    drop(stack, (<InstructionInt>instruction).value)
 
-            elif instruction.code == OpCode.Label:
-                pass
+                elif instruction.code == OpCode.Label:
+                    pass
 
-            elif instruction.code == OpCode.Jump:
-                pc += (<InstructionJump>instruction).offset
-
-            elif instruction.code == OpCode.BranchTrue:
-                if pop(stack).as_bool():
+                elif instruction.code == OpCode.Jump:
                     pc += (<InstructionJump>instruction).offset
 
-            elif instruction.code == OpCode.BranchFalse:
-                if not pop(stack).as_bool():
-                    pc += (<InstructionJump>instruction).offset
+                elif instruction.code == OpCode.BranchTrue:
+                    if pop(stack).as_bool():
+                        pc += (<InstructionJump>instruction).offset
 
-            elif instruction.code == OpCode.Pragma:
-                context.pragmas[(<InstructionStr>instruction).value] = peek(stack)
-                poke(stack, null_)
+                elif instruction.code == OpCode.BranchFalse:
+                    if not pop(stack).as_bool():
+                        pc += (<InstructionJump>instruction).offset
 
-            elif instruction.code == OpCode.Import:
-                filename = peek(stack).as_string()
-                poke(stack, null_)
-                names = (<InstructionTuple>instruction).value
-                import_variables = self.import_module(context, filename, record_stats, &duration)
-                if import_variables is not None:
-                    for name in names:
-                        objptr = PyDict_GetItem(import_variables, name)
-                        if objptr != NULL:
-                            push(lvars, <Vector>objptr)
-                        else:
-                            context.errors.add(f"Unable to import '{<str>name}' from '{filename}'")
-                            push(lvars, null_)
-                else:
-                    context.errors.add(f"Unable to import from '{filename}'")
-                filename = names = import_variables = name = None
-
-            elif instruction.code == OpCode.Literal:
-                push(stack, (<InstructionVector>instruction).value)
-
-            elif instruction.code == OpCode.LiteralNode:
-                r1 = Vector.__new__(Vector)
-                r1.objects = [(<InstructionNode>instruction).value.copy()]
-                r1.length = 1
-                push(stack, r1)
-                r1 = None
-
-            elif instruction.code == OpCode.LiteralNodes:
-                push(stack, (<InstructionVector>instruction).value.copynodes())
-
-            elif instruction.code == OpCode.LocalDrop:
-                drop(lvars, (<InstructionInt>instruction).value)
-
-            elif instruction.code == OpCode.LocalLoad:
-                push(stack, peek_at(lvars, (<InstructionInt>instruction).value))
-
-            elif instruction.code == OpCode.LocalPush:
-                r1 = pop(stack)
-                n = (<InstructionInt>instruction).value
-                if n == 1:
-                    push(lvars, r1)
-                else:
-                    for i in range(n):
-                        push(lvars, r1.item(i))
-                r1 = None
-
-            elif instruction.code == OpCode.Name:
-                name = (<InstructionStr>instruction).value
-                objptr = PyDict_GetItem(variables, name)
-                if objptr == NULL:
-                    objptr = PyDict_GetItem(builtins, name)
-                if  objptr == NULL and node_scope is not None:
-                    objptr = PyDict_GetItem(node_scope, name)
-                if objptr != NULL:
-                    push(stack, <Vector>objptr)
-                else:
-                    push(stack, null_)
-                    context.errors.add(f"Unbound name '{<str>name}'")
-                name = None
-                objptr = NULL
-
-            elif instruction.code == OpCode.Lookup:
-                objptr = PyDict_GetItem(state, peek(stack))
-                if objptr != NULL:
-                    poke(stack, <Vector>objptr)
-                else:
+                elif instruction.code == OpCode.Pragma:
+                    context.pragmas[(<InstructionStr>instruction).value] = peek(stack)
                     poke(stack, null_)
-                objptr = NULL
 
-            elif instruction.code == OpCode.LookupLiteral:
-                objptr = PyDict_GetItem(state, (<InstructionVector>instruction).value)
-                if objptr != NULL:
-                    push(stack, <Vector>objptr)
-                else:
-                    push(stack, null_)
-                objptr = NULL
-
-            elif instruction.code == OpCode.Range:
-                r3 = pop(stack)
-                r2 = pop(stack)
-                r1 = Vector.__new__(Vector)
-                r1.fill_range(peek(stack), r2, r3)
-                poke(stack, r1)
-                r1 = r2 = r3 = None
-
-            elif instruction.code == OpCode.Neg:
-                poke(stack, peek(stack).neg())
-
-            elif instruction.code == OpCode.Pos:
-                poke(stack, peek(stack).pos())
-
-            elif instruction.code == OpCode.Not:
-                poke(stack, false_ if peek(stack).as_bool() else true_)
-
-            elif instruction.code == OpCode.Add:
-                r1 = pop(stack)
-                poke(stack, peek(stack).add(r1))
-                r1 = None
-
-            elif instruction.code == OpCode.Sub:
-                r1 = pop(stack)
-                poke(stack, peek(stack).sub(r1))
-                r1 = None
-
-            elif instruction.code == OpCode.Mul:
-                r1 = pop(stack)
-                poke(stack, peek(stack).mul(r1))
-                r1 = None
-
-            elif instruction.code == OpCode.MulAdd:
-                r2 = pop(stack)
-                r1 = pop(stack)
-                poke(stack, peek(stack).mul_add(r1, r2))
-                r1 = r2 = None
-
-            elif instruction.code == OpCode.TrueDiv:
-                r1 = pop(stack)
-                poke(stack, peek(stack).truediv(r1))
-                r1 = None
-
-            elif instruction.code == OpCode.FloorDiv:
-                r1 = pop(stack)
-                poke(stack, peek(stack).floordiv(r1))
-                r1 = None
-
-            elif instruction.code == OpCode.Mod:
-                r1 = pop(stack)
-                poke(stack, peek(stack).mod(r1))
-                r1 = None
-
-            elif instruction.code == OpCode.Pow:
-                r1 = pop(stack)
-                poke(stack, peek(stack).pow(r1))
-                r1 = None
-
-            elif instruction.code == OpCode.Eq:
-                r1 = pop(stack)
-                poke(stack, peek(stack).eq(r1))
-                r1 = None
-
-            elif instruction.code == OpCode.Ne:
-                r1 = pop(stack)
-                poke(stack, peek(stack).ne(r1))
-                r1 = None
-
-            elif instruction.code == OpCode.Gt:
-                r1 = pop(stack)
-                poke(stack, peek(stack).gt(r1))
-                r1 = None
-
-            elif instruction.code == OpCode.Lt:
-                r1 = pop(stack)
-                poke(stack, peek(stack).lt(r1))
-                r1 = None
-
-            elif instruction.code == OpCode.Ge:
-                r1 = pop(stack)
-                poke(stack, peek(stack).ge(r1))
-                r1 = None
-
-            elif instruction.code == OpCode.Le:
-                r1 = pop(stack)
-                poke(stack, peek(stack).le(r1))
-                r1 = None
-
-            elif instruction.code == OpCode.Xor:
-                r2 = pop(stack)
-                r1 = peek(stack)
-                if not r1.as_bool():
-                    poke(stack, r2)
-                elif r2.as_bool():
-                    poke(stack, false_)
-                r1 = r2 = None
-
-            elif instruction.code == OpCode.Slice:
-                r1 = pop(stack)
-                poke(stack, peek(stack).slice(r1))
-                r1 = None
-
-            elif instruction.code == OpCode.SliceLiteral:
-                poke(stack, peek(stack).slice((<InstructionVector>instruction).value))
-
-            elif instruction.code == OpCode.IndexLiteral:
-                poke(stack, peek(stack).item((<InstructionInt>instruction).value))
-
-            elif instruction.code == OpCode.Call:
-                r1 = pop(stack)
-                names = (<InstructionIntTuple>instruction).tvalue
-                kwargs = pop_dict(stack, names) if names is not None else None
-                n = (<InstructionIntTuple>instruction).ivalue
-                args = pop_tuple(stack, n) if n else ()
-                if r1.objects is not None:
-                    if r1.length == 1:
-                        call_helper(context, stack, r1.objects[0], args, kwargs, record_stats, &duration)
+                elif instruction.code == OpCode.Import:
+                    filename = pop(stack).as_string()
+                    names = (<InstructionTuple>instruction).value
+                    import_variables = self.import_module(context, filename, record_stats, &duration)
+                    if import_variables is not None:
+                        for name in names:
+                            objptr = PyDict_GetItem(import_variables, name)
+                            if objptr != NULL:
+                                push(lvars, <Vector>objptr)
+                            else:
+                                context.errors.add(f"Unable to import '{<str>name}' from '{filename}'")
+                                push(lvars, null_)
                     else:
-                        for i in range(r1.length):
-                            call_helper(context, stack, r1.objects[i], args, kwargs, record_stats, &duration)
-                        push(stack, pop_composed(stack, r1.length))
-                else:
-                    push(stack, null_)
-                r1 = names = kwargs = args = None
+                        context.errors.add(f"Unable to import from '{filename}'")
+                    filename = names = import_variables = name = None
 
-            elif instruction.code == OpCode.Func:
-                function = Function.__new__(Function)
-                function.__name__ = (<InstructionStrTuple>instruction).svalue
-                function.parameters = (<InstructionStrTuple>instruction).tvalue
-                function.program = <Program>pop(stack).objects[0]
-                function.lvars = copy(lvars)
-                n = PyTuple_GET_SIZE(function.parameters)
-                function.defaults = pop_tuple(stack, n) if n else ()
-                r1 = <Vector>Vector.__new__(Vector)
-                r1.objects = [function]
-                r1.length = 1
-                push(stack, r1)
-                function = r1 = None
+                elif instruction.code == OpCode.Literal:
+                    push(stack, (<InstructionVector>instruction).value)
 
-            elif instruction.code == OpCode.Tag:
-                name = (<InstructionStr>instruction).value
-                r1 = peek(stack)
-                if r1.objects is not None:
-                    for node in r1.objects:
-                        if type(node) is Node:
-                            if (<Node>node)._tags is None:
-                                (<Node>node)._tags = set()
-                            (<Node>node)._tags.add(name)
-                name = r1 = None
+                elif instruction.code == OpCode.LiteralNode:
+                    r1 = Vector.__new__(Vector)
+                    r1.objects = [(<InstructionNode>instruction).value.copy()]
+                    r1.length = 1
+                    push(stack, r1)
+                    r1 = None
 
-            elif instruction.code == OpCode.Attribute:
-                r2 = pop(stack)
-                r1 = peek(stack)
-                if r1.objects is not None:
+                elif instruction.code == OpCode.LiteralNodes:
+                    push(stack, (<InstructionVector>instruction).value.copynodes())
+
+                elif instruction.code == OpCode.LocalDrop:
+                    drop(lvars, (<InstructionInt>instruction).value)
+
+                elif instruction.code == OpCode.LocalLoad:
+                    push(stack, peek_at(lvars, (<InstructionInt>instruction).value))
+
+                elif instruction.code == OpCode.LocalPush:
+                    r1 = pop(stack)
+                    n = (<InstructionInt>instruction).value
+                    if n == 1:
+                        push(lvars, r1)
+                    else:
+                        for i in range(n):
+                            push(lvars, r1.item(i))
+                    r1 = None
+
+                elif instruction.code == OpCode.Name:
                     name = (<InstructionStr>instruction).value
-                    for node in r1.objects:
+                    objptr = PyDict_GetItem(variables, name)
+                    if objptr == NULL:
+                        objptr = PyDict_GetItem(builtins, name)
+                    if  objptr == NULL and node_scope is not None:
+                        objptr = PyDict_GetItem(node_scope, name)
+                    if objptr != NULL:
+                        push(stack, <Vector>objptr)
+                    else:
+                        push(stack, null_)
+                        context.errors.add(f"Unbound name '{<str>name}'")
+                    name = None
+                    objptr = NULL
+
+                elif instruction.code == OpCode.Lookup:
+                    objptr = PyDict_GetItem(state, peek(stack))
+                    if objptr != NULL:
+                        poke(stack, <Vector>objptr)
+                    else:
+                        poke(stack, null_)
+                    objptr = NULL
+
+                elif instruction.code == OpCode.LookupLiteral:
+                    objptr = PyDict_GetItem(state, (<InstructionVector>instruction).value)
+                    if objptr != NULL:
+                        push(stack, <Vector>objptr)
+                    else:
+                        push(stack, null_)
+                    objptr = NULL
+
+                elif instruction.code == OpCode.Range:
+                    r3 = pop(stack)
+                    r2 = pop(stack)
+                    r1 = Vector.__new__(Vector)
+                    r1.fill_range(peek(stack), r2, r3)
+                    poke(stack, r1)
+                    r1 = r2 = r3 = None
+
+                elif instruction.code == OpCode.Neg:
+                    poke(stack, peek(stack).neg())
+
+                elif instruction.code == OpCode.Pos:
+                    poke(stack, peek(stack).pos())
+
+                elif instruction.code == OpCode.Not:
+                    poke(stack, false_ if peek(stack).as_bool() else true_)
+
+                elif instruction.code == OpCode.Add:
+                    r1 = pop(stack)
+                    poke(stack, peek(stack).add(r1))
+                    r1 = None
+
+                elif instruction.code == OpCode.Sub:
+                    r1 = pop(stack)
+                    poke(stack, peek(stack).sub(r1))
+                    r1 = None
+
+                elif instruction.code == OpCode.Mul:
+                    r1 = pop(stack)
+                    poke(stack, peek(stack).mul(r1))
+                    r1 = None
+
+                elif instruction.code == OpCode.MulAdd:
+                    r2 = pop(stack)
+                    r1 = pop(stack)
+                    poke(stack, peek(stack).mul_add(r1, r2))
+                    r1 = r2 = None
+
+                elif instruction.code == OpCode.TrueDiv:
+                    r1 = pop(stack)
+                    poke(stack, peek(stack).truediv(r1))
+                    r1 = None
+
+                elif instruction.code == OpCode.FloorDiv:
+                    r1 = pop(stack)
+                    poke(stack, peek(stack).floordiv(r1))
+                    r1 = None
+
+                elif instruction.code == OpCode.Mod:
+                    r1 = pop(stack)
+                    poke(stack, peek(stack).mod(r1))
+                    r1 = None
+
+                elif instruction.code == OpCode.Pow:
+                    r1 = pop(stack)
+                    poke(stack, peek(stack).pow(r1))
+                    r1 = None
+
+                elif instruction.code == OpCode.Eq:
+                    r1 = pop(stack)
+                    poke(stack, peek(stack).eq(r1))
+                    r1 = None
+
+                elif instruction.code == OpCode.Ne:
+                    r1 = pop(stack)
+                    poke(stack, peek(stack).ne(r1))
+                    r1 = None
+
+                elif instruction.code == OpCode.Gt:
+                    r1 = pop(stack)
+                    poke(stack, peek(stack).gt(r1))
+                    r1 = None
+
+                elif instruction.code == OpCode.Lt:
+                    r1 = pop(stack)
+                    poke(stack, peek(stack).lt(r1))
+                    r1 = None
+
+                elif instruction.code == OpCode.Ge:
+                    r1 = pop(stack)
+                    poke(stack, peek(stack).ge(r1))
+                    r1 = None
+
+                elif instruction.code == OpCode.Le:
+                    r1 = pop(stack)
+                    poke(stack, peek(stack).le(r1))
+                    r1 = None
+
+                elif instruction.code == OpCode.Xor:
+                    r2 = pop(stack)
+                    r1 = peek(stack)
+                    if not r1.as_bool():
+                        poke(stack, r2)
+                    elif r2.as_bool():
+                        poke(stack, false_)
+                    r1 = r2 = None
+
+                elif instruction.code == OpCode.Slice:
+                    r1 = pop(stack)
+                    poke(stack, peek(stack).slice(r1))
+                    r1 = None
+
+                elif instruction.code == OpCode.SliceLiteral:
+                    poke(stack, peek(stack).slice((<InstructionVector>instruction).value))
+
+                elif instruction.code == OpCode.IndexLiteral:
+                    poke(stack, peek(stack).item((<InstructionInt>instruction).value))
+
+                elif instruction.code == OpCode.Call:
+                    r1 = pop(stack)
+                    names = (<InstructionIntTuple>instruction).tvalue
+                    kwargs = pop_dict(stack, names) if names is not None else None
+                    n = (<InstructionIntTuple>instruction).ivalue
+                    args = pop_tuple(stack, n) if n else ()
+                    if r1.objects is not None:
+                        if r1.length == 1:
+                            call_helper(context, stack, r1.objects[0], args, kwargs, record_stats, &duration)
+                        else:
+                            for i in range(r1.length):
+                                call_helper(context, stack, r1.objects[i], args, kwargs, record_stats, &duration)
+                            push(stack, pop_composed(stack, r1.length))
+                    else:
+                        push(stack, null_)
+                    r1 = names = kwargs = args = None
+
+                elif instruction.code == OpCode.Func:
+                    function = Function.__new__(Function)
+                    function.__name__ = (<InstructionStrTuple>instruction).svalue
+                    function.parameters = (<InstructionStrTuple>instruction).tvalue
+                    function.program = <Program>pop(stack).objects[0]
+                    function.lvars = copy(lvars)
+                    n = PyTuple_GET_SIZE(function.parameters)
+                    function.defaults = pop_tuple(stack, n) if n else ()
+                    r1 = <Vector>Vector.__new__(Vector)
+                    r1.objects = [function]
+                    r1.length = 1
+                    push(stack, r1)
+                    function = r1 = None
+
+                elif instruction.code == OpCode.Tag:
+                    name = (<InstructionStr>instruction).value
+                    r1 = peek(stack)
+                    if r1.objects is not None:
+                        for node in r1.objects:
+                            if type(node) is Node:
+                                if (<Node>node)._tags is None:
+                                    (<Node>node)._tags = set()
+                                (<Node>node)._tags.add(name)
+                    name = r1 = None
+
+                elif instruction.code == OpCode.Attribute:
+                    r2 = pop(stack)
+                    r1 = peek(stack)
+                    if r1.objects is not None:
+                        name = (<InstructionStr>instruction).value
+                        for node in r1.objects:
+                            if type(node) is Node:
+                                if (<Node>node)._attributes_shared:
+                                    attributes = dict((<Node>node)._attributes)
+                                    (<Node>node)._attributes = attributes
+                                    (<Node>node)._attributes_shared = False
+                                else:
+                                    attributes = (<Node>node)._attributes
+                                if r2.length:
+                                    PyDict_SetItem(attributes, name, r2)
+                                elif PyDict_Contains(attributes, name) == 1:
+                                    PyDict_DelItem(attributes, name)
+                    r1 = r2 = name = node = None
+
+                elif instruction.code == OpCode.Append:
+                    m = (<InstructionInt>instruction).value
+                    r1 = peek_at(stack, m)
+                    if r1.objects is not None:
+                        n = r1.length - 1
+                        for i in range(m-1, -1, -1):
+                            r2 = peek_at(stack, i)
+                            if r2.objects is not None:
+                                for j, node in enumerate(r1.objects):
+                                    if type(node) is Node:
+                                        (<Node>node).append_vector(r2, j != n)
+                    drop(stack, m)
+                    r1 = r2 = node = None
+
+                elif instruction.code == OpCode.Prepend:
+                    r2 = pop(stack)
+                    r1 = peek(stack)
+                    if r1.objects is not None and r2.objects is not None:
+                        n = r1.length - 1
+                        for i, node in enumerate(r1.objects):
+                            if type(node) is Node:
+                                if i == n:
+                                    for child in reversed(r2.objects):
+                                        if type(child) is Node:
+                                            (<Node>node).insert(<Node>child)
+                                else:
+                                    for child in reversed(r2.objects):
+                                        if type(child) is Node:
+                                            (<Node>node).insert((<Node>child).copy())
+                    r1 = r2 = node = None
+
+                elif instruction.code == OpCode.Compose:
+                    push(stack, pop_composed(stack, (<InstructionInt>instruction).value))
+
+                elif instruction.code == OpCode.BeginFor:
+                    if loop_source is not None:
+                        loop_sources.append(loop_source)
+                    loop_source = LoopSource.__new__(LoopSource)
+                    loop_source.source = pop(stack)
+                    loop_source.position = 0
+                    loop_source.iterations = 0
+
+                elif instruction.code == OpCode.Next:
+                    if loop_source.position >= loop_source.source.length:
+                        pc += (<InstructionJump>instruction).offset
+                    else:
+                        n = (<InstructionJumpInt>instruction).value
+                        for i in range(n-1, -1, -1):
+                            poke_at(lvars, i, loop_source.source.item(loop_source.position))
+                            loop_source.position += 1
+                        loop_source.iterations += 1
+
+                elif instruction.code == OpCode.PushNext:
+                    if loop_source.position == loop_source.source.length:
+                        pc += (<InstructionJump>instruction).offset
+                    else:
+                        push(stack, loop_source.source.item(loop_source.position))
+                        loop_source.position += 1
+                        loop_source.iterations += 1
+
+                elif instruction.code == OpCode.EndFor:
+                    loop_source = loop_sources.pop() if loop_sources else None
+
+                elif instruction.code == OpCode.EndForCompose:
+                    push(stack, pop_composed(stack, loop_source.iterations))
+                    loop_source = loop_sources.pop() if loop_sources else None
+
+                elif instruction.code == OpCode.SetNodeScope:
+                    r1 = peek(stack)
+                    if r1.objects is not None and r1.length == 1:
+                        node = r1.objects[0]
                         if type(node) is Node:
                             if (<Node>node)._attributes_shared:
-                                attributes = dict((<Node>node)._attributes)
-                                (<Node>node)._attributes = attributes
+                                node_scope = dict((<Node>node)._attributes)
+                                (<Node>node)._attributes = node_scope
                                 (<Node>node)._attributes_shared = False
                             else:
-                                attributes = (<Node>node)._attributes
-                            if r2.length:
-                                PyDict_SetItem(attributes, name, r2)
-                            elif PyDict_Contains(attributes, name) == 1:
-                                PyDict_DelItem(attributes, name)
-                r1 = r2 = name = node = None
+                                node_scope = (<Node>node)._attributes
+                    r1 = node = None
 
-            elif instruction.code == OpCode.Append:
-                r2 = pop(stack)
-                r1 = peek(stack)
-                if r1.objects is not None and r2.objects is not None:
-                    n = r1.length - 1
-                    for i, node in enumerate(r1.objects):
-                        if type(node) is Node:
-                            (<Node>node).append_vector(r2, i != n)
-                r1 = r2 = node = None
+                elif instruction.code == OpCode.ClearNodeScope:
+                    node_scope = None
 
-            elif instruction.code == OpCode.Prepend:
-                r2 = pop(stack)
-                r1 = peek(stack)
-                if r1.objects is not None and r2.objects is not None:
-                    n = r1.length - 1
-                    for i, node in enumerate(r1.objects):
-                        if type(node) is Node:
-                            if i == n:
-                                for child in reversed(r2.objects):
-                                    if type(child) is Node:
-                                        (<Node>node).insert(<Node>child)
-                            else:
-                                for child in reversed(r2.objects):
-                                    if type(child) is Node:
-                                        (<Node>node).insert((<Node>child).copy())
-                r1 = r2 = node = None
+                elif instruction.code == OpCode.StoreGlobal:
+                    variables[(<InstructionStr>instruction).value] = pop(stack)
 
-            elif instruction.code == OpCode.Compose:
-                push(stack, pop_composed(stack, (<InstructionInt>instruction).value))
+                elif instruction.code == OpCode.Search:
+                    node = context.graph.first_child
+                    values = []
+                    query = (<InstructionQuery>instruction).value
+                    while node is not None:
+                        if (<Node>node)._select(query, values, query.first):
+                            break
+                        node = (<Node>node).next_sibling
+                    if values:
+                        r1 = <Vector>Vector.__new__(Vector)
+                        r1.objects = values
+                        r1.length = len(values)
+                    else:
+                        r1 = null_
+                    push(stack, r1)
+                    node = values = query = r1 = None
 
-            elif instruction.code == OpCode.BeginFor:
-                if loop_source is not None:
-                    loop_sources.append(loop_source)
-                loop_source = LoopSource.__new__(LoopSource)
-                loop_source.source = pop(stack)
-                loop_source.position = 0
-                loop_source.iterations = 0
+                elif instruction.code == OpCode.AppendRoot:
+                    r1 = pop(stack)
+                    if r1.objects is not None:
+                        for node in r1.objects:
+                            if type(node) is Node:
+                                if (<Node>node)._parent is None:
+                                    context.graph.append(<Node>node)
+                    r1 = node = None
 
-            elif instruction.code == OpCode.Next:
-                if loop_source.position >= loop_source.source.length:
-                    pc += (<InstructionJump>instruction).offset
                 else:
-                    n = (<InstructionJumpInt>instruction).value
-                    for i in range(n-1, -1, -1):
-                        poke_at(lvars, i, loop_source.source.item(loop_source.position))
-                        loop_source.position += 1
-                    loop_source.iterations += 1
+                    raise ValueError(f"Unrecognised instruction: {instruction}")
 
-            elif instruction.code == OpCode.PushNext:
-                if loop_source.position == loop_source.source.length:
-                    pc += (<InstructionJump>instruction).offset
-                else:
-                    push(stack, loop_source.source.item(loop_source.position))
-                    loop_source.position += 1
-                    loop_source.iterations += 1
+                if record_stats:
+                    duration += time()
+                    StatsCount[<int>instruction.code] += 1
+                    StatsDuration[<int>instruction.code] += duration
 
-            elif instruction.code == OpCode.EndFor:
-                loop_source = loop_sources.pop() if loop_sources else None
+                assert -1 <= stack.top < stack.size, "Stack out of bounds"
+                assert -1 <= lvars.top < lvars.size, "Lvars out of bounds"
 
-            elif instruction.code == OpCode.EndForCompose:
-                push(stack, pop_composed(stack, loop_source.iterations))
-                loop_source = loop_sources.pop() if loop_sources else None
-
-            elif instruction.code == OpCode.SetNodeScope:
-                r1 = peek(stack)
-                if r1.objects is not None and r1.length == 1:
-                    node = r1.objects[0]
-                    if type(node) is Node:
-                        if (<Node>node)._attributes_shared:
-                            node_scope = dict((<Node>node)._attributes)
-                            (<Node>node)._attributes = node_scope
-                            (<Node>node)._attributes_shared = False
-                        else:
-                            node_scope = (<Node>node)._attributes
-                r1 = node = None
-
-            elif instruction.code == OpCode.ClearNodeScope:
-                node_scope = None
-
-            elif instruction.code == OpCode.StoreGlobal:
-                variables[(<InstructionStr>instruction).value] = pop(stack)
-
-            elif instruction.code == OpCode.Search:
-                node = context.graph.first_child
-                values = []
-                query = (<InstructionQuery>instruction).value
-                while node is not None:
-                    if (<Node>node)._select(query, values, query.first):
-                        break
-                    node = (<Node>node).next_sibling
-                if values:
-                    r1 = <Vector>Vector.__new__(Vector)
-                    r1.objects = values
-                    r1.length = len(values)
-                else:
-                    r1 = null_
-                push(stack, r1)
-                node = values = query = r1 = None
-
-            elif instruction.code == OpCode.AppendRoot:
-                r1 = pop(stack)
-                if r1.objects is not None:
-                    for node in r1.objects:
-                        if type(node) is Node:
-                            if (<Node>node)._parent is None:
-                                context.graph.append(<Node>node)
-                r1 = node = None
-
-            else:
-                raise ValueError(f"Unrecognised instruction: {instruction}")
-
-            if record_stats:
-                duration += time()
-                StatsCount[<int>instruction.code] += 1
-                StatsDuration[<int>instruction.code] += duration
-
-            assert -1 <= stack.top < stack.size, "Stack out of bounds"
-            assert -1 <= lvars.top < lvars.size, "Lvars out of bounds"
+        except:
+            if instruction is not None:
+                logger.error("VM exception processing:\n{} <--",
+                             "\n".join(str(instruction) for instruction in self.instructions[pc-5:pc]))
+            raise
 
         assert pc == program_end, "Jump outside of program"
         return stack

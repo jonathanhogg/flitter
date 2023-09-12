@@ -47,7 +47,7 @@ cdef Expression sequence_pack(list expressions):
             if isinstance(expr, InlineSequence):
                 expressions[:0] = (<InlineSequence>expr).expressions
                 continue
-            if isinstance(expr, Let):
+            if isinstance(expr, (Let, Import, Function)):
                 has_let = True
             remaining.append(expr)
     if len(remaining) == 0:
@@ -98,21 +98,24 @@ cdef class Top(Expression):
         return top
 
     def compile(self):
-        return self._compile([])
+        cdef Program program = self._compile([])
+        program.optimize()
+        program.link()
+        return program
 
     cdef Program _compile(self, list lvars):
         cdef Expression expr
-        program = Program.__new__(Program)
+        cdef Program program = Program.__new__(Program)
         for expr in self.expressions:
             program.extend(expr._compile(lvars))
-            program.append_root()
+            if not isinstance(expr, (Let, Import, Function)):
+                program.append_root()
         cdef int i
         for i, name in enumerate(reversed(lvars)):
             program.local_load(i)
             program.store_global(name)
         if lvars:
             program.local_drop(len(lvars))
-        program.link()
         return program
 
     cpdef Expression evaluate(self, Context context):
@@ -191,14 +194,19 @@ cdef class Sequence(Expression):
     cdef Program _compile(self, list lvars):
         cdef Program program = Program.__new__(Program)
         cdef Expression expr
-        cdef int n=len(lvars)
+        cdef int n=len(lvars), m=0
         for expr in self.expressions:
             program.extend(expr._compile(lvars))
+            if not isinstance(expr, (Let, Import, Function)):
+                m += 1
         if len(lvars) > n:
             program.local_drop(len(lvars)-n)
             while len(lvars) > n:
                 lvars.pop()
-        program.compose(len(self.expressions))
+        if m > 1:
+            program.compose(m)
+        elif m == 0:
+            program.literal(null_)
         return program
 
     cpdef Expression evaluate(self, Context context):
@@ -506,20 +514,9 @@ cdef class Add(MathsBinaryOperation):
 
     cdef Program _compile(self, list lvars):
         cdef Program program = Program.__new__(Program)
-        if isinstance(self.right, Multiply):
-            program.extend(self.left._compile(lvars))
-            program.extend((<Multiply>self.right).left._compile(lvars))
-            program.extend((<Multiply>self.right).right._compile(lvars))
-            program.mul_add()
-        elif isinstance(self.left, Multiply):
-            program.extend(self.right._compile(lvars))
-            program.extend((<Multiply>self.left).left._compile(lvars))
-            program.extend((<Multiply>self.left).right._compile(lvars))
-            program.mul_add()
-        else:
-            program.extend(self.left._compile(lvars))
-            program.extend(self.right._compile(lvars))
-            program.add()
+        program.extend(self.left._compile(lvars))
+        program.extend(self.right._compile(lvars))
+        program.add()
         return program
 
     cdef Expression constant_left(self, Vector left, Expression right):
@@ -1103,7 +1100,6 @@ cdef class Let(Expression):
             program.extend(binding.expr._compile(lvars))
             program.local_push(len(binding.names))
             lvars.extend(binding.names)
-        program.literal(null_)
         return program
 
     cpdef Expression evaluate(self, Context context):
@@ -1337,7 +1333,6 @@ cdef class Function(Expression):
         program.func(self.name, tuple(names))
         program.local_push(1)
         lvars.append(self.name)
-        program.literal(null_)
         return program
 
     cpdef Expression evaluate(self, Context context):
