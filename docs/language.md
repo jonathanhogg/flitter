@@ -69,7 +69,7 @@ the middle of the window. You can edit and re-save the code while the engine is
 running and it will reload the code on-the-fly - this is usually fast enough
 not to be noticeable.
 
-The available global values are:
+The engine-supplied global values are:
 
 - `beat` - the current main clock beat (a monotonically-increasing floating
     point value)
@@ -79,10 +79,13 @@ The available global values are:
 - `clock` - the time in seconds since the "start" of the main clock, this
     will adjust when the tempo or quantum is changed to keep the value of
     `beat` constant, so it's generally not a particularly useful value
+- `fps` - the current target frame-rate of the engine (the `--fps` option)
 - `performance` - a value in the range [0.5 .. 2.0] that increases fractionally
     if the engine has time to spare and decreases fractionally if it is missing
     the target frame rate; this value can be multiplied into variable loads
     in the code – e.g., number of things on screen – to maintain frame rate
+- `realtime` - a `true`/`false` value indicating whether the engine is running
+    in realtime mode (the default) or not (with the `--lockstep` option)
 
 ## Values
 
