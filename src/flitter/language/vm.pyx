@@ -671,6 +671,8 @@ cdef class Program:
     def run(self, StateDict state=None, dict variables=None, bint record_stats=False):
         cdef dict context_vars = None
         cdef str key
+        if state is None:
+            state = StateDict()
         if variables is not None:
             context_vars = {}
             for key, value in variables.items():
