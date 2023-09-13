@@ -104,11 +104,13 @@ cdef class Top(Expression):
         return program
 
     cdef Program _compile(self, list lvars):
-        cdef Expression expr
+        cdef Expression expr, node
         cdef Program program = Program.__new__(Program)
         for expr in self.expressions:
             program.extend(expr._compile(lvars))
-            if not isinstance(expr, (Let, Import, Function)):
+            if isinstance(expr, NodeModifier) and isinstance((<NodeModifier>expr).ultimate_node(), Search):
+                program.drop(1)
+            elif not isinstance(expr, (Let, Import, Function)):
                 program.append_root()
         cdef int i
         for i, name in enumerate(reversed(lvars)):
@@ -132,7 +134,7 @@ cdef class Top(Expression):
             if value is not None:
                 bindings.append(PolyBinding((name,), Literal(value)))
         if bindings:
-            expressions.append(Let(tuple(bindings)))
+            expressions.append(StoreGlobal(tuple(bindings)))
         return Top(tuple(expressions))
 
     def __repr__(self):
@@ -855,8 +857,17 @@ cdef class Call(Expression):
         return f'Call({self.function!r}, {self.args!r})'
 
 
-cdef class Tag(Expression):
+cdef class NodeModifier(Expression):
     cdef readonly Expression node
+
+    cdef Expression ultimate_node(self):
+        cdef Expression node = self.node
+        while isinstance(node, NodeModifier):
+            node = (<NodeModifier>node).node
+        return node
+
+
+cdef class Tag(NodeModifier):
     cdef readonly str tag
 
     def __init__(self, Expression node, str tag):
@@ -885,8 +896,7 @@ cdef class Tag(Expression):
         return f'Tag({self.node!r}, {self.tag!r})'
 
 
-cdef class Attributes(Expression):
-    cdef readonly Expression node
+cdef class Attributes(NodeModifier):
     cdef readonly tuple bindings
 
     def __init__(self, Expression node, tuple bindings):
@@ -1005,8 +1015,7 @@ cdef class Search(Expression):
         return f'Search({self.query!r})'
 
 
-cdef class Append(Expression):
-    cdef readonly Expression node
+cdef class Append(NodeModifier):
     cdef readonly Expression children
 
     def __init__(self, Expression node, Expression children):
@@ -1129,7 +1138,18 @@ cdef class Let(Expression):
         return NoOp
 
     def __repr__(self):
-        return f'Let({self.bindings!r})'
+        return f'{self.__class__.__name__}({self.bindings!r})'
+
+
+cdef class StoreGlobal(Let):
+    cdef Program _compile(self, list lvars):
+        cdef Program program = Program.__new__(Program)
+        cdef PolyBinding binding
+        for binding in self.bindings:
+            program.extend(binding.expr._compile(lvars))
+            assert len(binding.names) == 1, "StoreGlobal cannot multi-bind"
+            program.store_global(binding.names[0])
+        return program
 
 
 cdef class InlineLet(Expression):
