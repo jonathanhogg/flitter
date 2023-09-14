@@ -417,6 +417,7 @@ cdef inline VectorStack copy(VectorStack stack):
     return new_stack
 
 cdef inline void drop(VectorStack stack, int n) noexcept:
+    assert stack.top - n >= -1, "Stack empty"
     stack.top -= n
     cdef int i
     for i in range(1, n+1):
@@ -440,6 +441,7 @@ cdef inline Vector pop(VectorStack stack) noexcept:
     return vector
 
 cdef inline tuple pop_tuple(VectorStack stack, int n):
+    assert stack.top - n >= -1, "Stack empty"
     cdef tuple t = PyTuple_New(n)
     stack.top -= n
     cdef int next = stack.top + 1
@@ -453,6 +455,7 @@ cdef inline tuple pop_tuple(VectorStack stack, int n):
     return t
 
 cdef inline list pop_list(VectorStack stack, int n):
+    assert stack.top - n >= -1, "Stack empty"
     cdef list t = PyList_New(n)
     stack.top -= n
     cdef int next = stack.top + 1
@@ -467,6 +470,7 @@ cdef inline list pop_list(VectorStack stack, int n):
 
 cdef inline dict pop_dict(VectorStack stack, tuple keys):
     cdef int n = len(keys)
+    assert stack.top - n >= -1, "Stack empty"
     cdef dict t = {}
     stack.top -= n
     cdef int next = stack.top + 1
@@ -481,6 +485,7 @@ cdef inline dict pop_dict(VectorStack stack, tuple keys):
     return t
 
 cdef inline Vector pop_composed(VectorStack stack, int m):
+    assert stack.top - m >= -1, "Stack empty"
     if m == 1:
         return pop(stack)
     if m == 0:
@@ -528,17 +533,21 @@ cdef inline Vector pop_composed(VectorStack stack, int m):
     return result
 
 cdef inline Vector peek(VectorStack stack) noexcept:
+    assert stack.top > -1, "Stack empty"
     return <Vector>stack.vectors[stack.top]
 
 cdef inline Vector peek_at(VectorStack stack, int offset) noexcept:
+    assert stack.top-offset > -1, "Stack empty"
     return <Vector>stack.vectors[stack.top-offset]
 
 cdef inline void poke(VectorStack stack, Vector vector) noexcept:
+    assert stack.top > -1, "Stack empty"
     Py_DECREF(<Vector>stack.vectors[stack.top])
     Py_INCREF(vector)
     stack.vectors[stack.top] = <PyObject*>vector
 
 cdef inline void poke_at(VectorStack stack, int offset, Vector vector) noexcept:
+    assert stack.top-offset > -1, "Stack empty"
     Py_DECREF(<Vector>stack.vectors[stack.top-offset])
     Py_INCREF(vector)
     stack.vectors[stack.top-offset] = <PyObject*>vector
@@ -1030,6 +1039,8 @@ cdef class Program:
                                 push(lvars, null_)
                     else:
                         context.errors.add(f"Unable to import from '{filename}'")
+                        for i in range(len(names)):
+                            push(lvars, null_)
                     filename = names = import_variables = name = None
 
                 elif instruction.code == OpCode.Literal:
@@ -1380,9 +1391,6 @@ cdef class Program:
                     duration += time()
                     StatsCount[<int>instruction.code] += 1
                     StatsDuration[<int>instruction.code] += duration
-
-                assert -1 <= stack.top < stack.size, "Stack out of bounds"
-                assert -1 <= lvars.top < lvars.size, "Lvars out of bounds"
 
         except:
             if instruction is not None:
