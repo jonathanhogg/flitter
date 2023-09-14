@@ -4,22 +4,26 @@ Flitter controller driver API
 
 import math
 
+from loguru import logger
+
 from ...model import Vector, Node
 
 
 class Control:
     def __init__(self, control_id):
+        self._initialised = False
         self.control_id = control_id
         self.reset()
 
     def reset(self):
+        if self._initialised:
+            logger.trace("De-initialised {}({!r})", self.__class__.__name__, self.control_id)
         self._initialised = False
         self._state_prefix = None
         self._name = None
         self._color = None
 
     def update(self, engine, node: Node, now: float):
-        self._initialised = True
         changed = False
         if (state_prefix := node.get('state')) != self._state_prefix:
             self._state_prefix = state_prefix
@@ -30,6 +34,9 @@ class Control:
         if (color := node.get('color', 3, float)) != self._color:
             self._color = color
             changed = True
+        if not self._initialised:
+            logger.trace("Initialised {}({!r})", self.__class__.__name__, self.control_id)
+        self._initialised = True
         return changed
 
     def update_representation(self):

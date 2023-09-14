@@ -179,8 +179,8 @@ class XTouchMiniDriver(driver.ControllerDriver):
     VENDOR_ID = 0x1397
     PRODUCT_ID = 0x00b3
     DEFAULT_CONFIG = [
-        Node('button', attributes={'id': 'a', 'action': 'next'}),
-        Node('button', attributes={'id': 'b', 'action': 'previous'}),
+        Node('button', attributes={'id': Vector('a'), 'action': Vector('next')}),
+        Node('button', attributes={'id': Vector('b'), 'action': Vector('previous')}),
     ]
 
     def __init__(self, node):
