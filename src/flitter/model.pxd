@@ -8,6 +8,7 @@ cdef class Vector:
     cdef list objects
     cdef double* numbers
     cdef double[16] _numbers
+    cdef unsigned long long _hash
 
     @staticmethod
     cdef Vector _coerce(object other)
@@ -18,6 +19,7 @@ cdef class Vector:
 
     cdef int allocate_numbers(self, int n) except -1
     cdef void deallocate_numbers(self)
+    cpdef Vector intern(self)
     cdef void fill_range(self, Vector startv, Vector stopv, Vector stepv)
     cpdef bint isinstance(self, t)
     cdef bint as_bool(self)
@@ -119,6 +121,7 @@ cdef class Node:
     cdef object _parent
     cdef Node next_sibling, first_child, last_child
 
+    cdef unsigned long long hash(self)
     cpdef Node copy(self)
     cpdef void add_tag(self, str tag)
     cpdef void remove_tag(self, str tag)
@@ -131,7 +134,7 @@ cdef class Node:
     cpdef object get(self, str name, int n=?, type t=?, object default=?)
     cdef Vector get_fvec(self, str name, int n, Vector default)
     cdef double get_float(self, str name, double default)
-    cdef int get_int(self, str name, long long default)
+    cdef int get_int(self, str name, int default)
     cdef bint get_bool(self, str name, bint default)
     cdef str get_str(self, str name, str default)
     cdef str repr(self)

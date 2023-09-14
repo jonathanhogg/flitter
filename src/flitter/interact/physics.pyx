@@ -35,13 +35,13 @@ cdef class Particle:
 
     def __cinit__(self, Node node, Vector id, Vector zero, Vector prefix, StateDict state):
         self.id = id
-        self.position_state_key = prefix.concat(self.id)
+        self.position_state_key = prefix.concat(self.id).intern()
         cdef Vector position = state.get_item(self.position_state_key)
         if position.length == zero.length and position.numbers != NULL:
             self.position = Vector._copy(position)
         else:
             self.position = Vector._copy(node.get_fvec('position', zero.length, zero))
-        self.velocity_state_key = self.position_state_key.concat(VELOCITY)
+        self.velocity_state_key = self.position_state_key.concat(VELOCITY).intern()
         cdef Vector velocity = state.get_item(self.velocity_state_key)
         if velocity.length == zero.length and velocity.numbers != NULL:
             self.velocity = Vector._copy(velocity)

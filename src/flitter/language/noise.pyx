@@ -584,7 +584,7 @@ cdef Vector get_perm(Vector seed, int i):
     cdef Vector perm = <Vector>PermCache.get(seed_hash)
     if perm is None:
         uniform = Uniform.__new__(Uniform)
-        uniform.seed = seed_hash
+        uniform._hash = seed_hash
         perm = shuffle(uniform, PERM_RANGE)
         if len(PermCache) == MAX_PERM_CACHE_ITEMS:
             PermCache.pop(next(iter(PermCache)))
@@ -605,7 +605,7 @@ def octnoise(Vector seed, Vector octaves, Vector roughness, *args):
     for arg in args:
         if arg.numbers == NULL:
             return null_
-        coords.append(Vector.__new__(Vector, arg))
+        coords.append(Vector._copy(arg))
     cdef int i, j, n = <int>octaves.numbers[0]
     cdef double weight_sum = 0, weight = 1, k = roughness.numbers[0]
     cdef Vector seed_i, single, result = null_

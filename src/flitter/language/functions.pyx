@@ -24,19 +24,19 @@ def state_transformer(func):
 
 cdef class Uniform(Vector):
     def __cinit__(self, value=None):
-        self.seed = self.hash(True)
+        self._hash = self.hash(True)
         self.deallocate_numbers()
         self.length = 0
         self.objects = None
 
     def __hash__(self):
-        return self.seed
+        return self._hash
 
     def __eq__(self, other):
         return self.eq(Vector._coerce(other)).numbers[0] != 0
 
     cdef Vector eq(self, Vector other):
-        if isinstance(other, self.__class__) and (<Uniform>other).seed == self.seed:
+        if type(other) is self.__class__ and other._hash == self._hash:
             return true_
         return false_
 
@@ -49,8 +49,8 @@ cdef class Uniform(Vector):
     cdef double _item(self, unsigned long long i) noexcept:
         cdef unsigned long long x, y, z
         # Compute a 32bit float PRN using the Squares algorithm [https://arxiv.org/abs/2004.06278]
-        x = y = i * self.seed
-        z = y + self.seed
+        x = y = i * self._hash
+        z = y + self._hash
         x = x*x + y
         x = (x >> 32) | (x << 32)
         x = x*x + z
@@ -78,7 +78,7 @@ cdef class Uniform(Vector):
         return True
 
     def __repr__(self):
-        return f"{self.__class__.__name__}({self.seed!r})"
+        return f"{self.__class__.__name__}({self._hash!r})"
 
 
 cdef class Beta(Uniform):
@@ -411,7 +411,7 @@ cpdef shuffle(Uniform source, Vector xs):
     if xs.length == 0:
         return null_
     cdef int i, j, n = xs.length
-    xs = Vector.__new__(Vector, xs)
+    xs = Vector._copy(xs)
     if xs.objects is None:
         for i in range(n - 1):
             j = <int>floor(source.item(i) * n) + i

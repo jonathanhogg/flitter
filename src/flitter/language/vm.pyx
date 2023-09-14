@@ -1066,7 +1066,7 @@ cdef class Program:
                     objptr = PyDict_GetItem(variables, name)
                     if objptr == NULL:
                         objptr = PyDict_GetItem(builtins, name)
-                    if  objptr == NULL and node_scope is not None:
+                    if objptr == NULL and node_scope is not None:
                         objptr = PyDict_GetItem(node_scope, name)
                     if objptr != NULL:
                         push(stack, <Vector>objptr)

@@ -7,8 +7,13 @@ from cython cimport view
 
 from libc.math cimport isnan, floor, ceil, abs, sqrt, sin, cos, tan, isnan
 from cpython cimport PyObject, Py_INCREF
+from cpython.bool cimport PyBool_FromLong
+from cpython.dict cimport PyDict_GetItem
+from cpython.float cimport PyFloat_AS_DOUBLE, PyFloat_FromDouble
+from cpython.int cimport PyInt_AS_LONG, PyInt_FromLong
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
-from cpython.list cimport PyList_New, PyList_SET_ITEM
+from cpython.list cimport PyList_New, PyList_GET_ITEM, PyList_SET_ITEM
+from cpython.unicode cimport PyUnicode_DATA, PyUnicode_GET_LENGTH, PyUnicode_KIND, PyUnicode_READ
 from cpython.weakref cimport PyWeakref_NewRef, PyWeakref_GetObject
 
 
@@ -21,6 +26,36 @@ cdef frozenset EmptySet = frozenset()
 cdef union double_long:
     double f
     unsigned long long l
+
+
+# SplitMix64 algorithm [http://xoshiro.di.unimi.it/splitmix64.c]
+#
+cdef unsigned long long HASH_START = 0xe220a8397b1dcdaf
+
+cdef inline unsigned long long HASH_UPDATE(unsigned long long _hash, unsigned long long y) noexcept:
+    _hash ^= y
+    _hash += <unsigned long long>(0x9e3779b97f4a7c15)
+    _hash ^= _hash >> 30
+    _hash *= <unsigned long long>(0xbf58476d1ce4e5b9)
+    _hash ^= _hash >> 27
+    _hash *= <unsigned long long>(0x94d049bb133111eb)
+    _hash ^= _hash >> 31
+    return _hash
+
+
+# FNV-1a hash algorithm [https://en.wikipedia.org/wiki/Fowler–Noll–Vo_hash_function#FNV-1a_hash]
+cdef inline unsigned long long HASH_STRING(str value):
+    cdef void* data = PyUnicode_DATA(value)
+    cdef unsigned int i, n=PyUnicode_GET_LENGTH(value), kind=PyUnicode_KIND(value)
+    cdef Py_UCS4 c
+    cdef unsigned long long y = <unsigned long long>(0xcbf29ce484222325)
+    for i in range(n):
+        c = PyUnicode_READ(kind, data, i)
+        y = (y ^ <unsigned long long>c) * <unsigned long long>(0x100000001b3)
+    return y
+
+
+cdef dict InternedVectors = {}
 
 
 @cython.freelist(256)
@@ -179,11 +214,16 @@ cdef class Vector:
     def __reduce__(self):
         if self.objects is not None:
             return Vector, (self.objects,)
-        cdef list values = []
+        cdef list values = PyList_New(self.length)
         cdef int i
         for i in range(self.length):
-            values.append(self.numbers[i])
+            value = PyFloat_FromDouble(self.numbers[i])
+            Py_INCREF(value)
+            PyList_SET_ITEM(values, i, value)
         return Vector, (values,)
+
+    cpdef Vector intern(self):
+        return <Vector>InternedVectors.setdefault(self, self)
 
     @cython.cdivision(True)
     cdef void fill_range(self, Vector startv, Vector stopv, Vector stepv):
@@ -233,23 +273,25 @@ cdef class Vector:
         return self.as_bool()
 
     cdef bint as_bool(self):
+        cdef PyObject* objptr
         cdef int i
-        if self.objects is not None:
-            for value in self.objects:
-                if isinstance(value, int):
-                    if <int>value != 0:
-                        return True
-                elif isinstance(value, float):
-                    if <double>value != 0.:
-                        return True
-                elif isinstance(value, str):
-                    if <str>value != "":
-                        return True
-                else:
-                    return True
-        else:
+        if self.numbers != NULL:
             for i in range(self.length):
                 if self.numbers[i] != 0.:
+                    return True
+        elif self.objects is not None:
+            for i in range(self.length):
+                objptr = PyList_GET_ITEM(self.objects, i)
+                if type(<object>objptr) is float:
+                    if PyFloat_AS_DOUBLE(<object>objptr) != 0.:
+                        return True
+                elif type(<object>objptr) is str:
+                    if PyUnicode_GET_LENGTH(<object>objptr) != 0:
+                        return True
+                elif type(<object>objptr) is int or type(<object>objptr) is bool:
+                    if PyInt_AS_LONG(<object>objptr) != 0:
+                        return True
+                else:
                     return True
         return False
 
@@ -266,17 +308,22 @@ cdef class Vector:
 
     cdef str as_string(self):
         cdef str text = ""
+        cdef PyObject* objptr
         cdef int i, n = self.length
-        if n:
-            if self.objects is not None:
-                for value in self.objects:
-                    if isinstance(value, str):
-                        text += <str>value
-                    elif isinstance(value, (float, int, bool)):
-                        text += f"{value:.9g}"
-            else:
-                for i in range(n):
-                    text += f"{self.numbers[i]:.9g}"
+        if self.objects is not None:
+            if n == 1:
+                objptr = PyList_GET_ITEM(self.objects, 0)
+                if type(<object>objptr) is str:
+                    return <str>objptr
+            for i in range(n):
+                objptr = PyList_GET_ITEM(self.objects, i)
+                if type(<object>objptr) is str:
+                    text += <str>objptr
+                elif isinstance(<object>objptr, (float, int)):
+                    text += f"{<object>objptr:.9g}"
+        elif n:
+            for i in range(n):
+                text += f"{self.numbers[i]:.9g}"
         return text
 
     def __iter__(self):
@@ -292,46 +339,48 @@ cdef class Vector:
         return self.hash(False)
 
     cdef unsigned long long hash(self, bint floor_floats):
-        # Compute a hash value using the SplitMix64 algorithm [http://xoshiro.di.unimi.it/splitmix64.c]
-        cdef unsigned long long y, hash = 0xe220a8397b1dcdaf
+        if not floor_floats and self._hash:
+            return self._hash
+        cdef unsigned long long y, _hash = HASH_START
         cdef double_long fl
-        cdef int i
-        cdef Py_UNICODE c
-        if self.length:
+        cdef list objects
+        cdef unsigned int i, n, kind
+        if self.length == 0:
+            pass
+        elif (objects := self.objects) is not None:
             for i in range(self.length):
-                if self.objects is not None:
-                    value = self.objects[i]
-                    if isinstance(value, str):
-                        # FNV-1a hash algorithm [https://en.wikipedia.org/wiki/Fowler–Noll–Vo_hash_function#FNV-1a_hash]
-                        y = <unsigned long long>(0xcbf29ce484222325)
-                        for c in <str>value:
-                            y = (y ^ ord(c)) * <unsigned long long>(0x100000001b3)
-                    elif isinstance(value, (float, int)):
-                        if floor_floats:
-                            y = <unsigned long long>(<long long>floor(value))
-                        else:
-                            fl.f = value
-                            y = fl.l
+                value = PyList_GET_ITEM(objects, i)
+                if type(<object>value) is str:
+                    y = HASH_STRING(<str>value)
+                elif type(<object>value) is float:
+                    if floor_floats:
+                        y = <unsigned long long>(<long long>floor(PyFloat_AS_DOUBLE(<object>value)))
                     else:
-                        raise TypeError("Unhashable value")
-                elif floor_floats:
+                        y = double_long(f=PyFloat_AS_DOUBLE(<object>value)).l
+                elif type(<object>value) is int:
+                    if floor_floats:
+                        y = <unsigned long long>(PyInt_AS_LONG(<object>value))
+                    else:
+                        y = double_long(f=<double>PyInt_AS_LONG(<object>value)).l
+                else:
+                    y = hash(<object>value)
+                _hash = HASH_UPDATE(_hash, y)
+        else:
+            for i in range(self.length):
+                if floor_floats:
                     y = <unsigned long long>(<long long>floor(self.numbers[i]))
                 else:
-                    fl.f = self.numbers[i]
-                    y = fl.l
-                hash ^= y
-                hash += <unsigned long long>(0x9e3779b97f4a7c15)
-                hash ^= hash >> 30
-                hash *= <unsigned long long>(0xbf58476d1ce4e5b9)
-                hash ^= hash >> 27
-                hash *= <unsigned long long>(0x94d049bb133111eb)
-                hash ^= hash >> 31
-        return hash
+                    y = double_long(f=self.numbers[i]).l
+                _hash = HASH_UPDATE(_hash, y)
+        if not floor_floats:
+            self._hash = _hash
+        return _hash
 
     cpdef object match(self, int n=0, type t=None, default=None):
         cdef int i, m = self.length
         cdef list values
         cdef double f
+        cdef object obj
         if self.objects is None:
             if t is float:
                 t = None
@@ -345,18 +394,20 @@ cdef class Vector:
                             return f != 0
                         return f
                     else:
-                        values = []
+                        values = PyList_New(m)
                         for i in range(m):
                             f = self.numbers[i]
                             if t is int:
-                                values.append(<long long>floor(f))
+                                obj = PyInt_FromLong(<long>floor(f))
                             elif t is bool:
-                                values.append(f != 0)
+                                obj = PyBool_FromLong(f != 0)
                             else:
-                                values.append(f)
+                                obj = PyFloat_FromDouble(f)
+                            Py_INCREF(obj)
+                            PyList_SET_ITEM(values, i, obj)
                         return values
                 elif m == 1:
-                    values = []
+                    values = PyList_New(n)
                     f = self.numbers[0]
                     if t is int:
                         obj = <long long>floor(f)
@@ -365,27 +416,34 @@ cdef class Vector:
                     else:
                         obj = f
                     for i in range(n):
-                        values.append(obj)
+                        Py_INCREF(obj)
+                        PyList_SET_ITEM(values, i, obj)
                     return values
             return default
         if n == 0 and t is None:
             return self.objects
         try:
             if m == 1:
-                value = self.objects[0]
+                obj = <object>PyList_GET_ITEM(self.objects, 0)
                 if t is not None:
-                    value = t(value)
+                    obj = t(obj)
                 if n == 1:
-                    return value
+                    return obj
                 if n == 0:
-                    return [value]
-                return [value] * n
+                    return [obj]
+                values = PyList_New(n)
+                for i in range(n):
+                    Py_INCREF(obj)
+                    PyList_SET_ITEM(values, i, obj)
+                return values
             elif m == n or n == 0:
-                values = []
-                for value in self.objects:
+                values = PyList_New(m)
+                for i in range(m):
+                    obj = <object>PyList_GET_ITEM(self.objects, i)
                     if t is not None:
-                        value = t(value)
-                    values.append(value)
+                        obj = t(obj)
+                    Py_INCREF(obj)
+                    PyList_SET_ITEM(values, i, obj)
                 return values
         except ValueError:
             pass
@@ -399,8 +457,8 @@ cdef class Vector:
             result.objects = PyList_New(self.length)
             result.length = self.length
             for i in range(self.length):
-                value = self.objects[i]
-                if isinstance(value, Node) and (<Node>value)._parent is None:
+                value = <object>PyList_GET_ITEM(self.objects, i)
+                if type(value) is Node and (<Node>value)._parent is None:
                     value = (<Node>value).copy()
                 Py_INCREF(value)
                 PyList_SET_ITEM(result.objects, i, value)
@@ -596,10 +654,12 @@ cdef class Vector:
     cdef Vector eq(self, Vector other):
         if self is other:
             return true_
-        cdef int i, n = self.length, m = other.length
-        if n != m or (self.objects is None) != (other.objects is None):
+        cdef int i, n = self.length
+        if n != other.length or (self.objects is None) != (other.objects is None):
             return false_
-        if self.objects is None:
+        if n == 0:
+            return true_
+        if self.numbers != NULL:
             for i in range(n):
                 if self.numbers[i] != other.numbers[i]:
                     return false_
@@ -1377,6 +1437,30 @@ cdef class Node:
         self._attributes = {} if attributes is None else attributes.copy()
         self._attributes_shared = False
 
+    def __hash__(self):
+        return self.hash()
+
+    cdef unsigned long long hash(self):
+        cdef unsigned long long _hash = HASH_START
+        _hash = HASH_UPDATE(_hash, HASH_STRING(self.kind))
+        if self._tags is not None:
+            for tag in sorted(self._tags):
+                _hash = HASH_UPDATE(_hash, HASH_STRING(<str>tag))
+        cdef list keys
+        cdef Vector value
+        if self._attributes:
+            keys = sorted(self._attributes.keys())
+            for key in keys:
+                value = (<Vector>self._attributes[key]).intern()
+                self._attributes[key] = value
+                _hash = HASH_UPDATE(_hash, HASH_STRING(<str>key))
+                _hash = HASH_UPDATE(_hash, value.hash(False))
+        cdef Node child = self.first_child
+        while child is not None:
+            _hash = HASH_UPDATE(_hash, child.hash())
+            child = child.next_sibling
+        return _hash
+
     def __setstate__(self, set tags):
         self._tags = tags
 
@@ -1416,27 +1500,27 @@ cdef class Node:
         return <Node>PyWeakref_GetObject(self._parent) if self._parent is not None else None
 
     cpdef Node copy(self):
-        cdef Node node = Node.__new__(Node)
-        node.kind = self.kind
-        if self._tags:
-            node._tags = set(self._tags)
-        node._attributes = self._attributes
-        node._attributes_shared = True
+        cdef Node self_copy = Node.__new__(Node)
+        self_copy.kind = self.kind
+        if self._tags is not None:
+            self_copy._tags = set(self._tags)
+        self_copy._attributes = self._attributes
+        self_copy._attributes_shared = True
         self._attributes_shared = True
-        cdef Node copy, child = self.first_child
-        if child is not None:
-            parent = PyWeakref_NewRef(node, None)
-            copy = child.copy()
-            copy._parent = parent
-            node.first_child = node.last_child = copy
+        if self.first_child is None:
+            return self_copy
+        cdef Node child_copy, child = self.first_child
+        cdef object self_weakref = PyWeakref_NewRef(self_copy, None)
+        child_copy = child.copy()
+        child_copy._parent = self_weakref
+        self_copy.first_child = child_copy
+        while child.next_sibling is not None:
             child = child.next_sibling
-            while child is not None:
-                copy = child.copy()
-                copy._parent = parent
-                node.last_child.next_sibling = copy
-                node.last_child = copy
-                child = child.next_sibling
-        return node
+            child_copy.next_sibling = child.copy()
+            child_copy = child_copy.next_sibling
+            child_copy._parent = self_weakref
+        self_copy.last_child = child_copy
+        return self_copy
 
     cpdef void add_tag(self, str tag):
         if self._tags is None:
@@ -1446,6 +1530,8 @@ cdef class Node:
     cpdef void remove_tag(self, str tag):
         if self._tags is not None:
             self._tags.discard(tag)
+            if not self._tags:
+                self._tags = None
 
     cpdef void append(self, Node node):
         cdef Node parent = <Node>PyWeakref_GetObject(node._parent) if node._parent is not None else None
@@ -1624,9 +1710,10 @@ cdef class Node:
         return self._attributes.items()
 
     cpdef object get(self, str name, int n=0, type t=None, object default=None):
-        cdef Vector value = self._attributes.get(name)
-        if value is None:
+        cdef PyObject* objptr = PyDict_GetItem(self._attributes, name)
+        if objptr == NULL:
             return default
+        cdef Vector value = <Vector>objptr
         if n == 1:
             if t is bool:
                 return value.as_bool()
@@ -1635,9 +1722,12 @@ cdef class Node:
         return value.match(n, t, default)
 
     cdef Vector get_fvec(self, str name, int n, Vector default):
-        cdef Vector result, value = self._attributes.get(name)
+        cdef PyObject* objptr = PyDict_GetItem(self._attributes, name)
+        if objptr == NULL:
+            return default
+        cdef Vector result, value = <Vector>objptr
         cdef int m, i
-        if value is not None and value.numbers != NULL:
+        if value.numbers != NULL:
             m = value.length
             if m == 1 and n > 1:
                 result = Vector.__new__(Vector)
@@ -1649,28 +1739,34 @@ cdef class Node:
         return default
 
     cdef double get_float(self, str name, double default):
-        cdef Vector result, value = self._attributes.get(name)
-        if value is not None and value.numbers != NULL and value.length == 1:
+        cdef PyObject* objptr = PyDict_GetItem(self._attributes, name)
+        if objptr == NULL:
+            return default
+        cdef Vector result, value = <Vector>objptr
+        if value.numbers != NULL and value.length == 1:
             return value.numbers[0]
         return default
 
-    cdef int get_int(self, str name, long long default):
-        cdef Vector result, value = self._attributes.get(name)
-        if value is not None and value.numbers != NULL and value.length == 1:
-            return <long long>value.numbers[0]
+    cdef int get_int(self, str name, int default):
+        cdef PyObject* objptr = PyDict_GetItem(self._attributes, name)
+        if objptr == NULL:
+            return default
+        cdef Vector result, value = <Vector>objptr
+        if value.numbers != NULL and value.length == 1:
+            return <int>value.numbers[0]
         return default
 
     cdef bint get_bool(self, str name, bint default):
-        cdef Vector result, value = self._attributes.get(name)
-        if value is not None:
-            return value.as_bool()
-        return default
+        cdef PyObject* objptr = PyDict_GetItem(self._attributes, name)
+        if objptr == NULL:
+            return default
+        return (<Vector>objptr).as_bool()
 
     cdef str get_str(self, str name, str default):
-        cdef Vector result, value = self._attributes.get(name)
-        if value is not None:
-            return value.as_string()
-        return default
+        cdef PyObject* objptr = PyDict_GetItem(self._attributes, name)
+        if objptr == NULL:
+            return default
+        return (<Vector>objptr).as_string()
 
     def __iter__(self):
         return iter(self._attributes)

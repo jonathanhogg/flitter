@@ -4,8 +4,6 @@ from ..model cimport Vector
 
 
 cdef class Uniform(Vector):
-    cdef unsigned long long seed
-
     cdef double _item(self, unsigned long long i) noexcept
     cpdef Vector slice(self, Vector index)
     cpdef Vector copynodes(self)

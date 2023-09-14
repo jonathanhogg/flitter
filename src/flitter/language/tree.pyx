@@ -257,7 +257,7 @@ cdef class Literal(Expression):
 
     cdef Program _compile(self, list lvars):
         cdef Program program = Program.__new__(Program)
-        program.literal(self.value)
+        program.literal(self.value.intern())
         return program
 
     cpdef Expression evaluate(self, Context context):
@@ -336,7 +336,7 @@ cdef class LookupLiteral(Expression):
     cdef readonly Vector key
 
     def __init__(self, Vector key):
-        self.key = key
+        self.key = key.intern()
 
     cdef Program _compile(self, list lvars):
         cdef Program program = Program.__new__(Program)

@@ -203,9 +203,9 @@ class TestVector(unittest.TestCase):
         self.assertEqual(hash(Vector(["Hello ", "world!"])), -463109597642348796)
         self.assertEqual(hash(Vector(["foo", 1])), hash(Vector(["foo", 1.0])))
         self.assertNotEqual(hash(Vector(["foo", 1.0])), hash(Vector(["foo", 1.1])))
-        self.assertRaises(TypeError, hash, Vector(Node('foo')))
-        self.assertRaises(TypeError, hash, Vector(test_func))
-        self.assertRaises(TypeError, hash, Vector(test_class))
+        self.assertEqual(hash(Vector(Node('foo', {'bar'}, {'test': Vector(5)}))), 9166098286934782834)
+        self.assertIsNotNone(hash(Vector(test_func)))  # just check it works, value will not be stable
+        self.assertIsNotNone(hash(Vector(test_class)))  # just check it works, value will not be stable
 
     def test_hash_uniformity(self):
         from scipy.stats import kstest
@@ -232,6 +232,7 @@ class TestVector(unittest.TestCase):
         self.assertEqual(Vector("Hello world!").match(1, str), "Hello world!")
         self.assertEqual(Vector("Hello world!").match(2, str), ["Hello world!", "Hello world!"])
         self.assertEqual(Vector(["Hello ", "world!"]).match(2, str), ["Hello ", "world!"])
+        self.assertEqual(Vector(["Hello ", 3.5]).match(2, str), ["Hello ", "3.5"])
         self.assertEqual(Vector(["Hello ", "world!"]).match(1, str), None)
         self.assertEqual(true.match(1, float), 1.0)
         self.assertIs(true.match(1, bool), True)
