@@ -784,7 +784,8 @@ cdef class FastSlice(Expression):
         return program
 
     cpdef Expression evaluate(self, Context context):
-        return self
+        cdef Expression expr = self.expr.evaluate(context)
+        return FastSlice(expr, self.index)
 
     def __repr__(self):
         return f'FastSlice({self.expr!r}, {self.index!r})'
