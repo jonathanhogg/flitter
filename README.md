@@ -40,11 +40,87 @@ the visuals into 2D and 3D drawing commands (or DMX packets, or laser DAC
 values). It's sort of like using a functional language to build a web page
 DOM - something akin to React.
 
-It is implemented in a mix of Python and Cython. I use and develop **flitter**
+## Installing/running
+
+**flitter** is implemented in a mix of Python and Cython. I develop and use it
 exclusively on macOS. It is notionally portable – in that there's no particular
 reason why it wouldn't work on Linux or Windows – but I've not tested either of
 those platforms. Please give it a go and raise any issues you come across, or
 get in touch if - amazingly - it just works.
+
+If you want to try it out without cloning the repo, then you can install and
+try it **right now** with:
+
+```sh
+pip3 install https://github.com/jonathanhogg/flitter/archive/main.zip
+```
+
+and then:
+
+```sh
+flitter path/to/some/flitter/script.fl
+```
+
+I'd recommend doing this in a Python virtual env, but you do you. Sadly, you
+won't have the examples handy doing it this way.
+
+If you clone the repo, then you can install from the top level directory with:
+
+```sh
+pip3 install .
+```
+
+Then you can run one of the examples easily with:
+
+```sh
+flitter examples/hoops.fl
+```
+
+You might want to add the `--verbose` option to get some more logging. You can
+see a full list of available options with `--help`.
+
+Everything else there is to know can be found in the [docs folder](/docs),
+examples or in the code.
+
+## Requirements
+
+At least Python 3.10 is *required* as the code uses `match`/`case` syntax. I
+work exclusively in 3.11, so I may have introduced some other hidden dependency
+on this later version.
+
+For reference, the runtime dependencies are:
+
+- `numpy` - for fast memory crunching
+- `lark` and `regex` - for the language parser
+- `rtmidi2` - for talking MIDI
+- `pyusb` - for sending screen data to the Push 2 and for talking to LaserCubes
+- `skia-python` - for 2D drawing
+- `glfw` - for OpenGL windowing
+- `moderngl` - because the raw OpenGL API is too low-level
+- `trimesh` - for generating/loading 3D triangular mesh models
+- `scipy` - because `trimesh` needs it for some operations
+- `av` - for encoding and decoding video
+- `pillow` - for saving screenshots as image files
+- `mako` - for templating of the GLSL source
+- `pyserial` - for talking to DMX interfaces and lasers
+- `loguru` - because the standard `logging` library is just too antiquated
+
+and the install-time dependencies are:
+
+- `cython` - because half of **flitter** is implemented in Cython for speed
+- `setuptools` - to run the build file
+
+If you want to muck about with the code then ensure Cython is installed in
+your runtime environment, do an editable package deployment, throw away the
+built code and let `pyximport` (re)compile it on-the-fly as you go:
+
+```sh
+pip3 install --editable .
+rm **/*.c **/*.so
+```
+
+You might also want to install `flake8` and `pytest`, which is what I use for
+linting the code and running the (few) unit tests.
 
 ## Background
 
@@ -102,67 +178,3 @@ of extension of this from the standard meaning of "flitter", which is to fly
 back and forth. However, "flitter" has a number of other meanings in different
 dialects of old Scots (I am a secret Scot), including "a small shiny piece of
 metal" – like a sequin. I like the name encompassing both movement and light.
-
-## Requirements
-
-At least Python 3.10 is *required* as the code uses `match`/`case` syntax. I
-work exclusively in 3.11, so I may have introduced some other hidden dependency
-on this later version.
-
-Install flitter and all of its requirements with:
-
-```sh
-pip3 install .
-```
-
-or some other suitable PEP 517 build mechanism. I'd recommend doing this in a
-virtual env, but you do you.
-
-For reference, the runtime dependencies are:
-
-- `numpy` - for fast memory crunching
-- `lark` and `regex` - for the language parser
-- `rtmidi2` - for talking MIDI
-- `pyusb` - for sending screen data to the Push 2 and for talking to LaserCubes
-- `skia-python` - for 2D drawing
-- `glfw` - for OpenGL windowing
-- `moderngl` - because the raw OpenGL API is too low-level
-- `trimesh` - for generating/loading 3D triangular mesh models
-- `scipy` - because `trimesh` needs it for some operations
-- `av` - for encoding and decoding video
-- `pillow` - for saving screenshots as image files
-- `mako` - for templating of the GLSL source
-- `pyserial` - for talking to DMX interfaces and lasers
-- `loguru` - because the standard `logging` library is just too antiquated
-
-and the install-time dependencies are:
-
-- `cython` - because half of **flitter** is implemented in Cython for speed
-- `setuptools` - to run the build file
-
-If you want to muck about with the code then ensure Cython is installed in
-your runtime environment, do an editable package deployment, throw away the
-built code and let `pyximport` (re)compile it on-the-fly as you go:
-
-```sh
-pip3 install --editable .
-rm **/*.c **/*.so
-```
-
-You might also want to install `flake8` and `pytest`, which is what I use for
-linting the code and running the (few) unit tests.
-
-## Running
-
-Along with the `flitter` Python package, the `flitter` command-line script
-will be installed. This can be used to execute a **flitter** script with:
-
-```sh
-flitter examples/hello.fl
-```
-
-You might want to add the `--verbose` option to get some more logging. You can
-see a full list of available options with `--help`.
-
-Everything else there is to know can be found in the [docs folder](/docs) and
-in the code.
