@@ -747,16 +747,18 @@ let SIZE=1280;720
 
 !window size=SIZE
     !canvas size=SIZE translate=SIZE/2
-        !ellipse radius=$:circ_radius
+        !ellipse radius=$:circle_radius
         !fill color=1;0;0
 
-!encoder number=0 name="Radius" state=:circ_radius lower=0 upper=300 initial=100
+!controller driver=:xtouch_mini
+    !rotary id=1 state=:circle_radius lower=0 upper=300 initial=100
 ```
 
-This shows the first Push 2 encoder being configured as a knob that changes the
-radius of a red filled-circle drawn in the middle of the window. The
-`state=:circ_radius` attribute of the `!encoder` node specifies the state key to
-write values to and the current value is retrieved with `$:circ_radius`.
+This shows an X-Touch mini MIDI surface being configured with one encoder as a
+knob that changes the radius of a red filled-circle drawn in the middle of the
+window. The `state=:circ_radius` attribute of the `!rotary` node specifies the
+state key to write values to and the current value is retrieved with
+`$:circle_radius`.
 
 A key is any vector of numbers and/or strings (/symbols). As the `;` operator
 binds with very low precedence, a non-singleton key needs to be surrounded with
@@ -765,7 +767,7 @@ brackets, e.g., `$(:circle;:radius)`.
 The state system is also used by the [physics engine](./physics.md) to
 communicate particle properties back to the program and by counters (see above)
 for storing a starting clock value and current speed. Be careful when choosing
-state keys to avoid collisions between these.
+state keys to avoid collisions between these different uses.
 
 ## Pragmas
 
