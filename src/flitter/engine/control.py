@@ -111,51 +111,73 @@ class EngineController:
         nodes_by_kind = {}
         for node in graph.children:
             nodes_by_kind.setdefault(node.kind, []).append(node)
-        async with asyncio.TaskGroup() as group:
-            for kind, nodes in nodes_by_kind.items():
-                renderer_class = get_renderer(kind)
-                if renderer_class is not None:
-                    references = {}
-                    renderers = self.renderers.setdefault(kind, [])
-                    count = 0
-                    for node in nodes:
-                        if count == len(renderers):
-                            if self.multiprocess:
-                                renderer = process.Proxy(renderer_class, **kwargs)
-                            else:
-                                renderer = renderer_class(**kwargs)
-                            renderers.append(renderer)
-                        group.create_task(renderers[count].update(node, references=references, **kwargs))
-                        count += 1
-                    while len(renderers) > count:
-                        renderers.pop().destroy()
+        tasks = []
+        for kind, nodes in nodes_by_kind.items():
+            renderer_class = get_renderer(kind)
+            if renderer_class is not None:
+                references = {}
+                renderers = self.renderers.setdefault(kind, [])
+                count = 0
+                for node in nodes:
+                    if count == len(renderers):
+                        if self.multiprocess:
+                            renderer = process.Proxy(renderer_class, **kwargs)
+                        else:
+                            renderer = renderer_class(**kwargs)
+                        renderers.append(renderer)
+                    tasks.append(asyncio.create_task(renderers[count].update(node, references=references, **kwargs)))
+                    count += 1
+                while len(renderers) > count:
+                    renderers.pop().destroy()
         for kind in list(self.renderers):
             if kind not in nodes_by_kind:
                 for renderer in self.renderers.pop(kind):
                     renderer.destroy()
+        try:
+            await asyncio.gather(*tasks)
+        except Exception:
+            for task in tasks:
+                if not task.done():
+                    print('cancel', task)
+                    task.cancel()
+            print('wait...')
+            await asyncio.gather(*tasks, return_exceptions=True)
+            print('ok')
+            raise
 
     async def update_interactors(self, graph, frame_time):
         nodes_by_kind = {}
         for node in graph.children:
             nodes_by_kind.setdefault(node.kind, []).append(node)
-        async with asyncio.TaskGroup() as group:
-            for kind, nodes in nodes_by_kind.items():
-                interactor_class = get_interactor(kind)
-                if interactor_class is not None:
-                    interactors = self.interactors.setdefault(kind, [])
-                    count = 0
-                    for node in nodes:
-                        if count == len(interactors):
-                            interactor = interactor_class()
-                            interactors.append(interactor)
-                        group.create_task(interactors[count].update(self, node, frame_time))
-                        count += 1
-                    while len(interactors) > count:
-                        interactors.pop().destroy()
+        tasks = []
+        for kind, nodes in nodes_by_kind.items():
+            interactor_class = get_interactor(kind)
+            if interactor_class is not None:
+                interactors = self.interactors.setdefault(kind, [])
+                count = 0
+                for node in nodes:
+                    if count == len(interactors):
+                        interactor = interactor_class()
+                        interactors.append(interactor)
+                    tasks.append(asyncio.create_task(interactors[count].update(self, node, frame_time)))
+                    count += 1
+                while len(interactors) > count:
+                    interactors.pop().destroy()
         for kind in list(self.interactors):
             if kind not in nodes_by_kind:
                 for interactor in self.interactors.pop(kind):
                     interactor.destroy()
+        try:
+            await asyncio.gather(*tasks)
+        except Exception:
+            for task in tasks:
+                if not task.done():
+                    print('cancel', task)
+                    task.cancel()
+            print('wait...')
+            await asyncio.gather(*tasks, return_exceptions=True)
+            print('ok')
+            raise
 
     def update_controls(self, graph):
         remaining = set(self.pads)

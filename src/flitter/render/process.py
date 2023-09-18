@@ -4,6 +4,7 @@ Multi-processing for rendering
 
 import asyncio
 from multiprocessing import Process, Queue
+import os
 
 from loguru import logger
 
@@ -34,6 +35,8 @@ class Proxy:
 
     @staticmethod
     def run(cls, kwargs, queue, log_level):
+        if hasattr(os, 'setpgrp'):
+            os.setpgrp()
         flitter.configure_logger(log_level)
         logger.info("Started {} render process", cls.__name__)
         try:
