@@ -377,15 +377,13 @@ class EngineController:
                 interaction -= now
 
                 self.update_controls(context.graph)
-                async with asyncio.TaskGroup() as group:
-                    group.create_task(self.update_interactors(context.graph, frame_time))
+                await self.update_interactors(context.graph, frame_time)
 
                 now = system_clock()
                 interaction += now
                 render -= now
 
-                async with asyncio.TaskGroup() as group:
-                    group.create_task(self.update_renderers(context.graph, **names))
+                await self.update_renderers(context.graph, **names)
 
                 now = system_clock()
                 render += now
