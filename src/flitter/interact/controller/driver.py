@@ -160,18 +160,18 @@ class ButtonControl(Control):
                 self._toggled = node.get('initial', 1, bool, False)
                 self._toggle_time = now
             changed = True
-        if self._pushed is None:
-            self._pushed = False
         if self._state_prefix:
             engine.state[self._state_prefix] = self._pushed if not self._toggle else self._toggled
             engine.state[self._state_prefix + ['pushed']] = self._pushed
-            if self._push_time is not None:
-                engine.state[self._state_prefix + ['pushed', 'beat']] = engine.counter.beat_at_time(self._push_time)
-            if self._release_time is not None:
-                engine.state[self._state_prefix + ['released', 'beat']] = engine.counter.beat_at_time(self._release_time)
-            engine.state[self._state_prefix + ['toggled']] = self._toggled
-            if self._toggle_time is not None:
-                engine.state[self._state_prefix + ['toggled', 'beat']] = engine.counter.beat_at_time(self._toggle_time)
+            engine.state[self._state_prefix + ['released']] = not self._pushed if self._pushed is not None else None
+            engine.state[self._state_prefix + ['pushed', 'beat']] = \
+                engine.counter.beat_at_time(self._push_time) if self._push_time is not None else None
+            engine.state[self._state_prefix + ['released', 'beat']] = \
+                engine.counter.beat_at_time(self._release_time) if self._release_time is not None else None
+            engine.state[self._state_prefix + ['toggled']] = self._toggled if self._toggle else None
+            engine.state[self._state_prefix + ['toggled', 'beat']] = \
+                engine.counter.beat_at_time(self._toggle_time) if self._toggle_time is not None else None
+
         if self._action is not None:
             match self._action:
                 case 'next':
