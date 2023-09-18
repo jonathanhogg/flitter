@@ -39,7 +39,6 @@ def main():
     parser.add_argument('--multiprocess', action='store_true', default=False, help="Use multiprocessing")
     parser.add_argument('--autoreset', type=float, help="Auto-reset state on idle")
     parser.add_argument('--evalstate', type=float, default=10, help="Partially-evaluate on state after stable period")
-    parser.add_argument('--push', action='store_true', default=False, help="Start Ableton Push 2 interface")
     parser.add_argument('--lockstep', action='store_true', default=False, help="Run clock in non-realtime mode")
     parser.add_argument('--define', '-D', action='append', default=[], type=keyvalue, dest='defines', help="Define variable for evaluation")
     parser.add_argument('--vmstats', action='store_true', default=False, help="Report VM statistics")
@@ -54,17 +53,6 @@ def main():
         controller.load_page(script)
     controller.switch_to_page(0)
 
-    if args.push:
-        arguments = [sys.executable, '-u', '-m', 'flitter.interface.push']
-        if args.level == 'DEBUG':
-            arguments.append('--debug')
-        elif args.level == 'VERBOSE':
-            arguments.append('--verbose')
-        push = subprocess.Popen(arguments)
-        logger.success("Started Push 2 interface sub-process")
-    else:
-        push = None
-
     try:
         if args.profile:
             import cProfile
@@ -77,9 +65,6 @@ def main():
         logger.error("Unexpected exception in flitter")
         raise
     finally:
-        if push is not None:
-            push.kill()
-            push.wait()
         logger.complete()
 
 
