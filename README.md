@@ -84,26 +84,25 @@ examples or in the code.
 
 ## Requirements
 
-At least Python 3.10 is *required* as the code uses `match`/`case` syntax. I
-work exclusively in 3.11, so I may have introduced some other hidden dependency
-on this later version.
+At least Python 3.10 is *required* as the code uses `match`/`case` syntax.
 
-For reference, the runtime dependencies are:
+The full runtime dependencies are:
 
-- `numpy` - for fast memory crunching
-- `lark` and `regex` - for the language parser
-- `rtmidi2` - for talking MIDI
-- `pyusb` - for sending screen data to the Push 2 and for talking to LaserCubes
-- `skia-python` - for 2D drawing
-- `glfw` - for OpenGL windowing
-- `moderngl` - because the raw OpenGL API is too low-level
-- `trimesh` - for generating/loading 3D triangular mesh models
-- `scipy` - because `trimesh` needs it for some operations
 - `av` - for encoding and decoding video
-- `pillow` - for saving screenshots as image files
+- `glfw` - for OpenGL windowing
+- `lark` - for the language parser
+- `loguru` - for enhanced logging
 - `mako` - for templating of the GLSL source
-- `pyserial` - for talking to DMX interfaces and lasers
-- `loguru` - because the standard `logging` library is just too antiquated
+- `moderngl` - for a higher-level API to OpenGL
+- `numpy` - for fast memory crunching
+- `pillow` - for saving screenshots as image files
+- `pyserial` - for talking to DMX interfaces
+- `pyusb` - for low-level communication with the Push 2 and LaserCube
+- `regex` - used by `lark` for advanced regular expressions
+- `rtmidi2` - for talking MIDI to control surfaces
+- `scipy` - used by `trimesh` for some operations
+- `skia-python` - for 2D drawing
+- `trimesh` - for generating/loading 3D meshes
 
 and the install-time dependencies are:
 
@@ -115,6 +114,7 @@ your runtime environment, do an editable package deployment, throw away the
 built code and let `pyximport` (re)compile it on-the-fly as you go:
 
 ```sh
+pip3 install cython
 pip3 install --editable .
 rm **/*.c **/*.so
 ```
