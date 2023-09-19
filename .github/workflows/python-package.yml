@@ -6,7 +6,13 @@ name: Python package
 on:
   push:
     branches: ["main"]
-    paths: [".github/workflows/python-package.yml", "src/**/*", "tests/*"]
+    paths:
+    - ".github/workflows/python-package.yml"
+    - "pyproject.toml"
+    - "setup.py"
+    - "setup.cfg"
+    - "src/**/*"
+    - "tests/*"
   pull_request:
     branches: ["main"]
 
