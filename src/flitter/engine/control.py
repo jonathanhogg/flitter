@@ -135,7 +135,6 @@ class EngineController:
 
     async def run(self):
         try:
-            loop = asyncio.get_event_loop()
             frames = []
             frame_time = system_clock()
             last = self.counter.beat_at_time(frame_time)

@@ -4,7 +4,6 @@ Flitter main entry point
 
 import argparse
 import asyncio
-import sys
 
 from flitter import configure_logger
 from .control import EngineController
