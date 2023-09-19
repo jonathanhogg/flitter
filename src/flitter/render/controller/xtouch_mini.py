@@ -80,9 +80,11 @@ class XTouchMiniRotary(driver.EncoderControl):
     def _handle_event(self, event):
         match event:
             case midi.ControlChangeEvent(value=value):
-                self.handle_turn(64 - value if value > 64 else value, event.timestamp)
+                if self.handle_turn(64 - value if value > 64 else value, event.timestamp):
+                    self.update_representation()
             case midi.NoteOnEvent(velocity=127):
-                self.handle_reset(event.timestamp)
+                if self.handle_reset(event.timestamp):
+                    self.update_representation()
 
 
 class XTouchMiniButton(driver.ButtonControl):
@@ -93,7 +95,8 @@ class XTouchMiniButton(driver.ButtonControl):
         self._group = None
 
     def _handle_event(self, event):
-        self.handle_push(event.velocity == 127, event.timestamp)
+        if self.handle_push(event.velocity == 127, event.timestamp):
+            self.update_representation()
 
     def update_representation(self):
         if self._driver._midi_port is None:

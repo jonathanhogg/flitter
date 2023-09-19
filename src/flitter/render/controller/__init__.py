@@ -67,6 +67,7 @@ class Controller:
                         del self.controls[key]
                     if control.update(engine, child, clock):
                         control.update_representation()
+                    control.update_state(engine)
         self.purge()
         self.controls = controls
 
