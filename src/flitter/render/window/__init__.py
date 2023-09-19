@@ -362,7 +362,8 @@ class Window(ProgramNode):
             logger.debug("OpenGL info: {GL_RENDERER} {GL_VERSION}", **self.glctx.info)
             logger.trace("{!r}", self.glctx.info)
             glfw.set_key_callback(self.window, self.key_callback)
-            glfw.set_cursor_pos_callback(self.window, self.pointer_callback)
+            glfw.set_cursor_pos_callback(self.window, self.pointer_movement_callback)
+            glfw.set_mouse_button_callback(self.window, self.pointer_button_callback)
         else:
             glfw.make_context_current(self.window)
             self.recalculate_viewport()
@@ -395,11 +396,18 @@ class Window(ProgramNode):
             if action == glfw.RELEASE:
                 self.engine.next_page()
 
-    def pointer_callback(self, window, x, y):
-        if self._pointer_state is not None and self.window:
+    def pointer_movement_callback(self, window, x, y):
+        if self._pointer_state is not None and self.window is not None:
             width, height = glfw.get_window_size(self.window)
             if 0 <= x <= width and 0 <= y <= height:
-                self.engine.state[self._pointer_state] = Vector((x/width, y/height))
+                self.engine.state[self._pointer_state] = x/width, y/height
+
+    def pointer_button_callback(self, window, button, action, mods):
+        if self._pointer_state is not None and self.window is not None:
+            if action == glfw.PRESS:
+                self.engine.state[self._pointer_state.concat(Vector(button))] = 1
+            elif action == glfw.RELEASE:
+                self.engine.state[self._pointer_state.concat(Vector(button))] = 0
 
     def handle_node(self, engine, node, **kwargs):
         if node.kind == 'key' and 'state' in node:
