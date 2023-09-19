@@ -98,11 +98,11 @@ name_list : NAME (";" NAME)* -> tuple
      | sum "+" product -> add
      | sum "-" product -> subtract
 
-?product : power
-         | product "*" power -> multiply
-         | product "/" power -> divide
-         | product "//" power -> floor_divide
-         | product "%" power -> modulo
+?product : unary
+         | product "*" unary -> multiply
+         | product "/" unary -> divide
+         | product "//" unary -> floor_divide
+         | product "%" unary -> modulo
 
 ?unary : power
        | "-" unary -> neg
