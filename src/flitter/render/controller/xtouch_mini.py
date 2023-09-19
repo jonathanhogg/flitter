@@ -78,25 +78,11 @@ class XTouchMiniRotary(driver.EncoderControl):
             self._driver._midi_port.send_control_change(self._light_control, 0)
 
     def _handle_event(self, event):
-        if not self._initialised:
-            return
         match event:
             case midi.ControlChangeEvent(value=value):
-                delta = 64 - value if value > 64 else value
-                raw_position = self._raw_position + delta
-                if self._style != 'continuous':
-                    raw_position = min(max(0, raw_position), self.get_raw_divisor())
-                if raw_position != self._raw_position:
-                    self._raw_position = raw_position
-                    self._position_time = event.timestamp
-                    self.update_representation()
+                self.handle_turn(64 - value if value > 64 else value, event.timestamp)
             case midi.NoteOnEvent(velocity=127):
-                position_range = self._upper - self._lower
-                position = min(max(self._lower, self._initial), self._upper)
-                self._raw_position = (position - self._lower) / position_range * self.get_raw_divisor() if position_range else 0
-                self.update_representation()
-            case _:
-                return
+                self.handle_reset(event.timestamp)
 
 
 class XTouchMiniButton(driver.ButtonControl):
@@ -106,18 +92,8 @@ class XTouchMiniButton(driver.ButtonControl):
         self._light_note = light_note
         self._group = None
 
-    def update(self, engine, node, now):
-        changed = super().update(engine, node, now)
-        group = node.get('group')
-        if group is not None:
-            group = tuple(group)
-        if group != self._group:
-            if self._group is not None:
-                self._driver._toggle_groups[self._group].remove(self)
-            self._group = group
-            self._driver._toggle_groups.setdefault(self._group, set()).add(self)
-            changed = True
-        return changed
+    def _handle_event(self, event):
+        self.handle_push(event.velocity == 127, event.timestamp)
 
     def update_representation(self):
         if self._driver._midi_port is None:
@@ -134,29 +110,6 @@ class XTouchMiniButton(driver.ButtonControl):
             self._driver._midi_port.send_note_on(self._light_note, velocity)
         else:
             self._driver._midi_port.send_note_on(self._light_note, 0)
-
-    def _handle_event(self, event):
-        if not self._initialised:
-            return
-        pushed = event.velocity == 127
-        if pushed != self._pushed:
-            self._pushed = pushed
-            if self._pushed:
-                self._push_time = event.timestamp
-                if self._action is not None:
-                    self._action_triggered = True
-                elif self._toggle:
-                    self._toggled = not self._toggled
-                    self._toggle_time = event.timestamp
-                    if self._group is not None and self._toggled:
-                        for button in self._driver._toggle_groups[self._group]:
-                            if button is not self and button._toggle and button._toggled:
-                                button._toggled = False
-                                button._toggle_time = event.timestamp
-                                button.update_representation()
-            else:
-                self._release_time = event.timestamp
-            self.update_representation()
 
 
 class XTouchMiniFader(driver.PositionControl):

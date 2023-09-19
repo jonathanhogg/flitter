@@ -121,8 +121,29 @@ class EncoderControl(PositionControl):
             changed = True
         return changed
 
+    def handle_turn(self, delta, timestamp):
+        if not self._initialised or delta == 0:
+            return
+        raw_position = self._raw_position + delta
+        if self._style != 'continuous':
+            raw_position = min(max(0, raw_position), self.get_raw_divisor())
+        if raw_position != self._raw_position:
+            self._raw_position = raw_position
+            self._position_time = timestamp
+            self.update_representation()
+
+    def handle_reset(self, timestamp):
+        if not self._initialised:
+            return
+        position_range = self._upper - self._lower
+        position = min(max(self._lower, self._initial), self._upper)
+        self._raw_position = (position - self._lower) / position_range * self.get_raw_divisor() if position_range else 0
+        self.update_representation()
+
 
 class ButtonControl(Control):
+    ToggleGroups = {}
+
     def reset(self):
         super().reset()
         self._pushed = None
@@ -134,11 +155,15 @@ class ButtonControl(Control):
         self._toggle = None
         self._toggled = None
         self._toggle_time = None
+        self._toggle_group = None
 
     def update(self, engine, node, now):
         changed = super().update(engine, node, now)
         action = node.get('action', 1, str)
         toggle = node.get('toggle', 1, bool, False)
+        group = node.get('group')
+        if group is not None:
+            group = tuple(group)
         if action != self._action:
             self._action = action
             if self._action is None:
@@ -160,6 +185,12 @@ class ButtonControl(Control):
                 self._toggled = node.get('initial', 1, bool, False)
                 self._toggle_time = now
             changed = True
+        if group != self._toggle_group:
+            if self._toggle_group is not None:
+                self.ToggleGroups[self._toggle_group].remove(self)
+            self._toggle_group = group
+            self.ToggleGroups.setdefault(self._toggle_group, set()).add(self)
+            changed = True
         if self._state_prefix:
             engine.state[self._state_prefix] = self._pushed if not self._toggle else self._toggled
             engine.state[self._state_prefix + ['pushed']] = self._pushed
@@ -171,7 +202,6 @@ class ButtonControl(Control):
             engine.state[self._state_prefix + ['toggled']] = self._toggled if self._toggle else None
             engine.state[self._state_prefix + ['toggled', 'beat']] = \
                 engine.counter.beat_at_time(self._toggle_time) if self._toggle_time is not None else None
-
         if self._action is not None:
             match self._action:
                 case 'next':
@@ -186,6 +216,27 @@ class ButtonControl(Control):
                         engine.previous_page()
                 self._action_triggered = False
         return changed
+
+    def handle_push(self, pushed, timestamp):
+        if not self._initialised or pushed == self._pushed:
+            return
+        self._pushed = pushed
+        if self._pushed:
+            self._push_time = timestamp
+            if self._action is not None:
+                self._action_triggered = True
+            elif self._toggle:
+                self._toggled = not self._toggled
+                self._toggle_time = timestamp
+                if self._toggle_group is not None and self._toggled:
+                    for button in self.ToggleGroups[self._group]:
+                        if button is not self and button._toggle and button._toggled:
+                            button._toggled = False
+                            button._toggle_time = timestamp
+                            self.update_representation()
+        else:
+            self._release_time = timestamp
+        self.update_representation()
 
 
 class ControllerDriver:
