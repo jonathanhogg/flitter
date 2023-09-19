@@ -104,22 +104,24 @@ name_list : NAME (";" NAME)* -> tuple
          | product "//" power -> floor_divide
          | product "%" power -> modulo
 
-?power : unary
-       | unary "**" power -> power
+?unary : power
+       | "-" unary -> neg
+       | "+" unary -> pos
 
-?unary : atom
-       | "-" atom -> neg
-       | "+" atom -> pos
+?power : call
+       | power "**" call -> power
+
+?call : atom
+      | call "(" args ")" -> call
+      | call "[" node "]" -> slice
+
+args : (node ("," node)*)? -> tuple
 
 ?atom : literal
       | NAME -> name
-      | atom "(" args ")" -> call
-      | atom "[" node "]" -> slice
-      | QUERY -> search
       | "$" atom -> lookup
+      | QUERY -> search
       | "(" node ")"
-
-args : (node ("," node)*)? -> tuple
 
 literal : NUMBER
         | STRING
