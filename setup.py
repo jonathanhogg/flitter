@@ -10,7 +10,7 @@ setup(
         Extension("flitter.model", ["src/flitter/model.pyx"]),
         Extension("flitter.render.dmx", ["src/flitter/render/dmx.pyx"]),
         Extension("flitter.render.laser", ["src/flitter/render/laser.pyx"]),
-        Extension("flitter.render.physics", ["src/flitter/interact/physics.pyx"]),
+        Extension("flitter.render.physics", ["src/flitter/render/physics.pyx"]),
         Extension("flitter.render.window.canvas", ["src/flitter/render/window/canvas.pyx"]),
         Extension("flitter.render.window.canvas3d", ["src/flitter/render/window/canvas3d.pyx"]),
         Extension("flitter.render.window.models", ["src/flitter/render/window/models.pyx"]),
