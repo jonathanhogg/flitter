@@ -17,7 +17,7 @@ class Controller:
         if cls.VIRTUAL_MIDI_PORT is None:
             cls.VIRTUAL_MIDI_PORT = midi.MidiPort('flitter', virtual=True)
 
-    def __init__(self):
+    def __init__(self, **kwargs):
         logger.debug("Create controller")
         self.open_virtual_midi_port()
         self.driver = None
@@ -35,7 +35,7 @@ class Controller:
             self.driver.stop()
             self.driver = None
 
-    async def update(self, engine, node, now):
+    async def update(self, engine, node, clock, **kwargs):
         driver = node.get('driver', 1, str)
         driver_class = None
         if driver:
@@ -65,10 +65,10 @@ class Controller:
                     controls[key] = control
                     if key in self.controls:
                         del self.controls[key]
-                    if control.update(engine, child, now):
+                    if control.update(engine, child, clock):
                         control.update_representation()
         self.purge()
         self.controls = controls
 
 
-INTERACTOR_CLASS = Controller
+RENDERER_CLASS = Controller

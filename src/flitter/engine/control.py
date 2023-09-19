@@ -13,12 +13,11 @@ from ..cache import SharedCache
 from ..clock import BeatCounter, system_clock
 from ..language.vm import StateDict, Context, log_vm_stats
 from ..model import Vector, null
-from ..render import process, get_renderer
-from ..interact import get_interactor
+from ..render import get_renderer
 
 
 class EngineController:
-    def __init__(self, target_fps=60, screen=0, fullscreen=False, vsync=False, state_file=None, multiprocess=True,
+    def __init__(self, target_fps=60, screen=0, fullscreen=False, vsync=False, state_file=None,
                  autoreset=None, state_eval_wait=0, realtime=True, defined_variables=None, vm_stats=False):
         self.default_fps = target_fps
         self.target_fps = target_fps
@@ -26,7 +25,6 @@ class EngineController:
         self.screen = screen
         self.fullscreen = fullscreen
         self.vsync = vsync
-        self.multiprocess = multiprocess
         self.autoreset = autoreset
         self.state_eval_wait = state_eval_wait
         if defined_variables:
@@ -45,7 +43,6 @@ class EngineController:
         self.state = None
         self.state_timestamp = None
         self.renderers = {}
-        self.interactors = {}
         self.counter = BeatCounter()
         self.pages = []
         self.switch_page = None
@@ -74,9 +71,6 @@ class EngineController:
             for renderers in self.renderers.values():
                 for renderer in renderers:
                     renderer.purge()
-            for interactors in self.interactors.values():
-                for interactor in interactors:
-                    interactor.purge()
 
     def has_next_page(self):
         return self.current_page < len(self.pages) - 1
@@ -105,12 +99,9 @@ class EngineController:
                 count = 0
                 for node in nodes:
                     if count == len(renderers):
-                        if self.multiprocess:
-                            renderer = process.Proxy(renderer_class, **kwargs)
-                        else:
-                            renderer = renderer_class(**kwargs)
+                        renderer = renderer_class(**kwargs)
                         renderers.append(renderer)
-                    tasks.append(asyncio.create_task(renderers[count].update(node, references=references, **kwargs)))
+                    tasks.append(asyncio.create_task(renderers[count].update(self, node, references=references, **kwargs)))
                     count += 1
                 while len(renderers) > count:
                     renderers.pop().destroy()
@@ -125,43 +116,7 @@ class EngineController:
                 if not task.done():
                     print('cancel', task)
                     task.cancel()
-            print('wait...')
             await asyncio.gather(*tasks, return_exceptions=True)
-            print('ok')
-            raise
-
-    async def update_interactors(self, graph, frame_time):
-        nodes_by_kind = {}
-        for node in graph.children:
-            nodes_by_kind.setdefault(node.kind, []).append(node)
-        tasks = []
-        for kind, nodes in nodes_by_kind.items():
-            interactor_class = get_interactor(kind)
-            if interactor_class is not None:
-                interactors = self.interactors.setdefault(kind, [])
-                count = 0
-                for node in nodes:
-                    if count == len(interactors):
-                        interactor = interactor_class()
-                        interactors.append(interactor)
-                    tasks.append(asyncio.create_task(interactors[count].update(self, node, frame_time)))
-                    count += 1
-                while len(interactors) > count:
-                    interactors.pop().destroy()
-        for kind in list(self.interactors):
-            if kind not in nodes_by_kind:
-                for interactor in self.interactors.pop(kind):
-                    interactor.destroy()
-        try:
-            await asyncio.gather(*tasks)
-        except Exception:
-            for task in tasks:
-                if not task.done():
-                    print('cancel', task)
-                    task.cancel()
-            print('wait...')
-            await asyncio.gather(*tasks, return_exceptions=True)
-            print('ok')
             raise
 
     def handle_pragmas(self, pragmas):
@@ -185,7 +140,7 @@ class EngineController:
             frame_time = system_clock()
             last = self.counter.beat_at_time(frame_time)
             dump_time = frame_time
-            execution = interaction = render = housekeeping = 0
+            execution = render = housekeeping = 0
             performance = 1
             gc.disable()
             run_program = current_program = None
@@ -248,12 +203,6 @@ class EngineController:
                     print(log)
                 now = system_clock()
                 execution += now
-                interaction -= now
-
-                await self.update_interactors(context.graph, frame_time)
-
-                now = system_clock()
-                interaction += now
                 render -= now
 
                 await self.update_renderers(context.graph, **names)
@@ -311,11 +260,10 @@ class EngineController:
                 if len(frames) > 1 and frames[-1] - frames[0] > 5:
                     nframes = len(frames) - 1
                     fps = nframes / (frames[-1] - frames[0])
-                    logger.info("{:4.1f}fps; {:4.1f}/{:4.1f}/{:4.1f}/{:4.1f}ms (run/interact/render/sys); perf {:.2f}",
-                                fps, 1000 * execution / nframes, 1000 * interaction / nframes,
-                                1000 * render / nframes, 1000 * housekeeping / nframes, performance)
+                    logger.info("{:4.1f}fps; {:4.1f}/{:4.1f}/{:4.1f}ms (run/render/sys); perf {:.2f}",
+                                fps, 1000 * execution / nframes, 1000 * render / nframes, 1000 * housekeeping / nframes, performance)
                     frames = frames[-1:]
-                    execution = interaction = render = housekeeping = 0
+                    execution = render = housekeeping = 0
                     if run_program is not None:
                         logger.trace("VM stack size: {:d}", run_program.stack.size)
 
@@ -324,9 +272,6 @@ class EngineController:
             for renderers in self.renderers.values():
                 while renderers:
                     renderers.pop().destroy()
-            for interactors in self.interactors.values():
-                while interactors:
-                    interactors.pop().destroy()
             count = gc.collect(2)
             logger.trace("Collected {} objects (full collection)", count)
             gc.enable()

@@ -4,7 +4,6 @@ Flitter main entry point
 
 import argparse
 import asyncio
-import subprocess
 import sys
 
 from flitter import configure_logger
@@ -36,7 +35,6 @@ def main():
     parser.add_argument('--fullscreen', action='store_true', default=False, help="Default to full screen")
     parser.add_argument('--vsync', action='store_true', default=False, help="Default to winow vsync")
     parser.add_argument('--state', type=str, help="State save/restore file")
-    parser.add_argument('--multiprocess', action='store_true', default=False, help="Use multiprocessing")
     parser.add_argument('--autoreset', type=float, help="Auto-reset state on idle")
     parser.add_argument('--evalstate', type=float, default=10, help="Partially-evaluate on state after stable period")
     parser.add_argument('--lockstep', action='store_true', default=False, help="Run clock in non-realtime mode")
@@ -46,9 +44,8 @@ def main():
     args = parser.parse_args()
     logger = configure_logger(args.level)
     controller = EngineController(target_fps=args.fps, screen=args.screen, fullscreen=args.fullscreen, vsync=args.vsync,
-                                  state_file=args.state, multiprocess=args.multiprocess and not args.profile, autoreset=args.autoreset,
-                                  state_eval_wait=args.evalstate, realtime=not args.lockstep, defined_variables=dict(args.defines),
-                                  vm_stats=args.vmstats)
+                                  state_file=args.state, autoreset=args.autoreset, state_eval_wait=args.evalstate,
+                                  realtime=not args.lockstep, defined_variables=dict(args.defines), vm_stats=args.vmstats)
     for script in args.script:
         controller.load_page(script)
     controller.switch_to_page(0)

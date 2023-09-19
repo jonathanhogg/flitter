@@ -187,7 +187,7 @@ cdef class DMX:
             self.driver.close()
             self.driver = None
 
-    async def update(self, model.Node node, **kwargs):
+    async def update(self, engine, model.Node node, **kwargs):
         driver = node.get('driver', 1, str, '').lower()
         cls = {'entec': EntecDMXDriver, 'outputarts': OutputArtsDMXDriver}.get(driver)
         if cls is not None:

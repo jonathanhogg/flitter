@@ -235,8 +235,8 @@ cdef class PhysicsSystem:
     def purge(self):
         pass
 
-    async def update(self, engine, Node node, double now):
-        self._update(engine.state, node, now, engine.target_fps, engine.realtime)
+    async def update(self, engine, Node node, clock, **kwargs):
+        self._update(engine.state, node, clock, engine.target_fps, engine.realtime)
 
     cdef _update(self, StateDict state, Node node, double now, double target_fps, bint realtime):
         cdef int dimensions = node.get_int('dimensions', 0)
@@ -351,4 +351,4 @@ cdef class PhysicsSystem:
         state.set_item(state_prefix, time_vector)
 
 
-INTERACTOR_CLASS = PhysicsSystem
+RENDERER_CLASS = PhysicsSystem

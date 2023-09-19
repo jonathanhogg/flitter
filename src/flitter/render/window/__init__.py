@@ -17,6 +17,7 @@ from . import canvas3d
 from ...clock import system_clock
 from .glconstants import GL_RGBA8, GL_RGBA16F, GL_RGBA32F, GL_SRGB8, GL_SRGB8_ALPHA8, GL_FRAMEBUFFER_SRGB
 from .glsl import TemplateLoader
+from ...model import Vector
 
 
 def value_split(value, n, m):
@@ -75,7 +76,7 @@ class SceneNode:
         while self.children:
             self.children.pop().destroy()
 
-    async def update(self, node, default_size=(512, 512), **kwargs):
+    async def update(self, engine, node, default_size=(512, 512), **kwargs):
         references = kwargs.setdefault('references', {})
         if node_id := node.get('id', 1, str):
             references[node_id] = self
@@ -87,19 +88,18 @@ class SceneNode:
             self.height = height
             resized = True
         self.tags = node.tags
-        self.create(node, resized, **kwargs)
-        await self.descend(node, **kwargs)
+        self.create(engine, node, resized, **kwargs)
+        await self.descend(engine, node, **kwargs)
         self.render(node, **kwargs)
 
     def similar_to(self, node):
         return node.tags and node.tags == self.tags
 
-    async def descend(self, node, **kwargs):
+    async def descend(self, engine, node, **kwargs):
         existing = self.children
         updated = []
         for child in node.children:
-            cls = {'reference': Reference, 'shader': Shader, 'canvas': Canvas, 'canvas3d': Canvas3D,
-                   'record': Record, 'video': Video}.get(child.kind)
+            cls = SCENE_CLASSES.get(child.kind)
             if cls is not None:
                 index = None
                 for i, scene_node in enumerate(existing):
@@ -113,13 +113,18 @@ class SceneNode:
                     scene_node = existing.pop(index)
                 else:
                     scene_node = cls(self.glctx)
-                await scene_node.update(child, default_size=(self.width, self.height), **kwargs)
+                await scene_node.update(engine, child, default_size=(self.width, self.height), **kwargs)
                 updated.append(scene_node)
+            else:
+                self.handle_node(engine, child, **kwargs)
         while existing:
             existing.pop().destroy()
         self.children = updated
 
-    def create(self, node, resized, **kwargs):
+    def handle_node(self, engine, node, **kwargs):
+        pass
+
+    def create(self, engine, node, resized, **kwargs):
         pass
 
     def render(self, node, **kwargs):
@@ -138,7 +143,7 @@ class Reference(SceneNode):
     def texture(self):
         return self._reference.texture if self._reference is not None else None
 
-    async def update(self, node, references=None, **kwargs):
+    async def update(self, engine, node, references=None, **kwargs):
         node_id = node.get('id', 1, str)
         self._reference = references.get(node_id) if references is not None and node_id else None
 
@@ -174,8 +179,8 @@ class ProgramNode(SceneNode):
     def size(self):
         return self.framebuffer.size
 
-    def create(self, node, resized, **kwargs):
-        super().create(node, resized, **kwargs)
+    def create(self, engine, node, resized, **kwargs):
+        super().create(engine, node, resized, **kwargs)
         if resized and self._last is not None:
             self._last = None
 
@@ -276,6 +281,7 @@ class Window(ProgramNode):
 
     def __init__(self, screen=0, fullscreen=False, vsync=False, **kwargs):
         super().__init__(None)
+        self.engine = None
         self.window = None
         self.default_screen = screen
         self.default_fullscreen = fullscreen
@@ -295,6 +301,7 @@ class Window(ProgramNode):
             Window.Windows.remove(self)
             if not Window.Windows:
                 glfw.terminate()
+            self.engine = None
             logger.debug("{} closed", self.name)
         super().release()
 
@@ -310,9 +317,10 @@ class Window(ProgramNode):
     def size(self):
         return self.glctx.screen.viewport[2:]
 
-    def create(self, node, resized, **kwargs):
-        super().create(node, resized)
+    def create(self, engine, node, resized, **kwargs):
+        super().create(engine, node, resized)
         if self.window is None:
+            self.engine = engine
             title = node.get('title', 1, str, "flitter")
             screen = node.get('screen', 1, int, self.default_screen)
             fullscreen = node.get('fullscreen', 1, bool, self.default_fullscreen)
@@ -353,6 +361,8 @@ class Window(ProgramNode):
             self.recalculate_viewport(True)
             logger.debug("OpenGL info: {GL_RENDERER} {GL_VERSION}", **self.glctx.info)
             logger.trace("{!r}", self.glctx.info)
+            glfw.set_key_callback(self.window, self.key_callback)
+            glfw.set_cursor_pos_callback(self.window, self.pointer_callback)
         else:
             glfw.make_context_current(self.window)
             self.recalculate_viewport()
@@ -362,6 +372,54 @@ class Window(ProgramNode):
             colorbits = DEFAULT_COLORBITS
         self.glctx.extra['colorbits'] = colorbits
         self.glctx.extra['size'] = self.width, self.height
+        self._keys = {}
+        self._pointer_state = None
+
+    def key_callback(self, window, key, scancode, action, mods):
+        if key in self._keys:
+            state = self._keys[key]
+            if action == glfw.PRESS:
+                self.engine.state[state] = 1
+                self.engine.state[state.concat(Vector('pushed'))] = 1
+                self.engine.state[state.concat(Vector('released'))] = 0
+                self.engine.state[state.concat(Vector(['pushed', 'beat']))] = self._beat
+            elif action == glfw.RELEASE:
+                self.engine.state[state] = 0
+                self.engine.state[state.concat(Vector('pushed'))] = 0
+                self.engine.state[state.concat(Vector('released'))] = 1
+                self.engine.state[state.concat(Vector(['released', 'beat']))] = self._beat
+        elif key == glfw.KEY_PAGE_DOWN:
+            if action == glfw.RELEASE:
+                self.engine.previous_page()
+        elif key == glfw.KEY_PAGE_UP:
+            if action == glfw.RELEASE:
+                self.engine.next_page()
+
+    def pointer_callback(self, window, x, y):
+        if self._pointer_state is not None and self.window:
+            width, height = glfw.get_window_size(self.window)
+            if 0 <= x <= width and 0 <= y <= height:
+                self.engine.state[self._pointer_state] = Vector((x/width, y/height))
+
+    def handle_node(self, engine, node, **kwargs):
+        if node.kind == 'key' and 'state' in node:
+            key_name = node.get('name', 1, str)
+            key_constant = 'KEY_' + key_name.upper()
+            if hasattr(glfw, key_constant):
+                key = getattr(glfw, key_constant)
+                state = node['state']
+                self._keys[key] = state
+                if state not in engine.state:
+                    if self.window is not None and glfw.get_key(self.window, key) == glfw.PRESS:
+                        engine.state[state] = 1
+                        engine.state[state.concat(Vector('pushed'))] = 1
+                        engine.state[state.concat(Vector('released'))] = 0
+                    else:
+                        engine.state[state] = 0
+                        engine.state[state.concat(Vector('pushed'))] = 0
+                        engine.state[state.concat(Vector('released'))] = 1
+        elif node.kind == 'pointer' and 'state' in node:
+            self._pointer_state = node['state']
 
     def recalculate_viewport(self, force=False):
         aspect_ratio = self.width / self.height
@@ -385,6 +443,7 @@ class Window(ProgramNode):
         vsync = node.get('vsync', 1, bool, self.default_vsync)
         glfw.swap_interval(1 if vsync else 0)
         glfw.swap_buffers(self.window)
+        self._beat = kwargs['beat']
         glfw.poll_events()
         if count := self.glctx.gc():
             logger.trace("Collected {} OpenGL objects", count)
@@ -415,8 +474,8 @@ class Shader(ProgramNode):
         self._texture = None
         super().release()
 
-    def create(self, node, resized, **kwargs):
-        super().create(node, resized, **kwargs)
+    def create(self, engine, node, resized, **kwargs):
+        super().create(engine, node, resized, **kwargs)
         colorbits = node.get('colorbits', 1, int, self.glctx.extra['colorbits'])
         if colorbits not in COLOR_FORMATS:
             colorbits = self.glctx.extra['colorbits']
@@ -455,8 +514,8 @@ class Record(ProgramNode):
         self._texture = None
         super().release()
 
-    def create(self, node, resized, **kwargs):
-        super().create(node, resized, **kwargs)
+    def create(self, engine, node, resized, **kwargs):
+        super().create(engine, node, resized, **kwargs)
         has_alpha = node.get('keep_alpha', 1, bool, False)
         if self._framebuffer is None or self._texture is None or resized or has_alpha != self._has_alpha:
             self._last = None
@@ -514,7 +573,7 @@ class Canvas(SceneNode):
         self._framebuffer = None
         self._texture = None
 
-    def create(self, node, resized, **kwargs):
+    def create(self, engine, node, resized, **kwargs):
         colorbits = node.get('colorbits', 1, int, self.glctx.extra['colorbits'])
         if colorbits not in COLOR_FORMATS:
             colorbits = self.glctx.extra['colorbits']
@@ -533,7 +592,7 @@ class Canvas(SceneNode):
             self._linear = linear
             logger.debug("Created {:d}x{:d} canvas; skia version {}", self.width, self.height, skia.__version__)
 
-    async def descend(self, node, **kwargs):
+    async def descend(self, engine, node, **kwargs):
         # A canvas is a leaf node from the perspective of the OpenGL world
         pass
 
@@ -593,7 +652,7 @@ class Canvas3D(SceneNode):
         self._total_duration = 0
         self._total_count = 0
 
-    def create(self, node, resized, **kwargs):
+    def create(self, engine, node, resized, **kwargs):
         colorbits = node.get('colorbits', 1, int, self.glctx.extra['colorbits'])
         if colorbits not in COLOR_FORMATS:
             colorbits = self.glctx.extra['colorbits']
@@ -616,7 +675,7 @@ class Canvas3D(SceneNode):
             self._colorbits = colorbits
             self._samples = samples
 
-    async def descend(self, node, **kwargs):
+    async def descend(self, engine, node, **kwargs):
         # A canvas3d is a leaf node from the perspective of the OpenGL world
         pass
 
@@ -666,7 +725,7 @@ class Video(Shader):
     def similar_to(self, node):
         return super().similar_to(node) and node.get('filename', 1, str) == self._filename
 
-    async def update(self, node, **kwargs):
+    async def update(self, engine, node, **kwargs):
         references = kwargs.setdefault('references', {})
         if node_id := node.get('id', 1, str):
             references[node_id] = self
@@ -717,3 +776,12 @@ class Video(Shader):
 
 
 RENDERER_CLASS = Window
+
+SCENE_CLASSES = {
+    'canvas': Canvas,
+    'canvas3d': Canvas3D,
+    'record': Record,
+    'reference': Reference,
+    'shader': Shader,
+    'video': Video
+}
