@@ -58,11 +58,13 @@ class PositionControl(Control):
         self._lag = None
         self._lower = None
         self._upper = None
+        self._origin = None
         self._raw_position = None
         self._position = None
         self._position_time = None
 
-    def get_raw_divisor(self):
+    @property
+    def raw_divisor(self):
         raise NotImplementedError()
 
     def primary_state_value(self):
@@ -79,10 +81,13 @@ class PositionControl(Control):
         if (upper := max(self._lower, node.get('upper', 1, float, 1))) != self._upper:
             self._upper = upper
             changed = True
-        position_range = self._upper - self._lower
+        default_origin = 0 if self._lower < 0 < self._upper else self._lower
+        if (origin := min(max(self._lower, node.get('origin', 1, float, default_origin)), self._upper)) != self._origin:
+            self._origin = origin
+            changed = True
         if self._raw_position is not None:
-            raw_divisor = self.get_raw_divisor()
-            position = self._raw_position / raw_divisor * position_range + self._lower
+            position_range = self._upper - self._lower
+            position = self._raw_position / self.raw_divisor * position_range + self._lower
             if self._position is not None and abs(position - self._position) > position_range / 1000:
                 delta = engine.counter.beat_at_time(now) - engine.counter.beat_at_time(self._position_time)
                 alpha = math.exp(-delta / self._lag) if self._lag > 0 else 0
@@ -94,29 +99,15 @@ class PositionControl(Control):
         return changed
 
 
-class EncoderControl(PositionControl):
-    STYLES = {'volume', 'pan', 'continuous'}
-
+class SettablePositionControl(PositionControl):
     def reset(self):
         super().reset()
-        self._style = None
         self._initial = None
-        self._turns = None
 
     def update(self, engine, node, now):
         changed = super().update(engine, node, now)
-        style = node.get('style', 1, str, 'volume').lower()
-        if style not in self.STYLES:
-            style = 'volume'
-        if style != self._style:
-            self._style = style
-            changed = True
-        position_range = self._upper - self._lower
-        if (initial := node.get('initial', 1, float, self._lower + position_range / 2 if self._style == 'pan' else self._lower)) != self._initial:
+        if (initial := node.get('initial', 1, float, self._origin)) != self._initial:
             self._initial = initial
-            changed = True
-        if (turns := node.get('turns', 1, float, 1)) != self._turns:
-            self._turns = turns
             changed = True
         if self._raw_position is None:
             if self._state_prefix and self._state_prefix in engine.state:
@@ -125,7 +116,45 @@ class EncoderControl(PositionControl):
                 initial = self._initial
             self._position = min(max(self._lower, initial), self._upper)
             self._position_time = now
-            self._raw_position = (self._position - self._lower) / position_range * self.get_raw_divisor() if position_range else 0
+            position_range = self._upper - self._lower
+            self._raw_position = (self._position - self._lower) / position_range * self.raw_divisor if position_range else 0
+            changed = True
+        return changed
+
+    def handle_reset(self, timestamp):
+        if not self._initialised:
+            return False
+        position_range = self._upper - self._lower
+        position = min(max(self._lower, self._initial), self._upper)
+        raw_position = (position - self._lower) / position_range * self.raw_divisor if position_range else 0
+        if raw_position != self._raw_position:
+            self._raw_position = raw_position
+            self._position = position
+            self._position_time = timestamp
+            return True
+        return False
+
+
+class EncoderControl(SettablePositionControl):
+    STYLES = {'volume', 'pan', 'continuous'}
+
+    def reset(self):
+        super().reset()
+        self._style = None
+        self._turns = None
+
+    def update(self, engine, node, now):
+        changed = False
+        style = node.get('style', 1, str, 'volume').lower()
+        if style not in self.STYLES:
+            style = 'volume'
+        if style != self._style:
+            self._style = style
+            changed = True
+        if (turns := node.get('turns', 1, float, 1)) != self._turns:
+            self._turns = turns
+            changed = True
+        if super().update(engine, node, now):
             changed = True
         return changed
 
@@ -134,19 +163,7 @@ class EncoderControl(PositionControl):
             return False
         raw_position = self._raw_position + delta
         if self._style != 'continuous':
-            raw_position = min(max(0, raw_position), self.get_raw_divisor())
-        if raw_position != self._raw_position:
-            self._raw_position = raw_position
-            self._position_time = timestamp
-            return True
-        return False
-
-    def handle_reset(self, timestamp):
-        if not self._initialised:
-            return False
-        position_range = self._upper - self._lower
-        position = min(max(self._lower, self._initial), self._upper)
-        raw_position = (position - self._lower) / position_range * self.get_raw_divisor() if position_range else 0
+            raw_position = min(max(0, raw_position), self.raw_divisor)
         if raw_position != self._raw_position:
             self._raw_position = raw_position
             self._position_time = timestamp

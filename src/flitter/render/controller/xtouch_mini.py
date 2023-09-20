@@ -57,14 +57,15 @@ class XTouchMiniRotary(driver.EncoderControl):
         self._driver = driver
         self._light_control = light_control
 
-    def get_raw_divisor(self):
+    @property
+    def raw_divisor(self):
         return int(round(24 * self._turns))
 
     def update_representation(self):
         if self._driver._midi_port is None:
             return
         if self._initialised:
-            divisor = self.get_raw_divisor()
+            divisor = self.raw_divisor
             if self._upper == self._lower:
                 value = 0x3f
             elif self._style == 'volume':
@@ -124,7 +125,8 @@ class XTouchMiniFader(driver.PositionControl):
     def update_representation(self):
         pass
 
-    def get_raw_divisor(self):
+    @property
+    def raw_divisor(self):
         return 16256
 
     def _handle_event(self, event):
