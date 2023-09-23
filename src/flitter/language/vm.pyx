@@ -559,6 +559,7 @@ cdef class Function:
     cdef readonly tuple defaults
     cdef readonly Program program
     cdef readonly VectorStack lvars
+    cdef readonly object root_path
 
 
 cdef class LoopSource:
@@ -622,6 +623,8 @@ cdef void call_helper(Context context, VectorStack stack, object function, tuple
             m += 1
             push(lvars, arg)
         top = stack.top
+        if func.root_path is not context.path:
+            SharedCache.set_root(func.root_path)
         if record_stats:
             call_duration = -time()
         func.program._execute(context, stack, lvars, record_stats)
@@ -631,6 +634,8 @@ cdef void call_helper(Context context, VectorStack stack, object function, tuple
         assert stack.top == top + 1, "Bad function return stack"
         assert lvars.top == lvars_top + m, "Bad function return lvars"
         drop(lvars, m)
+        if func.root_path is not context.path:
+            SharedCache.set_root(context.path)
     elif function is _log_func and n == 1 and kwargs is None:
         arg = <Vector>args[0]
         context.logs.add(arg.repr())
@@ -761,11 +766,13 @@ cdef class Program:
                 import_context.state = context.state
                 import_context.variables = {}
                 import_context.path = program.path
+                SharedCache.set_root(import_context.path)
                 if record_stats:
                     duration[0] += time()
                 program._execute(import_context, None, None, record_stats)
                 if record_stats:
                     duration[0] -= time()
+                SharedCache.set_root(context.path)
                 return import_context.variables
         return None
 
@@ -1234,6 +1241,7 @@ cdef class Program:
                     function.parameters = (<InstructionStrTuple>instruction).tvalue
                     function.program = <Program>pop(stack).objects[0]
                     function.lvars = copy(lvars)
+                    function.root_path = context.path
                     n = PyTuple_GET_SIZE(function.parameters)
                     function.defaults = pop_tuple(stack, n) if n else ()
                     r1 = <Vector>Vector.__new__(Vector)
