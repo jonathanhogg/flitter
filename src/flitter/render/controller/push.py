@@ -2,7 +2,6 @@
 Ableton Push OSC controller for Flitter
 """
 
-import argparse
 import asyncio
 from dataclasses import dataclass
 import math
@@ -10,7 +9,6 @@ import math
 from loguru import logger
 import skia
 
-import flitter
 from ..clock import TapTempo, system_clock
 from ..ableton.constants import Encoder, Control, BUTTONS
 from ..ableton.events import (ButtonPressed, ButtonReleased, PadPressed, PadHeld, PadReleased,
@@ -424,28 +422,3 @@ class Controller:
                 self.push.set_menu_button_rgb(n, 0, 0, 0)
             for n in BUTTONS:
                 self.push.set_button_white(n, 0)
-
-
-def main():
-    parser = argparse.ArgumentParser(description="Flitter Ableton Push 2 Interface")
-    parser.set_defaults(level=None)
-    levels = parser.add_mutually_exclusive_group()
-    levels.add_argument('--trace', action='store_const', const='TRACE', dest='level', help="Trace logging")
-    levels.add_argument('--debug', action='store_const', const='DEBUG', dest='level', help="Debug logging")
-    levels.add_argument('--verbose', action='store_const', const='INFO', dest='level', help="Informational logging")
-    parser.add_argument('--notempo', action='store_true', default=False, help="Disable tempo control")
-    parser.add_argument('--nofader', action='store_true', default=False, help="Disable fader control")
-    args = parser.parse_args()
-    flitter.configure_logger(args.level)
-
-    try:
-        controller = Controller(tempo_control=not args.notempo, fader_control=not args.nofader)
-        asyncio.run(controller.run())
-    except KeyboardInterrupt:
-        logger.info("Exiting Push 2 interface on keyboard interrupt")
-    except Exception:
-        logger.exception("Unhandled exception in Push 2 interface")
-
-
-if __name__ == '__main__':
-    main()
