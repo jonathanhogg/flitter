@@ -49,7 +49,7 @@ class CachePath:
     def read_text(self, encoding=None, errors=None):
         self._touched = system_clock()
         key = 'text', encoding, errors
-        mtime = self._path.stat().st_mtime if self._path.exists() and self._path.is_file() else None
+        mtime = self._path.stat().st_mtime if self._path.is_file() else None
         if key in self._cache:
             cache_mtime, text = self._cache[key]
             if mtime == cache_mtime:
@@ -71,7 +71,7 @@ class CachePath:
     def read_flitter_program(self, variables=None, undefined=None):
         from .language.parser import parse, ParseError
         self._touched = system_clock()
-        mtime = self._path.stat().st_mtime if self._path.exists() and self._path.is_file() else None
+        mtime = self._path.stat().st_mtime if self._path.is_file() else None
         if 'flitter' in self._cache:
             cache_mtime, program = self._cache['flitter']
             if mtime == cache_mtime:
@@ -117,7 +117,7 @@ class CachePath:
         import csv
         from .model import Vector, null
         self._touched = system_clock()
-        mtime = self._path.stat().st_mtime if self._path.exists() and self._path.is_file() else None
+        mtime = self._path.stat().st_mtime if self._path.is_file() else None
         if 'csv' in self._cache and self._cache['csv'][0] == mtime:
             _, reader, rows = self._cache['csv']
         elif mtime is None:
@@ -160,7 +160,7 @@ class CachePath:
     def read_image(self):
         import skia
         self._touched = system_clock()
-        mtime = self._path.stat().st_mtime if self._path.exists() and self._path.is_file() else None
+        mtime = self._path.stat().st_mtime if self._path.is_file() else None
         if 'image' in self._cache:
             cache_mtime, image = self._cache['image']
             if mtime == cache_mtime:
@@ -186,7 +186,7 @@ class CachePath:
         container = decoder = current_frame = next_frame = None
         frames = []
         ratio = 0
-        mtime = self._path.stat().st_mtime if self._path.exists() and self._path.is_file() else None
+        mtime = self._path.stat().st_mtime if self._path.is_file() else None
         if key in self._cache and self._cache[key][0] == mtime:
             _, container, decoder, frames = self._cache[key]
         elif mtime is None:
@@ -254,7 +254,7 @@ class CachePath:
     def read_trimesh_model(self):
         import trimesh
         self._touched = system_clock()
-        mtime = self._path.stat().st_mtime if self._path.exists() and self._path.is_file() else None
+        mtime = self._path.stat().st_mtime if self._path.is_file() else None
         if 'trimesh' in self._cache:
             cache_mtime, trimesh_model = self._cache['trimesh']
             if mtime == cache_mtime:
