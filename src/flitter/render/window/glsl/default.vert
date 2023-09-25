@@ -1,4 +1,4 @@
-#version 410
+#version 400
 
 in vec2 position;
 out vec2 coord;

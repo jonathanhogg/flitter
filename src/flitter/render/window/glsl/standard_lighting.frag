@@ -1,4 +1,4 @@
-#version 410
+#version 400
 
 const float min_shininess = 50;
 

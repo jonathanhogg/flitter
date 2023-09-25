@@ -146,7 +146,7 @@ class Reference(SceneNode):
 
 
 class ProgramNode(SceneNode):
-    GL_VERSION = (4, 1)
+    GL_VERSION = (4, 0)
     DEFAULT_VERTEX_SOURCE = TemplateLoader.get_template('default.vert')
     DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('default.frag')
 

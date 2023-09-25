@@ -1,5 +1,5 @@
 
-#version 410
+#version 400
 
 in vec2 coord;
 out vec4 color;
