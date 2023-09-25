@@ -323,16 +323,20 @@ class Window(ProgramNode):
             while width > mw * 0.95 or height > mh * 0.95:
                 width = width * 2 // 3
                 height = height * 2 // 3
+            glfw.window_hint(glfw.CONTEXT_CREATION_API, glfw.NATIVE_CONTEXT_API)
             glfw.window_hint(glfw.CLIENT_API, glfw.OPENGL_API)
-            glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
             glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, self.GL_VERSION[0])
             glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, self.GL_VERSION[1])
+            glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
             glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, glfw.TRUE)
             glfw.window_hint(glfw.DOUBLEBUFFER, glfw.TRUE)
+            glfw.window_hint(glfw.DEPTH_BITS, 24)
+            glfw.window_hint(glfw.STENCIL_BITS, 8)
             glfw.window_hint(glfw.SAMPLES, 0)
             glfw.window_hint(glfw.AUTO_ICONIFY, glfw.FALSE)
             glfw.window_hint(glfw.CENTER_CURSOR, glfw.FALSE)
             glfw.window_hint(glfw.RESIZABLE, glfw.TRUE if resizable else glfw.FALSE)
+            glfw.window_hint(glfw.SCALE_TO_MONITOR, glfw.TRUE)
             self.window = glfw.create_window(width, height, title, None, Window.Windows[0].window if Window.Windows else None)
             glfw.set_window_pos(self.window, mx + (mw - width) // 2, my + (mh - height) // 2)
             if fullscreen:
