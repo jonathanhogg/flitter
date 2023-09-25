@@ -9,8 +9,8 @@ let SIZE=(1920;1080)
     RADII=(1+beta(:radii)[..N]*2)/3*R
     START=uniform(:xy)[..N*2] * (SIZE+2*R) - R
 
-!window size=SIZE linear=true
-    !canvas composite=:add antialias=false
+!window size=SIZE
+    !canvas composite=:add antialias=false linear=true
         let current_speed=counter(:speed, beat)
             accelleration=normal(:f;beat*100)[..N*2] * F - current_speed * DRAG
             speed=counter(:speed, beat, accelleration)

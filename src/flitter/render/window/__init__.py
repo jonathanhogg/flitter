@@ -15,7 +15,7 @@ from ...cache import SharedCache
 from . import canvas
 from . import canvas3d
 from ...clock import system_clock
-from .glconstants import GL_RGBA8, GL_RGBA16F, GL_RGBA32F, GL_SRGB8, GL_FRAMEBUFFER_SRGB
+from .glconstants import GL_RGBA8, GL_RGBA16F, GL_RGBA32F, GL_SRGB8, GL_SRGB8_ALPHA8, GL_FRAMEBUFFER_SRGB
 from .glsl import TemplateLoader
 
 
@@ -35,6 +35,7 @@ COLOR_FORMATS = {
     32: ColorFormat('f4', GL_RGBA32F, skia.kRGBA_F32_ColorType)  # Canvas currently fails with 32bit color
 }
 
+DEFAULT_LINEAR = False
 DEFAULT_COLORBITS = 8
 
 
@@ -330,13 +331,12 @@ class Window(ProgramNode):
             glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
             glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, glfw.TRUE)
             glfw.window_hint(glfw.DOUBLEBUFFER, glfw.TRUE)
-            glfw.window_hint(glfw.DEPTH_BITS, 24)
-            glfw.window_hint(glfw.STENCIL_BITS, 8)
             glfw.window_hint(glfw.SAMPLES, 0)
             glfw.window_hint(glfw.AUTO_ICONIFY, glfw.FALSE)
             glfw.window_hint(glfw.CENTER_CURSOR, glfw.FALSE)
             glfw.window_hint(glfw.RESIZABLE, glfw.TRUE if resizable else glfw.FALSE)
             glfw.window_hint(glfw.SCALE_TO_MONITOR, glfw.TRUE)
+            glfw.window_hint(glfw.SRGB_CAPABLE, glfw.TRUE)
             self.window = glfw.create_window(width, height, title, None, Window.Windows[0].window if Window.Windows else None)
             glfw.set_window_pos(self.window, mx + (mw - width) // 2, my + (mh - height) // 2)
             if fullscreen:
@@ -347,6 +347,7 @@ class Window(ProgramNode):
             self.glctx = moderngl.create_context(self.GL_VERSION[0] * 100 + self.GL_VERSION[1] * 10)
             self.glctx.gc_mode = 'context_gc'
             self.glctx.extra = {}
+            self.glctx.enable_direct(GL_FRAMEBUFFER_SRGB)
             logger.debug("{} opened on {}", self.name, screen)
             self.recalculate_viewport(True)
             logger.debug("OpenGL info: {GL_RENDERER} {GL_VERSION}", **self.glctx.info)
@@ -354,7 +355,7 @@ class Window(ProgramNode):
         else:
             glfw.make_context_current(self.window)
             self.recalculate_viewport()
-        self.glctx.extra['linear'] = node.get('linear', 1, bool, False)
+        self.glctx.extra['linear'] = node.get('linear', 1, bool, DEFAULT_LINEAR)
         colorbits = node.get('colorbits', 1, int, DEFAULT_COLORBITS)
         if colorbits not in COLOR_FORMATS:
             colorbits = DEFAULT_COLORBITS
@@ -379,11 +380,7 @@ class Window(ProgramNode):
                 logger.debug("{} resized to {}x{}", self.name, width, height)
 
     def render(self, node, **kwargs):
-        if self.glctx.extra['linear']:
-            self.glctx.enable_direct(GL_FRAMEBUFFER_SRGB)
         super().render(node, **kwargs)
-        if self.glctx.extra['linear']:
-            self.glctx.disable_direct(GL_FRAMEBUFFER_SRGB)
         vsync = node.get('vsync', 1, bool, self.default_vsync)
         glfw.swap_interval(1 if vsync else 0)
         glfw.swap_buffers(self.window)
@@ -463,14 +460,14 @@ class Record(ProgramNode):
         if self._framebuffer is None or self._texture is None or resized or has_alpha != self._has_alpha:
             self._last = None
             self._has_alpha = has_alpha
-            self._texture = self.glctx.texture((self.width, self.height), 4 if self._has_alpha else 3, dtype='f1')
+            self._texture = self.glctx.texture((self.width, self.height), 4 if self._has_alpha else 3,
+                                               dtype='f1', internal_format=GL_SRGB8_ALPHA8 if self._has_alpha else GL_SRGB8)
             self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
             self._framebuffer.clear()
 
     def render(self, node, **kwargs):
         if filename := node.get('filename', 1, str):
-            gamma = 1 / 2.2 if self.glctx.extra['linear'] else 1
-            super().render(node, gamma=gamma, **kwargs)
+            super().render(node, **kwargs)
             path = SharedCache[filename]
             if path.suffix.lower() in ('.mp4', '.mov', '.m4v', '.mkv'):
                 codec = node.get('codec', 1, str, 'h264')
@@ -498,6 +495,7 @@ class Canvas(SceneNode):
         self._total_duration = 0
         self._colorbits = None
         self._linear = None
+        self._colorspace = None
 
     @property
     def texture(self):
@@ -505,6 +503,8 @@ class Canvas(SceneNode):
 
     def release(self):
         self._colorbits = None
+        self._linear = None
+        self._colorspace = None
         self._canvas = None
         self._surface = None
         if self._graphics_context is not None:
@@ -517,15 +517,16 @@ class Canvas(SceneNode):
         colorbits = node.get('colorbits', 1, int, self.glctx.extra['colorbits'])
         if colorbits not in COLOR_FORMATS:
             colorbits = self.glctx.extra['colorbits']
-        linear = self.glctx.extra['linear']
+        linear = node.get('linear', 1, bool, self.glctx.extra['linear'])
         if resized or colorbits != self._colorbits or linear != self._linear:
             depth = COLOR_FORMATS[colorbits]
-            self._texture = self.glctx.texture((self.width, self.height), 4, dtype=depth.moderngl_dtype)
+            internal_format = None if linear else GL_SRGB8_ALPHA8
+            self._colorspace = skia.ColorSpace.MakeSRGBLinear() if linear else skia.ColorSpace.MakeSRGB()
+            self._texture = self.glctx.texture((self.width, self.height), 4, dtype=depth.moderngl_dtype, internal_format=internal_format)
             self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
             backend_render_target = skia.GrBackendRenderTarget(self.width, self.height, 0, 0, skia.GrGLFramebufferInfo(self._framebuffer.glo, depth.gl_format))
-            colorspace = skia.ColorSpace.MakeSRGBLinear() if linear else skia.ColorSpace.MakeSRGB()
             self._surface = skia.Surface.MakeFromBackendRenderTarget(self._graphics_context, backend_render_target, skia.kBottomLeft_GrSurfaceOrigin,
-                                                                     depth.skia_colortype, colorspace)
+                                                                     depth.skia_colortype, self._colorspace)
             self._canvas = self._surface.getCanvas()
             self._colorbits = colorbits
             self._linear = linear
@@ -554,8 +555,7 @@ class Canvas(SceneNode):
         self._total_duration -= system_clock()
         self._graphics_context.resetContext()
         self._framebuffer.clear()
-        linear = self.glctx.extra['linear']
-        canvas.draw(node, self._canvas, stats=self._stats, references=references, linear=linear)
+        canvas.draw(node, self._canvas, stats=self._stats, references=references, colorspace=self._colorspace)
         self._surface.flushAndSubmit()
         self._total_duration += system_clock()
 
@@ -648,7 +648,6 @@ class Video(Shader):
         self._frame1 = None
         self._frame0_texture = None
         self._frame1_texture = None
-        self._linear = None
         self._colorbits = None
 
     def release(self):
@@ -656,7 +655,6 @@ class Video(Shader):
         self._frame1_texture = None
         self._frame0 = None
         self._frame1 = None
-        self._linear = None
         self._colorbits = None
         super().release()
 
@@ -680,12 +678,11 @@ class Video(Shader):
             ratio, frame0, frame1 = SharedCache[self._filename].read_video_frames(self, position, loop, threading=threading)
         else:
             ratio, frame0, frame1 = 0, None, None
-        linear = self.glctx.extra['linear']
         colorbits = node.get('colorbits', 1, int, self.glctx.extra['colorbits'])
         if colorbits not in COLOR_FORMATS:
             colorbits = self.glctx.extra['colorbits']
         if self._texture is not None and (frame0 is None or (self.width, self.height) != (frame0.width, frame0.height)) \
-                or linear != self._linear or colorbits != self._colorbits:
+                or colorbits != self._colorbits:
             self.release()
         if frame0 is None:
             return
@@ -694,10 +691,8 @@ class Video(Shader):
             depth = COLOR_FORMATS[colorbits]
             self._texture = self.glctx.texture((self.width, self.height), 4, dtype=depth.moderngl_dtype)
             self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
-            format = GL_SRGB8 if linear else None
-            self._frame0_texture = self.glctx.texture((self.width, self.height), 3, internal_format=format)
-            self._frame1_texture = self.glctx.texture((self.width, self.height), 3, internal_format=format)
-            self._linear = linear
+            self._frame0_texture = self.glctx.texture((self.width, self.height), 3, internal_format=GL_SRGB8)
+            self._frame1_texture = self.glctx.texture((self.width, self.height), 3, internal_format=GL_SRGB8)
             self._colorbits = colorbits
         if frame0 is self._frame1 or frame1 is self._frame0:
             self._frame0_texture, self._frame1_texture = self._frame1_texture, self._frame0_texture

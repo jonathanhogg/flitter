@@ -28,7 +28,7 @@ let bubble_radii=MIN_BUBBLE_RADIUS+(1+noise(:radii, i*NOISE_SCALE, NOISE_T))/2*(
     !drag strength=0.0001
     !collision strength=200*ease_in
 
-!window size=SIZE linear=true colorbits=16
+!window size=SIZE colorbits=16
     !record filename=('blobs.m4v' if RECORD and CYCLE > 1) codec=:hevc crf=20 limit=30
         @bloom_filter size=SIZE/2 radius=hypot(SIZE)/300
             !canvas3d viewpoint=0;0;1200 focus=0 near=1 far=2000 fov=60/360 samples=4
