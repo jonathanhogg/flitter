@@ -263,10 +263,12 @@ class ProgramNode(SceneNode):
                         dtype = {'f': float, 'd': float, 'i': int, 'I': int}[member.fmt[-1]]
                         if (value := node.get(name, member.array_length * member.dimension, dtype)) is not None:
                             member.value = value_split(value, member.array_length, member.dimension)
+            self.glctx.enable_direct(GL_FRAMEBUFFER_SRGB)
             self.framebuffer.clear()
             self._rectangle.render(mode=moderngl.TRIANGLE_STRIP)
             for sampler in samplers:
                 sampler.clear()
+            self.glctx.disable_direct(GL_FRAMEBUFFER_SRGB)
 
 
 class Window(ProgramNode):
@@ -347,7 +349,6 @@ class Window(ProgramNode):
             self.glctx = moderngl.create_context(self.GL_VERSION[0] * 100 + self.GL_VERSION[1] * 10)
             self.glctx.gc_mode = 'context_gc'
             self.glctx.extra = {}
-            self.glctx.enable_direct(GL_FRAMEBUFFER_SRGB)
             logger.debug("{} opened on {}", self.name, screen)
             self.recalculate_viewport(True)
             logger.debug("OpenGL info: {GL_RENDERER} {GL_VERSION}", **self.glctx.info)
