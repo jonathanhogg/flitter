@@ -394,7 +394,7 @@ cdef object make_shader(ctx, Node node, paint, dict references, colorspace):
         while child is not None:
             if child.kind == 'stop':
                 positions.append(child.get('offset', 1, float))
-                colors.append(get_color(child, paint.getColor()).toColor())
+                colors.append(get_color(child, paint.getColor4f()).toColor())
             child = child.next_sibling
         nstops = len(positions)
         if nstops:
