@@ -82,9 +82,12 @@ class MidiPort:
             if input:
                 self._midi_in = rtmidi2.MidiIn()
                 if virtual:
-                    self._midi_in.open_virtual_port(self.name)
+                    self._midi_in.open_virtual_port(name)
                 else:
-                    self._midi_in.open_port(self.name)
+                    for port in rtmidi2.get_in_ports():
+                        if port.split(':')[0] == name:
+                            name = port
+                    self._midi_in.open_port(name)
                 self._last_receive_timestamp = None
                 self._loop = asyncio.get_event_loop()
                 self._receive_queue = asyncio.Queue()
@@ -94,7 +97,10 @@ class MidiPort:
                 if virtual:
                     self._midi_out.open_virtual_port(self.name)
                 else:
-                    self._midi_out.open_port(self.name)
+                    for port in rtmidi2.get_in_ports():
+                        if port.split(':')[0] == name:
+                            name = port
+                    self._midi_out.open_port(name)
         except RuntimeError as exc:
             if self._midi_in is not None:
                 self._midi_in.close()
