@@ -287,6 +287,9 @@ class Window(ProgramNode):
         self.default_fullscreen = fullscreen
         self.default_vsync = vsync
         self._deferred_fullscreen = False
+        self._screen = None
+        self._fullscreen = None
+        self._resizable = None
 
     def release(self):
         if self.window is not None:
@@ -319,21 +322,17 @@ class Window(ProgramNode):
 
     def create(self, engine, node, resized, **kwargs):
         super().create(engine, node, resized)
+        new_window = False
+        screen = node.get('screen', 1, int, self.default_screen)
+        fullscreen = node.get('fullscreen', 1, bool, self.default_fullscreen)
+        resizable = node.get('resizable', 1, bool, True)
         if self.window is None:
             self.engine = engine
             title = node.get('title', 1, str, "flitter")
-            screen = node.get('screen', 1, int, self.default_screen)
-            fullscreen = node.get('fullscreen', 1, bool, self.default_fullscreen)
-            resizable = node.get('resizable', 1, bool, True)
             if not Window.Windows:
-                glfw.init()
-            monitors = glfw.get_monitors()
-            monitor = monitors[screen] if screen < len(monitors) else monitors[0]
-            mx, my, mw, mh = glfw.get_monitor_workarea(monitor)
-            width, height = self.width, self.height
-            while width > mw * 0.95 or height > mh * 0.95:
-                width = width * 2 // 3
-                height = height * 2 // 3
+                ok = glfw.init()
+                if not ok:
+                    raise RuntimeError("Unable to initialize GLFW")
             glfw.window_hint(glfw.CONTEXT_CREATION_API, glfw.NATIVE_CONTEXT_API)
             glfw.window_hint(glfw.CLIENT_API, glfw.OPENGL_API)
             glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, self.GL_VERSION[0])
@@ -344,30 +343,48 @@ class Window(ProgramNode):
             glfw.window_hint(glfw.SAMPLES, 0)
             glfw.window_hint(glfw.AUTO_ICONIFY, glfw.FALSE)
             glfw.window_hint(glfw.CENTER_CURSOR, glfw.FALSE)
-            glfw.window_hint(glfw.RESIZABLE, glfw.TRUE if resizable else glfw.FALSE)
             glfw.window_hint(glfw.SCALE_TO_MONITOR, glfw.TRUE)
             glfw.window_hint(glfw.SRGB_CAPABLE, glfw.TRUE)
-            self.window = glfw.create_window(width, height, title, None, Window.Windows[0].window if Window.Windows else None)
-            glfw.set_window_pos(self.window, mx + (mw - width) // 2, my + (mh - height) // 2)
-            if fullscreen:
+            self.window = glfw.create_window(self.width, self.height, title, None, Window.Windows[0].window if Window.Windows else None)
+            glfw.set_key_callback(self.window, self.key_callback)
+            glfw.set_cursor_pos_callback(self.window, self.pointer_movement_callback)
+            glfw.set_mouse_button_callback(self.window, self.pointer_button_callback)
+            Window.Windows.append(self)
+            new_window = True
+        if resizable != self._resizable:
+            glfw.set_window_attrib(self.window, glfw.RESIZABLE, glfw.TRUE if resizable else glfw.FALSE)
+            self._resizable = resizable
+        if resized or screen != self._screen or fullscreen != self._fullscreen:
+            monitors = glfw.get_monitors()
+            monitor = monitors[screen] if screen < len(monitors) else monitors[0]
+            mx, my, mw, mh = glfw.get_monitor_workarea(monitor)
+            width, height = self.width, self.height
+            if not fullscreen:
+                glfw.set_window_aspect_ratio(self.window, self.width, self.height)
+            while width > mw * 0.95 or height > mh * 0.95:
+                width = width * 2 // 3
+                height = height * 2 // 3
+            if fullscreen and not self._fullscreen:
                 mode = glfw.get_video_mode(monitor)
                 glfw.set_window_monitor(self.window, monitor, 0, 0, mode.size.width, mode.size.height, mode.refresh_rate)
-            Window.Windows.append(self)
-            glfw.make_context_current(self.window)
+            elif self._fullscreen and not fullscreen:
+                glfw.set_window_monitor(self.window, None, 0, 0, width, height, glfw.DONT_CARE)
+            if new_window or (not fullscreen and self._fullscreen):
+                glfw.set_window_pos(self.window, mx + (mw - width) // 2, my + (mh - height) // 2)
+            if not fullscreen:
+                glfw.set_window_size(self.window, width, height)
+            self._screen = screen
+            self._fullscreen = fullscreen
+        glfw.make_context_current(self.window)
+        if new_window:
             self.glctx = moderngl.create_context(self.GL_VERSION[0] * 100 + self.GL_VERSION[1] * 10)
             self.glctx.gc_mode = 'context_gc'
             self.glctx.extra = {}
             self.glctx.enable_direct(GL_FRAMEBUFFER_SRGB)
             logger.debug("{} opened on {}", self.name, screen)
-            self.recalculate_viewport(True)
             logger.debug("OpenGL info: {GL_RENDERER} {GL_VERSION}", **self.glctx.info)
             logger.trace("{!r}", self.glctx.info)
-            glfw.set_key_callback(self.window, self.key_callback)
-            glfw.set_cursor_pos_callback(self.window, self.pointer_movement_callback)
-            glfw.set_mouse_button_callback(self.window, self.pointer_button_callback)
-        else:
-            glfw.make_context_current(self.window)
-            self.recalculate_viewport()
+        self.recalculate_viewport(new_window)
         self.glctx.extra['linear'] = node.get('linear', 1, bool, DEFAULT_LINEAR)
         colorbits = node.get('colorbits', 1, int, DEFAULT_COLORBITS)
         if colorbits not in COLOR_FORMATS:
