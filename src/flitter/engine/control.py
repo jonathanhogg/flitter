@@ -18,7 +18,8 @@ from ..render import get_renderer
 
 class EngineController:
     def __init__(self, target_fps=60, screen=0, fullscreen=False, vsync=False, state_file=None,
-                 autoreset=None, state_eval_wait=0, realtime=True, defined_variables=None, vm_stats=False):
+                 autoreset=None, state_eval_wait=0, realtime=True, defined_variables=None, vm_stats=False,
+                 run_time=None):
         self.default_fps = target_fps
         self.target_fps = target_fps
         self.realtime = realtime
@@ -32,6 +33,7 @@ class EngineController:
         else:
             self.defined_variables = {}
         self.vm_stats = vm_stats
+        self.run_time = run_time
         self.state_file = Path(state_file) if state_file is not None else None
         if self.state_file is not None and self.state_file.exists():
             logger.info("Recover state from state file: {}", self.state_file)
@@ -136,7 +138,7 @@ class EngineController:
     async def run(self):
         try:
             frames = []
-            frame_time = system_clock()
+            start_time = frame_time = system_clock()
             last = self.counter.beat_at_time(frame_time)
             dump_time = frame_time
             execution = render = housekeeping = 0
@@ -145,7 +147,7 @@ class EngineController:
             run_program = current_program = None
             errors = set()
             logs = set()
-            while True:
+            while self.run_time is None or frame_time - start_time < self.run_time:
                 housekeeping -= system_clock()
 
                 beat = self.counter.beat_at_time(frame_time)
