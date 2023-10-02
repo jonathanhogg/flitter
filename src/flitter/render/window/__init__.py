@@ -400,9 +400,6 @@ class Window(ProgramNode):
             glfw.window_hint(glfw.SCALE_TO_MONITOR, glfw.TRUE)
             glfw.window_hint(glfw.SRGB_CAPABLE, glfw.TRUE)
             self.window = glfw.create_window(self.width, self.height, title, None, Window.Windows[0].window if Window.Windows else None)
-            glfw.set_key_callback(self.window, self.key_callback)
-            glfw.set_cursor_pos_callback(self.window, self.pointer_movement_callback)
-            glfw.set_mouse_button_callback(self.window, self.pointer_button_callback)
             Window.Windows.append(self)
             new_window = True
         if resizable != self._resizable:
@@ -418,26 +415,31 @@ class Window(ProgramNode):
             while width > mw * 0.95 or height > mh * 0.95:
                 width = width * 2 // 3
                 height = height * 2 // 3
-            if fullscreen and not self._fullscreen:
+            if self._fullscreen and not fullscreen or screen != self._screen:
+                glfw.set_window_monitor(self.window, None, 0, 0, width, height, glfw.DONT_CARE)
+            if new_window or (self._fullscreen and not fullscreen) or screen != self._screen:
+                glfw.set_window_pos(self.window, mx + (mw - width) // 2, my + (mh - height) // 2)
+            if fullscreen and (not self._fullscreen or screen != self._screen):
                 mode = glfw.get_video_mode(monitor)
                 glfw.set_window_monitor(self.window, monitor, 0, 0, mode.size.width, mode.size.height, mode.refresh_rate)
-            elif self._fullscreen and not fullscreen:
-                glfw.set_window_monitor(self.window, None, 0, 0, width, height, glfw.DONT_CARE)
-            if new_window or (not fullscreen and self._fullscreen):
-                glfw.set_window_pos(self.window, mx + (mw - width) // 2, my + (mh - height) // 2)
-            if not fullscreen:
+            elif resized:
                 glfw.set_window_size(self.window, width, height)
             self._screen = screen
             self._fullscreen = fullscreen
         glfw.make_context_current(self.window)
+        self._keys = {}
+        self._pointer_state = None
         if new_window:
             self.glctx = moderngl.create_context(self.GL_VERSION[0] * 100 + self.GL_VERSION[1] * 10)
             self.glctx.gc_mode = 'context_gc'
             self.glctx.extra = {}
             self.glctx.enable_direct(GL_FRAMEBUFFER_SRGB)
-            logger.debug("{} opened on {}", self.name, screen)
+            logger.debug("{} opened on screen {}", self.name, screen)
             logger.debug("OpenGL info: {GL_RENDERER} {GL_VERSION}", **self.glctx.info)
             logger.trace("{!r}", self.glctx.info)
+            glfw.set_key_callback(self.window, self.key_callback)
+            glfw.set_cursor_pos_callback(self.window, self.pointer_movement_callback)
+            glfw.set_mouse_button_callback(self.window, self.pointer_button_callback)
         self.recalculate_viewport(new_window)
         self.glctx.extra['linear'] = node.get('linear', 1, bool, DEFAULT_LINEAR)
         colorbits = node.get('colorbits', 1, int, DEFAULT_COLORBITS)
@@ -445,8 +447,6 @@ class Window(ProgramNode):
             colorbits = DEFAULT_COLORBITS
         self.glctx.extra['colorbits'] = colorbits
         self.glctx.extra['size'] = self.width, self.height
-        self._keys = {}
-        self._pointer_state = None
 
     def key_callback(self, window, key, scancode, action, mods):
         if key in self._keys:
