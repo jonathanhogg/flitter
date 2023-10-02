@@ -10,8 +10,9 @@ from loguru import logger
 import moderngl
 import numpy as np
 
-from libc.math cimport cos
+from libc.math cimport cos, log2
 
+from . import SceneNode, COLOR_FORMATS
 from ... import name_patch
 from ...clock import system_clock
 from ...model cimport Node, Vector, Matrix44, null_
@@ -524,3 +525,83 @@ cdef void dispatch_instances(glctx, dict objects, shader, Model model, int count
         shader['use_specular_texture'] = False
         shader['use_emissive_texture'] = False
         shader['use_transparency_texture'] = False
+
+
+class Canvas3D(SceneNode):
+    def __init__(self, glctx):
+        super().__init__(glctx)
+        self._image_texture = None
+        self._image_framebuffer = None
+        self._color_renderbuffer = None
+        self._depth_renderbuffer = None
+        self._render_framebuffer = None
+        self._colorbits = None
+        self._samples = None
+        self._total_duration = 0
+        self._total_count = 0
+
+    @property
+    def texture(self):
+        return self._image_texture
+
+    def release(self):
+        self._colorbits = None
+        self._samples = None
+        self._render_framebuffer = None
+        self._image_texture = None
+        self._image_framebuffer = None
+        self._color_renderbuffer = None
+        self._depth_renderbuffer = None
+
+    def purge(self):
+        logger.info("{} draw stats - {:d} x {:.1f}ms = {:.1f}s", self.name, self._total_count,
+                    1e3 * self._total_duration / self._total_count, self._total_duration)
+        self._total_duration = 0
+        self._total_count = 0
+
+    def create(self, engine, node, resized, **kwargs):
+        colorbits = node.get('colorbits', 1, int, self.glctx.extra['colorbits'])
+        if colorbits not in COLOR_FORMATS:
+            colorbits = self.glctx.extra['colorbits']
+        samples = max(0, node.get('samples', 1, int, 0))
+        if samples:
+            samples = min(1 << int(log2(samples)), self.glctx.info['GL_MAX_SAMPLES'])
+        if resized or colorbits != self._colorbits or samples != self._samples:
+            self.release()
+            format = COLOR_FORMATS[colorbits]
+            self._image_texture = self.glctx.texture((self.width, self.height), 4, dtype=format.moderngl_dtype)
+            self._depth_renderbuffer = self.glctx.depth_renderbuffer((self.width, self.height), samples=samples)
+            if samples:
+                self._color_renderbuffer = self.glctx.renderbuffer((self.width, self.height), 4, samples=samples, dtype=format.moderngl_dtype)
+                self._render_framebuffer = self.glctx.framebuffer(color_attachments=(self._color_renderbuffer,), depth_attachment=self._depth_renderbuffer)
+                self._image_framebuffer = self.glctx.framebuffer(self._image_texture)
+                logger.debug("Created canvas3d {}x{}/{}-bit render target with {}x sampling", self.width, self.height, colorbits, samples)
+            else:
+                self._render_framebuffer = self.glctx.framebuffer(color_attachments=(self._image_texture,), depth_attachment=self._depth_renderbuffer)
+                logger.debug("Created canvas3d {}x{}/{}-bit render target", self.width, self.height, colorbits)
+            self._colorbits = colorbits
+            self._samples = samples
+
+    async def descend(self, engine, node, **kwargs):
+        # A canvas3d is a leaf node from the perspective of the OpenGL world
+        pass
+
+    def render(self, node, references=None, **kwargs):
+        self._total_duration -= system_clock()
+        self._render_framebuffer.use()
+        fog_min = node.get('fog_min', 1, float, 0)
+        fog_max = node.get('fog_max', 1, float, 0)
+        if fog_max > fog_min:
+            fog_color = node.get('fog_color', 3, float, (0, 0, 0))
+            self._render_framebuffer.clear(*fog_color)
+        else:
+            self._render_framebuffer.clear()
+        objects = self.glctx.extra.setdefault('canvas3d_objects', {})
+        draw(node, (self.width, self.height), self.glctx, objects, references)
+        if self._image_framebuffer is not None:
+            self.glctx.copy_framebuffer(self._image_framebuffer, self._render_framebuffer)
+        self._total_duration += system_clock()
+        self._total_count += 1
+
+
+SCENE_NODE_CLASS = Canvas3D

@@ -4,18 +4,14 @@ Flitter window management
 
 import array
 from collections import namedtuple
-import math
+import importlib
 
 import glfw
 from loguru import logger
-import skia
 import moderngl
 
-from ...cache import SharedCache
-from . import canvas
-from . import canvas3d
 from ...clock import system_clock
-from .glconstants import GL_RGBA8, GL_RGBA16F, GL_RGBA32F, GL_SRGB8, GL_SRGB8_ALPHA8, GL_FRAMEBUFFER_SRGB
+from .glconstants import GL_RGBA8, GL_RGBA16F, GL_RGBA32F, GL_FRAMEBUFFER_SRGB
 from .glsl import TemplateLoader
 from ...model import Vector
 
@@ -28,16 +24,36 @@ def value_split(value, n, m):
     return [tuple(value[i * m:(i + 1) * m]) for i in range(n)]
 
 
-ColorFormat = namedtuple('ColorFormat', ('moderngl_dtype', 'gl_format', 'skia_colortype'))
+ColorFormat = namedtuple('ColorFormat', ('moderngl_dtype', 'gl_format'))
 
 COLOR_FORMATS = {
-    8: ColorFormat('f1', GL_RGBA8, skia.kRGBA_8888_ColorType),
-    16: ColorFormat('f2', GL_RGBA16F, skia.kRGBA_F16_ColorType),
-    32: ColorFormat('f4', GL_RGBA32F, skia.kRGBA_F32_ColorType)  # Canvas currently fails with 32bit color
+    8: ColorFormat('f1', GL_RGBA8),
+    16: ColorFormat('f2', GL_RGBA16F),
+    32: ColorFormat('f4', GL_RGBA32F)
 }
 
 DEFAULT_LINEAR = False
 DEFAULT_COLORBITS = 8
+
+
+def get_scene_node_class(kind):
+    global ClassCache
+    if kind in ClassCache:
+        return ClassCache[kind]
+    try:
+        module = importlib.import_module(f'.{kind}', __package__)
+        cls = module.SCENE_NODE_CLASS
+    except ModuleNotFoundError:
+        logger.warning("No sub-module for '{}'", kind)
+        cls = None
+    except ImportError:
+        logger.exception("Import error")
+        cls = None
+    except AttributeError:
+        logger.warning("Sub-module '{}' does not contain a scene node class", kind)
+        cls = None
+    ClassCache[kind] = cls
+    return cls
 
 
 class SceneNode:
@@ -99,7 +115,7 @@ class SceneNode:
         existing = self.children
         updated = []
         for child in node.children:
-            cls = SCENE_CLASSES.get(child.kind)
+            cls = get_scene_node_class(child.kind)
             if cls is not None:
                 index = None
                 for i, scene_node in enumerate(existing):
@@ -274,6 +290,44 @@ class ProgramNode(SceneNode):
             for sampler in samplers:
                 sampler.clear()
             self.glctx.disable_direct(GL_FRAMEBUFFER_SRGB)
+
+
+class Shader(ProgramNode):
+    def __init__(self, glctx):
+        super().__init__(glctx)
+        self._framebuffer = None
+        self._texture = None
+        self._colorbits = None
+
+    @property
+    def texture(self):
+        return self._texture
+
+    @property
+    def framebuffer(self):
+        return self._framebuffer
+
+    def release(self):
+        self._colorbits = None
+        self._framebuffer = None
+        self._texture = None
+        super().release()
+
+    def create(self, engine, node, resized, **kwargs):
+        super().create(engine, node, resized, **kwargs)
+        colorbits = node.get('colorbits', 1, int, self.glctx.extra['colorbits'])
+        if colorbits not in COLOR_FORMATS:
+            colorbits = self.glctx.extra['colorbits']
+        if self._framebuffer is None or self._texture is None or resized or colorbits != self._colorbits:
+            depth = COLOR_FORMATS[colorbits]
+            self._last = None
+            self._texture = self.glctx.texture((self.width, self.height), 4, dtype=depth.moderngl_dtype)
+            self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
+            self._framebuffer.clear()
+            self._colorbits = colorbits
+
+    def make_last(self):
+        return self.glctx.texture((self.width, self.height), 4, dtype=COLOR_FORMATS[self._colorbits].moderngl_dtype)
 
 
 class Window(ProgramNode):
@@ -479,335 +533,9 @@ class Window(ProgramNode):
         return self.glctx.texture((width, height), 4)
 
 
-class Shader(ProgramNode):
-    def __init__(self, glctx):
-        super().__init__(glctx)
-        self._framebuffer = None
-        self._texture = None
-        self._colorbits = None
-
-    @property
-    def texture(self):
-        return self._texture
-
-    @property
-    def framebuffer(self):
-        return self._framebuffer
-
-    def release(self):
-        self._colorbits = None
-        self._framebuffer = None
-        self._texture = None
-        super().release()
-
-    def create(self, engine, node, resized, **kwargs):
-        super().create(engine, node, resized, **kwargs)
-        colorbits = node.get('colorbits', 1, int, self.glctx.extra['colorbits'])
-        if colorbits not in COLOR_FORMATS:
-            colorbits = self.glctx.extra['colorbits']
-        if self._framebuffer is None or self._texture is None or resized or colorbits != self._colorbits:
-            depth = COLOR_FORMATS[colorbits]
-            self._last = None
-            self._texture = self.glctx.texture((self.width, self.height), 4, dtype=depth.moderngl_dtype)
-            self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
-            self._framebuffer.clear()
-            self._colorbits = colorbits
-
-    def make_last(self):
-        return self.glctx.texture((self.width, self.height), 4, dtype=COLOR_FORMATS[self._colorbits].moderngl_dtype)
-
-
-class Record(ProgramNode):
-    DEFAULT_VERTEX_SOURCE = TemplateLoader.get_template('video.vert')
-    DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('record.frag')
-
-    def __init__(self, glctx):
-        super().__init__(glctx)
-        self._framebuffer = None
-        self._texture = None
-        self._has_alpha = None
-
-    @property
-    def texture(self):
-        return self.children[0].texture if self.children else None
-
-    @property
-    def framebuffer(self):
-        return self._framebuffer
-
-    def release(self):
-        self._framebuffer = None
-        self._texture = None
-        super().release()
-
-    def create(self, engine, node, resized, **kwargs):
-        super().create(engine, node, resized, **kwargs)
-        has_alpha = node.get('keep_alpha', 1, bool, False)
-        if self._framebuffer is None or self._texture is None or resized or has_alpha != self._has_alpha:
-            self._last = None
-            self._has_alpha = has_alpha
-            self._texture = self.glctx.texture((self.width, self.height), 4 if self._has_alpha else 3,
-                                               dtype='f1', internal_format=GL_SRGB8_ALPHA8 if self._has_alpha else GL_SRGB8)
-            self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
-            self._framebuffer.clear()
-
-    def render(self, node, **kwargs):
-        if filename := node.get('filename', 1, str):
-            super().render(node, **kwargs)
-            path = SharedCache[filename]
-            if path.suffix.lower() in ('.mp4', '.mov', '.m4v', '.mkv'):
-                codec = node.get('codec', 1, str, 'h264')
-                crf = node.get('crf', 1, int)
-                bitrate = node.get('bitrate', 1, int)
-                preset = node.get('preset', 1, str)
-                limit = node.get('limit', 1, float)
-                path.write_video_frame(self._texture, kwargs['clock'],
-                                       fps=int(kwargs['fps']), realtime=kwargs['realtime'], codec=codec,
-                                       crf=crf, bitrate=bitrate, preset=preset, limit=limit)
-            else:
-                quality = node.get('quality', 1, int)
-                path.write_image(self._texture, quality=quality)
-
-
-class Canvas(SceneNode):
-    def __init__(self, glctx):
-        super().__init__(glctx)
-        self._graphics_context = skia.GrDirectContext.MakeGL()
-        self._texture = None
-        self._framebuffer = None
-        self._surface = None
-        self._canvas = None
-        self._stats = {}
-        self._total_duration = 0
-        self._colorbits = None
-        self._linear = None
-        self._colorspace = None
-
-    @property
-    def texture(self):
-        return self._texture
-
-    def release(self):
-        self._colorbits = None
-        self._linear = None
-        self._colorspace = None
-        self._canvas = None
-        self._surface = None
-        if self._graphics_context is not None:
-            self._graphics_context.abandonContext()
-            self._graphics_context = None
-        self._framebuffer = None
-        self._texture = None
-
-    def create(self, engine, node, resized, **kwargs):
-        colorbits = node.get('colorbits', 1, int, self.glctx.extra['colorbits'])
-        if colorbits not in COLOR_FORMATS:
-            colorbits = self.glctx.extra['colorbits']
-        linear = node.get('linear', 1, bool, self.glctx.extra['linear'])
-        if resized or colorbits != self._colorbits or linear != self._linear:
-            depth = COLOR_FORMATS[colorbits]
-            internal_format = None if linear else GL_SRGB8_ALPHA8
-            self._colorspace = skia.ColorSpace.MakeSRGBLinear() if linear else skia.ColorSpace.MakeSRGB()
-            self._texture = self.glctx.texture((self.width, self.height), 4, dtype=depth.moderngl_dtype, internal_format=internal_format)
-            self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
-            backend_render_target = skia.GrBackendRenderTarget(self.width, self.height, 0, 0, skia.GrGLFramebufferInfo(self._framebuffer.glo, depth.gl_format))
-            self._surface = skia.Surface.MakeFromBackendRenderTarget(self._graphics_context, backend_render_target, skia.kBottomLeft_GrSurfaceOrigin,
-                                                                     depth.skia_colortype, self._colorspace)
-            self._canvas = self._surface.getCanvas()
-            self._colorbits = colorbits
-            self._linear = linear
-            logger.debug("Created {:d}x{:d} canvas; skia version {}", self.width, self.height, skia.__version__)
-
-    async def descend(self, engine, node, **kwargs):
-        # A canvas is a leaf node from the perspective of the OpenGL world
-        pass
-
-    def purge(self):
-        total_count = self._stats['canvas'][0]
-        logger.info("{} render stats - {:d} x {:.1f}ms = {:.1f}s", self.name, total_count,
-                    1e3 * self._total_duration / total_count, self._total_duration)
-        draw_duration = 0
-        for duration, count, key in sorted(((duration, count, key) for (key, (count, duration)) in self._stats.items()), reverse=True):
-            logger.debug("{:15s}  - {:8d}  x {:6.1f}µs = {:5.1f}s  ({:4.1f}%)",
-                         key, count, 1e6 * duration / count, duration, 100 * duration / self._total_duration)
-            draw_duration += duration
-        overhead = self._total_duration - draw_duration
-        logger.debug("{:15s}  - {:8d}  x {:6.1f}µs = {:5.1f}s  ({:4.1f}%)",
-                     '(surface)', total_count, 1e6 * overhead / total_count, overhead, 100 * overhead / self._total_duration)
-        self._stats = {}
-        self._total_duration = 0
-
-    def render(self, node, references=None, **kwargs):
-        self._total_duration -= system_clock()
-        self._graphics_context.resetContext()
-        self._framebuffer.clear()
-        canvas.draw(node, self._canvas, stats=self._stats, references=references, colorspace=self._colorspace)
-        self._surface.flushAndSubmit()
-        self._total_duration += system_clock()
-
-
-class Canvas3D(SceneNode):
-    def __init__(self, glctx):
-        super().__init__(glctx)
-        self._image_texture = None
-        self._image_framebuffer = None
-        self._color_renderbuffer = None
-        self._depth_renderbuffer = None
-        self._render_framebuffer = None
-        self._colorbits = None
-        self._samples = None
-        self._total_duration = 0
-        self._total_count = 0
-
-    @property
-    def texture(self):
-        return self._image_texture
-
-    def release(self):
-        self._colorbits = None
-        self._samples = None
-        self._render_framebuffer = None
-        self._image_texture = None
-        self._image_framebuffer = None
-        self._color_renderbuffer = None
-        self._depth_renderbuffer = None
-
-    def purge(self):
-        logger.info("{} draw stats - {:d} x {:.1f}ms = {:.1f}s", self.name, self._total_count,
-                    1e3 * self._total_duration / self._total_count, self._total_duration)
-        self._total_duration = 0
-        self._total_count = 0
-
-    def create(self, engine, node, resized, **kwargs):
-        colorbits = node.get('colorbits', 1, int, self.glctx.extra['colorbits'])
-        if colorbits not in COLOR_FORMATS:
-            colorbits = self.glctx.extra['colorbits']
-        samples = max(0, node.get('samples', 1, int, 0))
-        if samples:
-            samples = min(1 << int(math.log2(samples)), self.glctx.info['GL_MAX_SAMPLES'])
-        if resized or colorbits != self._colorbits or samples != self._samples:
-            self.release()
-            format = COLOR_FORMATS[colorbits]
-            self._image_texture = self.glctx.texture((self.width, self.height), 4, dtype=format.moderngl_dtype)
-            self._depth_renderbuffer = self.glctx.depth_renderbuffer((self.width, self.height), samples=samples)
-            if samples:
-                self._color_renderbuffer = self.glctx.renderbuffer((self.width, self.height), 4, samples=samples, dtype=format.moderngl_dtype)
-                self._render_framebuffer = self.glctx.framebuffer(color_attachments=(self._color_renderbuffer,), depth_attachment=self._depth_renderbuffer)
-                self._image_framebuffer = self.glctx.framebuffer(self._image_texture)
-                logger.debug("Created canvas3d {}x{}/{}-bit render target with {}x sampling", self.width, self.height, colorbits, samples)
-            else:
-                self._render_framebuffer = self.glctx.framebuffer(color_attachments=(self._image_texture,), depth_attachment=self._depth_renderbuffer)
-                logger.debug("Created canvas3d {}x{}/{}-bit render target", self.width, self.height, colorbits)
-            self._colorbits = colorbits
-            self._samples = samples
-
-    async def descend(self, engine, node, **kwargs):
-        # A canvas3d is a leaf node from the perspective of the OpenGL world
-        pass
-
-    def render(self, node, references=None, **kwargs):
-        self._total_duration -= system_clock()
-        self._render_framebuffer.use()
-        fog_min = node.get('fog_min', 1, float, 0)
-        fog_max = node.get('fog_max', 1, float, 0)
-        if fog_max > fog_min:
-            fog_color = node.get('fog_color', 3, float, (0, 0, 0))
-            self._render_framebuffer.clear(*fog_color)
-        else:
-            self._render_framebuffer.clear()
-        objects = self.glctx.extra.setdefault('canvas3d_objects', {})
-        canvas3d.draw(node, (self.width, self.height), self.glctx, objects, references)
-        if self._image_framebuffer is not None:
-            self.glctx.copy_framebuffer(self._image_framebuffer, self._render_framebuffer)
-        self._total_duration += system_clock()
-        self._total_count += 1
-
-
-class Video(Shader):
-    DEFAULT_VERTEX_SOURCE = TemplateLoader.get_template('video.vert')
-    DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('video.frag')
-
-    def __init__(self, glctx):
-        super().__init__(glctx)
-        self._filename = None
-        self._frame0 = None
-        self._frame1 = None
-        self._frame0_texture = None
-        self._frame1_texture = None
-        self._colorbits = None
-
-    def release(self):
-        self._frame0_texture = None
-        self._frame1_texture = None
-        self._frame0 = None
-        self._frame1 = None
-        self._colorbits = None
-        super().release()
-
-    @property
-    def child_textures(self):
-        return {'frame0': self._frame0_texture, 'frame1': self._frame1_texture}
-
-    def similar_to(self, node):
-        return super().similar_to(node) and node.get('filename', 1, str) == self._filename
-
-    async def update(self, engine, node, **kwargs):
-        references = kwargs.setdefault('references', {})
-        if node_id := node.get('id', 1, str):
-            references[node_id] = self
-        self.hidden = node.get('hidden', 1, bool, False)
-        self._filename = node.get('filename', 1, str)
-        position = node.get('position', 1, float, 0)
-        loop = node.get('loop', 1, bool, False)
-        threading = node.get('thread', 1, bool, False)
-        if self._filename is not None:
-            ratio, frame0, frame1 = SharedCache[self._filename].read_video_frames(self, position, loop, threading=threading)
-        else:
-            ratio, frame0, frame1 = 0, None, None
-        colorbits = node.get('colorbits', 1, int, self.glctx.extra['colorbits'])
-        if colorbits not in COLOR_FORMATS:
-            colorbits = self.glctx.extra['colorbits']
-        if self._texture is not None and (frame0 is None or (self.width, self.height) != (frame0.width, frame0.height)) \
-                or colorbits != self._colorbits:
-            self.release()
-        if frame0 is None:
-            return
-        if self._texture is None:
-            self.width, self.height = frame0.width, frame0.height
-            depth = COLOR_FORMATS[colorbits]
-            self._texture = self.glctx.texture((self.width, self.height), 4, dtype=depth.moderngl_dtype)
-            self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
-            self._frame0_texture = self.glctx.texture((self.width, self.height), 3, internal_format=GL_SRGB8)
-            self._frame1_texture = self.glctx.texture((self.width, self.height), 3, internal_format=GL_SRGB8)
-            self._colorbits = colorbits
-        if frame0 is self._frame1 or frame1 is self._frame0:
-            self._frame0_texture, self._frame1_texture = self._frame1_texture, self._frame0_texture
-            self._frame0, self._frame1 = self._frame1, self._frame0
-        if frame0 is not self._frame0:
-            rgb_frame = frame0.to_rgb()
-            plane = rgb_frame.planes[0]
-            data = memoryview(rgb_frame.to_ndarray().data) if plane.line_size > plane.width * 3 else memoryview(plane)
-            self._frame0_texture.write(data)
-            self._frame0 = frame0
-        if frame1 is None:
-            self._frame1 = None
-        elif frame1 is not self._frame1:
-            rgb_frame = frame1.to_rgb()
-            plane = rgb_frame.planes[0]
-            data = rgb_frame.to_ndarray().data if plane.line_size > plane.width * 3 else plane
-            self._frame1_texture.write(memoryview(data))
-            self._frame1 = frame1
-        interpolate = node.get('interpolate', 1, bool, False)
-        self.render(node, ratio=ratio if interpolate else 0, **kwargs)
-
-
 RENDERER_CLASS = Window
 
-SCENE_CLASSES = {
-    'canvas': Canvas,
-    'canvas3d': Canvas3D,
-    'record': Record,
+ClassCache = {
     'reference': Reference,
     'shader': Shader,
-    'video': Video
 }

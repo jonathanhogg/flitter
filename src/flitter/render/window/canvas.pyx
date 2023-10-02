@@ -14,11 +14,12 @@ from libc.math cimport acos, sqrt, round
 from loguru import logger
 import skia
 
+from . import SceneNode, COLOR_FORMATS
 from flitter import name_patch
 from ...cache import SharedCache
 from ...clock import system_clock
 from ...model cimport Vector, Node
-from .glconstants import GL_TEXTURE_2D, GL_RGBA8, GL_RGBA16F, GL_RGBA32F
+from .glconstants import GL_TEXTURE_2D, GL_RGBA8, GL_RGBA16F, GL_RGBA32F, GL_SRGB8_ALPHA8
 
 
 logger = name_patch(logger, __name__)
@@ -837,3 +838,84 @@ cpdef object draw(Node node, ctx, paint=None, font=None, path=None, dict stats=N
             stats[parent_kind] = count, total-duration
 
     return paint
+
+
+class Canvas(SceneNode):
+    def __init__(self, glctx):
+        super().__init__(glctx)
+        self._graphics_context = skia.GrDirectContext.MakeGL()
+        self._texture = None
+        self._framebuffer = None
+        self._surface = None
+        self._canvas = None
+        self._stats = {}
+        self._total_duration = 0
+        self._colorbits = None
+        self._linear = None
+        self._colorspace = None
+
+    @property
+    def texture(self):
+        return self._texture
+
+    def release(self):
+        self._colorbits = None
+        self._linear = None
+        self._colorspace = None
+        self._canvas = None
+        self._surface = None
+        if self._graphics_context is not None:
+            self._graphics_context.abandonContext()
+            self._graphics_context = None
+        self._framebuffer = None
+        self._texture = None
+
+    def create(self, engine, node, resized, **kwargs):
+        colorbits = node.get('colorbits', 1, int, self.glctx.extra['colorbits'])
+        if colorbits not in COLOR_FORMATS:
+            colorbits = self.glctx.extra['colorbits']
+        linear = node.get('linear', 1, bool, self.glctx.extra['linear'])
+        if resized or colorbits != self._colorbits or linear != self._linear:
+            depth = COLOR_FORMATS[colorbits]
+            skia_colortype = TextureFormatColorType[depth.moderngl_dtype][1]
+            internal_format = None if linear else GL_SRGB8_ALPHA8
+            self._colorspace = skia.ColorSpace.MakeSRGBLinear() if linear else skia.ColorSpace.MakeSRGB()
+            self._texture = self.glctx.texture((self.width, self.height), 4, dtype=depth.moderngl_dtype, internal_format=internal_format)
+            self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
+            backend_render_target = skia.GrBackendRenderTarget(self.width, self.height, 0, 0, skia.GrGLFramebufferInfo(self._framebuffer.glo, depth.gl_format))
+            self._surface = skia.Surface.MakeFromBackendRenderTarget(self._graphics_context, backend_render_target, skia.kBottomLeft_GrSurfaceOrigin,
+                                                                     skia_colortype, self._colorspace)
+            self._canvas = self._surface.getCanvas()
+            self._colorbits = colorbits
+            self._linear = linear
+            logger.debug("Created {:d}x{:d} canvas; skia version {}", self.width, self.height, skia.__version__)
+
+    async def descend(self, engine, node, **kwargs):
+        # A canvas is a leaf node from the perspective of the OpenGL world
+        pass
+
+    def purge(self):
+        total_count = self._stats['canvas'][0]
+        logger.info("{} render stats - {:d} x {:.1f}ms = {:.1f}s", self.name, total_count,
+                    1e3 * self._total_duration / total_count, self._total_duration)
+        draw_duration = 0
+        for duration, count, key in sorted(((duration, count, key) for (key, (count, duration)) in self._stats.items()), reverse=True):
+            logger.debug("{:15s}  - {:8d}  x {:6.1f}µs = {:5.1f}s  ({:4.1f}%)",
+                         key, count, 1e6 * duration / count, duration, 100 * duration / self._total_duration)
+            draw_duration += duration
+        overhead = self._total_duration - draw_duration
+        logger.debug("{:15s}  - {:8d}  x {:6.1f}µs = {:5.1f}s  ({:4.1f}%)",
+                     '(surface)', total_count, 1e6 * overhead / total_count, overhead, 100 * overhead / self._total_duration)
+        self._stats = {}
+        self._total_duration = 0
+
+    def render(self, node, references=None, **kwargs):
+        self._total_duration -= system_clock()
+        self._graphics_context.resetContext()
+        self._framebuffer.clear()
+        draw(node, self._canvas, stats=self._stats, references=references, colorspace=self._colorspace)
+        self._surface.flushAndSubmit()
+        self._total_duration += system_clock()
+
+
+SCENE_NODE_CLASS = Canvas
