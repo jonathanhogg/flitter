@@ -422,7 +422,7 @@ class Window(ProgramNode):
             if fullscreen and (not self._fullscreen or screen != self._screen):
                 mode = glfw.get_video_mode(monitor)
                 glfw.set_window_monitor(self.window, monitor, 0, 0, mode.size.width, mode.size.height, mode.refresh_rate)
-            elif resized:
+            if not fullscreen:
                 glfw.set_window_size(self.window, width, height)
             self._screen = screen
             self._fullscreen = fullscreen
