@@ -745,10 +745,11 @@ cpdef object draw(Node node, ctx, paint=None, font=None, path=None, dict stats=N
             text_paint = update_paint(node, paint, colorspace)
             font = update_font(node, font)
             stroke = node.get('stroke', 1, bool, False)
-            text_paint.setStyle(StrokeStyle if stroke else FillStyle)
+            fill = node.get('fill', 1, bool, not stroke)
+            text_paint.setStyle((FillStyle if not stroke else StrokeAndFillStyle) if fill else StrokeStyle)
             if node.get('center', 1, bool, True):
                 bounds = skia.Rect(0, 0, 0, 0)
-                font.measureText(text, bounds=bounds)
+                font.measureText(text, bounds=bounds, paint=text_paint)
                 rx = bounds.x() + bounds.width()/2
                 ry = bounds.y() + bounds.height()/2
                 ctx.drawString(text, x-rx, y-ry, font, text_paint)
