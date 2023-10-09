@@ -473,15 +473,21 @@ def sumv(Vector xs not None):
     return ys
 
 
-def accumulate(Vector xs not None):
-    cdef int i, n = xs.length
-    if n == 0 or xs.objects is not None:
+def accumulate(Vector xs not None, Vector zs=true_):
+    cdef int i, j, k, n = xs.length
+    if n == 0 or xs.objects is not None or zs.length != 1 or zs.objects is not None:
         return null_
     cdef Vector ys = Vector.__new__(Vector)
-    cdef double y = 0
-    for i in range(ys.allocate_numbers(n)):
-        y += xs.numbers[i]
-        ys.numbers[i] = y
+    cdef int m = <int>(zs.numbers[0])
+    if m < 1:
+        return null_
+    ys.allocate_numbers(n)
+    for j in range(min(n, m)):
+        ys.numbers[j] = xs.numbers[j]
+    for i in range(m, n, m):
+        for j in range(min(m, n-i)):
+            k = i + j
+            ys.numbers[k] = ys.numbers[k-m] + xs.numbers[k]
     return ys
 
 
