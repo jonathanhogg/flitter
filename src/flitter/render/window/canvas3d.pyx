@@ -433,7 +433,7 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, bint orthographic, Ve
             zs_array = np.empty(n)
             zs = zs_array
             for i, instance in enumerate(instances):
-                zs[i] = pv_matrix.mmul(instance.model_matrix).numbers[14]
+                zs[i] = -pv_matrix.mmul(instance.model_matrix).numbers[14]
             indices = zs_array.argsort()
         else:
             indices = np.arange(n, dtype='long')
