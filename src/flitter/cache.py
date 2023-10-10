@@ -13,6 +13,7 @@ from .clock import system_clock
 
 
 DEFAULT_CLEAN_TIME = 30
+MAX_CACHE_VIDEO_FRAMES = 100
 
 
 class CachePath:
@@ -211,11 +212,14 @@ class CachePath:
                     timestamp = stream.start_time + min(max(0, int(position / stream.time_base)), stream.duration)
                 count = 0
                 while True:
-                    if len(frames) >= 2:
-                        if timestamp >= frames[0].pts and (frames[-1] is None or timestamp < frames[-1].pts):
-                            break
-                        if timestamp < frames[0].pts or (timestamp > frames[1].pts and frames[-1].key_frame):
-                            frames = []
+                    if len(frames) >= 2 and timestamp >= frames[0].pts and (frames[-1] is None or timestamp < frames[-1].pts):
+                        break
+                    if frames and timestamp < frames[0].pts:
+                        logger.trace("Discard {} buffered video frames", len(frames))
+                        frames = []
+                    if len(frames) >= 2 and frames[-1].key_frame and timestamp > 2*frames[-1].pts - frames[0].pts:
+                        logger.trace("Discard {} buffered video frames", len(frames))
+                        frames = []
                     if not frames:
                         if decoder is not None:
                             decoder.close()
@@ -225,11 +229,23 @@ class CachePath:
                     if decoder is not None:
                         try:
                             frame = next(decoder)
+                            if frame.key_frame:
+                                logger.trace("Read video key frame @ {:.2f}s", float(frame.pts * stream.time_base))
+                                for i in range(len(frames)-1, 0, -1):
+                                    if frames[i].key_frame:
+                                        frames = frames[:i]
+                                        logger.trace("Discard {} buffered video frames", i)
+                                        break
+                            else:
+                                logger.trace("Read video frame @ {:.2f}s", float(frame.pts * stream.time_base))
                             count += 1
                         except StopIteration:
                             logger.trace("Hit end of video {}", self._path)
                             decoder = None
                             frame = None
+                        if len(frames) == MAX_CACHE_VIDEO_FRAMES:
+                            frames.pop(0)
+                            logger.trace("Discard one buffered video frame (hit maximum)")
                         frames.append(frame)
                         if len(frames) == 1:
                             logger.trace("Decoding frames from {:.2f}s", float(frames[0].pts * stream.time_base))
@@ -239,7 +255,7 @@ class CachePath:
                     if current_frame is not None and current_frame.pts <= timestamp:
                         break
                     next_frame = current_frame
-                ratio = (timestamp - current_frame.pts) / (next_frame.pts - current_frame.pts) if next_frame is not None else 0
+                ratio = 0 if next_frame is None else (timestamp - current_frame.pts) / (next_frame.pts - current_frame.pts)
             except Exception as exc:
                 logger.opt(exception=exc).warning("Error reading video file: {}", self._path)
                 container = decoder = None

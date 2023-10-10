@@ -71,8 +71,8 @@ class Video(Shader):
         if frame0 is not self._frame0:
             rgb_frame = frame0.to_rgb()
             plane = rgb_frame.planes[0]
-            data = memoryview(rgb_frame.to_ndarray().data) if plane.line_size > plane.width * 3 else memoryview(plane)
-            self._frame0_texture.write(data)
+            data = rgb_frame.to_ndarray().data if plane.line_size > plane.width * 3 else plane
+            self._frame0_texture.write(memoryview(data))
             self._frame0 = frame0
         if frame1 is None:
             self._frame1 = None
