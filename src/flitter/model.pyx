@@ -4,6 +4,7 @@ import re
 
 import cython
 from cython cimport view
+import numpy as np
 
 from libc.math cimport isnan, floor, ceil, abs, sqrt, sin, cos, tan, isnan
 from cpython cimport PyObject, Py_INCREF
@@ -169,7 +170,7 @@ cdef class Vector:
         if value is None:
             return
         cdef int i, n
-        if isinstance(value, (list, tuple, set, dict, Vector)):
+        if isinstance(value, (list, tuple, set, dict, Vector, np.ndarray)):
             n = len(value)
             if n:
                 self.allocate_numbers(n)

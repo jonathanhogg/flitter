@@ -50,6 +50,7 @@ class EngineController:
         self.switch_page = None
         self.current_page = None
         self.current_path = None
+        self._references = {}
 
     def load_page(self, filename):
         page_number = len(self.pages)
@@ -93,10 +94,10 @@ class EngineController:
         for node in graph.children:
             nodes_by_kind.setdefault(node.kind, []).append(node)
         tasks = []
+        references = {}
         for kind, nodes in nodes_by_kind.items():
             renderer_class = get_renderer(kind)
             if renderer_class is not None:
-                references = {}
                 renderers = self.renderers.setdefault(kind, [])
                 count = 0
                 for node in nodes:
@@ -120,6 +121,7 @@ class EngineController:
                     task.cancel()
             await asyncio.gather(*tasks, return_exceptions=True)
             raise
+        return references
 
     def handle_pragmas(self, pragmas):
         if '_counter' not in self.state:
@@ -134,6 +136,21 @@ class EngineController:
         self.state.clear()
         self.state_timestamp = None
         self.global_state_dirty = True
+
+    def sample(self, texture_id, coord, default=null):
+        if len(coord) != 2 \
+                or (scene_node := self._references.get(str(texture_id))) is None \
+                or (data := scene_node.texture_data) is None:
+            return default
+        height, width, _ = data.shape
+        x = int(coord[0] * width)
+        y = int(coord[1] * height)
+        if x < 0 or x >= width or y < 0 or y >= height:
+            return default
+        color = data[y, x].astype('float')
+        if data.dtype == 'uint8':
+            color /= 255
+        return Vector(color)
 
     async def run(self):
         try:
@@ -156,7 +173,8 @@ class EngineController:
                 names = {'beat': beat, 'quantum': self.counter.quantum, 'tempo': self.counter.tempo,
                          'delta': delta, 'clock': frame_time, 'performance': performance,
                          'fps': self.target_fps, 'realtime': self.realtime,
-                         'screen': self.screen, 'fullscreen': self.fullscreen, 'vsync': self.vsync}
+                         'screen': self.screen, 'fullscreen': self.fullscreen, 'vsync': self.vsync,
+                         'sample': self.sample}
 
                 program = self.current_path.read_flitter_program(variables=self.defined_variables, undefined=names)
                 if program is not current_program:
@@ -206,7 +224,7 @@ class EngineController:
                 execution += now
                 render -= now
 
-                await self.update_renderers(context.graph, **names)
+                self._references = await self.update_renderers(context.graph, **names)
 
                 now = system_clock()
                 render += now

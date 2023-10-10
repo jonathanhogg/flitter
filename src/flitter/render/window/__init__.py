@@ -9,6 +9,7 @@ import importlib
 import glfw
 from loguru import logger
 import moderngl
+import numpy as np
 
 from ...clock import system_clock
 from .glconstants import GL_RGBA8, GL_RGBA16F, GL_RGBA32F, GL_FRAMEBUFFER_SRGB
@@ -64,6 +65,7 @@ class SceneNode:
         self.height = None
         self.tags = set()
         self.hidden = False
+        self._texture_data = None
 
     @property
     def name(self):
@@ -72,6 +74,17 @@ class SceneNode:
     @property
     def texture(self):
         raise NotImplementedError()
+
+    @property
+    def texture_data(self):
+        if self._texture_data is not None:
+            return self._texture_data
+        texture = self.texture
+        if texture is not None:
+            dtype = {'f1': 'uint8', 'f2': 'float16', 'f4': 'float32'}[texture.dtype]
+            data = np.ndarray((texture.height, texture.width, texture.components), dtype, texture.read())
+            self._texture_data = data
+        return self._texture_data
 
     @property
     def child_textures(self):
@@ -93,6 +106,7 @@ class SceneNode:
             self.children.pop().destroy()
 
     async def update(self, engine, node, default_size=(512, 512), **kwargs):
+        self._texture_data = None
         references = kwargs.setdefault('references', {})
         if node_id := node.get('id', 1, str):
             references[node_id] = self
