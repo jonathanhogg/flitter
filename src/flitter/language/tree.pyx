@@ -15,7 +15,6 @@ from loguru import logger
 from .. import name_patch
 from ..model cimport Vector, Node, Query, null_, true_, false_, minusone_
 from .vm cimport Context, StateDict, Program, builtins, static_builtins, dynamic_builtins
-from .vm import log
 
 
 logger = name_patch(logger, __name__)

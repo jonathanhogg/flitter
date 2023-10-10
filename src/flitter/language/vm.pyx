@@ -32,13 +32,13 @@ cdef dict static_builtins = {
 static_builtins.update(STATIC_FUNCTIONS)
 static_builtins.update(NOISE_FUNCTIONS)
 
-def log(value):
+def debug(value):
     return value
 
-cdef object _log_func = log
+cdef object _debug_func = debug
 
 cdef dict dynamic_builtins = {
-    'log': Vector(log),
+    'debug': Vector(debug),
 }
 dynamic_builtins.update(DYNAMIC_FUNCTIONS)
 
@@ -636,7 +636,7 @@ cdef void call_helper(Context context, VectorStack stack, object function, tuple
         drop(lvars, m)
         if func.root_path is not context.path:
             SharedCache.set_root(context.path)
-    elif function is _log_func and n == 1 and kwargs is None:
+    elif function is _debug_func and n == 1 and kwargs is None:
         arg = <Vector>args[0]
         context.logs.add(arg.repr())
         push(stack, arg)

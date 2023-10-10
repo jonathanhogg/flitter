@@ -7,7 +7,7 @@ Flitter language functions
 
 import cython
 
-from libc.math cimport isnan, isinf, floor, round, sin, cos, asin, acos, sqrt, exp, ceil, atan2, log
+from libc.math cimport isnan, isinf, floor, round, sin, cos, asin, acos, sqrt, exp, ceil, atan2, log, log2, log10
 
 from ..cache import SharedCache
 from ..model cimport Vector, Matrix44, null_, true_, false_
@@ -267,6 +267,36 @@ def sqrtv(Vector xs not None):
     cdef Vector ys = Vector.__new__(Vector)
     for i in range(ys.allocate_numbers(xs.length)):
         ys.numbers[i] = sqrt(xs.numbers[i])
+    return ys
+
+
+def logv(Vector xs not None):
+    if xs.numbers == NULL:
+        return null_
+    cdef Vector ys = Vector.__new__(Vector)
+    cdef int i, n = xs.length
+    for i in range(ys.allocate_numbers(n)):
+        ys.numbers[i] = log(xs.numbers[i])
+    return ys
+
+
+def log2v(Vector xs not None):
+    if xs.numbers == NULL:
+        return null_
+    cdef Vector ys = Vector.__new__(Vector)
+    cdef int i, n = xs.length
+    for i in range(ys.allocate_numbers(n)):
+        ys.numbers[i] = log2(xs.numbers[i])
+    return ys
+
+
+def log10v(Vector xs not None):
+    if xs.numbers == NULL:
+        return null_
+    cdef Vector ys = Vector.__new__(Vector)
+    cdef int i, n = xs.length
+    for i in range(ys.allocate_numbers(n)):
+        ys.numbers[i] = log10(xs.numbers[i])
     return ys
 
 
@@ -759,6 +789,9 @@ STATIC_FUNCTIONS = {
     'abs': Vector(absv),
     'exp': Vector(expv),
     'sqrt': Vector(sqrtv),
+    'log': Vector(logv),
+    'log2': Vector(log2v),
+    'log10': Vector(log10v),
     'sine': Vector(sine),
     'bounce': Vector(bounce),
     'sharkfin': Vector(sharkfin),
