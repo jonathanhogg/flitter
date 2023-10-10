@@ -10,12 +10,12 @@ from loguru import logger
 import moderngl
 import numpy as np
 
-from libc.math cimport cos, log2
+from libc.math cimport cos, log2, sqrt
 
 from . import SceneNode, COLOR_FORMATS
 from ... import name_patch
 from ...clock import system_clock
-from ...model cimport Node, Vector, Matrix44, null_
+from ...model cimport Node, Vector, Matrix44, null_, true_
 from .glsl import TemplateLoader
 from .models cimport Model, Box, Cylinder, Sphere, LoadedModel
 
@@ -24,6 +24,8 @@ logger = name_patch(logger, __name__)
 
 cdef Vector Zero3 = Vector((0, 0, 0))
 cdef Vector One3 = Vector((1, 1, 1))
+cdef Vector Xaxis = Vector((1, 0, 0))
+cdef Vector Yaxis = Vector((0, 1, 0))
 cdef int DEFAULT_MAX_LIGHTS = 50
 cdef double Pi = 3.141592653589793
 cdef tuple MaterialAttributes = ('color', 'specular', 'emissive', 'shininess', 'transparency',
@@ -314,15 +316,37 @@ cdef void collect(Node node, Matrix44 model_matrix, Material material, RenderSet
             lights.append(light)
 
 
+cdef Matrix44 instance_start_end_matrix(Vector start, Vector end, double radius):
+    cdef Vector direction = end.sub(start);
+    cdef double length = sqrt(direction.squared_sum())
+    if length == 0 or radius <= 0:
+        return
+    cdef Vector up = Xaxis if direction.numbers[0] == 0 and direction.numbers[2] == 0 else Yaxis
+    cdef Vector middle = Vector.__new__(Vector)
+    middle.allocate_numbers(3)
+    middle.numbers[0] = (start.numbers[0] + end.numbers[0]) / 2
+    middle.numbers[1] = (start.numbers[1] + end.numbers[1]) / 2
+    middle.numbers[2] = (start.numbers[2] + end.numbers[2]) / 2
+    cdef Vector size = Vector.__new__(Vector)
+    size.allocate_numbers(3)
+    size.numbers[0] = radius
+    size.numbers[1] = radius
+    size.numbers[2] = length
+    return Matrix44._look(middle, end, up).inverse().mmul(Matrix44._scale(size))
+
+
 cdef void add_instance(dict render_instances, Model model, Node node, Matrix44 model_matrix, Material material):
-    cdef Vector vec = None
     cdef Matrix44 matrix = None
-    if (vec := node.get_fvec('position', 3, None)) is not None and (matrix := Matrix44._translate(vec)) is not None:
-        model_matrix = model_matrix.mmul(matrix)
-    if (vec := node.get_fvec('rotation', 3, None)) is not None and (matrix := Matrix44._rotate(vec)) is not None:
-        model_matrix = model_matrix.mmul(matrix)
-    if (vec := node.get_fvec('size', 3, None)) is not None and (matrix := Matrix44._scale(vec)) is not None:
-        model_matrix = model_matrix.mmul(matrix)
+    cdef Vector vec=None, start=None, end=None
+    if (start := node.get_fvec('start', 3, None)) is not None and (end := node.get_fvec('end', 3, None)) is not None:
+        model_matrix = model_matrix.mmul(instance_start_end_matrix(start, end, node.get_float('radius', 1)))
+    else:
+        if (vec := node.get_fvec('position', 3, None)) is not None and (matrix := Matrix44._translate(vec)) is not None:
+            model_matrix = model_matrix.mmul(matrix)
+        if (vec := node.get_fvec('rotation', 3, None)) is not None and (matrix := Matrix44._rotate(vec)) is not None:
+            model_matrix = model_matrix.mmul(matrix)
+        if (vec := node.get_fvec('size', 3, None)) is not None and (matrix := Matrix44._scale(vec)) is not None:
+            model_matrix = model_matrix.mmul(matrix)
     cdef Instance instance = Instance.__new__(Instance)
     instance.model_matrix = model_matrix
     instance.material = material
