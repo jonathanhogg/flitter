@@ -371,6 +371,7 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, bint orthographic, Ve
     cdef double* src
     cdef float* dest
     cdef Instance instance
+    cdef Matrix44 matrix
     cdef bint has_transparency_texture
     cdef tuple transparent_object
     cdef list transparent_objects = []
@@ -433,7 +434,8 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, bint orthographic, Ve
             zs_array = np.empty(n)
             zs = zs_array
             for i, instance in enumerate(instances):
-                zs[i] = -pv_matrix.mmul(instance.model_matrix).numbers[14]
+                matrix = pv_matrix.mmul(instance.model_matrix)
+                zs[i] = matrix.numbers[14] / matrix.numbers[15]
             indices = zs_array.argsort()
         else:
             indices = np.arange(n, dtype='long')
