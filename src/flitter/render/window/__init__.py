@@ -129,6 +129,8 @@ class SceneNode:
         existing = self.children
         updated = []
         for child in node.children:
+            if self.handle_node(engine, child, **kwargs):
+                continue
             cls = get_scene_node_class(child.kind)
             if cls is not None:
                 index = None
@@ -145,14 +147,12 @@ class SceneNode:
                     scene_node = cls(self.glctx)
                 await scene_node.update(engine, child, default_size=(self.width, self.height), **kwargs)
                 updated.append(scene_node)
-            else:
-                self.handle_node(engine, child, **kwargs)
         while existing:
             existing.pop().destroy()
         self.children = updated
 
     def handle_node(self, engine, node, **kwargs):
-        pass
+        return False
 
     def create(self, engine, node, resized, **kwargs):
         pass
@@ -496,24 +496,29 @@ class Window(ProgramNode):
                 self.engine.state[self._pointer_state.concat(Vector(button))] = 0
 
     def handle_node(self, engine, node, **kwargs):
-        if node.kind == 'key' and 'state' in node:
-            key_name = node.get('name', 1, str)
-            key_constant = 'KEY_' + key_name.upper()
-            if hasattr(glfw, key_constant):
-                key = getattr(glfw, key_constant)
-                state = node['state']
-                self._keys[key] = state
-                if state not in engine.state:
-                    if self.window is not None and glfw.get_key(self.window, key) == glfw.PRESS:
-                        engine.state[state] = 1
-                        engine.state[state.concat(Vector('pushed'))] = 1
-                        engine.state[state.concat(Vector('released'))] = 0
-                    else:
-                        engine.state[state] = 0
-                        engine.state[state.concat(Vector('pushed'))] = 0
-                        engine.state[state.concat(Vector('released'))] = 1
-        elif node.kind == 'pointer' and 'state' in node:
-            self._pointer_state = node['state']
+        if node.kind == 'key':
+            if 'state' in node:
+                key_name = node.get('name', 1, str)
+                key_constant = 'KEY_' + key_name.upper()
+                if hasattr(glfw, key_constant):
+                    key = getattr(glfw, key_constant)
+                    state = node['state']
+                    self._keys[key] = state
+                    if state not in engine.state:
+                        if self.window is not None and glfw.get_key(self.window, key) == glfw.PRESS:
+                            engine.state[state] = 1
+                            engine.state[state.concat(Vector('pushed'))] = 1
+                            engine.state[state.concat(Vector('released'))] = 0
+                        else:
+                            engine.state[state] = 0
+                            engine.state[state.concat(Vector('pushed'))] = 0
+                            engine.state[state.concat(Vector('released'))] = 1
+            return True
+        elif node.kind == 'pointer':
+            if 'state' in node:
+                self._pointer_state = node['state']
+            return True
+        return super().handle_node(engine, node, **kwargs)
 
     def recalculate_viewport(self, force=False):
         aspect_ratio = self.width / self.height
