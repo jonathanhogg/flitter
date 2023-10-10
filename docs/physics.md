@@ -25,25 +25,25 @@ system, i.e., the length of the position, value and force vectors
 - `resolution` is an optional attribute specifying a *minimum* simulation step
 interval
 
-If `time` and `resolution` are not specified then the system will default to
-**flitter**'s internal frame clock and the target frame-rate interval. This
-means that the simulation time units will be seconds and the simulation will
-advance in time steps equal to the frame interval.
+The simulation maintains an internal simulation clock which begins at zero and
+advances in steps equal to the minimum of `resolution` or the difference between
+successive values of `time`. This means that if the engine frame rate falls
+below that necessary to maintain `time` deltas greater than `resolution`, the
+simulation will advance in time steps of `resolution`. This allows `resolution`
+to be used to avoid numerical instability caused by slow frames. In this
+situation, the internal simulation clock will advance more slowly than `time`.
+The internal simulation clock can be read from the state and used to track the
+actual amount of simulation time that has passed (see **State interaction**
+below).
 
-If specifying `time`, then `resolution` should be set to some sensible matching
+If `time` and `resolution` are not specified then the system will default to
+**flitter**'s internal frame clock and the target frame-rate interval
+respectively. This means that the simulation time units will be seconds and the
+simulation will advance in time steps equal to the frame interval.
+
+If `time` *is* specified then `resolution` should be set to a sensible matching
 value somewhere at or above the expected increment in `time` at the engine
 frame-rate.
-
-> **Note**
->
-> If the physics engine is called with sequential `time` values (or the actual
-> frame times) that have a delta greater than `resolution`, then the simulation
-> will be run with `resolution` as the time delta, i.e., if **flitter** is
-> unable to call the engine rapidly enough, the simulation will subjectively
-> appear to slow down. This is to avoid numerical instability, for example if
-> two objects overlap each other because of processing a large step at their
-> current velocity and a collision force applier is in place, then this may
-> generate massive repelling forces that will cause the particles to fly apart.
 
 All other nodes described below must be contained with a `!physics` node.
 
@@ -75,6 +75,8 @@ the first simulation step (defaults to zero)
 - `force` - specifies a constant force vector to be applied to the particle,
 this may be changed at any point during the simulation to create custom forces,
 e.g., thrust from an engine (defaults to zero)
+- `ease` - specifies an amount of simulation time over which to ramp up the
+force vector (does nothing if `force` is not specified)
 - `radius` - specifies a radius for a spherical particle, this is used both
 in collision detection and when calculating drag force (defaults to 1 and will
 be clamped to zero if negative)
@@ -114,6 +116,8 @@ will be normalized)
 direction vector
 - `force` - alternative to `direction` and `strength` for giving the force
 vector directly
+- `ease` - specifies an amount of simulation time over which to ramp up
+`strength` (or `force`)
 
 ```math
 \vec{F} = \textbf{strength} . \vec{d}
@@ -146,6 +150,8 @@ to simulate various tethers, rubber bands and springs.
 - `max` - a maximum distance that the two objects can be apart
 - `fixed` - a shortcut for setting both `min` and `max` to the same value
 - `strength` - force magnitude coefficient
+- `ease` - specifies an amount of simulation time over which to ramp up
+`strength`
 
 ```math
 l = \left| \vec{p}_\textbf{to} - \vec{p}_\textbf{from} \right|
@@ -179,6 +185,8 @@ particles, with `min` set to the sum of the `radius` attributes of each
 particle. Particles with zero `radius` will be ignored.
 
 - `strength` - force magnitude coefficient
+- `ease` - specifies an amount of simulation time over which to ramp up
+`strength`
 
 The `strength` attribute is inversely proportional to the elasticity of the
 particles: lower values mean the particles can overlap more before bouncing
@@ -194,6 +202,8 @@ proportional to the square of the distance between the particles. Particles
 with zero `mass` will be ignored.
 
 - `strength` - force magnitude coefficient
+- `ease` - specifies an amount of simulation time over which to ramp up
+`strength`
 - `max_distance` - pairs of particles further apart than this will be ignored
 
 ```math
@@ -225,6 +235,8 @@ charge will repel each other and particles with oppositely signed charges will
 attract each other.
 
 - `strength` - force magnitude coefficient
+- `ease` - specifies an amount of simulation time over which to ramp up
+`strength`
 - `max_distance` - pairs of particles further apart than this will be ignored
 
 ```math
@@ -258,6 +270,8 @@ very useful for taking energy out of a simulation, otherwise particles will
 tend to bounce around forever. Particles with zero `radius` will be ignored.
 
 - `strength` - force magnitude coefficient
+- `ease` - specifies an amount of simulation time over which to ramp up
+`strength`
 
 ```math
 {speed} = |\vec{v}_t|
@@ -282,8 +296,9 @@ For a `!physics` system with `state` set to *prefix*, and a particle with `id`
 set to *id*, the following key/value pairs will be stored in the state
 dictionary:
 
-- *prefix* - the last simulation timestamp (as provided with the `time`
-attribute or the internal frame time
+- *prefix* - the last simulation timestamp (either the last value of the `time`
+attribute or the internal engine frame time)
+- *prefix*`;:clock` - the internal simulation clock
 - *prefix*`;`*id* - the last position of the particle
 - *prefix*`;`*id*`;:velocity` - the last velocity of the particle
 
@@ -294,7 +309,8 @@ dictionary, even though position will always be whatever was provided with the
 `state` and `id` can be any non-null vectors, but `id` must be unique within
 the system and `state` must be unique if multiple simultaneous systems are
 used. Obviously one should avoid using a `state` prefix that might collide with
-other users of the state dictionary, such as MIDI controllers.
+other users of the state dictionary, such as MIDI controllers. One should also
+not use `:clock` as the id of a particle.
 
 ## Example
 
@@ -325,7 +341,6 @@ let SIZE=1080;1080
     DISH=500
 
 !physics state=:cells dimensions=2 time=beat resolution=tempo/60/fps
-    let ease_in=linear(beat/10)
     !anchor id=:middle position=0;0
     for i in ..NBUBBLES
         let start=(beta(:start;i)[..2]-0.5)*2*DISH
@@ -333,8 +348,8 @@ let SIZE=1080;1080
             charge=10*normal(:charge)[i]
         !particle id=i charge=charge radius=RADIUS position=start force=random
         !distance strength=1000 max=DISH-RADIUS from=i to=:middle
-    !electrostatic strength=1000*ease_in
-    !collision strength=200*ease_in
+    !electrostatic strength=1000 ease=10
+    !collision strength=200 ease=10
     !drag strength=0.0001
 
 !window size=SIZE

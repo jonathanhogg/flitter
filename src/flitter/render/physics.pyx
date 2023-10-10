@@ -17,6 +17,7 @@ from libc.math cimport sqrt, isinf, isnan, abs
 logger = name_patch(logger, __name__)
 
 cdef Vector VELOCITY = Vector('velocity')
+cdef Vector CLOCK = Vector('clock')
 
 cdef Normal RandomSource = Normal('_physics')
 cdef unsigned long long RandomIndex = 0
@@ -32,6 +33,7 @@ cdef class Particle:
     cdef double radius
     cdef double mass
     cdef double charge
+    cdef double ease
 
     def __cinit__(self, Node node, Vector id, Vector zero, Vector prefix, StateDict state):
         self.id = id
@@ -51,8 +53,9 @@ cdef class Particle:
         self.radius = max(0, node.get_float('radius', 1))
         self.mass = max(0, node.get_float('mass', 1))
         self.charge = node.get_float('charge', 1)
+        self.ease = node.get_float('ease', 0)
 
-    cdef void update(self, double speed_of_light, double delta, StateDict state):
+    cdef void update(self, double speed_of_light, double clock, double delta, StateDict state):
         cdef double speed, d, k
         cdef int i, n=self.force.length
         if self.mass:
@@ -61,6 +64,8 @@ cdef class Particle:
                     break
             else:
                 k = delta / self.mass
+                if self.ease > 0 and clock < self.ease:
+                    k *= clock / self.ease
                 speed = 0
                 for i in range(n):
                     d = self.velocity.numbers[i] + self.force.numbers[i] * k
@@ -81,7 +86,7 @@ cdef class Anchor(Particle):
         self.position = node.get_fvec('position', zero.length, zero)
         self.velocity = Vector._copy(zero)
 
-    cdef void update(self, double speed_of_light, double delta, StateDict state):
+    cdef void update(self, double speed_of_light, double clock, double delta, StateDict state):
         state.set_item(self.position_state_key, self.position)
         state.set_item(self.velocity_state_key, self.velocity)
 
@@ -89,8 +94,8 @@ cdef class Anchor(Particle):
 cdef class ForceApplier:
     cdef double strength
 
-    def __cinit__(self, Node node, Vector zero):
-        self.strength = node.get_float('strength', 1)
+    def __cinit__(self, Node node, double strength, Vector zero):
+        self.strength = strength
 
 
 cdef class PairForceApplier(ForceApplier):
@@ -106,7 +111,7 @@ cdef class ParticleForceApplier(ForceApplier):
 cdef class MatrixPairForceApplier(PairForceApplier):
     cdef double max_distance
 
-    def __cinit__(self, Node node, Vector zero):
+    def __cinit__(self, Node node, double strength, Vector zero):
         self.max_distance = max(0, node.get_float('max_distance', 0))
 
 
@@ -114,7 +119,7 @@ cdef class SpecificPairForceApplier(PairForceApplier):
     cdef Vector from_particle_id
     cdef Vector to_particle_id
 
-    def __cinit__(self, Node node, Vector zero):
+    def __cinit__(self, Node node, double strength, Vector zero):
         self.from_particle_id = <Vector>node._attributes.get('from')
         self.to_particle_id = <Vector>node._attributes.get('to')
 
@@ -123,7 +128,7 @@ cdef class DistanceForceApplier(SpecificPairForceApplier):
     cdef double minimum
     cdef double maximum
 
-    def __cinit__(self, Node node, Vector zero):
+    def __cinit__(self, Node node, double strength, Vector zero):
         cdef double fixed
         if (fixed := node.get_float('fixed', 0)) != 0:
             self.minimum = fixed
@@ -165,7 +170,7 @@ cdef class DragForceApplier(ParticleForceApplier):
 cdef class ConstantForceApplier(ParticleForceApplier):
     cdef Vector force
 
-    def __cinit__(self, Node node, Vector zero):
+    def __cinit__(self, Node node, double strength, Vector zero):
         cdef Vector force
         cdef int i
         force = node.get_fvec('force', zero.length, null_)
@@ -257,9 +262,14 @@ cdef class PhysicsSystem:
         zero.allocate_numbers(dimensions)
         for i in range(dimensions):
             zero.numbers[i] = 0
+        cdef double clock=0
+        cdef Vector time_vector = state.get_item(state_prefix.concat(CLOCK))
+        if time_vector.length == 1 and time_vector.numbers != NULL:
+            clock = time_vector.numbers[0]
         cdef list particles=[], particle_forces=[], matrix_forces=[], specific_forces=[]
         cdef Node child = node.first_child
         cdef Vector id
+        cdef double strength, ease
         while child is not None:
             if child.kind == 'particle':
                 id = <Vector>child._attributes.get('id')
@@ -269,29 +279,33 @@ cdef class PhysicsSystem:
                 id = <Vector>child._attributes.get('id')
                 if id is not None:
                     particles.append(Anchor.__new__(Anchor, child, id, zero, state_prefix, state))
-            elif child.kind == 'distance':
-                specific_forces.append(DistanceForceApplier.__new__(DistanceForceApplier, child, zero))
-            elif child.kind == 'drag':
-                particle_forces.append(DragForceApplier.__new__(DragForceApplier, child, zero))
-            elif child.kind == 'constant':
-                particle_forces.append(ConstantForceApplier.__new__(ConstantForceApplier, child, zero))
-            elif child.kind == 'random':
-                particle_forces.append(RandomForceApplier.__new__(RandomForceApplier, child, zero))
-            elif child.kind == 'collision':
-                matrix_forces.append(CollisionForceApplier.__new__(CollisionForceApplier, child, zero))
-            elif child.kind == 'gravity':
-                matrix_forces.append(GravityForceApplier.__new__(GravityForceApplier, child, zero))
-            elif child.kind == 'electrostatic':
-                matrix_forces.append(ElectrostaticForceApplier.__new__(ElectrostaticForceApplier, child, zero))
+            else:
+                strength = child.get_float('strength', 1)
+                ease = child.get_float('ease', 0)
+                if ease > 0 and ease < clock:
+                    strength *= clock/ease;
+                if child.kind == 'distance':
+                    specific_forces.append(DistanceForceApplier.__new__(DistanceForceApplier, child, strength, zero))
+                elif child.kind == 'drag':
+                    particle_forces.append(DragForceApplier.__new__(DragForceApplier, child, strength, zero))
+                elif child.kind == 'constant':
+                    particle_forces.append(ConstantForceApplier.__new__(ConstantForceApplier, child, strength, zero))
+                elif child.kind == 'random':
+                    particle_forces.append(RandomForceApplier.__new__(RandomForceApplier, child, strength, zero))
+                elif child.kind == 'collision':
+                    matrix_forces.append(CollisionForceApplier.__new__(CollisionForceApplier, child, strength, zero))
+                elif child.kind == 'gravity':
+                    matrix_forces.append(GravityForceApplier.__new__(GravityForceApplier, child, strength, zero))
+                elif child.kind == 'electrostatic':
+                    matrix_forces.append(ElectrostaticForceApplier.__new__(ElectrostaticForceApplier, child, strength, zero))
             child = child.next_sibling
-        cdef double last_time
-        cdef Vector time_vector = state.get_item(state_prefix)
+        cdef double last_time=time
+        time_vector = state.get_item(state_prefix)
         if time_vector.length == 1 and time_vector.numbers != NULL:
             last_time = min(time, time_vector.numbers[0])
         else:
-            logger.debug("Create physics {!r} with {} particles and {} forces", state_prefix, len(particles),
+            logger.debug("New physics {!r} with {} particles and {} forces", state_prefix, len(particles),
                          len(particle_forces) + len(matrix_forces) + len(specific_forces))
-            last_time = time
         cdef double delta
         cdef Particle from_particle, to_particle
         cdef Vector direction = Vector.__new__(Vector)
@@ -341,14 +355,19 @@ cdef class PhysicsSystem:
                             direction.numbers[k] /= distance
                         (<SpecificPairForceApplier>force).apply(from_particle, to_particle, direction, distance, distance_squared)
             for particle in particles:
-                (<Particle>particle).update(speed_of_light, delta, state)
+                (<Particle>particle).update(speed_of_light, clock, delta, state)
             last_time += delta
+            clock += delta
             if realtime or last_time >= time:
                 break
         time_vector = Vector.__new__(Vector)
         time_vector.allocate_numbers(1)
         time_vector.numbers[0] = time
         state.set_item(state_prefix, time_vector)
+        time_vector = Vector.__new__(Vector)
+        time_vector.allocate_numbers(1)
+        time_vector.numbers[0] = clock
+        state.set_item(state_prefix.concat(CLOCK), time_vector)
 
 
 RENDERER_CLASS = PhysicsSystem
