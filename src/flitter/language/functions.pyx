@@ -46,7 +46,8 @@ cdef class Uniform(Vector):
         value.numbers[0] = self._item(i)
         return value
 
-    cdef double _item(self, unsigned long long i) noexcept:
+    @cython.cdivision(True)
+    cdef double _item(self, unsigned long long i) noexcept nogil:
         cdef unsigned long long x, y, z
         # Compute a 32bit float PRN using the Squares algorithm [https://arxiv.org/abs/2004.06278]
         x = y = i * self._hash
@@ -82,7 +83,7 @@ cdef class Uniform(Vector):
 
 
 cdef class Beta(Uniform):
-    cdef double _item(self, unsigned long long i) noexcept:
+    cdef double _item(self, unsigned long long i) noexcept nogil:
         i <<= 2
         cdef double u1 = Uniform._item(self, i)
         cdef double u2 = Uniform._item(self, i + 1)
@@ -95,7 +96,8 @@ cdef class Beta(Uniform):
 
 
 cdef class Normal(Uniform):
-    cdef double _item(self, unsigned long long i) noexcept:
+    @cython.cdivision(True)
+    cdef double _item(self, unsigned long long i) noexcept nogil:
         # Use the Box-Muller transform to approximate the normal distribution
         # [https://en.wikipedia.org/wiki/Box–Muller_transform]
         cdef double u1, u2
@@ -105,7 +107,7 @@ cdef class Normal(Uniform):
         if not self.cached or i != self.i:
             u1 = Uniform._item(self, i)
             u2 = Uniform._item(self, i + 1)
-            if u1 < 1 / (1<<32):
+            if u1 < 1 / <double>(1<<32):
                 u1, u2 = u2, u1
             self.R = sqrt(-2 * log(u1))
             self.th = Tau * u2
