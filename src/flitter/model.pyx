@@ -22,6 +22,8 @@ cdef double Pi = 3.141592653589793
 cdef double Tau = 6.283185307179586
 cdef double NaN = float("nan")
 cdef frozenset EmptySet = frozenset()
+cdef tuple AstypeArgs = (np.float64, 'K', 'unsafe', True, False)
+cdef type ndarray = np.ndarray
 
 
 cdef union double_long:
@@ -170,7 +172,12 @@ cdef class Vector:
         if value is None:
             return
         cdef int i, n
-        if isinstance(value, (list, tuple, set, dict, Vector, np.ndarray)):
+        cdef const double[:] arr
+        if type(value) is ndarray:
+            arr = value.astype(*AstypeArgs)
+            for i in range(self.allocate_numbers(arr.shape[0])):
+                self.numbers[i] = arr[i]
+        elif isinstance(value, (list, tuple, set, dict, Vector)):
             n = len(value)
             if n:
                 self.allocate_numbers(n)
