@@ -19,6 +19,7 @@ uniform bool orthographic;
 uniform float fog_max;
 uniform float fog_min;
 uniform vec3 fog_color;
+uniform float fog_curve;
 
 uniform bool use_diffuse_texture;
 uniform bool use_specular_texture;
@@ -41,7 +42,7 @@ void main() {
         view_distance = length(view_direction);
         view_direction = normalize(view_direction);
     }
-    float fog_alpha = (fog_max > fog_min) ? clamp((view_distance - fog_min) / (fog_max - fog_min), 0, 1) : 0;
+    float fog_alpha = (fog_max > fog_min) && (fog_curve > 0) ? pow(clamp((view_distance - fog_min) / (fog_max - fog_min), 0, 1), 1/fog_curve) : 0;
     if (fog_alpha == 1) {
         discard;
     }

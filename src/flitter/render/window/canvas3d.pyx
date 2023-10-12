@@ -186,6 +186,7 @@ def draw(Node node, tuple size, glctx, dict objects, dict references):
     cdef double fog_min = node.get_float('fog_min', 0)
     cdef double fog_max = node.get_float('fog_max', 0)
     cdef Vector fog_color = node.get_fvec('fog_color', 3, Zero3)
+    cdef double fog_curve = max(0, node.get_float('fog_curve', 1))
     cdef int max_lights = node.get_int('max_lights', DEFAULT_MAX_LIGHTS)
     cdef Matrix44 pv_matrix
     if orthographic:
@@ -203,7 +204,7 @@ def draw(Node node, tuple size, glctx, dict objects, dict references):
     collect(node, model_matrix, material, None, render_sets)
     for render_set in render_sets:
         if render_set.instances:
-            render(render_set, pv_matrix, orthographic, viewpoint, focus, max_lights, fog_min, fog_max, fog_color,
+            render(render_set, pv_matrix, orthographic, viewpoint, focus, max_lights, fog_min, fog_max, fog_color, fog_curve,
                    glctx, objects, references)
 
 
@@ -359,7 +360,7 @@ def fst(tuple ab):
 
 
 cdef void render(RenderSet render_set, Matrix44 pv_matrix, bint orthographic, Vector viewpoint, Vector focus, int max_lights,
-                 double fog_min, double fog_max, Vector fog_color, glctx, dict objects, dict references):
+                 double fog_min, double fog_max, Vector fog_color, float fog_curve, glctx, dict objects, dict references):
     cdef list instances, lights, buffers
     cdef cython.float[:, :] matrices, materials, lights_data
     cdef Material material
@@ -392,6 +393,7 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, bint orthographic, Ve
     shader['fog_min'] = fog_min
     shader['fog_max'] = fog_max
     shader['fog_color'] = fog_color
+    shader['fog_curve'] = fog_curve
     shader['use_diffuse_texture'] = False
     shader['use_specular_texture'] = False
     shader['use_emissive_texture'] = False
