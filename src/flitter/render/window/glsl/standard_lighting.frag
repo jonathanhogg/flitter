@@ -18,7 +18,7 @@ uniform vec3 focus;
 uniform bool orthographic;
 uniform float fog_max;
 uniform float fog_min;
-uniform vec3 fog_color;
+uniform vec4 fog_color;
 uniform float fog_curve;
 
 uniform bool use_diffuse_texture;
@@ -106,5 +106,5 @@ void main() {
         }
     }
     vec4 model_color = vec4(color * opacity, opacity);
-    fragment_color = mix(model_color, vec4(fog_color, 1), fog_alpha);
+    fragment_color = mix(model_color, fog_color, fog_alpha);
 }
