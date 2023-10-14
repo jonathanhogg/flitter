@@ -318,14 +318,14 @@ class CachePath:
                 logger.success("Saved image to file: {}", self._path)
         self._cache['write_image'] = True
 
-    def write_video_frame(self, texture, timestamp, codec='h264', fps=60, realtime=False, crf=None, bitrate=None,
+    def write_video_frame(self, texture, timestamp, codec='h264', pixfmt='yuv420p', fps=60, realtime=False, crf=None, bitrate=None,
                           preset=None, limit=None):
         import av
         self._touched = system_clock()
         writer = queue = start = None
         width, height = texture.width, texture.height
         has_alpha = texture.components == 4
-        config = [width, height, has_alpha, codec, fps, crf, bitrate, preset, limit]
+        config = [width, height, has_alpha, codec, pixfmt, fps, crf, bitrate, preset, limit]
         if 'video_output' in self._cache:
             writer, queue, start, *cached_config = self._cache['video_output']
             if cached_config != config:
@@ -339,6 +339,9 @@ class CachePath:
             if self._path.exists():
                 logger.warning("Existing video file will be overwritten: {}", self._path)
             options = {}
+            options['color_primaries'] = 'bt709'
+            options['color_trc'] = 'bt709'
+            options['colorspace'] = 'bt709'
             if crf is not None:
                 options['crf'] = str(crf)
             elif bitrate is not None:
@@ -353,6 +356,8 @@ class CachePath:
                 av_codec = av.codec.Codec(codec, mode='w')
                 if av_codec.type != 'video':
                     raise ValueError(f"'{codec}' not a video codec")
+                if av_codec.name == 'hevc_videotoolbox' and has_alpha:
+                    options['alpha_quality'] = '1'
                 container = av.open(str(self._path), mode='w')
                 stream = container.add_stream(av_codec, rate=fps, options=options)
             except Exception as exc:
@@ -361,15 +366,16 @@ class CachePath:
                 return
             stream.width = width
             stream.height = height
-            stream.pix_fmt = 'yuv420p'
+            stream.pix_fmt = pixfmt
             stream.codec_context.time_base = fractions.Fraction(1, fps)
-            if av_codec.name == 'libx265':
+            if av_codec.name == 'libx265' or av_codec.name == 'hevc_videotoolbox':
                 stream.codec_context.codec_tag = 'hvc1'
             queue = Queue(maxsize=fps)
             writer = threading.Thread(target=self._video_writer, args=(container, stream, queue))
             writer.start()
             start = timestamp
             self._cache['video_output'] = writer, queue, start, *config
+            logger.debug("Beginning {} {} video output{}: {}", av_codec.name, stream.pix_fmt, " (with alpha)" if has_alpha else "", self._path)
         if queue is not None and (not realtime or not queue.full()):
             frame_time = timestamp - start
             if limit is not None and frame_time >= limit:

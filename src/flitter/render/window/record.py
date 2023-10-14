@@ -10,7 +10,6 @@ from .glsl import TemplateLoader
 
 class Record(ProgramNode):
     DEFAULT_VERTEX_SOURCE = TemplateLoader.get_template('video.vert')
-    DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('record.frag')
 
     def __init__(self, glctx):
         super().__init__(glctx)
@@ -43,18 +42,19 @@ class Record(ProgramNode):
             self._framebuffer.clear()
 
     def render(self, node, **kwargs):
+        super().render(node, **kwargs)
         if filename := node.get('filename', 1, str):
-            super().render(node, **kwargs)
             path = SharedCache[filename]
-            if path.suffix.lower() in ('.mp4', '.mov', '.m4v', '.mkv'):
+            if path.suffix.lower() in ('.mp4', '.mov', '.m4v', '.mkv', '.webm'):
                 codec = node.get('codec', 1, str, 'h264')
+                pixfmt = node.get('pixfmt', 1, str, 'yuv420p')
                 crf = node.get('crf', 1, int)
                 bitrate = node.get('bitrate', 1, int)
                 preset = node.get('preset', 1, str)
                 limit = node.get('limit', 1, float)
                 path.write_video_frame(self._texture, kwargs['clock'],
                                        fps=int(kwargs['fps']), realtime=kwargs['realtime'], codec=codec,
-                                       crf=crf, bitrate=bitrate, preset=preset, limit=limit)
+                                       pixfmt=pixfmt, crf=crf, bitrate=bitrate, preset=preset, limit=limit)
             else:
                 quality = node.get('quality', 1, int)
                 path.write_image(self._texture, quality=quality)
