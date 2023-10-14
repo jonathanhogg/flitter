@@ -15,6 +15,19 @@ cdef class VectorStack:
     cdef int top
     cdef readonly int size
 
+    cpdef VectorStack copy(self)
+    cpdef void drop(self, int count=?)
+    cpdef void push(self, Vector vector)
+    cpdef Vector pop(self)
+    cpdef tuple pop_tuple(self, int count)
+    cpdef list pop_list(self, int count)
+    cpdef dict pop_dict(self, tuple keys)
+    cpdef Vector pop_composed(self, int count)
+    cpdef Vector peek(self)
+    cpdef Vector peek_at(self, int offset)
+    cpdef void poke(self, Vector vector)
+    cpdef void poke_at(self, int offset, Vector vector)
+
 
 cdef class Program:
     cdef readonly list instructions

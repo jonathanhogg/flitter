@@ -341,58 +341,58 @@ cdef class VectorStack:
     def __len__(self):
         return self.top + 1
 
-    def copy(self):
+    cpdef VectorStack copy(self):
         return copy(self)
 
-    def drop(self, int count=1):
+    cpdef void drop(self, int count=1):
         if self.top+1 < count:
             raise TypeError("Insufficient items")
-        return drop(self, count)
+        drop(self, count)
 
-    def push(self, Vector vector):
+    cpdef void push(self, Vector vector):
         push(self, vector)
 
-    def pop(self):
+    cpdef Vector pop(self):
         if self.top == -1:
             raise TypeError("Stack empty")
         return pop(self)
 
-    def pop_tuple(self, int count):
+    cpdef tuple pop_tuple(self, int count):
         if self.top+1 < count:
             raise TypeError("Insufficient items")
         return pop_tuple(self, count)
 
-    def pop_list(self, int count):
+    cpdef list pop_list(self, int count):
         if self.top+1 < count:
             raise TypeError("Insufficient items")
         return pop_list(self, count)
 
-    def pop_dict(self, tuple keys):
+    cpdef dict pop_dict(self, tuple keys):
         if self.top+1 < len(keys):
             raise TypeError("Insufficient items")
         return pop_dict(self, keys)
 
-    def pop_composed(self, int count):
+    cpdef Vector pop_composed(self, int count):
         if self.top+1 < count:
             raise TypeError("Insufficient items")
         return pop_composed(self, count)
 
-    def peek(self):
+    cpdef Vector peek(self):
         if self.top == -1:
             raise TypeError("Stack empty")
         return peek(self)
 
-    def peek_at(self, int offset):
+    cpdef Vector peek_at(self, int offset):
         if self.top - offset <= -1:
             raise TypeError("Insufficient items")
         return peek_at(self, offset)
 
-    def poke(self, Vector vector):
+    cpdef void poke(self, Vector vector):
         if self.top == -1:
             raise TypeError("Stack empty")
         poke(self, vector)
 
-    def poke_at(self, int offset, Vector vector):
+    cpdef void poke_at(self, int offset, Vector vector):
         if self.top - offset <= -1:
             raise TypeError("Insufficient items")
         poke_at(self, offset, vector)
