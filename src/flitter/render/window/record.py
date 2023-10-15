@@ -42,10 +42,10 @@ class Record(ProgramNode):
             self._framebuffer.clear()
 
     def render(self, node, **kwargs):
-        super().render(node, **kwargs)
         if filename := node.get('filename', 1, str):
+            super().render(node, **kwargs)
             path = SharedCache[filename]
-            if path.suffix.lower() in ('.mp4', '.mov', '.m4v', '.mkv', '.webm'):
+            if path.suffix.lower() in ('.mp4', '.mov', '.m4v', '.mkv', '.webm', '.ogg'):
                 codec = node.get('codec', 1, str, 'h264')
                 pixfmt = node.get('pixfmt', 1, str, 'yuv420p')
                 crf = node.get('crf', 1, int)
