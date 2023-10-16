@@ -115,7 +115,10 @@ name_list : NAME (";" NAME)* -> tuple
       | call "(" args ")" -> call
       | call "[" node "]" -> slice
 
-args : (node ("," node)*)? -> tuple
+args : (arg ("," arg)*)? -> tuple
+
+?arg : node
+     | NAME "=" node -> binding
 
 ?atom : literal
       | NAME -> name

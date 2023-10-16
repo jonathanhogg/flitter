@@ -38,7 +38,7 @@ def debug(value):
 cdef object _debug_func = debug
 
 cdef dict dynamic_builtins = {
-    'debug': Vector(debug),
+    'debug': Vector(_debug_func),
 }
 dynamic_builtins.update(DYNAMIC_FUNCTIONS)
 
@@ -608,6 +608,7 @@ cdef void call_helper(Context context, VectorStack stack, object function, tuple
     cdef tuple defaults
     cdef VectorStack lvars
     cdef Vector arg, result=null_
+    cdef PyObject* obj
     if type(function) is Function:
         func = <Function>function
         defaults = func.defaults
@@ -616,10 +617,10 @@ cdef void call_helper(Context context, VectorStack stack, object function, tuple
         for i, name in enumerate(func.parameters):
             if i < n:
                 arg = <Vector>args[i]
+            elif kwargs is not None and (obj := PyDict_GetItem(kwargs, name)) != NULL:
+                arg = <Vector>obj
             else:
                 arg = <Vector>defaults[i]
-                if kwargs is not None:
-                    arg = <Vector>kwargs.get(name, arg)
             m += 1
             push(lvars, arg)
         top = stack.top

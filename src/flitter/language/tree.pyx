@@ -287,10 +287,12 @@ cdef class Name(Expression):
         cdef Vector value
         if self.name in context.variables:
             value = context.variables[self.name]
-            if value is not None:
-                return Literal(value.copynodes())
-            else:
+            if value is None:
                 return self
+            elif value.length == 1 and isinstance(value[0], Function):
+                return FunctionName(self.name)
+            else:
+                return Literal(value.copynodes())
         elif (value := static_builtins.get(self.name)) is not None:
             return Literal(value)
         elif self.name not in dynamic_builtins:
@@ -303,6 +305,11 @@ cdef class Name(Expression):
 
     def __repr__(self):
         return f'Name({self.name!r})'
+
+
+cdef class FunctionName(Name):
+    def __repr__(self):
+        return f'FunctionName({self.name!r})'
 
 
 cdef class Lookup(Expression):
@@ -793,68 +800,94 @@ cdef class FastSlice(Expression):
 cdef class Call(Expression):
     cdef readonly Expression function
     cdef readonly tuple args
+    cdef readonly tuple keyword_args
 
-    def __init__(self, Expression function, tuple args):
+    def __init__(self, Expression function, tuple args, tuple keyword_args=None):
         self.function = function
         self.args = args
+        self.keyword_args = keyword_args
 
     cdef Program _compile(self, list lvars):
         cdef Program program = Program.__new__(Program)
         cdef Expression expr
-        for expr in self.args:
-            program.extend(expr._compile(lvars))
+        cdef list names = []
+        if self.args:
+            for expr in self.args:
+                program.extend(expr._compile(lvars))
+        cdef Binding keyword_arg
+        if self.keyword_args:
+            for keyword_arg in self.keyword_args:
+                names.append(keyword_arg.name)
+                program.extend(keyword_arg.expr._compile(lvars))
         program.extend(self.function._compile(lvars))
-        program.call(len(self.args))
+        program.call(len(self.args) if self.args else 0, tuple(names) if names else None)
         return program
 
     cpdef Expression evaluate(self, Context context):
         cdef Expression function = self.function.evaluate(context)
         cdef list args = []
-        cdef Expression arg
-        cdef bint literal = isinstance(function, Literal) and (<Literal>function).value.objects is not None
-        for arg in self.args:
-            arg = arg.evaluate(context)
-            args.append(arg)
-            if not isinstance(arg, Literal):
-                literal = False
+        cdef Expression arg, expr
+        cdef bint literal = isinstance(function, (Literal, FunctionName)) and (<Literal>function).value.objects is not None
+        if self.args:
+            for arg in self.args:
+                arg = arg.evaluate(context)
+                args.append(arg)
+                if not isinstance(arg, Literal):
+                    literal = False
+        cdef list keyword_args = []
+        cdef Binding binding
+        if self.keyword_args:
+            for binding in self.keyword_args:
+                arg = binding.expr.evaluate(context)
+                keyword_args.append(Binding(binding.name, arg))
+                if not isinstance(arg, Literal):
+                    literal = False
         cdef list vector_args, results
         cdef Literal literal_arg
         cdef Function func_expr
-        cdef dict saved, params
+        cdef str func_name
+        cdef dict vector_kwargs, saved, params
         cdef Binding parameter
         cdef int i
         if literal:
             vector_args = [literal_arg.value for literal_arg in args]
+            vector_kwargs = {binding.name: (<Literal>binding.expr).value for binding in keyword_args}
+            if isinstance(function, FunctionName):
+                func_expr = context.variables[(<FunctionName>function).name][0]
+                saved = context.variables
+                context.variables = {}
+                for i, parameter in enumerate(func_expr.parameters):
+                    if i < len(vector_args):
+                        context.variables[parameter.name] = vector_args[i]
+                    elif parameter.name in vector_kwargs:
+                        context.variables[parameter.name] = vector_kwargs[parameter.name]
+                    elif parameter.expr is not None:
+                        context.variables[parameter.name] = (<Literal>parameter.expr).value
+                    else:
+                        context.variables[parameter.name] = null_
+                expr = func_expr.expr.evaluate(context)
+                context.variables = saved
+                return expr
             results = []
             for func in (<Literal>function).value.objects:
                 if callable(func):
                     try:
                         if hasattr(func, 'state_transformer') and func.state_transformer:
-                            results.append(Literal(func(context.state, *vector_args)))
+                            if context.state is None:
+                                break
+                            else:
+                                results.append(Literal(func(context.state, *vector_args, **vector_kwargs)))
                         else:
-                            results.append(Literal(func(*vector_args)))
+                            results.append(Literal(func(*vector_args, **vector_kwargs)))
                     except Exception:
                         break
-                elif isinstance(func, Function):
-                    func_expr = func
-                    saved = context.variables
-                    context.variables = {}
-                    for i, parameter in enumerate(func_expr.parameters):
-                        if i < len(vector_args):
-                            context.variables[parameter.name] = vector_args[i]
-                        elif parameter.expr is not None:
-                            context.variables[parameter.name] = (<Literal>parameter.expr).value
-                        else:
-                            context.variables[parameter.name] = null_
-                    results.append(func_expr.expr.evaluate(context))
-                    context.variables = saved
             else:
                 return sequence_pack(results)
-        cdef Call call = Call(function, tuple(args))
+        cdef Call call = Call(function, tuple(args), tuple(keyword_args))
         return call
 
     def __repr__(self):
-        return f'Call({self.function!r}, {self.args!r})'
+        return f'Call({self.function!r}, {self.args!r}, {self.keyword_args!r})'
 
 
 cdef class NodeModifier(Expression):
@@ -1366,69 +1399,25 @@ cdef class Function(Expression):
                 literal = False
             parameters.append(Binding(parameter.name, expr))
         cdef dict saved = context.variables
-        cdef str key
+        cdef str key, name
         cdef Vector value
+        cdef set unbound = context.unbound
+        context.unbound = set()
         context.variables = {}
         for key, value in saved.items():
-            context.variables[key] = value
+            if value is not None:
+                context.variables[key] = value
         for parameter in parameters:
             context.variables[parameter.name] = None
         expr = self.expr.evaluate(context)
+        cdef Function function = Function(self.name, tuple(parameters), expr)
         context.variables = saved
-        context.variables[self.name] = None
-        return Function(self.name, tuple(parameters), expr)
+        context.variables[self.name] = Vector(function) if not context.unbound else None
+        if unbound is not None:
+            context.unbound.difference_update(saved)
+            unbound.update(context.unbound)
+        context.unbound = unbound
+        return function
 
     def __repr__(self):
         return f'Function({self.name!r}, {self.parameters!r}, {self.expr!r})'
-
-
-cdef class TemplateCall(Expression):
-    cdef readonly Expression function
-    cdef readonly tuple args
-    cdef readonly Expression children
-
-    def __init__(self, Expression function, tuple args, Expression children):
-        self.function = function
-        self.args = args
-        self.children = children
-
-    cdef Program _compile(self, list lvars):
-        cdef Program program = Program.__new__(Program)
-        cdef Binding arg
-        cdef list names = []
-        if self.children is not None:
-            program.extend(self.children._compile(lvars))
-        else:
-            program.literal(null_)
-        if self.args:
-            for arg in self.args:
-                names.append(arg.name)
-                program.extend(arg.expr._compile(lvars))
-        program.extend(self.function._compile(lvars))
-        program.call(1, tuple(names))
-        return program
-
-    cpdef Expression evaluate(self, Context context):
-        cdef Expression function = self.function.evaluate(context)
-        cdef literal = isinstance(function, Literal)
-        cdef Expression children = None
-        if self.children is not None:
-            children = self.children.evaluate(context)
-            literal = literal and isinstance(children, Literal)
-        cdef list args = None
-        cdef Binding arg
-        cdef Expression value
-        if self.args is not None:
-            args = []
-            for arg in self.args:
-                value = arg.expr.evaluate(context)
-                if not isinstance(value, Literal):
-                    literal = False
-                args.append(Binding(arg.name, value))
-        cdef TemplateCall call = TemplateCall(function, tuple(args) if args is not None else None, children)
-        if literal:
-            return Literal(call.evaluate(context))
-        return call
-
-    def __repr__(self):
-        return f'TemplateCall({self.function!r}, {self.args!r}, {self.children!r})'
