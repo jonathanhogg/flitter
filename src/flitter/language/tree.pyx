@@ -13,8 +13,9 @@ cimport cython
 from loguru import logger
 
 from .. import name_patch
+from .context cimport Context, StateDict
 from ..model cimport Vector, Node, Query, null_, true_, false_, minusone_
-from .vm cimport Context, StateDict, Program, builtins, static_builtins, dynamic_builtins
+from .vm cimport Program, builtins, static_builtins, dynamic_builtins
 
 
 logger = name_patch(logger, __name__)
@@ -870,11 +871,8 @@ cdef class Call(Expression):
             for func in (<Literal>function).value.objects:
                 if callable(func):
                     try:
-                        if hasattr(func, 'state_transformer') and func.state_transformer:
-                            if context.state is None:
-                                break
-                            else:
-                                results.append(Literal(func(context.state, *vector_args, **kwargs)))
+                        if hasattr(func, 'context_func'):
+                            results.append(Literal(func(context, *vector_args, **kwargs)))
                         else:
                             results.append(Literal(func(*vector_args, **kwargs)))
                     except Exception:

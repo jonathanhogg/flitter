@@ -3,6 +3,7 @@ from setuptools import setup, Extension
 
 setup(
     ext_modules=[
+        Extension("flitter.language.context", ["src/flitter/language/context.pyx"]),
         Extension("flitter.language.functions", ["src/flitter/language/functions.pyx"]),
         Extension("flitter.language.noise", ["src/flitter/language/noise.pyx"]),
         Extension("flitter.language.tree", ["src/flitter/language/tree.pyx"]),

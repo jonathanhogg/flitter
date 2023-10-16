@@ -10,7 +10,7 @@ from loguru import logger
 from .. import name_patch
 from ..model cimport Vector, Node, null_
 from ..language.functions cimport Normal
-from ..language.vm cimport StateDict
+from ..language.context cimport StateDict
 
 from libc.math cimport sqrt, isinf, isnan, abs
 from cpython cimport PyObject

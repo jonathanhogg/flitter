@@ -9,6 +9,7 @@ from loguru import logger
 
 from .. import name_patch
 from ..cache import SharedCache
+from .context cimport StateDict, Context
 from .functions import STATIC_FUNCTIONS, DYNAMIC_FUNCTIONS
 from ..model cimport Vector, Node, Query, null_, true_, false_
 from .noise import NOISE_FUNCTIONS
@@ -624,8 +625,8 @@ cdef inline void call_helper(Context context, VectorStack stack, object function
                 arg = <Vector>defaults[i]
             push(lvars, arg)
         top = stack.top
-        if func.root_path is not context.path:
-            SharedCache.set_root(func.root_path)
+        saved_path = context.path
+        context.path = func.root_path
         if record_stats:
             call_duration = -time()
         func.program._execute(context, stack, lvars, record_stats)
@@ -635,8 +636,7 @@ cdef inline void call_helper(Context context, VectorStack stack, object function
         assert stack.top == top + 1, "Bad function return stack"
         assert lvars.top == lvars_top + m, "Bad function return lvars"
         drop(lvars, m)
-        if func.root_path is not context.path:
-            SharedCache.set_root(context.path)
+        context.path = saved_path
     elif function is _debug_func and n == 1 and kwargs is None:
         arg = <Vector>args[0]
         context.logs.add(arg.repr())
@@ -645,11 +645,11 @@ cdef inline void call_helper(Context context, VectorStack stack, object function
         if record_stats:
             call_duration = -time()
         try:
-            if hasattr(function, 'state_transformer'):
+            if hasattr(function, 'context_func'):
                 if kwargs is None:
-                    result = <Vector>function(context.state, *args)
+                    result = <Vector>function(context, *args)
                 else:
-                    result = <Vector>function(context.state, *args, **kwargs)
+                    result = <Vector>function(context, *args, **kwargs)
             elif kwargs is None:
                 result = <Vector>function(*args)
             else:
@@ -1408,97 +1408,3 @@ cdef class Program:
 
         assert pc == program_end, "Jump outside of program"
         return stack
-
-
-cdef class StateDict:
-    def __cinit__(self, state=None):
-        cdef Vector value_vector
-        self._state = {}
-        self._changed_keys = set()
-        if state is not None:
-            for key, value in state.items():
-                value_vector = Vector._coerce(value)
-                if value_vector.length:
-                    self._state[Vector._coerce(key)] = value_vector
-
-    def __reduce__(self):
-        return StateDict, (self._state,)
-
-    @property
-    def changed(self):
-        return bool(self._changed_keys)
-
-    @property
-    def changed_keys(self):
-        return frozenset(self._changed_keys)
-
-    def clear_changed(self):
-        self._changed_keys = set()
-
-    cdef Vector get_item(self, Vector key):
-        return <Vector>self._state.get(key, null_)
-
-    cdef void set_item(self, Vector key, Vector value):
-        cdef Vector current = <Vector>self._state.get(key, null_)
-        if value.length:
-            if value.ne(current):
-                self._state[key] = value
-                self._changed_keys.add(key)
-        elif current.length:
-            del self._state[key]
-            self._changed_keys.add(key)
-
-    cdef bint contains(self, Vector key):
-        return key in self._state
-
-    def __getitem__(self, key):
-        return self.get_item(Vector._coerce(key))
-
-    def __setitem__(self, key, value):
-        self.set_item(Vector._coerce(key), Vector._coerce(value))
-
-    def __contains__(self, key):
-        return Vector._coerce(key) in self._state
-
-    def __delitem__(self, key):
-        cdef Vector key_vector = Vector._coerce(key)
-        if key_vector in self._state:
-            del self._state[key_vector]
-            self._changed_keys.add(key_vector)
-
-    def __iter__(self):
-        return iter(self._state)
-
-    def clear(self):
-        cdef Vector key, value
-        cdef dict new_state = {}
-        for key, value in self._state.items():
-            if key.length == 1 and key.objects is not None and isinstance(key.objects[0], str) and key.objects[0].startswith('_'):
-                new_state[key] = value
-        self._state = new_state
-        self._changed_keys = set()
-
-    def items(self):
-        return self._state.items()
-
-    def keys(self):
-        return self._state.keys()
-
-    def values(self):
-        return self._state.values()
-
-    def __repr__(self):
-        return f"StateDict({self._state!r})"
-
-
-cdef class Context:
-    def __init__(self, dict variables=None, StateDict state=None, Node graph=None, dict pragmas=None, object path=None, Context parent=None):
-        self.variables = variables if variables is not None else {}
-        self.state = state
-        self.graph = graph if graph is not None else Node('root')
-        self.pragmas = pragmas if pragmas is not None else {}
-        self.path = path
-        self.parent = parent
-        self.unbound = None
-        self.errors = set()
-        self.logs = set()

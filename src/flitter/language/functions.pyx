@@ -10,6 +10,7 @@ import cython
 from libc.math cimport isnan, isinf, floor, round, sin, cos, asin, acos, sqrt, exp, ceil, atan2, log, log2, log10
 
 from ..cache import SharedCache
+from .context cimport Context
 from ..model cimport Vector, Matrix44, null_, true_, false_
 
 
@@ -17,8 +18,8 @@ cdef double Pi = 3.141592653589793
 cdef double Tau = 6.283185307179586
 
 
-def state_transformer(func):
-    func.state_transformer = True
+def context_func(func):
+    func.context_func = True
     return func
 
 
@@ -118,11 +119,11 @@ cdef class Normal(Uniform):
         return self.R * cos(self.th)
 
 
-@state_transformer
-def counter(state, Vector counter_id, Vector clockv, Vector speedv=null_):
+@context_func
+def counter(Context context, Vector counter_id, Vector clockv, Vector speedv=null_):
     if counter_id.length == 0 or clockv.numbers == NULL or speedv.objects is not None:
         return null_
-    cdef Vector counter_state = state[counter_id]
+    cdef Vector counter_state = context.state.get_item(counter_id)
     if counter_state.numbers == NULL:
         counter_state = null_
     cdef int n = max(clockv.length, counter_state.length//2 if speedv.length == 0 else speedv.length), m = n * 2, i, j
@@ -147,22 +148,24 @@ def counter(state, Vector counter_id, Vector clockv, Vector speedv=null_):
             offset = clock * speed - count
         new_state.numbers[j] = offset
         new_state.numbers[j+1] = speed
-    state[counter_id] = new_state
+    context.state.set_item(counter_id, new_state)
     return countv
 
 
-def read_text(Vector filename):
+@context_func
+def read_text(Context context, Vector filename):
     cdef str path = filename.as_string()
     if path:
-        return Vector._coerce(SharedCache[path].read_text(encoding='utf8'))
+        return Vector._coerce(SharedCache.get_with_root(path, context.path).read_text(encoding='utf8'))
     return null_
 
 
-def read_csv(Vector filename, Vector row_number):
+@context_func
+def read_csv(Context context, Vector filename, Vector row_number):
     cdef str path = str(filename)
     row = row_number.match(1, int)
     if filename and row is not None:
-        return SharedCache[path].read_csv_vector(row)
+        return SharedCache.get_with_root(path, context.path).read_csv_vector(row)
     return null_
 
 

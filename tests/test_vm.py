@@ -10,7 +10,8 @@ import unittest
 import unittest.mock
 
 from flitter.model import Vector, Node, Query, null, true, false
-from flitter.language.vm import Program, Context, StateDict, Function, VectorStack
+from flitter.language.context import Context, StateDict
+from flitter.language.vm import Program, Function, VectorStack
 
 
 class TestBasicInstructions(unittest.TestCase):
@@ -644,9 +645,9 @@ class TestCalls(unittest.TestCase):
         self.program = Program()
         self.state = StateDict()
         self.test_function = unittest.mock.Mock()
-        del self.test_function.state_transformer
-        self.state_function = unittest.mock.Mock(state_transformer=True)
-        self.variables = {'test': Vector(self.test_function), 'state': Vector(self.state_function)}
+        del self.test_function.context_func
+        self.context_function = unittest.mock.Mock(context_func=True)
+        self.variables = {'test': Vector(self.test_function), 'context': Vector(self.context_function)}
         self.context = Context(state=self.state, variables=self.variables)
 
     def test_no_args(self):
@@ -696,6 +697,17 @@ class TestCalls(unittest.TestCase):
         stack = self.program.execute(self.context)
         self.assertEqual(stack, [12])
         self.test_function.assert_called_once_with(Vector(1), x=Vector(2), y=Vector(3))
+
+    def test_context_func(self):
+        self.context_function.return_value = Vector(12)
+        self.program.literal(1)
+        self.program.literal(2)
+        self.program.literal(3)
+        self.program.name('context')
+        self.program.call(1, ('x', 'y'))
+        stack = self.program.execute(self.context)
+        self.assertEqual(stack, [12])
+        self.context_function.assert_called_once_with(self.context, Vector(1), x=Vector(2), y=Vector(3))
 
 
 class TestStack(unittest.TestCase):
