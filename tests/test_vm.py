@@ -643,7 +643,8 @@ class TestCalls(unittest.TestCase):
     def setUp(self):
         self.program = Program()
         self.state = StateDict()
-        self.test_function = unittest.mock.Mock(state_transformer=False)
+        self.test_function = unittest.mock.Mock()
+        del self.test_function.state_transformer
         self.state_function = unittest.mock.Mock(state_transformer=True)
         self.variables = {'test': Vector(self.test_function), 'state': Vector(self.state_function)}
         self.context = Context(state=self.state, variables=self.variables)

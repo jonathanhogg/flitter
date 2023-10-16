@@ -600,28 +600,28 @@ def log_vm_stats():
                         duration, 100*duration/total)
 
 
-cdef void call_helper(Context context, VectorStack stack, object function, tuple args, dict kwargs, bint record_stats, double* duration):
+cdef inline void call_helper(Context context, VectorStack stack, object function, tuple args, dict kwargs, bint record_stats, double* duration):
     global CallOutDuration, CallOutCount
-    cdef int i, top, lvars_top, n=len(args), m=0
+    cdef int i, top, lvars_top, n=len(args), m
     cdef Function func
     cdef double call_duration
     cdef tuple defaults
     cdef VectorStack lvars
-    cdef Vector arg, result=null_
+    cdef Vector arg, result
     cdef PyObject* obj
     if type(function) is Function:
         func = <Function>function
         defaults = func.defaults
         lvars = func.lvars
         lvars_top = lvars.top
-        for i, name in enumerate(func.parameters):
+        m = len(func.parameters)
+        for i in range(m):
             if i < n:
                 arg = <Vector>args[i]
-            elif kwargs is not None and (obj := PyDict_GetItem(kwargs, name)) != NULL:
+            elif kwargs is not None and (obj := PyDict_GetItem(kwargs, func.parameters[i])) != NULL:
                 arg = <Vector>obj
             else:
                 arg = <Vector>defaults[i]
-            m += 1
             push(lvars, arg)
         top = stack.top
         if func.root_path is not context.path:
@@ -645,7 +645,7 @@ cdef void call_helper(Context context, VectorStack stack, object function, tuple
         if record_stats:
             call_duration = -time()
         try:
-            if hasattr(function, 'state_transformer') and function.state_transformer:
+            if hasattr(function, 'state_transformer'):
                 if kwargs is None:
                     result = <Vector>function(context.state, *args)
                 else:
@@ -656,6 +656,7 @@ cdef void call_helper(Context context, VectorStack stack, object function, tuple
                 result = <Vector>function(*args, **kwargs)
         except Exception as exc:
             context.errors.add(f"Error calling {function!r}\n{str(exc)}")
+            result = null_
         if record_stats:
             call_duration += time()
             CallOutDuration += call_duration
@@ -1226,11 +1227,9 @@ cdef class Program:
                     n = (<InstructionIntTuple>instruction).ivalue
                     args = pop_tuple(stack, n) if n else ()
                     if r1.objects is not None:
-                        if r1.length == 1:
-                            call_helper(context, stack, r1.objects[0], args, kwargs, record_stats, &duration)
-                        else:
-                            for i in range(r1.length):
-                                call_helper(context, stack, r1.objects[i], args, kwargs, record_stats, &duration)
+                        for i in range(r1.length):
+                            call_helper(context, stack, r1.objects[i], args, kwargs, record_stats, &duration)
+                        if r1.length > 1:
                             push(stack, pop_composed(stack, r1.length))
                     else:
                         push(stack, null_)

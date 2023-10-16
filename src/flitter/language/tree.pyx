@@ -127,10 +127,9 @@ cdef class Top(Expression):
             if not isinstance(expr, Literal) or (<Literal>expr).value.length:
                 expressions.append(expr)
         cdef str name
-        cdef Vector value
         cdef list bindings = []
         for name, value in context.variables.items():
-            if value is not None:
+            if value is not None and isinstance(value, Vector):
                 bindings.append(PolyBinding((name,), Literal(value)))
         if bindings:
             expressions.append(StoreGlobal(tuple(bindings)))
@@ -284,15 +283,16 @@ cdef class Name(Expression):
         return program
 
     cpdef Expression evaluate(self, Context context):
-        cdef Vector value
         if self.name in context.variables:
             value = context.variables[self.name]
             if value is None:
                 return self
-            elif value.length == 1 and isinstance(value[0], Function):
+            elif isinstance(value, Function):
                 return FunctionName(self.name)
+            elif isinstance(value, Name):
+                return (<Name>value).evaluate(context)
             else:
-                return Literal(value.copynodes())
+                return Literal((<Vector>value).copynodes())
         elif (value := static_builtins.get(self.name)) is not None:
             return Literal(value)
         elif self.name not in dynamic_builtins:
@@ -825,9 +825,9 @@ cdef class Call(Expression):
 
     cpdef Expression evaluate(self, Context context):
         cdef Expression function = self.function.evaluate(context)
-        cdef list args = []
+        cdef bint literal = isinstance(function, Literal) and (<Literal>function).value.objects is not None
         cdef Expression arg, expr
-        cdef bint literal = isinstance(function, (Literal, FunctionName)) and (<Literal>function).value.objects is not None
+        cdef list args = []
         if self.args:
             for arg in self.args:
                 arg = arg.evaluate(context)
@@ -842,32 +842,30 @@ cdef class Call(Expression):
                 keyword_args.append(Binding(binding.name, arg))
                 if not isinstance(arg, Literal):
                     literal = False
+        cdef list bindings
+        cdef Function func_expr
+        cdef dict kwargs
+        cdef int i
+        if isinstance(function, FunctionName):
+            func_expr = context.variables[(<FunctionName>function).name]
+            kwargs = {binding.name: binding.expr for binding in keyword_args}
+            bindings = []
+            for i, binding in enumerate(func_expr.parameters):
+                if i < len(args):
+                    bindings.append(PolyBinding((binding.name,), <Expression>args[i]))
+                elif binding.name in kwargs:
+                    bindings.append(PolyBinding((binding.name,), <Expression>kwargs[binding.name]))
+                elif binding.expr is not None:
+                    bindings.append(PolyBinding((binding.name,), binding.expr))
+                else:
+                    bindings.append(PolyBinding((binding.name,), Literal(null_)))
+            expr = InlineLet(func_expr.expr, tuple(bindings)).evaluate(context)
+            return expr
         cdef list vector_args, results
         cdef Literal literal_arg
-        cdef Function func_expr
-        cdef str func_name
-        cdef dict vector_kwargs, saved, params
-        cdef Binding parameter
-        cdef int i
         if literal:
             vector_args = [literal_arg.value for literal_arg in args]
-            vector_kwargs = {binding.name: (<Literal>binding.expr).value for binding in keyword_args}
-            if isinstance(function, FunctionName):
-                func_expr = context.variables[(<FunctionName>function).name][0]
-                saved = context.variables
-                context.variables = {}
-                for i, parameter in enumerate(func_expr.parameters):
-                    if i < len(vector_args):
-                        context.variables[parameter.name] = vector_args[i]
-                    elif parameter.name in vector_kwargs:
-                        context.variables[parameter.name] = vector_kwargs[parameter.name]
-                    elif parameter.expr is not None:
-                        context.variables[parameter.name] = (<Literal>parameter.expr).value
-                    else:
-                        context.variables[parameter.name] = null_
-                expr = func_expr.expr.evaluate(context)
-                context.variables = saved
-                return expr
+            kwargs = {binding.name: (<Literal>binding.expr).value for binding in keyword_args}
             results = []
             for func in (<Literal>function).value.objects:
                 if callable(func):
@@ -876,9 +874,9 @@ cdef class Call(Expression):
                             if context.state is None:
                                 break
                             else:
-                                results.append(Literal(func(context.state, *vector_args, **vector_kwargs)))
+                                results.append(Literal(func(context.state, *vector_args, **kwargs)))
                         else:
-                            results.append(Literal(func(*vector_args, **vector_kwargs)))
+                            results.append(Literal(func(*vector_args, **kwargs)))
                     except Exception:
                         break
             else:
@@ -1162,6 +1160,10 @@ cdef class Let(Expression):
                 else:
                     for i, name in enumerate(binding.names):
                         context.variables[name] = value.item(i)
+            elif isinstance(expr, Name) and len(binding.names) == 1:
+                name = binding.names[0]
+                if (<Name>expr).name != name:
+                    context.variables[name] = expr
             else:
                 for name in binding.names:
                     context.variables[name] = None
@@ -1202,6 +1204,7 @@ cdef class InlineLet(Expression):
             program.local_push(len(binding.names))
             lvars.extend(binding.names)
         program.extend(self.body._compile(lvars))
+        program.local_drop(len(self.bindings))
         while len(lvars) > n:
             lvars.pop()
         return program
@@ -1226,6 +1229,10 @@ cdef class InlineLet(Expression):
                 else:
                     for i, name in enumerate(binding.names):
                         context.variables[name] = value.item(i)
+            elif isinstance(expr, Name) and len(binding.names) == 1:
+                name = binding.names[0]
+                if (<Name>expr).name != name:
+                    context.variables[name] = expr
             else:
                 for name in binding.names:
                     context.variables[name] = None
@@ -1400,7 +1407,6 @@ cdef class Function(Expression):
             parameters.append(Binding(parameter.name, expr))
         cdef dict saved = context.variables
         cdef str key, name
-        cdef Vector value
         cdef set unbound = context.unbound
         context.unbound = set()
         context.variables = {}
@@ -1412,7 +1418,7 @@ cdef class Function(Expression):
         expr = self.expr.evaluate(context)
         cdef Function function = Function(self.name, tuple(parameters), expr)
         context.variables = saved
-        context.variables[self.name] = Vector(function) if not context.unbound else None
+        context.variables[self.name] = function if literal and not context.unbound else None
         if unbound is not None:
             context.unbound.difference_update(saved)
             unbound.update(context.unbound)
