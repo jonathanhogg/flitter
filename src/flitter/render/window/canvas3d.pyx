@@ -326,7 +326,7 @@ cdef Matrix44 instance_start_end_matrix(Vector start, Vector end, double radius)
     cdef Vector direction = end.sub(start);
     cdef double length = sqrt(direction.squared_sum())
     if length == 0 or radius <= 0:
-        return
+        return None
     cdef Vector up = Xaxis if direction.numbers[0] == 0 and direction.numbers[2] == 0 else Yaxis
     cdef Vector middle = Vector.__new__(Vector)
     middle.allocate_numbers(3)
@@ -344,8 +344,9 @@ cdef Matrix44 instance_start_end_matrix(Vector start, Vector end, double radius)
 cdef void add_instance(dict render_instances, Model model, Node node, Matrix44 model_matrix, Material material):
     cdef Matrix44 matrix = None
     cdef Vector vec=None, start=None, end=None
-    if (start := node.get_fvec('start', 3, None)) is not None and (end := node.get_fvec('end', 3, None)) is not None:
-        model_matrix = model_matrix.mmul(instance_start_end_matrix(start, end, node.get_float('radius', 1)))
+    if (start := node.get_fvec('start', 3, None)) is not None and (end := node.get_fvec('end', 3, None)) is not None \
+            and (matrix := instance_start_end_matrix(start, end, node.get_float('radius', 1))) is not None:
+        model_matrix = model_matrix.mmul(matrix)
     else:
         if (vec := node.get_fvec('position', 3, None)) is not None and (matrix := Matrix44._translate(vec)) is not None:
             model_matrix = model_matrix.mmul(matrix)
