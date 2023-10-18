@@ -233,7 +233,7 @@ class CachePath:
                                 logger.trace("Read video key frame @ {:.2f}s", float(frame.pts * stream.time_base))
                                 for i in range(len(frames)-1, 0, -1):
                                     if frames[i].key_frame:
-                                        frames = frames[:i]
+                                        frames = frames[i:]
                                         logger.trace("Discard {} buffered video frames", i)
                                         break
                             else:
@@ -262,10 +262,6 @@ class CachePath:
                 frames = []
         self._cache[key] = mtime, container, decoder, frames
         return ratio, current_frame, next_frame
-        if frames:
-            return ratio, *frames
-        else:
-            return 0, None, None
 
     def read_trimesh_model(self):
         import trimesh
