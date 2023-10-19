@@ -325,22 +325,22 @@ def bounce(Vector xs not None):
     return ys
 
 
-def impulse(Vector xs not None):
-    if xs.numbers == NULL:
+def impulse(Vector xs not None, Vector cs=None):
+    if xs.numbers == NULL or (cs is not None and cs.numbers == NULL):
         return null_
     cdef Vector ys = Vector.__new__(Vector)
-    cdef double x, y
+    cdef int n=cs.length
+    cdef double x, c, y
     for i in range(ys.allocate_numbers(xs.length)):
         x = xs.numbers[i]
         x -= floor(x)
-        # bounce(linear(x * 4) / 2) - quad(linear((x * 4 - 1) / 3))
-        x *= 4
-        if x < 1:
-            y = sin(Pi*x/2)
+        c = cs.numbers[i%n] if cs is not None else 0.25
+        if x < c:
+            y = 1 - x/c
+            y = 1 - y*y
         else:
-            x -= 1
-            x /= 3
-            y = 1 - ((x * 2)**2 / 2 if x < 0.5 else 1 - ((1 - x) * 2)**2 / 2)
+            y = 1 - (x-c)/(1-c)
+            y = y*y
         ys.numbers[i] = y
     return ys
 
