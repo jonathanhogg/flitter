@@ -251,7 +251,7 @@ cdef class Vector:
         self.length = n
         return n
 
-    cdef void deallocate_numbers(self):
+    cdef void deallocate_numbers(self) noexcept:
         if self.numbers != NULL and self.numbers != self._numbers:
             PyMem_Free(self.numbers)
         self.numbers = NULL
@@ -303,7 +303,7 @@ cdef class Vector:
     def __len__(self):
         return self.length
 
-    cpdef bint isinstance(self, t):
+    cpdef bint isinstance(self, t) noexcept:
         if not self.length:
             return False
         if self.objects is not None:
@@ -343,7 +343,7 @@ cdef class Vector:
     def __float__(self):
         return self.as_double()
 
-    cdef double as_double(self):
+    cdef double as_double(self) noexcept:
         if self.length == 1 and self.objects is None:
             return self.numbers[0]
         return NaN
@@ -564,7 +564,7 @@ cdef class Vector:
     def __pos__(self):
         return self.pos()
 
-    cdef Vector pos(self):
+    cdef Vector pos(self) noexcept:
         if self.objects is None:
             return self
         return null_
@@ -821,7 +821,7 @@ cdef class Vector:
         return result
 
     @cython.cdivision(True)
-    cpdef double squared_sum(self):
+    cpdef double squared_sum(self) noexcept:
         cdef int i, n = self.length
         if self.numbers == NULL:
             return null_

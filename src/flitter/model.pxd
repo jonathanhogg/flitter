@@ -18,19 +18,19 @@ cdef class Vector:
     cdef Vector _compose(list vectors, int start, int end)
 
     cdef int allocate_numbers(self, int n) except -1
-    cdef void deallocate_numbers(self)
+    cdef void deallocate_numbers(self) noexcept
     cpdef Vector intern(self)
     cdef void fill_range(self, Vector startv, Vector stopv, Vector stepv)
-    cpdef bint isinstance(self, t)
+    cpdef bint isinstance(self, t) noexcept
     cdef bint as_bool(self)
-    cdef double as_double(self)
+    cdef double as_double(self) noexcept
     cdef str as_string(self)
     cdef unsigned long long hash(self, bint floor_floats)
     cpdef object match(self, int n=?, type t=?, default=?)
     cpdef Vector copynodes(self)
     cdef str repr(self)
     cdef Vector neg(self)
-    cdef Vector pos(self)
+    cdef Vector pos(self) noexcept
     cdef Vector abs(self)
     cdef Vector add(self, Vector other)
     cpdef Vector mul_add(self, Vector left, Vector right)
@@ -49,7 +49,7 @@ cdef class Vector:
     cdef int compare(self, Vector other) except -2
     cdef Vector slice(self, Vector index)
     cdef Vector item(self, int i)
-    cpdef double squared_sum(self)
+    cpdef double squared_sum(self) noexcept
     cpdef Vector normalize(self)
     cpdef Vector dot(self, Vector other)
     cpdef Vector cross(self, Vector other)
