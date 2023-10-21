@@ -239,7 +239,7 @@ cdef class Literal(Expression):
     cdef bint copynodes
 
     def __init__(self, Vector value):
-        self.value = value.intern()
+        self.value = value
         self.copynodes = False
         if self.value.objects is not None:
             for obj in self.value.objects:
@@ -248,7 +248,7 @@ cdef class Literal(Expression):
                     break
 
     cdef void _compile(self, Program program, list lvars):
-        program.literal(self.value)
+        program.literal(self.value.intern())
 
     cpdef Expression evaluate(self, Context context):
         return Literal(self.value.copynodes()) if self.copynodes else self
@@ -330,10 +330,10 @@ cdef class LookupLiteral(Expression):
     cdef readonly Vector key
 
     def __init__(self, Vector key):
-        self.key = key.intern()
+        self.key = key
 
     cdef void _compile(self, Program program, list lvars):
-        program.lookup_literal(self.key)
+        program.lookup_literal(self.key.intern())
 
     cpdef Expression evaluate(self, Context context):
         cdef Vector value
@@ -749,11 +749,11 @@ cdef class FastSlice(Expression):
 
     def __init__(self, Expression expr, Vector index):
         self.expr = expr
-        self.index = index.intern()
+        self.index = index
 
     cdef void _compile(self, Program program, list lvars):
         self.expr._compile(program, lvars)
-        program.slice_literal(self.index)
+        program.slice_literal(self.index.intern())
 
     cpdef Expression evaluate(self, Context context):
         cdef Expression expr = self.expr.evaluate(context)
