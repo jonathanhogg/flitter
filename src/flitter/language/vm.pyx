@@ -815,36 +815,36 @@ cdef class Program:
             instructions.append(instruction)
         self.instructions = instructions
 
-    def new_label(self):
+    cpdef int new_label(self):
         label = self.next_label
         self.next_label += 1
         return label
 
-    def dup(self):
+    cpdef void dup(self):
         self.instructions.append(Instruction(OpCode.Dup))
 
-    def drop(self, int count=1):
+    cpdef void drop(self, int count=1):
         self.instructions.append(InstructionInt(OpCode.Drop, count))
 
-    def label(self, int label):
+    cpdef void label(self, int label):
         self.instructions.append(InstructionLabel(label))
 
-    def jump(self, int label):
+    cpdef void jump(self, int label):
         self.instructions.append(InstructionJump(OpCode.Jump, label))
 
-    def branch_true(self, int label):
+    cpdef void branch_true(self, int label):
         self.instructions.append(InstructionJump(OpCode.BranchTrue, label))
 
-    def branch_false(self, int label):
+    cpdef void branch_false(self, int label):
         self.instructions.append(InstructionJump(OpCode.BranchFalse, label))
 
-    def pragma(self, str name):
+    cpdef void pragma(self, str name):
         self.instructions.append(InstructionStr(OpCode.Pragma, name))
 
-    def import_(self, tuple names):
+    cpdef void import_(self, tuple names):
         self.instructions.append(InstructionTuple(OpCode.Import, names))
 
-    def literal(self, value):
+    cpdef void literal(self, value):
         cdef Vector vector = Vector._coerce(value)
         if vector.objects is not None:
             if vector.length == 1:
@@ -859,142 +859,142 @@ cdef class Program:
                         return
         self.instructions.append(InstructionVector(OpCode.Literal, vector))
 
-    def local_push(self, int count):
+    cpdef void local_push(self, int count):
         self.instructions.append(InstructionInt(OpCode.LocalPush, count))
 
-    def local_load(self, int offset):
+    cpdef void local_load(self, int offset):
         self.instructions.append(InstructionInt(OpCode.LocalLoad, offset))
 
-    def local_drop(self, int count):
+    cpdef void local_drop(self, int count):
         self.instructions.append(InstructionInt(OpCode.LocalDrop, count))
 
-    def name(self, str name):
+    cpdef void name(self, str name):
         self.instructions.append(InstructionStr(OpCode.Name, name))
 
-    def lookup(self):
+    cpdef void lookup(self):
         self.instructions.append(Instruction(OpCode.Lookup))
 
-    def lookup_literal(self, Vector value):
+    cpdef void lookup_literal(self, Vector value):
         self.instructions.append(InstructionVector(OpCode.LookupLiteral, value))
 
-    def range(self):
+    cpdef void range(self):
         self.instructions.append(Instruction(OpCode.Range))
 
-    def neg(self):
+    cpdef void neg(self):
         self.instructions.append(Instruction(OpCode.Neg))
 
-    def pos(self):
+    cpdef void pos(self):
         self.instructions.append(Instruction(OpCode.Pos))
 
-    def not_(self):
+    cpdef void not_(self):
         self.instructions.append(Instruction(OpCode.Not))
 
-    def add(self):
+    cpdef void add(self):
         self.instructions.append(Instruction(OpCode.Add))
 
-    def sub(self):
+    cpdef void sub(self):
         self.instructions.append(Instruction(OpCode.Sub))
 
-    def mul(self):
+    cpdef void mul(self):
         self.instructions.append(Instruction(OpCode.Mul))
 
-    def mul_add(self):
+    cpdef void mul_add(self):
         self.instructions.append(Instruction(OpCode.MulAdd))
 
-    def truediv(self):
+    cpdef void truediv(self):
         self.instructions.append(Instruction(OpCode.TrueDiv))
 
-    def floordiv(self):
+    cpdef void floordiv(self):
         self.instructions.append(Instruction(OpCode.FloorDiv))
 
-    def mod(self):
+    cpdef void mod(self):
         self.instructions.append(Instruction(OpCode.Mod))
 
-    def pow(self):
+    cpdef void pow(self):
         self.instructions.append(Instruction(OpCode.Pow))
 
-    def eq(self):
+    cpdef void eq(self):
         self.instructions.append(Instruction(OpCode.Eq))
 
-    def ne(self):
+    cpdef void ne(self):
         self.instructions.append(Instruction(OpCode.Ne))
 
-    def gt(self):
+    cpdef void gt(self):
         self.instructions.append(Instruction(OpCode.Gt))
 
-    def lt(self):
+    cpdef void lt(self):
         self.instructions.append(Instruction(OpCode.Lt))
 
-    def ge(self):
+    cpdef void ge(self):
         self.instructions.append(Instruction(OpCode.Ge))
 
-    def le(self):
+    cpdef void le(self):
         self.instructions.append(Instruction(OpCode.Le))
 
-    def xor(self):
+    cpdef void xor(self):
         self.instructions.append(Instruction(OpCode.Xor))
 
-    def slice(self):
+    cpdef void slice(self):
         self.instructions.append(Instruction(OpCode.Slice))
 
-    def slice_literal(self, Vector value):
+    cpdef void slice_literal(self, Vector value):
         if value.length == 1 and value.numbers != NULL:
             self.instructions.append(InstructionInt(OpCode.IndexLiteral, <int>floor(value.numbers[0])))
         else:
             self.instructions.append(InstructionVector(OpCode.SliceLiteral, value))
 
-    def call(self, int count, tuple names=None):
+    cpdef void call(self, int count, tuple names=None):
         self.instructions.append(InstructionIntTuple(OpCode.Call, count, names))
 
-    def call_fast(self, object function, int count):
+    cpdef void call_fast(self, object function, int count):
         self.instructions.append(InstructionObjectInt(OpCode.CallFast, function, count))
 
-    def tag(self, str name):
+    cpdef void tag(self, str name):
         self.instructions.append(InstructionStr(OpCode.Tag, name))
 
-    def attribute(self, str name):
+    cpdef void attribute(self, str name):
         self.instructions.append(InstructionStr(OpCode.Attribute, name))
 
-    def append(self, int count=1):
+    cpdef void append(self, int count=1):
         self.instructions.append(InstructionInt(OpCode.Append, count))
 
-    def prepend(self):
+    cpdef void prepend(self):
         self.instructions.append(Instruction(OpCode.Prepend))
 
-    def compose(self, int count):
+    cpdef void compose(self, int count):
         self.instructions.append(InstructionInt(OpCode.Compose, count))
 
-    def set_node_scope(self):
+    cpdef void set_node_scope(self):
         self.instructions.append(Instruction(OpCode.SetNodeScope))
 
-    def clear_node_scope(self):
+    cpdef void clear_node_scope(self):
         self.instructions.append(Instruction(OpCode.ClearNodeScope))
 
-    def begin_for(self):
+    cpdef void begin_for(self):
         self.instructions.append(Instruction(OpCode.BeginFor))
 
-    def next(self, int count, int label):
+    cpdef void next(self, int count, int label):
         self.instructions.append(InstructionJumpInt(OpCode.Next, label, count))
 
-    def push_next(self, int label):
+    cpdef void push_next(self, int label):
         self.instructions.append(InstructionJump(OpCode.PushNext, label))
 
-    def end_for(self):
+    cpdef void end_for(self):
         self.instructions.append(Instruction(OpCode.EndFor))
 
-    def end_for_compose(self):
+    cpdef void end_for_compose(self):
         self.instructions.append(Instruction(OpCode.EndForCompose))
 
-    def store_global(self, str name):
+    cpdef void store_global(self, str name):
         self.instructions.append(InstructionStr(OpCode.StoreGlobal, name))
 
-    def search(self, Query query):
+    cpdef void search(self, Query query):
         self.instructions.append(InstructionQuery(OpCode.Search, query))
 
-    def func(self, str name, tuple parameters):
+    cpdef void func(self, str name, tuple parameters):
         self.instructions.append(InstructionStrTuple(OpCode.Func, name, parameters))
 
-    def append_root(self):
+    cpdef void append_root(self):
         self.instructions.append(Instruction(OpCode.AppendRoot))
 
     def execute(self, Context context, list lvars=None, bint record_stats=False):

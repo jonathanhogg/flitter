@@ -113,6 +113,7 @@ cdef class Top(Expression):
             elif not isinstance(expr, (Let, Import, Function)):
                 program.append_root()
         cdef int i
+        cdef str name
         for i, name in enumerate(reversed(lvars)):
             program.local_load(i)
             program.store_global(name)
@@ -122,6 +123,7 @@ cdef class Top(Expression):
     cpdef Expression evaluate(self, Context context):
         cdef list expressions = []
         cdef Expression expr
+        cdef dict variables = dict(context.variables)
         for expr in self.expressions:
             expr = expr.evaluate(context)
             if not isinstance(expr, Literal) or (<Literal>expr).value.length:
@@ -129,7 +131,7 @@ cdef class Top(Expression):
         cdef str name
         cdef list bindings = []
         for name, value in context.variables.items():
-            if value is not None and isinstance(value, Vector):
+            if name not in variables and value is not None and isinstance(value, Vector):
                 bindings.append(PolyBinding((name,), Literal(value)))
         if bindings:
             expressions.append(StoreGlobal(tuple(bindings)))
@@ -237,7 +239,7 @@ cdef class Literal(Expression):
     cdef bint copynodes
 
     def __init__(self, Vector value):
-        self.value = value
+        self.value = value.intern()
         self.copynodes = False
         if self.value.objects is not None:
             for obj in self.value.objects:
@@ -246,7 +248,7 @@ cdef class Literal(Expression):
                     break
 
     cdef void _compile(self, Program program, list lvars):
-        program.literal(self.value.intern())
+        program.literal(self.value)
 
     cpdef Expression evaluate(self, Context context):
         return Literal(self.value.copynodes()) if self.copynodes else self
@@ -747,7 +749,7 @@ cdef class FastSlice(Expression):
 
     def __init__(self, Expression expr, Vector index):
         self.expr = expr
-        self.index = index
+        self.index = index.intern()
 
     cdef void _compile(self, Program program, list lvars):
         self.expr._compile(program, lvars)
