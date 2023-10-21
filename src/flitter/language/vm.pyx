@@ -63,7 +63,6 @@ cdef dict all_builtins = {}
 all_builtins.update(dynamic_builtins)
 all_builtins.update(static_builtins)
 
-cdef int NextLabel = 1
 cdef int* StatsCount = NULL
 cdef double* StatsDuration = NULL
 cdef double CallOutDuration = 0
@@ -740,6 +739,7 @@ cdef class Program:
         self.linked = False
         self.stack = VectorStack.__new__(VectorStack)
         self.lvars = VectorStack.__new__(VectorStack)
+        self.next_label = 1
 
     def __len__(self):
         return len(self.instructions)
@@ -815,16 +815,10 @@ cdef class Program:
             instructions.append(instruction)
         self.instructions = instructions
 
-    @staticmethod
-    def new_label():
-        global NextLabel
-        label = NextLabel
-        NextLabel += 1
+    def new_label(self):
+        label = self.next_label
+        self.next_label += 1
         return label
-
-    def extend(self, Program program):
-        self.instructions.extend(program.instructions)
-        return self
 
     def dup(self):
         self.instructions.append(Instruction(OpCode.Dup))

@@ -37,6 +37,7 @@ cdef class Program:
     cdef readonly object top
     cdef readonly VectorStack stack
     cdef readonly VectorStack lvars
+    cdef int next_label
 
     cpdef void link(self)
     cpdef void optimize(self)
