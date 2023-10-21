@@ -70,7 +70,6 @@ class CachePath:
         return text
 
     def read_flitter_program(self, variables=None, undefined=None):
-        from .language.parser import parse, ParseError
         self._touched = system_clock()
         mtime = self._path.stat().st_mtime if self._path.is_file() else None
         if 'flitter' in self._cache:
@@ -83,6 +82,7 @@ class CachePath:
             logger.warning("Program file not found: {}", self._path)
             program = None
         else:
+            from .language.parser import parse, ParseError
             try:
                 parse_time = -system_clock()
                 source = self._path.read_text(encoding='utf8')
@@ -314,14 +314,14 @@ class CachePath:
                 logger.success("Saved image to file: {}", self._path)
         self._cache['write_image'] = True
 
-    def write_video_frame(self, texture, timestamp, codec='h264', pixfmt='yuv420p', fps=60, realtime=False, crf=None, bitrate=None,
-                          preset=None, limit=None):
+    def write_video_frame(self, texture, timestamp, codec='h264', pixfmt='yuv420p', fps=60, realtime=False,
+                          crf=None, preset=None, limit=None):
         import av
         self._touched = system_clock()
         writer = queue = start = None
         width, height = texture.width, texture.height
         has_alpha = texture.components == 4
-        config = [width, height, has_alpha, codec, pixfmt, fps, crf, bitrate, preset, limit]
+        config = [width, height, has_alpha, codec, pixfmt, fps, crf, preset, limit]
         if 'video_output' in self._cache:
             writer, queue, start, *cached_config = self._cache['video_output']
             if cached_config != config:
@@ -340,9 +340,6 @@ class CachePath:
             options['colorspace'] = 'bt709'
             if crf is not None:
                 options['crf'] = str(crf)
-            elif bitrate is not None:
-                options['maxrate'] = str(bitrate)
-                options['bufsize'] = str(bitrate * 2)
             if preset is not None:
                 options['preset'] = preset
             try:
@@ -440,11 +437,12 @@ class FileCache:
             self._root = Path('.')
 
     def get_with_root(self, path, root):
-        if isinstance(root, CachePath):
-            root = root._path
         path = Path(path)
         if not path.is_absolute():
-            root = Path(root)
+            if isinstance(root, CachePath):
+                root = root._path
+            elif not isinstance(root, Path):
+                root = Path(root)
             if not root.is_dir():
                 root = root.parent
             path = root / path

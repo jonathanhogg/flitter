@@ -49,12 +49,11 @@ class Record(ProgramNode):
                 codec = node.get('codec', 1, str, 'h264')
                 pixfmt = node.get('pixfmt', 1, str, 'yuv420p')
                 crf = node.get('crf', 1, int)
-                bitrate = node.get('bitrate', 1, int)
                 preset = node.get('preset', 1, str)
                 limit = node.get('limit', 1, float)
                 path.write_video_frame(self._texture, kwargs['clock'],
                                        fps=int(kwargs['fps']), realtime=kwargs['realtime'], codec=codec,
-                                       pixfmt=pixfmt, crf=crf, bitrate=bitrate, preset=preset, limit=limit)
+                                       pixfmt=pixfmt, crf=crf, preset=preset, limit=limit)
             else:
                 quality = node.get('quality', 1, int)
                 path.write_image(self._texture, quality=quality)

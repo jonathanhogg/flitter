@@ -148,9 +148,9 @@ class EngineController:
         y = int(coord[1] * height)
         if x < 0 or x >= width or y < 0 or y >= height:
             return default
-        color = data[y, x].astype('float')
+        color = data[y, x]
         if data.dtype == 'uint8':
-            color /= 255
+            color = color / 255
         return Vector(color)
 
     async def run(self):
