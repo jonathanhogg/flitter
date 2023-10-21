@@ -677,6 +677,15 @@ class TestCalls(unittest.TestCase):
         self.assertEqual(stack, [12])
         self.test_function.assert_called_once_with(Vector(1), Vector(2))
 
+    def test_fast_multiple_args(self):
+        self.test_function.return_value = Vector(12)
+        self.program.literal(1)
+        self.program.literal(2)
+        self.program.call_fast(self.test_function, 2)
+        stack = self.program.execute(self.context)
+        self.assertEqual(stack, [12])
+        self.test_function.assert_called_once_with(Vector(1), Vector(2))
+
     def test_kwargs(self):
         self.test_function.return_value = Vector(12)
         self.program.literal(1)
