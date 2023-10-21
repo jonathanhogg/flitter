@@ -12,8 +12,8 @@ from cpython.bool cimport PyBool_FromLong
 from cpython.dict cimport PyDict_GetItem
 from cpython.float cimport PyFloat_AS_DOUBLE, PyFloat_FromDouble
 from cpython.int cimport PyInt_AS_LONG, PyInt_FromLong
-from cpython.mem cimport PyMem_Malloc, PyMem_Free
 from cpython.list cimport PyList_New, PyList_GET_ITEM, PyList_SET_ITEM
+from cpython.mem cimport PyMem_Malloc, PyMem_Free
 from cpython.unicode cimport PyUnicode_DATA, PyUnicode_GET_LENGTH, PyUnicode_KIND, PyUnicode_READ
 from cpython.weakref cimport PyWeakref_NewRef, PyWeakref_GetObject
 
@@ -56,6 +56,43 @@ cdef inline unsigned long long HASH_STRING(str value):
         c = PyUnicode_READ(kind, data, i)
         y = (y ^ <unsigned long long>c) * <unsigned long long>(0x100000001b3)
     return y
+
+
+cdef inline int vector_compare(Vector left, Vector right) except -2:
+    if left is right:
+        return 0
+    cdef int i, n = left.length, m = right.length
+    cdef double x, y
+    if n == 0 and m == 0:
+        return 0
+    if left.numbers != NULL and right.numbers != NULL:
+        for i in range(min(n, m)):
+            x, y = left.numbers[i], right.numbers[i]
+            if x == y:
+                continue
+            if x < y:
+                return -1
+            return 1
+    elif left.objects is not None and right.objects is not None:
+        for i in range(min(n, m)):
+            a = left.objects[i]
+            b = right.objects[i]
+            if a == b:
+                continue
+            if a < b:
+                return -1
+            return 1
+    elif n == 0:
+        return -1
+    elif m == 0:
+        return 1
+    else:
+        raise TypeError("Not comparable vectors")
+    if n == m:
+        return 0
+    if n < m:
+        return -1
+    return 1
 
 
 cdef dict InternedVectors = {}
@@ -459,17 +496,26 @@ cdef class Vector:
 
     cpdef Vector copynodes(self):
         cdef Vector result = self
-        cdef int i
+        cdef PyObject* obj
+        cdef int i, j
         if self.objects is not None:
-            result = Vector.__new__(Vector)
-            result.objects = PyList_New(self.length)
-            result.length = self.length
             for i in range(self.length):
                 value = <object>PyList_GET_ITEM(self.objects, i)
                 if type(value) is Node and (<Node>value)._parent is None:
+                    if result is self:
+                        result = Vector.__new__(Vector)
+                        result.objects = PyList_New(self.length)
+                        result.length = self.length
+                        for j in range(i):
+                            obj = PyList_GET_ITEM(self.objects, j)
+                            Py_INCREF(<object>obj)
+                            PyList_SET_ITEM(result.objects, j, <object>obj)
                     value = (<Node>value).copy()
-                Py_INCREF(value)
-                PyList_SET_ITEM(result.objects, i, value)
+                    Py_INCREF(value)
+                    PyList_SET_ITEM(result.objects, i, value)
+                elif result is not self:
+                    Py_INCREF(value)
+                    PyList_SET_ITEM(result.objects, i, value)
         return result
 
     def __repr__(self):
@@ -657,7 +703,7 @@ cdef class Vector:
         return result
 
     def __eq__(self, other):
-        return self.eq(Vector._coerce(other)).numbers[0] != 0
+        return self.eq(Vector._coerce(other)) is true_
 
     cdef Vector eq(self, Vector other):
         if self is other:
@@ -678,7 +724,7 @@ cdef class Vector:
         return true_
 
     def __ne__(self, other):
-        return self.ne(Vector._coerce(other)).numbers[0] != 0
+        return self.ne(Vector._coerce(other)) is true_
 
     cdef Vector ne(self, Vector other):
         if self is other:
@@ -696,55 +742,32 @@ cdef class Vector:
                     return true_
         return false_
 
+    cdef int compare(self, Vector other) except -2:
+        return vector_compare(self, other)
+
     def __gt__(self, other):
-        return self.gt(Vector._coerce(other)).numbers[0] != 0
+        return self.gt(Vector._coerce(other)) is true_
 
     cdef Vector gt(self, Vector other):
-        return true_ if self.compare(other) == 1 else false_
+        return true_ if vector_compare(self, other) == 1 else false_
 
     def __ge__(self, other):
-        return self.ge(Vector._coerce(other)).numbers[0] != 0
+        return self.ge(Vector._coerce(other)) is true_
 
     cdef Vector ge(self, Vector other):
-        return true_ if self.compare(other) != -1 else false_
+        return true_ if vector_compare(self, other) != -1 else false_
 
     def __lt__(self, other):
-        return self.lt(Vector._coerce(other)).numbers[0] != 0
+        return self.lt(Vector._coerce(other)) is true_
 
     cdef Vector lt(self, Vector other):
-        return true_ if self.compare(other) == -1 else false_
+        return true_ if vector_compare(self, other) == -1 else false_
 
     def __le__(self, other):
-        return self.le(Vector._coerce(other)).numbers[0] != 0
+        return self.le(Vector._coerce(other)) is true_
 
     cdef Vector le(self, Vector other):
-        return true_ if self.compare(other) != 1 else false_
-
-    cdef int compare(self, Vector other) except -2:
-        if self is other:
-            return 0
-        cdef int i, n = self.length, m = other.length
-        cdef double x, y
-        if self.objects is None and other.objects is None:
-            for i in range(min(n, m)):
-                x, y = self.numbers[i], other.numbers[i]
-                if x < y:
-                    return -1
-                if x > y:
-                    return 1
-        else:
-            for i in range(min(n, m)):
-                a = self.objects[i] if self.objects is not None else self.numbers[i]
-                b = other.objects[i] if other.objects is not None else other.numbers[i]
-                if a < b:
-                    return -1
-                if a > b:
-                    return 1
-        if n < m:
-            return -1
-        if n > m:
-            return 1
-        return 0
+        return true_ if vector_compare(self, other) != 1 else false_
 
     def __getitem__(self, index):
         cdef Vector result = self.slice(Vector._coerce(index))
@@ -1553,20 +1576,23 @@ cdef class Node:
             self.first_child = self.last_child = node
 
     cdef void append_vector(self, Vector nodes, bint copy):
-        if nodes.objects is None:
+        cdef list objects = nodes.objects
+        if objects is None:
             return
         weak_self = PyWeakref_NewRef(self, None)
         cdef Node node, last=self.last_child
-        cdef PyObject* parent
-        for obj in nodes.objects:
-            if not isinstance(obj, Node):
+        cdef PyObject* obj
+        cdef int i
+        for i in range(nodes.length):
+            obj = PyList_GET_ITEM(objects, i)
+            if type(<object>obj) is not Node:
                 continue
             if copy:
                 node = (<Node>obj).copy()
             else:
                 node = <Node>obj
-                if node._parent is not None and (parent := PyWeakref_GetObject(node._parent)) != NULL:
-                    (<Node>parent).remove(node)
+                if node._parent is not None and (obj := PyWeakref_GetObject(node._parent)) != NULL:
+                    (<Node>obj).remove(node)
             node._parent = weak_self
             if last is not None:
                 last.next_sibling = node
