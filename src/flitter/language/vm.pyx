@@ -78,6 +78,7 @@ cdef enum OpCode:
     BranchFalse
     BranchTrue
     Call
+    CallFast
     ClearNodeScope
     Compose
     Drop
@@ -137,6 +138,7 @@ cdef dict OpCodeNames = {
     OpCode.BranchFalse: 'BranchFalse',
     OpCode.BranchTrue: 'BranchTrue',
     OpCode.Call: 'Call',
+    OpCode.CallFast: 'CallFast',
     OpCode.ClearNodeScope: 'ClearNodeScope',
     OpCode.Compose: 'Compose',
     OpCode.Drop: 'Drop',
@@ -338,6 +340,19 @@ cdef class InstructionJumpInt(InstructionJump):
         if self.offset:
             return f'{OpCodeNames[self.code]} {self.value!r} .L{self.label} ({self.offset:+d})'
         return f'{OpCodeNames[self.code]} {self.value!r} .L{self.label}'
+
+
+cdef class InstructionObjectInt(Instruction):
+    cdef readonly object obj
+    cdef readonly int value
+
+    def __init__(self, OpCode code, object obj, int value):
+        super().__init__(code)
+        self.obj = obj
+        self.value = value
+
+    def __str__(self):
+        return f'{OpCodeNames[self.code]} {self.obj!r} {self.value!r}'
 
 
 cdef class VectorStack:
@@ -662,22 +677,19 @@ cdef inline void call_helper(Context context, VectorStack stack, object function
         PySet_Add(context.logs, (<Vector>obj).repr())
         push(stack, <Vector>obj)
     else:
+        if PyObject_HasAttrString(function, ContextFunc):
+            context_args = PyTuple_New(n+1)
+            Py_INCREF(context)
+            PyTuple_SET_ITEM(context_args, 0, context)
+            for i in range(n):
+                obj = PyTuple_GET_ITEM(args, i)
+                Py_INCREF(<object>obj)
+                PyTuple_SET_ITEM(context_args, i+1, <object>obj)
+            args = context_args
         if record_stats:
             call_duration = -perf_counter()
         try:
-            if PyObject_HasAttrString(function, ContextFunc):
-                context_args = PyTuple_New(n+1)
-                Py_INCREF(context)
-                PyTuple_SET_ITEM(context_args, 0, context)
-                for i in range(n):
-                    obj = PyTuple_GET_ITEM(args, i)
-                    Py_INCREF(<object>obj)
-                    PyTuple_SET_ITEM(context_args, i+1, <object>obj)
-                if kwargs is None:
-                    push(stack, <Vector>PyObject_CallObject(function, context_args))
-                else:
-                    push(stack, <Vector>PyObject_Call(function, context_args, kwargs))
-            elif kwargs is None:
+            if kwargs is None:
                 push(stack, <Vector>PyObject_CallObject(function, args))
             else:
                 push(stack, <Vector>PyObject_Call(function, args, kwargs))
@@ -774,7 +786,7 @@ cdef class Program:
                 jump.offset = target - address
         self.linked = True
 
-    cpdef optimize(self):
+    cpdef void optimize(self):
         cdef Instruction instruction, last=None
         cdef list instructions=[]
         cdef int n
@@ -796,14 +808,12 @@ cdef class Program:
                         instructions.pop()
                         instruction = Instruction(OpCode.MulAdd)
                 elif last.code == OpCode.Literal:
-                    if (<InstructionVector>last).value.length == 0:
-                        if instruction.code == OpCode.Append or instruction.code == OpCode.AppendRoot:
-                            instructions.pop()
-                            continue
+                    if (<InstructionVector>last).value.length == 0 \
+                            and (instruction.code == OpCode.Append or instruction.code == OpCode.AppendRoot):
+                        instructions.pop()
+                        continue
             instructions.append(instruction)
-        if len(instructions) < len(self.instructions):
-            logger.debug("Optimizer reduced program by {} instructions", len(self.instructions) - len(instructions))
-            self.instructions = instructions
+        self.instructions = instructions
 
     @staticmethod
     def new_label():
@@ -942,6 +952,9 @@ cdef class Program:
     def call(self, int count, tuple names=None):
         self.instructions.append(InstructionIntTuple(OpCode.Call, count, names))
 
+    def call_fast(self, object function, int count):
+        self.instructions.append(InstructionObjectInt(OpCode.CallFast, function, count))
+
     def tag(self, str name):
         self.instructions.append(InstructionStr(OpCode.Tag, name))
 
@@ -1008,6 +1021,7 @@ cdef class Program:
         return stack.pop_list(len(stack))
 
     cdef void _execute(self, Context context, VectorStack stack, VectorStack lvars, bint record_stats):
+        global CallOutCount, CallOutDuration
         if stack is None:
             stack = self.stack
         if lvars is None:
@@ -1016,7 +1030,7 @@ cdef class Program:
         cdef dict node_scope=None, variables=context.variables, builtins=all_builtins, state=context.state._state
         cdef list loop_sources=[]
         cdef LoopSource loop_source = None
-        cdef double duration
+        cdef double duration, call_out_duration
 
         cdef Instruction instruction=None
         cdef str filename
@@ -1252,9 +1266,8 @@ cdef class Program:
 
                 elif instruction.code == OpCode.Call:
                     r1 = pop(stack)
-                    names = (<InstructionIntTuple>instruction).tvalue
-                    if names is not None:
-                        kwargs = pop_dict(stack, names)
+                    if (<InstructionIntTuple>instruction).tvalue is not None:
+                        kwargs = pop_dict(stack, (<InstructionIntTuple>instruction).tvalue)
                     else:
                         kwargs = None
                     n = (<InstructionIntTuple>instruction).ivalue
@@ -1266,7 +1279,24 @@ cdef class Program:
                             push(stack, pop_composed(stack, r1.length))
                     else:
                         push(stack, null_)
-                    r1 = names = kwargs = args = None
+                    r1 = kwargs = args = None
+
+                elif instruction.code == OpCode.CallFast:
+                    if record_stats:
+                        call_duration = -perf_counter()
+                    args = pop_tuple(stack, (<InstructionObjectInt>instruction).value)
+                    try:
+                        r1 = <Vector>PyObject_CallObject((<InstructionObjectInt>instruction).obj, args)
+                    except Exception as exc:
+                        PySet_Add(context.errors, f"Error calling {function!r}\n{str(exc)}")
+                        r1 = null_
+                    if record_stats:
+                        call_duration += perf_counter()
+                        CallOutDuration += call_duration
+                        CallOutCount += 1
+                        duration -= call_duration
+                    push(stack, r1)
+                    r1 = args = None
 
                 elif instruction.code == OpCode.Func:
                     function = Function.__new__(Function)

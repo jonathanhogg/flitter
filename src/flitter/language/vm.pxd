@@ -39,5 +39,5 @@ cdef class Program:
     cdef readonly VectorStack lvars
 
     cpdef void link(self)
-    cpdef optimize(self)
+    cpdef void optimize(self)
     cdef void _execute(self, Context context, VectorStack stack, VectorStack lvars, bint record_stats)

@@ -810,11 +810,17 @@ cdef class Call(Expression):
 
     cdef Program _compile(self, list lvars):
         cdef Program program = Program.__new__(Program)
+        cdef Vector value
         cdef Expression expr
         cdef list names = []
         if self.args:
             for expr in self.args:
                 program.extend(expr._compile(lvars))
+        if isinstance(self.function, Literal) and not self.keyword_args:
+            value = (<Literal>self.function).value
+            if value.length == 1 and value.objects is not None and callable(value.objects[0]) and not hasattr(value.objects[0], 'context_func'):
+                program.call_fast(value.objects[0], len(self.args))
+                return program
         cdef Binding keyword_arg
         if self.keyword_args:
             for keyword_arg in self.keyword_args:
@@ -1386,6 +1392,7 @@ cdef class Function(Expression):
             else:
                 program.extend(parameter.expr._compile(lvars))
         body = self.expr._compile(lvars + names)
+        body.optimize()
         body.link()
         program.literal(body)
         program.func(self.name, tuple(names))
