@@ -70,6 +70,7 @@ class CachePath:
         return text
 
     def read_flitter_program(self, variables=None, undefined=None):
+        from .language.parser import parse, ParseError
         self._touched = system_clock()
         mtime = self._path.stat().st_mtime if self._path.is_file() else None
         if 'flitter' in self._cache:
@@ -82,7 +83,6 @@ class CachePath:
             logger.warning("Program file not found: {}", self._path)
             program = None
         else:
-            from .language.parser import parse, ParseError
             try:
                 parse_time = -system_clock()
                 source = self._path.read_text(encoding='utf8')
@@ -443,7 +443,7 @@ class FileCache:
                 root = root._path
             elif not isinstance(root, Path):
                 root = Path(root)
-            if not root.is_dir():
+            if root.is_file():
                 root = root.parent
             path = root / path
         key = str(path.resolve())
