@@ -110,7 +110,7 @@ cdef class Top(Expression):
             expr._compile(program, lvars)
             if isinstance(expr, NodeModifier) and isinstance((<NodeModifier>expr).ultimate_node(), Search):
                 program.drop(1)
-            elif not isinstance(expr, (Let, Import, Function)):
+            elif not isinstance(expr, (Let, Import, Function, Pragma)):
                 program.append_root()
         cdef int i
         cdef str name
@@ -194,7 +194,7 @@ cdef class Sequence(Expression):
         cdef int n=len(lvars), m=0
         for expr in self.expressions:
             expr._compile(program, lvars)
-            if not isinstance(expr, (Let, Import, Function)):
+            if not isinstance(expr, (Let, Import, Function, Pragma)):
                 m += 1
         if len(lvars) > n:
             program.local_drop(len(lvars)-n)

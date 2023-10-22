@@ -1067,8 +1067,7 @@ cdef class Program:
                         pc += (<InstructionJump>instruction).offset
 
                 elif instruction.code == OpCode.Pragma:
-                    PyDict_SetItem(context.pragmas, (<InstructionStr>instruction).value, peek(stack))
-                    poke(stack, null_)
+                    PyDict_SetItem(context.pragmas, (<InstructionStr>instruction).value, pop(stack))
 
                 elif instruction.code == OpCode.Import:
                     filename = pop(stack).as_string()

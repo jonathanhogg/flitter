@@ -1,4 +1,4 @@
-# cython language_level=3, profile=False
+# cython: language_level=3, profile=False
 
 from cpython cimport PyObject
 
