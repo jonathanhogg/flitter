@@ -37,7 +37,7 @@ class CachePath:
             key, value = self._cache.popitem()
             match key:
                 case 'video', _:
-                    mtime, container, decoder, frames = value
+                    container, decoder, frames = value
                     if decoder is not None:
                         decoder.close()
                     if container is not None:
@@ -179,12 +179,10 @@ class CachePath:
         return image
 
     def read_video_frames(self, obj, position, loop=False, threading=False):
-        self._touched = system_clock()
         key = 'video', id(obj)
         container = decoder = current_frame = next_frame = None
         frames = []
         ratio = 0
-        mtime = self._path.stat().st_mtime if self._path.is_file() else None
         if self.check_unmodified() and (cached := self._cache.get(key)) is not None:
             container, decoder, frames = cached
         elif self._mtime is None:
@@ -262,8 +260,6 @@ class CachePath:
         return ratio, current_frame, next_frame
 
     def read_trimesh_model(self):
-        self._touched = system_clock()
-        mtime = self._path.stat().st_mtime if self._path.is_file() else None
         if self.check_unmodified() and (trimesh_model := self._cache.get('trimesh')) is not None:
             return trimesh_model
         if self._mtime is None:
