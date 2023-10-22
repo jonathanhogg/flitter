@@ -257,7 +257,7 @@ class TestBasicInstructions(unittest.TestCase):
         self.program.literal(3)
         self.program.pragma('x')
         stack = self.program.execute(self.context)
-        self.assertEqual(stack, [null])
+        self.assertEqual(len(stack), 0)
         self.assertEqual(self.context.pragmas, {'x': Vector(3)})
 
     def test_Prepend(self):
