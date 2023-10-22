@@ -495,27 +495,34 @@ cdef class Vector:
         return default
 
     cpdef Vector copynodes(self):
-        cdef Vector result = self
-        cdef PyObject* obj
-        cdef int i, j
-        if self.objects is not None:
-            for i in range(self.length):
-                value = <object>PyList_GET_ITEM(self.objects, i)
-                if type(value) is Node and (<Node>value)._parent is None:
-                    if result is self:
-                        result = Vector.__new__(Vector)
-                        result.objects = PyList_New(self.length)
-                        result.length = self.length
-                        for j in range(i):
-                            obj = PyList_GET_ITEM(self.objects, j)
-                            Py_INCREF(<object>obj)
-                            PyList_SET_ITEM(result.objects, j, <object>obj)
-                    value = (<Node>value).copy()
-                    Py_INCREF(value)
-                    PyList_SET_ITEM(result.objects, i, value)
-                elif result is not self:
-                    Py_INCREF(value)
-                    PyList_SET_ITEM(result.objects, i, value)
+        cdef list src=self.objects
+        if src is None:
+            return self
+        cdef int i, j, n=self.length
+        cdef list dest=None
+        cdef PyObject* current
+        cdef PyObject* earlier
+        for i in range(n):
+            current = PyList_GET_ITEM(src, i)
+            if type(<object>current) is Node and (<Node>current)._parent is None:
+                if dest is None:
+                    dest = PyList_New(n)
+                    for j in range(i):
+                        earlier = PyList_GET_ITEM(src, j)
+                        Py_INCREF(<object>earlier)
+                        PyList_SET_ITEM(dest, j, <object>earlier)
+                value = (<Node>current).copy()
+                Py_INCREF(value)
+                PyList_SET_ITEM(dest, i, value)
+            elif dest is not None:
+                Py_INCREF(<object>current)
+                PyList_SET_ITEM(dest, i, <object>current)
+        if dest is None:
+            return self
+        cdef Vector result
+        result = Vector.__new__(Vector)
+        result.objects = dest
+        result.length = n
         return result
 
     def __repr__(self):
