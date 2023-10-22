@@ -227,6 +227,7 @@ class TestVector(unittest.TestCase):
         self.assertEqual(Vector(3.5).match(0, float), [3.5])
         self.assertEqual(Vector(3.5).match(1, float), 3.5)
         self.assertEqual(Vector(3.5).match(1, int), 3)
+        self.assertEqual(Vector(-3.5).match(1, int), -4)
         self.assertEqual(Vector(3.5).match(1, str), None)
         self.assertEqual(Vector(3.5).match(3, float), [3.5, 3.5, 3.5])
         self.assertEqual(Vector("Hello world!").match(1, str), "Hello world!")

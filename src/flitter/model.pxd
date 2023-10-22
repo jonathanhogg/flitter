@@ -15,7 +15,7 @@ cdef class Vector:
     @staticmethod
     cdef Vector _copy(Vector other)
     @staticmethod
-    cdef Vector _compose(list vectors, int start, int end)
+    cdef Vector _compose(list vectors)
 
     cdef int allocate_numbers(self, int n) except -1
     cdef void deallocate_numbers(self) noexcept
