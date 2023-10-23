@@ -63,7 +63,7 @@ class CachePath:
 
     def read_text(self, encoding=None, errors=None):
         key = 'text', encoding, errors
-        if self.check_unmodified() and (text := self._cache.get(key)) is not None:
+        if self.check_unmodified() and (text := self._cache.get(key, False)) is not False:
             return text
         if self._mtime is None:
             logger.warning("File not found: {}", self._path)
@@ -80,12 +80,18 @@ class CachePath:
         return text
 
     def read_flitter_program(self, variables=None, undefined=None):
-        if self.check_unmodified() and (program := self._cache.get('flitter')) is not None:
-            return program
+        current_program = self._cache.get('flitter', False)
+        if current_program is not False and self.check_unmodified():
+            return current_program
         if self._mtime is None:
-            logger.warning("Program file not found: {}", self._path)
-            program = None
+            if current_program is False:
+                logger.warning("Program not found: {}", self._path)
+                current_program = None
+            elif program is not None:
+                logger.error("Program disappeared: {}", self._path)
         else:
+            if current_program is False:
+                current_program = None
             from .language.parser import parse, ParseError
             try:
                 parse_time = -system_clock()
@@ -106,22 +112,23 @@ class CachePath:
                 logger.debug("Compiled to {} instructions in {:.1f}/{:.1f}/{:.1f}ms",
                              len(program), parse_time*1000, simplify_time*1000, compile_time*1000)
             except ParseError as exc:
-                if program is None:
+                if current_program is None:
                     logger.error("Error parsing {} at line {} column {}:\n{}",
                                  self._path.name, exc.line, exc.column, exc.context)
                 else:
                     logger.warning("Unable to re-parse {}, error at line {} column {}:\n{}",
                                    self._path.name, exc.line, exc.column, exc.context)
+                program = current_program
             except Exception as exc:
                 logger.opt(exception=exc).error("Error reading program: {}", self._path)
-                program = None
+                program = current_program
         self._cache['flitter'] = program
         return program
 
     def read_csv_vector(self, row_number):
         import csv
         from .model import Vector, null
-        if self.check_unmodified() and (cached := self._cache.get('csv')) is not None:
+        if self.check_unmodified() and (cached := self._cache.get('csv', False)) is not False:
             reader, rows = cached
         elif self._mtime is None:
             logger.warning("File not found: {}", self._path)
@@ -161,7 +168,7 @@ class CachePath:
         return null
 
     def read_image(self):
-        if self.check_unmodified() and (image := self._cache.get('image')) is not None:
+        if self.check_unmodified() and (image := self._cache.get('image', False)) is not False:
             return image
         import skia
         if self._mtime is None:
@@ -183,7 +190,7 @@ class CachePath:
         container = decoder = current_frame = next_frame = None
         frames = []
         ratio = 0
-        if self.check_unmodified() and (cached := self._cache.get(key)) is not None:
+        if self.check_unmodified() and (cached := self._cache.get(key, False)) is not False:
             container, decoder, frames = cached
         elif self._mtime is None:
             logger.warning("File not found: {}", self._path)
@@ -260,7 +267,7 @@ class CachePath:
         return ratio, current_frame, next_frame
 
     def read_trimesh_model(self):
-        if self.check_unmodified() and (trimesh_model := self._cache.get('trimesh')) is not None:
+        if self.check_unmodified() and (trimesh_model := self._cache.get('trimesh', False)) is not False:
             return trimesh_model
         if self._mtime is None:
             logger.warning("File not found: {}", self._path)
