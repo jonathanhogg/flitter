@@ -575,7 +575,7 @@ cdef class Vector:
             pass
         return default
 
-    cpdef Vector copynodes(self):
+    cpdef Vector copynodes(self, bint parented=False):
         cdef list src=self.objects
         if src is None:
             return self
@@ -585,7 +585,7 @@ cdef class Vector:
         cdef PyObject* earlier
         for i in range(n):
             current = PyList_GET_ITEM(src, i)
-            if type(<object>current) is Node and (<Node>current)._parent is None:
+            if type(<object>current) is Node and (not parented or (<Node>current)._parent is not None)):
                 if dest is None:
                     dest = PyList_New(n)
                     for j in range(i):

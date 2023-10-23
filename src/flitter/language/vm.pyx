@@ -1105,7 +1105,7 @@ cdef class Program:
                     drop(lvars, (<InstructionInt>instruction).value)
 
                 elif instruction.code == OpCode.LocalLoad:
-                    push(stack, peek_at(lvars, (<InstructionInt>instruction).value).copynodes())
+                    push(stack, peek_at(lvars, (<InstructionInt>instruction).value).copynodes(True))
 
                 elif instruction.code == OpCode.LocalPush:
                     r1 = pop(stack)

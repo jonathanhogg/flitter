@@ -256,6 +256,18 @@ class TestVector(unittest.TestCase):
         self.assertEqual(copy[1].tags, {'bar'})
         self.assertIs(copy[1]['color'], color)
 
+    def test_copynodes_parented(self):
+        foo = Node('foo')
+        bar = Node('bar')
+        foo.append(bar)
+        foo_vector = Vector(foo)
+        bar_vector = Vector(bar)
+        foo_copy = foo_vector.copynodes(True)
+        self.assertIs(foo_copy, foo_vector)
+        bar_copy = bar_vector.copynodes(True)
+        self.assertIsNot(bar_copy, bar_vector)
+        self.assertEqual(bar_copy, bar_vector)
+
     def test_repr(self):
         self.assertEqual(repr(null), "null")
         self.assertEqual(repr(true), "1")
