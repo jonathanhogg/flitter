@@ -100,10 +100,86 @@ cdef inline int vector_compare(Vector left, Vector right) except -2:
     return 1
 
 
+cdef int NumbersCacheSize = 0
+cdef void** NumbersCache = NULL
+
+cpdef void initialize_numbers_cache(int max_size):
+    global NumbersCache, NumbersCacheSize
+    cdef int i, n = max_size >> 4
+    if max_size & 0xf == 0:
+        n -= 1
+    cdef void* ptr
+    cdef void* next
+    if NumbersCacheSize:
+        empty_numbers_cache()
+        PyMem_Free(NumbersCache)
+        NumbersCache = NULL
+        NumbersCacheSize = 0
+    if n > 0:
+        NumbersCache = <void**>PyMem_Malloc(sizeof(void*) * n)
+        for i in range(n):
+            NumbersCache[i] = NULL
+        NumbersCacheSize = n
+
+cpdef void empty_numbers_cache():
+    cdef int i
+    for i in range(NumbersCacheSize):
+        ptr = NumbersCache[i]
+        while ptr != NULL:
+            next = (<void**>ptr)[0]
+            PyMem_Free(ptr)
+            ptr = next
+        NumbersCache[i] = NULL
+
+cpdef dict numbers_cache_counts():
+    cdef dict sizes = {}
+    cdef int i, n
+    cdef void* ptr
+    for i in range(NumbersCacheSize):
+        n = 0
+        ptr = NumbersCache[i]
+        while ptr != NULL:
+            ptr = (<void**>ptr)[0]
+            n += 1
+        if n:
+            sizes[16*(i+2)] = n
+    return sizes
+
+cdef inline double* malloc_numbers(int n) except NULL:
+    global NumbersCache, NumbersCacheSize
+    cdef double* numbers
+    cdef int i = (n >> 4) - 1
+    if n & 0xf == 0:
+        i -= 1
+    if i < NumbersCacheSize and NumbersCache[i] != NULL:
+        numbers = <double*>NumbersCache[i]
+        NumbersCache[i] = (<void**>NumbersCache[i])[0]
+    else:
+        numbers = <double*>PyMem_Malloc((i+2) * 16 * sizeof(double))
+        if not numbers:
+            raise MemoryError()
+    return numbers
+
+cdef inline void free_numbers(int n, double* numbers) noexcept:
+    global NumbersCache, NumbersCacheSize
+    cdef void* ptr
+    cdef int i = (n >> 4) - 1
+    if n & 0xf == 0:
+        i -= 1
+    if i < NumbersCacheSize:
+        ptr = NumbersCache[i]
+        (<void**>numbers)[0] = ptr
+        NumbersCache[i] = <void*>numbers
+    else:
+        PyMem_Free(numbers)
+
+initialize_numbers_cache(8192)
+
+
 cdef dict InternedVectors = {}
 
 
-@cython.freelist(256)
+@cython.freelist(1024)
 cdef class Vector:
     @staticmethod
     def coerce(other):
@@ -247,9 +323,7 @@ cdef class Vector:
 
     cdef int allocate_numbers(self, int n) except -1:
         if n > 16:
-            self.numbers = <double*>PyMem_Malloc(n * sizeof(double))
-            if not self.numbers:
-                raise MemoryError()
+            self.numbers = malloc_numbers(n)
         elif n:
             self.numbers = self._numbers
         self.length = n
@@ -257,7 +331,7 @@ cdef class Vector:
 
     cdef void deallocate_numbers(self) noexcept:
         if self.numbers != NULL and self.numbers != self._numbers:
-            PyMem_Free(self.numbers)
+            free_numbers(self.length, self.numbers)
         self.numbers = NULL
 
     def __reduce__(self):
@@ -302,7 +376,10 @@ cdef class Vector:
         return
 
     def __dealloc__(self):
-        self.deallocate_numbers()
+        if self.numbers != NULL and self.numbers != self._numbers:
+            free_numbers(self.length, self.numbers)
+        self.numbers = NULL
+        self.length = 0
 
     def __len__(self):
         return self.length
@@ -392,9 +469,8 @@ cdef class Vector:
         if not floor_floats and self._hash:
             return self._hash
         cdef unsigned long long y, _hash = HASH_START
-        cdef double_long fl
         cdef list objects
-        cdef unsigned int i, n, kind
+        cdef unsigned int i
         if self.length == 0:
             pass
         elif (objects := self.objects) is not None:
@@ -808,9 +884,9 @@ cdef class Vector:
                 if j >= 0 and j < n:
                     result.numbers[m] = self.numbers[j]
                     m += 1
-            result.length = m
             if m == 0:
                 result.deallocate_numbers()
+            result.length = m
         return result
 
     cdef Vector item(self, int i):
@@ -1037,7 +1113,6 @@ cdef class Matrix33(Vector):
         cdef Vector result = Vector.__new__(Vector)
         cdef double* a_numbers = self.numbers
         cdef double* b_numbers = b.numbers
-        cdef int j
         if b.length == 2:
             result.allocate_numbers(2)
             result.numbers[0] = a_numbers[0]*b_numbers[0] + a_numbers[3]*b_numbers[1] + a_numbers[6]
@@ -1804,7 +1879,7 @@ cdef class Node:
         cdef PyObject* objptr = PyDict_GetItem(self._attributes, name)
         if objptr == NULL:
             return default
-        cdef Vector result, value = <Vector>objptr
+        cdef Vector value = <Vector>objptr
         if value.numbers != NULL and value.length == 1:
             return value.numbers[0]
         return default
@@ -1813,7 +1888,7 @@ cdef class Node:
         cdef PyObject* objptr = PyDict_GetItem(self._attributes, name)
         if objptr == NULL:
             return default
-        cdef Vector result, value = <Vector>objptr
+        cdef Vector value = <Vector>objptr
         if value.numbers != NULL and value.length == 1:
             return <int>value.numbers[0]
         return default

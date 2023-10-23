@@ -193,7 +193,7 @@ cdef initialize_stats():
     global StatsCount, StatsDuration
     StatsCount = <int*>PyMem_Malloc(OpCode.MAX * sizeof(int))
     StatsDuration = <double*>PyMem_Malloc(OpCode.MAX * sizeof(double))
-    cdef int i
+    cdef unsigned int i
     for i in range(OpCode.MAX):
         StatsCount[i] = 0
         StatsDuration[i] = 0
@@ -355,7 +355,7 @@ cdef class InstructionObjectInt(Instruction):
 
 
 cdef class VectorStack:
-    def __cinit__(self, int size=256):
+    def __cinit__(self, int size=32):
         self.vectors = <PyObject**>PyMem_Malloc(sizeof(PyObject*) * size)
         if self.vectors == NULL:
             raise MemoryError()
@@ -472,16 +472,17 @@ cdef inline Vector pop(VectorStack stack) noexcept:
     return vector
 
 cdef inline tuple pop_tuple(VectorStack stack, int n):
+    if n == 0:
+        return ()
     assert stack.top - n >= -1, "Stack empty"
     cdef tuple t = PyTuple_New(n)
     stack.top -= n
     cdef PyObject* ptr
-    cdef int i, j=stack.top+1
+    cdef int i, base=stack.top+1
     for i in range(n):
-        ptr = stack.vectors[j]
+        ptr = stack.vectors[base+i]
         PyTuple_SET_ITEM(t, i, <Vector>ptr)
-        stack.vectors[j] = NULL
-        j += 1
+        stack.vectors[base+i] = NULL
     return t
 
 cdef inline list pop_list(VectorStack stack, int n):
@@ -489,12 +490,11 @@ cdef inline list pop_list(VectorStack stack, int n):
     cdef list t = PyList_New(n)
     stack.top -= n
     cdef PyObject* ptr
-    cdef int i, j=stack.top+1
+    cdef int i, base=stack.top+1
     for i in range(n):
-        ptr = stack.vectors[j]
+        ptr = stack.vectors[base+i]
         PyList_SET_ITEM(t, i, <Vector>ptr)
-        stack.vectors[j] = NULL
-        j += 1
+        stack.vectors[base+i] = NULL
     return t
 
 cdef inline dict pop_dict(VectorStack stack, tuple keys):
@@ -502,15 +502,13 @@ cdef inline dict pop_dict(VectorStack stack, tuple keys):
     assert stack.top - n >= -1, "Stack empty"
     cdef dict t = {}
     stack.top -= n
-    cdef int next = stack.top + 1
     cdef PyObject* ptr
-    cdef int i
+    cdef int i, base=stack.top+1
     for i in range(n):
-        ptr = stack.vectors[next]
+        ptr = stack.vectors[base+i]
         PyDict_SetItem(t, <object>PyTuple_GET_ITEM(keys, i), <Vector>ptr)
-        stack.vectors[next] = NULL
+        stack.vectors[base+i] = NULL
         Py_DECREF(<Vector>ptr)
-        next += 1
     return t
 
 cdef inline Vector pop_composed(VectorStack stack, int m):
@@ -547,6 +545,7 @@ cdef inline Vector pop_composed(VectorStack stack, int m):
         return result
     cdef list vobjects, objects=PyList_New(n)
     cdef PyObject* itemptr
+    cdef object obj
     for i in range(base, base+m):
         ptr = stack.vectors[i]
         if (<Vector>ptr).objects is None:
@@ -605,26 +604,26 @@ cdef class LoopSource:
 
 
 def log_vm_stats():
-    cdef list stats
+    cdef list stats = []
     cdef double duration, total=0
-    cdef int count, code
-    cdef int i
+    cdef int count
+    cdef unsigned int i
     cdef double start, end, overhead, per_execution
     start = perf_counter()
     for count in range(10000):
         end = perf_counter()
     overhead = (end - start) / 10000
-    stats = []
     if CallOutCount:
         duration = max(0, CallOutDuration - CallOutCount*overhead)
         stats.append((duration, CallOutCount, '(native funcs)'))
         total += duration
-    for i in range(<int>OpCode.MAX):
+    for i in range(OpCode.MAX):
         if StatsCount[i]:
             duration = max(0, StatsDuration[i] - StatsCount[i]*overhead)
             stats.append((duration, StatsCount[i], OpCodeNames[i]))
             total += duration
     stats.sort(reverse=True)
+    cdef str name
     logger.info("VM execution statistics:")
     for duration, count, name in stats:
         per_execution = duration / count * 1e6
@@ -638,32 +637,31 @@ def log_vm_stats():
 
 cdef inline void call_helper(Context context, VectorStack stack, object function, tuple args, dict kwargs, bint record_stats, double* duration):
     global CallOutDuration, CallOutCount
-    cdef int i, top, lvars_top, n=PyTuple_GET_SIZE(args), m
-    cdef Function func
+    cdef int i, top, lvars_top, m, n=PyTuple_GET_SIZE(args)
     cdef double call_duration
     cdef tuple parameters, defaults, context_args
     cdef VectorStack lvars
-    cdef PyObject* obj
+    cdef PyObject* objptr
+    cdef object saved_path
     if type(function) is Function:
-        func = <Function>function
-        lvars = func.lvars
-        parameters = func.parameters
-        defaults = func.defaults
+        lvars = (<Function>function).lvars
+        parameters = (<Function>function).parameters
+        defaults = (<Function>function).defaults
         m = PyTuple_GET_SIZE(parameters)
         for i in range(m):
             if i < n:
                 push(lvars, <Vector>PyTuple_GET_ITEM(args, i))
-            elif kwargs is not None and (obj := PyDict_GetItem(kwargs, <object>PyTuple_GET_ITEM(parameters, i))) != NULL:
-                push(lvars, <Vector>obj)
+            elif kwargs is not None and (objptr := PyDict_GetItem(kwargs, <object>PyTuple_GET_ITEM(parameters, i))) != NULL:
+                push(lvars, <Vector>objptr)
             else:
                 push(lvars, <Vector>PyTuple_GET_ITEM(defaults, i))
         lvars_top = lvars.top
         top = stack.top
         saved_path = context.path
-        context.path = func.root_path
+        context.path = (<Function>function).root_path
         if record_stats:
             call_duration = -perf_counter()
-        func.program._execute(context, stack, lvars, record_stats)
+        (<Function>function).program._execute(context, stack, lvars, record_stats)
         if record_stats:
             call_duration += perf_counter()
             duration[0] = duration[0] - call_duration
@@ -689,9 +687,9 @@ cdef inline void call_helper(Context context, VectorStack stack, object function
             call_duration = -perf_counter()
         try:
             if kwargs is None:
-                push(stack, <Vector>PyObject_CallObject(function, args))
+                push(stack, PyObject_CallObject(function, args))
             else:
-                push(stack, <Vector>PyObject_Call(function, args, kwargs))
+                push(stack, PyObject_Call(function, args, kwargs))
         except Exception as exc:
             PySet_Add(context.errors, f"Error calling {function!r}\n{str(exc)}")
             push(stack, null_)
@@ -756,6 +754,7 @@ cdef class Program:
     def run(self, StateDict state=None, dict variables=None, bint record_stats=False):
         cdef dict context_vars = None
         cdef str key
+        cdef object value
         if state is None:
             state = StateDict()
         if variables is not None:
@@ -816,7 +815,7 @@ cdef class Program:
         self.instructions = instructions
 
     cpdef int new_label(self):
-        label = self.next_label
+        cdef object label = self.next_label
         self.next_label += 1
         return label
 
@@ -846,6 +845,7 @@ cdef class Program:
 
     cpdef void literal(self, value):
         cdef Vector vector = Vector._coerce(value)
+        cdef object obj
         if vector.objects is not None:
             if vector.length == 1:
                 obj = vector.objects[0]
@@ -1024,7 +1024,7 @@ cdef class Program:
         cdef dict node_scope=None, variables=context.variables, builtins=all_builtins, state=context.state._state
         cdef list loop_sources=[]
         cdef LoopSource loop_source = None
-        cdef double duration, call_out_duration
+        cdef double duration, call_duration
 
         cdef Instruction instruction=None
         cdef str filename
@@ -1275,11 +1275,11 @@ cdef class Program:
                     r1 = kwargs = args = None
 
                 elif instruction.code == OpCode.CallFast:
+                    args = pop_tuple(stack, (<InstructionObjectInt>instruction).value)
                     if record_stats:
                         call_duration = -perf_counter()
-                    args = pop_tuple(stack, (<InstructionObjectInt>instruction).value)
                     try:
-                        r1 = <Vector>PyObject_CallObject((<InstructionObjectInt>instruction).obj, args)
+                        r1 = PyObject_CallObject((<InstructionObjectInt>instruction).obj, args)
                     except Exception as exc:
                         PySet_Add(context.errors, f"Error calling {function!r}\n{str(exc)}")
                         r1 = null_
@@ -1289,7 +1289,7 @@ cdef class Program:
                         CallOutCount += 1
                         duration -= call_duration
                     push(stack, r1)
-                    r1 = args = None
+                    args = r1 = None
 
                 elif instruction.code == OpCode.Func:
                     function = Function.__new__(Function)
@@ -1362,14 +1362,17 @@ cdef class Program:
                         for i, node in enumerate(r1.objects):
                             if type(node) is Node:
                                 if i == n:
-                                    for child in reversed(r2.objects):
-                                        if type(child) is Node:
-                                            (<Node>node).insert(<Node>child)
+                                    for j in range(r2.length-1, -1, -1):
+                                        objptr = PyList_GET_ITEM(r2.objects, j)
+                                        if type(<object>objptr) is Node:
+                                            (<Node>node).insert(<Node>objptr)
                                 else:
-                                    for child in reversed(r2.objects):
-                                        if type(child) is Node:
-                                            (<Node>node).insert((<Node>child).copy())
+                                    for j in range(r2.length-1, -1, -1):
+                                        objptr = PyList_GET_ITEM(r2.objects, j)
+                                        if type(<object>objptr) is Node:
+                                            (<Node>node).insert((<Node>objptr).copy())
                     r1 = r2 = node = None
+                    objptr = NULL
 
                 elif instruction.code == OpCode.Compose:
                     push(stack, pop_composed(stack, (<InstructionInt>instruction).value))

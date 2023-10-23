@@ -27,7 +27,7 @@ cdef class Vector:
     cdef str as_string(self)
     cdef unsigned long long hash(self, bint floor_floats)
     cpdef object match(self, int n=?, type t=?, default=?)
-    cpdef Vector copynodes(self)
+    cpdef Vector copynodes(self, bint parented=?)
     cdef str repr(self)
     cdef Vector neg(self)
     cdef Vector pos(self) noexcept

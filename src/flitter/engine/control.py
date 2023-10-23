@@ -13,7 +13,7 @@ from ..cache import SharedCache
 from ..clock import BeatCounter, system_clock
 from ..language.context import StateDict, Context
 from ..language.vm import log_vm_stats
-from ..model import Vector, null
+from ..model import Vector, null, numbers_cache_counts, empty_numbers_cache
 from ..render import get_renderer
 
 
@@ -288,12 +288,20 @@ class EngineController:
                         logger.trace("VM stack size: {:d}", run_program.stack.size)
 
         finally:
+            self.global_state = {}
+            self._references = {}
+            self.pages = []
+            program = run_program = current_program = context = None
             SharedCache.clean(0)
             for renderers in self.renderers.values():
                 while renderers:
                     renderers.pop().destroy()
-            count = gc.collect(2)
-            logger.trace("Collected {} objects (full collection)", count)
-            gc.enable()
             if self.vm_stats:
                 log_vm_stats()
+            count = gc.collect(2)
+            logger.trace("Collected {} objects (full collection)", count)
+            counts = numbers_cache_counts()
+            if counts:
+                logger.debug("Numbers cache: {}", ", ".join(f"{size}x{count}" for size, count in counts.items()))
+            empty_numbers_cache()
+            gc.enable()
