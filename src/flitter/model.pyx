@@ -585,7 +585,7 @@ cdef class Vector:
         cdef PyObject* earlier
         for i in range(n):
             current = PyList_GET_ITEM(src, i)
-            if type(<object>current) is Node and (not parented or (<Node>current)._parent is not None)):
+            if type(<object>current) is Node and (not parented or (<Node>current)._parent is not None):
                 if dest is None:
                     dest = PyList_New(n)
                     for j in range(i):
