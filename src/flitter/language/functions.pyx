@@ -496,15 +496,20 @@ def floorv(Vector xs not None):
     return ys
 
 
-def sumv(Vector xs not None):
-    if xs.objects is not None:
+def sumv(Vector xs not None, Vector zs=true_):
+    cdef int i, j, k, n = xs.length
+    if n == 0 or xs.objects is not None or zs.length != 1 or zs.objects is not None:
         return null_
-    cdef double y = 0
-    for i in range(xs.length):
-        y += xs.numbers[i]
     cdef Vector ys = Vector.__new__(Vector)
-    ys.allocate_numbers(1)
-    ys.numbers[0] = y
+    cdef int m = <int>(zs.numbers[0])
+    if m < 1:
+        return null_
+    ys.allocate_numbers(m)
+    for i in range(m):
+        ys.numbers[i] = 0
+    for i in range(0, n, m):
+        for j in range(min(m, n-i)):
+            ys.numbers[j] += xs.numbers[i+j]
     return ys
 
 
