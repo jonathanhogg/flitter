@@ -1,0 +1,17 @@
+
+%pragma tempo 100
+
+!controller driver=:push2
+    !pad id=1;1 state=:custom_screen toggle=true color=1 if $(:custom_screen;:toggled) else beat%2//1
+    for i in ..8
+        !pad id=8;i+1 state=:color;i color=hsv(i/8;1;1) toggle=true group=:colors
+    let r=1 if $:thrust < 8 and $:thrust > -4 else sine(beat)
+    !rotary id=1 color=r;0;0 state=:thrust lower=-5 upper=10 decimals=2 label='Thrust' lag=1 units='kN'
+    !rotary id=2 color=1;0;1 decimals=0 degrees=true style=:continuous label='Heading' lag=1 wrap=true
+    !rotary id=3 color=0;1;0 state=:green percent=true decimals=0 label='Brightness'
+    !slider id=:main state=:foo initial=0.5
+    if $(:custom_screen;:toggled)
+        !screen
+            !text point=(960;160)/2 text="Hello world!" color=hsv(beat/16;1;1) font_size=100 center=true
+    !button id=:record color=1;0;0
+    !button id=:play color=0;1;0

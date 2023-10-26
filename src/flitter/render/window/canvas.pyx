@@ -592,6 +592,19 @@ cdef object make_path_effect(Node node):
 
 
 cpdef object draw(Node node, ctx, paint=None, font=None, path=None, dict stats=None, dict references=None, colorspace=None):
+    ctx.save()
+    update_context(node, ctx)
+    paint = update_paint(node, skia.Paint(AntiAlias=True) if paint is None else paint, colorspace)
+    font = update_font(node, skia.Font(skia.Typeface(), 14) if font is None else font)
+    path = skia.Path()
+    child = node.first_child
+    while child is not None:
+        paint = _draw(child, ctx, paint, font, path, stats, references, colorspace)
+        child = child.next_sibling
+    ctx.restore()
+
+
+cpdef object _draw(Node node, ctx, paint, font, path, dict stats, dict references, colorspace):
     cdef double start_time = system_clock()
     cdef Vector points
     cdef Node child
@@ -608,7 +621,7 @@ cpdef object draw(Node node, ctx, paint=None, font=None, path=None, dict stats=N
         font = update_font(node, font)
         child = node.first_child
         while child is not None:
-            group_paint = draw(child, ctx, group_paint, font, path, stats, references, colorspace)
+            group_paint = _draw(child, ctx, group_paint, font, path, stats, references, colorspace)
             child = child.next_sibling
         ctx.restore()
 
@@ -617,7 +630,7 @@ cpdef object draw(Node node, ctx, paint=None, font=None, path=None, dict stats=N
         update_context(node, ctx)
         child = node.first_child
         while child is not None:
-            paint = draw(child, ctx, paint, font, path, stats, references, colorspace)
+            paint = _draw(child, ctx, paint, font, path, stats, references, colorspace)
             child = child.next_sibling
         ctx.restore()
 
@@ -625,14 +638,14 @@ cpdef object draw(Node node, ctx, paint=None, font=None, path=None, dict stats=N
         paint_paint = update_paint(node, paint, colorspace)
         child = node.first_child
         while child is not None:
-            paint_paint = draw(child, ctx, paint_paint, font, path, stats, references, colorspace)
+            paint_paint = _draw(child, ctx, paint_paint, font, path, stats, references, colorspace)
             child = child.next_sibling
 
     elif kind == 'font':
         font = update_font(node, font)
         child = node.first_child
         while child is not None:
-            paint = draw(child, ctx, paint, font, path, stats, references, colorspace)
+            paint = _draw(child, ctx, paint, font, path, stats, references, colorspace)
             child = child.next_sibling
 
     elif kind == 'path':
@@ -640,7 +653,7 @@ cpdef object draw(Node node, ctx, paint=None, font=None, path=None, dict stats=N
         update_path(node, path)
         child = node.first_child
         while child is not None:
-            paint = draw(child, ctx, paint, font, path, stats, references, colorspace)
+            paint = _draw(child, ctx, paint, font, path, stats, references, colorspace)
             child = child.next_sibling
 
     elif kind == 'move_to':
@@ -798,21 +811,9 @@ cpdef object draw(Node node, ctx, paint=None, font=None, path=None, dict stats=N
             font = update_font(node, font)
             child = node.first_child
             while child is not None:
-                layer_paint = draw(child, ctx, layer_paint, font, path, stats, references, colorspace)
+                layer_paint = _draw(child, ctx, layer_paint, font, path, stats, references, colorspace)
                 child = child.next_sibling
             ctx.restore()
-
-    elif kind == 'canvas':
-        ctx.save()
-        update_context(node, ctx)
-        paint = update_paint(node, skia.Paint(AntiAlias=True) if paint is None else paint, colorspace)
-        font = update_font(node, skia.Font(skia.Typeface(), 14) if font is None else font)
-        path = skia.Path()
-        child = node.first_child
-        while child is not None:
-            paint = draw(child, ctx, paint, font, path, stats, references, colorspace)
-            child = child.next_sibling
-        ctx.restore()
 
     elif shader := make_shader(ctx, node, paint, references, colorspace):
         paint = skia.Paint(paint)
@@ -914,7 +915,7 @@ class Canvas(SceneNode):
         self._total_duration -= system_clock()
         self._graphics_context.resetContext()
         self._framebuffer.clear()
-        draw(node, self._canvas, stats=self._stats, references=references, colorspace=self._colorspace)
+        _draw(node, self._canvas, stats=self._stats, references=references, colorspace=self._colorspace)
         self._surface.flushAndSubmit()
         self._total_duration += system_clock()
 

@@ -14,6 +14,11 @@ def get_driver_class():
     return XTouchMiniDriver
 
 
+DEFAULT_CONFIG = [
+    Node('button', attributes={'id': Vector('a'), 'action': Vector('next')}),
+    Node('button', attributes={'id': Vector('b'), 'action': Vector('previous')}),
+]
+
 BUTTON_NOTE_MAPPING = {
     Vector(1): 89, Vector(2): 90, Vector(3): 40, Vector(4): 41,
     Vector(5): 42, Vector(6): 43, Vector(7): 44, Vector(8): 45,
@@ -52,6 +57,8 @@ SPECIAL_ACTIONS = {
 
 
 class XTouchMiniRotary(driver.EncoderControl):
+    DEFAULT_LAG = 1/4
+
     def __init__(self, control_id, driver, light_control):
         super().__init__(control_id)
         self._driver = driver
@@ -130,16 +137,12 @@ class XTouchMiniFader(driver.PositionControl):
         return 16256
 
     def _handle_event(self, event):
-        self._raw_position = event.value
+        self.handle_raw_position_change(event.value, event.timestamp)
 
 
 class XTouchMiniDriver(driver.ControllerDriver):
     VENDOR_ID = 0x1397
     PRODUCT_ID = 0x00b3
-    DEFAULT_CONFIG = [
-        Node('button', attributes={'id': Vector('a'), 'action': Vector('next')}),
-        Node('button', attributes={'id': Vector('b'), 'action': Vector('previous')}),
-    ]
 
     def __init__(self, node):
         self._port_name = node.get('port', 1, str, 'X-TOUCH MINI')
@@ -149,7 +152,6 @@ class XTouchMiniDriver(driver.ControllerDriver):
         self._toggle_groups = {}
         self._run_task = None
         self._midi_port = None
-        self._ready = asyncio.Event()
         for rotary_id, (_, light_control) in ROTARY_CONTROLS_MAPPING.items():
             rotary = XTouchMiniRotary(rotary_id, self, light_control)
             self._rotaries[rotary_id] = rotary
@@ -158,16 +160,15 @@ class XTouchMiniDriver(driver.ControllerDriver):
             self._buttons[button_id] = button
         self._sliders[Vector('main')] = XTouchMiniFader(Vector('main'))
 
-    @property
-    def is_ready(self):
-        return self._ready.is_set()
-
-    async def start(self):
+    async def start(self, engine):
         self._run_task = asyncio.create_task(self.run())
 
     def stop(self):
         self._run_task.cancel()
         self._run_task = None
+
+    def get_default_config(self):
+        return DEFAULT_CONFIG
 
     async def run(self):
         try:
@@ -176,7 +177,6 @@ class XTouchMiniDriver(driver.ControllerDriver):
                     await asyncio.sleep(1)
                 self._midi_port.send_control_change(127, 1, channel=11)  # Switch to Mackie Control mode
                 self.refresh()
-                self._ready.set()
                 logger.debug("X-Touch Mini controller driver ready")
                 while True:
                     event = await self._midi_port.wait_event(1)
@@ -200,7 +200,6 @@ class XTouchMiniDriver(driver.ControllerDriver):
         except asyncio.CancelledError:
             if self._midi_port is not None:
                 self._midi_port.send_control_change(127, 0, channel=11)
-                self._ready.clear()
                 self._midi_port.close()
                 self._midi_port = None
         except Exception as exc:

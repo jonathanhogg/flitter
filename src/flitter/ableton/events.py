@@ -10,8 +10,7 @@ from .constants import Control, Encoder
 __all__ = ['PadPressed', 'PadHeld', 'PadReleased',
            'ButtonPressed', 'ButtonReleased',
            'EncoderTouched', 'EncoderTurned', 'EncoderReleased', 'TouchStripTouched',
-           'TouchStripDragged', 'TouchStripReleased',
-           'MenuButtonPressed', 'MenuButtonReleased']
+           'TouchStripDragged', 'TouchStripReleased']
 
 
 @dataclass
@@ -93,21 +92,4 @@ class TouchStripDragged(TouchStripEvent):
 
 @dataclass
 class TouchStripReleased(TouchStripEvent):
-    pass
-
-
-@dataclass
-class MenuButtonEvent(PushEvent):
-    number: Control
-    column: int
-    row: int
-
-
-@dataclass
-class MenuButtonPressed(MenuButtonEvent):
-    pass
-
-
-@dataclass
-class MenuButtonReleased(MenuButtonEvent):
     pass

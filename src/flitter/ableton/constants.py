@@ -184,7 +184,7 @@ class Control(enum.IntEnum):
     ENCODER_5 = 76
     ENCODER_6 = 77
     ENCODER_7 = 78
-    ENCODER_MASTER = 79
+    ENCODER_SETUP = 79
     PLAY = 85
     RECORD = 86
     NEW = 87
@@ -218,18 +218,25 @@ class Encoder(enum.IntEnum):
     FIVE = 5
     SIX = 6
     SEVEN = 7
-    MASTER = 8
+    SETUP = 8
     METRONOME = 9
     TEMPO = 10
 
 
 class TouchStripFlags(enum.IntFlag):
-    HOST_SENDS = 0b00000001
-    SYSEX = 0b00000010
+    PUSH2_CONTROL = 0b00000000
+    HOST_CONTROL = 0b00000001
+    SEND_VALUES = 0b00000000
+    SEND_SYSEX = 0b00000010
+    PITCH_BEND = 0b00000000
     MOD_WHEEL = 0b00000100
-    LED_POINT = 0b00001000
+    LEDS_BAR = 0b00000000
+    LEDS_POINT = 0b00001000
+    BAR_BOTTOM = 0b00000000
     BAR_CENTER = 0b00010000
+    NO_AUTO_RETURN = 0b00000000
     AUTO_RETURN = 0b00100000
+    RETURN_BOTTOM = 0b00000000
     RETURN_CENTER = 0b01000000
 
 
@@ -239,18 +246,20 @@ BUTTONS = frozenset({Control.TAP_TEMPO, Control.METRONOME, Control.SETUP, Contro
                      Control.ONE_32, Control.ONE_32_T, Control.CONVERT, Control.DOUBLE_LOOP, Control.QUANTIZE, Control.DUPLICATE, Control.NEW,
                      Control.FIXED_LENGTH, Control.AUTOMATE, Control.RECORD, Control.PLAY, Control.LEFT, Control.RIGHT, Control.UP, Control.DOWN,
                      Control.REPEAT, Control.ACCENT, Control.SCALE, Control.LAYOUT, Control.NOTE, Control.SESSION, Control.OCTAVE_DOWN, Control.OCTAVE_UP,
-                     Control.PAGE_LEFT, Control.PAGE_RIGHT, Control.SELECT, Control.SHIFT})
+                     Control.PAGE_LEFT, Control.PAGE_RIGHT, Control.SELECT, Control.SHIFT,
+                     Control.MENU_0_0, Control.MENU_0_1, Control.MENU_0_2, Control.MENU_0_3,
+                     Control.MENU_0_4, Control.MENU_0_5, Control.MENU_0_6, Control.MENU_0_7,
+                     Control.MENU_1_0, Control.MENU_1_1, Control.MENU_1_2, Control.MENU_1_3,
+                     Control.MENU_1_4, Control.MENU_1_5, Control.MENU_1_6, Control.MENU_1_7})
 
-COLOR_BUTTONS = frozenset({Control.MUTE, Control.SOLO, Control.STOP_CLIP, Control.AUTOMATE, Control.RECORD, Control.PLAY, Control.ONE_4,
-                           Control.ONE_4_T, Control.ONE_8, Control.ONE_8_T, Control.ONE_16, Control.ONE_16_T, Control.ONE_32, Control.ONE_32_T})
+COLOR_BUTTONS = frozenset({Control.MUTE, Control.SOLO, Control.STOP_CLIP, Control.AUTOMATE, Control.RECORD, Control.PLAY,
+                           Control.ONE_4, Control.ONE_4_T, Control.ONE_8, Control.ONE_8_T,
+                           Control.ONE_16, Control.ONE_16_T, Control.ONE_32, Control.ONE_32_T,
+                           Control.MENU_0_0, Control.MENU_0_1, Control.MENU_0_2, Control.MENU_0_3,
+                           Control.MENU_0_4, Control.MENU_0_5, Control.MENU_0_6, Control.MENU_0_7,
+                           Control.MENU_1_0, Control.MENU_1_1, Control.MENU_1_2, Control.MENU_1_3,
+                           Control.MENU_1_4, Control.MENU_1_5, Control.MENU_1_6, Control.MENU_1_7})
 
 ENCODER_CONTROLS = {Control.ENCODER_0: Encoder.ZERO, Control.ENCODER_1: Encoder.ONE, Control.ENCODER_2: Encoder.TWO, Control.ENCODER_3: Encoder.THREE,
                     Control.ENCODER_4: Encoder.FOUR, Control.ENCODER_5: Encoder.FIVE, Control.ENCODER_6: Encoder.SIX, Control.ENCODER_7: Encoder.SEVEN,
-                    Control.ENCODER_MASTER: Encoder.MASTER, Control.ENCODER_METRONOME: Encoder.METRONOME, Control.ENCODER_TEMPO: Encoder.TEMPO}
-
-MENU_CONTROLS = {Control.MENU_0_0: 0, Control.MENU_0_1: 1, Control.MENU_0_2: 2, Control.MENU_0_3: 3,
-                 Control.MENU_0_4: 4, Control.MENU_0_5: 5, Control.MENU_0_6: 6, Control.MENU_0_7: 7,
-                 Control.MENU_1_0: 8, Control.MENU_1_1: 9, Control.MENU_1_2: 10, Control.MENU_1_3: 11,
-                 Control.MENU_1_4: 12, Control.MENU_1_5: 13, Control.MENU_1_6: 14, Control.MENU_1_7: 15}
-
-MENU_NUMBERS = {number: control for control, number in MENU_CONTROLS.items()}
+                    Control.ENCODER_SETUP: Encoder.SETUP, Control.ENCODER_METRONOME: Encoder.METRONOME, Control.ENCODER_TEMPO: Encoder.TEMPO}
