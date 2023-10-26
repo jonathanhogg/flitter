@@ -517,7 +517,7 @@ body expressions will be returned as a single vector to the caller.
 
 Functions may refer to names bound in the enclosing scope(s) to the definition.
 These will be captured at definition time. Thus rebinding a name later in
-the same scope will be ignored: E.g.:
+the same scope will be ignored, e.g.:
 
 ```flitter
 let x=10
@@ -536,16 +536,29 @@ A function definition is itself an implicit `let` that binds the function
 definition to the function name in the definition scope. Functions are values
 in the **flitter** language and may be manipulated as such.
 
+Function calls may include out-of-order named arguments, e.g.:
+
+```flitter
+func multiply_add(x, y=1, z)
+    x*y + z
+
+!foo w=multiply_add(2, z=3)
+```
+
+will bind the arguments to parameters with `x` taking the value `2`, `y` taking
+the value `1` and `z` taking the value `3`. Named arguments should be given
+*after* any positional arguments and should not repeat positional arguments.
+
 ## Template function calls
 
-This is something of a hack, but the special `@` operator allows calling a
-function using similar syntax to constructing a node. The name following `@`
-should be the name of the function to be called, any "attributes" placed after
-this are passed as arguments to the respectively-named function parameters. Any
-indented expressions are evaluated and the resulting vector passed as the first
-argument to the function. Function parameters that are not bound by a
-pseudo-attribute will have their default value if one was specified in the
-function definition or `null` otherwise.
+The special `@` operator provides syntactic sugar for calling a function using
+syntax similar to constructing a node. The name following `@` should be the
+name of the function to be called, any "attributes" placed after this are
+passed as named arguments. Any indented expressions are evaluated and the
+resulting vector passed as the *first* argument to the function.
+
+As normal, function parameters that are not bound will take their default value
+if one is given in the function definition or `null` otherwise.
 
 For example:
 
@@ -569,7 +582,8 @@ func shrink(nodes, percent=0)
 This (rather pointless) example draws a 100px radius circle in green and then
 draws another circle 25% smaller in red on top. Both `!path` nodes will be
 wrapped with `!transform` nodes, the first with `scale=1` and the second with
-`scale=0.75`.
+`scale=0.75`. The `!transform` nodes returned by the two template function
+calls are appended to the `!canvas` node.
 
 ## Queries
 
@@ -747,16 +761,18 @@ let SIZE=1280;720
 
 !window size=SIZE
     !canvas size=SIZE translate=SIZE/2
-        !ellipse radius=$:circ_radius
+        !ellipse radius=$:circle_radius
         !fill color=1;0;0
 
-!encoder number=0 name="Radius" state=:circ_radius lower=0 upper=300 initial=100
+!controller driver=:xtouch_mini
+    !rotary id=1 state=:circle_radius lower=0 upper=300 initial=100
 ```
 
-This shows the first Push 2 encoder being configured as a knob that changes the
-radius of a red filled-circle drawn in the middle of the window. The
-`state=:circ_radius` attribute of the `!encoder` node specifies the state key to
-write values to and the current value is retrieved with `$:circ_radius`.
+This shows an X-Touch mini MIDI surface being configured with one encoder as a
+knob that changes the radius of a red filled-circle drawn in the middle of the
+window. The `state=:circ_radius` attribute of the `!rotary` node specifies the
+state key to write values to and the current value is retrieved with
+`$:circle_radius`.
 
 A key is any vector of numbers and/or strings (/symbols). As the `;` operator
 binds with very low precedence, a non-singleton key needs to be surrounded with
@@ -765,7 +781,7 @@ brackets, e.g., `$(:circle;:radius)`.
 The state system is also used by the [physics engine](./physics.md) to
 communicate particle properties back to the program and by counters (see above)
 for storing a starting clock value and current speed. Be careful when choosing
-state keys to avoid collisions between these.
+state keys to avoid collisions between these different uses.
 
 ## Pragmas
 

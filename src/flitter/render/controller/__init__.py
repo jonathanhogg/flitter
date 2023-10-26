@@ -2,6 +2,7 @@
 Flitter generic controller framework
 """
 
+import asyncio
 import importlib
 
 from loguru import logger
@@ -11,17 +12,22 @@ from . import midi
 
 class Controller:
     VIRTUAL_MIDI_PORT = None
+    DRIVER_CACHE = {}
 
     @classmethod
     def open_virtual_midi_port(cls):
+        """Hold a virtual MIDI port open to stop RTMIDI on OS X releasing the
+           main context when ports are closed and throwing subsequent errors
+           when attempting to open a new port."""
         if cls.VIRTUAL_MIDI_PORT is None:
             cls.VIRTUAL_MIDI_PORT = midi.MidiPort('flitter', virtual=True)
 
-    def __init__(self):
+    def __init__(self, **kwargs):
         logger.debug("Create controller")
         self.open_virtual_midi_port()
         self.driver = None
         self.controls = {}
+        self.unknown = set()
 
     def purge(self):
         while self.controls:
@@ -35,26 +41,31 @@ class Controller:
             self.driver.stop()
             self.driver = None
 
-    async def update(self, engine, node, now):
+    async def update(self, engine, node, clock, **kwargs):
         driver = node.get('driver', 1, str)
-        driver_class = None
-        if driver:
+        if driver in self.DRIVER_CACHE:
+            driver_class = self.DRIVER_CACHE[driver]
+        elif driver:
             try:
                 driver_module = importlib.import_module(f'.{driver}', __package__)
                 driver_class = driver_module.get_driver_class()
-            except (ImportError, NameError):
-                pass
+            except (ImportError, NameError) as exc:
+                logger.opt(exception=exc).warning("Unable to import controller driver: {}", driver)
+                driver_class = None
+            self.DRIVER_CACHE[driver] = driver_class
         if self.driver is not None and (driver_class is None or not isinstance(self.driver, driver_class)):
             self.driver.stop()
             self.driver = None
         if self.driver is None:
             if driver_class is not None:
                 self.driver = driver_class(node)
-                await self.driver.start()
+                await self.driver.start(engine)
             else:
                 return
+        await self.driver.start_update(engine, node)
         controls = {}
-        for child in list(node.children) + self.driver.DEFAULT_CONFIG:
+        unknown = set()
+        for child in list(node.children) + self.driver.get_default_config():
             if 'id' in child:
                 control_id = child['id']
                 control = self.driver.get_control(child.kind, control_id)
@@ -65,10 +76,19 @@ class Controller:
                     controls[key] = control
                     if key in self.controls:
                         del self.controls[key]
-                    if control.update(engine, child, now):
+                    if control.update(engine, child, clock):
                         control.update_representation()
+                    control.update_state(engine)
+                    continue
+            if not self.driver.handle_node(engine, child):
+                unknown.add(child.kind)
+        for kind in unknown.difference(self.unknown):
+            logger.warning("Unexpected '{}' node in controller", kind)
         self.purge()
+        self.unknown = unknown
         self.controls = controls
+        await self.driver.finish_update(engine)
+        await asyncio.sleep(0)
 
 
-INTERACTOR_CLASS = Controller
+RENDERER_CLASS = Controller

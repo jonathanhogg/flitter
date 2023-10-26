@@ -4,19 +4,17 @@ Flitter window management
 
 import array
 from collections import namedtuple
-import math
+import importlib
 
 import glfw
 from loguru import logger
-import skia
 import moderngl
+import numpy as np
 
-from ...cache import SharedCache
-from . import canvas
-from . import canvas3d
 from ...clock import system_clock
-from .glconstants import GL_RGBA8, GL_RGBA16F, GL_RGBA32F, GL_SRGB8, GL_SRGB8_ALPHA8, GL_FRAMEBUFFER_SRGB
+from .glconstants import GL_RGBA8, GL_RGBA16F, GL_RGBA32F, GL_FRAMEBUFFER_SRGB
 from .glsl import TemplateLoader
+from ...model import Vector
 
 
 def value_split(value, n, m):
@@ -27,16 +25,36 @@ def value_split(value, n, m):
     return [tuple(value[i * m:(i + 1) * m]) for i in range(n)]
 
 
-ColorFormat = namedtuple('ColorFormat', ('moderngl_dtype', 'gl_format', 'skia_colortype'))
+ColorFormat = namedtuple('ColorFormat', ('moderngl_dtype', 'gl_format'))
 
 COLOR_FORMATS = {
-    8: ColorFormat('f1', GL_RGBA8, skia.kRGBA_8888_ColorType),
-    16: ColorFormat('f2', GL_RGBA16F, skia.kRGBA_F16_ColorType),
-    32: ColorFormat('f4', GL_RGBA32F, skia.kRGBA_F32_ColorType)  # Canvas currently fails with 32bit color
+    8: ColorFormat('f1', GL_RGBA8),
+    16: ColorFormat('f2', GL_RGBA16F),
+    32: ColorFormat('f4', GL_RGBA32F)
 }
 
 DEFAULT_LINEAR = False
 DEFAULT_COLORBITS = 8
+
+
+def get_scene_node_class(kind):
+    global ClassCache
+    if kind in ClassCache:
+        return ClassCache[kind]
+    try:
+        module = importlib.import_module(f'.{kind}', __package__)
+        cls = module.SCENE_NODE_CLASS
+    except ModuleNotFoundError:
+        logger.warning("No sub-module for '{}'", kind)
+        cls = None
+    except ImportError:
+        logger.exception("Import error")
+        cls = None
+    except AttributeError:
+        logger.warning("Sub-module '{}' does not contain a scene node class", kind)
+        cls = None
+    ClassCache[kind] = cls
+    return cls
 
 
 class SceneNode:
@@ -47,6 +65,7 @@ class SceneNode:
         self.height = None
         self.tags = set()
         self.hidden = False
+        self._texture_data = None
 
     @property
     def name(self):
@@ -55,6 +74,17 @@ class SceneNode:
     @property
     def texture(self):
         raise NotImplementedError()
+
+    @property
+    def texture_data(self):
+        if self._texture_data is not None:
+            return self._texture_data
+        texture = self.texture
+        if texture is not None:
+            dtype = {'f1': 'uint8', 'f2': 'float16', 'f4': 'float32'}[texture.dtype]
+            data = np.ndarray((texture.height, texture.width, texture.components), dtype, texture.read())
+            self._texture_data = data
+        return self._texture_data
 
     @property
     def child_textures(self):
@@ -75,7 +105,8 @@ class SceneNode:
         while self.children:
             self.children.pop().destroy()
 
-    async def update(self, node, default_size=(512, 512), **kwargs):
+    async def update(self, engine, node, default_size=(512, 512), **kwargs):
+        self._texture_data = None
         references = kwargs.setdefault('references', {})
         if node_id := node.get('id', 1, str):
             references[node_id] = self
@@ -87,19 +118,20 @@ class SceneNode:
             self.height = height
             resized = True
         self.tags = node.tags
-        self.create(node, resized, **kwargs)
-        await self.descend(node, **kwargs)
+        self.create(engine, node, resized, **kwargs)
+        await self.descend(engine, node, **kwargs)
         self.render(node, **kwargs)
 
     def similar_to(self, node):
         return node.tags and node.tags == self.tags
 
-    async def descend(self, node, **kwargs):
+    async def descend(self, engine, node, **kwargs):
         existing = self.children
         updated = []
         for child in node.children:
-            cls = {'reference': Reference, 'shader': Shader, 'canvas': Canvas, 'canvas3d': Canvas3D,
-                   'record': Record, 'video': Video}.get(child.kind)
+            if self.handle_node(engine, child, **kwargs):
+                continue
+            cls = get_scene_node_class(child.kind)
             if cls is not None:
                 index = None
                 for i, scene_node in enumerate(existing):
@@ -113,13 +145,16 @@ class SceneNode:
                     scene_node = existing.pop(index)
                 else:
                     scene_node = cls(self.glctx)
-                await scene_node.update(child, default_size=(self.width, self.height), **kwargs)
+                await scene_node.update(engine, child, default_size=(self.width, self.height), **kwargs)
                 updated.append(scene_node)
         while existing:
             existing.pop().destroy()
         self.children = updated
 
-    def create(self, node, resized, **kwargs):
+    def handle_node(self, engine, node, **kwargs):
+        return False
+
+    def create(self, engine, node, resized, **kwargs):
         pass
 
     def render(self, node, **kwargs):
@@ -138,7 +173,7 @@ class Reference(SceneNode):
     def texture(self):
         return self._reference.texture if self._reference is not None else None
 
-    async def update(self, node, references=None, **kwargs):
+    async def update(self, engine, node, references=None, **kwargs):
         node_id = node.get('id', 1, str)
         self._reference = references.get(node_id) if references is not None and node_id else None
 
@@ -147,7 +182,7 @@ class Reference(SceneNode):
 
 
 class ProgramNode(SceneNode):
-    GL_VERSION = (4, 0)
+    GL_VERSION = (3, 3)
     DEFAULT_VERTEX_SOURCE = TemplateLoader.get_template('default.vert')
     DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('default.frag')
 
@@ -174,8 +209,8 @@ class ProgramNode(SceneNode):
     def size(self):
         return self.framebuffer.size
 
-    def create(self, node, resized, **kwargs):
-        super().create(node, resized, **kwargs)
+    def create(self, engine, node, resized, **kwargs):
+        super().create(engine, node, resized, **kwargs)
         if resized and self._last is not None:
             self._last = None
 
@@ -271,16 +306,58 @@ class ProgramNode(SceneNode):
             self.glctx.disable_direct(GL_FRAMEBUFFER_SRGB)
 
 
+class Shader(ProgramNode):
+    def __init__(self, glctx):
+        super().__init__(glctx)
+        self._framebuffer = None
+        self._texture = None
+        self._colorbits = None
+
+    @property
+    def texture(self):
+        return self._texture
+
+    @property
+    def framebuffer(self):
+        return self._framebuffer
+
+    def release(self):
+        self._colorbits = None
+        self._framebuffer = None
+        self._texture = None
+        super().release()
+
+    def create(self, engine, node, resized, **kwargs):
+        super().create(engine, node, resized, **kwargs)
+        colorbits = node.get('colorbits', 1, int, self.glctx.extra['colorbits'])
+        if colorbits not in COLOR_FORMATS:
+            colorbits = self.glctx.extra['colorbits']
+        if self._framebuffer is None or self._texture is None or resized or colorbits != self._colorbits:
+            depth = COLOR_FORMATS[colorbits]
+            self._last = None
+            self._texture = self.glctx.texture((self.width, self.height), 4, dtype=depth.moderngl_dtype)
+            self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
+            self._framebuffer.clear()
+            self._colorbits = colorbits
+
+    def make_last(self):
+        return self.glctx.texture((self.width, self.height), 4, dtype=COLOR_FORMATS[self._colorbits].moderngl_dtype)
+
+
 class Window(ProgramNode):
     Windows = []
 
     def __init__(self, screen=0, fullscreen=False, vsync=False, **kwargs):
         super().__init__(None)
+        self.engine = None
         self.window = None
         self.default_screen = screen
         self.default_fullscreen = fullscreen
         self.default_vsync = vsync
         self._deferred_fullscreen = False
+        self._screen = None
+        self._fullscreen = None
+        self._resizable = None
 
     def release(self):
         if self.window is not None:
@@ -295,6 +372,7 @@ class Window(ProgramNode):
             Window.Windows.remove(self)
             if not Window.Windows:
                 glfw.terminate()
+            self.engine = None
             logger.debug("{} closed", self.name)
         super().release()
 
@@ -310,22 +388,19 @@ class Window(ProgramNode):
     def size(self):
         return self.glctx.screen.viewport[2:]
 
-    def create(self, node, resized, **kwargs):
-        super().create(node, resized)
+    def create(self, engine, node, resized, **kwargs):
+        super().create(engine, node, resized)
+        new_window = False
+        screen = node.get('screen', 1, int, self.default_screen)
+        fullscreen = node.get('fullscreen', 1, bool, self.default_fullscreen)
+        resizable = node.get('resizable', 1, bool, True)
         if self.window is None:
+            self.engine = engine
             title = node.get('title', 1, str, "flitter")
-            screen = node.get('screen', 1, int, self.default_screen)
-            fullscreen = node.get('fullscreen', 1, bool, self.default_fullscreen)
-            resizable = node.get('resizable', 1, bool, True)
             if not Window.Windows:
-                glfw.init()
-            monitors = glfw.get_monitors()
-            monitor = monitors[screen] if screen < len(monitors) else monitors[0]
-            mx, my, mw, mh = glfw.get_monitor_workarea(monitor)
-            width, height = self.width, self.height
-            while width > mw * 0.95 or height > mh * 0.95:
-                width = width * 2 // 3
-                height = height * 2 // 3
+                ok = glfw.init()
+                if not ok:
+                    raise RuntimeError("Unable to initialize GLFW")
             glfw.window_hint(glfw.CONTEXT_CREATION_API, glfw.NATIVE_CONTEXT_API)
             glfw.window_hint(glfw.CLIENT_API, glfw.OPENGL_API)
             glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, self.GL_VERSION[0])
@@ -336,32 +411,114 @@ class Window(ProgramNode):
             glfw.window_hint(glfw.SAMPLES, 0)
             glfw.window_hint(glfw.AUTO_ICONIFY, glfw.FALSE)
             glfw.window_hint(glfw.CENTER_CURSOR, glfw.FALSE)
-            glfw.window_hint(glfw.RESIZABLE, glfw.TRUE if resizable else glfw.FALSE)
             glfw.window_hint(glfw.SCALE_TO_MONITOR, glfw.TRUE)
             glfw.window_hint(glfw.SRGB_CAPABLE, glfw.TRUE)
-            self.window = glfw.create_window(width, height, title, None, Window.Windows[0].window if Window.Windows else None)
-            glfw.set_window_pos(self.window, mx + (mw - width) // 2, my + (mh - height) // 2)
-            if fullscreen:
+            self.window = glfw.create_window(self.width, self.height, title, None, Window.Windows[0].window if Window.Windows else None)
+            Window.Windows.append(self)
+            new_window = True
+        if resizable != self._resizable:
+            glfw.set_window_attrib(self.window, glfw.RESIZABLE, glfw.TRUE if resizable else glfw.FALSE)
+            self._resizable = resizable
+        if resized or screen != self._screen or fullscreen != self._fullscreen:
+            monitors = glfw.get_monitors()
+            monitor = monitors[screen] if screen < len(monitors) else monitors[0]
+            mx, my, mw, mh = glfw.get_monitor_workarea(monitor)
+            width, height = self.width, self.height
+            if not fullscreen:
+                glfw.set_window_aspect_ratio(self.window, self.width, self.height)
+            while width > mw * 0.95 or height > mh * 0.95:
+                width = width * 2 // 3
+                height = height * 2 // 3
+            if self._fullscreen and not fullscreen or screen != self._screen:
+                glfw.set_window_monitor(self.window, None, 0, 0, width, height, glfw.DONT_CARE)
+            if new_window or (self._fullscreen and not fullscreen) or screen != self._screen:
+                glfw.set_window_pos(self.window, mx + (mw - width) // 2, my + (mh - height) // 2)
+            if fullscreen and (not self._fullscreen or screen != self._screen):
                 mode = glfw.get_video_mode(monitor)
                 glfw.set_window_monitor(self.window, monitor, 0, 0, mode.size.width, mode.size.height, mode.refresh_rate)
-            Window.Windows.append(self)
-            glfw.make_context_current(self.window)
+            if not fullscreen:
+                glfw.set_window_size(self.window, width, height)
+            self._screen = screen
+            self._fullscreen = fullscreen
+        glfw.make_context_current(self.window)
+        self._keys = {}
+        self._pointer_state = None
+        if new_window:
             self.glctx = moderngl.create_context(self.GL_VERSION[0] * 100 + self.GL_VERSION[1] * 10)
             self.glctx.gc_mode = 'context_gc'
             self.glctx.extra = {}
-            logger.debug("{} opened on {}", self.name, screen)
-            self.recalculate_viewport(True)
+            self.glctx.enable_direct(GL_FRAMEBUFFER_SRGB)
+            logger.debug("{} opened on screen {}", self.name, screen)
             logger.debug("OpenGL info: {GL_RENDERER} {GL_VERSION}", **self.glctx.info)
             logger.trace("{!r}", self.glctx.info)
-        else:
-            glfw.make_context_current(self.window)
-            self.recalculate_viewport()
+            glfw.set_key_callback(self.window, self.key_callback)
+            glfw.set_cursor_pos_callback(self.window, self.pointer_movement_callback)
+            glfw.set_mouse_button_callback(self.window, self.pointer_button_callback)
+        self.recalculate_viewport(new_window)
         self.glctx.extra['linear'] = node.get('linear', 1, bool, DEFAULT_LINEAR)
         colorbits = node.get('colorbits', 1, int, DEFAULT_COLORBITS)
         if colorbits not in COLOR_FORMATS:
             colorbits = DEFAULT_COLORBITS
         self.glctx.extra['colorbits'] = colorbits
         self.glctx.extra['size'] = self.width, self.height
+
+    def key_callback(self, window, key, scancode, action, mods):
+        if key in self._keys:
+            state = self._keys[key]
+            if action == glfw.PRESS:
+                self.engine.state[state] = 1
+                self.engine.state[state.concat(Vector('pushed'))] = 1
+                self.engine.state[state.concat(Vector('released'))] = 0
+                self.engine.state[state.concat(Vector(['pushed', 'beat']))] = self._beat
+            elif action == glfw.RELEASE:
+                self.engine.state[state] = 0
+                self.engine.state[state.concat(Vector('pushed'))] = 0
+                self.engine.state[state.concat(Vector('released'))] = 1
+                self.engine.state[state.concat(Vector(['released', 'beat']))] = self._beat
+        elif key == glfw.KEY_PAGE_DOWN:
+            if action == glfw.RELEASE:
+                self.engine.previous_page()
+        elif key == glfw.KEY_PAGE_UP:
+            if action == glfw.RELEASE:
+                self.engine.next_page()
+
+    def pointer_movement_callback(self, window, x, y):
+        if self._pointer_state is not None and self.window is not None:
+            width, height = glfw.get_window_size(self.window)
+            if 0 <= x <= width and 0 <= y <= height:
+                self.engine.state[self._pointer_state] = x/width, y/height
+
+    def pointer_button_callback(self, window, button, action, mods):
+        if self._pointer_state is not None and self.window is not None:
+            if action == glfw.PRESS:
+                self.engine.state[self._pointer_state.concat(Vector(button))] = 1
+            elif action == glfw.RELEASE:
+                self.engine.state[self._pointer_state.concat(Vector(button))] = 0
+
+    def handle_node(self, engine, node, **kwargs):
+        if node.kind == 'key':
+            if 'state' in node:
+                key_name = node.get('name', 1, str)
+                key_constant = 'KEY_' + key_name.upper()
+                if hasattr(glfw, key_constant):
+                    key = getattr(glfw, key_constant)
+                    state = node['state']
+                    self._keys[key] = state
+                    if state not in engine.state:
+                        if self.window is not None and glfw.get_key(self.window, key) == glfw.PRESS:
+                            engine.state[state] = 1
+                            engine.state[state.concat(Vector('pushed'))] = 1
+                            engine.state[state.concat(Vector('released'))] = 0
+                        else:
+                            engine.state[state] = 0
+                            engine.state[state.concat(Vector('pushed'))] = 0
+                            engine.state[state.concat(Vector('released'))] = 1
+            return True
+        elif node.kind == 'pointer':
+            if 'state' in node:
+                self._pointer_state = node['state']
+            return True
+        return super().handle_node(engine, node, **kwargs)
 
     def recalculate_viewport(self, force=False):
         aspect_ratio = self.width / self.height
@@ -385,6 +542,7 @@ class Window(ProgramNode):
         vsync = node.get('vsync', 1, bool, self.default_vsync)
         glfw.swap_interval(1 if vsync else 0)
         glfw.swap_buffers(self.window)
+        self._beat = kwargs['beat']
         glfw.poll_events()
         if count := self.glctx.gc():
             logger.trace("Collected {} OpenGL objects", count)
@@ -394,326 +552,9 @@ class Window(ProgramNode):
         return self.glctx.texture((width, height), 4)
 
 
-class Shader(ProgramNode):
-    def __init__(self, glctx):
-        super().__init__(glctx)
-        self._framebuffer = None
-        self._texture = None
-        self._colorbits = None
-
-    @property
-    def texture(self):
-        return self._texture
-
-    @property
-    def framebuffer(self):
-        return self._framebuffer
-
-    def release(self):
-        self._colorbits = None
-        self._framebuffer = None
-        self._texture = None
-        super().release()
-
-    def create(self, node, resized, **kwargs):
-        super().create(node, resized, **kwargs)
-        colorbits = node.get('colorbits', 1, int, self.glctx.extra['colorbits'])
-        if colorbits not in COLOR_FORMATS:
-            colorbits = self.glctx.extra['colorbits']
-        if self._framebuffer is None or self._texture is None or resized or colorbits != self._colorbits:
-            depth = COLOR_FORMATS[colorbits]
-            self._last = None
-            self._texture = self.glctx.texture((self.width, self.height), 4, dtype=depth.moderngl_dtype)
-            self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
-            self._framebuffer.clear()
-            self._colorbits = colorbits
-
-    def make_last(self):
-        return self.glctx.texture((self.width, self.height), 4, dtype=COLOR_FORMATS[self._colorbits].moderngl_dtype)
-
-
-class Record(ProgramNode):
-    DEFAULT_VERTEX_SOURCE = TemplateLoader.get_template('video.vert')
-    DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('record.frag')
-
-    def __init__(self, glctx):
-        super().__init__(glctx)
-        self._framebuffer = None
-        self._texture = None
-        self._has_alpha = None
-
-    @property
-    def texture(self):
-        return self.children[0].texture if self.children else None
-
-    @property
-    def framebuffer(self):
-        return self._framebuffer
-
-    def release(self):
-        self._framebuffer = None
-        self._texture = None
-        super().release()
-
-    def create(self, node, resized, **kwargs):
-        super().create(node, resized, **kwargs)
-        has_alpha = node.get('keep_alpha', 1, bool, False)
-        if self._framebuffer is None or self._texture is None or resized or has_alpha != self._has_alpha:
-            self._last = None
-            self._has_alpha = has_alpha
-            self._texture = self.glctx.texture((self.width, self.height), 4 if self._has_alpha else 3,
-                                               dtype='f1', internal_format=GL_SRGB8_ALPHA8 if self._has_alpha else GL_SRGB8)
-            self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
-            self._framebuffer.clear()
-
-    def render(self, node, **kwargs):
-        if filename := node.get('filename', 1, str):
-            super().render(node, **kwargs)
-            path = SharedCache[filename]
-            if path.suffix.lower() in ('.mp4', '.mov', '.m4v', '.mkv'):
-                codec = node.get('codec', 1, str, 'h264')
-                crf = node.get('crf', 1, int)
-                bitrate = node.get('bitrate', 1, int)
-                preset = node.get('preset', 1, str)
-                limit = node.get('limit', 1, float)
-                path.write_video_frame(self._texture, kwargs['clock'],
-                                       fps=int(kwargs['fps']), realtime=kwargs['realtime'], codec=codec,
-                                       crf=crf, bitrate=bitrate, preset=preset, limit=limit)
-            else:
-                quality = node.get('quality', 1, int)
-                path.write_image(self._texture, quality=quality)
-
-
-class Canvas(SceneNode):
-    def __init__(self, glctx):
-        super().__init__(glctx)
-        self._graphics_context = skia.GrDirectContext.MakeGL()
-        self._texture = None
-        self._framebuffer = None
-        self._surface = None
-        self._canvas = None
-        self._stats = {}
-        self._total_duration = 0
-        self._colorbits = None
-        self._linear = None
-        self._colorspace = None
-
-    @property
-    def texture(self):
-        return self._texture
-
-    def release(self):
-        self._colorbits = None
-        self._linear = None
-        self._colorspace = None
-        self._canvas = None
-        self._surface = None
-        if self._graphics_context is not None:
-            self._graphics_context.abandonContext()
-            self._graphics_context = None
-        self._framebuffer = None
-        self._texture = None
-
-    def create(self, node, resized, **kwargs):
-        colorbits = node.get('colorbits', 1, int, self.glctx.extra['colorbits'])
-        if colorbits not in COLOR_FORMATS:
-            colorbits = self.glctx.extra['colorbits']
-        linear = node.get('linear', 1, bool, self.glctx.extra['linear'])
-        if resized or colorbits != self._colorbits or linear != self._linear:
-            depth = COLOR_FORMATS[colorbits]
-            internal_format = None if linear else GL_SRGB8_ALPHA8
-            self._colorspace = skia.ColorSpace.MakeSRGBLinear() if linear else skia.ColorSpace.MakeSRGB()
-            self._texture = self.glctx.texture((self.width, self.height), 4, dtype=depth.moderngl_dtype, internal_format=internal_format)
-            self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
-            backend_render_target = skia.GrBackendRenderTarget(self.width, self.height, 0, 0, skia.GrGLFramebufferInfo(self._framebuffer.glo, depth.gl_format))
-            self._surface = skia.Surface.MakeFromBackendRenderTarget(self._graphics_context, backend_render_target, skia.kBottomLeft_GrSurfaceOrigin,
-                                                                     depth.skia_colortype, self._colorspace)
-            self._canvas = self._surface.getCanvas()
-            self._colorbits = colorbits
-            self._linear = linear
-            logger.debug("Created {:d}x{:d} canvas; skia version {}", self.width, self.height, skia.__version__)
-
-    async def descend(self, node, **kwargs):
-        # A canvas is a leaf node from the perspective of the OpenGL world
-        pass
-
-    def purge(self):
-        total_count = self._stats['canvas'][0]
-        logger.info("{} render stats - {:d} x {:.1f}ms = {:.1f}s", self.name, total_count,
-                    1e3 * self._total_duration / total_count, self._total_duration)
-        draw_duration = 0
-        for duration, count, key in sorted(((duration, count, key) for (key, (count, duration)) in self._stats.items()), reverse=True):
-            logger.debug("{:15s}  - {:8d}  x {:6.1f}µs = {:5.1f}s  ({:4.1f}%)",
-                         key, count, 1e6 * duration / count, duration, 100 * duration / self._total_duration)
-            draw_duration += duration
-        overhead = self._total_duration - draw_duration
-        logger.debug("{:15s}  - {:8d}  x {:6.1f}µs = {:5.1f}s  ({:4.1f}%)",
-                     '(surface)', total_count, 1e6 * overhead / total_count, overhead, 100 * overhead / self._total_duration)
-        self._stats = {}
-        self._total_duration = 0
-
-    def render(self, node, references=None, **kwargs):
-        self._total_duration -= system_clock()
-        self._graphics_context.resetContext()
-        self._framebuffer.clear()
-        canvas.draw(node, self._canvas, stats=self._stats, references=references, colorspace=self._colorspace)
-        self._surface.flushAndSubmit()
-        self._total_duration += system_clock()
-
-
-class Canvas3D(SceneNode):
-    def __init__(self, glctx):
-        super().__init__(glctx)
-        self._image_texture = None
-        self._image_framebuffer = None
-        self._color_renderbuffer = None
-        self._depth_renderbuffer = None
-        self._render_framebuffer = None
-        self._colorbits = None
-        self._samples = None
-        self._total_duration = 0
-        self._total_count = 0
-
-    @property
-    def texture(self):
-        return self._image_texture
-
-    def release(self):
-        self._colorbits = None
-        self._samples = None
-        self._render_framebuffer = None
-        self._image_texture = None
-        self._image_framebuffer = None
-        self._color_renderbuffer = None
-        self._depth_renderbuffer = None
-
-    def purge(self):
-        logger.info("{} draw stats - {:d} x {:.1f}ms = {:.1f}s", self.name, self._total_count,
-                    1e3 * self._total_duration / self._total_count, self._total_duration)
-        self._total_duration = 0
-        self._total_count = 0
-
-    def create(self, node, resized, **kwargs):
-        colorbits = node.get('colorbits', 1, int, self.glctx.extra['colorbits'])
-        if colorbits not in COLOR_FORMATS:
-            colorbits = self.glctx.extra['colorbits']
-        samples = max(0, node.get('samples', 1, int, 0))
-        if samples:
-            samples = min(1 << int(math.log2(samples)), self.glctx.info['GL_MAX_SAMPLES'])
-        if resized or colorbits != self._colorbits or samples != self._samples:
-            self.release()
-            format = COLOR_FORMATS[colorbits]
-            self._image_texture = self.glctx.texture((self.width, self.height), 4, dtype=format.moderngl_dtype)
-            self._depth_renderbuffer = self.glctx.depth_renderbuffer((self.width, self.height), samples=samples)
-            if samples:
-                self._color_renderbuffer = self.glctx.renderbuffer((self.width, self.height), 4, samples=samples, dtype=format.moderngl_dtype)
-                self._render_framebuffer = self.glctx.framebuffer(color_attachments=(self._color_renderbuffer,), depth_attachment=self._depth_renderbuffer)
-                self._image_framebuffer = self.glctx.framebuffer(self._image_texture)
-                logger.debug("Created canvas3d {}x{}/{}-bit render target with {}x sampling", self.width, self.height, colorbits, samples)
-            else:
-                self._render_framebuffer = self.glctx.framebuffer(color_attachments=(self._image_texture,), depth_attachment=self._depth_renderbuffer)
-                logger.debug("Created canvas3d {}x{}/{}-bit render target", self.width, self.height, colorbits)
-            self._colorbits = colorbits
-            self._samples = samples
-
-    async def descend(self, node, **kwargs):
-        # A canvas3d is a leaf node from the perspective of the OpenGL world
-        pass
-
-    def render(self, node, references=None, **kwargs):
-        self._total_duration -= system_clock()
-        self._render_framebuffer.use()
-        fog_min = node.get('fog_min', 1, float, 0)
-        fog_max = node.get('fog_max', 1, float, 0)
-        if fog_max > fog_min:
-            fog_color = node.get('fog_color', 3, float, (0, 0, 0))
-            self._render_framebuffer.clear(*fog_color)
-        else:
-            self._render_framebuffer.clear()
-        objects = self.glctx.extra.setdefault('canvas3d_objects', {})
-        canvas3d.draw(node, (self.width, self.height), self.glctx, objects, references)
-        if self._image_framebuffer is not None:
-            self.glctx.copy_framebuffer(self._image_framebuffer, self._render_framebuffer)
-        self._total_duration += system_clock()
-        self._total_count += 1
-
-
-class Video(Shader):
-    DEFAULT_VERTEX_SOURCE = TemplateLoader.get_template('video.vert')
-    DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('video.frag')
-
-    def __init__(self, glctx):
-        super().__init__(glctx)
-        self._filename = None
-        self._frame0 = None
-        self._frame1 = None
-        self._frame0_texture = None
-        self._frame1_texture = None
-        self._colorbits = None
-
-    def release(self):
-        self._frame0_texture = None
-        self._frame1_texture = None
-        self._frame0 = None
-        self._frame1 = None
-        self._colorbits = None
-        super().release()
-
-    @property
-    def child_textures(self):
-        return {'frame0': self._frame0_texture, 'frame1': self._frame1_texture}
-
-    def similar_to(self, node):
-        return super().similar_to(node) and node.get('filename', 1, str) == self._filename
-
-    async def update(self, node, **kwargs):
-        references = kwargs.setdefault('references', {})
-        if node_id := node.get('id', 1, str):
-            references[node_id] = self
-        self.hidden = node.get('hidden', 1, bool, False)
-        self._filename = node.get('filename', 1, str)
-        position = node.get('position', 1, float, 0)
-        loop = node.get('loop', 1, bool, False)
-        threading = node.get('thread', 1, bool, False)
-        if self._filename is not None:
-            ratio, frame0, frame1 = SharedCache[self._filename].read_video_frames(self, position, loop, threading=threading)
-        else:
-            ratio, frame0, frame1 = 0, None, None
-        colorbits = node.get('colorbits', 1, int, self.glctx.extra['colorbits'])
-        if colorbits not in COLOR_FORMATS:
-            colorbits = self.glctx.extra['colorbits']
-        if self._texture is not None and (frame0 is None or (self.width, self.height) != (frame0.width, frame0.height)) \
-                or colorbits != self._colorbits:
-            self.release()
-        if frame0 is None:
-            return
-        if self._texture is None:
-            self.width, self.height = frame0.width, frame0.height
-            depth = COLOR_FORMATS[colorbits]
-            self._texture = self.glctx.texture((self.width, self.height), 4, dtype=depth.moderngl_dtype)
-            self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
-            self._frame0_texture = self.glctx.texture((self.width, self.height), 3, internal_format=GL_SRGB8)
-            self._frame1_texture = self.glctx.texture((self.width, self.height), 3, internal_format=GL_SRGB8)
-            self._colorbits = colorbits
-        if frame0 is self._frame1 or frame1 is self._frame0:
-            self._frame0_texture, self._frame1_texture = self._frame1_texture, self._frame0_texture
-            self._frame0, self._frame1 = self._frame1, self._frame0
-        if frame0 is not self._frame0:
-            rgb_frame = frame0.to_rgb()
-            plane = rgb_frame.planes[0]
-            data = memoryview(rgb_frame.to_ndarray().data) if plane.line_size > plane.width * 3 else memoryview(plane)
-            self._frame0_texture.write(data)
-            self._frame0 = frame0
-        if frame1 is None:
-            self._frame1 = None
-        elif frame1 is not self._frame1:
-            rgb_frame = frame1.to_rgb()
-            plane = rgb_frame.planes[0]
-            data = rgb_frame.to_ndarray().data if plane.line_size > plane.width * 3 else plane
-            self._frame1_texture.write(memoryview(data))
-            self._frame1 = frame1
-        interpolate = node.get('interpolate', 1, bool, False)
-        self.render(node, ratio=ratio if interpolate else 0, **kwargs)
-
-
 RENDERER_CLASS = Window
+
+ClassCache = {
+    'reference': Reference,
+    'shader': Shader,
+}

@@ -13,9 +13,9 @@ cimport cython
 from loguru import logger
 
 from .. import name_patch
+from .context cimport Context, StateDict
 from ..model cimport Vector, Node, Query, null_, true_, false_, minusone_
-from .vm cimport Context, StateDict, Program, builtins, static_builtins, dynamic_builtins
-from .vm import log
+from .vm cimport Program, builtins, static_builtins, dynamic_builtins
 
 
 logger = name_patch(logger, __name__)
@@ -42,7 +42,7 @@ cdef Expression sequence_pack(list expressions):
                     break
                 expr = <Expression>expressions.pop(0)
             if vectors:
-                remaining.append(Literal(Vector._compose(vectors, 0, len(vectors))))
+                remaining.append(Literal(Vector._compose(vectors)))
         if expr is not None:
             if isinstance(expr, InlineSequence):
                 expressions[:0] = (<InlineSequence>expr).expressions
@@ -63,7 +63,7 @@ cdef Expression sequence_pack(list expressions):
 
 
 cdef class Expression:
-    cdef Program _compile(self, list lvars):
+    cdef void _compile(self, Program program, list lvars):
         raise NotImplementedError()
 
     cpdef Expression evaluate(self, Context context):
@@ -98,40 +98,40 @@ cdef class Top(Expression):
         return top
 
     def compile(self):
-        cdef Program program = self._compile([])
+        cdef Program program = Program.__new__(Program)
+        self._compile(program, [])
         program.optimize()
         program.link()
         return program
 
-    cdef Program _compile(self, list lvars):
+    cdef void _compile(self, Program program, list lvars):
         cdef Expression expr, node
-        cdef Program program = Program.__new__(Program)
         for expr in self.expressions:
-            program.extend(expr._compile(lvars))
+            expr._compile(program, lvars)
             if isinstance(expr, NodeModifier) and isinstance((<NodeModifier>expr).ultimate_node(), Search):
                 program.drop(1)
-            elif not isinstance(expr, (Let, Import, Function)):
+            elif not isinstance(expr, (Let, Import, Function, Pragma)):
                 program.append_root()
         cdef int i
+        cdef str name
         for i, name in enumerate(reversed(lvars)):
             program.local_load(i)
             program.store_global(name)
         if lvars:
             program.local_drop(len(lvars))
-        return program
 
     cpdef Expression evaluate(self, Context context):
         cdef list expressions = []
         cdef Expression expr
+        cdef dict variables = dict(context.variables)
         for expr in self.expressions:
             expr = expr.evaluate(context)
             if not isinstance(expr, Literal) or (<Literal>expr).value.length:
                 expressions.append(expr)
         cdef str name
-        cdef Vector value
         cdef list bindings = []
         for name, value in context.variables.items():
-            if value is not None:
+            if name not in variables and value is not None and isinstance(value, Vector):
                 bindings.append(PolyBinding((name,), Literal(value)))
         if bindings:
             expressions.append(StoreGlobal(tuple(bindings)))
@@ -149,11 +149,9 @@ cdef class Pragma(Expression):
         self.name = name
         self.expr = expr
 
-    cdef Program _compile(self, list lvars):
-        cdef Program program = Program.__new__(Program)
-        program.extend(self.expr._compile(lvars))
+    cdef void _compile(self, Program program, list lvars):
+        self.expr._compile(program, lvars)
         program.pragma(self.name)
-        return program
 
     cpdef Expression evaluate(self, Context context):
         return Pragma(self.name, self.expr.evaluate(context))
@@ -170,12 +168,10 @@ cdef class Import(Expression):
         self.names = names
         self.filename = filename
 
-    cdef Program _compile(self, list lvars):
-        cdef Program program = Program.__new__(Program)
-        program.extend(self.filename._compile(lvars))
+    cdef void _compile(self, Program program, list lvars):
+        self.filename._compile(program, lvars)
         program.import_(self.names)
         lvars.extend(self.names)
-        return program
 
     cpdef Expression evaluate(self, Context context):
         cdef str name
@@ -193,13 +189,12 @@ cdef class Sequence(Expression):
     def __init__(self, tuple expressions):
         self.expressions = expressions
 
-    cdef Program _compile(self, list lvars):
-        cdef Program program = Program.__new__(Program)
+    cdef void _compile(self, Program program, list lvars):
         cdef Expression expr
         cdef int n=len(lvars), m=0
         for expr in self.expressions:
-            program.extend(expr._compile(lvars))
-            if not isinstance(expr, (Let, Import, Function)):
+            expr._compile(program, lvars)
+            if not isinstance(expr, (Let, Import, Function, Pragma)):
                 m += 1
         if len(lvars) > n:
             program.local_drop(len(lvars)-n)
@@ -209,7 +204,6 @@ cdef class Sequence(Expression):
             program.compose(m)
         elif m == 0:
             program.literal(null_)
-        return program
 
     cpdef Expression evaluate(self, Context context):
         cdef list expressions = []
@@ -226,13 +220,11 @@ cdef class Sequence(Expression):
 
 
 cdef class InlineSequence(Sequence):
-    cdef Program _compile(self, list lvars):
-        cdef Program program = Program.__new__(Program)
+    cdef void _compile(self, Program program, list lvars):
         cdef Expression expr
         for expr in self.expressions:
-            program.extend(expr._compile(lvars))
+            expr._compile(program, lvars)
         program.compose(len(self.expressions))
-        return program
 
     cpdef Expression evaluate(self, Context context):
         cdef list expressions = []
@@ -255,10 +247,8 @@ cdef class Literal(Expression):
                     self.copynodes = True
                     break
 
-    cdef Program _compile(self, list lvars):
-        cdef Program program = Program.__new__(Program)
+    cdef void _compile(self, Program program, list lvars):
         program.literal(self.value.intern())
-        return program
 
     cpdef Expression evaluate(self, Context context):
         return Literal(self.value.copynodes()) if self.copynodes else self
@@ -273,8 +263,7 @@ cdef class Name(Expression):
     def __init__(self, str name):
         self.name = name
 
-    cdef Program _compile(self, list lvars):
-        cdef Program program = Program.__new__(Program)
+    cdef void _compile(self, Program program, list lvars):
         cdef int i, n=len(lvars)-1
         for i in range(len(lvars)):
             if self.name == <str>lvars[n-i]:
@@ -282,16 +271,18 @@ cdef class Name(Expression):
                 break
         else:
             program.name(self.name)
-        return program
 
     cpdef Expression evaluate(self, Context context):
-        cdef Vector value
         if self.name in context.variables:
             value = context.variables[self.name]
-            if value is not None:
-                return Literal(value.copynodes())
-            else:
+            if value is None:
                 return self
+            elif isinstance(value, Function):
+                return FunctionName(self.name)
+            elif isinstance(value, Name):
+                return (<Name>value).evaluate(context)
+            else:
+                return Literal((<Vector>value).copynodes())
         elif (value := static_builtins.get(self.name)) is not None:
             return Literal(value)
         elif self.name not in dynamic_builtins:
@@ -306,17 +297,20 @@ cdef class Name(Expression):
         return f'Name({self.name!r})'
 
 
+cdef class FunctionName(Name):
+    def __repr__(self):
+        return f'FunctionName({self.name!r})'
+
+
 cdef class Lookup(Expression):
     cdef readonly Expression key
 
     def __init__(self, Expression key):
         self.key = key
 
-    cdef Program _compile(self, list lvars):
-        cdef Program program = Program.__new__(Program)
-        program.extend(self.key._compile(lvars))
+    cdef void _compile(self, Program program, list lvars):
+        self.key._compile(program, lvars)
         program.lookup()
-        return program
 
     cpdef Expression evaluate(self, Context context):
         cdef Expression key = self.key.evaluate(context)
@@ -336,12 +330,10 @@ cdef class LookupLiteral(Expression):
     cdef readonly Vector key
 
     def __init__(self, Vector key):
-        self.key = key.intern()
+        self.key = key
 
-    cdef Program _compile(self, list lvars):
-        cdef Program program = Program.__new__(Program)
-        program.lookup_literal(self.key)
-        return program
+    cdef void _compile(self, Program program, list lvars):
+        program.lookup_literal(self.key.intern())
 
     cpdef Expression evaluate(self, Context context):
         cdef Vector value
@@ -364,13 +356,11 @@ cdef class Range(Expression):
         self.stop = stop
         self.step = step
 
-    cdef Program _compile(self, list lvars):
-        cdef Program program = Program.__new__(Program)
-        program.extend(self.start._compile(lvars))
-        program.extend(self.stop._compile(lvars))
-        program.extend(self.step._compile(lvars))
+    cdef void _compile(self, Program program, list lvars):
+        self.start._compile(program, lvars)
+        self.stop._compile(program, lvars)
+        self.step._compile(program, lvars)
         program.range()
-        return program
 
     cpdef Expression evaluate(self, Context context):
         cdef Expression start = self.start.evaluate(context)
@@ -398,11 +388,9 @@ cdef class UnaryOperation(Expression):
 
 
 cdef class Negative(UnaryOperation):
-    cdef Program _compile(self, list lvars):
-        cdef Program program = Program.__new__(Program)
-        program.extend(self.expr._compile(lvars))
+    cdef void _compile(self, Program program, list lvars):
+        self.expr._compile(program, lvars)
         program.neg()
-        return program
 
     cpdef Expression evaluate(self, Context context):
         cdef Expression expr = self.expr.evaluate(context)
@@ -424,11 +412,9 @@ cdef class Negative(UnaryOperation):
 
 
 cdef class Positive(UnaryOperation):
-    cdef Program _compile(self, list lvars):
-        cdef Program program = Program.__new__(Program)
-        program.extend(self.expr._compile(lvars))
+    cdef void _compile(self, Program program, list lvars):
+        self.expr._compile(program, lvars)
         program.pos()
-        return program
 
     cpdef Expression evaluate(self, Context context):
         cdef Expression expr = self.expr.evaluate(context)
@@ -440,11 +426,9 @@ cdef class Positive(UnaryOperation):
 
 
 cdef class Not(UnaryOperation):
-    cdef Program _compile(self, list lvars):
-        cdef Program program = Program.__new__(Program)
-        program.extend(self.expr._compile(lvars))
+    cdef void _compile(self, Program program, list lvars):
+        self.expr._compile(program, lvars)
         program.not_()
-        return program
 
     cpdef Expression evaluate(self, Context context):
         cdef Expression expr = self.expr.evaluate(context)
@@ -461,12 +445,10 @@ cdef class BinaryOperation(Expression):
         self.left = left
         self.right = right
 
-    cdef Program _compile(self, list lvars):
-        cdef Program program = Program.__new__(Program)
-        program.extend(self.left._compile(lvars))
-        program.extend(self.right._compile(lvars))
+    cdef void _compile(self, Program program, list lvars):
+        self.left._compile(program, lvars)
+        self.right._compile(program, lvars)
         self._compile_op(program)
-        return program
 
     cdef void _compile_op(self, Program program):
         raise NotImplementedError()
@@ -514,12 +496,10 @@ cdef class Add(MathsBinaryOperation):
     cdef Vector op(self, Vector left, Vector right):
         return left.add(right)
 
-    cdef Program _compile(self, list lvars):
-        cdef Program program = Program.__new__(Program)
-        program.extend(self.left._compile(lvars))
-        program.extend(self.right._compile(lvars))
+    cdef void _compile(self, Program program, list lvars):
+        self.left._compile(program, lvars)
+        self.right._compile(program, lvars)
         program.add()
-        return program
 
     cdef Expression constant_left(self, Vector left, Expression right):
         if left.eq(false_):
@@ -679,16 +659,14 @@ cdef class And(BinaryOperation):
     cdef Vector op(self, Vector left, Vector right):
         return right if left.as_bool() else left
 
-    cdef Program _compile(self, list lvars):
-        cdef Program program = Program.__new__(Program)
+    cdef void _compile(self, Program program, list lvars):
         end_label = program.new_label()
-        program.extend(self.left._compile(lvars))
+        self.left._compile(program, lvars)
         program.dup()
         program.branch_false(end_label)
         program.drop()
-        program.extend(self.right._compile(lvars))
+        self.right._compile(program, lvars)
         program.label(end_label)
-        return program
 
     cdef Expression constant_left(self, Vector left, Expression right):
         if left.as_bool():
@@ -701,16 +679,14 @@ cdef class Or(BinaryOperation):
     cdef Vector op(self, Vector left, Vector right):
         return left if left.as_bool() else right
 
-    cdef Program _compile(self, list lvars):
-        cdef Program program = Program.__new__(Program)
+    cdef void _compile(self, Program program, list lvars):
         end_label = program.new_label()
-        program.extend(self.left._compile(lvars))
+        self.left._compile(program, lvars)
         program.dup()
         program.branch_true(end_label)
         program.drop()
-        program.extend(self.right._compile(lvars))
+        self.right._compile(program, lvars)
         program.label(end_label)
-        return program
 
     cdef Expression constant_left(self, Vector left, Expression right):
         if left.as_bool():
@@ -743,12 +719,10 @@ cdef class Slice(Expression):
         self.expr = expr
         self.index = index
 
-    cdef Program _compile(self, list lvars):
-        cdef Program program = Program.__new__(Program)
-        program.extend(self.expr._compile(lvars))
-        program.extend(self.index._compile(lvars))
+    cdef void _compile(self, Program program, list lvars):
+        self.expr._compile(program, lvars)
+        self.index._compile(program, lvars)
         program.slice()
-        return program
 
     cpdef Expression evaluate(self, Context context):
         cdef Expression expr = self.expr.evaluate(context)
@@ -777,11 +751,9 @@ cdef class FastSlice(Expression):
         self.expr = expr
         self.index = index
 
-    cdef Program _compile(self, list lvars):
-        cdef Program program = Program.__new__(Program)
-        program.extend(self.expr._compile(lvars))
-        program.slice_literal(self.index)
-        return program
+    cdef void _compile(self, Program program, list lvars):
+        self.expr._compile(program, lvars)
+        program.slice_literal(self.index.intern())
 
     cpdef Expression evaluate(self, Context context):
         cdef Expression expr = self.expr.evaluate(context)
@@ -794,68 +766,93 @@ cdef class FastSlice(Expression):
 cdef class Call(Expression):
     cdef readonly Expression function
     cdef readonly tuple args
+    cdef readonly tuple keyword_args
 
-    def __init__(self, Expression function, tuple args):
+    def __init__(self, Expression function, tuple args, tuple keyword_args=None):
         self.function = function
         self.args = args
+        self.keyword_args = keyword_args
 
-    cdef Program _compile(self, list lvars):
-        cdef Program program = Program.__new__(Program)
+    cdef void _compile(self, Program program, list lvars):
+        cdef Vector value
         cdef Expression expr
-        for expr in self.args:
-            program.extend(expr._compile(lvars))
-        program.extend(self.function._compile(lvars))
-        program.call(len(self.args))
-        return program
+        cdef list names = []
+        if self.args:
+            for expr in self.args:
+                expr._compile(program, lvars)
+        if isinstance(self.function, Literal) and not self.keyword_args:
+            value = (<Literal>self.function).value
+            if value.length == 1 and value.objects is not None and callable(value.objects[0]) and not hasattr(value.objects[0], 'context_func'):
+                program.call_fast(value.objects[0], len(self.args))
+                return
+        cdef Binding keyword_arg
+        if self.keyword_args:
+            for keyword_arg in self.keyword_args:
+                names.append(keyword_arg.name)
+                keyword_arg.expr._compile(program, lvars)
+        self.function._compile(program, lvars)
+        program.call(len(self.args) if self.args else 0, tuple(names) if names else None)
 
     cpdef Expression evaluate(self, Context context):
         cdef Expression function = self.function.evaluate(context)
-        cdef list args = []
-        cdef Expression arg
         cdef bint literal = isinstance(function, Literal) and (<Literal>function).value.objects is not None
-        for arg in self.args:
-            arg = arg.evaluate(context)
-            args.append(arg)
-            if not isinstance(arg, Literal):
-                literal = False
+        cdef Expression arg, expr
+        cdef list args = []
+        if self.args:
+            for arg in self.args:
+                arg = arg.evaluate(context)
+                args.append(arg)
+                if not isinstance(arg, Literal):
+                    literal = False
+        cdef list keyword_args = []
+        cdef Binding binding
+        if self.keyword_args:
+            for binding in self.keyword_args:
+                arg = binding.expr.evaluate(context)
+                keyword_args.append(Binding(binding.name, arg))
+                if not isinstance(arg, Literal):
+                    literal = False
+        cdef list bindings
+        cdef Function func_expr
+        cdef dict kwargs
+        cdef int i
+        if isinstance(function, FunctionName):
+            func_expr = context.variables[(<FunctionName>function).name]
+            kwargs = {binding.name: binding.expr for binding in keyword_args}
+            bindings = []
+            for i, binding in enumerate(func_expr.parameters):
+                if i < len(args):
+                    bindings.append(PolyBinding((binding.name,), <Expression>args[i]))
+                elif binding.name in kwargs:
+                    bindings.append(PolyBinding((binding.name,), <Expression>kwargs[binding.name]))
+                elif binding.expr is not None:
+                    bindings.append(PolyBinding((binding.name,), binding.expr))
+                else:
+                    bindings.append(PolyBinding((binding.name,), Literal(null_)))
+            expr = InlineLet(func_expr.expr, tuple(bindings)).evaluate(context)
+            return expr
         cdef list vector_args, results
         cdef Literal literal_arg
-        cdef Function func_expr
-        cdef dict saved, params
-        cdef Binding parameter
-        cdef int i
         if literal:
             vector_args = [literal_arg.value for literal_arg in args]
+            kwargs = {binding.name: (<Literal>binding.expr).value for binding in keyword_args}
             results = []
             for func in (<Literal>function).value.objects:
                 if callable(func):
                     try:
-                        if hasattr(func, 'state_transformer') and func.state_transformer:
-                            results.append(Literal(func(context.state, *vector_args)))
+                        if hasattr(func, 'context_func'):
+                            results.append(Literal(func(context, *vector_args, **kwargs)))
                         else:
-                            results.append(Literal(func(*vector_args)))
+                            results.append(Literal(func(*vector_args, **kwargs)))
                     except Exception:
                         break
-                elif isinstance(func, Function):
-                    func_expr = func
-                    saved = context.variables
-                    context.variables = {}
-                    for i, parameter in enumerate(func_expr.parameters):
-                        if i < len(vector_args):
-                            context.variables[parameter.name] = vector_args[i]
-                        elif parameter.expr is not None:
-                            context.variables[parameter.name] = (<Literal>parameter.expr).value
-                        else:
-                            context.variables[parameter.name] = null_
-                    results.append(func_expr.expr.evaluate(context))
-                    context.variables = saved
             else:
                 return sequence_pack(results)
-        cdef Call call = Call(function, tuple(args))
+        cdef Call call = Call(function, tuple(args), tuple(keyword_args))
         return call
 
     def __repr__(self):
-        return f'Call({self.function!r}, {self.args!r})'
+        return f'Call({self.function!r}, {self.args!r}, {self.keyword_args!r})'
 
 
 cdef class NodeModifier(Expression):
@@ -875,11 +872,9 @@ cdef class Tag(NodeModifier):
         self.node = node
         self.tag = tag
 
-    cdef Program _compile(self, list lvars):
-        cdef Program program = Program.__new__(Program)
-        program.extend(self.node._compile(lvars))
+    cdef void _compile(self, Program program, list lvars):
+        self.node._compile(program, lvars)
         program.tag(self.tag)
-        return program
 
     cpdef Expression evaluate(self, Context context):
         cdef Expression node = self.node.evaluate(context)
@@ -904,14 +899,13 @@ cdef class Attributes(NodeModifier):
         self.node = node
         self.bindings = bindings
 
-    cdef Program _compile(self, list lvars):
-        cdef Program program = Program.__new__(Program)
+    cdef void _compile(self, Program program, list lvars):
         cdef Binding binding
-        program.extend(self.node._compile(lvars))
+        self.node._compile(program, lvars)
         if isinstance(self.node, Literal) and (<Literal>self.node).value.length == 1:
             program.set_node_scope()
             for binding in self.bindings:
-                program.extend(binding.expr._compile(lvars))
+                binding.expr._compile(program, lvars)
                 program.attribute(binding.name)
         else:
             program.dup()
@@ -922,14 +916,13 @@ cdef class Attributes(NodeModifier):
             program.push_next(END)
             program.set_node_scope()
             for binding in self.bindings:
-                program.extend(binding.expr._compile(lvars))
+                binding.expr._compile(program, lvars)
                 program.attribute(binding.name)
             program.drop()
             program.jump(START)
             program.label(END)
             program.end_for()
         program.clear_node_scope()
-        return program
 
     cpdef Expression evaluate(self, Context context):
         cdef Expression node = self
@@ -988,14 +981,12 @@ cdef class Attributes(NodeModifier):
 
 
 cdef class FastAttributes(Attributes):
-    cdef Program _compile(self, list lvars):
-        cdef Program program = Program.__new__(Program)
-        program.extend(self.node._compile(lvars))
+    cdef void _compile(self, Program program, list lvars):
+        self.node._compile(program, lvars)
         cdef Binding binding
         for binding in self.bindings:
-            program.extend(binding.expr._compile(lvars))
+            binding.expr._compile(program, lvars)
             program.attribute(binding.name)
-        return program
 
 
 cdef class Search(Expression):
@@ -1004,10 +995,8 @@ cdef class Search(Expression):
     def __init__(self, Query query):
         self.query = query
 
-    cdef Program _compile(self, list lvars):
-        cdef Program program = Program.__new__(Program)
+    cdef void _compile(self, Program program, list lvars):
         program.search(self.query)
-        return program
 
     cpdef Expression evaluate(self, Context context):
         return self
@@ -1023,12 +1012,10 @@ cdef class Append(NodeModifier):
         self.node = node
         self.children = children
 
-    cdef Program _compile(self, list lvars):
-        cdef Program program = Program.__new__(Program)
-        program.extend(self.node._compile(lvars))
-        program.extend(self.children._compile(lvars))
+    cdef void _compile(self, Program program, list lvars):
+        self.node._compile(program, lvars)
+        self.children._compile(program, lvars)
         program.append()
-        return program
 
     cpdef Expression evaluate(self, Context context):
         cdef Expression node = self.node.evaluate(context)
@@ -1050,12 +1037,10 @@ cdef class Append(NodeModifier):
 
 
 cdef class Prepend(Append):
-    cdef Program _compile(self, list lvars):
-        cdef Program program = Program.__new__(Program)
-        program.extend(self.node._compile(lvars))
-        program.extend(self.children._compile(lvars))
+    cdef void _compile(self, Program program, list lvars):
+        self.node._compile(program, lvars)
+        self.children._compile(program, lvars)
         program.prepend()
-        return program
 
     cpdef Expression evaluate(self, Context context):
         cdef Expression node = self.node.evaluate(context)
@@ -1103,14 +1088,12 @@ cdef class Let(Expression):
     def __init__(self, tuple bindings):
         self.bindings = bindings
 
-    cdef Program _compile(self, list lvars):
-        cdef Program program = Program.__new__(Program)
+    cdef void _compile(self, Program program, list lvars):
         cdef PolyBinding binding
         for binding in self.bindings:
-            program.extend(binding.expr._compile(lvars))
+            binding.expr._compile(program, lvars)
             program.local_push(len(binding.names))
             lvars.extend(binding.names)
-        return program
 
     cpdef Expression evaluate(self, Context context):
         cdef list remaining = []
@@ -1130,6 +1113,10 @@ cdef class Let(Expression):
                 else:
                     for i, name in enumerate(binding.names):
                         context.variables[name] = value.item(i)
+            elif isinstance(expr, Name) and len(binding.names) == 1:
+                name = binding.names[0]
+                if (<Name>expr).name != name:
+                    context.variables[name] = expr
             else:
                 for name in binding.names:
                     context.variables[name] = None
@@ -1143,14 +1130,12 @@ cdef class Let(Expression):
 
 
 cdef class StoreGlobal(Let):
-    cdef Program _compile(self, list lvars):
-        cdef Program program = Program.__new__(Program)
+    cdef void _compile(self, Program program, list lvars):
         cdef PolyBinding binding
         for binding in self.bindings:
-            program.extend(binding.expr._compile(lvars))
+            binding.expr._compile(program, lvars)
             assert len(binding.names) == 1, "StoreGlobal cannot multi-bind"
             program.store_global(binding.names[0])
-        return program
 
 
 cdef class InlineLet(Expression):
@@ -1161,18 +1146,17 @@ cdef class InlineLet(Expression):
         self.body = body
         self.bindings = bindings
 
-    cdef Program _compile(self, list lvars):
-        cdef Program program = Program.__new__(Program)
+    cdef void _compile(self, Program program, list lvars):
         cdef PolyBinding binding
         cdef int n=len(lvars)
         for binding in self.bindings:
-            program.extend(binding.expr._compile(lvars))
+            binding.expr._compile(program, lvars)
             program.local_push(len(binding.names))
             lvars.extend(binding.names)
-        program.extend(self.body._compile(lvars))
+        self.body._compile(program, lvars)
+        program.local_drop(len(self.bindings))
         while len(lvars) > n:
             lvars.pop()
-        return program
 
     cpdef Expression evaluate(self, Context context):
         cdef dict saved = context.variables
@@ -1194,6 +1178,10 @@ cdef class InlineLet(Expression):
                 else:
                     for i, name in enumerate(binding.names):
                         context.variables[name] = value.item(i)
+            elif isinstance(expr, Name) and len(binding.names) == 1:
+                name = binding.names[0]
+                if (<Name>expr).name != name:
+                    context.variables[name] = expr
             else:
                 for name in binding.names:
                     context.variables[name] = None
@@ -1218,9 +1206,8 @@ cdef class For(Expression):
         self.source = source
         self.body = body
 
-    cdef Program _compile(self, list lvars):
-        cdef Program program = Program.__new__(Program)
-        program.extend(self.source._compile(lvars))
+    cdef void _compile(self, Program program, list lvars):
+        self.source._compile(program, lvars)
         program.begin_for()
         START = program.new_label()
         END = program.new_label()
@@ -1230,14 +1217,13 @@ cdef class For(Expression):
         program.local_push(n)
         program.label(START)
         program.next(n, END)
-        program.extend(self.body._compile(lvars))
+        self.body._compile(program, lvars)
         program.jump(START)
         program.label(END)
         program.local_drop(n)
         program.end_for_compose()
         for i in range(n):
             lvars.pop()
-        return program
 
     cpdef Expression evaluate(self, Context context):
         cdef Expression body, source=self.source.evaluate(context)
@@ -1286,23 +1272,21 @@ cdef class IfElse(Expression):
         self.tests = tests
         self.else_ = else_
 
-    cdef Program _compile(self, list lvars):
-        cdef Program program = Program.__new__(Program)
+    cdef void _compile(self, Program program, list lvars):
         cdef Test test
         END = program.new_label()
         for test in self.tests:
             NEXT = program.new_label()
-            program.extend(test.condition._compile(lvars))
+            test.condition._compile(program, lvars)
             program.branch_false(NEXT)
-            program.extend(test.then._compile(lvars))
+            test.then._compile(program, lvars)
             program.jump(END)
             program.label(NEXT)
         if self.else_ is not None:
-            program.extend(self.else_._compile(lvars))
+            self.else_._compile(program, lvars)
         else:
             program.literal(null_)
         program.label(END)
-        return program
 
     cpdef Expression evaluate(self, Context context):
         cdef list remaining = []
@@ -1338,8 +1322,7 @@ cdef class Function(Expression):
         self.parameters = parameters
         self.expr = expr
 
-    cdef Program _compile(self, list lvars):
-        cdef Program body, program = Program.__new__(Program)
+    cdef void _compile(self, Program program, list lvars):
         cdef Binding parameter
         cdef list names = []
         for parameter in self.parameters:
@@ -1347,14 +1330,15 @@ cdef class Function(Expression):
             if parameter.expr is None:
                 program.literal(null_)
             else:
-                program.extend(parameter.expr._compile(lvars))
-        body = self.expr._compile(lvars + names)
+                parameter.expr._compile(program, lvars)
+        cdef Program body = Program.__new__(Program)
+        self.expr._compile(body, lvars + names)
+        body.optimize()
         body.link()
         program.literal(body)
         program.func(self.name, tuple(names))
         program.local_push(1)
         lvars.append(self.name)
-        return program
 
     cpdef Expression evaluate(self, Context context):
         cdef list parameters = []
@@ -1367,69 +1351,24 @@ cdef class Function(Expression):
                 literal = False
             parameters.append(Binding(parameter.name, expr))
         cdef dict saved = context.variables
-        cdef str key
-        cdef Vector value
+        cdef str key, name
+        cdef set unbound = context.unbound
+        context.unbound = set()
         context.variables = {}
         for key, value in saved.items():
-            context.variables[key] = value
+            if value is not None:
+                context.variables[key] = value
         for parameter in parameters:
             context.variables[parameter.name] = None
         expr = self.expr.evaluate(context)
+        cdef Function function = Function(self.name, tuple(parameters), expr)
         context.variables = saved
-        context.variables[self.name] = None
-        return Function(self.name, tuple(parameters), expr)
+        context.variables[self.name] = function if literal and not context.unbound else None
+        if unbound is not None:
+            context.unbound.difference_update(saved)
+            unbound.update(context.unbound)
+        context.unbound = unbound
+        return function
 
     def __repr__(self):
         return f'Function({self.name!r}, {self.parameters!r}, {self.expr!r})'
-
-
-cdef class TemplateCall(Expression):
-    cdef readonly Expression function
-    cdef readonly tuple args
-    cdef readonly Expression children
-
-    def __init__(self, Expression function, tuple args, Expression children):
-        self.function = function
-        self.args = args
-        self.children = children
-
-    cdef Program _compile(self, list lvars):
-        cdef Program program = Program.__new__(Program)
-        cdef Binding arg
-        cdef list names = []
-        if self.children is not None:
-            program.extend(self.children._compile(lvars))
-        else:
-            program.literal(null_)
-        if self.args:
-            for arg in self.args:
-                names.append(arg.name)
-                program.extend(arg.expr._compile(lvars))
-        program.extend(self.function._compile(lvars))
-        program.call(1, tuple(names))
-        return program
-
-    cpdef Expression evaluate(self, Context context):
-        cdef Expression function = self.function.evaluate(context)
-        cdef literal = isinstance(function, Literal)
-        cdef Expression children = None
-        if self.children is not None:
-            children = self.children.evaluate(context)
-            literal = literal and isinstance(children, Literal)
-        cdef list args = None
-        cdef Binding arg
-        cdef Expression value
-        if self.args is not None:
-            args = []
-            for arg in self.args:
-                value = arg.expr.evaluate(context)
-                if not isinstance(value, Literal):
-                    literal = False
-                args.append(Binding(arg.name, value))
-        cdef TemplateCall call = TemplateCall(function, tuple(args) if args is not None else None, children)
-        if literal:
-            return Literal(call.evaluate(context))
-        return call
-
-    def __repr__(self):
-        return f'TemplateCall({self.function!r}, {self.args!r}, {self.children!r})'

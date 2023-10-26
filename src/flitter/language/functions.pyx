@@ -7,9 +7,10 @@ Flitter language functions
 
 import cython
 
-from libc.math cimport isnan, isinf, floor, round, sin, cos, asin, acos, sqrt, exp, ceil, atan2, log
+from libc.math cimport isnan, isinf, floor, round, sin, cos, asin, acos, sqrt, exp, ceil, atan2, log, log2, log10
 
 from ..cache import SharedCache
+from .context cimport Context
 from ..model cimport Vector, Matrix44, null_, true_, false_
 
 
@@ -17,8 +18,8 @@ cdef double Pi = 3.141592653589793
 cdef double Tau = 6.283185307179586
 
 
-def state_transformer(func):
-    func.state_transformer = True
+def context_func(func):
+    func.context_func = True
     return func
 
 
@@ -46,7 +47,8 @@ cdef class Uniform(Vector):
         value.numbers[0] = self._item(i)
         return value
 
-    cdef double _item(self, unsigned long long i) noexcept:
+    @cython.cdivision(True)
+    cdef double _item(self, unsigned long long i) noexcept nogil:
         cdef unsigned long long x, y, z
         # Compute a 32bit float PRN using the Squares algorithm [https://arxiv.org/abs/2004.06278]
         x = y = i * self._hash
@@ -71,7 +73,7 @@ cdef class Uniform(Vector):
             result.numbers[i] = self._item(j)
         return result
 
-    cpdef Vector copynodes(self):
+    cpdef Vector copynodes(self, bint parented=False):
         return self
 
     cpdef bint as_bool(self):
@@ -82,7 +84,7 @@ cdef class Uniform(Vector):
 
 
 cdef class Beta(Uniform):
-    cdef double _item(self, unsigned long long i) noexcept:
+    cdef double _item(self, unsigned long long i) noexcept nogil:
         i <<= 2
         cdef double u1 = Uniform._item(self, i)
         cdef double u2 = Uniform._item(self, i + 1)
@@ -95,7 +97,8 @@ cdef class Beta(Uniform):
 
 
 cdef class Normal(Uniform):
-    cdef double _item(self, unsigned long long i) noexcept:
+    @cython.cdivision(True)
+    cdef double _item(self, unsigned long long i) noexcept nogil:
         # Use the Box-Muller transform to approximate the normal distribution
         # [https://en.wikipedia.org/wiki/Box–Muller_transform]
         cdef double u1, u2
@@ -105,7 +108,7 @@ cdef class Normal(Uniform):
         if not self.cached or i != self.i:
             u1 = Uniform._item(self, i)
             u2 = Uniform._item(self, i + 1)
-            if u1 < 1 / (1<<32):
+            if u1 < 1 / <double>(1<<32):
                 u1, u2 = u2, u1
             self.R = sqrt(-2 * log(u1))
             self.th = Tau * u2
@@ -116,11 +119,11 @@ cdef class Normal(Uniform):
         return self.R * cos(self.th)
 
 
-@state_transformer
-def counter(state, Vector counter_id, Vector clockv, Vector speedv=null_):
+@context_func
+def counter(Context context, Vector counter_id, Vector clockv, Vector speedv=null_):
     if counter_id.length == 0 or clockv.numbers == NULL or speedv.objects is not None:
         return null_
-    cdef Vector counter_state = state[counter_id]
+    cdef Vector counter_state = context.state.get_item(counter_id)
     if counter_state.numbers == NULL:
         counter_state = null_
     cdef int n = max(clockv.length, counter_state.length//2 if speedv.length == 0 else speedv.length), m = n * 2, i, j
@@ -145,22 +148,24 @@ def counter(state, Vector counter_id, Vector clockv, Vector speedv=null_):
             offset = clock * speed - count
         new_state.numbers[j] = offset
         new_state.numbers[j+1] = speed
-    state[counter_id] = new_state
+    context.state.set_item(counter_id, new_state)
     return countv
 
 
-def read_text(Vector filename):
+@context_func
+def read_text(Context context, Vector filename):
     cdef str path = filename.as_string()
     if path:
-        return Vector._coerce(SharedCache[path].read_text(encoding='utf8'))
+        return Vector._coerce(SharedCache.get_with_root(path, context.path).read_text(encoding='utf8'))
     return null_
 
 
-def read_csv(Vector filename, Vector row_number):
+@context_func
+def read_csv(Context context, Vector filename, Vector row_number):
     cdef str path = str(filename)
     row = row_number.match(1, int)
     if filename and row is not None:
-        return SharedCache[path].read_csv_vector(row)
+        return SharedCache.get_with_root(path, context.path).read_csv_vector(row)
     return null_
 
 
@@ -270,6 +275,36 @@ def sqrtv(Vector xs not None):
     return ys
 
 
+def logv(Vector xs not None):
+    if xs.numbers == NULL:
+        return null_
+    cdef Vector ys = Vector.__new__(Vector)
+    cdef int i, n = xs.length
+    for i in range(ys.allocate_numbers(n)):
+        ys.numbers[i] = log(xs.numbers[i])
+    return ys
+
+
+def log2v(Vector xs not None):
+    if xs.numbers == NULL:
+        return null_
+    cdef Vector ys = Vector.__new__(Vector)
+    cdef int i, n = xs.length
+    for i in range(ys.allocate_numbers(n)):
+        ys.numbers[i] = log2(xs.numbers[i])
+    return ys
+
+
+def log10v(Vector xs not None):
+    if xs.numbers == NULL:
+        return null_
+    cdef Vector ys = Vector.__new__(Vector)
+    cdef int i, n = xs.length
+    for i in range(ys.allocate_numbers(n)):
+        ys.numbers[i] = log10(xs.numbers[i])
+    return ys
+
+
 def sine(Vector xs not None):
     if xs.numbers == NULL:
         return null_
@@ -290,22 +325,22 @@ def bounce(Vector xs not None):
     return ys
 
 
-def impulse(Vector xs not None):
-    if xs.numbers == NULL:
+def impulse(Vector xs not None, Vector cs=None):
+    if xs.numbers == NULL or (cs is not None and cs.numbers == NULL):
         return null_
     cdef Vector ys = Vector.__new__(Vector)
-    cdef double x, y
+    cdef int n=cs.length
+    cdef double x, c, y
     for i in range(ys.allocate_numbers(xs.length)):
         x = xs.numbers[i]
         x -= floor(x)
-        # bounce(linear(x * 4) / 2) - quad(linear((x * 4 - 1) / 3))
-        x *= 4
-        if x < 1:
-            y = sin(Pi*x/2)
+        c = cs.numbers[i%n] if cs is not None else 0.25
+        if x < c:
+            y = 1 - x/c
+            y = 1 - y*y
         else:
-            x -= 1
-            x /= 3
-            y = 1 - ((x * 2)**2 / 2 if x < 0.5 else 1 - ((1 - x) * 2)**2 / 2)
+            y = 1 - (x-c)/(1-c)
+            y = y*y
         ys.numbers[i] = y
     return ys
 
@@ -461,27 +496,38 @@ def floorv(Vector xs not None):
     return ys
 
 
-def sumv(Vector xs not None):
-    if xs.objects is not None:
+def sumv(Vector xs not None, Vector zs=true_):
+    cdef int i, j, k, n = xs.length
+    if n == 0 or xs.objects is not None or zs.length != 1 or zs.objects is not None:
         return null_
-    cdef double y = 0
-    for i in range(xs.length):
-        y += xs.numbers[i]
     cdef Vector ys = Vector.__new__(Vector)
-    ys.allocate_numbers(1)
-    ys.numbers[0] = y
+    cdef int m = <int>(zs.numbers[0])
+    if m < 1:
+        return null_
+    ys.allocate_numbers(m)
+    for i in range(m):
+        ys.numbers[i] = 0
+    for i in range(0, n, m):
+        for j in range(min(m, n-i)):
+            ys.numbers[j] += xs.numbers[i+j]
     return ys
 
 
-def accumulate(Vector xs not None):
-    cdef int i, n = xs.length
-    if n == 0 or xs.objects is not None:
+def accumulate(Vector xs not None, Vector zs=true_):
+    cdef int i, j, k, n = xs.length
+    if n == 0 or xs.objects is not None or zs.length != 1 or zs.objects is not None:
         return null_
     cdef Vector ys = Vector.__new__(Vector)
-    cdef double y = 0
-    for i in range(ys.allocate_numbers(n)):
-        y += xs.numbers[i]
-        ys.numbers[i] = y
+    cdef int m = <int>(zs.numbers[0])
+    if m < 1:
+        return null_
+    ys.allocate_numbers(n)
+    for j in range(min(n, m)):
+        ys.numbers[j] = xs.numbers[j]
+    for i in range(m, n, m):
+        for j in range(min(m, n-i)):
+            k = i + j
+            ys.numbers[k] = ys.numbers[k-m] + xs.numbers[k]
     return ys
 
 
@@ -753,6 +799,9 @@ STATIC_FUNCTIONS = {
     'abs': Vector(absv),
     'exp': Vector(expv),
     'sqrt': Vector(sqrtv),
+    'log': Vector(logv),
+    'log2': Vector(log2v),
+    'log10': Vector(log10v),
     'sine': Vector(sine),
     'bounce': Vector(bounce),
     'sharkfin': Vector(sharkfin),

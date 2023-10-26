@@ -1,8 +1,9 @@
 # cython: language_level=3, profile=False
 
-from ..model cimport Vector, Node
-
 from cpython cimport PyObject
+
+from ..model cimport Vector, Query
+from .context cimport Context
 
 
 cdef dict static_builtins
@@ -15,6 +16,19 @@ cdef class VectorStack:
     cdef int top
     cdef readonly int size
 
+    cpdef VectorStack copy(self)
+    cpdef void drop(self, int count=?)
+    cpdef void push(self, Vector vector)
+    cpdef Vector pop(self)
+    cpdef tuple pop_tuple(self, int count)
+    cpdef list pop_list(self, int count)
+    cpdef dict pop_dict(self, tuple keys)
+    cpdef Vector pop_composed(self, int count)
+    cpdef Vector peek(self)
+    cpdef Vector peek_at(self, int offset)
+    cpdef void poke(self, Vector vector)
+    cpdef void poke_at(self, int offset, Vector vector)
+
 
 cdef class Program:
     cdef readonly list instructions
@@ -23,29 +37,63 @@ cdef class Program:
     cdef readonly object top
     cdef readonly VectorStack stack
     cdef readonly VectorStack lvars
+    cdef int next_label
 
-    cdef dict import_module(self, Context context, str filename, bint record_stats, double* duration)
     cpdef void link(self)
-    cpdef optimize(self)
-    cdef VectorStack _execute(self, Context context, VectorStack stack, VectorStack lvars, bint record_stats)
-
-
-cdef class StateDict:
-    cdef set _changed_keys
-    cdef dict _state
-
-    cdef Vector get_item(self, Vector key)
-    cdef void set_item(self, Vector key, Vector value)
-    cdef bint contains(self, Vector key)
-
-
-cdef class Context:
-    cdef readonly dict variables
-    cdef readonly set unbound
-    cdef readonly dict pragmas
-    cdef readonly StateDict state
-    cdef readonly Node graph
-    cdef readonly object path
-    cdef readonly Context parent
-    cdef readonly set errors
-    cdef readonly set logs
+    cpdef void optimize(self)
+    cpdef int new_label(self)
+    cpdef void dup(self)
+    cpdef void drop(self, int count=?)
+    cpdef void label(self, int label)
+    cpdef void jump(self, int label)
+    cpdef void branch_true(self, int label)
+    cpdef void branch_false(self, int label)
+    cpdef void pragma(self, str name)
+    cpdef void import_(self, tuple names)
+    cpdef void literal(self, value)
+    cpdef void local_push(self, int count)
+    cpdef void local_load(self, int offset)
+    cpdef void local_drop(self, int count)
+    cpdef void name(self, str name)
+    cpdef void lookup(self)
+    cpdef void lookup_literal(self, Vector value)
+    cpdef void range(self)
+    cpdef void neg(self)
+    cpdef void pos(self)
+    cpdef void not_(self)
+    cpdef void add(self)
+    cpdef void sub(self)
+    cpdef void mul(self)
+    cpdef void mul_add(self)
+    cpdef void truediv(self)
+    cpdef void floordiv(self)
+    cpdef void mod(self)
+    cpdef void pow(self)
+    cpdef void eq(self)
+    cpdef void ne(self)
+    cpdef void gt(self)
+    cpdef void lt(self)
+    cpdef void ge(self)
+    cpdef void le(self)
+    cpdef void xor(self)
+    cpdef void slice(self)
+    cpdef void slice_literal(self, Vector value)
+    cpdef void call(self, int count, tuple names=?)
+    cpdef void call_fast(self, object function, int count)
+    cpdef void tag(self, str name)
+    cpdef void attribute(self, str name)
+    cpdef void append(self, int count=?)
+    cpdef void prepend(self)
+    cpdef void compose(self, int count)
+    cpdef void set_node_scope(self)
+    cpdef void clear_node_scope(self)
+    cpdef void begin_for(self)
+    cpdef void next(self, int count, int label)
+    cpdef void push_next(self, int label)
+    cpdef void end_for(self)
+    cpdef void end_for_compose(self)
+    cpdef void store_global(self, str name)
+    cpdef void search(self, Query query)
+    cpdef void func(self, str name, tuple parameters)
+    cpdef void append_root(self)
+    cdef void _execute(self, Context context, VectorStack stack, VectorStack lvars, bint record_stats)

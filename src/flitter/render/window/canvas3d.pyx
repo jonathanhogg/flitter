@@ -10,11 +10,12 @@ from loguru import logger
 import moderngl
 import numpy as np
 
-from libc.math cimport cos
+from libc.math cimport cos, log2, sqrt
 
+from . import SceneNode, COLOR_FORMATS
 from ... import name_patch
 from ...clock import system_clock
-from ...model cimport Node, Vector, Matrix44, null_
+from ...model cimport Node, Vector, Matrix44, null_, true_
 from .glsl import TemplateLoader
 from .models cimport Model, Box, Cylinder, Sphere, LoadedModel
 
@@ -23,6 +24,9 @@ logger = name_patch(logger, __name__)
 
 cdef Vector Zero3 = Vector((0, 0, 0))
 cdef Vector One3 = Vector((1, 1, 1))
+cdef Vector Xaxis = Vector((1, 0, 0))
+cdef Vector Yaxis = Vector((0, 1, 0))
+cdef Vector Black = Vector((0, 0, 0, 1))
 cdef int DEFAULT_MAX_LIGHTS = 50
 cdef double Pi = 3.141592653589793
 cdef tuple MaterialAttributes = ('color', 'specular', 'emissive', 'shininess', 'transparency',
@@ -182,7 +186,12 @@ def draw(Node node, tuple size, glctx, dict objects, dict references):
     cdef double far = node.get_float('far', width)
     cdef double fog_min = node.get_float('fog_min', 0)
     cdef double fog_max = node.get_float('fog_max', 0)
-    cdef Vector fog_color = node.get_fvec('fog_color', 3, Zero3)
+    cdef Vector fog_color = node.get_fvec('fog_color', 3, null_)
+    if fog_color is null_:
+        fog_color = node.get_fvec('fog_color', 4, Black)
+    else:
+        fog_color = fog_color.concat(true_)
+    cdef double fog_curve = max(0, node.get_float('fog_curve', 1))
     cdef int max_lights = node.get_int('max_lights', DEFAULT_MAX_LIGHTS)
     cdef Matrix44 pv_matrix
     if orthographic:
@@ -200,7 +209,7 @@ def draw(Node node, tuple size, glctx, dict objects, dict references):
     collect(node, model_matrix, material, None, render_sets)
     for render_set in render_sets:
         if render_set.instances:
-            render(render_set, pv_matrix, orthographic, viewpoint, focus, max_lights, fog_min, fog_max, fog_color,
+            render(render_set, pv_matrix, orthographic, viewpoint, focus, max_lights, fog_min, fog_max, fog_color, fog_curve,
                    glctx, objects, references)
 
 
@@ -313,15 +322,38 @@ cdef void collect(Node node, Matrix44 model_matrix, Material material, RenderSet
             lights.append(light)
 
 
+cdef Matrix44 instance_start_end_matrix(Vector start, Vector end, double radius):
+    cdef Vector direction = end.sub(start);
+    cdef double length = sqrt(direction.squared_sum())
+    if length == 0 or radius <= 0:
+        return None
+    cdef Vector up = Xaxis if direction.numbers[0] == 0 and direction.numbers[2] == 0 else Yaxis
+    cdef Vector middle = Vector.__new__(Vector)
+    middle.allocate_numbers(3)
+    middle.numbers[0] = (start.numbers[0] + end.numbers[0]) / 2
+    middle.numbers[1] = (start.numbers[1] + end.numbers[1]) / 2
+    middle.numbers[2] = (start.numbers[2] + end.numbers[2]) / 2
+    cdef Vector size = Vector.__new__(Vector)
+    size.allocate_numbers(3)
+    size.numbers[0] = radius
+    size.numbers[1] = radius
+    size.numbers[2] = length
+    return Matrix44._look(middle, end, up).inverse().mmul(Matrix44._scale(size))
+
+
 cdef void add_instance(dict render_instances, Model model, Node node, Matrix44 model_matrix, Material material):
-    cdef Vector vec = None
     cdef Matrix44 matrix = None
-    if (vec := node.get_fvec('position', 3, None)) is not None and (matrix := Matrix44._translate(vec)) is not None:
+    cdef Vector vec=None, start=None, end=None
+    if (start := node.get_fvec('start', 3, None)) is not None and (end := node.get_fvec('end', 3, None)) is not None \
+            and (matrix := instance_start_end_matrix(start, end, node.get_float('radius', 1))) is not None:
         model_matrix = model_matrix.mmul(matrix)
-    if (vec := node.get_fvec('rotation', 3, None)) is not None and (matrix := Matrix44._rotate(vec)) is not None:
-        model_matrix = model_matrix.mmul(matrix)
-    if (vec := node.get_fvec('size', 3, None)) is not None and (matrix := Matrix44._scale(vec)) is not None:
-        model_matrix = model_matrix.mmul(matrix)
+    else:
+        if (vec := node.get_fvec('position', 3, None)) is not None and (matrix := Matrix44._translate(vec)) is not None:
+            model_matrix = model_matrix.mmul(matrix)
+        if (vec := node.get_fvec('rotation', 3, None)) is not None and (matrix := Matrix44._rotate(vec)) is not None:
+            model_matrix = model_matrix.mmul(matrix)
+        if (vec := node.get_fvec('size', 3, None)) is not None and (matrix := Matrix44._scale(vec)) is not None:
+            model_matrix = model_matrix.mmul(matrix)
     cdef Instance instance = Instance.__new__(Instance)
     instance.model_matrix = model_matrix
     instance.material = material
@@ -334,7 +366,7 @@ def fst(tuple ab):
 
 
 cdef void render(RenderSet render_set, Matrix44 pv_matrix, bint orthographic, Vector viewpoint, Vector focus, int max_lights,
-                 double fog_min, double fog_max, Vector fog_color, glctx, dict objects, dict references):
+                 double fog_min, double fog_max, Vector fog_color, float fog_curve, glctx, dict objects, dict references):
     cdef list instances, lights, buffers
     cdef cython.float[:, :] matrices, materials, lights_data
     cdef Material material
@@ -346,6 +378,7 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, bint orthographic, Ve
     cdef double* src
     cdef float* dest
     cdef Instance instance
+    cdef Matrix44 matrix
     cdef bint has_transparency_texture
     cdef tuple transparent_object
     cdef list transparent_objects = []
@@ -366,6 +399,7 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, bint orthographic, Ve
     shader['fog_min'] = fog_min
     shader['fog_max'] = fog_max
     shader['fog_color'] = fog_color
+    shader['fog_curve'] = fog_curve
     shader['use_diffuse_texture'] = False
     shader['use_specular_texture'] = False
     shader['use_emissive_texture'] = False
@@ -408,7 +442,8 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, bint orthographic, Ve
             zs_array = np.empty(n)
             zs = zs_array
             for i, instance in enumerate(instances):
-                zs[i] = pv_matrix.mmul(instance.model_matrix).numbers[14]
+                matrix = pv_matrix.mmul(instance.model_matrix)
+                zs[i] = matrix.numbers[14] / matrix.numbers[15]
             indices = zs_array.argsort()
         else:
             indices = np.arange(n, dtype='long')
@@ -524,3 +559,87 @@ cdef void dispatch_instances(glctx, dict objects, shader, Model model, int count
         shader['use_specular_texture'] = False
         shader['use_emissive_texture'] = False
         shader['use_transparency_texture'] = False
+
+
+class Canvas3D(SceneNode):
+    def __init__(self, glctx):
+        super().__init__(glctx)
+        self._image_texture = None
+        self._image_framebuffer = None
+        self._color_renderbuffer = None
+        self._depth_renderbuffer = None
+        self._render_framebuffer = None
+        self._colorbits = None
+        self._samples = None
+        self._total_duration = 0
+        self._total_count = 0
+
+    @property
+    def texture(self):
+        return self._image_texture
+
+    def release(self):
+        self._colorbits = None
+        self._samples = None
+        self._render_framebuffer = None
+        self._image_texture = None
+        self._image_framebuffer = None
+        self._color_renderbuffer = None
+        self._depth_renderbuffer = None
+
+    def purge(self):
+        logger.info("{} draw stats - {:d} x {:.1f}ms = {:.1f}s", self.name, self._total_count,
+                    1e3 * self._total_duration / self._total_count, self._total_duration)
+        self._total_duration = 0
+        self._total_count = 0
+
+    def create(self, engine, node, resized, **kwargs):
+        colorbits = node.get('colorbits', 1, int, self.glctx.extra['colorbits'])
+        if colorbits not in COLOR_FORMATS:
+            colorbits = self.glctx.extra['colorbits']
+        samples = max(0, node.get('samples', 1, int, 0))
+        if samples:
+            samples = min(1 << int(log2(samples)), self.glctx.info['GL_MAX_SAMPLES'])
+        if resized or colorbits != self._colorbits or samples != self._samples:
+            self.release()
+            format = COLOR_FORMATS[colorbits]
+            self._image_texture = self.glctx.texture((self.width, self.height), 4, dtype=format.moderngl_dtype)
+            self._depth_renderbuffer = self.glctx.depth_renderbuffer((self.width, self.height), samples=samples)
+            if samples:
+                self._color_renderbuffer = self.glctx.renderbuffer((self.width, self.height), 4, samples=samples, dtype=format.moderngl_dtype)
+                self._render_framebuffer = self.glctx.framebuffer(color_attachments=(self._color_renderbuffer,), depth_attachment=self._depth_renderbuffer)
+                self._image_framebuffer = self.glctx.framebuffer(self._image_texture)
+                logger.debug("Created canvas3d {}x{}/{}-bit render target with {}x sampling", self.width, self.height, colorbits, samples)
+            else:
+                self._render_framebuffer = self.glctx.framebuffer(color_attachments=(self._image_texture,), depth_attachment=self._depth_renderbuffer)
+                logger.debug("Created canvas3d {}x{}/{}-bit render target", self.width, self.height, colorbits)
+            self._colorbits = colorbits
+            self._samples = samples
+
+    async def descend(self, engine, node, **kwargs):
+        # A canvas3d is a leaf node from the perspective of the OpenGL world
+        pass
+
+    def render(self, node, references=None, **kwargs):
+        self._total_duration -= system_clock()
+        self._render_framebuffer.use()
+        fog_min = node.get('fog_min', 1, float, 0)
+        fog_max = node.get('fog_max', 1, float, 0)
+        if fog_max > fog_min:
+            fog_color = node.get('fog_color', 3, float)
+            if fog_color is None:
+                fog_color = node.get('fog_color', 4, float, (0, 0, 0, 1))
+            else:
+                fog_color = fog_color + [1]
+            self._render_framebuffer.clear(*fog_color)
+        else:
+            self._render_framebuffer.clear()
+        objects = self.glctx.extra.setdefault('canvas3d_objects', {})
+        draw(node, (self.width, self.height), self.glctx, objects, references)
+        if self._image_framebuffer is not None:
+            self.glctx.copy_framebuffer(self._image_framebuffer, self._render_framebuffer)
+        self._total_duration += system_clock()
+        self._total_count += 1
+
+
+SCENE_NODE_CLASS = Canvas3D

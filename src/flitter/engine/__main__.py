@@ -4,8 +4,6 @@ Flitter main entry point
 
 import argparse
 import asyncio
-import subprocess
-import sys
 
 from flitter import configure_logger
 from .control import EngineController
@@ -36,34 +34,22 @@ def main():
     parser.add_argument('--fullscreen', action='store_true', default=False, help="Default to full screen")
     parser.add_argument('--vsync', action='store_true', default=False, help="Default to winow vsync")
     parser.add_argument('--state', type=str, help="State save/restore file")
-    parser.add_argument('--multiprocess', action='store_true', default=False, help="Use multiprocessing")
     parser.add_argument('--autoreset', type=float, help="Auto-reset state on idle")
     parser.add_argument('--evalstate', type=float, default=10, help="Partially-evaluate on state after stable period")
-    parser.add_argument('--push', action='store_true', default=False, help="Start Ableton Push 2 interface")
     parser.add_argument('--lockstep', action='store_true', default=False, help="Run clock in non-realtime mode")
     parser.add_argument('--define', '-D', action='append', default=[], type=keyvalue, dest='defines', help="Define variable for evaluation")
     parser.add_argument('--vmstats', action='store_true', default=False, help="Report VM statistics")
+    parser.add_argument('--runtime', type=float, help="Seconds to run for before exiting")
     parser.add_argument('script', nargs='+', help="Script to execute")
     args = parser.parse_args()
     logger = configure_logger(args.level)
     controller = EngineController(target_fps=args.fps, screen=args.screen, fullscreen=args.fullscreen, vsync=args.vsync,
-                                  state_file=args.state, multiprocess=args.multiprocess and not args.profile, autoreset=args.autoreset,
-                                  state_eval_wait=args.evalstate, realtime=not args.lockstep, defined_variables=dict(args.defines),
-                                  vm_stats=args.vmstats)
+                                  state_file=args.state, autoreset=args.autoreset, state_eval_wait=args.evalstate,
+                                  realtime=not args.lockstep, defined_variables=dict(args.defines), vm_stats=args.vmstats,
+                                  run_time=args.runtime)
     for script in args.script:
         controller.load_page(script)
     controller.switch_to_page(0)
-
-    if args.push:
-        arguments = [sys.executable, '-u', '-m', 'flitter.interface.push']
-        if args.level == 'DEBUG':
-            arguments.append('--debug')
-        elif args.level == 'VERBOSE':
-            arguments.append('--verbose')
-        push = subprocess.Popen(arguments)
-        logger.success("Started Push 2 interface sub-process")
-    else:
-        push = None
 
     try:
         if args.profile:
@@ -77,9 +63,6 @@ def main():
         logger.error("Unexpected exception in flitter")
         raise
     finally:
-        if push is not None:
-            push.kill()
-            push.wait()
         logger.complete()
 
 

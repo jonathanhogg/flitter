@@ -71,6 +71,21 @@ class FlitterTransformer(Transformer):
     def inline_loop(self, body, names, source):
         return tree.For(names, source, body)
 
+    def call(self, function, args):
+        args = list(args)
+        bindings = []
+        while args and isinstance(args[-1], tree.Binding):
+            bindings.insert(0, args.pop())
+        for arg in args:
+            if isinstance(arg, tree.Binding):
+                raise TypeError("Cannot mix positional and keyword arguments")
+        return tree.Call(function, tuple(args) if args else None, tuple(bindings) if bindings else None)
+
+    def template_call(self, function, bindings, sequence):
+        if sequence is not None:
+            return tree.Call(function, (sequence,), bindings)
+        return tree.Call(function, (tree.Literal(model.null),), bindings or None)
+
     tuple = v_args(inline=False)(tuple)
 
     add = tree.Add
@@ -78,7 +93,6 @@ class FlitterTransformer(Transformer):
     attributes = tree.Attributes
     binding = tree.Binding
     bool = tree.Literal
-    call = tree.Call
     divide = tree.Divide
     eq = tree.EqualTo
     file_import = tree.Import
@@ -114,7 +128,6 @@ class FlitterTransformer(Transformer):
     slice = tree.Slice
     subtract = tree.Subtract
     tag = tree.Tag
-    template_call = tree.TemplateCall
     test = tree.Test
     top = tree.Top
 

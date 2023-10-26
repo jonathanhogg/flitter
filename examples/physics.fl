@@ -19,22 +19,25 @@ let bubble_radii=MIN_BUBBLE_RADIUS+(1+noise(:radii, i*NOISE_SCALE, NOISE_T))/2*(
     bubble_brightness=(1+noise(:brightness, i*NOISE_SCALE, NOISE_T)) for i in ..NBUBBLES
 
 !physics dimensions=3 state=:bubble
-    let ease_in=linear(CYCLE)
-    !anchor id=:centre position=0;0;0
+    !anchor id=:centre position=(-SIZE*(($:pointer)-0.5);0) if $(:pointer;0) else (0;0;0)
     for i in ..NBUBBLES
         let r=bubble_radii[i]
         !particle id=i position=START[i*3..(i+1)*3] radius=r mass=r**3/1000
-        !distance from=i to=:centre strength=200 fixed=RADIUS-r
+        !distance from=i to=:centre strength=200 fixed=(r if $(:collapse) else RADIUS-r)
     !drag strength=0.0001
-    !collision strength=200*ease_in
+    !collision strength=200 ease=15
 
 !window size=SIZE colorbits=16
     !record filename=('blobs.m4v' if RECORD and CYCLE > 1) codec=:hevc crf=20 limit=30
         @bloom_filter size=SIZE/2 radius=hypot(SIZE)/300
-            !canvas3d viewpoint=0;0;1200 focus=0 near=1 far=2000 fov=60/360 samples=4
+            !canvas3d viewpoint=0;0;-1200 focus=0 near=1 far=2000 fov=60/360 samples=4
                 !light color=2;0;0
-                !light color=-1.9;0;0 direction=0;0;-1
-                !transform rotate_x=ROT/2 rotate_y=ROT/2
-                    !sphere subdivisions=3 color=0.01 size=RADIUS position=$(:bubble;:centre) transparency=0.05
-                    for i in ..NBUBBLES
-                        !sphere subdivisions=3 position=$(:bubble;i) color=bubble_brightness[i] size=bubble_radii[i]
+                !light color=-1.9;0;0 direction=0;0;1
+                !sphere subdivisions=3 color=0.01 size=RADIUS position=$(:bubble;:centre) transparency=0.05
+                for i in ..NBUBBLES
+                    !sphere subdivisions=3 position=$(:bubble;i) color=bubble_brightness[i] size=bubble_radii[i]
+
+     -- press the space bar to collapse the particles into the centre
+    !key name=:space state=:collapse
+     -- click and move mouse to move the anchor point around
+    !pointer state=:pointer

@@ -1,5 +1,5 @@
 
-#version 400
+#version 330
 
 precision mediump float;
 
