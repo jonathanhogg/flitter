@@ -915,7 +915,7 @@ class Canvas(SceneNode):
         self._total_duration -= system_clock()
         self._graphics_context.resetContext()
         self._framebuffer.clear()
-        _draw(node, self._canvas, stats=self._stats, references=references, colorspace=self._colorspace)
+        draw(node, self._canvas, stats=self._stats, references=references, colorspace=self._colorspace)
         self._surface.flushAndSubmit()
         self._total_duration += system_clock()
 
