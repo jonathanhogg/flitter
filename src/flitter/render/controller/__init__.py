@@ -38,7 +38,7 @@ class Controller:
     def destroy(self):
         if self.driver is not None:
             self.purge()
-            self.driver.stop()
+            asyncio.create_task(self.driver.stop())
             self.driver = None
 
     async def update(self, engine, node, clock, **kwargs):
@@ -50,19 +50,21 @@ class Controller:
                 driver_module = importlib.import_module(f'.{driver}', __package__)
                 driver_class = driver_module.get_driver_class()
             except (ImportError, NameError) as exc:
-                logger.opt(exception=exc).warning("Unable to import controller driver: {}", driver)
+                logger.warning("Unable to import controller driver: {}", driver)
                 driver_class = None
             self.DRIVER_CACHE[driver] = driver_class
+        else:
+            driver_class = None
         if self.driver is not None and (driver_class is None or not isinstance(self.driver, driver_class)):
-            self.driver.stop()
+            await self.driver.stop()
             self.driver = None
         if self.driver is None:
             if driver_class is not None:
-                self.driver = driver_class(node)
-                await self.driver.start(engine)
+                self.driver = driver_class(engine)
+                await self.driver.start()
             else:
                 return
-        await self.driver.start_update(engine, node)
+        await self.driver.start_update(node)
         controls = {}
         unknown = set()
         for child in list(node.children) + self.driver.get_default_config():
@@ -76,18 +78,18 @@ class Controller:
                     controls[key] = control
                     if key in self.controls:
                         del self.controls[key]
-                    if control.update(engine, child, clock):
+                    if control.update(child, clock):
                         control.update_representation()
-                    control.update_state(engine)
+                    control.update_state()
                     continue
-            if not self.driver.handle_node(engine, child):
+            if not self.driver.handle_node(child):
                 unknown.add(child.kind)
         for kind in unknown.difference(self.unknown):
             logger.warning("Unexpected '{}' node in controller", kind)
         self.purge()
         self.unknown = unknown
         self.controls = controls
-        await self.driver.finish_update(engine)
+        await self.driver.finish_update()
         await asyncio.sleep(0)
 
 

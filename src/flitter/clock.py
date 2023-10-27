@@ -117,6 +117,9 @@ class BeatCounter:
         finally:
             self._resync_events.remove(resync_event)
 
+    def __repr__(self):
+        return f"BeatCounter(tempo={60/self._period:.1f}, quantum={self._quantum}, start={self._start:.1f})"
+
 
 class TapTempo:
     def __init__(self, rounding=2):

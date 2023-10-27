@@ -6,12 +6,14 @@ import math
 
 from loguru import logger
 
+from ...clock import TapTempo
 from ...model import Vector, Node
 
 
 class Control:
-    def __init__(self, control_id):
+    def __init__(self, driver, control_id):
         self._initialised = False
+        self.driver = driver
         self.control_id = control_id
         self.reset()
 
@@ -28,15 +30,7 @@ class Control:
     def primary_state_value(self):
         raise NotImplementedError()
 
-    @property
-    def color(self):
-        if not self._initialised:
-            return 0, 0, 0
-        if self._color is None:
-            return 1, 1, 1
-        return self._color
-
-    def update(self, engine, node: Node, now: float):
+    def update(self, node: Node, now: float):
         """Update the configuration of the control to match the tree node."""
         changed = False
         action = node.get('action')
@@ -65,11 +59,11 @@ class Control:
            current configuration and state of the control."""
         raise NotImplementedError()
 
-    def update_state(self, engine):
+    def update_state(self):
         """Update the program state dictionary and any other engine state
            (such as the beat counter tempo) to match the control state."""
         if self._state_prefix:
-            engine.state[self._state_prefix] = self.primary_state_value()
+            self.driver.engine.state[self._state_prefix] = self.primary_state_value()
 
 
 class PositionControl(Control):
@@ -101,15 +95,14 @@ class PositionControl(Control):
     def primary_state_value(self):
         return self.position
 
-    def update(self, engine, node, now):
-        changed = super().update(engine, node, now)
+    def update(self, node, now):
+        changed = super().update(node, now)
         if self._action is not None:
             match self._action:
                 case 'tempo':
-                    if self._raw_position is None:
-                        self._raw_position = engine.counter.tempo * 2
-                    elif self._raw_position != engine.counter.tempo:
-                        engine.counter.tempo = self._raw_position / 2
+                    raw_position = self.driver.engine.counter.tempo * 2
+                    if raw_position != self._raw_position:
+                        self._raw_position = raw_position
                         changed = True
                     self._lag = None
                     self._lower = None
@@ -137,7 +130,7 @@ class PositionControl(Control):
             position_range = self._upper - self._lower
             position = self._raw_position / self.raw_divisor * position_range + self._lower
             if self._position is not None and abs(position - self._position) > position_range / 1000:
-                delta = engine.counter.beat_at_time(now) - engine.counter.beat_at_time(self._position_time)
+                delta = self.driver.engine.counter.beat_at_time(now) - self.driver.engine.counter.beat_at_time(self._position_time)
                 alpha = math.exp(-delta / self._lag) if self._lag > 0 else 0
                 self._position = self._position * alpha + position * (1 - alpha)
                 self._position_time = now
@@ -148,7 +141,7 @@ class PositionControl(Control):
                     self._position = self._lower + (position - self._lower) % (self._upper - self._lower)
                 else:
                     self._position = position
-                self._position_time = now
+                self._position_time = None
                 changed = True
         return changed
 
@@ -157,6 +150,9 @@ class PositionControl(Control):
             return False
         if raw_position != self._raw_position:
             self._raw_position = raw_position
+            self._position_time = timestamp
+            if self._action == 'tempo' and self._raw_position != self.driver.engine.counter.tempo * 2:
+                self.driver.engine.counter.tempo = self._raw_position / 2
             return True
         return False
 
@@ -166,14 +162,22 @@ class SettablePositionControl(PositionControl):
         super().reset()
         self._initial = None
 
-    def update(self, engine, node, now):
-        changed = super().update(engine, node, now)
+    @property
+    def initial_raw_position(self):
+        if self._initialised:
+            position_range = self._upper - self._lower
+            position = min(max(self._lower, self._initial), self._upper)
+            return (position - self._lower) / position_range * self.raw_divisor if position_range else 0
+        return None
+
+    def update(self, node, now):
+        changed = super().update(node, now)
         if (initial := node.get('initial', 1, float, self._origin)) != self._initial:
             self._initial = initial
             changed = True
         if self._raw_position is None:
-            if self._state_prefix and self._state_prefix in engine.state:
-                initial = float(engine.state[self._state_prefix])
+            if self._state_prefix and self._state_prefix in self.driver.engine.state:
+                initial = float(self.driver.engine.state[self._state_prefix])
             else:
                 initial = self._initial
             self._position = min(max(self._lower, initial), self._upper)
@@ -183,12 +187,19 @@ class SettablePositionControl(PositionControl):
             changed = True
         return changed
 
-    def handle_position_reset(self, timestamp):
+    def handle_raw_position_reset(self, timestamp):
         if not self._initialised or self._action is not None:
             return False
-        position_range = self._upper - self._lower
-        position = min(max(self._lower, self._initial), self._upper)
-        raw_position = (position - self._lower) / position_range * self.raw_divisor if position_range else 0
+        raw_position = self.initial_raw_position
+        if self._wrap:
+            raw_divisor = self.raw_divisor
+            delta = raw_position - self._raw_position
+            while delta > raw_divisor//2:
+                raw_position -= raw_divisor
+                delta -= raw_divisor
+            while delta < -raw_divisor//2:
+                raw_position += raw_divisor
+                delta += raw_divisor
         return self.handle_raw_position_change(raw_position, timestamp)
 
 
@@ -209,12 +220,12 @@ class EncoderControl(SettablePositionControl):
         else:
             return self._position
 
-    def update(self, engine, node, now):
+    def update(self, node, now):
         changed = False
         if self._action is None and (turns := node.get('turns', 1, float, 1)) != self._turns:
             self._turns = turns
             changed = True
-        if super().update(engine, node, now):
+        if super().update(node, now):
             changed = True
         default_style = 'volume' if self._origin == self._lower else 'pan'
         style = node.get('style', 1, str, default_style).lower()
@@ -254,43 +265,83 @@ class ButtonControl(Control):
         self._toggled_changed = None
         self._toggle_time = None
         self._toggle_group = None
+        self._action_control = None
+        self._action_control_color = None
         self._action_can_trigger = None
         self._action_triggered = None
+        self._tap_tempo = None
+        self._tap_time = None
 
     def primary_state_value(self):
         return self._pushed if not self._toggle else self._toggled
 
-    def update_action(self, triggered, engine, now):
-        match self._action:
-            case 'next':
-                if triggered:
-                    engine.next_page()
-                return engine.has_next_page()
-            case 'previous':
-                if triggered:
-                    engine.previous_page()
-                return engine.has_previous_page()
-        return False
-
-    def update(self, engine, node, now):
-        changed = super().update(engine, node, now)
+    def update(self, node, now):
+        changed = super().update(node, now)
+        if self._action is not None:
+            triggered = self._action_can_trigger and self._action_triggered
+            action_control = None
+            action_can_trigger = False
+            action_control_color = None
+            match self._action:
+                case 'next':
+                    if triggered:
+                        self.driver.engine.next_page()
+                    return self.driver.engine.has_next_page()
+                case 'previous':
+                    if triggered:
+                        self.driver.engine.previous_page()
+                    return self.driver.engine.has_previous_page()
+                case 'reset', kind, *control_id:
+                    control = self.driver.get_control(kind, Vector(control_id))
+                    if control is not None and control._initialised and isinstance(control, SettablePositionControl):
+                        action_control = control
+                        if triggered:
+                            if control.handle_raw_position_reset(now):
+                                control.update_representation()
+                        action_control_color = control._color
+                        action_can_trigger = control._raw_position != control.initial_raw_position
+                case 'tap_tempo', kind, *control_id:
+                    control = self.driver.get_control(kind, Vector(control_id))
+                    if control is not None and control._initialised and isinstance(control, TouchControl):
+                        action_control = control
+                        if triggered:
+                            if self._tap_tempo is None:
+                                self._tap_tempo = TapTempo()
+                            else:
+                                self._tap_tempo.apply(self.driver.engine.counter, now)
+                                self._tap_tempo = None
+                                self.driver._screen_update_requested = True
+                        else:
+                            if control._touched_time != self._tap_time:
+                                self._tap_time = control._touched_time
+                                if self._tap_tempo is not None:
+                                    self._tap_tempo.tap(self._tap_time)
+                        action_control_color = control._color
+                        action_can_trigger = True
+                    else:
+                        self._tap_tempo = None
+                        self._tap_time = None
+                case _:
+                    self._tap_tempo = None
+                    self._tap_time = None
+            if action_control != self._action_control:
+                self._action_control = action_control
+                changed = True
+            if action_can_trigger != self._action_can_trigger:
+                self._action_can_trigger = action_can_trigger
+                changed = True
+            if action_control_color != self._action_control_color:
+                self._action_control_color = action_control_color
+                changed = True
+            self._action_triggered = False
+            self._toggled = None
+            self._toggle_time = None
+            self._toggled_changed = None
+            return changed
         toggle = node.get('toggle', 1, bool, False)
         group = node.get('group')
         if group is not None:
             group = tuple(group)
-        if self._action is not None:
-            triggered = self._action_can_trigger and self._action_triggered
-            action_can_trigger = self.update_action(triggered, engine, now)
-            self._action_triggered = False
-            if action_can_trigger != self._action_can_trigger:
-                self._action_can_trigger = action_can_trigger
-                changed = True
-            toggle = None
-            group = None
-            self._pushed = None
-            self._push_time = None
-            self._release_time = None
-            return changed
         if toggle != self._toggle:
             self._toggle = toggle
             self._toggled = None
@@ -299,10 +350,10 @@ class ButtonControl(Control):
             changed = True
         if self._toggle and self._toggled is None:
             key = self._state_prefix + ['toggled'] if self._state_prefix else None
-            if key and key in engine.state:
-                self._toggled = bool(engine.state[key])
-                toggled_beat = float(engine.state[key + ['beat']])
-                self._toggle_time = engine.counter.time_at_beat(toggled_beat)
+            if key and key in self.driver.engine.state:
+                self._toggled = bool(self.driver.engine.state[key])
+                toggled_beat = float(self.driver.engine.state[key + ['beat']])
+                self._toggle_time = self.driver.engine.counter.time_at_beat(toggled_beat)
             else:
                 self._toggled = node.get('initial', 1, bool, False)
                 self._toggle_time = now
@@ -321,9 +372,10 @@ class ButtonControl(Control):
             changed = True
         return changed
 
-    def update_state(self, engine):
-        super().update_state(engine)
+    def update_state(self):
+        super().update_state()
         if self._state_prefix:
+            engine = self.driver.engine
             engine.state[self._state_prefix + ['pushed']] = self._pushed
             engine.state[self._state_prefix + ['released']] = not self._pushed if self._pushed is not None else None
             engine.state[self._state_prefix + ['pushed', 'beat']] = \
@@ -351,7 +403,7 @@ class ButtonControl(Control):
                             button._toggled = False
                             button._toggle_time = timestamp
                             button._toggled_changed = True
-        elif self._action is None:
+        else:
             self._release_time = timestamp
         return True
 
@@ -363,9 +415,10 @@ class TouchControl(Control):
         self._touched_time = None
         self._untouched_time = None
 
-    def update_state(self, engine):
-        super().update_state(engine)
+    def update_state(self):
+        super().update_state()
         if self._state_prefix:
+            engine = self.driver.engine
             engine.state[self._state_prefix + ['touched']] = self._touched
             engine.state[self._state_prefix + ['untouched']] = not self._touched
             engine.state[self._state_prefix + ['touched', 'beat']] = \
@@ -393,10 +446,10 @@ class PressureControl(PositionControl, TouchControl, ButtonControl):
     def default_raw_threshold(self):
         return self.raw_divisor // 2
 
-    def update(self, engine, node, now):
+    def update(self, node, now):
         if self._raw_position is None:
             self._raw_position = 0
-        changed = super().update(engine, node, now)
+        changed = super().update(node, now)
         if (threshold := node.get('threshold', 1, float)) is not None:
             position_range = self._upper - self._lower
             raw_threshold = (threshold - self._lower) / position_range * self.raw_divisor
@@ -417,22 +470,22 @@ class PressureControl(PositionControl, TouchControl, ButtonControl):
 
 
 class ControllerDriver:
-    def __init__(self, node: Node):
-        pass
+    def __init__(self, engine):
+        self.engine = engine
 
     def get_default_config(self) -> list[Node]:
         """Return a list of nodes that specify a default configuration."""
         raise NotImplementedError()
 
-    async def start(self, engine):
+    async def start(self):
         """Start the driver."""
         raise NotImplementedError()
 
-    def stop(self):
+    async def stop(self):
         """Stop the driver (or schedule it to stop)."""
         raise NotImplementedError()
 
-    async def start_update(self, engine, node: Node):
+    async def start_update(self, node: Node):
         """Start an update pass."""
         pass
 
@@ -440,11 +493,11 @@ class ControllerDriver:
         """Return a control matching the node `kind` and `id` attribute."""
         raise NotImplementedError()
 
-    def handle_node(self, engine, node: Node) -> bool:
+    def handle_node(self, node: Node) -> bool:
         """A second chance to handle nodes that don't appear to be controls.
            Return `False` if not handled, `True` otherwise."""
         return False
 
-    async def finish_update(self, engine):
+    async def finish_update(self):
         """Finish an update pass."""
         pass

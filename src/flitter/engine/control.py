@@ -118,7 +118,6 @@ class EngineController:
         except Exception:
             for task in tasks:
                 if not task.done():
-                    print('cancel', task)
                     task.cancel()
             await asyncio.gather(*tasks, return_exceptions=True)
             raise

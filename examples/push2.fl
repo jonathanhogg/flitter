@@ -2,16 +2,39 @@
 %pragma tempo 100
 
 !controller driver=:push2
-    !pad id=1;1 state=:custom_screen toggle=true color=1 if $(:custom_screen;:toggled) else beat%2//1
+    -- The encoders above the screen are 1..8 and will show UI on the screen by default:
+    let r=1 if $:thrust > -4 and $:thrust < 8 else sine(beat)
+    !rotary id=1 color=r;0;0 state=:thrust lower=-5 upper=10 decimals=2 lag=1 label='Thrust' units='kN'
+    !rotary id=2 color=1;0;1 state=:heading decimals=0 degrees=true wrap=true lag=1 style=:continuous label='Heading'
+    !rotary id=3 color=0;1;0 state=:brightness percent=true decimals=0 label='Brightness'
+
+    -- The other encoders are, respectively, `:tempo`, `:metronome` and `:setup`.
+    -- The `:tempo` rotary is configured for tempo control by default, but can be re-purposed.
+    !rotary id=:metronome state=:volume color=0;1;1 lower=0 upper=10 initial=3
+
+    -- The buttons immediately below each of `:tempo`, `:metronome` and 1..8 encoders will
+    -- be automatically configured to act as a reset button for the corresponding rotary,
+    -- pressing it will set the rotary back to its `initial` value.
+
+    -- The touch strip appears as the `:main` slider:
+    !slider id=:main state=:foo initial=0.5
+
+    -- The pads are numbered `row;column` counting downwards and rightwards from 1:
     for i in ..8
         !pad id=8;i+1 state=:color;i color=hsv(i/8;1;1) toggle=true group=:colors
-    let r=1 if $:thrust < 8 and $:thrust > -4 else sine(beat)
-    !rotary id=1 color=r;0;0 state=:thrust lower=-5 upper=10 decimals=2 label='Thrust' lag=1 units='kN'
-    !rotary id=2 color=1;0;1 decimals=0 degrees=true style=:continuous label='Heading' lag=1 wrap=true
-    !rotary id=3 color=0;1;0 state=:green percent=true decimals=0 label='Brightness'
-    !slider id=:main state=:foo initial=0.5
+
+    -- Although a pad can be used as a button, it's primary value is the pressure being applied
+    -- The `:pushed` and `:toggled` sub-keys can be used for button-like behaviour:
+    !pad id=1;1 state=:custom_screen toggle=true color=1 if $(:custom_screen;:toggled) else beat%2//1
+
+    -- The screen will automatically show UI for the 1..8 rotaries, but can be completely
+    -- controlled by adding a `!screen` node. This uses the same drawing nodes as the
+    -- window `!canvas`. The drawing area is 960px x 160px.
     if $(:custom_screen;:toggled)
+        let SIZE=960;160
         !screen
-            !text point=(960;160)/2 text="Hello world!" color=hsv(beat/16;1;1) font_size=100 center=true
-    !button id=:record color=1;0;0
-    !button id=:play color=0;1;0
+            !text point=SIZE/2 text="Hello world!" color=hsv(beat/16;1;1) font_size=100 center=true
+
+    -- All of the buttons on the Push2 can be accessed:
+    !button id=:record state=:recording toggle=true group=:tape color=((r;0;0) where r=beat%2//1 if $:recording else 1)
+    !button id=:play state=:playing toggle=true group=:tape color=((0;g;0) where g=beat%2//1 if $:playing else 1)

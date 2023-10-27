@@ -23,6 +23,10 @@ from .events import (PadPressed, PadHeld, PadReleased,
 from .palette import SimplePalette
 
 
+class Push2CommunicationError(Exception):
+    pass
+
+
 class Push2:
     USB_VENDOR = 0x2982
     USB_PRODUCT = 0x1967
@@ -65,6 +69,7 @@ class Push2:
         self._usb_device = usb.core.find(idVendor=self.USB_VENDOR, idProduct=self.USB_PRODUCT)
         if self._usb_device is None:
             raise RuntimeError("Cannot locate USB device")
+        self._usb_device.reset()
         self._usb_device.set_configuration()
         self._screen_endpoint = self._usb_device.get_active_configuration()[0, 0][0]
         self._midi_out = rtmidi2.MidiOut()
@@ -106,22 +111,28 @@ class Push2:
             self._send_sysex(Command.SET_COLOR_PALETTE_ENTRY, i, r & 0x7f, r >> 7, g & 0x7f, g >> 7, b & 0x7f, b >> 7, w & 0x7f, w >> 7)
         self._send_sysex(Command.REAPPLY_COLOR_PALETTE)
 
-    def stop(self):
+    async def stop(self):
         if self._clock_task is not None:
             self._clock_task.cancel()
+            await self._clock_task
             self._clock_task = None
-        if self._screen_task is not None:
-            self._screen_task.cancel()
-            self._screen_task = None
+        if self._midi_out is not None:
+            for number in BUTTONS:
+                self.set_button_white(number, 0)
+            for number in range(64):
+                self.set_pad_rgb(number, 0, 0, 0)
+            self.set_touch_strip_position(0)
+            self._midi_out.close_port()
+            self._midi_out = None
         if self._midi_in is not None:
             self._midi_in.close_port()
             self._midi_in = None
-        if self._midi_out is not None:
-            self._midi_out.close_port()
-            self._midi_out = None
+        if self._screen_task is not None:
+            self._screen_task.cancel()
+            await self._screen_task
+            self._screen_task = None
         if self._usb_device is not None:
             self._screen_endpoint = None
-            self._usb_device.reset()
             self._usb_device = None
         self._receive_queue = asyncio.Queue()
         self._last_receive_timestamp = None
@@ -188,6 +199,10 @@ class Push2:
         return self.process_message(message, timestamp)
 
     async def wait_event(self):
+        if self._clock_task.done():
+            await self._clock_task
+        if self._screen_task.done():
+            await self._screen_task
         message, timestamp = await self._receive_queue.get()
         return self.process_message(message, timestamp)
 
@@ -235,8 +250,6 @@ class Push2:
     async def screen_context(self):
         if self._screen_task is None:
             raise TypeError("Screen task not running")
-        if self._screen_task.done():
-            await self._screen_task
         async with self._screen_update:
             with self._screen_surface as ctx:
                 ctx.save()
@@ -257,6 +270,7 @@ class Push2:
                 await self._counter.wait_for_beat(tick / 24)
         except asyncio.CancelledError:
             logger.trace("Stopped Push2 clock task")
+            self._send_midi([MIDI.STOP])
         except Exception:
             logger.exception("Unexpected exception in Push2 clock task")
 
@@ -272,6 +286,10 @@ class Push2:
                         pass
         except asyncio.CancelledError:
             logger.trace("Stopped Push2 screen task")
+            self._surface_array[:, :, :] = 0
+            self._update_screen()
+        except usb.core.USBError as exc:
+            raise Push2CommunicationError("Error sending screen data") from exc
         except Exception:
             logger.exception("Unexpected exception in Push2 screen task")
             raise

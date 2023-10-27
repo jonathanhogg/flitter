@@ -14,7 +14,7 @@ from ...ableton.events import (ButtonPressed, ButtonReleased,
                                PadPressed, PadHeld, PadReleased,
                                EncoderTurned, EncoderTouched, EncoderReleased,
                                TouchStripTouched, TouchStripDragged, TouchStripReleased)
-from ...ableton.push import Push2
+from ...ableton.push import Push2, Push2CommunicationError
 from ...ableton.palette import SimplePalette, PrimaryPalette, HuePalette
 from ...clock import system_clock
 from ...model import Vector, Node
@@ -25,16 +25,16 @@ DEFAULT_CONFIG = [
     Node('rotary', attributes={'id': Vector('tempo'), 'style': Vector('continuous'), 'action': Vector('tempo')}),
     Node('button', attributes={'id': Vector('page_left'), 'action': Vector('previous')}),
     Node('button', attributes={'id': Vector('page_right'), 'action': Vector('next')}),
-    Node('button', attributes={'id': Vector('tap_tempo'), 'action': Vector(['reset_rotary', 'tempo'])}),
-    Node('button', attributes={'id': Vector('metronome'), 'action': Vector(['reset_rotary', 'metronome'])}),
-    Node('button', attributes={'id': Vector('menu_1_0'), 'action': Vector(['reset_rotary', 1])}),
-    Node('button', attributes={'id': Vector('menu_1_1'), 'action': Vector(['reset_rotary', 2])}),
-    Node('button', attributes={'id': Vector('menu_1_2'), 'action': Vector(['reset_rotary', 3])}),
-    Node('button', attributes={'id': Vector('menu_1_3'), 'action': Vector(['reset_rotary', 4])}),
-    Node('button', attributes={'id': Vector('menu_1_4'), 'action': Vector(['reset_rotary', 5])}),
-    Node('button', attributes={'id': Vector('menu_1_5'), 'action': Vector(['reset_rotary', 6])}),
-    Node('button', attributes={'id': Vector('menu_1_6'), 'action': Vector(['reset_rotary', 7])}),
-    Node('button', attributes={'id': Vector('menu_1_7'), 'action': Vector(['reset_rotary', 8])}),
+    Node('button', attributes={'id': Vector('tap_tempo'), 'action': Vector(['tap_tempo', 'rotary', 'tempo'])}),
+    Node('button', attributes={'id': Vector('metronome'), 'action': Vector(['reset', 'rotary', 'metronome'])}),
+    Node('button', attributes={'id': Vector('menu_1_0'), 'action': Vector(['reset', 'rotary', 1])}),
+    Node('button', attributes={'id': Vector('menu_1_1'), 'action': Vector(['reset', 'rotary', 2])}),
+    Node('button', attributes={'id': Vector('menu_1_2'), 'action': Vector(['reset', 'rotary', 3])}),
+    Node('button', attributes={'id': Vector('menu_1_3'), 'action': Vector(['reset', 'rotary', 4])}),
+    Node('button', attributes={'id': Vector('menu_1_4'), 'action': Vector(['reset', 'rotary', 5])}),
+    Node('button', attributes={'id': Vector('menu_1_5'), 'action': Vector(['reset', 'rotary', 6])}),
+    Node('button', attributes={'id': Vector('menu_1_6'), 'action': Vector(['reset', 'rotary', 7])}),
+    Node('button', attributes={'id': Vector('menu_1_7'), 'action': Vector(['reset', 'rotary', 8])}),
 ]
 
 PALETTES = {
@@ -59,7 +59,7 @@ ROTARY_ID_MAPPING = {
     Encoder.SETUP: Vector('setup'),
 }
 
-MENU_ROTARIES = {
+SCREEN_ROTARIES = {
     Encoder.ZERO: 0,
     Encoder.ONE: 1,
     Encoder.TWO: 2,
@@ -80,9 +80,8 @@ def get_driver_class():
 class Push2RotaryControl(driver.TouchControl, driver.EncoderControl):
     DEFAULT_DECIMALS = 1
 
-    def __init__(self, control_id, driver, number):
-        super().__init__(control_id)
-        self._driver = driver
+    def __init__(self, driver, control_id, number):
+        super().__init__(driver, control_id)
         self._number = number
 
     def reset(self):
@@ -101,13 +100,17 @@ class Push2RotaryControl(driver.TouchControl, driver.EncoderControl):
 
     @property
     def color(self):
-        r, g, b = super().color
-        if not self._touched:
-            return r/2, g/2, b/2
-        return r, g, b
+        if not self._initialised:
+            return 0, 0, 0
+        if self._color is None:
+            red = green = blue = 1
+        else:
+            red, green, blue = self._color
+        brightness = 1 if self._touched else 0.5
+        return red*brightness, green*brightness, blue*brightness
 
-    def update(self, engine, node, now):
-        changed = super().update(engine, node, now)
+    def update(self, node, now):
+        changed = super().update(node, now)
         if (decimals := node.get('decimals', 1, int, self.DEFAULT_DECIMALS)) != self._decimals:
             self._decimals = decimals
             changed = True
@@ -123,78 +126,48 @@ class Push2RotaryControl(driver.TouchControl, driver.EncoderControl):
         return changed
 
     def update_representation(self):
-        if self._driver._push2 is None:
+        if self.driver._push2 is None:
             return
-        number = MENU_ROTARIES.get(self._number)
+        number = SCREEN_ROTARIES.get(self._number)
         if number is not None:
-            self._driver._screen_update_requested = True
+            self.driver._screen_update_requested = True
         else:
-            self._driver._screen_update_requested = self._action is not None
+            self.driver._screen_update_requested = self._action == 'tempo'
 
 
 class Push2ButtonControl(driver.ButtonControl):
-    def __init__(self, control_id, driver, number):
-        super().__init__(control_id)
-        self._driver = driver
+    def __init__(self, driver, control_id, number):
+        super().__init__(driver, control_id)
         self._number = number
-
-    def reset(self):
-        super().reset()
-        self._rotary_touched = None
-        self._rotary_color = None
 
     @property
     def color(self):
-        if not self._initialised or (self._action is not None and not self._action_can_trigger):
+        if not self._initialised or (self._action is not None and self._action_control is None):
             return 0, 0, 0
-        color = self._color or self._rotary_color
-        touched = self._pushed or self._rotary_touched
+        color = self._color or self._action_control_color
         if color is None:
             red = green = blue = 1
         else:
             red, green, blue = color
-        brightness = 1 if touched else 0.5
+        brightness = 0.5
+        if self._pushed:
+            brightness = 1
+        elif self._action and isinstance(self._action, tuple) and self._action[0] == 'tap_tempo':
+            if self._tap_tempo is not None:
+                brightness = 1
+        elif self._action_can_trigger:
+            brightness = 1
         return red*brightness, green*brightness, blue*brightness
 
-    def update_action(self, triggered, engine, now):
-        match self._action:
-            case 'reset_rotary', control_id:
-                rotary = self._driver._rotaries.get(Vector(control_id))
-                if triggered and rotary is not None:
-                    if rotary.handle_position_reset(now):
-                        rotary.update_representation()
-                return rotary is not None and rotary._initialised
-        return super().update_action(triggered, engine, now)
-
-    def update(self, engine, node, now):
-        changed = super().update(engine, node, now)
-        rotary_color = None
-        rotary_touched = None
-        if self._action is not None:
-            match self._action:
-                case 'reset_rotary', control_id:
-                    rotary = self._driver._rotaries.get(Vector(control_id))
-                    if rotary is not None:
-                        rotary_color = rotary._color
-                        rotary_touched = rotary._touched
-        if rotary_color != self._rotary_color:
-            self._rotary_color = rotary_color
-            changed = True
-        if rotary_touched != self._rotary_touched:
-            self._rotary_touched = rotary_touched
-            changed = True
-        return changed
-
     def update_representation(self):
-        if self._driver._push2 is None:
+        if self.driver._push2 is None:
             return
-        self._driver._push2.set_button_rgb(self._number, *self.color)
+        self.driver._push2.set_button_rgb(self._number, *self.color)
 
 
 class Push2PadControl(driver.PressureControl):
-    def __init__(self, control_id, driver, number):
-        super().__init__(control_id)
-        self._driver = driver
+    def __init__(self, driver, control_id, number):
+        super().__init__(driver, control_id)
         self._number = number
 
     @property
@@ -205,69 +178,106 @@ class Push2PadControl(driver.PressureControl):
     def raw_divisor(self):
         return 127
 
+    @property
+    def color(self):
+        if not self._initialised or (self._action is not None and self._action_control is None):
+            return 0, 0, 0
+        color = self._color or self._action_control_color
+        if color is None:
+            red = green = blue = 1
+        else:
+            red, green, blue = color
+        brightness = 0.5
+        if self._pushed or self._touched or self._toggled:
+            brightness = 1
+        elif self._action and isinstance(self._action, tuple) and self._action[0] == 'tap_tempo':
+            if self._tap_tempo is not None:
+                brightness = 1
+        elif self._action_can_trigger:
+            brightness = 1
+        return red*brightness, green*brightness, blue*brightness
+
     def update_representation(self):
-        if self._driver._push2 is None:
+        if self.driver._push2 is None:
             return
-        red, green, blue = self.color
-        brightness = 1 if self._touched or self._toggled else 0.5
-        self._driver._push2.set_pad_rgb(self._number, red*brightness, green*brightness, blue*brightness)
+        self.driver._push2.set_pad_rgb(self._number, *self.color)
 
 
 class Push2SliderControl(driver.TouchControl, driver.SettablePositionControl):
-    def __init__(self, control_id, driver):
-        super().__init__(control_id)
-        self._driver = driver
+    def reset(self):
+        super().reset()
+        self._return = None
 
     @property
     def raw_divisor(self):
         return 1 << 14
 
+    def update(self, node, now):
+        changed = super().update(node, now)
+        if (return_ := node.get('return', 1, bool, False)) != self._return:
+            self._return = return_
+            changed = True
+        return changed
+
     def update_representation(self):
-        if self._driver._push2 is None:
+        if self.driver._push2 is None:
             return
         if self._position is not None:
             position = (self._position - self._lower) / (self._upper - self._lower)
-            self._driver._push2.set_touch_strip_position(position)
+            self.driver._push2.set_touch_strip_position(position)
+
+    def handle_touch(self, touched, timestamp):
+        if self._return and self._touched is True and touched is False:
+            changed = self.handle_raw_position_reset(timestamp)
+        else:
+            changed = False
+        return super().handle_touch(touched, timestamp) or changed
 
 
 class Push2Driver(driver.ControllerDriver):
     MAX_SCREEN_REFRESH_PERIOD = 1/30
 
-    def __init__(self, node):
+    def __init__(self, engine):
+        super().__init__(engine)
         self._push2 = None
         self._rotaries = {}
         for number, control_id in ROTARY_ID_MAPPING.items():
-            self._rotaries[control_id] = Push2RotaryControl(control_id, self, number)
+            self._rotaries[control_id] = Push2RotaryControl(self, control_id, number)
         self._buttons = {}
         for number, control_id in BUTTON_ID_MAPPING.items():
-            self._buttons[control_id] = Push2ButtonControl(control_id, self, number)
+            self._buttons[control_id] = Push2ButtonControl(self, control_id, number)
         self._pads = {}
         for number, control_id in PAD_NUMBER_ID_MAPPING.items():
-            self._pads[control_id] = Push2PadControl(control_id, self, number)
-        self._slider = Push2SliderControl(Vector('main'), self)
+            self._pads[control_id] = Push2PadControl(self, control_id, number)
+        self._slider = Push2SliderControl(self, Vector('main'))
         self._run_task = None
         self._screen_update_requested = True
         self._screen_canvas_node = None
         self._last_screen_update = None
         self._last_update_was_canvas = None
 
-    async def start(self, engine):
-        self._run_task = asyncio.create_task(self.run(engine))
+    async def start(self):
+        self._run_task = asyncio.create_task(self.run())
 
-    def stop(self):
+    async def stop(self):
         self._run_task.cancel()
+        await self._run_task
         self._run_task = None
 
     def get_default_config(self):
         return DEFAULT_CONFIG
 
-    async def start_update(self, engine, node):
+    async def start_update(self, node):
         self._screen_canvas_node = None
         if self._push2 is not None:
             palette = node.get('palette', 1, str, 'hue').lower()
             palette_class = PALETTES.get(palette, HuePalette)
             if not isinstance(self._push2.palette, palette_class):
                 self._push2.palette = palette_class()
+        else:
+            self._screen_update_requested = True
+            self._last_screen_update = None
+            self._last_update_was_canvas = None
 
     def get_control(self, kind, control_id):
         if kind == 'rotary':
@@ -279,27 +289,27 @@ class Push2Driver(driver.ControllerDriver):
         if kind == 'pad':
             return self._pads.get(control_id)
 
-    def handle_node(self, engine, node):
+    def handle_node(self, node):
         if node.kind == 'screen':
             self._screen_canvas_node = node
             return True
         return False
 
-    async def finish_update(self, engine):
+    async def finish_update(self):
         if self._push2 is not None:
-            now = system_clock()
-            if self._last_screen_update is None or now >= self._last_screen_update + self.MAX_SCREEN_REFRESH_PERIOD:
-                self._last_screen_update = now
-                if self._screen_canvas_node is not None:
-                    await self.draw_screen_canvas()
-                    self._last_update_was_canvas = True
-                elif self._screen_update_requested or self._last_update_was_canvas:
-                    await self.update_screen()
-                    self._last_update_was_canvas = False
-                self._screen_update_requested = False
-        else:
-            self._screen_update_requested = True
-            self._last_screen_update = None
+            try:
+                now = system_clock()
+                if self._last_screen_update is None or now >= self._last_screen_update + self.MAX_SCREEN_REFRESH_PERIOD:
+                    self._last_screen_update = now
+                    if self._screen_canvas_node is not None:
+                        await self.draw_screen_canvas()
+                        self._last_update_was_canvas = True
+                    elif self._screen_update_requested or self._last_update_was_canvas:
+                        await self.update_screen()
+                        self._last_update_was_canvas = False
+                    self._screen_update_requested = False
+            except Exception as exc:
+                logger.warning("Unable to update Push2 screen: {}", str(exc))
 
     def request_screen_update(self):
         self._screen_update_requested = True
@@ -314,13 +324,13 @@ class Push2Driver(driver.ControllerDriver):
             pad.update_representation()
         self._screen_update_requested = True
 
-    async def run(self, engine):
-        try:
-            while True:
+    async def run(self):
+        while True:
+            try:
                 while not Push2.test_presence():
                     await asyncio.sleep(1)
                 self._push2 = Push2(palette=HuePalette())
-                await self._push2.start(counter=engine.counter)
+                await self._push2.start(counter=self.engine.counter)
                 await self.refresh()
                 logger.debug("Ableton Push2 controller driver ready")
                 while True:
@@ -378,12 +388,27 @@ class Push2Driver(driver.ControllerDriver):
                         event = self._push2.get_event()
                     for control in updates:
                         control.update_representation()
-        except asyncio.CancelledError:
-            if self._push2 is not None:
-                self._push2.stop()
+            except asyncio.CancelledError:
+                if self._push2 is not None:
+                    await self._push2.stop()
+                    self._push2 = None
+                    logger.debug("Ableton Push2 controller driver stopped")
+                return
+            except Push2CommunicationError:
+                logger.warning("Lost contact with Ableton Push2 device")
+                try:
+                    self._push2.stop()
+                except Exception:
+                    pass
                 self._push2 = None
-        except Exception as exc:
-            logger.opt(exception=exc).error("Unhandled exception in Ableton Push2 controller driver")
+            except Exception as exc:
+                logger.exception("Unexpected error in Ableton Push2 driver")
+                if self._push2 is not None:
+                    try:
+                        self._push2.stop()
+                    except Exception:
+                        pass
+                    self._push2 = None
 
     async def draw_screen_canvas(self):
         async with self._push2.screen_context() as ctx:
@@ -397,10 +422,10 @@ class Push2Driver(driver.ControllerDriver):
             white_paint = skia.Paint(Color=skia.ColorWHITE, AntiAlias=True)
             black_paint = skia.Paint(Color=skia.ColorBLACK, AntiAlias=True)
             font = skia.Font(skia.Typeface("helvetica"), 16)
-            ctx.drawSimpleText(f"Tempo: {self._push2.counter.tempo:5.1f}", 10, 150, font, white_paint)
-            ctx.drawSimpleText(f"Quantum: {self._push2.counter.quantum}", 130, 150, font, white_paint)
+            ctx.drawSimpleText(f"Tempo: {self.engine.counter.tempo:5.1f}", 10, 150, font, white_paint)
+            ctx.drawSimpleText(f"Quantum: {self.engine.counter.quantum}", 130, 150, font, white_paint)
             for control_id, rotary in self._rotaries.items():
-                number = MENU_ROTARIES.get(rotary._number)
+                number = SCREEN_ROTARIES.get(rotary._number)
                 if number is None or not rotary._initialised:
                     continue
                 ctx.save()

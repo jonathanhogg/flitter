@@ -17,26 +17,33 @@ def get_driver_class():
 DEFAULT_CONFIG = [
     Node('button', attributes={'id': Vector('a'), 'action': Vector('next')}),
     Node('button', attributes={'id': Vector('b'), 'action': Vector('previous')}),
+    Node('button', attributes={'id': Vector(('rotary', 1)), 'action': Vector(('reset', 'rotary', 1))}),
+    Node('button', attributes={'id': Vector(('rotary', 2)), 'action': Vector(('reset', 'rotary', 2))}),
+    Node('button', attributes={'id': Vector(('rotary', 3)), 'action': Vector(('reset', 'rotary', 3))}),
+    Node('button', attributes={'id': Vector(('rotary', 4)), 'action': Vector(('reset', 'rotary', 4))}),
+    Node('button', attributes={'id': Vector(('rotary', 5)), 'action': Vector(('reset', 'rotary', 5))}),
+    Node('button', attributes={'id': Vector(('rotary', 6)), 'action': Vector(('reset', 'rotary', 6))}),
+    Node('button', attributes={'id': Vector(('rotary', 7)), 'action': Vector(('reset', 'rotary', 7))}),
+    Node('button', attributes={'id': Vector(('rotary', 8)), 'action': Vector(('reset', 'rotary', 8))}),
 ]
 
-BUTTON_NOTE_MAPPING = {
-    Vector(1): 89, Vector(2): 90, Vector(3): 40, Vector(4): 41,
-    Vector(5): 42, Vector(6): 43, Vector(7): 44, Vector(8): 45,
-    Vector(9): 87, Vector(10): 88, Vector(11): 91, Vector(12): 92,
-    Vector(13): 86, Vector(14): 93, Vector(15): 94, Vector(16): 95,
-    Vector("a"): 84, Vector("b"): 85,
+NOTE_BUTTON_MAPPING = {
+    32: Vector(('rotary', 1)), 33: Vector(('rotary', 2)), 34: Vector(('rotary', 3)), 35: Vector(('rotary', 4)),
+    36: Vector(('rotary', 5)), 37: Vector(('rotary', 6)), 38: Vector(('rotary', 7)), 39: Vector(('rotary', 8)),
+    89: Vector(1), 90: Vector(2), 40: Vector(3), 41: Vector(4), 42: Vector(5), 43: Vector(6), 44: Vector(7), 45: Vector(8),
+    87: Vector(9), 88: Vector(10), 91: Vector(11), 92: Vector(12), 86: Vector(13), 93: Vector(14), 94: Vector(15), 95: Vector(16),
+    84: Vector('a'), 85: Vector('b'),
 }
 
-NOTE_BUTTON_MAPPING = {note: button_id for button_id, note in BUTTON_NOTE_MAPPING.items()}
+BUTTON_LIGHT_MAPPING = {
+    Vector(1): 89, Vector(2): 90, Vector(3): 40, Vector(4): 41, Vector(5): 42, Vector(6): 43, Vector(7): 44, Vector(8): 45,
+    Vector(9): 87, Vector(10): 88, Vector(11): 91, Vector(12): 92, Vector(13): 86, Vector(14): 93, Vector(15): 94, Vector(16): 95,
+    Vector("a"): 84, Vector("b"): 85,
+}
 
 ROTARY_CONTROLS_MAPPING = {
     Vector(1): (16, 48), Vector(2): (17, 49), Vector(3): (18, 50), Vector(4): (19, 51),
     Vector(5): (20, 52), Vector(6): (21, 53), Vector(7): (22, 54), Vector(8): (23, 55),
-}
-
-NOTE_ROTARY_MAPPING = {
-    32: Vector(1), 33: Vector(2), 34: Vector(3), 35: Vector(4),
-    36: Vector(5), 37: Vector(6), 38: Vector(7), 39: Vector(8),
 }
 
 TURN_CONTROL_ROTARY_MAPPING = {turn_control: rotary_id for rotary_id, (turn_control, light_control) in ROTARY_CONTROLS_MAPPING.items()}
@@ -59,9 +66,8 @@ SPECIAL_ACTIONS = {
 class XTouchMiniRotary(driver.EncoderControl):
     DEFAULT_LAG = 1/4
 
-    def __init__(self, control_id, driver, light_control):
-        super().__init__(control_id)
-        self._driver = driver
+    def __init__(self, driver, control_id, light_control):
+        super().__init__(driver, control_id)
         self._light_control = light_control
 
     @property
@@ -69,7 +75,7 @@ class XTouchMiniRotary(driver.EncoderControl):
         return int(round(24 * self._turns))
 
     def update_representation(self):
-        if self._driver._midi_port is None:
+        if self.driver._midi_port is None:
             return
         if self._initialised:
             divisor = self.raw_divisor
@@ -81,33 +87,18 @@ class XTouchMiniRotary(driver.EncoderControl):
                 value = int(round(self._raw_position / divisor * 10)) + 0x11
             else:
                 value = int(self._raw_position / divisor % 1 * 11) + 0x01
-            self._driver._midi_port.send_control_change(self._light_control, value)
+            self.driver._midi_port.send_control_change(self._light_control, value)
         else:
-            self._driver._midi_port.send_control_change(self._light_control, 0)
-
-    def _handle_event(self, event):
-        match event:
-            case midi.ControlChangeEvent(value=value):
-                if self.handle_turn(64 - value if value > 64 else value, event.timestamp):
-                    self.update_representation()
-            case midi.NoteOnEvent(velocity=127):
-                if self.handle_reset(event.timestamp):
-                    self.update_representation()
+            self.driver._midi_port.send_control_change(self._light_control, 0)
 
 
 class XTouchMiniButton(driver.ButtonControl):
-    def __init__(self, control_id, driver, light_note):
-        super().__init__(control_id)
-        self._driver = driver
+    def __init__(self, driver, control_id, light_note):
+        super().__init__(driver, control_id)
         self._light_note = light_note
-        self._group = None
-
-    def _handle_event(self, event):
-        if self.handle_push(event.velocity == 127, event.timestamp):
-            self.update_representation()
 
     def update_representation(self):
-        if self._driver._midi_port is None:
+        if self._light_note is None or self.driver._midi_port is None:
             return
         if self._initialised:
             if self._action:
@@ -118,9 +109,9 @@ class XTouchMiniButton(driver.ButtonControl):
                 velocity = 127 if self._toggled else 0
             else:
                 velocity = 127 if self._pushed else 0
-            self._driver._midi_port.send_note_on(self._light_note, velocity)
+            self.driver._midi_port.send_note_on(self._light_note, velocity)
         else:
-            self._driver._midi_port.send_note_on(self._light_note, 0)
+            self.driver._midi_port.send_note_on(self._light_note, 0)
 
 
 class XTouchMiniFader(driver.PositionControl):
@@ -136,16 +127,14 @@ class XTouchMiniFader(driver.PositionControl):
     def raw_divisor(self):
         return 16256
 
-    def _handle_event(self, event):
-        self.handle_raw_position_change(event.value, event.timestamp)
-
 
 class XTouchMiniDriver(driver.ControllerDriver):
     VENDOR_ID = 0x1397
     PRODUCT_ID = 0x00b3
+    PORT_NAME = 'X-TOUCH MINI'
 
-    def __init__(self, node):
-        self._port_name = node.get('port', 1, str, 'X-TOUCH MINI')
+    def __init__(self, engine):
+        super().__init__(engine)
         self._rotaries = {}
         self._buttons = {}
         self._sliders = {}
@@ -153,18 +142,20 @@ class XTouchMiniDriver(driver.ControllerDriver):
         self._run_task = None
         self._midi_port = None
         for rotary_id, (_, light_control) in ROTARY_CONTROLS_MAPPING.items():
-            rotary = XTouchMiniRotary(rotary_id, self, light_control)
+            rotary = XTouchMiniRotary(self, rotary_id, light_control)
             self._rotaries[rotary_id] = rotary
-        for button_id, light_note in BUTTON_NOTE_MAPPING.items():
-            button = XTouchMiniButton(button_id, self, light_note)
+        for note, button_id in NOTE_BUTTON_MAPPING.items():
+            light_note = BUTTON_LIGHT_MAPPING.get(button_id)
+            button = XTouchMiniButton(self, button_id, light_note)
             self._buttons[button_id] = button
-        self._sliders[Vector('main')] = XTouchMiniFader(Vector('main'))
+        self._sliders[Vector('main')] = XTouchMiniFader(self, Vector('main'))
 
-    async def start(self, engine):
+    async def start(self):
         self._run_task = asyncio.create_task(self.run())
 
-    def stop(self):
+    async def stop(self):
         self._run_task.cancel()
+        await self._run_task
         self._run_task = None
 
     def get_default_config(self):
@@ -186,15 +177,14 @@ class XTouchMiniDriver(driver.ControllerDriver):
                     match event:
                         case midi.NoteOnEvent(note=note, channel=0) if note in NOTE_BUTTON_MAPPING:
                             button = self._buttons[NOTE_BUTTON_MAPPING[note]]
-                            button._handle_event(event)
-                        case midi.NoteOnEvent(note=note, channel=0) if note in NOTE_ROTARY_MAPPING:
-                            rotary = self._rotaries[NOTE_ROTARY_MAPPING[note]]
-                            rotary._handle_event(event)
-                        case midi.ControlChangeEvent(control=control, channel=0) if control in TURN_CONTROL_ROTARY_MAPPING:
+                            if button.handle_push(event.velocity == 127, event.timestamp):
+                                button.update_representation()
+                        case midi.ControlChangeEvent(control=control, value=value, channel=0) if control in TURN_CONTROL_ROTARY_MAPPING:
                             rotary = self._rotaries[TURN_CONTROL_ROTARY_MAPPING[control]]
-                            rotary._handle_event(event)
+                            if rotary.handle_turn(64 - value if value > 64 else value, event.timestamp):
+                                rotary.update_representation()
                         case midi.PitchBendEvent(channel=8):
-                            self._sliders[Vector('main')]._handle_event(event)
+                            self._sliders[Vector('main')].handle_raw_position_change(event.value, event.timestamp)
                         case _:
                             logger.warning("Unhandled MIDI event: {}", event)
         except asyncio.CancelledError:
@@ -215,7 +205,7 @@ class XTouchMiniDriver(driver.ControllerDriver):
 
     def _try_connect(self):
         try:
-            self._midi_port = midi.MidiPort(self._port_name)
+            self._midi_port = midi.MidiPort(self.PORT_NAME)
         except ValueError:
             return False
         else:
