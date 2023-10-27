@@ -8,18 +8,28 @@ import array
 import functools
 from pathlib import Path
 
-from cpython cimport array
 import cython
+from cpython cimport array, PyObject
+from cpython.dict cimport PyDict_GetItem, PyDict_SetItem
 from libc.math cimport acos, sqrt, round
+from libc.stdint cimport int64_t
 from loguru import logger
 import skia
 
 from . import SceneNode, COLOR_FORMATS
 from flitter import name_patch
 from ...cache import SharedCache
-from ...clock import system_clock
 from ...model cimport Vector, Node
 from .glconstants import GL_TEXTURE_2D, GL_RGBA8, GL_RGBA16F, GL_RGBA32F, GL_SRGB8_ALPHA8
+
+cdef extern from "Python.h":
+    ctypedef int64_t _PyTime_t
+    _PyTime_t _PyTime_GetPerfCounter() noexcept nogil
+    double _PyTime_AsSecondsDouble(_PyTime_t t) noexcept nogil
+
+
+cdef inline double perf_counter() noexcept nogil:
+    return _PyTime_AsSecondsDouble(_PyTime_GetPerfCounter())
 
 
 logger = name_patch(logger, __name__)
@@ -592,20 +602,26 @@ cdef object make_path_effect(Node node):
 
 
 cpdef object draw(Node node, ctx, paint=None, font=None, path=None, dict stats=None, dict references=None, colorspace=None):
+    cdef double duration, total, start_time = perf_counter()
+    cdef int count
     ctx.save()
     update_context(node, ctx)
     paint = update_paint(node, skia.Paint(AntiAlias=True) if paint is None else paint, colorspace)
     font = update_font(node, skia.Font(skia.Typeface(), 14) if font is None else font)
     path = skia.Path()
-    child = node.first_child
+    cdef Node child = node.first_child
     while child is not None:
         paint = _draw(child, ctx, paint, font, path, stats, references, colorspace)
         child = child.next_sibling
     ctx.restore()
+    if stats is not None:
+        duration = perf_counter() - start_time
+        count, total = stats.get(node.kind, (0, 0))
+        stats[node.kind] = count+1, total+duration
 
 
 cpdef object _draw(Node node, ctx, paint, font, path, dict stats, dict references, colorspace):
-    cdef double start_time = system_clock()
+    cdef double start_time = perf_counter()
     cdef Vector points
     cdef Node child
     cdef str kind = node.kind
@@ -830,14 +846,22 @@ cpdef object _draw(Node node, ctx, paint, font, path, dict stats, dict reference
     cdef double duration, total
     cdef int count
     cdef str parent_kind
+    cdef PyObject* objptr
     if stats is not None:
-        duration = system_clock() - start_time
-        count, total = stats.get(kind, (0, 0))
-        stats[kind] = count+1, total+duration
-        if kind != 'canvas':
-            parent_kind = node.parent.kind
-            count, total = stats.get(parent_kind, (0, 0))
-            stats[parent_kind] = count, total-duration
+        duration = perf_counter() - start_time
+        objptr = PyDict_GetItem(stats, kind)
+        if objptr != NULL:
+            count, total = <tuple>objptr
+            PyDict_SetItem(stats, kind, (count+1, total+duration))
+        else:
+            PyDict_SetItem(stats, kind, (1, duration))
+        parent_kind = node.parent.kind
+        objptr = PyDict_GetItem(stats, parent_kind)
+        if objptr != NULL:
+            count, total = <tuple>objptr
+            PyDict_SetItem(stats, parent_kind, (count, total-duration))
+        else:
+            PyDict_SetItem(stats, parent_kind, (0, -duration))
 
     return paint
 
@@ -912,12 +936,12 @@ class Canvas(SceneNode):
         self._total_duration = 0
 
     def render(self, node, references=None, **kwargs):
-        self._total_duration -= system_clock()
+        self._total_duration -= perf_counter()
         self._graphics_context.resetContext()
         self._framebuffer.clear()
         draw(node, self._canvas, stats=self._stats, references=references, colorspace=self._colorspace)
         self._surface.flushAndSubmit()
-        self._total_duration += system_clock()
+        self._total_duration += perf_counter()
 
 
 SCENE_NODE_CLASS = Canvas
