@@ -912,6 +912,34 @@ cdef class Vector:
             result.numbers[0] = self.numbers[i]
         return result
 
+    cdef Vector items(self, int start, int end):
+        cdef int i, j, n = self.length, m = end - start
+        if m <= 0 or end <= 0 or start >= n:
+            return null_
+        cdef list objects = self.objects
+        cdef PyObject* objptr
+        cdef Vector result = Vector.__new__(Vector)
+        result.allocate_numbers(m)
+        if objects is not None:
+            j = 0
+            for i in range(start, end):
+                objptr = PyList_GET_ITEM(objects, i)
+                if type(<object>objptr) is float:
+                    result.numbers[j] = PyFloat_AS_DOUBLE(<object>objptr)
+                elif type(<object>objptr) is int:
+                    result.numbers[j] = PyLong_AsDouble(<object>objptr)
+                else:
+                    result.deallocate_numbers()
+                    result.objects = list(self.objects)
+                    break
+                j += 1
+        else:
+            j = 0
+            for i in range(start, end):
+                result.numbers[j] = self.numbers[i]
+                j += 1
+        return result
+
     @cython.cdivision(True)
     cpdef double squared_sum(self) noexcept:
         cdef int i, n = self.length
@@ -1871,7 +1899,7 @@ cdef class Node:
                 for i in range(result.allocate_numbers(n)):
                     result.numbers[i] = value.numbers[0]
                 return result
-            elif m == n:
+            elif m == n or n == 0:
                 return value
         return default
 
