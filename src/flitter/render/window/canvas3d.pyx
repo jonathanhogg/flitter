@@ -204,9 +204,9 @@ def draw(Node node, tuple size, glctx, dict objects, dict references):
     material.specular = One3
     material.emissive = Zero3
     cdef Matrix44 model_matrix = Matrix44.__new__(Matrix44)
-    cdef RenderSet render_set = RenderSet.__new__(RenderSet)
     cdef list render_sets = []
     collect(node, model_matrix, material, None, render_sets)
+    cdef RenderSet render_set
     for render_set in render_sets:
         if render_set.instances:
             render(render_set, pv_matrix, orthographic, viewpoint, focus, max_lights, fog_min, fog_max, fog_color, fog_curve,
