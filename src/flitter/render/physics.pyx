@@ -8,9 +8,8 @@ import asyncio
 from loguru import logger
 
 from .. import name_patch
-from ..model cimport Vector, Node, null_
+from ..model cimport Vector, Node, StateDict, null_
 from ..language.functions cimport Normal
-from ..language.context cimport StateDict
 
 from libc.math cimport sqrt, isinf, isnan, abs
 from cpython cimport PyObject

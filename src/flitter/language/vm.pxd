@@ -2,8 +2,7 @@
 
 from cpython cimport PyObject
 
-from ..model cimport Vector, Query
-from .context cimport Context
+from ..model cimport Vector, Query, Context
 
 
 cdef dict static_builtins

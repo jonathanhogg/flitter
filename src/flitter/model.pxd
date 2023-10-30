@@ -138,3 +138,24 @@ cdef class Node:
     cdef bint get_bool(self, str name, bint default)
     cdef str get_str(self, str name, str default)
     cdef str repr(self)
+
+
+cdef class StateDict:
+    cdef set _changed_keys
+    cdef dict _state
+
+    cdef Vector get_item(self, Vector key)
+    cdef void set_item(self, Vector key, Vector value)
+    cdef bint contains(self, Vector key)
+
+
+cdef class Context:
+    cdef readonly dict variables
+    cdef readonly set unbound
+    cdef readonly dict pragmas
+    cdef readonly StateDict state
+    cdef readonly Node graph
+    cdef readonly object path
+    cdef readonly Context parent
+    cdef readonly set errors
+    cdef readonly set logs

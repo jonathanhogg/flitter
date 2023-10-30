@@ -9,9 +9,8 @@ from loguru import logger
 
 from .. import name_patch
 from ..cache import SharedCache
-from .context cimport StateDict, Context
 from .functions import STATIC_FUNCTIONS, DYNAMIC_FUNCTIONS
-from ..model cimport Vector, Node, Query, null_, true_, false_
+from ..model cimport Vector, Node, Query, StateDict, Context, null_, true_, false_
 from .noise import NOISE_FUNCTIONS
 
 from libc.math cimport floor

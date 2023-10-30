@@ -10,8 +10,7 @@ import cython
 from libc.math cimport isnan, isinf, floor, round, sin, cos, asin, acos, sqrt, exp, ceil, atan2, log, log2, log10
 
 from ..cache import SharedCache
-from .context cimport Context
-from ..model cimport Vector, Matrix44, null_, true_, false_
+from ..model cimport Vector, Matrix44, Context, null_, true_, false_
 
 
 cdef double Pi = 3.141592653589793

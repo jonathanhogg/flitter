@@ -11,9 +11,8 @@ from loguru import logger
 
 from ..cache import SharedCache
 from ..clock import BeatCounter, system_clock
-from ..language.context import StateDict, Context
 from ..language.vm import log_vm_stats
-from ..model import Vector, null, numbers_cache_counts, empty_numbers_cache
+from ..model import Vector, StateDict, Context, null, numbers_cache_counts, empty_numbers_cache
 from ..render import get_renderer
 
 

@@ -5,9 +5,8 @@ Tests of the flitter language built-in functions
 import math
 import unittest
 
-from flitter.model import Vector, null
+from flitter.model import Vector, Context, StateDict, null
 from flitter.language.functions import (Uniform, Normal, Beta, counter, hypot, angle)
-from flitter.language.context import Context, StateDict
 
 
 Tau = 2*math.pi

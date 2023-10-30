@@ -13,8 +13,7 @@ cimport cython
 from loguru import logger
 
 from .. import name_patch
-from .context cimport Context, StateDict
-from ..model cimport Vector, Node, Query, null_, true_, false_, minusone_
+from ..model cimport Vector, Node, Query, Context, StateDict, null_, true_, false_, minusone_
 from .vm cimport Program, builtins, static_builtins, dynamic_builtins
 
 

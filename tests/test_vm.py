@@ -9,8 +9,7 @@ import tracemalloc
 import unittest
 import unittest.mock
 
-from flitter.model import Vector, Node, Query, null, true, false
-from flitter.language.context import Context, StateDict
+from flitter.model import Vector, Node, Query, Context, StateDict, null, true, false
 from flitter.language.vm import Program, Function, VectorStack
 
 
