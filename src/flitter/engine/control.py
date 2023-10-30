@@ -159,10 +159,8 @@ class EngineController:
             dump_time = frame_time
             execution = render = housekeeping = 0
             performance = 1
+            run_program = current_program = errors = logs = None
             gc.disable()
-            run_program = current_program = None
-            errors = set()
-            logs = set()
             while self.run_time is None or frame_time - start_time < self.run_time:
                 housekeeping -= system_clock()
 
@@ -181,6 +179,7 @@ class EngineController:
                     logger.log(level, "Loaded page {}: {}", self.current_page, self.current_path)
                     run_program = current_program = program
                     errors = set()
+                    logs = set()
 
                 if current_program is not None and run_program is current_program and self.state_eval_wait and self.state_timestamp is not None and \
                         system_clock() > self.state_timestamp + self.state_eval_wait:
