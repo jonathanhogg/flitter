@@ -21,6 +21,12 @@ def keyvalue(text):
 
 
 def main():
+    try:
+        import setproctitle
+    except ImportError:
+        pass
+    else:
+        setproctitle.setproctitle('flitter')
     parser = argparse.ArgumentParser(description="Flitter")
     parser.set_defaults(level=None)
     levels = parser.add_mutually_exclusive_group()

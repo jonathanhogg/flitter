@@ -17,7 +17,7 @@
     -- pressing it will set the rotary back to its `initial` value.
 
     -- The touch strip appears as the `:main` slider:
-    !slider id=:main state=:foo initial=0.5
+    !slider id=:main state=:foo initial=0.5 return=true
 
     -- The pads are numbered `row;column` counting downwards and rightwards from 1:
     for i in ..8
@@ -25,7 +25,7 @@
 
     -- Although a pad can be used as a button, it's primary value is the pressure being applied
     -- The `:pushed` and `:toggled` sub-keys can be used for button-like behaviour:
-    !pad id=1;1 state=:custom_screen toggle=true color=1 if $(:custom_screen;:toggled) else beat%2//1
+    !pad id=1;1 state=:custom_screen toggle=true color=1 if $(:custom_screen;:toggled) or $(:custom_screen;:touched) else beat%2//1
 
     -- The screen will automatically show UI for the 1..8 rotaries, but can be completely
     -- controlled by adding a `!screen` node. This uses the same drawing nodes as the

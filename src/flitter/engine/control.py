@@ -180,6 +180,7 @@ class EngineController:
                     level = 'SUCCESS' if current_program is None else 'INFO'
                     logger.log(level, "Loaded page {}: {}", self.current_page, self.current_path)
                     run_program = current_program = program
+                    errors = set()
 
                 if current_program is not None and run_program is current_program and self.state_eval_wait and self.state_timestamp is not None and \
                         system_clock() > self.state_timestamp + self.state_eval_wait:
