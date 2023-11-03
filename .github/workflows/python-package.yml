@@ -43,7 +43,7 @@ jobs:
         flake8 . --count --exit-zero --max-complexity=30 --max-line-length=160 --statistics
     - name: Install build dependencies
       run: |
-        sudo apt-get install libasound2-dev libjack-jackd2-dev
+        sudo apt-get install libasound2-dev libjack-jackd2-dev libavformat-dev libavcodec-dev libavdevice-dev libavutil-dev libavfilter-dev libswscale-dev libswresample-dev
     - name: Build wheel
       run: |
         python -m build
