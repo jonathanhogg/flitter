@@ -8,6 +8,9 @@ Flitter language functions
 import cython
 
 from libc.math cimport isnan, isinf, floor, round, sin, cos, asin, acos, sqrt, exp, ceil, atan2, log, log2, log10
+from cpython.object cimport PyObject
+from cpython.ref cimport Py_INCREF
+from cpython.tuple cimport PyTuple_New, PyTuple_GET_ITEM, PyTuple_SET_ITEM
 
 from ..cache import SharedCache
 from ..model cimport Vector, Matrix44, Context, null_, true_, false_
@@ -445,8 +448,11 @@ cpdef shuffle(Uniform source, Vector xs):
     if xs.length == 0:
         return null_
     cdef int i, j, n = xs.length
+    cdef PyObject* a
+    cdef PyObject* b
     xs = Vector._copy(xs)
-    if xs.objects is None:
+    cdef tuple objects=xs.objects
+    if objects is None:
         for i in range(n - 1):
             j = <int>floor(source.item(i) * n) + i
             n -= 1
@@ -455,7 +461,10 @@ cpdef shuffle(Uniform source, Vector xs):
         for i in range(n - 1):
             j = <int>floor(source.item(i) * n) + i
             n -= 1
-            xs.objects[i], xs.objects[j] = xs.objects[j], xs.objects[i]
+            a = PyTuple_GET_ITEM(objects, i)
+            b = PyTuple_GET_ITEM(objects, j)
+            PyTuple_SET_ITEM(objects, i, <object>b)
+            PyTuple_SET_ITEM(objects, j, <object>a)
     return xs
 
 
@@ -551,7 +560,7 @@ def minv(Vector xs not None, *args):
                     if x < y:
                         y = x
                 ys = Vector.__new__(Vector)
-                ys.objects = [y]
+                ys.objects = (y,)
                 ys.length = 1
     else:
         ys = xs
@@ -612,7 +621,7 @@ def maxv(Vector xs not None, *args):
                     if x > y:
                         y = x
                 ys = Vector.__new__(Vector)
-                ys.objects = [y]
+                ys.objects = (y,)
                 ys.length = 1
     else:
         ys = xs
@@ -713,13 +722,14 @@ def zipv(*vectors):
             if v.length > n:
                 n = v.length
             numeric = numeric and v.objects is None
-    cdef int i, j, p, m = len(vs)
+    cdef int i, j, k, p, m = len(vs)
     if m == 0:
         return null_
     if m == 1:
         return vs[0]
     cdef Vector zs = Vector.__new__(Vector)
     cdef double* zp
+    cdef object obj
     if numeric:
         zs.allocate_numbers(n * m)
         for j in range(m):
@@ -729,12 +739,18 @@ def zipv(*vectors):
             for i in range(n):
                 zp[i*m] = v.numbers[i % p]
     else:
-        zs.objects = list()
-        zs.length = n * m
+        zs.objects = PyTuple_New(n * m)
+        k = 0
         for i in range(n):
             for j in range(m):
                 v = vs[j]
-                zs.objects.append(v.numbers[i % v.length] if v.objects is None else v.objects[i % v.length])
+                if v.objects is None:
+                    obj =  v.numbers[i % v.length]
+                else:
+                    obj = <object>PyTuple_GET_ITEM(v.objects, i % v.length)
+                Py_INCREF(obj)
+                PyTuple_SET_ITEM(zs.objects, i*m + j, obj)
+        zs.length = n * m
     return zs
 
 
