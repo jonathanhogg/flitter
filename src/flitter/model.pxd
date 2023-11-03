@@ -5,7 +5,7 @@ import cython
 
 cdef class Vector:
     cdef int length
-    cdef list objects
+    cdef tuple objects
     cdef double* numbers
     cdef double[16] _numbers
     cdef unsigned long long _hash

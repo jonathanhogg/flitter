@@ -542,7 +542,7 @@ cdef inline Vector pop_composed(VectorStack stack, int m):
             Py_DECREF(<object>ptr)
             stack.vectors[i] = NULL
         return result
-    cdef list vobjects, objects=PyList_New(n)
+    cdef tuple vobjects, objects=PyTuple_New(n)
     cdef PyObject* itemptr
     cdef object obj
     for i in range(base, base+m):
@@ -551,14 +551,14 @@ cdef inline Vector pop_composed(VectorStack stack, int m):
             for k in range((<Vector>ptr).length):
                 obj = PyFloat_FromDouble((<Vector>ptr).numbers[k])
                 Py_INCREF(obj)
-                PyList_SET_ITEM(objects, j, obj)
+                PyTuple_SET_ITEM(objects, j, obj)
                 j += 1
         else:
             vobjects = (<Vector>ptr).objects
             for k in range((<Vector>ptr).length):
-                itemptr = PyList_GET_ITEM(vobjects, k)
+                itemptr = PyTuple_GET_ITEM(vobjects, k)
                 Py_INCREF(<object>itemptr)
-                PyList_SET_ITEM(objects, j, <object>itemptr)
+                PyTuple_SET_ITEM(objects, j, <object>itemptr)
                 j += 1
         Py_DECREF(<object>ptr)
         stack.vectors[i] = NULL
@@ -1092,7 +1092,7 @@ cdef class Program:
 
                 elif instruction.code == OpCode.LiteralNode:
                     r1 = Vector.__new__(Vector)
-                    r1.objects = [(<InstructionNode>instruction).value.copy()]
+                    r1.objects = ((<InstructionNode>instruction).value.copy(),)
                     r1.length = 1
                     push(stack, r1)
                     r1 = None
@@ -1266,7 +1266,7 @@ cdef class Program:
                     args = pop_tuple(stack, n) if n else ()
                     if r1.objects is not None:
                         for i in range(r1.length):
-                            call_helper(context, stack, <object>PyList_GET_ITEM(r1.objects, i), args, kwargs, record_stats, &duration)
+                            call_helper(context, stack, <object>PyTuple_GET_ITEM(r1.objects, i), args, kwargs, record_stats, &duration)
                         if r1.length > 1:
                             push(stack, pop_composed(stack, r1.length))
                     else:
@@ -1294,13 +1294,13 @@ cdef class Program:
                     function = Function.__new__(Function)
                     function.__name__ = (<InstructionStrTuple>instruction).svalue
                     function.parameters = (<InstructionStrTuple>instruction).tvalue
-                    function.program = <Program>PyList_GET_ITEM(pop(stack).objects, 0)
+                    function.program = <Program>pop(stack).objects[0]
                     function.lvars = copy(lvars)
                     function.root_path = context.path
                     n = PyTuple_GET_SIZE(function.parameters)
                     function.defaults = pop_tuple(stack, n) if n else ()
                     r1 = <Vector>Vector.__new__(Vector)
-                    r1.objects = [function]
+                    r1.objects = (function,)
                     r1.length = 1
                     push(stack, r1)
                     function = r1 = None
@@ -1310,7 +1310,7 @@ cdef class Program:
                     r1 = peek(stack)
                     if r1.objects is not None:
                         for i in range(r1.length):
-                            objptr = PyList_GET_ITEM(r1.objects, i)
+                            objptr = PyTuple_GET_ITEM(r1.objects, i)
                             if type(<object>objptr) is Node:
                                 if (<Node>objptr)._tags is None:
                                     (<Node>objptr)._tags = set()
@@ -1324,7 +1324,7 @@ cdef class Program:
                     if r1.objects is not None:
                         name = (<InstructionStr>instruction).value
                         for i in range(r1.length):
-                            objptr = PyList_GET_ITEM(r1.objects, i)
+                            objptr = PyTuple_GET_ITEM(r1.objects, i)
                             if type(<object>objptr) is Node:
                                 attributes = (<Node>objptr)._attributes
                                 if (<Node>objptr)._attributes_shared:
@@ -1346,7 +1346,7 @@ cdef class Program:
                             r2 = peek_at(stack, i)
                             if r2.objects is not None:
                                 for j in range(r1.length):
-                                    objptr = PyList_GET_ITEM(r1.objects, j)
+                                    objptr = PyTuple_GET_ITEM(r1.objects, j)
                                     if type(<object>objptr) is Node:
                                         (<Node>objptr).append_vector(r2, j != n)
                     drop(stack, m)
@@ -1362,12 +1362,12 @@ cdef class Program:
                             if type(node) is Node:
                                 if i == n:
                                     for j in range(r2.length-1, -1, -1):
-                                        objptr = PyList_GET_ITEM(r2.objects, j)
+                                        objptr = PyTuple_GET_ITEM(r2.objects, j)
                                         if type(<object>objptr) is Node:
                                             (<Node>node).insert(<Node>objptr)
                                 else:
                                     for j in range(r2.length-1, -1, -1):
-                                        objptr = PyList_GET_ITEM(r2.objects, j)
+                                        objptr = PyTuple_GET_ITEM(r2.objects, j)
                                         if type(<object>objptr) is Node:
                                             (<Node>node).insert((<Node>objptr).copy())
                     r1 = r2 = node = None
@@ -1418,7 +1418,7 @@ cdef class Program:
                 elif instruction.code == OpCode.SetNodeScope:
                     r1 = peek(stack)
                     if r1.objects is not None and r1.length == 1:
-                        objptr = PyList_GET_ITEM(r1.objects, 0)
+                        objptr = PyTuple_GET_ITEM(r1.objects, 0)
                         if type(<object>objptr) is Node:
                             if (<Node>objptr)._attributes_shared:
                                 (<Node>objptr)._attributes = PyDict_Copy((<Node>objptr)._attributes)
@@ -1443,7 +1443,7 @@ cdef class Program:
                         node = (<Node>node).next_sibling
                     if values:
                         r1 = <Vector>Vector.__new__(Vector)
-                        r1.objects = values
+                        r1.objects = tuple(values)
                         r1.length = len(values)
                     else:
                         r1 = null_
@@ -1454,7 +1454,7 @@ cdef class Program:
                     r1 = pop(stack)
                     if r1.objects is not None:
                         for i in range(r1.length):
-                            objptr = PyList_GET_ITEM(r1.objects, i)
+                            objptr = PyTuple_GET_ITEM(r1.objects, i)
                             if type(<object>objptr) is Node:
                                 if (<Node>objptr)._parent is None:
                                     context.graph.append(<Node>objptr)

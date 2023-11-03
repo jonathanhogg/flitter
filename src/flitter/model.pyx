@@ -7,7 +7,8 @@ from cython cimport view
 import numpy as np
 
 from libc.math cimport isnan, floor, ceil, abs, sqrt, sin, cos, tan, isnan
-from cpython cimport PyObject, Py_INCREF
+from cpython.object cimport PyObject
+from cpython.ref cimport Py_INCREF
 from cpython.bool cimport PyBool_FromLong
 from cpython.dict cimport PyDict_GetItem
 from cpython.float cimport PyFloat_AS_DOUBLE, PyFloat_FromDouble
@@ -16,6 +17,7 @@ from cpython.long cimport (PyLong_FromLongLong, PyLong_FromUnsignedLongLong, PyL
                            PyLong_AsLongLong, PyLong_AsUnsignedLongLong, PyLong_AsDouble)
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
 from cpython.object cimport PyObject_RichCompareBool, Py_NE, Py_EQ, Py_LT
+from cpython.tuple cimport PyTuple_New, PyTuple_GET_SIZE, PyTuple_GET_ITEM, PyTuple_SET_ITEM, PyTuple_Pack
 from cpython.unicode cimport PyUnicode_DATA, PyUnicode_GET_LENGTH, PyUnicode_KIND, PyUnicode_READ
 from cpython.weakref cimport PyWeakref_NewRef, PyWeakref_GetObject
 
@@ -67,7 +69,7 @@ cdef inline int vector_compare(Vector left, Vector right) except -2:
     if n == 0 and m == 0:
         return 0
     cdef double x, y
-    cdef list leftobj = left.objects, rightobj = right.objects
+    cdef tuple leftobj = left.objects, rightobj = right.objects
     cdef PyObject* a
     cdef PyObject* b
     if left.numbers != NULL and right.numbers != NULL:
@@ -80,8 +82,8 @@ cdef inline int vector_compare(Vector left, Vector right) except -2:
             return 1
     elif leftobj is not None and rightobj is not None:
         for i in range(min(n, m)):
-            a = PyList_GET_ITEM(leftobj, i)
-            b = PyList_GET_ITEM(rightobj, i)
+            a = PyTuple_GET_ITEM(leftobj, i)
+            b = PyTuple_GET_ITEM(rightobj, i)
             if PyObject_RichCompareBool(<object>a, <object>b, Py_EQ):
                 continue
             if PyObject_RichCompareBool(<object>a, <object>b, Py_LT):
@@ -211,12 +213,19 @@ cdef class Vector:
     cdef Vector _copy(Vector other):
         cdef Vector result = Vector.__new__(Vector)
         cdef int i, n=other.length
+        cdef tuple objects
+        cdef PyObject* objptr
         if other.numbers != NULL:
             result.allocate_numbers(n)
             for i in range(n):
                 result.numbers[i] = other.numbers[i]
         elif other.objects is not None:
-            result.objects = list(other.objects)
+            objects = PyTuple_New(n)
+            for i in range(n):
+                objptr = PyTuple_GET_ITEM(other.objects, i)
+                Py_INCREF(<object>objptr)
+                PyTuple_SET_ITEM(objects, i, <object>objptr)
+            result.objects = objects
             result.length = n
         return result
 
@@ -249,7 +258,7 @@ cdef class Vector:
                     result.numbers[j] = v.numbers[k]
                     j += 1
             return result
-        cdef list src, dest = PyList_New(n)
+        cdef tuple src, dest = PyTuple_New(n)
         cdef object obj
         cdef PyObject* objptr
         j = 0
@@ -260,13 +269,13 @@ cdef class Vector:
                 for k in range(v.length):
                     obj = v.numbers[k]
                     Py_INCREF(obj)
-                    PyList_SET_ITEM(dest, j, obj)
+                    PyTuple_SET_ITEM(dest, j, obj)
                     j += 1
             else:
                 for k in range(v.length):
-                    objptr = PyList_GET_ITEM(src, k)
+                    objptr = PyTuple_GET_ITEM(src, k)
                     Py_INCREF(<object>objptr)
-                    PyList_SET_ITEM(dest, j, <object>objptr)
+                    PyTuple_SET_ITEM(dest, j, <object>objptr)
                     j += 1
         result.objects = dest
         result.length = n
@@ -303,14 +312,14 @@ cdef class Vector:
                         self.numbers[i] = v
                 except TypeError:
                     self.deallocate_numbers()
-                    self.objects = list(value)
+                    self.objects = tuple(value)
         elif isinstance(value, (float, int)):
             self.allocate_numbers(1)
             self.numbers[0] = value
         elif isinstance(value, (range, slice)):
             self.fill_range(Vector._coerce(value.start), Vector._coerce(value.stop), Vector._coerce(value.step))
         else:
-            self.objects = [value]
+            self.objects = (value,)
             self.length = 1
 
     @property
@@ -385,11 +394,15 @@ cdef class Vector:
         return self.length
 
     cpdef bint isinstance(self, t) noexcept:
-        if not self.length:
+        cdef int i, n=self.length
+        if n == 0:
             return False
-        if self.objects is not None:
-            for value in self.objects:
-                if not isinstance(value, t):
+        cdef PyObject* objptr
+        cdef tuple objects = self.objects
+        if objects is not None:
+            for i in range(n):
+                objptr = PyTuple_GET_ITEM(objects, i)
+                if not isinstance(<object>objptr, t):
                     return False
             return True
         else:
@@ -401,14 +414,14 @@ cdef class Vector:
     cdef bint as_bool(self):
         cdef PyObject* objptr
         cdef int i
-        cdef list objects
+        cdef tuple objects
         if self.numbers != NULL:
             for i in range(self.length):
                 if self.numbers[i] != 0.:
                     return True
         elif (objects := self.objects) is not None:
             for i in range(self.length):
-                objptr = PyList_GET_ITEM(objects, i)
+                objptr = PyTuple_GET_ITEM(objects, i)
                 if type(<object>objptr) is float:
                     if PyFloat_AS_DOUBLE(<object>objptr) != 0.:
                         return True
@@ -439,11 +452,11 @@ cdef class Vector:
         cdef int i, n = self.length
         if self.objects is not None:
             if n == 1:
-                objptr = PyList_GET_ITEM(self.objects, 0)
+                objptr = PyTuple_GET_ITEM(self.objects, 0)
                 if type(<object>objptr) is str:
                     return <str>objptr
             for i in range(n):
-                objptr = PyList_GET_ITEM(self.objects, i)
+                objptr = PyTuple_GET_ITEM(self.objects, i)
                 if type(<object>objptr) is str:
                     text += <str>objptr
                 elif isinstance(<object>objptr, (float, int)):
@@ -469,13 +482,13 @@ cdef class Vector:
         if not floor_floats and self._hash:
             return self._hash
         cdef unsigned long long y, _hash = HASH_START
-        cdef list objects
+        cdef tuple objects
         cdef unsigned int i
         if self.length == 0:
             pass
         elif (objects := self.objects) is not None:
             for i in range(self.length):
-                value = PyList_GET_ITEM(objects, i)
+                value = PyTuple_GET_ITEM(objects, i)
                 if type(<object>value) is str:
                     y = HASH_STRING(<str>value)
                 elif type(<object>value) is float:
@@ -547,10 +560,10 @@ cdef class Vector:
                     return values
             return default
         if n == 0 and t is None:
-            return self.objects
+            return list(self.objects)
         try:
             if m == 1:
-                obj = <object>PyList_GET_ITEM(self.objects, 0)
+                obj = <object>PyTuple_GET_ITEM(self.objects, 0)
                 if t is not None:
                     obj = t(obj)
                 if n == 1:
@@ -565,7 +578,7 @@ cdef class Vector:
             elif m == n or n == 0:
                 values = PyList_New(m)
                 for i in range(m):
-                    obj = <object>PyList_GET_ITEM(self.objects, i)
+                    obj = <object>PyTuple_GET_ITEM(self.objects, i)
                     if t is not None:
                         obj = t(obj)
                     Py_INCREF(obj)
@@ -576,28 +589,28 @@ cdef class Vector:
         return default
 
     cpdef Vector copynodes(self, bint parented=False):
-        cdef list src=self.objects
+        cdef tuple src=self.objects
         if src is None:
             return self
         cdef int i, j, n=self.length
-        cdef list dest=None
+        cdef tuple dest=None
         cdef PyObject* current
         cdef PyObject* earlier
         for i in range(n):
-            current = PyList_GET_ITEM(src, i)
+            current = PyTuple_GET_ITEM(src, i)
             if type(<object>current) is Node and (not parented or (<Node>current)._parent is not None):
                 if dest is None:
-                    dest = PyList_New(n)
+                    dest = PyTuple_New(n)
                     for j in range(i):
-                        earlier = PyList_GET_ITEM(src, j)
+                        earlier = PyTuple_GET_ITEM(src, j)
                         Py_INCREF(<object>earlier)
-                        PyList_SET_ITEM(dest, j, <object>earlier)
+                        PyTuple_SET_ITEM(dest, j, <object>earlier)
                 value = (<Node>current).copy()
                 Py_INCREF(value)
-                PyList_SET_ITEM(dest, i, value)
+                PyTuple_SET_ITEM(dest, i, value)
             elif dest is not None:
                 Py_INCREF(<object>current)
-                PyList_SET_ITEM(dest, i, <object>current)
+                PyTuple_SET_ITEM(dest, i, <object>current)
         if dest is None:
             return self
         cdef Vector result
@@ -797,7 +810,7 @@ cdef class Vector:
         if self is other:
             return true_
         cdef int i, n = self.length, m = other.length
-        cdef list left = self.objects, right = other.objects
+        cdef tuple left = self.objects, right = other.objects
         if n != m or (left is None) != (right is None):
             return false_
         if left is None:
@@ -806,7 +819,7 @@ cdef class Vector:
                     return false_
         else:
             for i in range(n):
-                if PyObject_RichCompareBool(<object>PyList_GET_ITEM(left, i), <object>PyList_GET_ITEM(right, i), Py_NE):
+                if PyObject_RichCompareBool(<object>PyTuple_GET_ITEM(left, i), <object>PyTuple_GET_ITEM(right, i), Py_NE):
                     return false_
         return true_
 
@@ -817,7 +830,7 @@ cdef class Vector:
         if self is other:
             return false_
         cdef int i, n = self.length, m = other.length
-        cdef list left = self.objects, right = other.objects
+        cdef tuple left = self.objects, right = other.objects
         if n != m or (left is None) != (right is None):
             return true_
         if left is None:
@@ -826,7 +839,7 @@ cdef class Vector:
                     return true_
         else:
             for i in range(n):
-                if PyObject_RichCompareBool(<object>PyList_GET_ITEM(left, i), <object>PyList_GET_ITEM(right, i), Py_NE):
+                if PyObject_RichCompareBool(<object>PyTuple_GET_ITEM(left, i), <object>PyTuple_GET_ITEM(right, i), Py_NE):
                     return true_
         return false_
 
@@ -866,27 +879,31 @@ cdef class Vector:
     cdef Vector slice(self, Vector index):
         if index.numbers == NULL:
             return null_
-        cdef int i, j, m = 0, n = self.length, o = index.length
+        cdef int i, j, k = 0, m = 0, n = self.length, o = index.length
+        for i in range(o):
+            if 0 <= index.numbers[i] < n:
+                m += 1
         cdef Vector result = Vector.__new__(Vector)
-        cdef list src = self.objects, dest
+        cdef tuple src = self.objects, dest
+        cdef PyObject* objptr
         if src is not None:
-            result.objects = dest = []
+            result.objects = dest = PyTuple_New(m)
             for i in range(o):
                 j = <int>floor(index.numbers[i])
                 if j >= 0 and j < n:
-                    dest.append(<object>PyList_GET_ITEM(src, j))
-                    m += 1
-            result.length = m
-        else:
-            result.allocate_numbers(o)
+                    objptr = PyTuple_GET_ITEM(src, j)
+                    Py_INCREF(<object>objptr)
+                    PyTuple_SET_ITEM(dest, k, <object>objptr)
+                    k += 1
+        elif m:
+            result.allocate_numbers(m)
             for i in range(o):
                 j = <int>floor(index.numbers[i])
                 if j >= 0 and j < n:
-                    result.numbers[m] = self.numbers[j]
-                    m += 1
-            if m == 0:
-                result.deallocate_numbers()
-            result.length = m
+                    result.numbers[k] = self.numbers[j]
+                    k += 1
+        assert k == m
+        result.length = k
         return result
 
     cdef Vector item(self, int i):
@@ -894,10 +911,10 @@ cdef class Vector:
         if i < 0 or i >= n:
             return null_
         cdef Vector result = Vector.__new__(Vector)
-        cdef list objects = self.objects
+        cdef tuple objects = self.objects
         cdef PyObject* objptr
         if objects is not None:
-            objptr = PyList_GET_ITEM(objects, i)
+            objptr = PyTuple_GET_ITEM(objects, i)
             if type(<object>objptr) is float:
                 result.allocate_numbers(1)
                 result.numbers[0] = PyFloat_AS_DOUBLE(<object>objptr)
@@ -905,7 +922,7 @@ cdef class Vector:
                 result.allocate_numbers(1)
                 result.numbers[0] = PyLong_AsDouble(<object>objptr)
             else:
-                result.objects = [<object>objptr]
+                result.objects = PyTuple_Pack(1, objptr)
                 result.length = 1
         else:
             result.allocate_numbers(1)
@@ -973,7 +990,7 @@ cdef class Vector:
         if n == 0:
             return other
         cdef Vector result = Vector.__new__(Vector)
-        cdef list left = self.objects, right = other.objects, dest
+        cdef tuple left = self.objects, right = other.objects, dest
         cdef PyObject* objptr
         cdef object obj
         if self.numbers != NULL and other.numbers != NULL:
@@ -983,27 +1000,27 @@ cdef class Vector:
             for i in range(m):
                 result.numbers[n + i] = other.numbers[i]
         else:
-            dest = PyList_New(n + m)
+            dest = PyTuple_New(n + m)
             if left is None:
                 for i in range(n):
                     obj = self.numbers[i]
                     Py_INCREF(obj)
-                    PyList_SET_ITEM(dest, i, obj)
+                    PyTuple_SET_ITEM(dest, i, obj)
             else:
                 for i in range(n):
-                    objptr = PyList_GET_ITEM(left, i)
+                    objptr = PyTuple_GET_ITEM(left, i)
                     Py_INCREF(<object>objptr)
-                    PyList_SET_ITEM(dest, i, <object>objptr)
+                    PyTuple_SET_ITEM(dest, i, <object>objptr)
             if right is None:
                 for i in range(m):
                     obj = other.numbers[i]
                     Py_INCREF(obj)
-                    PyList_SET_ITEM(dest, n+i, obj)
+                    PyTuple_SET_ITEM(dest, n+i, obj)
             else:
                 for i in range(m):
-                    objptr = PyList_GET_ITEM(right, i)
+                    objptr = PyTuple_GET_ITEM(right, i)
                     Py_INCREF(<object>objptr)
-                    PyList_SET_ITEM(dest, n+i, <object>objptr)
+                    PyTuple_SET_ITEM(dest, n+i, <object>objptr)
             result.objects = dest
             result.length = n + m
         return result
@@ -1679,7 +1696,7 @@ cdef class Node:
             self.first_child = self.last_child = node
 
     cdef void append_vector(self, Vector nodes, bint copy):
-        cdef list objects = nodes.objects
+        cdef tuple objects = nodes.objects
         if objects is None:
             return
         weak_self = PyWeakref_NewRef(self, None)
@@ -1687,7 +1704,7 @@ cdef class Node:
         cdef PyObject* obj
         cdef int i
         for i in range(nodes.length):
-            obj = PyList_GET_ITEM(objects, i)
+            obj = PyTuple_GET_ITEM(objects, i)
             if type(<object>obj) is not Node:
                 continue
             if copy:
