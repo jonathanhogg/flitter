@@ -23,7 +23,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
+        python-version: ["3.10", "3.11"]
 
     steps:
     - uses: actions/checkout@v3
@@ -43,7 +43,7 @@ jobs:
         flake8 . --count --exit-zero --max-complexity=30 --max-line-length=160 --statistics
     - name: Install build dependencies
       run: |
-        sudo apt-get install libasound2-dev libjack-jackd2-dev libavformat-dev libavcodec-dev libavdevice-dev libavutil-dev libavfilter-dev libswscale-dev libswresample-dev
+        sudo apt-get install libasound2-dev libjack-jackd2-dev
     - name: Build wheel
       run: |
         python -m build
