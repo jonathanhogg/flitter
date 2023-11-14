@@ -37,7 +37,7 @@ let bubble_radii=MIN_BUBBLE_RADIUS+(1+noise(:radii, i*NOISE_SCALE, NOISE_T))/2*(
                 for i in ..NBUBBLES
                     !sphere subdivisions=3 position=$(:bubble;i) color=bubble_brightness[i] size=bubble_radii[i]
 
-     -- press the space bar to collapse the particles into the centre
+    -- press the space bar to collapse the particles into the centre
     !key name=:space state=:collapse
-     -- click and move mouse to move the anchor point around
+    -- click and move mouse to move the anchor point around
     !pointer state=:pointer

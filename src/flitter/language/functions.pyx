@@ -162,6 +162,11 @@ def read_text(Context context, Vector filename):
     return null_
 
 
+def split(Vector text):
+    cdef str string = text.as_string()
+    return Vector._coerce(string.split('\n'))
+
+
 @context_func
 def read_csv(Context context, Vector filename, Vector row_number):
     cdef str path = str(filename)
@@ -845,6 +850,7 @@ STATIC_FUNCTIONS = {
     'hsl': Vector(hsl),
     'hsv': Vector(hsv),
     'point_towards': Vector(point_towards),
+    'split': Vector(split),
 }
 
 DYNAMIC_FUNCTIONS = {

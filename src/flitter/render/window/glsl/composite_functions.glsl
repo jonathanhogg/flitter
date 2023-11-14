@@ -22,3 +22,7 @@ vec4 composite_add(vec4 s, vec4 d) {
 vec4 composite_difference(vec4 s, vec4 d) {
     return vec4(abs(d.rgb - s.rgb), max(s.a, d.a));
 }
+
+vec4 composite_multiply(vec4 s, vec4 d) {
+    return s * d;
+}

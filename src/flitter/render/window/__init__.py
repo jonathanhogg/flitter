@@ -240,7 +240,7 @@ class ProgramNode(SceneNode):
                 start = system_clock()
                 self._program = self.glctx.program(vertex_shader=self._vertex_source, fragment_shader=self._fragment_source)
                 vertices = self.glctx.buffer(array.array('f', [-1, 1, -1, -1, 1, 1, 1, -1]))
-                self._rectangle = self.glctx.vertex_array(self._program, [(vertices, '2f', 'position')])
+                self._rectangle = self.glctx.vertex_array(self._program, [(vertices, '2f', 'position')], mode=moderngl.TRIANGLE_STRIP)
             except Exception as exc:
                 error = str(exc).strip().split('\n')
                 logger.error("{} GL program compile failed: {}", self.name, error[-1])
@@ -300,7 +300,7 @@ class ProgramNode(SceneNode):
                             member.value = value_split(value, member.array_length, member.dimension)
             self.glctx.enable_direct(GL_FRAMEBUFFER_SRGB)
             self.framebuffer.clear()
-            self._rectangle.render(mode=moderngl.TRIANGLE_STRIP)
+            self._rectangle.render()
             for sampler in samplers:
                 sampler.clear()
             self.glctx.disable_direct(GL_FRAMEBUFFER_SRGB)
@@ -339,8 +339,10 @@ class Shader(ProgramNode):
             self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
             self._framebuffer.clear()
             self._colorbits = colorbits
+            logger.debug("Created {}x{} {}-bit framebuffer for {}", self.width, self.height, self._colorbits, self.name)
 
     def make_last(self):
+        logger.debug("Create {}x{} {}-bit last texture for {}", self.width, self.height, self._colorbits, self.name)
         return self.glctx.texture((self.width, self.height), 4, dtype=COLOR_FORMATS[self._colorbits].moderngl_dtype)
 
 
@@ -364,7 +366,7 @@ class Window(ProgramNode):
             self.glctx.finish()
             self.glctx.extra.clear()
             if count := self.glctx.gc():
-                logger.trace("Collected {} OpenGL objects", count)
+                logger.trace("Window release collected {} OpenGL objects", count)
             self.glctx.release()
             self.glctx = None
             glfw.destroy_window(self.window)
@@ -375,6 +377,12 @@ class Window(ProgramNode):
             self.engine = None
             logger.debug("{} closed", self.name)
         super().release()
+
+    def purge(self):
+        self.glctx.finish()
+        super().purge()
+        if count := self.glctx.gc():
+            logger.trace("Window purge collected {} OpenGL objects", count)
 
     @property
     def texture(self):
@@ -475,10 +483,10 @@ class Window(ProgramNode):
                 self.engine.state[state.concat(Vector('pushed'))] = 0
                 self.engine.state[state.concat(Vector('released'))] = 1
                 self.engine.state[state.concat(Vector(['released', 'beat']))] = self._beat
-        elif key == glfw.KEY_PAGE_DOWN:
+        elif key == glfw.KEY_LEFT:
             if action == glfw.RELEASE:
                 self.engine.previous_page()
-        elif key == glfw.KEY_PAGE_UP:
+        elif key == glfw.KEY_RIGHT:
             if action == glfw.RELEASE:
                 self.engine.next_page()
 
