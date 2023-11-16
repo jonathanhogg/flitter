@@ -1,0 +1,12 @@
+
+let SIZE=1080;1080
+
+!window size=SIZE colorbits=16
+    !canvas
+        !rect size=SIZE
+        !fill color=0.5
+    !canvas3d viewpoint=0;0;-1200 focus=0 near=1 far=2000 fov=60/360 samples=4
+        !light color=1;0;0 direction=0;0;1
+        !light color=0;1;0 direction=1;0;0
+        !light color=0;0;1
+        !sphere subdivisions=3 color=1 size=400

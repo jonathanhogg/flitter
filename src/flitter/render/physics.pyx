@@ -99,6 +99,36 @@ cdef class Anchor(Particle):
     cdef void update(self, double speed_of_light, double clock, double delta) noexcept nogil:
         pass
 
+
+cdef class Barrier:
+    cdef Vector position
+    cdef Vector normal
+    cdef float restitution
+
+    def __cinit__(self, Node node, Vector zero):
+        self.position = node.get_fvec('position', zero.length, zero)
+        self.normal = node.get_fvec('normal', zero.length, zero).normalize()
+        self.restitution = node.get_float('restitution', 1)
+
+    cdef void apply(self, Particle particle, double delta) noexcept nogil:
+        if self.normal.length == 0:
+            return
+        cdef int i, dimensions=self.position.length
+        cdef double d
+        d = -particle.radius
+        for i in range(dimensions):
+            d = d + (particle.position.numbers[i] - self.position.numbers[i]) * self.normal.numbers[i]
+        if d >= 0:
+            return
+        for i in range(dimensions):
+            particle.position.numbers[i] = particle.position.numbers[i] - d*self.normal.numbers[i]
+        d = 0
+        for i in range(dimensions):
+            d = d + particle.velocity.numbers[i] * self.normal.numbers[i]
+        for i in range(dimensions):
+            particle.velocity.numbers[i] = (particle.velocity.numbers[i] - 2*d*self.normal.numbers[i]) * self.restitution
+
+
 cdef class ForceApplier:
     cdef double strength
 
@@ -179,21 +209,19 @@ cdef class DragForceApplier(ParticleForceApplier):
 
 cdef class ConstantForceApplier(ParticleForceApplier):
     cdef Vector force
+    cdef Vector acceleration
 
     def __cinit__(self, Node node, double strength, Vector zero):
         cdef Vector force
         cdef long i
-        force = node.get_fvec('force', zero.length, null_)
-        if force.length == 0:
-            force = node.get_fvec('direction', zero.length, zero).normalize()
-            for i in range(force.length):
-                force.numbers[i] = force.numbers[i] * self.strength
-        self.force = force
+        self.force = node.get_fvec('force', zero.length, zero)
+        self.acceleration = node.get_fvec('acceleration', zero.length, zero)
 
     cdef void apply(self, Particle particle, double delta) noexcept nogil:
         cdef long i
         for i in range(self.force.length):
-            particle.force.numbers[i] = particle.force.numbers[i] + self.force.numbers[i]
+            particle.force.numbers[i] = particle.force.numbers[i] + self.force.numbers[i]*self.strength
+            particle.velocity.numbers[i] = particle.velocity.numbers[i] + self.acceleration.numbers[i]*self.strength*delta
 
 
 cdef class RandomForceApplier(ParticleForceApplier):
@@ -275,12 +303,13 @@ cdef class PhysicsSystem:
         cdef long i
         for i in range(dimensions):
             zero.numbers[i] = 0
-        cdef list particles=[], particle_forces=[], matrix_forces=[], specific_forces=[]
+        cdef list particles=[], non_anchors=[], particle_forces=[], matrix_forces=[], specific_forces=[], barriers=[]
         cdef Node child = node.first_child
         cdef Vector id
         cdef double strength, ease
         cdef dict particles_by_id = {}
         cdef Particle particle
+        cdef Barrier barrier
         while child is not None:
             if child.kind == 'particle':
                 id = <Vector>child._attributes.get('id')
@@ -288,12 +317,16 @@ cdef class PhysicsSystem:
                     particle = Particle.__new__(Particle, child, id, zero, state_prefix, state)
                     particles_by_id[id] = len(particles)
                     particles.append(particle)
+                    non_anchors.append(particle)
             elif child.kind == 'anchor':
                 id = <Vector>child._attributes.get('id')
                 if id is not None:
                     particle = Anchor.__new__(Anchor, child, id, zero, state_prefix, state)
                     particles_by_id[id] = len(particles)
                     particles.append(particle)
+            elif child.kind == 'barrier':
+                barrier = Barrier.__new__(Barrier, child, zero)
+                barriers.append(barrier)
             else:
                 strength = child.get_float('strength', 1)
                 ease = child.get_float('ease', 0)
@@ -326,7 +359,7 @@ cdef class PhysicsSystem:
             logger.debug("New physics {!r} with {} particles and {} forces", state_prefix, len(particles),
                          len(particle_forces) + len(matrix_forces) + len(specific_forces))
             last_time = time
-        clock = await asyncio.to_thread(self.calculate, particles, particle_forces, matrix_forces, specific_forces,
+        clock = await asyncio.to_thread(self.calculate, particles, non_anchors, particle_forces, matrix_forces, specific_forces, barriers,
                                         dimensions, engine.realtime, speed_of_light, time, last_time, resolution, clock)
         for particle in particles:
             state.set_item(particle.position_state_key, particle.position)
@@ -340,10 +373,10 @@ cdef class PhysicsSystem:
         time_vector.numbers[0] = clock
         state.set_item(state_prefix.concat(CLOCK), time_vector)
 
-    cdef double calculate(self, list particles, list particle_forces, list matrix_forces, list specific_forces,
+    cdef double calculate(self, list particles, list non_anchors, list particle_forces, list matrix_forces, list specific_forces, list barriers,
                           int dimensions, bint realtime, double speed_of_light,
                           double time, double last_time, double resolution, double clock):
-        cdef long i, j, k, m, n=len(particles)
+        cdef long i, j, k, m, n=len(particles), o=len(non_anchors)
         cdef double delta
         cdef Vector direction = Vector.__new__(Vector)
         direction.allocate_numbers(dimensions)
@@ -353,13 +386,14 @@ cdef class PhysicsSystem:
         cdef PyObject* from_particle
         cdef PyObject* to_particle
         cdef PyObject* force
+        cdef PyObject* barrier
         with nogil:
             while True:
                 delta = min(resolution, time-last_time)
                 m = PyList_GET_SIZE(particle_forces)
                 for i in range(m):
-                    for j in range(n):
-                        (<ParticleForceApplier>PyList_GET_ITEM(particle_forces, i)).apply((<Particle>PyList_GET_ITEM(particles, j)), delta)
+                    for j in range(o):
+                        (<ParticleForceApplier>PyList_GET_ITEM(particle_forces, i)).apply((<Particle>PyList_GET_ITEM(non_anchors, j)), delta)
                 m = PyList_GET_SIZE(specific_forces)
                 for i in range(m):
                     force = PyList_GET_ITEM(specific_forces, i)
@@ -397,6 +431,12 @@ cdef class PhysicsSystem:
                                                                           direction, distance, distance_squared)
                 for i in range(n):
                     (<Particle>PyList_GET_ITEM(particles, i)).update(speed_of_light, clock, delta)
+                m = PyList_GET_SIZE(barriers)
+                for i in range(m):
+                    barrier = PyList_GET_ITEM(barriers, i)
+                    for j in range(o):
+                        to_particle = PyList_GET_ITEM(non_anchors, j)
+                        (<Barrier>barrier).apply(<Particle>to_particle, delta)
                 last_time += delta
                 clock += delta
                 if realtime or last_time >= time:

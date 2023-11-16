@@ -105,38 +105,34 @@ be moved once the simulation has started. An anchor can usefully have zero mass,
 for example if it is to be one side of a distance force, but should be ignored
 for the purposes of calculating attraction due to gravity.
 
+### `!barrier`
+
+A `!barrier` constrains all particles to be on one side of it. In the case of
+a system with 3 dimensions, this will be an infinite plane; with 2 dimensions,
+a line; and with 1 dimension, a point. Particles that hit a barrier will
+"bounce" by reflecting the velocity.
+
+- `position` - specifies the origin for the barrier
+- `normal` - specifies the orientation of the barrier; particles are
+constrained to be on the side of the barrier in the direction of this vector
+- `restitution` - the coefficient of restitution (default is `1`)
+
+Particles bouncing off a barrier will have reflected speed in proportion to
+their original speed multiplied by the coefficient of restitution: a value of
+`1` will result in a perfectly elastic collision, whereas `0` would mean all of
+the particle's velocity is absorbed.
+
 ### `!constant`
 
-Specifies a constant force to be applied to all particles. This is useful for
-simulating the "down" acceleration from the gravity of a large body.
+Specifies a constant force or acceleration to be applied to all particles. This
+is useful for simulating global forces such as fields, winds, or gravity.
 
-- `direction` - specifies a vector representing the force direction (which
-will be normalized)
-- `strength` - specifies the magnitude of the constant force along the
-direction vector
-- `force` - alternative to `direction` and `strength` for giving the force
-vector directly
+- `force` - specifies a constant force vector (such as an electric field)
+- `acceleration` - specifies a constant acceleration vector (such as gravity)
+- `strength` - specifies a multiplier for `force`/`acceleration` vector
+(default is `1`)
 - `ease` - specifies an amount of simulation time over which to ramp up
-`strength` (or `force`)
-
-```math
-\vec{F} = \textbf{strength} . \vec{d}
-```
-
-`direction` and `strength` are available rather than just `force` as it allows
-one to easily specify a direction in terms of two points, e.g.:
-
-```
-!constant direction=bottom-top strength=100
-```
-
-is equivalent to:
-
-```
-!constant force=100*normalize(bottom-top)
-```
-
-but possibly more obvious.
+`strength`
 
 ### `!distance`
 
