@@ -86,9 +86,10 @@ class CachePath:
         if self._mtime is None:
             if current_program is False:
                 logger.warning("Program not found: {}", self._path)
-                current_program = None
+                program = current_program = None
             elif current_program is not None:
                 logger.error("Program disappeared: {}", self._path)
+                program = current_program
         else:
             if current_program is False:
                 current_program = None

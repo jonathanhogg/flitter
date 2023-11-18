@@ -211,11 +211,12 @@ class EngineController:
                 else:
                     context = Context()
                 self.handle_pragmas(context.pragmas)
-                new_errors = context.errors.difference(errors)
+
+                new_errors = context.errors.difference(errors) if errors is not None else context.errors
                 errors = context.errors
                 for error in new_errors:
                     logger.error("Evaluation error: {}", error)
-                new_logs = context.logs.difference(logs)
+                new_logs = context.logs.difference(logs) if logs is not None else context.logs
                 logs = context.logs
                 for log in new_logs:
                     print(log)
