@@ -1,0 +1,24 @@
+
+%pragma tempo 60
+
+import bloom_filter from 'bloom.fl'
+
+let SIZE=1080;1080
+    N=150
+    BASE=30
+    LOOPS=2
+
+!window size=SIZE colorbits=16
+    !record filename=('bauble.mp4' if RECORD) codec=:hevc crf=25 limit=BASE*LOOPS
+        @bloom_filter radius=20
+            !canvas3d samples=4 viewpoint=0;0;1000 near=1 far=2000 fov=30/360 max_lights=N \
+                      fog_color=0 fog_min=500 fog_max=1500
+                !transform rotate=beat/BASE*(1;2;3)
+                    for i in ..N
+                        let period=BASE/((1+uniform(:period)[i]*6)//1) phase=uniform(:phase)[i] cycle=(beat/period+phase)%LOOPS
+                            length=beta(:size;i)[cycle]*1000*sine(cycle)
+                            c=hsl(0.6+0.2*beta(:hue;i)[cycle];1;beta(:lightness;i)[cycle])
+                        !transform rotate_z=beta(:rotx;i)[cycle] rotate_y=uniform(:roty;i)[cycle]
+                            !cone position=0;0;length/2 size=2;2;length color=c shininess=200
+                            !sphere position=0;0;length size=2 emissive=c*2
+                            !light color=c*5000 position=0;0;length

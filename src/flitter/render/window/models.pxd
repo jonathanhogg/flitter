@@ -34,6 +34,13 @@ cdef class Cylinder(TrimeshModel):
     cdef Cylinder get(bint flat, bint invert, int segments)
 
 
+cdef class Cone(TrimeshModel):
+    cdef int segments
+
+    @staticmethod
+    cdef Cone get(bint flat, bint invert, int segments)
+
+
 cdef class LoadedModel(TrimeshModel):
     cdef str filename
 

@@ -17,7 +17,7 @@ from ... import name_patch
 from ...clock import system_clock
 from ...model cimport Node, Vector, Matrix44, null_, true_
 from .glsl import TemplateLoader
-from .models cimport Model, Box, Cylinder, Sphere, LoadedModel
+from .models cimport Model, Box, Cylinder, Cone, Sphere, LoadedModel
 
 
 logger = name_patch(logger, __name__)
@@ -245,6 +245,14 @@ cdef void collect(Node node, Matrix44 model_matrix, Material material, RenderSet
         invert = node.get_bool('invert', False)
         segments = node.get_int('segments', 32)
         model = Cylinder.get(flat, invert, segments)
+        material = material.update(node)
+        add_instance(render_set.instances, model, node, model_matrix, material)
+
+    elif node.kind == 'cone':
+        flat = node.get_bool('flat', False)
+        invert = node.get_bool('invert', False)
+        segments = node.get_int('segments', 32)
+        model = Cone.get(flat, invert, segments)
         material = material.update(node)
         add_instance(render_set.instances, model, node, model_matrix, material)
 

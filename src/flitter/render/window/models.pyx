@@ -5,6 +5,8 @@ from loguru import logger
 import numpy as np
 import trimesh
 
+from libc.math cimport cos, sin, sqrt
+
 from ... import name_patch
 from ...cache import SharedCache
 
@@ -12,6 +14,8 @@ from ...cache import SharedCache
 logger = name_patch(logger, __name__)
 
 cdef dict ModelCache = {}
+cdef double Tau = 6.283185307179586
+cdef double RootHalf = sqrt(0.5)
 
 
 cdef class Model:
@@ -124,6 +128,58 @@ cdef class Cylinder(TrimeshModel):
 
     cdef object get_trimesh_model(self):
         return trimesh.primitives.Cylinder(sections=self.segments) if self.trimesh_model is None else self.trimesh_model
+
+
+cdef class Cone(TrimeshModel):
+    @staticmethod
+    cdef Cone get(bint flat, bint invert, int segments):
+        cdef str name = f'!cone/{segments}'
+        if flat:
+            name += '/flat'
+        if invert:
+            name += '/invert'
+        cdef Cone model = ModelCache.get(name)
+        if model is None:
+            model = Cone.__new__(Cone)
+            model.name = name
+            model.flat = flat
+            model.invert = invert
+            model.segments = segments
+            model.trimesh_model = None
+            ModelCache[name] = model
+        return model
+
+    @cython.cdivision(True)
+    @cython.boundscheck(False)
+    cdef object get_trimesh_model(self):
+        if self.trimesh_model is not None:
+            return self.trimesh_model
+        cdef int i, j, k, n = self.segments
+        cdef object vertices_array = np.empty((n*3+1, 3), dtype='float64')
+        cdef double[:,:] vertices = vertices_array
+        cdef object vertex_normals_array = np.empty((n*3+1, 3), dtype='float64')
+        cdef double[:,:] vertex_normals = vertex_normals_array
+        cdef object faces_array = np.empty((n*2, 3), dtype='int64')
+        cdef long[:,:] faces = faces_array
+        cdef double x, y, th
+        vertices[0, 0], vertices[0, 1], vertices[0, 2] = 0, 0, -0.5
+        vertex_normals[0, 0], vertex_normals[0, 1], vertex_normals[0, 2] = 0, 0, -1
+        for i in range(n):
+            j = i * 3
+            k = (i-1)*3 if i else (n-1)*3
+            th = Tau * i/n
+            x = cos(th)
+            y = sin(th)
+            vertices[j+1, 0], vertices[j+1, 1], vertices[j+1, 2] = x, y, -0.5
+            vertex_normals[j+1, 0], vertex_normals[j+1, 1], vertex_normals[j+1, 2] = 0, 0, -1
+            vertices[j+2, 0], vertices[j+2, 1], vertices[j+2, 2] = x, y, -0.5
+            vertex_normals[j+2, 0], vertex_normals[j+2, 1], vertex_normals[j+2, 2] = x*RootHalf, y*RootHalf, RootHalf
+            vertices[j+3, 0], vertices[j+3, 1], vertices[j+3, 2] = 0, 0, 0.5
+            vertex_normals[j+3, 0], vertex_normals[j+3, 1], vertex_normals[j+3, 2] = x*RootHalf, y*RootHalf, RootHalf
+            faces[i*2, 0], faces[i*2, 1], faces[i*2, 2] = 0, k+1, j+1
+            faces[i*2+1, 0], faces[i*2+1, 1], faces[i*2+1, 2] = j+3, k+2, j+2
+        self.trimesh_model = trimesh.base.Trimesh(vertices=vertices_array, vertex_normals=vertex_normals_array, faces=faces_array)
+        return self.trimesh_model
 
 
 cdef class LoadedModel(TrimeshModel):
