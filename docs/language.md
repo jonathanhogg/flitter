@@ -76,9 +76,9 @@ The engine-supplied global values are:
 - `quantum` - the beats per quantum (usually 4)
 - `delta` - the difference between the current value of `beat` and the value
     at the last display frame
-- `clock` - the time in seconds since the "start" of the main clock, this
-    will adjust when the tempo or quantum is changed to keep the value of
-    `beat` constant, so it's generally not a particularly useful value
+- `clock` - the current frame time (derived from Python's `perf_counter()`
+    usually, though increasing by exactly `1/fps` per frame in non-realtime
+    mode)
 - `fps` - the current target frame-rate of the engine (the `--fps` option)
 - `performance` - a value in the range [0.5 .. 2.0] that increases fractionally
     if the engine has time to spare and decreases fractionally if it is missing
