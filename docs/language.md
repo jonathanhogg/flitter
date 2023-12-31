@@ -147,14 +147,14 @@ as a suffix. (Confused yet?)
 
 The allowed SI prefixes are:
 
- - `T` - x 10e12
- - `G` - x 10e9
- - `M` - x 10e6
- - `k` - x 10e3
- - `m` - x 10e-3
- - `u` or `µ` - x 10e-6
- - `n` - x 10e-9
- - `p` - x 10e-12
+- `T` - x 10e12
+- `G` - x 10e9
+- `M` - x 10e6
+- `k` - x 10e3
+- `m` - x 10e-3
+- `u` or `µ` - x 10e-6
+- `n` - x 10e-9
+- `p` - x 10e-12
 
 So you can suffix any number with one of these, e.g., `10m` is the same as
 `0.01`. They are primarily useful for avoiding difficult-to-read long sequences
@@ -617,7 +617,8 @@ Queries allow the node tree so-far to be searched and manipulated. They use
 a CSS-selector-like syntax that is best explained by example:
 
 - `{*}` matches *all* nodes in the tree
-- `{window}` matches any `!window` node
+- `{window}` matches all `!window` nodes
+- `{window!}` matches only the *first* `!window` node in the tree
 - `{#spot}` matches any node with the `#spot` tag
 - `{shader#blur}` matches `!shader` nodes with the `#blur` tag
 - `{ellipse|rect}` matches any `!ellipse` or `!rect` node
@@ -631,7 +632,7 @@ The result of a query expression is a vector of matching nodes. Note that nodes
 are appended to the main tree from the top-level after the complete evaluation
 of each expression, including any indented append operations. Thus a query
 evaluated within a nested expression cannot match any node that makes up part
-of that expression.
+of that expression. Query searches are *depth-first*.
 
 A query expression may be combined with tag, attribute-set or node-append
 expressions to amend the current tree. For example:
