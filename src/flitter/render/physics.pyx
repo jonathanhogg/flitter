@@ -251,7 +251,7 @@ cdef class GravityForceApplier(MatrixPairForceApplier):
     cdef void apply(self, Particle from_particle, Particle to_particle, Vector direction, double distance, double distance_squared) noexcept nogil:
         cdef double f, k
         cdef long i
-        if from_particle.mass and to_particle.mass and distance > min(from_particle.radius, to_particle.radius):
+        if from_particle.mass and to_particle.mass and distance > max(from_particle.radius, to_particle.radius):
             k = self.strength * from_particle.mass * to_particle.mass / distance_squared
             for i in range(direction.length):
                 f = direction.numbers[i] * k
@@ -263,7 +263,7 @@ cdef class ElectrostaticForceApplier(MatrixPairForceApplier):
     cdef void apply(self, Particle from_particle, Particle to_particle, Vector direction, double distance, double distance_squared) noexcept nogil:
         cdef double f, k
         cdef long i
-        if from_particle.charge and to_particle.charge and distance > min(from_particle.radius, to_particle.radius):
+        if from_particle.charge and to_particle.charge and distance > max(from_particle.radius, to_particle.radius):
             k = self.strength * -from_particle.charge * to_particle.charge / distance_squared
             for i in range(direction.length):
                 f = direction.numbers[i] * k

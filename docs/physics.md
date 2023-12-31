@@ -234,7 +234,7 @@ minimal effect on each other.
 
 Gravitational forces are ignored between particles whose centres are within
 each other's radii, i.e., the minimum distance over which gravity will be
-calculated is the minimum of the `radius` of each particle. This is to avoid
+calculated is the maximum of the `radius` of each particle. This is to avoid
 the wild instability caused by massive forces when the distance is very small.
 
 ### `!electrostatic`
