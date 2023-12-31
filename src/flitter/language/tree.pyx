@@ -655,9 +655,6 @@ cdef class GreaterThanOrEqualTo(Comparison):
 
 
 cdef class And(BinaryOperation):
-    cdef Vector op(self, Vector left, Vector right):
-        return right if left.as_bool() else left
-
     cdef void _compile(self, Program program, list lvars):
         end_label = program.new_label()
         self.left._compile(program, lvars)
@@ -667,17 +664,16 @@ cdef class And(BinaryOperation):
         self.right._compile(program, lvars)
         program.label(end_label)
 
-    cdef Expression constant_left(self, Vector left, Expression right):
-        if left.as_bool():
-            return right
-        else:
-            return Literal(left)
+    cpdef Expression evaluate(self, Context context):
+        cdef Expression left = self.left.evaluate(context)
+        if isinstance(left, Literal):
+            if (<Literal>left).value.as_bool():
+                return self.right.evaluate(context)
+            return left
+        return And(left, self.right.evaluate(context))
 
 
 cdef class Or(BinaryOperation):
-    cdef Vector op(self, Vector left, Vector right):
-        return left if left.as_bool() else right
-
     cdef void _compile(self, Program program, list lvars):
         end_label = program.new_label()
         self.left._compile(program, lvars)
@@ -687,27 +683,31 @@ cdef class Or(BinaryOperation):
         self.right._compile(program, lvars)
         program.label(end_label)
 
-    cdef Expression constant_left(self, Vector left, Expression right):
-        if left.as_bool():
-            return Literal(left)
-        else:
-            return right
+    cpdef Expression evaluate(self, Context context):
+        cdef Expression left = self.left.evaluate(context)
+        if isinstance(left, Literal):
+            if not (<Literal>left).value.as_bool():
+                return self.right.evaluate(context)
+            return left
+        return Or(left, self.right.evaluate(context))
 
 
 cdef class Xor(BinaryOperation):
-    cdef Vector op(self, Vector left, Vector right):
-        if not left.as_bool():
-            return right
-        if not right.as_bool():
-            return left
-        return false_
-
     cdef void _compile_op(self, Program program):
         program.xor()
 
-    cdef Expression constant_left(self, Vector left, Expression right):
-        if not left.as_bool():
+    cpdef Expression evaluate(self, Context context):
+        cdef Expression left = self.left.evaluate(context)
+        cdef Expression right = self.right.evaluate(context)
+        cdef bint literal_left = isinstance(left, Literal)
+        cdef bint literal_right = isinstance(right, Literal)
+        if literal_left and not (<Literal>left).value.as_bool():
             return right
+        if literal_right and not (<Literal>right).value.as_bool():
+            return left
+        if literal_left and literal_right:
+            return Literal(false_)
+        return Xor(left, right)
 
 
 cdef class Slice(Expression):
@@ -1293,14 +1293,15 @@ cdef class IfElse(Expression):
         cdef Expression condition, then
         for test in self.tests:
             condition = test.condition.evaluate(context)
-            then = test.then.evaluate(context)
             if isinstance(condition, Literal):
                 if (<Literal>condition).value.as_bool():
+                    then = test.then.evaluate(context)
                     if not remaining:
                         return then
                     else:
                         return IfElse(tuple(remaining), then)
             else:
+                then = test.then.evaluate(context)
                 remaining.append(Test(condition, then))
         else_ = self.else_.evaluate(context) if self.else_ is not None else None
         if remaining:
