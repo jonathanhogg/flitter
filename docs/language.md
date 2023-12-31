@@ -138,6 +138,32 @@ a function vector is identical to composing the result of calling each function
 with the arguments, i.e., `(sin;cos)(x) == (sin(x);cos(x))`. This is arguably
 obtuse behaviour.
 
+### SI Prefixes
+
+**flitter** supports adding an SI prefix to the end of a number. This is
+confusing terminology, but an SI prefix is a prefix to a unit suffix.
+**flitter** does *not* support units, so you just end up with the SI prefix
+as a suffix. (Confused yet?)
+
+The allowed SI prefixes are:
+
+ - `T` - x 10e12
+ - `G` - x 10e9
+ - `M` - x 10e6
+ - `k` - x 10e3
+ - `m` - x 10e-3
+ - `u` or `µ` - x 10e-6
+ - `n` - x 10e-9
+ - `p` - x 10e-12
+
+So you can suffix any number with one of these, e.g., `10m` is the same as
+`0.01`. They are primarily useful for avoiding difficult-to-read long sequences
+of zeros – e.g. when specifying the brightness of point and spot lights:
+
+```flitter
+!light position=0 color=1M
+```
+
 ### Symbols
 
 Names can be turned into short Unicode strings with a preceding `:` character.
@@ -171,7 +197,7 @@ decrementing if negative) by `step` until the value is equal to or passes
 `stop` - the last value is *not* included in the range, i.e., it is a
 half-open range.
 
-`start` and `|stop` may be omitted, in which case the vector will begin at 0
+`start` and `|step` may be omitted, in which case the vector will begin at 0
 and increment by 1. Therefore:
 
 - `..10` evaluates to the vector `0;1;2;3;4;5;6;7;8;9`
