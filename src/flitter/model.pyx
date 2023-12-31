@@ -175,7 +175,7 @@ cdef inline void free_numbers(int n, double* numbers) noexcept:
     else:
         PyMem_Free(numbers)
 
-initialize_numbers_cache(8192)
+initialize_numbers_cache(16384)
 
 
 cdef dict InternedVectors = {}
