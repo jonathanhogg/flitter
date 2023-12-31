@@ -82,6 +82,11 @@ see a full list of available options with `--help`.
 Everything else there is to know can be found in the [docs folder](/docs),
 examples or in the code.
 
+## More examples
+
+As well as the few [examples](/examples) in this repo, there is a dedicated
+repo containing [more examples](https://github.com/jonathanhogg/flitter-examples).
+
 ## Requirements
 
 At least Python 3.10 is *required* as the code uses `match`/`case` syntax.
