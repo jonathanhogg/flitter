@@ -747,7 +747,7 @@ They are considered to be `true` in conditional expressions (`if`, `and`, etc.).
 In all other aspects, pseudo-random streams behave like the `null` vector, e.g.,
 attempts to use them in mathematical expressions will evaluate to `null`.
 
-## Counters
+## Counters
 
 Arbitrary counters can be managed with the `counter()` function. This takes
 either two or three arguments and **has state side-effects**.
@@ -833,10 +833,10 @@ that is *partially-evaluated*. This attempts to evaluate all static expressions.
 The partial-evaluator is quite sophisticated and is able to construct static
 parts of node trees, unroll loops with constant source vectors, evaluate
 conditionals with constant tests, call functions with constant arguments
-(including creating pseudo-random streams), replace `let` names with literal
-values, evaluate mathematical expressions (including some rearranging where
-necessary to achieve this) and generally reduces as much of the evaluation tree
-as possible to constant values.
+(including creating pseudo-random streams), inline functions that contain only
+local names, replace `let` names with literal values, evaluate mathematical
+expressions (including some rearranging where necessary to achieve this) and
+generally reduces as much of the evaluation tree as possible to constant values.
 
 Unbound names (which includes all of the globals listed above, like `beat`) and
 queries (`{...}`) are always dynamic, as will then obviously be any expressions
@@ -854,18 +854,3 @@ touched) the engine will return to the original compiled program. Counters
 update the state whenever their speed changes, and so doing this continously
 will defeat state-based partial-evaluation. The physics engine updates state on
 every iteration and so does the same.
-
-### A note on multi-processing
-
-I love Python, but the global interpreter lock basically makes any kind of
-serious multi-threading impossible. **flitter** supports a limited form of
-multi-processing instead. Adding the `--multiprocess` option on the command line
-will cause a separate renderer child process to be executed for each window,
-laser or DMX bus.
-
-The main process handles evaluating the script to produce an output tree. This
-tree is then fed to each renderer and all renderers are waited on before moving
-on to the next iteration. This works well if the script and the renderers are
-expensive to run and the tree is small. As the tree grows large, the cost of
-pickling and un-pickling it across the process boundaries becomes a bottleneck,
-so your mileage may vary.
