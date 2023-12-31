@@ -86,11 +86,21 @@ attraction (defaults to 1 and will be clamped to zero if negative)
 - `charge` - specifies a value to be used for calculating electrostatic force
 (defaults to 1)
 
-As `mass` is used when calculating acceleration, particles with zero mass will
+As `mass` is used when calculating acceleration, particles with zero mass
 cannot be the subject of a force, meaning they will always continue travelling
 at their initial velocity (or remain fixed at their initial position).
 However, particles with zero mass will still be considered when computing
 forces on other particles.
+
+> **A note on "easing"**
+>
+> Starting a simulation with forces immediately applied can cause wild
+> instability due to massive forces being computed. This applies particularly
+> when a collision force applier and particle starting positions that overlap.
+> To avoid this, all forces can be "eased"-in with the `ease` attribute. This
+> specifies an amount of simulation time to linearly ramp up the strength of
+> the force applier, giving an amount of time for particles to settle into a
+> more stable position.
 
 ### `!anchor`
 
@@ -102,7 +112,7 @@ rather than an initial value. Thus an `!anchor` may be arbitrarily moved around.
 
 While a zero-mass particle is similar to an anchor, a zero-mass particle cannot
 be moved once the simulation has started. An anchor can usefully have zero mass,
-for example if it is to be one side of a distance force, but should be ignored
+for example if it is to be one side of a distance force but should be ignored
 for the purposes of calculating attraction due to gravity.
 
 ### `!barrier`
@@ -128,7 +138,8 @@ Specifies a constant force or acceleration to be applied to all particles. This
 is useful for simulating global forces such as fields, winds, or gravity.
 
 - `force` - specifies a constant force vector (such as an electric field)
-- `acceleration` - specifies a constant acceleration vector (such as gravity)
+- `acceleration` - specifies a constant acceleration vector (such as large-body
+gravity)
 - `strength` - specifies a multiplier for `force`/`acceleration` vector
 (default is `1`)
 - `ease` - specifies an amount of simulation time over which to ramp up
@@ -174,7 +185,7 @@ l = \left| \vec{p}_\textbf{to} - \vec{p}_\textbf{from} \right|
 \vec{F}_\textbf{to} = -\vec{F}
 ```
 
-### `!collision`
+### `!collision`
 
 This creates an implicit `!distance` force applier between all pairs of
 particles, with `min` set to the sum of the `radius` attributes of each
@@ -221,6 +232,11 @@ an optimization feature that allows running the simulation slightly faster by
 skipping over particle pairings where they are far apart and will have only a
 minimal effect on each other.
 
+Gravitational forces are ignored for overlapping particles, i.e., the minimum
+distance over which gravity will be calculated is the sum of the `radius` of
+each particle. This is to avoid the wild instability caused by massive forces
+when the distance is very small.
+
 ### `!electrostatic`
 
 `!electrostatic` creates an attractive force that applies to all pairs of
@@ -249,7 +265,7 @@ attract each other.
 ```
 
 Except for the ability to have negative charges, electrostatic force operates
-in the same way as gravity.
+in the same way as gravity – including being ignored for overlapping particles.
 
 > **Note**
 >
