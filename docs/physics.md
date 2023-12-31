@@ -96,11 +96,11 @@ forces on other particles.
 >
 > Starting a simulation with forces immediately applied can cause wild
 > instability due to massive forces being computed. This applies particularly
-> when a collision force applier and particle starting positions that overlap.
-> To avoid this, all forces can be "eased"-in with the `ease` attribute. This
-> specifies an amount of simulation time to linearly ramp up the strength of
-> the force applier, giving an amount of time for particles to settle into a
-> more stable position.
+> when using a collision force applier and particle starting positions that map
+> overlap. To avoid this, all forces can be "eased"-in with the `ease`
+> attribute. This specifies an amount of simulation time to linearly ramp up
+> the strength of the force applier, giving an amount of time for particles to
+> settle into a more stable position.
 
 ### `!anchor`
 
