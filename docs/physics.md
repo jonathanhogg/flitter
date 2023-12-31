@@ -232,10 +232,10 @@ an optimization feature that allows running the simulation slightly faster by
 skipping over particle pairings where they are far apart and will have only a
 minimal effect on each other.
 
-Gravitational forces are ignored for overlapping particles, i.e., the minimum
-distance over which gravity will be calculated is the sum of the `radius` of
-each particle. This is to avoid the wild instability caused by massive forces
-when the distance is very small.
+Gravitational forces are ignored between particles whose centres are within
+each other's radii, i.e., the minimum distance over which gravity will be
+calculated is the minimum of the `radius` of each particle. This is to avoid
+the wild instability caused by massive forces when the distance is very small.
 
 ### `!electrostatic`
 
