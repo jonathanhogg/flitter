@@ -346,7 +346,7 @@ cdef Matrix44 instance_start_end_matrix(Vector start, Vector end, double radius)
     size.numbers[0] = radius
     size.numbers[1] = radius
     size.numbers[2] = length
-    return Matrix44._look(middle, end, up).inverse().mmul(Matrix44._scale(size))
+    return Matrix44._look(middle, start, up).inverse().mmul(Matrix44._scale(size))
 
 
 cdef void add_instance(dict render_instances, Model model, Node node, Matrix44 model_matrix, Material material):
