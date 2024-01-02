@@ -161,8 +161,8 @@ short strings that are used as enumerations, e.g.:
 
 The `composite` attribute of `!canvas` takes a string representing the name of
 the blend function to use when drawing. They are also useful when constructing
-state key vectors or seed vectors (see **State** and **Pseudo-random sources**
-below)
+state key vectors or seed vectors (see [State](#state) and [Pseudo-random
+sources](#pseudo-random-sources) below)
 
 ## Operators
 
@@ -233,13 +233,13 @@ adding each value to an accumulator starting at 0
 - `angle(x, y)` - return the angle (in *turns*) of the cartesian
 vector *x,y*
 - `asin(x)` - arc-sine (in *turns*) of *x*
-- `beta(seed)` - see **Psuedo-random sources** below
+- `beta(seed)` - see [Psuedo-random sources](#pseudo-random-sources) below
 - `bounce(x)` - return a repeating bouncing wave (akin to a perfectly bouncing
 ball) in the range *[0,1]* with one wave per unit of *x*, with the *0* point
 when `x%1 == 0` and the *1* point when `x%1 == 0.5`
 - `ceil(x)` - return mathematical ceiling of *x*
 - `cos(x)` - return cosine of *x* (in *turns*)
-- `counter(...)` - see *Counters* below
+- `counter(...)` - see [Counters](#counters) below
 - `csv(filename, row)` - return a vector of values obtained by reading a
 specific *row* (indexed from *0*) from the CSV file with the given *filename*;
 this function intelligently caches and will convert numeric-looking columns in
@@ -275,7 +275,7 @@ argument, or the smallest of the arguments in vector sort order
 - `minindex(x, [...])` - return the index of the minimum value in the vector
 *x* with one argument, or the index of the smallest argument in vector sort
 order (with the 1st argument being index *0*)
-- `normal(seed)` - see **Psuedo-random sources** below
+- `normal(seed)` - see [Psuedo-random sources](#pseudo-random-sources) below
 - `normalize(x)` - return `x / hypot(x)`
 - `polar(th)` - equivalent to `zip(cos(th), sin(th))`
 - `quad(x)` - a quadratic "easing" function in the range *[0, 1]* with values of
@@ -308,7 +308,7 @@ vector *xs*
 - `triangle(x)` - return a repeating triangle wave in the range *[0,1]* with
 one wave per unit of *x*, with the *0* point when `x%1 == 0` and the *1* point
 when `x%1 == 0.5`
-- `uniform(seed)` - see **Psuedo-random sources** below
+- `uniform(seed)` - see [Psuedo-random sources](#pseudo-random-sources) below
 - `zip(xs, [...])` - return a vector formed by interleaving values from each
 argument vector; for *m* arguments the resulting vector will be *n * m*
 elements long, where *n* is the length of the longest vector; short arguments
@@ -346,11 +346,11 @@ vector with 1 million items.
 The purpose of any **flitter** program is to construct a render tree.
 Individual literal nodes are represented by an exclamation mark followed by
 a name, e.g., `!window`. Nodes can be tagged with additional arbitrary names
-that aid in readability and in searching (see Queries below). A hash character
-followed by a name will tag the preceding node (or nodes) with that name, e.g.,
-`#top`. A name followed by an equals character will set that attribute on the
-preceding node. The resulting value in both of these instances is the
-tagged/attributed node.
+that aid in readability and in searching (see [Queries](#queries) below). A
+hash character followed by a name will tag the preceding node (or nodes) with
+that name, e.g., `#top`. A name followed by an equals character will set that
+attribute on the preceding node. The resulting value in both of these instances
+is the tagged/attributed node.
 
 For example:
 
@@ -486,7 +486,7 @@ is equivalent to:
 ```
 
 Generally, this sort of behaviour is obtuse, but the semantics are important
-when using queries (see **Queries** below).
+when using queries (see [Queries](#queries) below).
 
 ## Let expressions
 
@@ -940,9 +940,10 @@ binds with very low precedence, a non-singleton key needs to be surrounded with
 brackets, e.g., `$(:circle;:radius)`.
 
 The state system is also used by the [physics engine](./physics.md) to
-communicate particle properties back to the program and by counters (see above)
-for storing a starting clock value and current speed. Be careful when choosing
-state keys to avoid collisions between these different uses.
+communicate particle properties back to the program and by counters (see
+[Counters](#counters) above) for storing a starting clock value and current
+speed. Be careful when choosing state keys to avoid collisions between these
+different uses.
 
 ## Pragmas
 
