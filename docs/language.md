@@ -241,8 +241,9 @@ when `x%1 == 0` and the *1* point when `x%1 == 0.5`
 - `cos(x)` - return cosine of *x* (in *turns*)
 - `counter(...)` - see *Counters* below
 - `csv(filename, row)` - return a vector of values obtained by reading a
-specific *row* (indexed from *0*) from the CSV file with the given *filename*; this function intelligently caches and will convert numeric-looking columns in the
-row into numeric values
+specific *row* (indexed from *0*) from the CSV file with the given *filename*;
+this function intelligently caches and will convert numeric-looking columns in
+the row into numeric values
 - `exp(x)` - return *e* raised to the power of *x*
 - `floor(x)` - return mathematical floor of *x*
 - `hsl(h;s;l)` - return a 3-vector of *R*, *G* and *B* in the range *[0,1]*
@@ -283,8 +284,9 @@ order (with the 1st argument being index *0*)
 of *filename* (this function intelligently caches)
 - `round(x)` - return mathematical round-towards-zero of *x*, with 0.5 rounding
 up
-- `sawtooth(x)` - return a repeating sawtooth wave in the range *[0,1)* with one wave
-per unit of *x*, with the *0* point at `x%1 == 0` and linearly rising towards 1
+- `sawtooth(x)` - return a repeating sawtooth wave in the range *[0,1)* with one
+wave per unit of *x*, with the *0* point at `x%1 == 0` and linearly rising
+towards 1
 - `sharkfin(x)` - return a repeating sharkfin wave in the range *[0,1]* with
 one wave per unit of *x*, with the *0* point when `x%1 == 0` and the *1* point
 when `x%1 == 0.5`
