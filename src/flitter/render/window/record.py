@@ -45,9 +45,10 @@ class Record(ProgramNode):
         if filename := node.get('filename', 1, str):
             super().render(node, **kwargs)
             path = SharedCache[filename]
-            if path.suffix.lower() in ('.mp4', '.mov', '.m4v', '.mkv', '.webm', '.ogg'):
-                codec = node.get('codec', 1, str, 'h264')
-                pixfmt = node.get('pixfmt', 1, str, 'yuv420p')
+            ext = path.suffix.lower()
+            codec = node.get('codec', 1, str, 'h264')
+            if ext in ('.mp4', '.mov', '.m4v', '.mkv', '.webm', '.ogg') or (ext == 'gif' and codec == 'gif'):
+                pixfmt = node.get('pixfmt', 1, str, 'rgb8' if codec == 'gif' else 'yuv420p')
                 crf = node.get('crf', 1, int)
                 preset = node.get('preset', 1, str)
                 limit = node.get('limit', 1, float)
