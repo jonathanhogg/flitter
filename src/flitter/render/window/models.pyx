@@ -65,25 +65,59 @@ cdef class TrimeshModel(Model):
 
 
 cdef class Box(TrimeshModel):
+    Vertices = np.array([
+        (-.5,-.5,+.5), (+.5,-.5,+.5), (+.5,+.5,+.5), (-.5,+.5,+.5),
+        (-.5,+.5,+.5), (+.5,+.5,+.5), (+.5,+.5,-.5), (-.5,+.5,-.5),
+        (+.5,+.5,+.5), (+.5,-.5,+.5), (+.5,-.5,-.5), (+.5,+.5,-.5),
+        (+.5,+.5,-.5), (+.5,-.5,-.5), (-.5,-.5,-.5), (-.5,+.5,-.5),
+        (-.5,+.5,-.5), (-.5,-.5,-.5), (-.5,-.5,+.5), (-.5,+.5,+.5),
+        (-.5,-.5,-.5), (+.5,-.5,-.5), (+.5,-.5,+.5), (-.5,-.5,+.5),
+    ], dtype='f4')
+    VertexNormals = np.array([
+        (0,0,1), (0,0,1), (0,0,1), (0,0,1),
+        (0,1,0), (0,1,0), (0,1,0), (0,1,0),
+        (1,0,0), (1,0,0), (1,0,0), (1,0,0),
+        (0,0,-1), (0,0,-1), (0,0,-1), (0,0,-1),
+        (-1,0,0), (-1,0,0), (-1,0,0), (-1,0,0),
+        (0,-1,0), (0,-1,0), (0,-1,0), (0,-1,0),
+    ], dtype='f4')
+    VertexUV = np.array([
+        (0,0), (1/6,0), (1/6,1), (0,1),
+        (1/6,0), (2/6,0), (2/6,1), (1/6,1),
+        (2/6,0), (3/6,0), (3/6,1), (2/6,1),
+        (3/6,0), (4/6,0), (4/6,1), (3/6,1),
+        (4/6,0), (5/6,0), (5/6,1), (4/6,1),
+        (5/6,0), (6/6,0), (6/6,1), (5/6,1),
+    ], dtype='f4')
+    Faces = np.array([
+        (0,1,2), (2,3,0),
+        (4,5,6), (6,7,4),
+        (8,9,10), (10,11,8),
+        (12,13,14), (14,15,12),
+        (16,17,18), (18,19,16),
+        (20,21,22), (22,23,20),
+    ], dtype='i4')
+
     @staticmethod
     cdef Box get(Node node):
-        cdef bint flat = node.get_bool('flat', False)
         cdef bint invert = node.get_bool('invert', False)
-        cdef str name = '!box/flat' if flat else '!box'
-        if invert:
-            name += '/invert'
+        cdef str name = 'box/invert' if invert else 'box'
         cdef Box model = ModelCache.get(name)
         if model is None:
             model = Box.__new__(Box)
             model.name = name
-            model.flat = flat
+            model.flat = False
             model.invert = invert
             model.trimesh_model = None
             ModelCache[name] = model
         return model
 
     cdef object get_trimesh_model(self):
-        return trimesh.primitives.Box() if self.trimesh_model is None else self.trimesh_model
+        if self.trimesh_model is not None:
+            return self.trimesh_model
+        visual = trimesh.visual.texture.TextureVisuals(uv=Box.VertexUV)
+        self.trimesh_model = trimesh.base.Trimesh(vertices=Box.Vertices, vertex_normals=Box.VertexNormals, faces=Box.Faces, visual=visual)
+        return self.trimesh_model
 
 
 cdef class Sphere(TrimeshModel):
@@ -134,22 +168,24 @@ cdef class Cylinder(TrimeshModel):
             ModelCache[name] = model
         return model
 
+    @cython.cdivision(True)
+    @cython.boundscheck(False)
     cdef object get_trimesh_model(self):
         if self.trimesh_model is not None:
             return self.trimesh_model
         cdef int i, j, k, n = self.segments, m = (n+1)*6
-        cdef object vertices_array = np.empty((m, 3), dtype='float64')
-        cdef double[:,:] vertices = vertices_array
-        cdef object vertex_normals_array = np.empty((m, 3), dtype='float64')
-        cdef double[:,:] vertex_normals = vertex_normals_array
-        cdef object vertex_uv_array = np.empty((m, 2), dtype='float64')
-        cdef double[:,:] vertex_uv = vertex_uv_array
-        cdef object faces_array = np.empty((n*4, 3), dtype='int64')
-        cdef long[:,:] faces = faces_array
-        cdef double x, y, th, u, uu
+        cdef object vertices_array = np.empty((m, 3), dtype='f4')
+        cdef float[:,:] vertices = vertices_array
+        cdef object vertex_normals_array = np.empty((m, 3), dtype='f4')
+        cdef float[:,:] vertex_normals = vertex_normals_array
+        cdef object vertex_uv_array = np.empty((m, 2), dtype='f4')
+        cdef float[:,:] vertex_uv = vertex_uv_array
+        cdef object faces_array = np.empty((n*4, 3), dtype='i4')
+        cdef int[:,:] faces = faces_array
+        cdef float x, y, th, u, uu
         for i in range(n+1):
             j = k = i * 6
-            u = <double>i / n
+            u = <float>i / n
             u_ = (i+0.5) / n
             th = -Tau * u
             x = cos(th)
@@ -229,15 +265,15 @@ cdef class Cone(TrimeshModel):
         if self.trimesh_model is not None:
             return self.trimesh_model
         cdef int i, j, k, n = self.segments, m = (n+1)*4
-        cdef object vertices_array = np.empty((m, 3), dtype='float64')
-        cdef double[:,:] vertices = vertices_array
-        cdef object vertex_normals_array = np.empty((m, 3), dtype='float64')
-        cdef double[:,:] vertex_normals = vertex_normals_array
-        cdef object vertex_uv_array = np.empty((m, 2), dtype='float64')
-        cdef double[:,:] vertex_uv = vertex_uv_array
-        cdef object faces_array = np.empty((n*2, 3), dtype='int64')
-        cdef long[:,:] faces = faces_array
-        cdef double x, y, th, u, uu
+        cdef object vertices_array = np.empty((m, 3), dtype='f4')
+        cdef float[:,:] vertices = vertices_array
+        cdef object vertex_normals_array = np.empty((m, 3), dtype='f4')
+        cdef float[:,:] vertex_normals = vertex_normals_array
+        cdef object vertex_uv_array = np.empty((m, 2), dtype='f4')
+        cdef float[:,:] vertex_uv = vertex_uv_array
+        cdef object faces_array = np.empty((n*2, 3), dtype='i4')
+        cdef int[:,:] faces = faces_array
+        cdef float x, y, th, u, uu
         for i in range(n+1):
             j = k = i * 4
             u = <double>i / n
