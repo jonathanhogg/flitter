@@ -401,7 +401,7 @@ class Push2Driver(driver.ControllerDriver):
                 except Exception:
                     pass
                 self._push2 = None
-            except Exception as exc:
+            except Exception:
                 logger.exception("Unexpected error in Ableton Push2 driver")
                 if self._push2 is not None:
                     try:

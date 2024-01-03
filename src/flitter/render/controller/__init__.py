@@ -49,7 +49,7 @@ class Controller:
             try:
                 driver_module = importlib.import_module(f'.{driver}', __package__)
                 driver_class = driver_module.get_driver_class()
-            except (ImportError, NameError) as exc:
+            except (ImportError, NameError):
                 logger.warning("Unable to import controller driver: {}", driver)
                 driver_class = None
             self.DRIVER_CACHE[driver] = driver_class
