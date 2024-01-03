@@ -135,7 +135,70 @@ cdef class Cylinder(TrimeshModel):
         return model
 
     cdef object get_trimesh_model(self):
-        return trimesh.primitives.Cylinder(sections=self.segments) if self.trimesh_model is None else self.trimesh_model
+        if self.trimesh_model is not None:
+            return self.trimesh_model
+        cdef int i, j, k, n = self.segments, m = (n+1)*6
+        cdef object vertices_array = np.empty((m, 3), dtype='float64')
+        cdef double[:,:] vertices = vertices_array
+        cdef object vertex_normals_array = np.empty((m, 3), dtype='float64')
+        cdef double[:,:] vertex_normals = vertex_normals_array
+        cdef object vertex_uv_array = np.empty((m, 2), dtype='float64')
+        cdef double[:,:] vertex_uv = vertex_uv_array
+        cdef object faces_array = np.empty((n*4, 3), dtype='int64')
+        cdef long[:,:] faces = faces_array
+        cdef double x, y, th, u, uu
+        for i in range(n+1):
+            j = k = i * 6
+            u = <double>i / n
+            u_ = (i+0.5) / n
+            th = -Tau * u
+            x = cos(th)
+            y = sin(th)
+            # bottom centre (k):
+            vertices[j, 0], vertices[j, 1], vertices[j, 2] = 0, 0, -0.5
+            vertex_normals[j, 0], vertex_normals[j, 1], vertex_normals[j, 2] = 0, 0, -1
+            vertex_uv[j, 0], vertex_uv[j, 1] = u_, 0
+            j += 1
+            # bottom edge (k+1):
+            vertices[j, 0], vertices[j, 1], vertices[j, 2] = x, y, -0.5
+            vertex_normals[j, 0], vertex_normals[j, 1], vertex_normals[j, 2] = 0, 0, -1
+            vertex_uv[j, 0], vertex_uv[j, 1] = u, 0.25
+            j += 1
+            # side bottom (k+2):
+            vertices[j, 0], vertices[j, 1], vertices[j, 2] = x, y, -0.5
+            vertex_normals[j, 0], vertex_normals[j, 1], vertex_normals[j, 2] = x, y, 0
+            vertex_uv[j, 0], vertex_uv[j, 1] = u, 0.25
+            j += 1
+            # side top (k+3):
+            vertices[j, 0], vertices[j, 1], vertices[j, 2] = x, y, 0.5
+            vertex_normals[j, 0], vertex_normals[j, 1], vertex_normals[j, 2] = x, y, 0
+            vertex_uv[j, 0], vertex_uv[j, 1] = u, 0.75
+            j += 1
+            # top edge (k+4):
+            vertices[j, 0], vertices[j, 1], vertices[j, 2] = x, y, 0.5
+            vertex_normals[j, 0], vertex_normals[j, 1], vertex_normals[j, 2] = 0, 0, 1
+            vertex_uv[j, 0], vertex_uv[j, 1] = u, 0.75
+            j += 1
+            # top centre (k+5):
+            vertices[j, 0], vertices[j, 1], vertices[j, 2] = 0, 0, 0.5
+            vertex_normals[j, 0], vertex_normals[j, 1], vertex_normals[j, 2] = 0, 0, 1
+            vertex_uv[j, 0], vertex_uv[j, 1] = u_, 1
+            if i < n:
+                j = i * 4
+                # bottom face
+                faces[j, 0], faces[j, 1], faces[j, 2] = k, k+1, k+1+6
+                j += 1
+                # side face 1
+                faces[j, 0], faces[j, 1], faces[j, 2] = k+2+6, k+2, k+3
+                j += 1
+                # side face 2
+                faces[j, 0], faces[j, 1], faces[j, 2] = k+3, k+3+6, k+2+6
+                j += 1
+                # top face
+                faces[j, 0], faces[j, 1], faces[j, 2] = k+5, k+4+6, k+4
+        visual = trimesh.visual.texture.TextureVisuals(uv=vertex_uv_array)
+        self.trimesh_model = trimesh.base.Trimesh(vertices=vertices_array, vertex_normals=vertex_normals_array, faces=faces_array, visual=visual)
+        return self.trimesh_model
 
 
 cdef class Cone(TrimeshModel):
