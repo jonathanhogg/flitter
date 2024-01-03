@@ -30,7 +30,7 @@ cdef Vector Black = Vector((0, 0, 0, 1))
 cdef int DEFAULT_MAX_LIGHTS = 50
 cdef double Pi = 3.141592653589793
 cdef tuple MaterialAttributes = ('color', 'specular', 'emissive', 'shininess', 'transparency',
-                                 'texture_id', 'specular_texture_id', 'emissive_texture_id')
+                                 'texture_id', 'specular_texture_id', 'emissive_texture_id', 'transparency_texture_id')
 
 cdef object StandardVertexSource = TemplateLoader.get_template("standard_lighting.vert")
 cdef object StandardFragmentSource = TemplateLoader.get_template("standard_lighting.frag")
