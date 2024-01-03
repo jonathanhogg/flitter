@@ -165,31 +165,52 @@ cdef class Cone(TrimeshModel):
     cdef object get_trimesh_model(self):
         if self.trimesh_model is not None:
             return self.trimesh_model
-        cdef int i, j, k, n = self.segments
-        cdef object vertices_array = np.empty((n*3+1, 3), dtype='float64')
+        cdef int i, j, k, n = self.segments, m = (n+1)*4
+        cdef object vertices_array = np.empty((m, 3), dtype='float64')
         cdef double[:,:] vertices = vertices_array
-        cdef object vertex_normals_array = np.empty((n*3+1, 3), dtype='float64')
+        cdef object vertex_normals_array = np.empty((m, 3), dtype='float64')
         cdef double[:,:] vertex_normals = vertex_normals_array
+        cdef object vertex_uv_array = np.empty((m, 2), dtype='float64')
+        cdef double[:,:] vertex_uv = vertex_uv_array
         cdef object faces_array = np.empty((n*2, 3), dtype='int64')
         cdef long[:,:] faces = faces_array
-        cdef double x, y, th
-        vertices[0, 0], vertices[0, 1], vertices[0, 2] = 0, 0, -0.5
-        vertex_normals[0, 0], vertex_normals[0, 1], vertex_normals[0, 2] = 0, 0, -1
-        for i in range(n):
-            j = i * 3
-            k = (i-1)*3 if i else (n-1)*3
-            th = Tau * i/n
+        cdef double x, y, th, u, uu
+        for i in range(n+1):
+            j = k = i * 4
+            u = <double>i / n
+            u_ = (i+0.5) / n
+            th = -Tau * u
+            th_ = -Tau * u_
             x = cos(th)
             y = sin(th)
-            vertices[j+1, 0], vertices[j+1, 1], vertices[j+1, 2] = x, y, -0.5
-            vertex_normals[j+1, 0], vertex_normals[j+1, 1], vertex_normals[j+1, 2] = 0, 0, -1
-            vertices[j+2, 0], vertices[j+2, 1], vertices[j+2, 2] = x, y, -0.5
-            vertex_normals[j+2, 0], vertex_normals[j+2, 1], vertex_normals[j+2, 2] = x*RootHalf, y*RootHalf, RootHalf
-            vertices[j+3, 0], vertices[j+3, 1], vertices[j+3, 2] = 0, 0, 0.5
-            vertex_normals[j+3, 0], vertex_normals[j+3, 1], vertex_normals[j+3, 2] = x*RootHalf, y*RootHalf, RootHalf
-            faces[i*2, 0], faces[i*2, 1], faces[i*2, 2] = 0, k+1, j+1
-            faces[i*2+1, 0], faces[i*2+1, 1], faces[i*2+1, 2] = j+3, k+2, j+2
-        self.trimesh_model = trimesh.base.Trimesh(vertices=vertices_array, vertex_normals=vertex_normals_array, faces=faces_array)
+            # bottom centre (k):
+            vertices[j, 0], vertices[j, 1], vertices[j, 2] = 0, 0, -0.5
+            vertex_normals[j, 0], vertex_normals[j, 1], vertex_normals[j, 2] = 0, 0, -1
+            vertex_uv[j, 0], vertex_uv[j, 1] = u_, 0
+            j += 1
+            # bottom edge (k+1):
+            vertices[j, 0], vertices[j, 1], vertices[j, 2] = x, y, -0.5
+            vertex_normals[j, 0], vertex_normals[j, 1], vertex_normals[j, 2] = 0, 0, -1
+            vertex_uv[j, 0], vertex_uv[j, 1] = u, 0.5
+            j += 1
+            # side bottom (k+2):
+            vertices[j, 0], vertices[j, 1], vertices[j, 2] = x, y, -0.5
+            vertex_normals[j, 0], vertex_normals[j, 1], vertex_normals[j, 2] = x*RootHalf, y*RootHalf, RootHalf
+            vertex_uv[j, 0], vertex_uv[j, 1] = u, 0.5
+            j += 1
+            # side top (k+3):
+            vertices[j, 0], vertices[j, 1], vertices[j, 2] = 0, 0, 0.5
+            vertex_normals[j, 0], vertex_normals[j, 1], vertex_normals[j, 2] = cos(th_)*RootHalf, sin(th_)*RootHalf, RootHalf
+            vertex_uv[j, 0], vertex_uv[j, 1] = u_, 1
+            if i < n:
+                j = i * 2
+                # bottom face
+                faces[j, 0], faces[j, 1], faces[j, 2] = k, k+1, k+1+4
+                j += 1
+                # side face
+                faces[j, 0], faces[j, 1], faces[j, 2] = k+3, k+2+4, k+2
+        visual = trimesh.visual.texture.TextureVisuals(uv=vertex_uv_array)
+        self.trimesh_model = trimesh.base.Trimesh(vertices=vertices_array, vertex_normals=vertex_normals_array, faces=faces_array, visual=visual)
         return self.trimesh_model
 
 
