@@ -370,7 +370,7 @@ cdef object make_image(ctx, Node node, dict references):
         return SharedCache[filename].read_image()
     elif references is not None and (id := node.get('texture_id', 1, str)) and id in references:
         scene_node = references[id]
-        if scene_node.texture is not None:
+        if hasattr(scene_node, 'texture') and scene_node.texture is not None:
             texture = scene_node.texture
             format, colortype = TextureFormatColorType[texture.dtype]
             colorspace = skia.ColorSpace.MakeSRGBLinear()

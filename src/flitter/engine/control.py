@@ -94,7 +94,7 @@ class EngineController:
         for node in graph.children:
             nodes_by_kind.setdefault(node.kind, []).append(node)
         tasks = []
-        references = {}
+        references = dict(self._references)
         for kind, nodes in nodes_by_kind.items():
             renderer_class = get_renderer(kind)
             if renderer_class is not None:

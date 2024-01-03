@@ -498,7 +498,7 @@ cdef void dispatch_instances(glctx, dict objects, shader, Model model, int count
     if references is not None and textures is not None:
         unit_ids = {}
         samplers = []
-        if (scene_node := references.get(textures.diffuse_id)) is not None and scene_node.texture is not None:
+        if (scene_node := references.get(textures.diffuse_id)) is not None and hasattr(scene_node, 'texture') and scene_node.texture is not None:
             if textures.diffuse_id in unit_ids:
                 unit_id = unit_ids[textures.diffuse_id]
             else:
@@ -509,7 +509,7 @@ cdef void dispatch_instances(glctx, dict objects, shader, Model model, int count
                 samplers.append(sampler)
             shader['use_diffuse_texture'] = True
             shader['diffuse_texture'] = unit_id
-        if (scene_node := references.get(textures.specular_id)) is not None and scene_node.texture is not None:
+        if (scene_node := references.get(textures.specular_id)) is not None and hasattr(scene_node, 'texture') and scene_node.texture is not None:
             if textures.specular_id in unit_ids:
                 unit_id = unit_ids[textures.specular_id]
             else:
@@ -520,7 +520,7 @@ cdef void dispatch_instances(glctx, dict objects, shader, Model model, int count
                 samplers.append(sampler)
             shader['use_specular_texture'] = True
             shader['specular_texture'] = unit_id
-        if (scene_node := references.get(textures.emissive_id)) is not None and scene_node.texture is not None:
+        if (scene_node := references.get(textures.emissive_id)) is not None and hasattr(scene_node, 'texture') and scene_node.texture is not None:
             if textures.emissive_id in unit_ids:
                 unit_id = unit_ids[textures.emissive_id]
             else:
@@ -531,7 +531,7 @@ cdef void dispatch_instances(glctx, dict objects, shader, Model model, int count
                 samplers.append(sampler)
             shader['use_emissive_texture'] = True
             shader['emissive_texture'] = unit_id
-        if (scene_node := references.get(textures.transparency_id)) is not None and scene_node.texture is not None:
+        if (scene_node := references.get(textures.transparency_id)) is not None and hasattr(scene_node, 'texture') and scene_node.texture is not None:
             if textures.transparency_id in unit_ids:
                 unit_id = unit_ids[textures.transparency_id]
             else:
