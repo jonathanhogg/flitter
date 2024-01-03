@@ -49,17 +49,17 @@ void main() {
     vec3 diffuse_color = colors[0];
     if (use_diffuse_texture) {
         vec4 diffuse_texture_color = texture(diffuse_texture, uv);
-        diffuse_color = diffuse_color * (1 - diffuse_texture_color.a) + diffuse_texture_color.rgb;
+        diffuse_color = diffuse_color * (1 - clamp(diffuse_texture_color.a, 0, 1)) + diffuse_texture_color.rgb;
     }
     vec3 specular_color = colors[1];
     if (use_specular_texture) {
         vec4 specular_texture_color = texture(specular_texture, uv);
-        specular_color = specular_color * (1 - specular_texture_color.a) + specular_texture_color.rgb;
+        specular_color = specular_color * (1 - clamp(specular_texture_color.a, 0, 1)) + specular_texture_color.rgb;
     }
     vec3 color = colors[2];
     if (use_emissive_texture) {
         vec4 emissive_texture_color = texture(emissive_texture, uv);
-        color = color * (1 - emissive_texture_color.a) + emissive_texture_color.rgb;
+        color = color * (1 - clamp(emissive_texture_color.a, 0, 1)) + emissive_texture_color.rgb;
     }
     float opacity = 1 - transparency;
     if (use_transparency_texture) {
@@ -68,7 +68,7 @@ void main() {
         opacity = opacity * (1 - clamp(transparency_texture_color.a, 0, 1)) + mono;
     }
     vec3 normal = normalize(world_normal);
-    int n = shininess == 0 && colors[0] == vec3(0) ? 0 : nlights * 4;
+    int n = shininess == 0 && diffuse_color == vec3(0) ? 0 : nlights * 4;
     for (int i = 0; i < n; i += 4) {
         float light_type = lights[i].x;
         float inner_cone = lights[i].y;
@@ -77,7 +77,7 @@ void main() {
         vec3 light_position = lights[i+2];
         vec3 light_direction = lights[i+3];
         if (light_type == ${Ambient}) {
-            color += (colors * vec3(1, 0, 0)) * light_color;
+            color += diffuse_color * light_color;
         } else if (light_type == ${Directional}) {
             vec3 reflection_direction = reflect(light_direction, normal);
             float specular_strength = pow(max(dot(view_direction, reflection_direction), 0), shininess) * min(shininess, min_shininess) / min_shininess;
