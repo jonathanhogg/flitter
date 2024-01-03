@@ -17,7 +17,7 @@ from ... import name_patch
 from ...clock import system_clock
 from ...model cimport Node, Vector, Matrix44, null_, true_
 from .glsl import TemplateLoader
-from .models cimport Model, Box, Cylinder, Cone, Sphere, LoadedModel
+from .models cimport Model, Box, Cylinder, Cone, Sphere, ExternalModel
 
 
 logger = name_patch(logger, __name__)
@@ -221,47 +221,36 @@ cdef void collect(Node node, Matrix44 model_matrix, Material material, RenderSet
     cdef double shininess, inner, outer
     cdef Node child
     cdef str filename, composite
-    cdef int subdivisions, segments
-    cdef bint flat, depth_test, cull_face
+    cdef bint depth_test, cull_face
     cdef Model model
 
     if node.kind == 'box':
-        flat = node.get_bool('flat', False)
-        invert = node.get_bool('invert', False)
-        model = Box.get(flat, invert)
-        material = material.update(node)
-        add_instance(render_set.instances, model, node, model_matrix, material)
+        model = Box.get(node)
+        if model is not None:
+            material = material.update(node)
+            add_instance(render_set.instances, model, node, model_matrix, material)
 
     elif node.kind == 'sphere':
-        flat = node.get_bool('flat', False)
-        invert = node.get_bool('invert', False)
-        subdivisions = node.get_int('subdivisions', 2)
-        model = Sphere.get(flat, invert, subdivisions)
-        material = material.update(node)
-        add_instance(render_set.instances, model, node, model_matrix, material)
+        model = Sphere.get(node)
+        if model is not None:
+            material = material.update(node)
+            add_instance(render_set.instances, model, node, model_matrix, material)
 
     elif node.kind == 'cylinder':
-        flat = node.get_bool('flat', False)
-        invert = node.get_bool('invert', False)
-        segments = node.get_int('segments', 32)
-        model = Cylinder.get(flat, invert, segments)
-        material = material.update(node)
-        add_instance(render_set.instances, model, node, model_matrix, material)
+        model = Cylinder.get(node)
+        if model is not None:
+            material = material.update(node)
+            add_instance(render_set.instances, model, node, model_matrix, material)
 
     elif node.kind == 'cone':
-        flat = node.get_bool('flat', False)
-        invert = node.get_bool('invert', False)
-        segments = node.get_int('segments', 32)
-        model = Cone.get(flat, invert, segments)
-        material = material.update(node)
-        add_instance(render_set.instances, model, node, model_matrix, material)
+        model = Cone.get(node)
+        if model is not None:
+            material = material.update(node)
+            add_instance(render_set.instances, model, node, model_matrix, material)
 
     elif node.kind == 'model':
-        filename = node.get_str('filename', None)
-        if filename:
-            flat = node.get_bool('flat', False)
-            invert = node.get_bool('invert', False)
-            model = LoadedModel.get(flat, invert, filename)
+        model = ExternalModel.get(node)
+        if model is not None:
             material = material.update(node)
             add_instance(render_set.instances, model, node, model_matrix, material)
 

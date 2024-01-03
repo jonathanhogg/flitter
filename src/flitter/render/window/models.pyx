@@ -66,7 +66,9 @@ cdef class TrimeshModel(Model):
 
 cdef class Box(TrimeshModel):
     @staticmethod
-    cdef Box get(bint flat, bint invert):
+    cdef Box get(Node node):
+        cdef bint flat = node.get_bool('flat', False)
+        cdef bint invert = node.get_bool('invert', False)
         cdef str name = '!box/flat' if flat else '!box'
         if invert:
             name += '/invert'
@@ -86,7 +88,10 @@ cdef class Box(TrimeshModel):
 
 cdef class Sphere(TrimeshModel):
     @staticmethod
-    cdef Sphere get(bint flat, bint invert, int subdivisions):
+    cdef Sphere get(Node node):
+        cdef bint flat = node.get_bool('flat', False)
+        cdef bint invert = node.get_bool('invert', False)
+        cdef int subdivisions = node.get_int('subdivisions', 2)
         cdef str name = f'!sphere/{subdivisions}'
         if flat:
             name += '/flat'
@@ -109,7 +114,10 @@ cdef class Sphere(TrimeshModel):
 
 cdef class Cylinder(TrimeshModel):
     @staticmethod
-    cdef Cylinder get(bint flat, bint invert, int segments):
+    cdef Cylinder get(Node node):
+        cdef bint flat = node.get_bool('flat', False)
+        cdef bint invert = node.get_bool('invert', False)
+        cdef int segments = node.get_int('segments', 32)
         cdef str name = f'!cylinder/{segments}'
         if flat:
             name += '/flat'
@@ -132,7 +140,10 @@ cdef class Cylinder(TrimeshModel):
 
 cdef class Cone(TrimeshModel):
     @staticmethod
-    cdef Cone get(bint flat, bint invert, int segments):
+    cdef Cone get(Node node):
+        cdef bint flat = node.get_bool('flat', False)
+        cdef bint invert = node.get_bool('invert', False)
+        cdef int segments = node.get_int('segments', 32)
         cdef str name = f'!cone/{segments}'
         if flat:
             name += '/flat'
@@ -182,17 +193,22 @@ cdef class Cone(TrimeshModel):
         return self.trimesh_model
 
 
-cdef class LoadedModel(TrimeshModel):
+cdef class ExternalModel(TrimeshModel):
     @staticmethod
-    cdef LoadedModel get(bint flat, bint invert, str filename):
+    cdef ExternalModel get(Node node):
+        cdef str filename = node.get_str('filename', None)
+        if not filename:
+            return None
+        cdef bint flat = node.get_bool('flat', False)
+        cdef bint invert = node.get_bool('invert', False)
         cdef str name = filename
         if flat:
             name += '/flat'
         if invert:
             name += '/invert'
-        cdef LoadedModel model = ModelCache.get(name)
+        cdef ExternalModel model = ModelCache.get(name)
         if model is None:
-            model = LoadedModel.__new__(LoadedModel)
+            model = ExternalModel.__new__(ExternalModel)
             model.name = name
             model.flat = flat
             model.invert = invert

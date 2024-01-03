@@ -1,5 +1,7 @@
 # cython: language_level=3, profile=True
 
+from ...model cimport Node
+
 
 cdef class Model:
     cdef str name
@@ -17,32 +19,32 @@ cdef class TrimeshModel(Model):
 
 cdef class Box(TrimeshModel):
     @staticmethod
-    cdef Box get(bint flat, bint invert)
+    cdef Box get(Node node)
 
 
 cdef class Sphere(TrimeshModel):
     cdef int subdivisions
 
     @staticmethod
-    cdef Sphere get(bint flat, bint invert, int subdivisions)
+    cdef Sphere get(Node node)
 
 
 cdef class Cylinder(TrimeshModel):
     cdef int segments
 
     @staticmethod
-    cdef Cylinder get(bint flat, bint invert, int segments)
+    cdef Cylinder get(Node node)
 
 
 cdef class Cone(TrimeshModel):
     cdef int segments
 
     @staticmethod
-    cdef Cone get(bint flat, bint invert, int segments)
+    cdef Cone get(Node node)
 
 
-cdef class LoadedModel(TrimeshModel):
+cdef class ExternalModel(TrimeshModel):
     cdef str filename
 
     @staticmethod
-    cdef LoadedModel get(bint flat, bint invert, str filename)
+    cdef ExternalModel get(Node node)
