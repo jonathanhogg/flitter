@@ -123,7 +123,7 @@ class SceneNode:
         self.render(node, **kwargs)
 
     def similar_to(self, node):
-        return node.tags and node.tags == self.tags
+        return node.tags == self.tags
 
     async def descend(self, engine, node, **kwargs):
         existing = self.children
@@ -135,14 +135,9 @@ class SceneNode:
             if cls is not None:
                 index = None
                 for i, scene_node in enumerate(existing):
-                    if type(scene_node) is cls:
-                        if scene_node.similar_to(child):
-                            index = i
-                            break
-                        if index is None:
-                            index = i
-                if index is not None:
-                    scene_node = existing.pop(index)
+                    if type(scene_node) is cls and scene_node.similar_to(child):
+                        scene_node = existing.pop(i)
+                        break
                 else:
                     scene_node = cls(self.glctx)
                 await scene_node.update(engine, child, default_size=(self.width, self.height), **kwargs)
