@@ -23,7 +23,7 @@ cdef class Box(TrimeshModel):
 
 
 cdef class Sphere(TrimeshModel):
-    cdef int subdivisions
+    cdef int segments
 
     @staticmethod
     cdef Sphere get(Node node)

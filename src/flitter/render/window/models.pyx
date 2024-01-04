@@ -126,7 +126,8 @@ cdef class Sphere(TrimeshModel):
         cdef bint flat = node.get_bool('flat', False)
         cdef bint invert = node.get_bool('invert', False)
         cdef int subdivisions = node.get_int('subdivisions', 2)
-        cdef str name = f'!sphere/{subdivisions}'
+        cdef int segments = max(2, node.get_int('segments', 4<<subdivisions)
+        cdef str name = f'!sphere/{segments}'
         if flat:
             name += '/flat'
         if invert:
@@ -137,13 +138,49 @@ cdef class Sphere(TrimeshModel):
             model.name = name
             model.flat = flat
             model.invert = invert
-            model.subdivisions = subdivisions
+            model.segments = segments
             model.trimesh_model = None
             ModelCache[name] = model
         return model
 
+    @cython.cdivision(True)
     cdef object get_trimesh_model(self):
-        return trimesh.primitives.Sphere(subdivisions=self.subdivisions) if self.trimesh_model is None else self.trimesh_model
+        if self.trimesh_model is not None:
+            return self.trimesh_model
+        cdef int nrows = self.segments, ncols = 2*nrows, nvertices = (nrows+1)*(ncols+1), nfaces = (2+(nrows-2)*2)*ncols
+        cdef object vertices_array = np.empty((nvertices, 3), dtype='f4')
+        cdef float[:,:] vertices = vertices_array
+        cdef object vertex_normals_array = np.empty((nvertices, 3), dtype='f4')
+        cdef float[:,:] vertex_normals = vertex_normals_array
+        cdef object vertex_uv_array = np.empty((nvertices, 2), dtype='f4')
+        cdef float[:,:] vertex_uv = vertex_uv_array
+        cdef object faces_array = np.empty((nfaces, 3), dtype='i4')
+        cdef int[:,:] faces = faces_array
+        cdef float x, y, z, r, th, u, v
+        cdef int row, col, i=0, j=0
+        for row in range(nrows + 1):
+            v = <float>row/nrows
+            th = Tau*(0.5-v)/2
+            r = cos(th)
+            z = sin(th)
+            for col in range(ncols+1):
+                u = (col+0.5)/ncols if row == 0 else ((col-0.5)/ncols if row == nrows else <float>col/ncols)
+                x = r*cos(-Tau*u)
+                y = r*sin(-Tau*u)
+                vertices[i, 0], vertices[i, 1], vertices[i, 2] = x, y, z
+                vertex_normals[i, 0], vertex_normals[i, 1], vertex_normals[i, 2] = x, y, z
+                vertex_uv[i, 0], vertex_uv[i, 1] = u, v
+                if col < ncols and row < nrows:
+                    if row < nrows-1:
+                        faces[j, 0], faces[j, 1], faces[j, 2] = i, i+2+ncols, i+1+ncols
+                        j += 1
+                    if row > 0:
+                        faces[j, 0], faces[j, 1], faces[j, 2] = i, i+1, i+2+ncols
+                        j += 1
+                i += 1
+        visual = trimesh.visual.texture.TextureVisuals(uv=vertex_uv_array)
+        self.trimesh_model = trimesh.base.Trimesh(vertices=vertices_array, vertex_normals=vertex_normals_array, faces=faces_array, visual=visual)
+        return self.trimesh_model
 
 
 cdef class Cylinder(TrimeshModel):
@@ -151,7 +188,7 @@ cdef class Cylinder(TrimeshModel):
     cdef Cylinder get(Node node):
         cdef bint flat = node.get_bool('flat', False)
         cdef bint invert = node.get_bool('invert', False)
-        cdef int segments = node.get_int('segments', 32)
+        cdef int segments = max(2, node.get_int('segments', 32))
         cdef str name = f'!cylinder/{segments}'
         if flat:
             name += '/flat'
@@ -242,7 +279,7 @@ cdef class Cone(TrimeshModel):
     cdef Cone get(Node node):
         cdef bint flat = node.get_bool('flat', False)
         cdef bint invert = node.get_bool('invert', False)
-        cdef int segments = node.get_int('segments', 32)
+        cdef int segments = max(2, node.get_int('segments', 32))
         cdef str name = f'!cone/{segments}'
         if flat:
             name += '/flat'
