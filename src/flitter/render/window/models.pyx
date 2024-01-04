@@ -327,12 +327,12 @@ cdef class Cone(TrimeshModel):
             # bottom edge (k+1):
             vertices[j, 0], vertices[j, 1], vertices[j, 2] = x, y, -0.5
             vertex_normals[j, 0], vertex_normals[j, 1], vertex_normals[j, 2] = 0, 0, -1
-            vertex_uv[j, 0], vertex_uv[j, 1] = u, 0.5
+            vertex_uv[j, 0], vertex_uv[j, 1] = u, 0.25
             j += 1
             # side bottom (k+2):
             vertices[j, 0], vertices[j, 1], vertices[j, 2] = x, y, -0.5
             vertex_normals[j, 0], vertex_normals[j, 1], vertex_normals[j, 2] = x*RootHalf, y*RootHalf, RootHalf
-            vertex_uv[j, 0], vertex_uv[j, 1] = u, 0.5
+            vertex_uv[j, 0], vertex_uv[j, 1] = u, 0.25
             j += 1
             # side top (k+3):
             vertices[j, 0], vertices[j, 1], vertices[j, 2] = 0, 0, 0.5
