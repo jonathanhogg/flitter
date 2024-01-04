@@ -367,7 +367,7 @@ cdef object update_font(Node node, font):
 
 cdef object make_image(ctx, Node node, dict references):
     if (filename := node.get('filename', 1, str)):
-        return SharedCache[filename].read_image()
+        return SharedCache[filename].read_skia_image()
     elif references is not None and (id := node.get('texture_id', 1, str)) and id in references:
         scene_node = references[id]
         if hasattr(scene_node, 'texture') and scene_node.texture is not None:

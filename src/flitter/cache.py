@@ -168,7 +168,7 @@ class CachePath:
             return rows[row_number]
         return null
 
-    def read_image(self):
+    def read_skia_image(self):
         if self.check_unmodified() and (image := self._cache.get('image', False)) is not False:
             return image
         import skia
