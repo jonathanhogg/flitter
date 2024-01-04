@@ -160,13 +160,13 @@ cdef class Sphere(TrimeshModel):
         cdef int row, col, i=0, j=0
         for row in range(nrows + 1):
             v = <float>row/nrows
-            th = Tau*(0.5-v)/2
+            th = Tau*(v-0.5)/2
             r = cos(th)
             z = sin(th)
             for col in range(ncols+1):
                 u = (col+0.5)/ncols if row == 0 else ((col-0.5)/ncols if row == nrows else <float>col/ncols)
-                x = r*cos(-Tau*u)
-                y = r*sin(-Tau*u)
+                x = r*cos(Tau*u)
+                y = r*sin(Tau*u)
                 vertices[i, 0], vertices[i, 1], vertices[i, 2] = x, y, z
                 vertex_normals[i, 0], vertex_normals[i, 1], vertex_normals[i, 2] = x, y, z
                 vertex_uv[i, 0], vertex_uv[i, 1] = u, v
@@ -224,7 +224,7 @@ cdef class Cylinder(TrimeshModel):
             j = k = i * 6
             u = <float>i / n
             u_ = (i+0.5) / n
-            th = -Tau * u
+            th = Tau * u
             x = cos(th)
             y = sin(th)
             # bottom centre (k):
@@ -259,16 +259,16 @@ cdef class Cylinder(TrimeshModel):
             if i < n:
                 j = i * 4
                 # bottom face
-                faces[j, 0], faces[j, 1], faces[j, 2] = k, k+1, k+1+6
+                faces[j, 0], faces[j, 1], faces[j, 2] = k, k+1+6, k+1
                 j += 1
                 # side face 1
-                faces[j, 0], faces[j, 1], faces[j, 2] = k+2+6, k+2, k+3
+                faces[j, 0], faces[j, 1], faces[j, 2] = k+2+6, k+3, k+2
                 j += 1
                 # side face 2
-                faces[j, 0], faces[j, 1], faces[j, 2] = k+3, k+3+6, k+2+6
+                faces[j, 0], faces[j, 1], faces[j, 2] = k+3, k+2+6, k+3+6
                 j += 1
                 # top face
-                faces[j, 0], faces[j, 1], faces[j, 2] = k+5, k+4+6, k+4
+                faces[j, 0], faces[j, 1], faces[j, 2] = k+5, k+4, k+4+6
         visual = trimesh.visual.texture.TextureVisuals(uv=vertex_uv_array)
         self.trimesh_model = trimesh.base.Trimesh(vertices=vertices_array, vertex_normals=vertex_normals_array, faces=faces_array, visual=visual)
         return self.trimesh_model
@@ -315,8 +315,8 @@ cdef class Cone(TrimeshModel):
             j = k = i * 4
             u = <double>i / n
             u_ = (i+0.5) / n
-            th = -Tau * u
-            th_ = -Tau * u_
+            th = Tau * u
+            th_ = Tau * u_
             x = cos(th)
             y = sin(th)
             # bottom centre (k):
@@ -341,10 +341,10 @@ cdef class Cone(TrimeshModel):
             if i < n:
                 j = i * 2
                 # bottom face
-                faces[j, 0], faces[j, 1], faces[j, 2] = k, k+1, k+1+4
+                faces[j, 0], faces[j, 1], faces[j, 2] = k, k+1+4, k+1
                 j += 1
                 # side face
-                faces[j, 0], faces[j, 1], faces[j, 2] = k+3, k+2+4, k+2
+                faces[j, 0], faces[j, 1], faces[j, 2] = k+3, k+2, k+2+4
         visual = trimesh.visual.texture.TextureVisuals(uv=vertex_uv_array)
         self.trimesh_model = trimesh.base.Trimesh(vertices=vertices_array, vertex_normals=vertex_normals_array, faces=faces_array, visual=visual)
         return self.trimesh_model
