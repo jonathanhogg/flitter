@@ -126,7 +126,7 @@ cdef class Sphere(TrimeshModel):
         cdef bint flat = node.get_bool('flat', False)
         cdef bint invert = node.get_bool('invert', False)
         cdef int subdivisions = node.get_int('subdivisions', 2)
-        cdef int segments = max(2, node.get_int('segments', 4<<subdivisions)
+        cdef int segments = max(2, node.get_int('segments', 4<<subdivisions))
         cdef str name = f'!sphere/{segments}'
         if flat:
             name += '/flat'
