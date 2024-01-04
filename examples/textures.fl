@@ -3,7 +3,7 @@
 --
 -- Spheres are mapped to a texture with the Mercator projection. This is a
 -- pretty dumb projection, but it's simple to understand and easy to find
--- appropriate textures.
+-- appropriate images.
 --
 -- The relative sizes and orbit timings are roughly correct, but the moon is
 -- not really anywhere near this close to Earth.
@@ -24,8 +24,8 @@ let SIZE=1920;1080
         !image filename='images/moon.jpg' id=:moon hidden=true
         !canvas3d samples=4 viewpoint=0;-25;0 up=0;0;1 near=1 far=150
             !light color=0.01
-            !transform rotate_z=days/365.256-0.25
-                !light color=3 direction=0;1;0
+            !transform rotate_z=days/365.256
+                !light color=3 direction=1;0;0
                 !sphere size=100 invert=true emissive_texture_id=:stars
             !transform rotate_y=23.44/360 rotate_z=days
                 !material shininess=10 emissive_texture_id=:earth_night texture_id=:earth specular_texture_id=:earth_reflection
