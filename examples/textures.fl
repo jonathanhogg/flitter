@@ -13,28 +13,22 @@
 import bloom_filter from 'bloom.fl'
 
 let SIZE=1920;1080
-    MAP_SIZE=2048;1024
     days=beat/3
 
 !window size=SIZE
     @bloom_filter radius=hypot(SIZE)/120
-        !canvas size=MAP_SIZE id=:stars hidden=true
-            !image filename='images/stars.jpg' fill=MAP_SIZE
-        !canvas size=MAP_SIZE id=:earth hidden=true
-            !image filename='images/earth.jpg' fill=MAP_SIZE
-        !canvas size=MAP_SIZE id=:earth_night hidden=true
-            !image filename='images/earth-night.jpg' fill=MAP_SIZE
-        !canvas size=MAP_SIZE/2 id=:earth_reflection hidden=true
-            !image filename='images/earth-reflection.jpg' fill=MAP_SIZE/2
-        !canvas size=MAP_SIZE id=:moon hidden=true
-            !image filename='images/moon.jpg' fill=MAP_SIZE
-        !canvas3d samples=4 viewpoint=0;-25;0 up=0;0;1 near=1 far=1.5k
+        !image filename='images/stars.jpg' id=:stars hidden=true
+        !image filename='images/earth.jpg' id=:earth hidden=true
+        !image filename='images/earth-night.jpg' id=:earth_night hidden=true
+        !image filename='images/earth-reflection.jpg' id=:earth_reflection hidden=true
+        !image filename='images/moon.jpg' id=:moon hidden=true
+        !canvas3d samples=4 viewpoint=0;-25;0 up=0;0;1 near=1 far=150
             !light color=0.01
-            !transform rotate_z=days/365.256
+            !transform rotate_z=days/365.256-0.25
                 !light color=3 direction=0;1;0
-                !sphere size=1k invert=true emissive_texture_id=:stars
+                !sphere size=100 invert=true emissive_texture_id=:stars
             !transform rotate_y=23.44/360 rotate_z=days
-                !sphere segments=32 size=6.371 shininess=10 rotation=0;0;0.25 \
-                        texture_id=:earth emissive_texture_id=:earth_night specular_texture_id=:earth_reflection
+                !material shininess=10 emissive_texture_id=:earth_night texture_id=:earth specular_texture_id=:earth_reflection
+                    !sphere size=6.371 rotation=0;0;0.25
             !transform rotate_y=-5.14/360 rotate_z=days/27.322 translate=20;0;0
                 !sphere size=1.7375 texture_id=:moon rotation=0;(5.14-6.68)/360;0
