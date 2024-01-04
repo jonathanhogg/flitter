@@ -17,7 +17,6 @@ class Image(SceneNode):
         self._texture = None
 
     def release(self):
-        print('released', self, self._filename)
         self._filename = None
         self._image = None
         self._texture = None
