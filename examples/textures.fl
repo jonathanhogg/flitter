@@ -1,0 +1,40 @@
+
+-- Texture mapping
+--
+-- Spheres are mapped to a texture with the Mercator projection. This is a
+-- pretty dumb projection, but it's simple to understand and easy to find
+-- appropriate textures.
+--
+-- The relative sizes and orbit timings are roughly correct, but the moon is
+-- not really anywhere near this close to Earth.
+
+%pragma tempo 60
+
+import bloom_filter from 'bloom.fl'
+
+let SIZE=1920;1080
+    MAP_SIZE=2048;1024
+    days=beat/3
+
+!window size=SIZE
+    @bloom_filter radius=hypot(SIZE)/120
+        !canvas size=MAP_SIZE id=:stars hidden=true
+            !image filename='images/stars.jpg' fill=MAP_SIZE
+        !canvas size=MAP_SIZE id=:earth hidden=true
+            !image filename='images/earth.jpg' fill=MAP_SIZE
+        !canvas size=MAP_SIZE id=:earth_night hidden=true
+            !image filename='images/earth-night.jpg' fill=MAP_SIZE
+        !canvas size=MAP_SIZE/2 id=:earth_reflection hidden=true
+            !image filename='images/earth-reflection.jpg' fill=MAP_SIZE/2
+        !canvas size=MAP_SIZE id=:moon hidden=true
+            !image filename='images/moon.jpg' fill=MAP_SIZE
+        !canvas3d samples=4 viewpoint=0;-25;0 up=0;0;1 near=1 far=1.5k
+            !light color=0.01
+            !transform rotate_z=days/365.256
+                !light color=3 direction=0;1;0
+                !sphere size=1k invert=true emissive_texture_id=:stars
+            !transform rotate_y=23.44/360 rotate_z=days
+                !sphere segments=32 size=6.371 shininess=10 rotation=0;0;0.25 \
+                        texture_id=:earth emissive_texture_id=:earth_night specular_texture_id=:earth_reflection
+            !transform rotate_y=-5.14/360 rotate_z=days/27.322 translate=20;0;0
+                !sphere size=1.7375 texture_id=:moon rotation=0;(5.14-6.68)/360;0
