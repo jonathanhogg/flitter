@@ -168,8 +168,26 @@ class CachePath:
             return rows[row_number]
         return null
 
+    def read_pil_image(self):
+        if self.check_unmodified() and (image := self._cache.get('pil_image', False)) is not False:
+            return image
+        import PIL.Image
+        if self._mtime is None:
+            logger.warning("File not found: {}", self._path)
+            image = None
+        else:
+            try:
+                image = PIL.Image.open(str(self._path))
+            except Exception as exc:
+                logger.opt(exception=exc).warning("Error reading image: {}", self._path)
+                image = None
+            else:
+                logger.debug("Read image file: {}", self._path)
+        self._cache['pil_image'] = image
+        return image
+
     def read_skia_image(self):
-        if self.check_unmodified() and (image := self._cache.get('image', False)) is not False:
+        if self.check_unmodified() and (image := self._cache.get('skia_image', False)) is not False:
             return image
         import skia
         if self._mtime is None:
@@ -183,7 +201,7 @@ class CachePath:
                 image = None
             else:
                 logger.debug("Read image file: {}", self._path)
-        self._cache['image'] = image
+        self._cache['skia_image'] = image
         return image
 
     def read_video_frames(self, obj, position, loop=False, threading=False):
