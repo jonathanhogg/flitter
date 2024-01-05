@@ -275,8 +275,10 @@ argument, or the smallest of the arguments in vector sort order
 - `minindex(x, [...])` - return the index of the minimum value in the vector
 *x* with one argument, or the index of the smallest argument in vector sort
 order (with the 1st argument being index *0*)
+- `noise(...)` - see [Noise functions](#noise-functions) below
 - `normal(seed)` - see [Psuedo-random sources](#pseudo-random-sources) below
 - `normalize(x)` - return `x / hypot(x)`
+- `octnoise(...)` - see [Noise functions](#noise-functions) below
 - `polar(th)` - equivalent to `zip(cos(th), sin(th))`
 - `quad(x)` - a quadratic "easing" function in the range *[0, 1]* with values of
 *x* less than *0* returning *0* and values greater than *1* returning *1*
@@ -880,6 +882,96 @@ let x;y;z = uniform(:position)
 They are considered to be `true` in conditional expressions (`if`, `and`, etc.).
 In all other aspects, pseudo-random streams behave like the `null` vector, e.g.,
 attempts to use them in mathematical expressions will evaluate to `null`.
+
+## Noise functions
+
+Often, more useful than a random source is a noise function. These produce
+smoothly changing output values across one or more input dimensions. **flitter**
+contains an implementation of [OpenSimplex 2S](https://github.com/KdotJPG/OpenSimplex2)
+noise in 1, 2 and 3 dimensions.
+
+The basic noise function is:
+
+`noise(` *seed* `,` *x* *[* `,` *y* *[* `,` *z* *] ] ]* `)`
+
+where:
+
+- *seed* is a seed value, as per [Psuedo-random sources](#pseudo-random-sources)
+above
+- *x* is the first dimension
+- *y* is an optional second dimension
+- *z* is an optional third dimension
+
+The function returns a value in the range *(-1,1)*. The function can be thought
+of as creating a wiggly line in 1 dimension, a landscape with hills and dips in
+2 dimensions or a volume of space filled with clouds in 3 dimensions.
+
+A slice through 3D noise will look like the output of a 2D noise function and,
+similarly, a slice through 2D noise will look like the output of a 1D noise
+function. Often a useful thing to do is to use a value derived from the beat
+counter as one of the inputs, yielding a 1D or 2D noise function that will
+smoothly change over time for the same input space.
+
+The function is entirely deterministic - always producing the same output
+for the same inputs. The *seed* value can be used to create multiple
+independent noise sources.
+
+### Multi-value vector inputs
+
+If one of the *x*, *y* or *z* arguments is a vector longer than 1, then the
+function will return a multi-value output. The return value is equivalent to
+the code:
+
+```flitter
+((noise(seed, ix, iy, iz) for iz in z) for iy in y) for ix in x
+```
+
+However, calling `noise()` with an *n*-vector will be significantly faster than
+*n* separate calls.
+
+### Multi-octave noise
+
+It is often useful to layer a number of noise functions on top of each other
+with different scales and weights to produce a more complex surface - this is
+particularly useful when attempting to produce organic looking results.
+
+For example:
+
+```flitter
+let n = 4
+    scale = 1;2;4;8
+    weight = 1;0.5;0.25;0.125
+    total = sum(weight)
+    z = (noise(:seed;i, x*scale[i], y*scale[i])*weight[i] for i in ..n) / total
+```
+
+Here the scale of the inputs doubles with each iteration and the weight halves.
+
+**flitter** provides a function that will do this calculation significantly faster
+than the equivalent code:
+
+`octnoise(` *seed* `,` *n* `,` *k* `,` *x* *[* `,` *y* *[* `,` *z* *] ] ]* `)`
+
+where:
+
+- *seed* is a seed value
+- *n* is the number of octaves
+- *k* is a weight constant
+- *x* is the first dimension
+- *y* is an optional second dimension
+- *z* is an optional third dimension
+
+The individual weight for each iteration is computed as *k<sup>-i</sup>* and the
+scaling factor for the inputs as *2<sup>i</sup>*. A unique seed value for each
+iteration is derived from *seed*.
+
+So the equivalent call to the code above would be:
+
+```flitter
+let z = octnoise(:seed, 4, 0.5, x, y)
+```
+
+Again, this function will accept *n*-vectors as inputs.
 
 ## Counters
 
