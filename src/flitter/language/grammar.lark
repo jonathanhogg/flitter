@@ -14,7 +14,8 @@ NUMBER : /[-+]?([0-9][_0-9]*(\.[0-9][_0-9]*)?|\.[0-9][_0-9]*)([eE][-+]?[0-9][_0-
 QUERY : /{[^}]+}/
 STRING : /('''([^'\\]|\\.|'{1,2}(?!'))*'''|'([^'\n\\]|\\.)*'|"""([^"\\]|\\.|"{1,2}(?!"))*"""|"([^"\n\\]|\\.)*")/
 _HASHBANG : /#!.*\r?\n/
-
+_LPAREN : "("
+_RPAREN : ")"
 
 top : _HASHBANG? _NL? expressions
 
@@ -31,7 +32,7 @@ expressions : expression* -> tuple
             | "if" tests ["else" _NL _INDENT sequence _DEDENT] -> if_else
             | "%pragma" NAME node _NL -> pragma
             | "import" name_list "from" composition _NL ->  file_import
-            | "func" NAME "(" parameters ")" _NL _INDENT sequence _DEDENT -> function
+            | "func" NAME _LPAREN parameters _RPAREN _NL _INDENT sequence _DEDENT -> function
 
 parameters : (parameter ("," parameter)*)? -> tuple
 
@@ -112,7 +113,7 @@ name_list : NAME (";" NAME)* -> tuple
        | power "**" call -> power
 
 ?call : atom
-      | call "(" args ")" -> call
+      | call _LPAREN args _RPAREN -> call
       | call "[" node "]" -> slice
 
 args : (arg ("," arg)*)? -> tuple
@@ -124,7 +125,7 @@ args : (arg ("," arg)*)? -> tuple
       | NAME -> name
       | "$" atom -> lookup
       | QUERY -> search
-      | "(" node ")"
+      | _LPAREN node _RPAREN
 
 literal : NUMBER
         | STRING

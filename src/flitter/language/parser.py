@@ -20,8 +20,8 @@ SI_PREFIXES = {'p': 1e-12, 'n': 1e-9, 'u': 1e-6, 'µ': 1e-6, 'm': 1e-3, 'k': 1e3
 
 class FlitterIndenter(Indenter):
     NL_type = '_NL'
-    OPEN_PAREN_types = ['_LPAR', '_LBRA']
-    CLOSE_PAREN_types = ['_RPAR', '_RBRA']
+    OPEN_PAREN_types = ['_LPAREN']
+    CLOSE_PAREN_types = ['_RPAREN']
     INDENT_type = '_INDENT'
     DEDENT_type = '_DEDENT'
     tab_len = 8
