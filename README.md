@@ -43,10 +43,11 @@ DOM - something akin to React.
 ## Installing/running
 
 **flitter** is implemented in a mix of Python and Cython. I develop and use it
-exclusively on macOS. It is notionally portable – in that there's no particular
-reason why it wouldn't work on Linux or Windows – but I've not tested either of
-those platforms. Please give it a go and raise any issues you come across, or
-get in touch if - amazingly - it just works.
+exclusively on Intel macOS. I have done some limited testing on an Intel Ubuntu
+VM and it seemed to run largely as expected. I've not heard of anyone trying it
+on Windows yet, but there's no particular reason why it shouldn't work. If you
+have success or otherwise on another platform please let me know / raise an
+issue. It requires OpenGL 3.3 or above.
 
 If you want to try it out without cloning the repo, then you can install and
 try it **right now** with:
