@@ -126,7 +126,7 @@ cdef class Sphere(TrimeshModel):
         cdef bint flat = node.get_bool('flat', False)
         cdef bint invert = node.get_bool('invert', False)
         cdef int subdivisions = node.get_int('subdivisions', 3)
-        cdef int segments = max(2, node.get_int('segments', 4<<subdivisions))
+        cdef int segments = max(4, node.get_int('segments', 4<<subdivisions))
         cdef str name = f'!sphere/{segments}'
         if flat:
             name += '/flat'
@@ -147,7 +147,7 @@ cdef class Sphere(TrimeshModel):
     cdef object get_trimesh_model(self):
         if self.trimesh_model is not None:
             return self.trimesh_model
-        cdef int nrows = self.segments, ncols = 2*nrows, nvertices = (nrows+1)*(ncols+1), nfaces = (2+(nrows-2)*2)*ncols
+        cdef int ncols = self.segments, nrows = ncols//2, nvertices = (nrows+1)*(ncols+1), nfaces = (2+(nrows-2)*2)*ncols
         cdef object vertices_array = np.empty((nvertices, 3), dtype='f4')
         cdef float[:,:] vertices = vertices_array
         cdef object vertex_normals_array = np.empty((nvertices, 3), dtype='f4')
