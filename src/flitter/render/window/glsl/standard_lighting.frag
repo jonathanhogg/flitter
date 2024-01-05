@@ -1,6 +1,7 @@
 #version 330
 
 const float min_shininess = 50;
+const vec3 greyscale = vec3(0.299, 0.587, 0.114);
 
 in vec3 world_position;
 in vec3 world_normal;
@@ -40,7 +41,7 @@ void main() {
     } else {
         view_direction = view_position - world_position;
         view_distance = length(view_direction);
-        view_direction = normalize(view_direction);
+        view_direction /= view_distance;
     }
     float fog_alpha = (fog_max > fog_min) && (fog_curve > 0) ? pow(clamp((view_distance - fog_min) / (fog_max - fog_min), 0, 1), 1/fog_curve) : 0;
     if (fog_alpha == 1) {
@@ -64,12 +65,11 @@ void main() {
     float opacity = 1 - transparency;
     if (use_transparency_texture) {
         vec4 transparency_texture_color = texture(transparency_texture, uv);
-        float mono = clamp(dot(transparency_texture_color.rgb, vec3(0.299, 0.587, 0.114)), 0, 1);
+        float mono = clamp(dot(transparency_texture_color.rgb, greyscale), 0, 1);
         opacity = opacity * (1 - clamp(transparency_texture_color.a, 0, 1)) + mono;
     }
     vec3 normal = normalize(world_normal);
-    int n = shininess == 0 && diffuse_color == vec3(0) ? 0 : nlights * 4;
-    for (int i = 0; i < n; i += 4) {
+    for (int i = 0; i < nlights * 4; i += 4) {
         float light_type = lights[i].x;
         float inner_cone = lights[i].y;
         float outer_cone = lights[i].z;
