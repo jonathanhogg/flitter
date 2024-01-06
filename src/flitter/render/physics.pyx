@@ -272,6 +272,11 @@ cdef class ElectrostaticForceApplier(MatrixPairForceApplier):
 
 
 cdef class PhysicsSystem:
+    cdef set state_keys
+
+    def __init__(self, **kwargs):
+        self.state_keys = set()
+
     def destroy(self):
         pass
 
@@ -310,6 +315,8 @@ cdef class PhysicsSystem:
         cdef dict particles_by_id = {}
         cdef Particle particle
         cdef Barrier barrier
+        cdef set old_state_keys = self.state_keys
+        cdef set new_state_keys = set()
         while child is not None:
             if child.kind == 'particle':
                 id = <Vector>child._attributes.get('id')
@@ -318,12 +325,20 @@ cdef class PhysicsSystem:
                     particles_by_id[id] = len(particles)
                     particles.append(particle)
                     non_anchors.append(particle)
+                    new_state_keys.add(particle.position_state_key)
+                    old_state_keys.discard(particle.position_state_key)
+                    new_state_keys.add(particle.velocity_state_key)
+                    old_state_keys.discard(particle.velocity_state_key)
             elif child.kind == 'anchor':
                 id = <Vector>child._attributes.get('id')
                 if id is not None:
                     particle = Anchor.__new__(Anchor, child, id, zero, state_prefix, state)
                     particles_by_id[id] = len(particles)
                     particles.append(particle)
+                    new_state_keys.add(particle.position_state_key)
+                    old_state_keys.discard(particle.position_state_key)
+                    new_state_keys.add(particle.velocity_state_key)
+                    old_state_keys.discard(particle.velocity_state_key)
             elif child.kind == 'barrier':
                 barrier = Barrier.__new__(Barrier, child, zero)
                 barriers.append(barrier)
@@ -372,6 +387,10 @@ cdef class PhysicsSystem:
         time_vector.allocate_numbers(1)
         time_vector.numbers[0] = clock
         state.set_item(state_prefix.concat(CLOCK), time_vector)
+        cdef Vector state_key
+        for state_key in old_state_keys:
+            state.set_item(state_key, null_)
+        self.state_keys = new_state_keys
 
     cdef double calculate(self, list particles, list non_anchors, list particle_forces, list matrix_forces, list specific_forces, list barriers,
                           int dimensions, bint realtime, double speed_of_light,

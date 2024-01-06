@@ -283,6 +283,7 @@ class EngineController:
                                 fps, 1000 * execution / nframes, 1000 * render / nframes, 1000 * housekeeping / nframes, performance)
                     frames = frames[-1:]
                     execution = render = housekeeping = 0
+                    logger.trace("State dictionary size: {} keys", len(self.state))
                     if run_program is not None:
                         logger.trace("VM stack size: {:d}", run_program.stack.size)
 

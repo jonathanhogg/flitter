@@ -2063,6 +2063,9 @@ cdef class StateDict:
             del self._state[key_vector]
             self._changed_keys.add(key_vector)
 
+    def __len__(self):
+        return len(self._state)
+
     def __iter__(self):
         return iter(self._state)
 
