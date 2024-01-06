@@ -5,7 +5,7 @@ Video scene node
 from loguru import logger
 import PIL.Image
 
-from . import SceneNode, COLOR_FORMATS
+from . import SceneNode
 from ...cache import SharedCache
 from .glconstants import GL_SRGB8
 

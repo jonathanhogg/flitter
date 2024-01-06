@@ -133,7 +133,6 @@ class SceneNode:
                 continue
             cls = get_scene_node_class(child.kind)
             if cls is not None:
-                index = None
                 for i, scene_node in enumerate(existing):
                     if type(scene_node) is cls and scene_node.similar_to(child):
                         scene_node = existing.pop(i)
