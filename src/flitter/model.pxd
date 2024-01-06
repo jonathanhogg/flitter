@@ -95,6 +95,12 @@ cdef class Matrix44(Vector):
     cdef Matrix44 _rotate_z(double turns)
     @staticmethod
     cdef Matrix44 _rotate(Vector v)
+    @staticmethod
+    cdef Matrix44 _shear_x(Vector v)
+    @staticmethod
+    cdef Matrix44 _shear_y(Vector v)
+    @staticmethod
+    cdef Matrix44 _shear_z(Vector v)
 
     cdef Matrix44 mmul(self, Matrix44 b)
     cdef Vector vmul(self, Vector b)

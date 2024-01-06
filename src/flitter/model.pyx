@@ -1371,6 +1371,51 @@ cdef class Matrix44(Vector):
     def rotate(v):
         return Matrix44._rotate(Vector._coerce(v))
 
+    @staticmethod
+    cdef Matrix44 _shear_x(Vector v):
+        cdef Matrix44 matrix, result = None
+        if v is not None and v.numbers is not NULL and v.length in (1, 2):
+            result = Matrix44.__new__(Matrix44)
+            numbers = result.numbers
+            numbers[4] = v.numbers[0]
+            numbers[8] = v.numbers[1] if v.length == 2 else v.numbers[0]
+            return result
+        return result
+
+    @staticmethod
+    def shear_x(v):
+        return Matrix44._shear_x(Vector._coerce(v))
+
+    @staticmethod
+    cdef Matrix44 _shear_y(Vector v):
+        cdef Matrix44 matrix, result = None
+        if v is not None and v.numbers is not NULL and v.length in (1, 2):
+            result = Matrix44.__new__(Matrix44)
+            numbers = result.numbers
+            numbers[1] = v.numbers[0]
+            numbers[9] = v.numbers[1] if v.length == 2 else v.numbers[0]
+            return result
+        return result
+
+    @staticmethod
+    def shear_y(v):
+        return Matrix44._shear_y(Vector._coerce(v))
+
+    @staticmethod
+    cdef Matrix44 _shear_z(Vector v):
+        cdef Matrix44 matrix, result = None
+        if v is not None and v.numbers is not NULL and v.length in (1, 2):
+            result = Matrix44.__new__(Matrix44)
+            numbers = result.numbers
+            numbers[2] = v.numbers[0]
+            numbers[6] = v.numbers[1] if v.length == 2 else v.numbers[0]
+            return result
+        return result
+
+    @staticmethod
+    def shear_z(v):
+        return Matrix44._shear_z(Vector._coerce(v))
+
     @cython.cdivision(True)
     def __cinit__(self, obj=None):
         if self.objects is not None:

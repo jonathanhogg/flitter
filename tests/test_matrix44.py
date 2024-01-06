@@ -100,6 +100,39 @@ class TestMatrix44(unittest.TestCase):
         self.assertTrue(all_isclose(Matrix44.rotate([0, 0.5, 0]), [-1, 0, 0, 0, 0, 1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1], abs_tol=1e-12))
         self.assertTrue(all_isclose(Matrix44.rotate([0, 0, 0.5]), [-1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1], abs_tol=1e-12))
 
+    def test_shear_x(self):
+        self.assertIsNone(Matrix44.shear_x(None))
+        self.assertIsNone(Matrix44.shear_x([0, 1, 2]))
+        self.assertEqual(Matrix44.shear_x(0), Matrix44())
+        self.assertEqual(Matrix44.shear_x([0, 0]), Matrix44())
+        self.assertEqual(Matrix44.shear_x([1, 0]), [1, 0, 0, 0,  1, 1, 0, 0,  0, 0, 1, 0,  0, 0, 0, 1])
+        self.assertEqual(Matrix44.shear_x([0, 1]), [1, 0, 0, 0,  0, 1, 0, 0,  1, 0, 1, 0,  0, 0, 0, 1])
+        self.assertEqual(Matrix44.shear_x([1, 1]), [1, 0, 0, 0,  1, 1, 0, 0,  1, 0, 1, 0,  0, 0, 0, 1])
+        self.assertEqual(Matrix44.shear_x(1),      [1, 0, 0, 0,  1, 1, 0, 0,  1, 0, 1, 0,  0, 0, 0, 1])
+        self.assertEqual(Matrix44.shear_x([0.5, 0.75]), [1, 0, 0, 0,  0.5, 1, 0, 0,  0.75, 0, 1, 0,  0, 0, 0, 1])
+
+    def test_shear_y(self):
+        self.assertIsNone(Matrix44.shear_y(None))
+        self.assertIsNone(Matrix44.shear_y([0, 1, 2]))
+        self.assertEqual(Matrix44.shear_y(0), Matrix44())
+        self.assertEqual(Matrix44.shear_y([0, 0]), Matrix44())
+        self.assertEqual(Matrix44.shear_y([1, 0]), [1, 1, 0, 0,  0, 1, 0, 0,  0, 0, 1, 0,  0, 0, 0, 1])
+        self.assertEqual(Matrix44.shear_y([0, 1]), [1, 0, 0, 0,  0, 1, 0, 0,  0, 1, 1, 0,  0, 0, 0, 1])
+        self.assertEqual(Matrix44.shear_y([1, 1]), [1, 1, 0, 0,  0, 1, 0, 0,  0, 1, 1, 0,  0, 0, 0, 1])
+        self.assertEqual(Matrix44.shear_y(1),      [1, 1, 0, 0,  0, 1, 0, 0,  0, 1, 1, 0,  0, 0, 0, 1])
+        self.assertEqual(Matrix44.shear_y([0.5, 0.75]), [1, 0.5, 0, 0,  0, 1, 0, 0,  0, 0.75, 1, 0,  0, 0, 0, 1])
+
+    def test_shear_z(self):
+        self.assertIsNone(Matrix44.shear_z(None))
+        self.assertIsNone(Matrix44.shear_z([0, 1, 2]))
+        self.assertEqual(Matrix44.shear_z(0), Matrix44())
+        self.assertEqual(Matrix44.shear_z([0, 0]), Matrix44())
+        self.assertEqual(Matrix44.shear_z([1, 0]), [1, 0, 1, 0,  0, 1, 0, 0,  0, 0, 1, 0,  0, 0, 0, 1])
+        self.assertEqual(Matrix44.shear_z([0, 1]), [1, 0, 0, 0,  0, 1, 1, 0,  0, 0, 1, 0,  0, 0, 0, 1])
+        self.assertEqual(Matrix44.shear_z([1, 1]), [1, 0, 1, 0,  0, 1, 1, 0,  0, 0, 1, 0,  0, 0, 0, 1])
+        self.assertEqual(Matrix44.shear_z(1),      [1, 0, 1, 0,  0, 1, 1, 0,  0, 0, 1, 0,  0, 0, 0, 1])
+        self.assertEqual(Matrix44.shear_z([0.5, 0.75]), [1, 0, 0.5, 0,  0, 1, 0.75, 0,  0, 0, 1, 0,  0, 0, 0, 1])
+
     def test_mmul(self):
         self.assertEqual(Matrix44() @ Matrix44(), Matrix44())
         self.assertEqual(Matrix44.translate([1, 2, 3]) @ Matrix44(), Matrix44.translate([1, 2, 3]))

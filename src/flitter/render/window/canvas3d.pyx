@@ -167,6 +167,15 @@ cdef Matrix44 update_model_matrix(Node node, Matrix44 model_matrix):
         elif attribute == 'rotate_z':
             if vector.numbers !=  NULL and vector.length == 1 and (matrix := Matrix44._rotate_z(vector.numbers[0])) is not None:
                 model_matrix = model_matrix.mmul(matrix)
+        elif attribute == 'shear_x':
+            if (matrix := Matrix44._shear_x(vector)) is not None:
+                model_matrix = model_matrix.mmul(matrix)
+        elif attribute == 'shear_y':
+            if (matrix := Matrix44._shear_y(vector)) is not None:
+                model_matrix = model_matrix.mmul(matrix)
+        elif attribute == 'shear_z':
+            if (matrix := Matrix44._shear_z(vector)) is not None:
+                model_matrix = model_matrix.mmul(matrix)
         elif attribute == 'matrix':
             if (matrix := Matrix44(vector)) is not None:
                 model_matrix = model_matrix.mmul(matrix)
