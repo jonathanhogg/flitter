@@ -69,8 +69,10 @@ class EngineController:
             logger.info("Switched to page {}: {}", page_number, self.current_path)
             if counter_state := self.state['_counter']:
                 tempo, quantum, start = counter_state
-                self.counter.update(tempo, int(quantum), start)
+                self.counter.reset(tempo, int(quantum), start)
                 logger.info("Restore counter at beat {:.1f}, tempo {:.1f}, quantum {}", self.counter.beat, self.counter.tempo, self.counter.quantum)
+            else:
+                self.counter.reset()
             for renderers in self.renderers.values():
                 for renderer in renderers:
                     renderer.purge()
@@ -122,13 +124,13 @@ class EngineController:
             raise
         return references
 
-    def handle_pragmas(self, pragmas):
-        if '_counter' not in self.state:
-            tempo = pragmas.get('tempo', null).match(1, float, 120)
-            quantum = pragmas.get('quantum', null).match(1, float, 4)
-            self.counter.update(tempo, quantum, system_clock())
-            self.state['_counter'] = self.counter.tempo, self.counter.quantum, self.counter.start
-            logger.info("Start counter, tempo {}, quantum {}", self.counter.tempo, self.counter.quantum)
+    def handle_pragmas(self, pragmas, timestamp):
+        tempo = pragmas.get('tempo', null).match(1, float, 120)
+        if tempo != self.counter.tempo:
+            self.counter.set_tempo(tempo, timestamp)
+        quantum = pragmas.get('quantum', null).match(1, float, 4)
+        if quantum != self.counter.quantum:
+            self.counter.set_quantum(quantum, timestamp)
         self.target_fps = pragmas.get('fps', null).match(1, float, self.default_fps)
 
     def reset_state(self):
@@ -154,7 +156,7 @@ class EngineController:
     async def run(self):
         try:
             frames = []
-            start_time = frame_time = system_clock()
+            start_time = frame_time = system_clock() if self.realtime else self.counter.start
             last = self.counter.beat_at_time(frame_time)
             dump_time = frame_time
             execution = render = housekeeping = 0
@@ -210,7 +212,7 @@ class EngineController:
                     context = run_program.run(state=self.state, variables=names, record_stats=self.vm_stats)
                 else:
                     context = Context()
-                self.handle_pragmas(context.pragmas)
+                self.handle_pragmas(context.pragmas, frame_time)
 
                 new_errors = context.errors.difference(errors) if errors is not None else context.errors
                 errors = context.errors
@@ -232,6 +234,8 @@ class EngineController:
 
                 del context
                 SharedCache.clean()
+
+                self.state['_counter'] = self.counter.tempo, self.counter.quantum, self.counter.start
 
                 if self.autoreset and self.state_timestamp is not None and system_clock() > self.state_timestamp + self.autoreset:
                     logger.debug("Auto-reset state")
