@@ -406,8 +406,8 @@ class CachePath:
             self._cache['video_output'] = writer, queue, start, *config
             logger.debug("Beginning {} {} video output{}: {}", av_codec.name, stream.pix_fmt, " (with alpha)" if has_alpha else "", self._path)
         if queue is not None and (not realtime or not queue.full()):
-            frame_time = timestamp - start
-            if limit is not None and frame_time >= limit:
+            frame_time = int(round((timestamp - start) * fps))
+            if limit is not None and frame_time >= int(round(limit * fps)):
                 queue.put(None)
                 writer.join()
                 self._cache['video_output'] = None, None, start, *config
@@ -423,7 +423,7 @@ class CachePath:
                 frame.planes[0].update(array.data)
             else:
                 frame.planes[0].update(texture.read())
-            frame.pts = int(round(frame_time * fps))
+            frame.pts = frame_time
             try:
                 queue.put(frame, block=not realtime)
             except Full:
