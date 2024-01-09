@@ -163,7 +163,7 @@ class EngineController:
             performance = 1
             run_program = current_program = errors = logs = None
             gc.disable()
-            while self.run_time is None or frame_time - start_time < self.run_time:
+            while self.run_time is None or int(round((frame_time - start_time) * self.target_fps)) < int(round(self.run_time * self.target_fps)):
                 housekeeping -= system_clock()
 
                 beat = self.counter.beat_at_time(frame_time)
