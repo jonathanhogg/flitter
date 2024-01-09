@@ -6,7 +6,7 @@ import math
 import unittest
 
 from flitter.model import Vector, Context, StateDict, null
-from flitter.language.functions import (Uniform, Normal, Beta, counter, hypot, angle)
+from flitter.language.functions import (Uniform, Normal, Beta, counter, hypot, angle, split, ordv, chrv)
 
 
 Tau = 2*math.pi
@@ -266,36 +266,23 @@ class TestTrig(unittest.TestCase):
         self.assertTrue(all_isclose(angle(self.a, self.c),
                                     Vector([math.atan2(2, 1)/Tau, math.atan2(2, 2)/Tau, math.atan2(2, 3)/Tau, math.atan2(2, 4)/Tau])))
 
+class TestStringFuncs(unittest.TestCase):
+    def test_ord(self):
+        self.assertEqual(ordv(null), null)
+        self.assertEqual(ordv(Vector('A')), Vector([65]))
+        self.assertEqual(ordv(Vector('AB')), Vector([65, 66]))
+        self.assertEqual(ordv(Vector(['A', 'B'])), Vector([65, 66]))
 
-#     'len': Vector(length),
-#     'sin': Vector(sinv),
-#     'cos': Vector(cosv),
-#     'asin': Vector(asinv),
-#     'acos': Vector(acosv),
-#     'polar': Vector(polar),
-#     'abs': Vector(absv),
-#     'exp': Vector(expv),
-#     'sqrt': Vector(sqrtv),
-#     'sine': Vector(sine),
-#     'bounce': Vector(bounce),
-#     'sharkfin': Vector(sharkfin),
-#     'impulse': Vector(impulse),
-#     'sawtooth': Vector(sawtooth),
-#     'triangle': Vector(triangle),
-#     'square': Vector(square),
-#     'linear': Vector(linear),
-#     'quad': Vector(quad),
-#     'snap': Vector(snap),
-#     'shuffle': Vector(shuffle),
-#     'round': Vector(roundv),
-#     'ceil': Vector(ceilv),
-#     'floor': Vector(floorv),
-#     'sum': Vector(sumv),
-#     'accumulate': Vector(accumulate),
-#     'min': Vector(minv),
-#     'max': Vector(maxv),
-#     'normalize': Vector(normalize),
-#     'map': Vector(mapv),
-#     'zip': Vector(zipv),
-#     'hsl': Vector(hsl),
-#     'hsv': Vector(hsv),
+    def test_chr(self):
+        self.assertEqual(chrv(null), null)
+        self.assertEqual(chrv(Vector('A')), null)
+        self.assertEqual(chrv(Vector([65])), Vector(['A']))
+        self.assertEqual(chrv(Vector([65, 66])), Vector(['AB']))
+
+    def test_split(self):
+        self.assertEqual(split(null), null)
+        self.assertEqual(split(Vector(['Hello world!'])), Vector(['Hello world!']))
+        self.assertEqual(split(Vector(['Hello world!\n'])), Vector(['Hello world!']))
+        self.assertEqual(split(Vector(['Hello\nworld!'])), Vector(['Hello', 'world!']))
+        self.assertEqual(split(Vector(['Hello\nworld!\n'])), Vector(['Hello', 'world!']))
+        self.assertEqual(split(Vector(['Hello\n\nworld!\n'])), Vector(['Hello', '', 'world!']))

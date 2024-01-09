@@ -170,9 +170,28 @@ def read_bytes(Context context, Vector filename):
     return null_
 
 
-def split(Vector text):
+def ordv(Vector text):
     cdef str string = text.as_string()
-    return Vector._coerce(string.split('\n'))
+    return Vector._coerce([ord(ch) for ch in string])
+
+
+def chrv(Vector ordinals):
+    if ordinals.numbers == NULL:
+        return null_
+    cdef str text = ""
+    cdef int i
+    for i in range(ordinals.length):
+        text += chr(<int>ordinals.numbers[i])
+    cdef Vector result = Vector.__new__(Vector)
+    result.objects = (text,)
+    result.length = 1
+    return result
+
+
+def split(Vector text):
+    if text.length == 0:
+        return null_
+    return Vector._coerce(text.as_string().rstrip('\n').split('\n'))
 
 
 @context_func
@@ -823,6 +842,7 @@ STATIC_FUNCTIONS = {
     'beta': Vector(Beta),
     'bounce': Vector(bounce),
     'ceil': Vector(ceilv),
+    'chr': Vector(chrv),
     'cos': Vector(cosv),
     'exp': Vector(expv),
     'floor': Vector(floorv),
@@ -842,6 +862,7 @@ STATIC_FUNCTIONS = {
     'minindex': Vector(minindex),
     'normal': Vector(Normal),
     'normalize': Vector(normalize),
+    'ord': Vector(ordv),
     'point_towards': Vector(point_towards),
     'polar': Vector(polar),
     'quad': Vector(quad),

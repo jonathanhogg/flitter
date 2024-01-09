@@ -278,6 +278,7 @@ class TestVector(unittest.TestCase):
         self.assertEqual(repr(Vector("Hello world!")), "'Hello world!'")
         self.assertEqual(repr(Vector("one_two_3")), ":one_two_3")
         self.assertEqual(repr(Vector("1_two_three")), "'1_two_three'")
+        self.assertEqual(repr(Vector("")), "''")
         self.assertEqual(repr(Vector([99, "red", "balloons"])), "99;:red;:balloons")
         node = Node('foo', {'bar'}, {'color': Vector(1)})
         self.assertEqual(repr(Vector(node)), f"({node!r})")

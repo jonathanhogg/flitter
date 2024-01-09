@@ -637,16 +637,19 @@ cdef class Vector:
                 if isinstance(obj, (float, int)):
                     parts.append(f"{obj:.9g}")
                 elif isinstance(obj, str):
-                    s = obj
-                    for i, c in enumerate(s):
-                        if c == ord('_') or (c >= ord('a') and c <= ord('z')) or (c >= ord('A') and c <= ord('Z')) or \
-                           (i > 0 and c >= ord('0') and c <= ord('9')):
-                            pass
+                    if len(obj):
+                        s = obj
+                        for i, c in enumerate(s):
+                            if c == ord('_') or (c >= ord('a') and c <= ord('z')) or (c >= ord('A') and c <= ord('Z')) or \
+                               (i > 0 and c >= ord('0') and c <= ord('9')):
+                                pass
+                            else:
+                                parts.append(repr(s))
+                                break
                         else:
-                            parts.append(repr(s))
-                            break
+                            parts.append(":" + s)
                     else:
-                        parts.append(":" + s)
+                        parts.append("''")
                 else:
                     parts.append("(" + repr(obj) + ")")
         return ";".join(parts)
