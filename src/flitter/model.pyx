@@ -191,7 +191,7 @@ cdef class Vector:
     cdef Vector _coerce(object other):
         if isinstance(other, Vector):
             return other
-        if other is None or (isinstance(other, (list, tuple, set, dict)) and len(other) == 0):
+        if other is None or (isinstance(other, (list, tuple, bytes, set, dict)) and len(other) == 0):
             return null_
         if isinstance(other, (float, int)):
             if other == 0:
@@ -303,7 +303,7 @@ cdef class Vector:
             arr = value.astype(*AstypeArgs)
             for i in range(self.allocate_numbers(arr.shape[0])):
                 self.numbers[i] = arr[i]
-        elif isinstance(value, (list, tuple, set, dict, Vector)):
+        elif isinstance(value, (list, tuple, bytes, set, dict, Vector)):
             n = len(value)
             if n:
                 self.allocate_numbers(n)

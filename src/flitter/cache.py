@@ -79,6 +79,24 @@ class CachePath:
         self._cache[key] = text
         return text
 
+    def read_bytes(self):
+        key = 'bytes'
+        if self.check_unmodified() and (data := self._cache.get(key, False)) is not False:
+            return data
+        if self._mtime is None:
+            logger.warning("File not found: {}", self._path)
+            data = None
+        else:
+            try:
+                data = self._path.read_bytes()
+            except Exception as exc:
+                logger.opt(exception=exc).warning("Error reading bytes: {}", self._path)
+                data = None
+            else:
+                logger.debug("Read bytes: {}", self._path)
+        self._cache[key] = data
+        return data
+
     def read_flitter_program(self, variables=None, undefined=None):
         current_program = self._cache.get('flitter', False)
         if current_program is not False and self.check_unmodified():

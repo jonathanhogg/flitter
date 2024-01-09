@@ -162,6 +162,14 @@ def read_text(Context context, Vector filename):
     return null_
 
 
+@context_func
+def read_bytes(Context context, Vector filename):
+    cdef str path = filename.as_string()
+    if path:
+        return Vector._coerce(SharedCache.get_with_root(path, context.path).read_bytes())
+    return null_
+
+
 def split(Vector text):
     cdef str string = text.as_string()
     return Vector._coerce(string.split('\n'))
@@ -807,54 +815,55 @@ def point_towards(Vector direction, Vector up):
 
 
 STATIC_FUNCTIONS = {
-    'uniform': Vector(Uniform),
-    'beta': Vector(Beta),
-    'normal': Vector(Normal),
-    'len': Vector(length),
-    'sin': Vector(sinv),
-    'cos': Vector(cosv),
-    'asin': Vector(asinv),
-    'acos': Vector(acosv),
-    'polar': Vector(polar),
     'abs': Vector(absv),
-    'exp': Vector(expv),
-    'sqrt': Vector(sqrtv),
-    'log': Vector(logv),
-    'log2': Vector(log2v),
-    'log10': Vector(log10v),
-    'sine': Vector(sine),
-    'bounce': Vector(bounce),
-    'sharkfin': Vector(sharkfin),
-    'impulse': Vector(impulse),
-    'sawtooth': Vector(sawtooth),
-    'triangle': Vector(triangle),
-    'square': Vector(square),
-    'linear': Vector(linear),
-    'quad': Vector(quad),
-    'snap': Vector(snap),
-    'shuffle': Vector(shuffle),
-    'round': Vector(roundv),
-    'ceil': Vector(ceilv),
-    'floor': Vector(floorv),
-    'sum': Vector(sumv),
     'accumulate': Vector(accumulate),
-    'min': Vector(minv),
-    'minindex': Vector(minindex),
-    'max': Vector(maxv),
-    'maxindex': Vector(maxindex),
-    'hypot': Vector(hypot),
+    'acos': Vector(acosv),
     'angle': Vector(angle),
-    'normalize': Vector(normalize),
-    'map': Vector(mapv),
-    'zip': Vector(zipv),
+    'asin': Vector(asinv),
+    'beta': Vector(Beta),
+    'bounce': Vector(bounce),
+    'ceil': Vector(ceilv),
+    'cos': Vector(cosv),
+    'exp': Vector(expv),
+    'floor': Vector(floorv),
     'hsl': Vector(hsl),
     'hsv': Vector(hsv),
+    'hypot': Vector(hypot),
+    'impulse': Vector(impulse),
+    'len': Vector(length),
+    'linear': Vector(linear),
+    'log': Vector(logv),
+    'log10': Vector(log10v),
+    'log2': Vector(log2v),
+    'map': Vector(mapv),
+    'max': Vector(maxv),
+    'maxindex': Vector(maxindex),
+    'min': Vector(minv),
+    'minindex': Vector(minindex),
+    'normal': Vector(Normal),
+    'normalize': Vector(normalize),
     'point_towards': Vector(point_towards),
+    'polar': Vector(polar),
+    'quad': Vector(quad),
+    'round': Vector(roundv),
+    'sawtooth': Vector(sawtooth),
+    'sharkfin': Vector(sharkfin),
+    'shuffle': Vector(shuffle),
+    'sin': Vector(sinv),
+    'sine': Vector(sine),
+    'snap': Vector(snap),
     'split': Vector(split),
+    'sqrt': Vector(sqrtv),
+    'square': Vector(square),
+    'sum': Vector(sumv),
+    'triangle': Vector(triangle),
+    'uniform': Vector(Uniform),
+    'zip': Vector(zipv),
 }
 
 DYNAMIC_FUNCTIONS = {
-    'read': Vector(read_text),
-    'csv': Vector(read_csv),
     'counter': Vector(counter),
+    'csv': Vector(read_csv),
+    'read': Vector(read_text),
+    'read_bytes': Vector(read_bytes),
 }
