@@ -7,6 +7,7 @@ Flitter OpenGL 3D drawing canvas
 import cython
 from cython cimport view
 from loguru import logger
+from mako.template import Template
 import moderngl
 import numpy as np
 
@@ -32,8 +33,8 @@ cdef double Pi = 3.141592653589793
 cdef tuple MaterialAttributes = ('color', 'specular', 'emissive', 'shininess', 'transparency',
                                  'texture_id', 'specular_texture_id', 'emissive_texture_id', 'transparency_texture_id')
 
-cdef object StandardVertexSource = TemplateLoader.get_template("standard_lighting.vert")
-cdef object StandardFragmentSource = TemplateLoader.get_template("standard_lighting.frag")
+cdef object StandardVertexTemplate = TemplateLoader.get_template("standard_lighting.vert")
+cdef object StandardFragmentTemplate = TemplateLoader.get_template("standard_lighting.frag")
 
 
 cdef enum LightType:
@@ -120,6 +121,8 @@ cdef class RenderSet:
     cdef bint depth_test
     cdef bint cull_face
     cdef str composite
+    cdef object vertex_shader_template
+    cdef object fragment_shader_template
 
     cdef void set_blend(self, glctx):
         glctx.blend_equation = moderngl.FUNC_ADD
@@ -229,8 +232,7 @@ cdef void collect(Node node, Matrix44 model_matrix, Material material, RenderSet
     cdef Vector color, position, direction, emissive, diffuse, specular
     cdef double shininess, inner, outer
     cdef Node child
-    cdef str filename, composite
-    cdef bint depth_test, cull_face
+    cdef str filename, vertex_shader, fragment_shader
     cdef Model model
 
     if node.kind == 'box':
@@ -282,15 +284,16 @@ cdef void collect(Node node, Matrix44 model_matrix, Material material, RenderSet
         material = material.update(node)
         lights = list(render_set.lights) if render_set is not None else []
         lights.append([])
-        depth_test = node.get_bool('depth_test', True)
-        cull_face = node.get_bool('cull_face', True)
-        composite = node.get_str('composite', 'over')
         render_set = RenderSet.__new__(RenderSet)
         render_set.lights = lights
         render_set.instances = {}
-        render_set.depth_test = depth_test
-        render_set.cull_face = cull_face
-        render_set.composite = composite.lower()
+        render_set.depth_test = node.get_bool('depth_test', True)
+        render_set.cull_face = node.get_bool('cull_face', True)
+        render_set.composite = node.get_str('composite', 'over').lower()
+        vertex_shader = node.get_str('vertex', None)
+        fragment_shader = node.get_str('fragment', None)
+        render_set.vertex_shader_template = Template(vertex_shader) if vertex_shader is not None else StandardVertexTemplate
+        render_set.fragment_shader_template = Template(fragment_shader) if fragment_shader is not None else StandardFragmentTemplate
         render_sets.append(render_set)
         child = node.first_child
         while child is not None:
@@ -390,14 +393,24 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, bint orthographic, Ve
     cdef list transparent_objects = []
     cdef double[:] zs
     cdef long[:] indices
-    cdef str shader_name = f'!shader/{max_lights}'
-    if (shader := objects.get(shader_name)) is None:
-        logger.debug("Compiling standard lighting shader for {} max lights", max_lights)
-        variables = {'max_lights': max_lights, 'Ambient': LightType.Ambient, 'Directional': LightType.Directional,
-                     'Point': LightType.Point, 'Spot': LightType.Spot}
-        shader = glctx.program(vertex_shader=StandardVertexSource.render(**variables),
-                               fragment_shader=StandardFragmentSource.render(**variables))
-        objects[shader_name] = shader
+    cdef dict shaders = objects.setdefault('canvas3d_shaders', {})
+    cdef dict variables = {'max_lights': max_lights, 'Ambient': LightType.Ambient, 'Directional': LightType.Directional,
+                           'Point': LightType.Point, 'Spot': LightType.Spot}
+    cdef str vertex_shader = render_set.vertex_shader_template.render(**variables)
+    cdef str fragment_shader = render_set.fragment_shader_template.render(**variables)
+    cdef tuple source = (vertex_shader, fragment_shader)
+    shader = shaders.get(source)
+    if shader is None:
+        try:
+            shader = glctx.program(vertex_shader=vertex_shader, fragment_shader=fragment_shader)
+        except Exception as exc:
+            logger.error("Shader program compile failed:\n{}", '\n'.join(str(exc).strip().split('\n')[4:]))
+            shader = False
+        else:
+            logger.debug("Compiled shader program")
+        shaders[source] = shader
+    if shader is False:
+        return
     shader['pv_matrix'] = pv_matrix
     shader['orthographic'] = orthographic
     shader['view_position'] = viewpoint
