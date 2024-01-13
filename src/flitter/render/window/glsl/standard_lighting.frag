@@ -77,11 +77,8 @@ void main() {
         vec3 light_color = lights[i+1];
         vec3 light_position = lights[i+2];
         vec3 light_direction = lights[i+3];
-        float diffuse_strength, specular_strength;
-        if (light_type == ${Ambient}) {
-            diffuse_strength = 1;
-            specular_strength = 0;
-        } else if (light_type == ${Directional}) {
+        float diffuse_strength = 1, specular_strength = 0;
+        if (light_type == ${Directional}) {
             vec3 reflection_direction = reflect(light_direction, normal);
             specular_strength = pow(max(dot(view_direction, reflection_direction), 0), shininess) * min(shininess, min_shininess) / min_shininess;
             diffuse_strength = max(dot(normal, -light_direction), 0);
