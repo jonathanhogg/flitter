@@ -487,25 +487,32 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, bint orthographic, Ve
                     k += 1
         dispatch_instances(glctx, objects, shader, model, k, matrices, materials, textures, references)
     if transparent_objects:
+        n = len(transparent_objects)
         transparent_objects.sort(key=fst)
-        matrices = view.array((1, 16), 4, 'f')
-        materials = view.array((1, 11), 4, 'f')
-        for transparent_object in transparent_objects:
+        matrices = view.array((n, 16), 4, 'f')
+        materials = view.array((n, 11), 4, 'f')
+        k = 0
+        for i, transparent_object in enumerate(transparent_objects):
             model = transparent_object[1]
             instance = transparent_object[2]
             material = instance.material
             src = instance.model_matrix.numbers
-            dest = &matrices[0, 0]
+            dest = &matrices[k, 0]
             for j in range(16):
                 dest[j] = src[j]
-            dest = &materials[0, 0]
+            dest = &materials[k, 0]
             for j in range(3):
                 dest[j] = material.diffuse.numbers[j]
                 dest[j+3] = material.specular.numbers[j]
                 dest[j+6] = material.emissive.numbers[j]
             dest[9] = material.shininess
             dest[10] = material.transparency
-            dispatch_instances(glctx, objects, shader, model, 1, matrices, materials, material.textures, references)
+            k += 1
+            if i == n-1 or (<tuple>transparent_objects[i+1])[1] is not model:
+                dispatch_instances(glctx, objects, shader, model, k, matrices, materials, material.textures, references)
+                k = 0
+        if k:
+            dispatch_instances(glctx, objects, shader, model, k, matrices, materials, material.textures, references)
     glctx.disable(flags)
 
 
