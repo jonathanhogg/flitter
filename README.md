@@ -120,7 +120,7 @@ your runtime environment, do an editable package deployment, throw away the
 built code and let `pyximport` (re)compile it on-the-fly as you go:
 
 ```sh
-pip3 install cython
+pip3 install cython setuptools
 pip3 install --editable .
 rm **/*.c **/*.so
 ```
