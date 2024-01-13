@@ -27,7 +27,6 @@ cdef Vector Zero3 = Vector((0, 0, 0))
 cdef Vector One3 = Vector((1, 1, 1))
 cdef Vector Xaxis = Vector((1, 0, 0))
 cdef Vector Yaxis = Vector((0, 1, 0))
-cdef Vector Black = Vector((0, 0, 0, 1))
 cdef int DEFAULT_MAX_LIGHTS = 50
 cdef double Pi = 3.141592653589793
 cdef tuple MaterialAttributes = ('color', 'specular', 'emissive', 'shininess', 'transparency',
@@ -199,7 +198,7 @@ def draw(Node node, tuple size, glctx, dict objects, dict references):
     cdef double far = node.get_float('far', width)
     cdef double fog_min = node.get_float('fog_min', 0)
     cdef double fog_max = node.get_float('fog_max', 0)
-    cdef Vector fog_color = node.get_fvec('fog_color', 3, Black)
+    cdef Vector fog_color = node.get_fvec('fog_color', 3, Zero3)
     cdef double fog_curve = max(0, node.get_float('fog_curve', 1))
     cdef Matrix44 pv_matrix
     if orthographic:
