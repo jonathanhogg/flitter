@@ -32,6 +32,6 @@ let SIZE=1080;1080
                     !transform translate=$(:balls;i)
                         !sphere position=0 size=RADII[i] emissive=color
                         !light position=0 color=color*RADII[i]*500
-            !material transparency=0.9 color=0.01 shininess=10
-                !box size=999 position=0;0;500 flat=true invert=true
-                !box size=1000 position=0;0;500 flat=true
+            !material transparency=0.9 specular=0.2 color=0.05 shininess=10
+                !box size=999 position=0;0;500 invert=true
+                !box size=1000 position=0;0;500
