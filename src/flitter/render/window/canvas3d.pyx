@@ -116,6 +116,7 @@ cdef class Instance:
 
 
 cdef class RenderSet:
+    cdef int max_lights
     cdef list lights
     cdef dict instances
     cdef bint depth_test
@@ -204,7 +205,6 @@ def draw(Node node, tuple size, glctx, dict objects, dict references):
     else:
         fog_color = fog_color.concat(true_)
     cdef double fog_curve = max(0, node.get_float('fog_curve', 1))
-    cdef int max_lights = node.get_int('max_lights', DEFAULT_MAX_LIGHTS)
     cdef Matrix44 pv_matrix
     if orthographic:
         pv_matrix = Matrix44._ortho(width/height, ortho_width, near, far)
@@ -221,7 +221,7 @@ def draw(Node node, tuple size, glctx, dict objects, dict references):
     cdef RenderSet render_set
     for render_set in render_sets:
         if render_set.instances:
-            render(render_set, pv_matrix, orthographic, viewpoint, focus, max_lights, fog_min, fog_max, fog_color, fog_curve,
+            render(render_set, pv_matrix, orthographic, viewpoint, focus, fog_min, fog_max, fog_color, fog_curve,
                    glctx, objects, references)
 
 
@@ -285,6 +285,7 @@ cdef void collect(Node node, Matrix44 model_matrix, Material material, RenderSet
         lights = list(render_set.lights) if render_set is not None else []
         lights.append([])
         render_set = RenderSet.__new__(RenderSet)
+        render_set.max_lights = node.get_int('max_lights', DEFAULT_MAX_LIGHTS)
         render_set.lights = lights
         render_set.instances = {}
         render_set.depth_test = node.get_bool('depth_test', True)
@@ -374,7 +375,7 @@ def fst(tuple ab):
     return ab[0]
 
 
-cdef void render(RenderSet render_set, Matrix44 pv_matrix, bint orthographic, Vector viewpoint, Vector focus, int max_lights,
+cdef void render(RenderSet render_set, Matrix44 pv_matrix, bint orthographic, Vector viewpoint, Vector focus,
                  double fog_min, double fog_max, Vector fog_color, float fog_curve, glctx, dict objects, dict references):
     cdef list instances, lights, buffers
     cdef cython.float[:, :] matrices, materials, lights_data
@@ -394,7 +395,7 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, bint orthographic, Ve
     cdef double[:] zs
     cdef long[:] indices
     cdef dict shaders = objects.setdefault('canvas3d_shaders', {})
-    cdef dict variables = {'max_lights': max_lights, 'Ambient': LightType.Ambient, 'Directional': LightType.Directional,
+    cdef dict variables = {'max_lights': render_set.max_lights, 'Ambient': LightType.Ambient, 'Directional': LightType.Directional,
                            'Point': LightType.Point, 'Spot': LightType.Spot}
     cdef str vertex_shader = render_set.vertex_shader_template.render(**variables)
     cdef str fragment_shader = render_set.fragment_shader_template.render(**variables)
@@ -423,11 +424,11 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, bint orthographic, Ve
     shader['use_specular_texture'] = False
     shader['use_emissive_texture'] = False
     shader['use_transparency_texture'] = False
-    lights_data = view.array((max_lights, 12), 4, 'f')
+    lights_data = view.array((render_set.max_lights, 12), 4, 'f')
     i = 0
     for lights in render_set.lights:
         for light in lights:
-            if i == max_lights:
+            if i == render_set.max_lights:
                 break
             dest = &lights_data[i, 0]
             dest[0] = <cython.float>(<int>light.type)
