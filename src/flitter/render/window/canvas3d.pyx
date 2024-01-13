@@ -199,11 +199,7 @@ def draw(Node node, tuple size, glctx, dict objects, dict references):
     cdef double far = node.get_float('far', width)
     cdef double fog_min = node.get_float('fog_min', 0)
     cdef double fog_max = node.get_float('fog_max', 0)
-    cdef Vector fog_color = node.get_fvec('fog_color', 3, null_)
-    if fog_color is null_:
-        fog_color = node.get_fvec('fog_color', 4, Black)
-    else:
-        fog_color = fog_color.concat(true_)
+    cdef Vector fog_color = node.get_fvec('fog_color', 3, Black)
     cdef double fog_curve = max(0, node.get_float('fog_curve', 1))
     cdef Matrix44 pv_matrix
     if orthographic:
@@ -470,7 +466,7 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, bint orthographic, Ve
         for i in indices:
             instance = instances[i]
             material = instance.material
-            if material.transparency < 1 or has_transparency_texture:
+            if material.shininess > 0 or material.transparency < 1 or has_transparency_texture:
                 if (material.transparency > 0 or has_transparency_texture) and render_set.depth_test:
                     transparent_objects.append((-zs[i], model, instance))
                 else:
@@ -653,11 +649,7 @@ class Canvas3D(SceneNode):
         fog_min = node.get('fog_min', 1, float, 0)
         fog_max = node.get('fog_max', 1, float, 0)
         if fog_max > fog_min:
-            fog_color = node.get('fog_color', 3, float)
-            if fog_color is None:
-                fog_color = node.get('fog_color', 4, float, (0, 0, 0, 1))
-            else:
-                fog_color = fog_color + [1]
+            fog_color = node.get('fog_color', 3, float, (0, 0, 0))
             self._render_framebuffer.clear(*fog_color)
         else:
             self._render_framebuffer.clear()

@@ -19,7 +19,7 @@ uniform vec3 focus;
 uniform bool orthographic;
 uniform float fog_max;
 uniform float fog_min;
-uniform vec4 fog_color;
+uniform vec3 fog_color;
 uniform float fog_curve;
 
 uniform bool use_diffuse_texture;
@@ -47,6 +47,12 @@ void main() {
     if (fog_alpha == 1) {
         discard;
     }
+    float opacity = 1 - transparency;
+    if (use_transparency_texture) {
+        vec4 transparency_texture_color = texture(transparency_texture, uv);
+        float mono = clamp(dot(transparency_texture_color.rgb, greyscale), 0, 1);
+        opacity = opacity * (1 - clamp(transparency_texture_color.a, 0, 1)) + mono;
+    }
     vec3 diffuse_color = colors[0];
     if (use_diffuse_texture) {
         vec4 diffuse_texture_color = texture(diffuse_texture, uv);
@@ -57,18 +63,13 @@ void main() {
         vec4 specular_texture_color = texture(specular_texture, uv);
         specular_color = specular_color * (1 - clamp(specular_texture_color.a, 0, 1)) + specular_texture_color.rgb;
     }
-    vec3 color = colors[2];
+    vec3 color_base = colors[2];
     if (use_emissive_texture) {
         vec4 emissive_texture_color = texture(emissive_texture, uv);
-        color = color * (1 - clamp(emissive_texture_color.a, 0, 1)) + emissive_texture_color.rgb;
-    }
-    float opacity = 1 - transparency;
-    if (use_transparency_texture) {
-        vec4 transparency_texture_color = texture(transparency_texture, uv);
-        float mono = clamp(dot(transparency_texture_color.rgb, greyscale), 0, 1);
-        opacity = opacity * (1 - clamp(transparency_texture_color.a, 0, 1)) + mono;
+        color_base = color_base * (1 - clamp(emissive_texture_color.a, 0, 1)) + emissive_texture_color.rgb;
     }
     vec3 normal = normalize(world_normal);
+    vec3 color_overlay = vec3(0);
     for (int i = 0; i < nlights * 4; i += 4) {
         float light_type = lights[i].x;
         float inner_cone = lights[i].y;
@@ -76,35 +77,37 @@ void main() {
         vec3 light_color = lights[i+1];
         vec3 light_position = lights[i+2];
         vec3 light_direction = lights[i+3];
+        float diffuse_strength, specular_strength;
         if (light_type == ${Ambient}) {
-            color += diffuse_color * light_color;
+            diffuse_strength = 1;
+            specular_strength = 0;
         } else if (light_type == ${Directional}) {
             vec3 reflection_direction = reflect(light_direction, normal);
-            float specular_strength = pow(max(dot(view_direction, reflection_direction), 0), shininess) * min(shininess, min_shininess) / min_shininess;
-            float diffuse_strength = max(dot(normal, -light_direction), 0);
-            color += (diffuse_color * diffuse_strength + specular_color * specular_strength) * light_color;
+            specular_strength = pow(max(dot(view_direction, reflection_direction), 0), shininess) * min(shininess, min_shininess) / min_shininess;
+            diffuse_strength = max(dot(normal, -light_direction), 0);
         } else if (light_type == ${Point}) {
             light_direction = world_position - light_position;
             float light_distance = length(light_direction);
             light_direction = normalize(light_direction);
-            float light_attenuation = 1 / (1 + light_distance*light_distance);
             vec3 reflection_direction = reflect(light_direction, normal);
-            float specular_strength = pow(max(dot(view_direction, reflection_direction), 0), shininess) * min(shininess, min_shininess) / min_shininess;
-            float diffuse_strength = max(dot(normal, -light_direction), 0);
-            color += (diffuse_color * diffuse_strength + specular_color * specular_strength) * light_color * light_attenuation;
+            float light_attenuation = 1 / (1 + light_distance*light_distance);
+            light_color *= light_attenuation;
+            specular_strength = pow(max(dot(view_direction, reflection_direction), 0), shininess) * min(shininess, min_shininess) / min_shininess;
+            diffuse_strength = max(dot(normal, -light_direction), 0);
         } else if (light_type == ${Spot}) {
             vec3 spot_direction = world_position - light_position;
             float spot_distance = length(spot_direction);
             spot_direction = normalize(spot_direction);
             float light_attenuation = 1 / (1 + spot_distance*spot_distance);
             vec3 reflection_direction = reflect(spot_direction, normal);
-            float specular_strength = pow(max(dot(view_direction, reflection_direction), 0), shininess) * min(shininess, min_shininess) / min_shininess;
-            float diffuse_strength = max(dot(normal, -spot_direction), 0);
             float spot_cosine = dot(spot_direction, light_direction);
             light_attenuation *= 1 - clamp((inner_cone - spot_cosine) / (inner_cone - outer_cone), 0, 1);
-            color += (diffuse_color * diffuse_strength + specular_color * specular_strength) * light_color * light_attenuation;
+            light_color *= light_attenuation;
+            specular_strength = pow(max(dot(view_direction, reflection_direction), 0), shininess) * min(shininess, min_shininess) / min_shininess;
+            diffuse_strength = max(dot(normal, -spot_direction), 0);
         }
+        color_base += diffuse_color * diffuse_strength * light_color;
+        color_overlay += specular_color * specular_strength * light_color;
     }
-    vec4 model_color = vec4(color * opacity, opacity);
-    fragment_color = mix(model_color, fog_color, fog_alpha);
+    fragment_color = vec4(mix(color_base, fog_color, fog_alpha) * opacity + color_overlay * (1 - fog_alpha), opacity);
 }
