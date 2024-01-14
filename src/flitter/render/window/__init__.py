@@ -17,12 +17,16 @@ from .glsl import TemplateLoader
 from ...model import Vector
 
 
-def value_split(value, n, m):
-    if m == 1:
-        return value if n == 1 else list(value)
-    elif n == 1:
-        return tuple(value)
-    return [tuple(value[i * m:(i + 1) * m]) for i in range(n)]
+def set_uniform_vector(uniform, vector):
+    dtype = {'f': float, 'd': float, 'i': int, 'I': int}[uniform.fmt[-1]]
+    n, m = uniform.array_length, uniform.dimension
+    if (value := vector.match(n * m, dtype)) is not None:
+        if m == 1:
+            uniform.value = value if n == 1 else list(value)
+        elif n == 1:
+            uniform.value = tuple(value)
+        else:
+            uniform.value = [tuple(value[i*m:(i+1)*m]) for i in range(n)]
 
 
 ColorFormat = namedtuple('ColorFormat', ('moderngl_dtype', 'gl_format'))
@@ -289,9 +293,7 @@ class ProgramNode(SceneNode):
                     elif name in kwargs:
                         member.value = kwargs[name]
                     elif name in node:
-                        dtype = {'f': float, 'd': float, 'i': int, 'I': int}[member.fmt[-1]]
-                        if (value := node.get(name, member.array_length * member.dimension, dtype)) is not None:
-                            member.value = value_split(value, member.array_length, member.dimension)
+                        set_uniform_vector(member, node[name])
             self.glctx.enable_direct(GL_FRAMEBUFFER_SRGB)
             self.framebuffer.clear()
             self._rectangle.render()

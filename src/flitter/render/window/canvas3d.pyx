@@ -13,7 +13,7 @@ import numpy as np
 
 from libc.math cimport cos, log2, sqrt
 
-from . import SceneNode, COLOR_FORMATS
+from . import SceneNode, COLOR_FORMATS, set_uniform_vector
 from ... import name_patch
 from ...clock import system_clock
 from ...model cimport Node, Vector, Matrix44, null_, true_
@@ -123,6 +123,7 @@ cdef class RenderSet:
     cdef str composite
     cdef object vertex_shader_template
     cdef object fragment_shader_template
+    cdef Node node
 
     cdef void set_blend(self, glctx):
         glctx.blend_equation = moderngl.FUNC_ADD
@@ -290,6 +291,7 @@ cdef void collect(Node node, Matrix44 model_matrix, Material material, RenderSet
         fragment_shader = node.get_str('fragment', None)
         render_set.vertex_shader_template = Template(vertex_shader) if vertex_shader is not None else StandardVertexTemplate
         render_set.fragment_shader_template = Template(fragment_shader) if fragment_shader is not None else StandardFragmentTemplate
+        render_set.node = node
         render_sets.append(render_set)
         child = node.first_child
         while child is not None:
@@ -407,6 +409,13 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, bint orthographic, Ve
         shaders[source] = shader
     if shader is False:
         return
+    cdef str name
+    cdef Vector value
+    for name, value in render_set.node._attributes.items():
+        if name in shader:
+            member = shader[name]
+            if isinstance(member, moderngl.Uniform):
+                set_uniform_vector(member, value)
     shader['pv_matrix'] = pv_matrix
     shader['orthographic'] = orthographic
     shader['view_position'] = viewpoint
