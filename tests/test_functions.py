@@ -266,6 +266,7 @@ class TestTrig(unittest.TestCase):
         self.assertTrue(all_isclose(angle(self.a, self.c),
                                     Vector([math.atan2(2, 1)/Tau, math.atan2(2, 2)/Tau, math.atan2(2, 3)/Tau, math.atan2(2, 4)/Tau])))
 
+
 class TestStringFuncs(unittest.TestCase):
     def test_ord(self):
         self.assertEqual(ordv(null), null)
