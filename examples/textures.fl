@@ -1,9 +1,11 @@
 
 -- Texture mapping
 --
--- Spheres are mapped to a texture with the Mercator projection. This is a
--- pretty dumb projection, but it's simple to understand and easy to find
+-- Spheres are mapped to a texture with the equirectangular projection. This is
+-- a pretty dumb projection, but it's simple to understand and easy to find
 -- appropriate images.
+--
+-- https://en.wikipedia.org/wiki/Equirectangular_projection
 --
 -- The relative sizes and orbit timings are roughly correct, but the moon is
 -- not really anywhere near this close to Earth.
