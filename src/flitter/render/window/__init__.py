@@ -451,7 +451,6 @@ class Window(ProgramNode):
             self.glctx = moderngl.create_context(self.GL_VERSION[0] * 100 + self.GL_VERSION[1] * 10)
             self.glctx.gc_mode = 'context_gc'
             self.glctx.extra = {}
-            self.glctx.enable_direct(GL_FRAMEBUFFER_SRGB)
             logger.debug("{} opened on screen {}", self.name, screen)
             logger.debug("OpenGL info: {GL_RENDERER} {GL_VERSION}", **self.glctx.info)
             logger.trace("{!r}", self.glctx.info)
