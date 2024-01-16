@@ -129,13 +129,14 @@ void main() {
             float NdotL = max(dot(N, L), 0);
             float NdotV = max(dot(N, V), 0);
             float NdotH = max(dot(N, H), 0);
+            float HdotV = max(dot(H, V), 0);
             vec3 radiance = light_color * attenuation * NdotL;
             float a = roughness * roughness;
             float a2 = a * a;
             float denom = NdotH * NdotH * (a2-1) + 1;
             float NDF = a2 / (denom * denom);
             float G = geometrySchlickGGX(NdotV, roughness) * geometrySchlickGGX(NdotL, roughness);
-            vec3 F = F0 + (1 - F0) * pow(1 - NdotH, 5);
+            vec3 F = F0 + (1 - F0) * pow(1 - HdotV, 5);
             vec3 diffuse = (1 - F) * (1 - metal) * albedo;
             vec3 specular = (NDF * G * F) / (4 * NdotV * NdotL + 0.0001);
             diffuse_color += diffuse * radiance;
