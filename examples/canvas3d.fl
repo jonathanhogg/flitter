@@ -3,9 +3,14 @@
 --
 -- * All angles are in turns
 -- * There is no support (currently) for shadow-casting
--- * Similarly, there is no support for reflections (beyond light sources and material shininess)
+-- * Similarly, there is no support for reflections (beyond light sources and
+--   material specular reflections)
 -- * Point and spot light sources have inverse-squared fall-off in intensity
--- * Add `flat=true` to a primitive/model to enable flat face-shading (costly on models with lots of vertices)
+-- * Material shine can be controlled by either PBR `roughness`, which should be
+--   in the range (0,1], or Phong-like `shininess` in the range [0,∞).
+-- * `transparency` can be used to create partially or fully transparent
+--   materials which *will not* refract light, but will have specular
+--   reflections
 
 %pragma tempo 60
 
@@ -16,7 +21,9 @@ let SIZE=1920;1080
 !window size=SIZE colorbits=16 vsync=true
     @bloom_filter radius=10
         !canvas3d samples=4 viewpoint=0;150;-750 focus=0;100;0 up=0;1;0 fov=60/360 near=1 far=1500 \
-                  fog_color=0;0;0.02 fog_min=0 fog_max=1500
+                  fog_color=0;0;0.02 fog_min=0 fog_max=1500 \
+                  fragment=read('../src/flitter/render/window/glsl/standard_lighting.frag') \
+                  vertex=read('../src/flitter/render/window/glsl/standard_lighting.vert')
             -- Ambient (directionless) light source:
             !light color=0;0;0.1
             -- Directional light source:
@@ -24,7 +31,7 @@ let SIZE=1920;1080
             -- Spotlight:
             !light color=500k;0;0 position=1050;1000;0 direction=-1;-1;0 inner=5/360 outer=20/360
             -- Ground and pedestal:
-            !material color=0.1 shininess=100
+            !material color=0.1 roughness=0.3
                 !cylinder size=2000;2000;1 rotation=0.25;0;0
                 !cylinder size=100;100;20 rotation=0.25;0;0
             !transform translate=0;100;0
@@ -38,7 +45,8 @@ let SIZE=1920;1080
                 for i in ..n
                     !transform rotate_x=sin(beat/25)*0.02 rotate_y=beat/9+i/n translate=150+150*sine(beat/16);0;0
                         let c=hsv(i/n;1;1)
+                        -- Use `emissive` to make the spheres glow:
                         !material emissive=c*2
                             !sphere size=15
-                        -- Point light source:
+                        -- Place a point light source inside each sphere:
                         !light color=c*5k position=0
