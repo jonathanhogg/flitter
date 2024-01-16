@@ -40,13 +40,6 @@ uniform sampler2D emissive_texture;
 uniform sampler2D transparency_texture;
 
 
-float geometrySchlickGGX(float NdotV, float roughness) {
-    float r = roughness + 1;
-    float k = (r*r) / 8;
-    return NdotV / (NdotV * (1 - k) + k);
-}
-
-
 void main() {
     vec3 V;
     float view_distance;
@@ -135,7 +128,9 @@ void main() {
             float a2 = a * a;
             float denom = NdotH * NdotH * (a2-1) + 1;
             float NDF = a2 / (denom * denom);
-            float G = geometrySchlickGGX(NdotV, roughness) * geometrySchlickGGX(NdotL, roughness);
+            float r = roughness + 1;
+            float k = (r*r) / 8;
+            float G = (NdotV / (NdotV * (1 - k) + k)) * (NdotL / (NdotL * (1 - k) + k));
             vec3 F = F0 + (1 - F0) * pow(1 - HdotV, 5);
             vec3 diffuse = (1 - F) * (1 - metal) * albedo;
             vec3 specular = (NDF * G * F) / (4 * NdotV * NdotL + 0.0001);
