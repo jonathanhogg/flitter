@@ -92,13 +92,17 @@ cdef class Material:
             return self
         cdef Material material = Material.__new__(Material)
         material.albedo = node.get_fvec('color', 3, self.albedo)
-        material.ior = node.get_float('ior', 1.5)
-        material.metal = node.get_float('metal', self.metal)
-        cdef double shininess = node.get_float('shininess', (4 / self.roughness - 4)**2)
-        material.roughness = node.get_float('roughness', 4 / (4 + sqrt(shininess)))
-        material.occlusion = node.get_float('occlusion', self.occlusion)
+        material.ior = max(1, node.get_float('ior', 1.5))
+        cdef double shininess = max(0, node.get_float('shininess', (5 / self.roughness - 5)**2))
+        material.roughness = min(max(0, node.get_float('roughness', 5 / (5 + sqrt(shininess)))), 1)
+        cdef Vector specular = node.get_fvec('specular', 3, None)
+        material.metal = min(max(0, node.get_float('metal', self.metal)), 1)
+        if specular is not None and material.roughness < 1 and material.metal == 0:
+            material.metal = min(max(0, sqrt(specular.sub(material.albedo).truediv(specular.add(material.albedo)).squared_sum() / 3)), 1)
+            material.albedo = specular.add(material.albedo)
+        material.occlusion = min(max(0, node.get_float('occlusion', self.occlusion)), 1)
         material.emissive = node.get_fvec('emissive', 3, self.emissive)
-        material.transparency = node.get_float('transparency', self.transparency)
+        material.transparency = min(max(0, node.get_float('transparency', self.transparency)), 1)
         if self.textures is not None:
             albedo_id = node.get_str('texture_id', self.textures.albedo_id)
             metal_id = node.get_str('metal_texture_id', self.textures.metal_id)
