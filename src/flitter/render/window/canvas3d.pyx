@@ -76,6 +76,7 @@ cdef class Textures:
 
 cdef class Material:
     cdef Vector albedo
+    cdef double ior
     cdef double metal
     cdef double roughness
     cdef double occlusion
@@ -91,6 +92,7 @@ cdef class Material:
             return self
         cdef Material material = Material.__new__(Material)
         material.albedo = node.get_fvec('color', 3, self.albedo)
+        material.ior = node.get_float('ior', 1.5)
         material.metal = node.get_float('metal', self.metal)
         cdef double shininess = node.get_float('shininess', (4 / self.roughness - 4)**2)
         material.roughness = node.get_float('roughness', 4 / (4 + sqrt(shininess)))
@@ -479,7 +481,7 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, bint orthographic, Ve
         has_transparency_texture = textures is not None and textures.transparency_id is not None
         n = len(instances)
         matrices = view.array((n, 16), 4, 'f')
-        materials = view.array((n, 10), 4, 'f')
+        materials = view.array((n, 11), 4, 'f')
         k = 0
         if render_set.depth_test:
             zs_array = np.empty(n)
@@ -504,17 +506,18 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, bint orthographic, Ve
                 for j in range(3):
                     dest[j] = material.albedo.numbers[j]
                     dest[j+3] = material.emissive.numbers[j]
-                dest[6] = material.metal
-                dest[7] = material.roughness
-                dest[8] = material.occlusion
-                dest[9] = material.transparency
+                dest[6] = material.ior
+                dest[7] = material.metal
+                dest[8] = material.roughness
+                dest[9] = material.occlusion
+                dest[10] = material.transparency
                 k += 1
         dispatch_instances(glctx, objects, shader, model, k, matrices, materials, textures, references)
     if transparent_objects:
         n = len(transparent_objects)
         transparent_objects.sort(key=fst)
         matrices = view.array((n, 16), 4, 'f')
-        materials = view.array((n, 10), 4, 'f')
+        materials = view.array((n, 11), 4, 'f')
         k = 0
         for i, transparent_object in enumerate(transparent_objects):
             model = transparent_object[1]
@@ -528,10 +531,11 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, bint orthographic, Ve
             for j in range(3):
                 dest[j] = material.albedo.numbers[j]
                 dest[j+3] = material.emissive.numbers[j]
-            dest[6] = material.metal
-            dest[7] = material.roughness
-            dest[8] = material.occlusion
-            dest[9] = material.transparency
+            dest[6] = material.ior
+            dest[7] = material.metal
+            dest[8] = material.roughness
+            dest[9] = material.occlusion
+            dest[10] = material.transparency
             k += 1
             if i == n-1 or (<tuple>transparent_objects[i+1])[1] is not model:
                 dispatch_instances(glctx, objects, shader, model, k, matrices, materials, material.textures, references)
@@ -622,7 +626,7 @@ cdef void dispatch_instances(glctx, dict objects, shader, Model model, int count
     materials_buffer = glctx.buffer(materials)
     buffers = [(vertex_buffer, '3f 3f 2f', 'model_position', 'model_normal', 'model_uv'),
                (matrices_buffer, '16f/i', 'model_matrix'),
-               (materials_buffer, '3f 3f 1f 1f 1f 1f/i', 'material_albedo', 'material_emissive', 'material_metal', 'material_roughness', 'material_occlusion', 'material_transparency')]
+               (materials_buffer, '3f 3f 1f 1f 1f 1f 1f/i', 'material_albedo', 'material_emissive', 'material_ior', 'material_metal', 'material_roughness', 'material_occlusion', 'material_transparency')]
     render_array = glctx.vertex_array(shader, buffers, index_buffer=index_buffer, mode=moderngl.TRIANGLES)
     render_array.render(instances=count)
     if samplers is not None:

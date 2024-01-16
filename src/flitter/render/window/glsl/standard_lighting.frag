@@ -7,6 +7,7 @@ in vec3 world_position;
 in vec3 world_normal;
 in vec2 texture_uv;
 flat in vec3 fragment_albedo;
+flat in float fragment_ior;
 flat in float fragment_metal;
 flat in float fragment_roughness;
 flat in float fragment_occlusion;
@@ -99,7 +100,8 @@ void main() {
     vec3 diffuse_color = vec3(0);
     vec3 specular_color = emissive;
     vec3 N = normalize(world_normal);
-    vec3 F0 = mix(vec3(0.04), albedo, metal);
+    float rf0 = (fragment_ior - 1) / (fragment_ior + 1);
+    vec3 F0 = mix(vec3(rf0*rf0), albedo, metal);
     for (int i = 0; i < nlights * 4; i += 4) {
         int light_type = int(lights[i].x);
         float inner_cone = lights[i].y;
