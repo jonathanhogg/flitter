@@ -93,7 +93,7 @@ cdef class Material:
         cdef Material material = Material.__new__(Material)
         material.albedo = node.get_fvec('color', 3, self.albedo)
         material.ior = max(1, node.get_float('ior', 1.5))
-        cdef double shininess = max(0, node.get_float('shininess', (10 / self.roughness - 11)**2))
+        cdef double shininess = max(0, node.get_float('shininess', (10 / self.roughness - 10)**2))
         material.roughness = min(max(0, node.get_float('roughness', 10 / (10 + sqrt(shininess)))), 1)
         cdef Vector specular = node.get_fvec('specular', 3, One3)
         material.metal = min(max(0, node.get_float('metal', self.metal)), 1)
@@ -102,7 +102,7 @@ cdef class Material:
             k = Vector.__new__(Vector, 0.001)
             material.metal = min(max(0, k.add(specular.sub(material.albedo)).truediv(k.add(specular.add(material.albedo))).squared_sum() / 3), 1)
             k = Vector.__new__(Vector, material.metal)
-            material.albedo = material.albedo.mul(true_.sub(k)).mul_add(k, specular.truediv(Vector.__new__(Vector, 10)))
+            material.albedo = material.albedo.mul(true_.sub(k)).mul_add(k, specular.truediv(Vector.__new__(Vector, 50)))
             material.roughness = material.roughness * material.roughness
         material.occlusion = min(max(0, node.get_float('occlusion', self.occlusion)), 1)
         material.emissive = node.get_fvec('emissive', 3, self.emissive)

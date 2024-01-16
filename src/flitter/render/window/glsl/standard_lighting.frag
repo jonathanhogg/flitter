@@ -133,7 +133,7 @@ void main() {
             float G = (NdotV / (NdotV * (1 - k) + k)) * (NdotL / (NdotL * (1 - k) + k));
             vec3 F = F0 + (1 - F0) * pow(1 - HdotV, 5);
             vec3 diffuse = (1 - F) * (1 - metal) * albedo;
-            vec3 specular = (NDF * G * F) / (4 * NdotV * NdotL + 0.0001);
+            vec3 specular = (NDF * G * F) / (4 * NdotV * NdotL + 1e-6);
             diffuse_color += diffuse * radiance;
             specular_color += specular * radiance;
         }
