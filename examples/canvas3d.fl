@@ -21,9 +21,7 @@ let SIZE=1920;1080
 !window size=SIZE colorbits=16 vsync=true
     @bloom_filter radius=10
         !canvas3d samples=4 viewpoint=0;150;-750 focus=0;100;0 up=0;1;0 fov=60/360 near=1 far=1500 \
-                  fog_color=0;0;0.02 fog_min=0 fog_max=1500 \
-                  fragment=read('../src/flitter/render/window/glsl/standard_lighting.frag') \
-                  vertex=read('../src/flitter/render/window/glsl/standard_lighting.vert')
+                  fog_color=0;0;0.02 fog_min=0 fog_max=1500
             -- Ambient (directionless) light source:
             !light color=0;0;0.1
             -- Directional light source:
@@ -31,7 +29,7 @@ let SIZE=1920;1080
             -- Spotlight:
             !light color=500k;0;0 position=1050;1000;0 direction=-1;-1;0 inner=5/360 outer=20/360
             -- Ground and pedestal:
-            !material color=0.1 roughness=0.3
+            !material color=0.1 shininess=100
                 !cylinder size=2000;2000;1 rotation=0.25;0;0
                 !cylinder size=100;100;20 rotation=0.25;0;0
             !transform translate=0;100;0
