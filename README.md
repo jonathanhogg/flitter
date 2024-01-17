@@ -3,37 +3,39 @@ with trails moving outwards from the centre of the screen.](docs/header.jpg)
 
 # flitter
 
-**flitter** is a [2D and 3D visuals language](/docs/language.md) and engine
-designed for live performances. While **flitter** supports basic live-coding
-(live reload of source files while maintaining system state), it is designed
-primarily for driving via a MIDI surface.
+**flitter** is a [functional programming language](/docs/language.md) and 2D/3D
+visuals engine designed for live performances. While **flitter** supports
+live-coding (live reload of source files while maintaining system state), it is
+designed primarily for driving via a MIDI surface.
 
 The engine that runs the language is capable of:
 
 - 2D drawing (loosely based on the HTML canvas/SVG model)
 - 3D rendering of primitive shapes and external triangular mesh models (in a
 bunch of formats including OBJ and STL); ambient, directional, point and
-spot- light sources with (currently shadowless) Phong lighting/shading; simple
-fog; perspective and orthographic projections; texture-mapping with the output
-of other visual units (like a drawing canvas or a video)
+spot- light sources with (currently shadowless) [PBR](https://en.wikipedia.org/wiki/Physically_based_rendering)
+material shading; simple fog; perspective and orthographic projections;
+texture-mapping with the output of other visual units (like a drawing canvas or
+a video)
 - simulating simple [physical particle systems](/docs/physics.md) (including
-gravity, electrostatic charge, inertia, drag and collisions) and hooking the
-results up to drawing instructions
+spring/rod/rubber-band constraints, gravity, electrostatic charge, inertia,
+drag, barriers and collisions) and then hooking the simulation output up to
+drawing instructions
 - playing videos at arbitrary speeds (including in reverse, although video will
 stutter if it makes extensive use of P-frames)
 - running GLSL shaders as stacked image generators and filters, with live
-manipulation of uniforms and live reload/recompilation of source
+manipulation of uniforms and live reload of source
 - compositing all of the above and rendering to one or more windows
-- saving output to image and video files
+- saving rendering output to image and video files
 - driving arbitrary DMX fixtures via a USB DMX interface (currently via an
 Entec-compatible interface or my own crazy hand-built devices)
-- driving a LaserCube plugged in over USB (other lasers probably easy to
+- driving a LaserCube plugged in over USB (other lasers probably easy-ish to
 support)
 - taking live inputs from Ableton Push 2 or Behringer X-Touch mini MIDI
 surfaces (other controllers relatively easy to add)
 
 Fundamentally, the system repeatedly evaluates a program with a beat counter
-and the current state. The output of the program is a tree of nodes that
+and the current system state. The output of the program is a tree of nodes that
 describe visuals to be rendered, systems to be simulated and interfaces to be
 made available to the user. A series of renderers turn the nodes describing
 the visuals into 2D and 3D drawing commands (or DMX packets, or laser DAC
@@ -42,12 +44,12 @@ DOM - something akin to React.
 
 ## Installing/running
 
-**flitter** is implemented in a mix of Python and Cython. I develop and use it
-exclusively on Intel macOS. I have done some limited testing on an Intel Ubuntu
-VM and it seemed to run largely as expected. I've not heard of anyone trying it
-on Windows yet, but there's no particular reason why it shouldn't work. If you
-have success or otherwise on another platform please let me know / raise an
-issue. It requires OpenGL 3.3 or above.
+**flitter** is implemented in a mix of Python and Cython and requires OpenGL
+3.3 or above. I develop and use it exclusively on Intel macOS. I have done some
+limited testing on an Intel Ubuntu VM and on Apple Silicon and it seems to run
+fine on both of those platforms. I've not heard of anyone trying it on Windows
+yet, but there's no particular reason why it shouldn't work. If you have success
+or otherwise on another platform please let me know / raise an issue.
 
 If you want to try it out without cloning the repo, then you can install and
 try it **right now** with:
@@ -62,8 +64,8 @@ and then:
 flitter path/to/some/flitter/script.fl
 ```
 
-I'd recommend doing this in a Python virtual env, but you do you. Sadly, you
-won't have the examples handy doing it this way.
+I'd recommend doing this in a Python [virtual env](https://docs.python.org/3/library/venv.html),
+but you do you. Sadly, you won't have the examples handy doing it this way.
 
 If you clone the repo, then you can install from the top level directory with:
 
