@@ -1539,6 +1539,34 @@ cdef class Matrix44(Vector):
                 result_numbers[3*i+j] = numbers[4*i+j]
         return result
 
+    cpdef Matrix33 inverse_transpose_matrix33(self):
+        cdef double* numbers = self.numbers
+        cdef double s0 = numbers[0]*numbers[5] - numbers[4]*numbers[1]
+        cdef double s1 = numbers[0]*numbers[6] - numbers[4]*numbers[2]
+        cdef double s2 = numbers[0]*numbers[7] - numbers[4]*numbers[3]
+        cdef double s3 = numbers[1]*numbers[6] - numbers[5]*numbers[2]
+        cdef double s4 = numbers[1]*numbers[7] - numbers[5]*numbers[3]
+        cdef double s5 = numbers[2]*numbers[7] - numbers[6]*numbers[3]
+        cdef double c5 = numbers[10]*numbers[15] - numbers[14]*numbers[11]
+        cdef double c4 = numbers[9]*numbers[15] - numbers[13]*numbers[11]
+        cdef double c3 = numbers[9]*numbers[14] - numbers[13]*numbers[10]
+        cdef double c2 = numbers[8]*numbers[15] - numbers[12]*numbers[11]
+        cdef double c1 = numbers[8]*numbers[14] - numbers[12]*numbers[10]
+        cdef double c0 = numbers[8]*numbers[13] - numbers[12]*numbers[9]
+        cdef double invdet = 1 / (s0*c5 - s1*c4 + s2*c3 + s3*c2 - s4*c1 + s5*c0)
+        cdef Matrix33 result = Matrix33.__new__(Matrix33)
+        cdef double* result_numbers = result.numbers
+        result_numbers[0] = (numbers[5]*c5 - numbers[6]*c4 + numbers[7]*c3) * invdet
+        result_numbers[3] = (-numbers[1]*c5 + numbers[2]*c4 - numbers[3]*c3) * invdet
+        result_numbers[6] = (numbers[13]*s5 - numbers[14]*s4 + numbers[15]*s3) * invdet
+        result_numbers[1] = (-numbers[4]*c5 + numbers[6]*c2 - numbers[7]*c1) * invdet
+        result_numbers[4] = (numbers[0]*c5 - numbers[2]*c2 + numbers[3]*c1) * invdet
+        result_numbers[7] = (-numbers[12]*s5 + numbers[14]*s2 - numbers[15]*s1) * invdet
+        result_numbers[2] = (numbers[4]*c4 - numbers[5]*c2 + numbers[7]*c0) * invdet
+        result_numbers[5] = (-numbers[0]*c4 + numbers[1]*c2 - numbers[3]*c0) * invdet
+        result_numbers[8] = (numbers[12]*s4 - numbers[13]*s2 + numbers[15]*s0) * invdet
+        return result
+
     def __repr__(self):
         cdef list rows = []
         cdef double* numbers = self.numbers

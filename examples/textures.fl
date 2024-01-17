@@ -9,28 +9,39 @@
 --
 -- The relative sizes and orbit timings are roughly correct, but the moon is
 -- not really anywhere near this close to Earth.
+--
+-- The star sphere is inverted so that that inside surface of it is rendered.
+-- It is also placed in a separate group so that it can be lit with a single
+-- ambient light.
 
 %pragma tempo 60
 
 import bloom_filter from 'bloom.fl'
 
-let SIZE=1920;1080
-    days=beat/3
+let SIZE=(1920;1080)*2
+    days=beat/60
 
 !window size=SIZE
-    @bloom_filter radius=hypot(SIZE)/120
-        !image filename='images/stars.jpg' id=:stars hidden=true
-        !image filename='images/earth.jpg' id=:earth hidden=true
-        !image filename='images/earth-night.jpg' id=:earth_night hidden=true
-        !image filename='images/earth-reflection.jpg' id=:earth_reflection hidden=true
-        !image filename='images/moon.jpg' id=:moon hidden=true
+    @bloom_filter radius=hypot(SIZE)/100
+        !image id=:stars filename='images/stars.jpg' hidden=true
+        !image id=:earth filename='images/earth.jpg' hidden=true
+        !image id=:earth_night filename='images/earth-night.jpg' hidden=true
+        !image id=:earth_reflection filename='images/earth-reflection.jpg' hidden=true
+        !image id=:earth_cloudmap filename='images/earth-cloudmap.jpg' hidden=true
+        !image id=:earth_cloudmap_transparency filename='images/earth-cloudmap-transparency.jpg' hidden=true
+        !image id=:moon filename='images/moon.jpg' hidden=true
         !canvas3d samples=4 viewpoint=0;-25;0 up=0;0;1 near=1 far=150
-            !light color=0.01
-            !transform rotate_z=days/365.256
-                !light color=3 direction=1;0;0
-                !sphere size=100 invert=true emissive_texture_id=:stars
-            !transform rotate_y=23.44/360 rotate_z=days
-                !material shininess=10 emissive_texture_id=:earth_night texture_id=:earth specular_texture_id=:earth_reflection
-                    !sphere size=6.371 rotation=0;0;0.25
-            !transform rotate_y=-5.14/360 rotate_z=days/27.322 translate=20;0;0
-                !sphere size=1.7375 texture_id=:moon rotation=0;(5.14-6.68)/360;0
+            !group
+                !light color=1
+                !sphere size=100 invert=true texture_id=:stars rotation=0;0;days/365.256
+            !group
+                !light color=0.01
+                !transform rotate_z=days/365.256
+                    !light color=1.5 direction=1;0;0
+                !transform rotate_y=23.44/360 rotate_z=days
+                    !material texture_id=:earth emissive_texture_id=:earth_night roughness_texture_id=:earth_reflection
+                        !sphere segments=64 size=6.371 rotation=0;0;0.25
+                    !material texture_id=:earth_cloudmap transparency_texture_id=:earth_cloudmap_transparency
+                        !sphere segments=64 size=6.421 rotation=0;0;days/14 roughness=0.5
+                !transform rotate_y=-5.14/360 rotate_z=days/27.322 translate=20;0;0
+                    !sphere segments=64 size=1.7375 texture_id=:moon rotation=0;(5.14-6.68)/360;0

@@ -170,6 +170,12 @@ class TestMatrix44(unittest.TestCase):
         self.assertEqual(Matrix44().matrix33(), Matrix33())
         self.assertEqual(Matrix44(range(16)).matrix33(), [0, 1, 2, 4, 5, 6, 8, 9, 10])
 
+    def test_inverse_transpose_matrix33(self):
+        m = Matrix44.project(2, 1 / 6, 1, 3) @ \
+            Matrix44.look([1, 2, 3], [1, 2, 2], [-1, 0, 0]) @ \
+            Matrix44.scale([5, 6, -3])
+        self.assertTrue(all_isclose(m.inverse_transpose_matrix33(), m.inverse().transpose().matrix33()))
+
     def test_repr(self):
         self.assertEqual(repr(Matrix44()), """|   1.000   0.000   0.000   0.000 |
 |   0.000   1.000   0.000   0.000 |

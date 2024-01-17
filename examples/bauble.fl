@@ -4,7 +4,7 @@
 import bloom_filter from 'bloom.fl'
 
 let SIZE=1080;1080
-    N=150
+    N=120
     BASE=30
     LOOPS=2
 
@@ -19,6 +19,6 @@ let SIZE=1080;1080
                             length=beta(:size;i)[cycle]*1000*sine(cycle)
                             c=hsl(0.6+0.2*beta(:hue;i)[cycle];1;beta(:lightness;i)[cycle])
                         !transform rotate_z=beta(:rotx;i)[cycle] rotate_y=uniform(:roty;i)[cycle]
-                            !cone position=0;0;length/2 size=2;2;length color=c shininess=200
+                            !cone position=0;0;length/2 size=2;2;length color=c roughness=0.3
                             !sphere position=0;0;length size=2 emissive=c*2
                             !light color=c*5000 position=0;0;length

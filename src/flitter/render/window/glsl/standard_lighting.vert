@@ -4,26 +4,36 @@ in vec3 model_position;
 in vec3 model_normal;
 in vec2 model_uv;
 in mat4 model_matrix;
-in mat3 material_colors;
-in float material_shininess;
-in float material_transparency;
+in mat3 model_normal_matrix;
+
+in vec4 material_albedo;
+in vec3 material_emissive;
+in vec4 material_properties;
 
 out vec3 world_position;
 out vec3 world_normal;
-out vec2 uv;
-flat out mat3 colors;
-flat out float shininess;
-flat out float transparency;
+out vec2 texture_uv;
+
+flat out vec3 fragment_albedo;
+flat out float fragment_transparency;
+flat out vec3 fragment_emissive;
+flat out float fragment_ior;
+flat out float fragment_metal;
+flat out float fragment_roughness;
+flat out float fragment_occlusion;
 
 uniform mat4 pv_matrix;
 
 void main() {
     world_position = (model_matrix * vec4(model_position, 1)).xyz;
     gl_Position = pv_matrix * vec4(world_position, 1);
-    mat3 normal_matrix = mat3(transpose(inverse(model_matrix)));
-    world_normal = normal_matrix * model_normal;
-    uv = model_uv;
-    colors = material_colors;
-    shininess = material_shininess;
-    transparency = material_transparency;
+    world_normal = model_normal_matrix * model_normal;
+    texture_uv = model_uv;
+    fragment_albedo = material_albedo.rgb;
+    fragment_emissive = material_emissive;
+    fragment_ior = material_properties.x;
+    fragment_metal = material_properties.y;
+    fragment_roughness = material_properties.z;
+    fragment_occlusion = material_properties.w;
+    fragment_transparency = material_albedo.a;
 }

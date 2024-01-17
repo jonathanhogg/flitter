@@ -33,9 +33,9 @@ let bubble_radii=MIN_BUBBLE_RADIUS+(1+noise(:radii, i*NOISE_SCALE, NOISE_T))/2*(
             !canvas3d viewpoint=0;0;-1200 focus=0 near=1 far=2000 fov=60/360 samples=4
                 !light color=2;0;0
                 !light color=-1.9;0;0 direction=0;0;1
-                !sphere subdivisions=3 color=0.01 size=RADIUS position=$(:bubble;:centre) transparency=0.05
+                !sphere color=0.01 size=RADIUS position=$(:bubble;:centre) transparency=0.05
                 for i in ..NBUBBLES
-                    !sphere subdivisions=3 position=$(:bubble;i) color=bubble_brightness[i] size=bubble_radii[i]
+                    !sphere position=$(:bubble;i) color=bubble_brightness[i] size=bubble_radii[i]
 
     -- press the space bar to collapse the particles into the centre
     !key name=:space state=:collapse

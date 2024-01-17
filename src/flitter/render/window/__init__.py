@@ -38,7 +38,7 @@ COLOR_FORMATS = {
 }
 
 DEFAULT_LINEAR = False
-DEFAULT_COLORBITS = 8
+DEFAULT_COLORBITS = 16
 
 
 def get_scene_node_class(kind):

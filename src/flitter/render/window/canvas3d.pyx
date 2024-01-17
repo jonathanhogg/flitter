@@ -16,7 +16,7 @@ from libc.math cimport cos, log2, sqrt
 from . import SceneNode, COLOR_FORMATS, set_uniform_vector
 from ... import name_patch
 from ...clock import system_clock
-from ...model cimport Node, Vector, Matrix44, null_, true_
+from ...model cimport Node, Vector, Matrix44, Matrix33, null_, true_
 from .glsl import TemplateLoader
 from .models cimport Model, Box, Cylinder, Cone, Sphere, ExternalModel
 
@@ -29,8 +29,9 @@ cdef Vector Xaxis = Vector((1, 0, 0))
 cdef Vector Yaxis = Vector((0, 1, 0))
 cdef int DEFAULT_MAX_LIGHTS = 50
 cdef double Pi = 3.141592653589793
-cdef tuple MaterialAttributes = ('color', 'specular', 'emissive', 'shininess', 'transparency',
-                                 'texture_id', 'specular_texture_id', 'emissive_texture_id', 'transparency_texture_id')
+cdef tuple MaterialAttributes = ('color', 'metal', 'roughness', 'shininess', 'occlusion', 'emissive', 'transparency',
+                                 'texture_id', 'metal_texture_id', 'roughness_texture_id', 'occlusion_texture_id',
+                                 'emissive_texture_id', 'transparency_texture_id')
 
 cdef object StandardVertexTemplate = TemplateLoader.get_template("standard_lighting.vert")
 cdef object StandardFragmentTemplate = TemplateLoader.get_template("standard_lighting.frag")
@@ -53,26 +54,33 @@ cdef class Light:
 
 
 cdef class Textures:
-    cdef str diffuse_id
-    cdef str specular_id
+    cdef str albedo_id
+    cdef str metal_id
+    cdef str roughness_id
+    cdef str occlusion_id
     cdef str emissive_id
     cdef str transparency_id
 
     def __eq__(self, Textures other):
-        return other.diffuse_id == self.diffuse_id and \
-               other.specular_id == self.specular_id and \
+        return other.albedo_id == self.albedo_id and \
+               other.metal_id == self.metal_id and \
+               other.roughness_id == self.roughness_id and \
+               other.occlusion_id == self.occlusion_id and \
                other.emissive_id == self.emissive_id and \
                other.transparency_id == self.transparency_id
 
     def __hash__(self):
-        return hash(self.diffuse_id) ^ hash(self.specular_id) ^ hash(self.emissive_id) ^ hash(self.transparency_id)
+        return (hash(self.albedo_id) ^ hash(self.metal_id) ^ hash(self.roughness_id) ^ hash(self.occlusion_id) ^
+                hash(self.emissive_id) ^ hash(self.transparency_id))
 
 
 cdef class Material:
-    cdef Vector diffuse
-    cdef Vector specular
+    cdef Vector albedo
+    cdef double ior
+    cdef double metal
+    cdef double roughness
+    cdef double occlusion
     cdef Vector emissive
-    cdef double shininess
     cdef double transparency
     cdef Textures textures
 
@@ -83,26 +91,44 @@ cdef class Material:
         else:
             return self
         cdef Material material = Material.__new__(Material)
-        material.diffuse = node.get_fvec('color', 3, self.diffuse)
-        material.specular = node.get_fvec('specular', 3, self.specular)
+        material.albedo = node.get_fvec('color', 3, self.albedo)
+        material.ior = max(1, node.get_float('ior', 1.5))
+        cdef double shininess = max(0, node.get_float('shininess', (10 / self.roughness - 10)**2))
+        material.roughness = min(max(1e-6, node.get_float('roughness', 10 / (10 + sqrt(shininess)))), 1)
+        cdef Vector specular = node.get_fvec('specular', 3, One3)
+        material.metal = min(max(0, node.get_float('metal', self.metal)), 1)
+        cdef Vector k
+        if specular.ne(One3) is true_ and material.roughness < 1 and material.metal == 0:
+            k = Vector.__new__(Vector, 0.001)
+            material.metal = min(max(0, k.add(specular.sub(material.albedo)).truediv(k.add(specular.add(material.albedo))).squared_sum() / 3), 1)
+            k = Vector.__new__(Vector, material.metal)
+            material.albedo = material.albedo.mul(true_.sub(k)).mul_add(k, specular)
+            material.roughness = material.roughness ** 1.5
+        material.occlusion = min(max(0, node.get_float('occlusion', self.occlusion)), 1)
         material.emissive = node.get_fvec('emissive', 3, self.emissive)
-        material.shininess = node.get_float('shininess', self.shininess)
-        material.transparency = node.get_float('transparency', self.transparency)
+        material.transparency = min(max(0, node.get_float('transparency', self.transparency)), 1)
         if self.textures is not None:
-            diffuse_id = node.get_str('texture_id', self.textures.diffuse_id)
-            specular_id = node.get_str('specular_texture_id', self.textures.specular_id)
+            albedo_id = node.get_str('texture_id', self.textures.albedo_id)
+            metal_id = node.get_str('metal_texture_id', self.textures.metal_id)
+            roughness_id = node.get_str('roughness_texture_id', self.textures.roughness_id)
+            occlusion_id = node.get_str('occlusion_texture_id', self.textures.occlusion_id)
             emissive_id = node.get_str('emissive_texture_id', self.textures.emissive_id)
             transparency_id = node.get_str('transparency_texture_id', self.textures.transparency_id)
         else:
-            diffuse_id = node.get_str('texture_id', None)
-            specular_id = node.get_str('specular_texture_id', None)
+            albedo_id = node.get_str('texture_id', None)
+            metal_id = node.get_str('metal_texture_id', None)
+            roughness_id = node.get_str('roughness_texture_id', None)
+            occlusion_id = node.get_str('occlusion_texture_id', None)
             emissive_id = node.get_str('emissive_texture_id', None)
             transparency_id = node.get_str('transparency_texture_id', None)
         cdef Textures textures
-        if diffuse_id is not None or specular_id is not None or emissive_id is not None or transparency_id is not None:
+        if (albedo_id is not None or metal_id is not None or roughness_id is not None or occlusion_id is not None or
+                emissive_id is not None or transparency_id is not None):
             textures = Textures.__new__(Textures)
-            textures.diffuse_id = diffuse_id
-            textures.specular_id = specular_id
+            textures.albedo_id = albedo_id
+            textures.metal_id = metal_id
+            textures.roughness_id = roughness_id
+            textures.occlusion_id = occlusion_id
             textures.emissive_id = emissive_id
             textures.transparency_id = transparency_id
             material.textures = textures
@@ -208,8 +234,9 @@ def draw(Node node, tuple size, glctx, dict objects, dict references):
         pv_matrix = Matrix44._project(width/height, fov, near, far)
     pv_matrix = pv_matrix.mmul(Matrix44._look(viewpoint, focus, up))
     cdef Material material = Material.__new__(Material)
-    material.diffuse = Zero3
-    material.specular = One3
+    material.albedo = Zero3
+    material.roughness = 1
+    material.occlusion = 1
     material.emissive = Zero3
     cdef Matrix44 model_matrix = Matrix44.__new__(Matrix44)
     cdef list render_sets = []
@@ -226,7 +253,7 @@ cdef void collect(Node node, Matrix44 model_matrix, Material material, RenderSet
     cdef Light light
     cdef list lights, instances
     cdef Vector color, position, direction, emissive, diffuse, specular
-    cdef double shininess, inner, outer
+    cdef double inner, outer
     cdef Node child
     cdef str filename, vertex_shader, fragment_shader
     cdef Model model
@@ -312,7 +339,7 @@ cdef void collect(Node node, Matrix44 model_matrix, Material material, RenderSet
                 light.inner_cone = cos(inner * Pi)
                 light.outer_cone = cos(outer * Pi)
                 light.position = model_matrix.vmul(position)
-                light.direction = model_matrix.inverse().transpose().matrix33().vmul(direction).normalize()
+                light.direction = model_matrix.inverse_transpose_matrix33().vmul(direction).normalize()
             elif position.length:
                 light.type = LightType.Point
                 light.position = model_matrix.vmul(position)
@@ -320,7 +347,7 @@ cdef void collect(Node node, Matrix44 model_matrix, Material material, RenderSet
             elif direction.as_bool():
                 light.type = LightType.Directional
                 light.position = None
-                light.direction = model_matrix.inverse().transpose().matrix33().vmul(direction).normalize()
+                light.direction = model_matrix.inverse_transpose_matrix33().vmul(direction).normalize()
             else:
                 light.type = LightType.Ambient
                 light.position = None
@@ -375,7 +402,7 @@ def fst(tuple ab):
 cdef void render(RenderSet render_set, Matrix44 pv_matrix, bint orthographic, Vector viewpoint, Vector focus,
                  double fog_min, double fog_max, Vector fog_color, float fog_curve, glctx, dict objects, dict references):
     cdef list instances, lights, buffers
-    cdef cython.float[:, :] matrices, materials, lights_data
+    cdef cython.float[:, :] instances_data, lights_data
     cdef Material material
     cdef Light light
     cdef Model model
@@ -386,6 +413,7 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, bint orthographic, Ve
     cdef float* dest
     cdef Instance instance
     cdef Matrix44 matrix
+    cdef Matrix33 normal_matrix
     cdef bint has_transparency_texture
     cdef tuple transparent_object
     cdef list transparent_objects = []
@@ -424,8 +452,10 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, bint orthographic, Ve
     shader['fog_max'] = fog_max
     shader['fog_color'] = fog_color
     shader['fog_curve'] = fog_curve
-    shader['use_diffuse_texture'] = False
-    shader['use_specular_texture'] = False
+    shader['use_albedo_texture'] = False
+    shader['use_metal_texture'] = False
+    shader['use_roughness_texture'] = False
+    shader['use_occlusion_texture'] = False
     shader['use_emissive_texture'] = False
     shader['use_transparency_texture'] = False
     lights_data = view.array((render_set.max_lights, 12), 4, 'f')
@@ -459,8 +489,7 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, bint orthographic, Ve
     for (model, textures), instances in render_set.instances.items():
         has_transparency_texture = textures is not None and textures.transparency_id is not None
         n = len(instances)
-        matrices = view.array((n, 16), 4, 'f')
-        materials = view.array((n, 11), 4, 'f')
+        instances_data = view.array((n, 36), 4, 'f')
         k = 0
         if render_set.depth_test:
             zs_array = np.empty(n)
@@ -474,27 +503,33 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, bint orthographic, Ve
         for i in indices:
             instance = instances[i]
             material = instance.material
-            if material.shininess > 0 or material.transparency < 1 or has_transparency_texture:
-                if (material.transparency > 0 or has_transparency_texture) and render_set.depth_test:
-                    transparent_objects.append((-zs[i], model, instance))
-                else:
-                    src = instance.model_matrix.numbers
-                    dest = &matrices[k, 0]
-                    for j in range(16):
-                        dest[j] = src[j]
-                    dest = &materials[k, 0]
-                    for j in range(3):
-                        dest[j] = material.diffuse.numbers[j]
-                        dest[j+3] = material.specular.numbers[j]
-                        dest[j+6] = material.emissive.numbers[j]
-                    dest[9] = material.shininess
-                    dest[10] = material.transparency
-                    k += 1
-        dispatch_instances(glctx, objects, shader, model, k, matrices, materials, textures, references)
+            if (material.transparency > 0 or has_transparency_texture) and render_set.depth_test:
+                transparent_objects.append((-zs[i], model, instance))
+            else:
+                src = instance.model_matrix.numbers
+                dest = &instances_data[k, 0]
+                for j in range(16):
+                    dest[j] = src[j]
+                normal_matrix = instance.model_matrix.inverse_transpose_matrix33()
+                src = normal_matrix.numbers
+                dest = &instances_data[k, 16]
+                for j in range(9):
+                    dest[j] = src[j]
+                dest = &instances_data[k, 25]
+                for j in range(3):
+                    dest[j] = material.albedo.numbers[j]
+                    dest[j+4] = material.emissive.numbers[j]
+                dest[3] = material.transparency
+                dest[7] = material.ior
+                dest[8] = material.metal
+                dest[9] = material.roughness
+                dest[10] = material.occlusion
+                k += 1
+        dispatch_instances(glctx, objects, shader, model, k, instances_data, textures, references)
     if transparent_objects:
         n = len(transparent_objects)
         transparent_objects.sort(key=fst)
-        matrices = view.array((n, 16), 4, 'f')
+        matrices = view.array((n, 25), 4, 'f')
         materials = view.array((n, 11), 4, 'f')
         k = 0
         for i, transparent_object in enumerate(transparent_objects):
@@ -502,27 +537,33 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, bint orthographic, Ve
             instance = transparent_object[2]
             material = instance.material
             src = instance.model_matrix.numbers
-            dest = &matrices[k, 0]
+            dest = &instances_data[k, 0]
             for j in range(16):
                 dest[j] = src[j]
-            dest = &materials[k, 0]
+            normal_matrix = instance.model_matrix.inverse_transpose_matrix33()
+            src = normal_matrix.numbers
+            dest = &instances_data[k, 16]
+            for j in range(9):
+                dest[j] = src[j]
+            dest = &instances_data[k, 25]
             for j in range(3):
-                dest[j] = material.diffuse.numbers[j]
-                dest[j+3] = material.specular.numbers[j]
-                dest[j+6] = material.emissive.numbers[j]
-            dest[9] = material.shininess
-            dest[10] = material.transparency
+                dest[j] = material.albedo.numbers[j]
+                dest[j+4] = material.emissive.numbers[j]
+            dest[3] = material.transparency
+            dest[7] = material.ior
+            dest[8] = material.metal
+            dest[9] = material.roughness
+            dest[10] = material.occlusion
             k += 1
             if i == n-1 or (<tuple>transparent_objects[i+1])[1] is not model:
-                dispatch_instances(glctx, objects, shader, model, k, matrices, materials, material.textures, references)
+                dispatch_instances(glctx, objects, shader, model, k, instances_data, material.textures, references)
                 k = 0
         if k:
-            dispatch_instances(glctx, objects, shader, model, k, matrices, materials, material.textures, references)
+            dispatch_instances(glctx, objects, shader, model, k, instances_data, material.textures, references)
     glctx.disable(flags)
 
 
-cdef void dispatch_instances(glctx, dict objects, shader, Model model, int count, cython.float[:, :] matrices,
-                             cython.float[:, :] materials, Textures textures, dict references):
+cdef void dispatch_instances(glctx, dict objects, shader, Model model, int count, cython.float[:, :] instances_data, Textures textures, dict references):
     vertex_buffer, index_buffer = model.get_buffers(glctx, objects)
     if vertex_buffer is None:
         return
@@ -532,28 +573,50 @@ cdef void dispatch_instances(glctx, dict objects, shader, Model model, int count
     if references is not None and textures is not None:
         unit_ids = {}
         samplers = []
-        if (scene_node := references.get(textures.diffuse_id)) is not None and hasattr(scene_node, 'texture') and scene_node.texture is not None:
-            if textures.diffuse_id in unit_ids:
-                unit_id = unit_ids[textures.diffuse_id]
+        if (scene_node := references.get(textures.albedo_id)) is not None and hasattr(scene_node, 'texture') and scene_node.texture is not None:
+            if textures.albedo_id in unit_ids:
+                unit_id = unit_ids[textures.albedo_id]
             else:
                 unit_id = len(unit_ids) + 1
-                unit_ids[textures.diffuse_id] = unit_id
+                unit_ids[textures.albedo_id] = unit_id
                 sampler = glctx.sampler(texture=scene_node.texture, filter=(moderngl.LINEAR, moderngl.LINEAR))
                 sampler.use(unit_id)
                 samplers.append(sampler)
-            shader['use_diffuse_texture'] = True
-            shader['diffuse_texture'] = unit_id
-        if (scene_node := references.get(textures.specular_id)) is not None and hasattr(scene_node, 'texture') and scene_node.texture is not None:
-            if textures.specular_id in unit_ids:
-                unit_id = unit_ids[textures.specular_id]
+            shader['use_albedo_texture'] = True
+            shader['albedo_texture'] = unit_id
+        if (scene_node := references.get(textures.metal_id)) is not None and hasattr(scene_node, 'texture') and scene_node.texture is not None:
+            if textures.metal_id in unit_ids:
+                unit_id = unit_ids[textures.metal_id]
             else:
                 unit_id = len(unit_ids) + 1
-                unit_ids[textures.specular_id] = unit_id
+                unit_ids[textures.metal_id] = unit_id
                 sampler = glctx.sampler(texture=scene_node.texture, filter=(moderngl.LINEAR, moderngl.LINEAR))
                 sampler.use(unit_id)
                 samplers.append(sampler)
-            shader['use_specular_texture'] = True
-            shader['specular_texture'] = unit_id
+            shader['use_metal_texture'] = True
+            shader['metal_texture'] = unit_id
+        if (scene_node := references.get(textures.roughness_id)) is not None and hasattr(scene_node, 'texture') and scene_node.texture is not None:
+            if textures.roughness_id in unit_ids:
+                unit_id = unit_ids[textures.roughness_id]
+            else:
+                unit_id = len(unit_ids) + 1
+                unit_ids[textures.roughness_id] = unit_id
+                sampler = glctx.sampler(texture=scene_node.texture, filter=(moderngl.LINEAR, moderngl.LINEAR))
+                sampler.use(unit_id)
+                samplers.append(sampler)
+            shader['use_roughness_texture'] = True
+            shader['roughness_texture'] = unit_id
+        if (scene_node := references.get(textures.occlusion_id)) is not None and hasattr(scene_node, 'texture') and scene_node.texture is not None:
+            if textures.occlusion_id in unit_ids:
+                unit_id = unit_ids[textures.occlusion_id]
+            else:
+                unit_id = len(unit_ids) + 1
+                unit_ids[textures.occlusion_id] = unit_id
+                sampler = glctx.sampler(texture=scene_node.texture, filter=(moderngl.LINEAR, moderngl.LINEAR))
+                sampler.use(unit_id)
+                samplers.append(sampler)
+            shader['use_occlusion_texture'] = True
+            shader['occlusion_texture'] = unit_id
         if (scene_node := references.get(textures.emissive_id)) is not None and hasattr(scene_node, 'texture') and scene_node.texture is not None:
             if textures.emissive_id in unit_ids:
                 unit_id = unit_ids[textures.emissive_id]
@@ -576,18 +639,18 @@ cdef void dispatch_instances(glctx, dict objects, shader, Model model, int count
                 samplers.append(sampler)
             shader['use_transparency_texture'] = True
             shader['transparency_texture'] = unit_id
-    matrices_buffer = glctx.buffer(matrices)
-    materials_buffer = glctx.buffer(materials)
+    instances_buffer = glctx.buffer(instances_data)
     buffers = [(vertex_buffer, '3f 3f 2f', 'model_position', 'model_normal', 'model_uv'),
-               (matrices_buffer, '16f/i', 'model_matrix'),
-               (materials_buffer, '9f 1f 1f/i', 'material_colors', 'material_shininess', 'material_transparency')]
+               (instances_buffer, '16f 9f 4f 3f 4f/i', 'model_matrix', 'model_normal_matrix', 'material_albedo', 'material_emissive', 'material_properties')]
     render_array = glctx.vertex_array(shader, buffers, index_buffer=index_buffer, mode=moderngl.TRIANGLES)
     render_array.render(instances=count)
     if samplers is not None:
         for sampler in samplers:
             sampler.clear()
-        shader['use_diffuse_texture'] = False
-        shader['use_specular_texture'] = False
+        shader['use_albedo_texture'] = False
+        shader['use_metal_texture'] = False
+        shader['use_roughness_texture'] = False
+        shader['use_occlusion_texture'] = False
         shader['use_emissive_texture'] = False
         shader['use_transparency_texture'] = False
 
