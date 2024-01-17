@@ -16,7 +16,7 @@ from libc.math cimport cos, log2, sqrt
 from . import SceneNode, COLOR_FORMATS, set_uniform_vector
 from ... import name_patch
 from ...clock import system_clock
-from ...model cimport Node, Vector, Matrix44, null_, true_
+from ...model cimport Node, Vector, Matrix44, Matrix33, null_, true_
 from .glsl import TemplateLoader
 from .models cimport Model, Box, Cylinder, Cone, Sphere, ExternalModel
 
@@ -402,7 +402,7 @@ def fst(tuple ab):
 cdef void render(RenderSet render_set, Matrix44 pv_matrix, bint orthographic, Vector viewpoint, Vector focus,
                  double fog_min, double fog_max, Vector fog_color, float fog_curve, glctx, dict objects, dict references):
     cdef list instances, lights, buffers
-    cdef cython.float[:, :] matrices, materials, lights_data
+    cdef cython.float[:, :] instances_data, lights_data
     cdef Material material
     cdef Light light
     cdef Model model
@@ -413,6 +413,7 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, bint orthographic, Ve
     cdef float* dest
     cdef Instance instance
     cdef Matrix44 matrix
+    cdef Matrix33 normal_matrix
     cdef bint has_transparency_texture
     cdef tuple transparent_object
     cdef list transparent_objects = []
@@ -488,8 +489,7 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, bint orthographic, Ve
     for (model, textures), instances in render_set.instances.items():
         has_transparency_texture = textures is not None and textures.transparency_id is not None
         n = len(instances)
-        matrices = view.array((n, 16), 4, 'f')
-        materials = view.array((n, 11), 4, 'f')
+        instances_data = view.array((n, 36), 4, 'f')
         k = 0
         if render_set.depth_test:
             zs_array = np.empty(n)
@@ -507,24 +507,29 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, bint orthographic, Ve
                 transparent_objects.append((-zs[i], model, instance))
             else:
                 src = instance.model_matrix.numbers
-                dest = &matrices[k, 0]
+                dest = &instances_data[k, 0]
                 for j in range(16):
                     dest[j] = src[j]
-                dest = &materials[k, 0]
+                normal_matrix = instance.model_matrix.inverse_transpose_matrix33()
+                src = normal_matrix.numbers
+                dest = &instances_data[k, 16]
+                for j in range(9):
+                    dest[j] = src[j]
+                dest = &instances_data[k, 25]
                 for j in range(3):
                     dest[j] = material.albedo.numbers[j]
-                    dest[j+3] = material.emissive.numbers[j]
-                dest[6] = material.ior
-                dest[7] = material.metal
-                dest[8] = material.roughness
-                dest[9] = material.occlusion
-                dest[10] = material.transparency
+                    dest[j+4] = material.emissive.numbers[j]
+                dest[3] = material.transparency
+                dest[7] = material.ior
+                dest[8] = material.metal
+                dest[9] = material.roughness
+                dest[10] = material.occlusion
                 k += 1
-        dispatch_instances(glctx, objects, shader, model, k, matrices, materials, textures, references)
+        dispatch_instances(glctx, objects, shader, model, k, instances_data, textures, references)
     if transparent_objects:
         n = len(transparent_objects)
         transparent_objects.sort(key=fst)
-        matrices = view.array((n, 16), 4, 'f')
+        matrices = view.array((n, 25), 4, 'f')
         materials = view.array((n, 11), 4, 'f')
         k = 0
         for i, transparent_object in enumerate(transparent_objects):
@@ -532,29 +537,33 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, bint orthographic, Ve
             instance = transparent_object[2]
             material = instance.material
             src = instance.model_matrix.numbers
-            dest = &matrices[k, 0]
+            dest = &instances_data[k, 0]
             for j in range(16):
                 dest[j] = src[j]
-            dest = &materials[k, 0]
+            normal_matrix = instance.model_matrix.inverse_transpose_matrix33()
+            src = normal_matrix.numbers
+            dest = &instances_data[k, 16]
+            for j in range(9):
+                dest[j] = src[j]
+            dest = &instances_data[k, 25]
             for j in range(3):
                 dest[j] = material.albedo.numbers[j]
-                dest[j+3] = material.emissive.numbers[j]
-            dest[6] = material.ior
-            dest[7] = material.metal
-            dest[8] = material.roughness
-            dest[9] = material.occlusion
-            dest[10] = material.transparency
+                dest[j+4] = material.emissive.numbers[j]
+            dest[3] = material.transparency
+            dest[7] = material.ior
+            dest[8] = material.metal
+            dest[9] = material.roughness
+            dest[10] = material.occlusion
             k += 1
             if i == n-1 or (<tuple>transparent_objects[i+1])[1] is not model:
-                dispatch_instances(glctx, objects, shader, model, k, matrices, materials, material.textures, references)
+                dispatch_instances(glctx, objects, shader, model, k, instances_data, material.textures, references)
                 k = 0
         if k:
-            dispatch_instances(glctx, objects, shader, model, k, matrices, materials, material.textures, references)
+            dispatch_instances(glctx, objects, shader, model, k, instances_data, material.textures, references)
     glctx.disable(flags)
 
 
-cdef void dispatch_instances(glctx, dict objects, shader, Model model, int count, cython.float[:, :] matrices,
-                             cython.float[:, :] materials, Textures textures, dict references):
+cdef void dispatch_instances(glctx, dict objects, shader, Model model, int count, cython.float[:, :] instances_data, Textures textures, dict references):
     vertex_buffer, index_buffer = model.get_buffers(glctx, objects)
     if vertex_buffer is None:
         return
@@ -630,11 +639,9 @@ cdef void dispatch_instances(glctx, dict objects, shader, Model model, int count
                 samplers.append(sampler)
             shader['use_transparency_texture'] = True
             shader['transparency_texture'] = unit_id
-    matrices_buffer = glctx.buffer(matrices)
-    materials_buffer = glctx.buffer(materials)
+    instances_buffer = glctx.buffer(instances_data)
     buffers = [(vertex_buffer, '3f 3f 2f', 'model_position', 'model_normal', 'model_uv'),
-               (matrices_buffer, '16f/i', 'model_matrix'),
-               (materials_buffer, '3f 3f 1f 1f 1f 1f 1f/i', 'material_albedo', 'material_emissive', 'material_ior', 'material_metal', 'material_roughness', 'material_occlusion', 'material_transparency')]
+               (instances_buffer, '16f 9f 4f 3f 4f/i', 'model_matrix', 'model_normal_matrix', 'material_albedo', 'material_emissive', 'material_properties')]
     render_array = glctx.vertex_array(shader, buffers, index_buffer=index_buffer, mode=moderngl.TRIANGLES)
     render_array.render(instances=count)
     if samplers is not None:

@@ -5,13 +5,14 @@ const vec3 greyscale = vec3(0.299, 0.587, 0.114);
 in vec3 world_position;
 in vec3 world_normal;
 in vec2 texture_uv;
+
 flat in vec3 fragment_albedo;
+flat in float fragment_transparency;
+flat in vec3 fragment_emissive;
 flat in float fragment_ior;
 flat in float fragment_metal;
 flat in float fragment_roughness;
 flat in float fragment_occlusion;
-flat in vec3 fragment_emissive;
-flat in float fragment_transparency;
 
 out vec4 fragment_color;
 
@@ -104,8 +105,8 @@ void main() {
         if (light_type == ${Ambient}) {
             diffuse_color += (1 - F0) * (1 - metal) * albedo * light_color * occlusion;
         } else {
-            vec3 L = -light_direction;
-            float attenuation = 1;
+            vec3 L;
+            float attenuation;
             if (light_type == ${Point}) {
                 L = light_position - world_position;
                 float light_distance = length(L);
@@ -117,13 +118,15 @@ void main() {
                 L /= light_distance;
                 float spot_cosine = dot(L, -light_direction);
                 attenuation = (1 - clamp((inner_cone-spot_cosine) / (inner_cone-outer_cone), 0, 1)) / (1 + light_distance*light_distance);
+            } else {
+                L = -light_direction;
+                attenuation = 1;
             }
             vec3 H = normalize(V + L);
-            float NdotL = max(dot(N, L), 0);
-            float NdotV = max(dot(N, V), 0);
-            float NdotH = max(dot(N, H), 0);
-            float HdotV = max(dot(H, V), 0);
-            vec3 radiance = light_color * attenuation * NdotL;
+            float NdotL = clamp(dot(N, L), 0, 1);
+            float NdotV = clamp(dot(N, V), 0, 1);
+            float NdotH = clamp(dot(N, H), 0, 1);
+            float HdotV = clamp(dot(H, V), 0, 1);
             float a = roughness * roughness;
             float a2 = a * a;
             float denom = NdotH * NdotH * (a2-1) + 1;
@@ -134,6 +137,7 @@ void main() {
             vec3 F = F0 + (1 - F0) * pow(1 - HdotV, 5);
             vec3 diffuse = (1 - F) * (1 - metal) * albedo;
             vec3 specular = (NDF * G * F) / (4 * NdotV * NdotL + 1e-6);
+            vec3 radiance = light_color * attenuation * NdotL;
             diffuse_color += diffuse * radiance;
             specular_color += specular * radiance;
         }
