@@ -239,11 +239,12 @@ ball) in the range *[0,1]* with one wave per unit of *x*, with the *0* point
 when `x%1 == 0` and the *1* point when `x%1 == 0.5`
 - `ceil(x)` - return mathematical ceiling of *x*
 - `colortemp(t)` - return a 3-vector of *R*, *G* and *B* **linear sRGB** values
-for an approximation of a Planckian (blackbody) radiator at temperature *t*
-scaled so that `colortemp(6503.5)` (the sRGB whitepoint correlated colour
-temperature) is close to `1;1;1`; the approximation only holds within the
-range *[1667,25000]* and, strictly speaking, values below 1900°K are outside
-the sRGB gamut
+for an approximation of the irradiance of a Planckian (blackbody) radiator at
+temperature *t*, scaled so that `colortemp(6503.5)` (the sRGB whitepoint
+correlated colour temperature) is close to `1;1;1`; the approximation only holds
+within the range *[1667,25000]* and, strictly speaking, values below 1900°K are
+outside the sRGB gamut; irradiance is proportional to the 4th power of the
+temperature, so lights become *significantly* brighter at higher temperatures
 - `cos(x)` - return cosine of *x* (in *turns*)
 - `counter(...)` - see [Counters](#counters) below
 - `csv(filename, row)` - return a vector of values obtained by reading a

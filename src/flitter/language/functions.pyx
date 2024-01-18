@@ -831,7 +831,7 @@ def colortemp(Vector t):
     if t.numbers == NULL:
         return null_
     cdef int i, n = t.length
-    cdef double T, T2, u, v, d, x, y, x2, X, Y, Z
+    cdef double T, T2, x, x2, y, X, Y, Z
     cdef Vector rgb = Vector.__new__(Vector)
     rgb.allocate_numbers(3*n)
     for i in range(n):
