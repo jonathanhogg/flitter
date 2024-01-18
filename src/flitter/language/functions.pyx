@@ -826,6 +826,37 @@ def hsv(Vector c):
     return hsl_to_rgb(h, 0 if l == 0 or l == 1 else (v - l) / min(l, 1 - l), l)
 
 
+@cython.cdivision(True)
+def colortemp(Vector t):
+    if t.numbers == NULL:
+        return null_
+    cdef int i, n = t.length
+    cdef double T, T2, u, v, d, x, y, x2, X, Y, Z
+    cdef Vector rgb = Vector.__new__(Vector)
+    rgb.allocate_numbers(3*n)
+    for i in range(n):
+        T = min(max(1667, t.numbers[i]), 25000)
+        T2 = T * T
+        if T < 4000:
+            x = -0.2661239e9/(T*T2) - 0.2343589e6/T2 + 0.8776956e3/T + 0.179910
+        else:
+            x = -3.0258469e9/(T*T2) + 2.1070379e6/T2 + 0.2226347e3/T + 0.240390
+        x2 = x * x
+        if T < 2222:
+            y = -1.1063814*x*x2 - 1.34811020*x2 + 2.18555832*x - 0.20219683
+        elif T < 4000:
+            y = -0.9549476*x*x2 - 1.37418593*x2 + 2.09137015*x - 0.16748867
+        else:
+            y = +3.0817580*x*x2 - 5.87338670*x2 + 3.75112997*x - 0.37001483
+        Y = (max(0, t.numbers[i]) / 6503.5)**4
+        X = Y * x / y
+        Z = Y * (1 - x - y) / y
+        rgb.numbers[3*i] = max(0, 3.2406255*X - 1.537208*Y - 0.4986286*Z)
+        rgb.numbers[3*i+1] = max(0, -0.9689307*X + 1.8757561*Y + 0.0415175*Z)
+        rgb.numbers[3*i+2] = max(0, 0.0557101*X - 0.2040211*Y + 1.0569959*Z)
+    return rgb
+
+
 def point_towards(Vector direction, Vector up):
     cdef Matrix44 matrix = Matrix44._look(Vector([0, 0, 0]), direction, up)
     if matrix is not None:
@@ -843,6 +874,7 @@ STATIC_FUNCTIONS = {
     'bounce': Vector(bounce),
     'ceil': Vector(ceilv),
     'chr': Vector(chrv),
+    'colortemp': Vector(colortemp),
     'cos': Vector(cosv),
     'exp': Vector(expv),
     'floor': Vector(floorv),
