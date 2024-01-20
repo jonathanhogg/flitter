@@ -18,7 +18,7 @@ from ..render import get_renderer
 
 class EngineController:
     def __init__(self, target_fps=60, screen=0, fullscreen=False, vsync=False, state_file=None,
-                 autoreset=None, state_eval_wait=0, realtime=True, defined_variables=None, vm_stats=False,
+                 autoreset=None, state_simplify_wait=0, realtime=True, defined_variables=None, vm_stats=False,
                  run_time=None):
         self.default_fps = target_fps
         self.target_fps = target_fps
@@ -27,7 +27,7 @@ class EngineController:
         self.fullscreen = fullscreen
         self.vsync = vsync
         self.autoreset = autoreset
-        self.state_eval_wait = state_eval_wait
+        self.state_simplify_wait = state_simplify_wait
         if defined_variables:
             self.defined_variables = {key: Vector.coerce(value) for key, value in defined_variables.items()}
         else:
@@ -183,8 +183,8 @@ class EngineController:
                     errors = set()
                     logs = set()
 
-                if current_program is not None and run_program is current_program and self.state_eval_wait and self.state_timestamp is not None and \
-                        system_clock() > self.state_timestamp + self.state_eval_wait:
+                if current_program is not None and run_program is current_program and self.state_simplify_wait and self.state_timestamp is not None and \
+                        system_clock() > self.state_timestamp + self.state_simplify_wait:
                     simplify_time = -system_clock()
                     top = current_program.top.simplify(state=self.state, undefined=names)
                     now = system_clock()
@@ -202,7 +202,7 @@ class EngineController:
                     self.state_timestamp = system_clock()
                     self.state.clear_changed()
                     if run_program is not current_program:
-                        logger.debug("Undo partial-evaluation on state")
+                        logger.debug("Undo simplification on state")
                         run_program = current_program
 
                 now = system_clock()
@@ -217,7 +217,7 @@ class EngineController:
                 new_errors = context.errors.difference(errors) if errors is not None else context.errors
                 errors = context.errors
                 for error in new_errors:
-                    logger.error("Evaluation error: {}", error)
+                    logger.error("Execution error: {}", error)
                 new_logs = context.logs.difference(logs) if logs is not None else context.logs
                 logs = context.logs
                 for log in new_logs:

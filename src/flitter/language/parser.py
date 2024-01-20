@@ -66,7 +66,7 @@ class FlitterTransformer(Transformer):
         return tree.Range(tree.Literal(model.null) if start is None else start, stop, tree.Literal(model.null) if step is None else step)
 
     def inline_if_else(self, then, condition, else_):
-        return tree.IfElse((tree.Test(condition, then),), else_)
+        return tree.IfElse((tree.IfCondition(condition, then),), else_)
 
     def inline_loop(self, body, names, source):
         return tree.For(names, source, body)
@@ -128,7 +128,7 @@ class FlitterTransformer(Transformer):
     slice = tree.Slice
     subtract = tree.Subtract
     tag = tree.Tag
-    test = tree.Test
+    test = tree.IfCondition
     top = tree.Top
 
 

@@ -41,7 +41,7 @@ def main():
     parser.add_argument('--vsync', action='store_true', default=False, help="Default to winow vsync")
     parser.add_argument('--state', type=str, help="State save/restore file")
     parser.add_argument('--autoreset', type=float, help="Auto-reset state on idle")
-    parser.add_argument('--evalstate', type=float, default=10, help="Partially-evaluate on state after stable period")
+    parser.add_argument('--simplifystate', type=float, default=10, help="Simplify on state after stable period")
     parser.add_argument('--lockstep', action='store_true', default=False, help="Run clock in non-realtime mode")
     parser.add_argument('--define', '-D', action='append', default=[], type=keyvalue, dest='defines', help="Define variable for evaluation")
     parser.add_argument('--vmstats', action='store_true', default=False, help="Report VM statistics")
@@ -50,7 +50,7 @@ def main():
     args = parser.parse_args()
     logger = configure_logger(args.level)
     controller = EngineController(target_fps=args.fps, screen=args.screen, fullscreen=args.fullscreen, vsync=args.vsync,
-                                  state_file=args.state, autoreset=args.autoreset, state_eval_wait=args.evalstate,
+                                  state_file=args.state, autoreset=args.autoreset, state_simplify_wait=args.simplifystate,
                                   realtime=not args.lockstep, defined_variables=dict(args.defines), vm_stats=args.vmstats,
                                   run_time=args.runtime)
     for script in args.script:
