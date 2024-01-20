@@ -147,10 +147,10 @@ cdef class ParticleForceApplier(ForceApplier):
 
 
 cdef class MatrixPairForceApplier(PairForceApplier):
-    cdef double max_distance
+    cdef double max_distance_squared
 
     def __cinit__(self, Node node, double strength, Vector zero):
-        self.max_distance = max(0, node.get_float('max_distance', 0))
+        self.max_distance_squared = max(0, node.get_float('max_distance', 0)) ** 2
 
 
 cdef class SpecificPairForceApplier(PairForceApplier):
@@ -395,7 +395,7 @@ cdef class PhysicsSystem:
     cdef double calculate(self, list particles, list non_anchors, list particle_forces, list matrix_forces, list specific_forces, list barriers,
                           int dimensions, bint realtime, double speed_of_light,
                           double time, double last_time, double resolution, double clock):
-        cdef long i, j, k, m, n=len(particles), o=len(non_anchors)
+        cdef long i, j, k, l, m, n=len(particles), o=len(non_anchors)
         cdef double delta
         cdef Vector direction = Vector.__new__(Vector)
         direction.allocate_numbers(dimensions)
@@ -439,13 +439,15 @@ cdef class PhysicsSystem:
                                 d = (<Particle>to_particle).position.numbers[k] - (<Particle>from_particle).position.numbers[k]
                                 direction.numbers[k] = d
                                 distance_squared += d * d
-                            distance = sqrt(distance_squared)
-                            for k in range(dimensions):
-                                direction.numbers[k] /= distance
+                            distance = -1
                             for k in range(m):
                                 force = PyList_GET_ITEM(matrix_forces, k)
-                                if not (<MatrixPairForceApplier>force).max_distance or \
-                                        distance < (<MatrixPairForceApplier>force).max_distance:
+                                if not (<MatrixPairForceApplier>force).max_distance_squared or \
+                                        distance_squared < (<MatrixPairForceApplier>force).max_distance_squared:
+                                    if distance == -1:
+                                        distance = sqrt(distance_squared)
+                                        for l in range(dimensions):
+                                            direction.numbers[l] /= distance
                                     (<MatrixPairForceApplier>force).apply(<Particle>from_particle, <Particle>to_particle,
                                                                           direction, distance, distance_squared)
                 for i in range(n):
