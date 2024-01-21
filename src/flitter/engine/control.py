@@ -175,7 +175,7 @@ class EngineController:
                          'screen': self.screen, 'fullscreen': self.fullscreen, 'vsync': self.vsync,
                          'sample': self.sample}
 
-                program = self.current_path.read_flitter_program(variables=self.defined_variables, undefined=names)
+                program = self.current_path.read_flitter_program(static=self.defined_variables, dynamic=names)
                 if program is not current_program:
                     level = 'SUCCESS' if current_program is None else 'INFO'
                     logger.log(level, "Loaded page {}: {}", self.current_page, self.current_path)
@@ -186,7 +186,7 @@ class EngineController:
                 if current_program is not None and run_program is current_program and self.state_simplify_wait and self.state_timestamp is not None and \
                         system_clock() > self.state_timestamp + self.state_simplify_wait:
                     simplify_time = -system_clock()
-                    top = current_program.top.simplify(state=self.state, undefined=names)
+                    top = current_program.top.simplify(state=self.state, dynamic=names)
                     now = system_clock()
                     simplify_time += now
                     compile_time = -now

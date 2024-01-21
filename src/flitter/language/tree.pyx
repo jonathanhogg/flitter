@@ -69,14 +69,14 @@ cdef class Expression:
         program.link()
         return program
 
-    def simplify(self, StateDict state=None, dict variables=None, undefined=None):
+    def simplify(self, StateDict state=None, dict static=None, dynamic=None):
         cdef dict context_vars = {}
         cdef str key
-        if variables is not None:
-            for key, value in variables.items():
+        if static is not None:
+            for key, value in static.items():
                 context_vars[key] = Vector._coerce(value)
-        if undefined is not None:
-            for key in undefined:
+        if dynamic is not None:
+            for key in dynamic:
                 context_vars[key] = None
         cdef Context context = Context(state=state, variables=context_vars)
         cdef Expression expr
