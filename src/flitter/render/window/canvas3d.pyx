@@ -174,6 +174,59 @@ cdef class RenderSet:
             glctx.blend_func = moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA
 
 
+cdef class Camera:
+    cdef Vector position
+    cdef Vector focus
+    cdef Vector up
+    cdef double fov
+    cdef bint orthographic
+    cdef double ortho_width
+    cdef double near
+    cdef double far
+    cdef double fog_min
+    cdef double fog_max
+    cdef Vector fog_color
+    cdef double fog_curve
+    cdef Matrix44 pv_matrix
+    cdef Vector size
+
+    cdef Camera derive(self, Node node, Matrix44 model_matrix):
+        cdef Camera camera = Camera.__new__(Camera)
+        cdef Vector position = node.get_fvec('position', 3, node.get_fvec('viewpoint', 3, None))
+        if position is None:
+            camera.position = self.position
+        else:
+            camera.position = model_matrix.vmul(position)
+        cdef Vector focus = node.get_fvec('focus', 3, None)
+        if focus is None:
+            camera.focus = self.focus
+        else:
+            camera.focus = model_matrix.vmul(focus)
+        cdef Vector up = node.get_fvec('up', 3, None)
+        if up is None:
+            camera.up = self.up
+        else:
+            camera.up = model_matrix.inverse_transpose_matrix33().vmul(up).normalize()
+        camera.fov = node.get_float('fov', self.fov)
+        camera.orthographic = node.get_bool('orthographic', self.orthographic)
+        camera.ortho_width = node.get_float('width', self.ortho_width)
+        camera.near = max(1e-9, node.get_float('near', self.near))
+        camera.far = max(camera.near+1e-9, node.get_float('far', self.far))
+        camera.fog_min = node.get_float('fog_min', self.fog_min)
+        camera.fog_max = node.get_float('fog_max', self.fog_max)
+        camera.fog_color = node.get_fvec('fog_color', 3, self.fog_color)
+        camera.fog_curve = max(0, node.get_float('fog_curve', self.fog_curve))
+        camera.size = node.get_fvec('size', 2, self.size)
+        cdef double aspect_ratio = camera.size.numbers[0] / camera.size.numbers[1]
+        cdef Matrix44 projection_matrix
+        if camera.orthographic:
+            projection_matrix = Matrix44._ortho(aspect_ratio, camera.ortho_width, camera.near, camera.far)
+        else:
+            projection_matrix = Matrix44._project(aspect_ratio, camera.fov, camera.near, camera.far)
+        camera.pv_matrix = projection_matrix.mmul(Matrix44._look(camera.position, camera.focus, camera.up))
+        return camera
+
+
 cdef Matrix44 update_model_matrix(Node node, Matrix44 model_matrix):
     cdef Matrix44 matrix
     cdef str attribute
@@ -215,47 +268,46 @@ cdef Matrix44 update_model_matrix(Node node, Matrix44 model_matrix):
 def draw(Node node, tuple size, glctx, dict objects, dict references):
     cdef int width, height
     width, height = size
-    cdef Vector viewpoint = node.get_fvec('viewpoint', 3, Vector((0, 0, width/2)))
-    cdef Vector focus = node.get_fvec('focus', 3, Zero3)
-    cdef Vector up = node.get_fvec('up', 3, Vector((0, 1, 0)))
-    cdef double fov = node.get_float('fov', 0.25)
-    cdef bint orthographic = node.get_bool('orthographic', False)
-    cdef double ortho_width = node.get_float('width', width)
-    cdef double near = node.get_float('near', 1)
-    cdef double far = node.get_float('far', width)
-    cdef double fog_min = node.get_float('fog_min', 0)
-    cdef double fog_max = node.get_float('fog_max', 0)
-    cdef Vector fog_color = node.get_fvec('fog_color', 3, Zero3)
-    cdef double fog_curve = max(0, node.get_float('fog_curve', 1))
-    cdef Matrix44 pv_matrix
-    if orthographic:
-        pv_matrix = Matrix44._ortho(width/height, ortho_width, near, far)
-    else:
-        pv_matrix = Matrix44._project(width/height, fov, near, far)
-    pv_matrix = pv_matrix.mmul(Matrix44._look(viewpoint, focus, up))
+    cdef Matrix44 model_matrix = Matrix44.__new__(Matrix44)
+    cdef Camera default_camera = Camera.__new__(Camera)
+    default_camera.position = Vector((0, 0, width/2))
+    default_camera.focus = Zero3
+    default_camera.up = Vector((0, 1, 0))
+    default_camera.fov = 0.25
+    default_camera.orthographic = False
+    default_camera.ortho_width = width
+    default_camera.near = 1
+    default_camera.far = width
+    default_camera.fog_min = 0
+    default_camera.fog_max = 0
+    default_camera.fog_color = Zero3
+    default_camera.fog_curve = 1
+    default_camera.size = Vector.__new__(Vector, size)
+    default_camera = default_camera.derive(node, model_matrix)
     cdef Material material = Material.__new__(Material)
     material.albedo = Zero3
     material.roughness = 1
     material.occlusion = 1
     material.emissive = Zero3
-    cdef Matrix44 model_matrix = Matrix44.__new__(Matrix44)
     cdef list render_sets = []
-    collect(node, model_matrix, material, None, render_sets)
+    cdef dict cameras = {}
+    collect(node, model_matrix, material, None, render_sets, default_camera, cameras)
+    cdef str camera_id = node.get_str('camera_id', None)
+    cdef Camera camera = cameras.get(camera_id, default_camera)
     cdef RenderSet render_set
     for render_set in render_sets:
         if render_set.instances:
-            render(render_set, pv_matrix, orthographic, viewpoint, focus, fog_min, fog_max, fog_color, fog_curve,
-                   glctx, objects, references)
+            render(render_set, camera, glctx, objects, references)
 
 
-cdef void collect(Node node, Matrix44 model_matrix, Material material, RenderSet render_set, list render_sets):
+cdef void collect(Node node, Matrix44 model_matrix, Material material, RenderSet render_set, list render_sets, Camera default_camera, dict cameras):
     cdef str kind = node.kind
     cdef Light light
     cdef list lights, instances
     cdef Vector color, position, direction, emissive, diffuse, specular
     cdef double inner, outer
     cdef Node child
-    cdef str filename, vertex_shader, fragment_shader
+    cdef str camera_id, filename, vertex_shader, fragment_shader
     cdef Model model
 
     if node.kind == 'box':
@@ -292,14 +344,14 @@ cdef void collect(Node node, Matrix44 model_matrix, Material material, RenderSet
         material = material.update(node)
         child = node.first_child
         while child is not None:
-            collect(child, model_matrix, material, render_set, render_sets)
+            collect(child, model_matrix, material, render_set, render_sets, default_camera, cameras)
             child = child.next_sibling
 
     elif node.kind == 'transform':
         model_matrix = update_model_matrix(node, model_matrix)
         child = node.first_child
         while child is not None:
-            collect(child, model_matrix, material, render_set, render_sets)
+            collect(child, model_matrix, material, render_set, render_sets, default_camera, cameras)
             child = child.next_sibling
 
     elif node.kind == 'group' or node.kind == 'canvas3d':
@@ -322,7 +374,7 @@ cdef void collect(Node node, Matrix44 model_matrix, Material material, RenderSet
         render_sets.append(render_set)
         child = node.first_child
         while child is not None:
-            collect(child, model_matrix, material, render_set, render_sets)
+            collect(child, model_matrix, material, render_set, render_sets, default_camera, cameras)
             child = child.next_sibling
 
     elif node.kind == 'light':
@@ -354,6 +406,10 @@ cdef void collect(Node node, Matrix44 model_matrix, Material material, RenderSet
                 light.direction = None
             lights = render_set.lights[-1]
             lights.append(light)
+
+    elif node.kind == 'camera':
+        if (camera_id := node.get_str('id', None)) is not None:
+            cameras[camera_id] = default_camera.derive(node, model_matrix)
 
 
 cdef Matrix44 instance_start_end_matrix(Vector start, Vector end, double radius):
@@ -399,8 +455,7 @@ def fst(tuple ab):
     return ab[0]
 
 
-cdef void render(RenderSet render_set, Matrix44 pv_matrix, bint orthographic, Vector viewpoint, Vector focus,
-                 double fog_min, double fog_max, Vector fog_color, float fog_curve, glctx, dict objects, dict references):
+cdef void render(RenderSet render_set, Camera camera, glctx, dict objects, dict references):
     cdef list instances, lights, buffers
     cdef cython.float[:, :] instances_data, lights_data
     cdef Material material
@@ -444,14 +499,14 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, bint orthographic, Ve
             member = shader[name]
             if isinstance(member, moderngl.Uniform):
                 set_uniform_vector(member, value)
-    shader['pv_matrix'] = pv_matrix
-    shader['orthographic'] = orthographic
-    shader['view_position'] = viewpoint
-    shader['focus'] = focus
-    shader['fog_min'] = fog_min
-    shader['fog_max'] = fog_max
-    shader['fog_color'] = fog_color
-    shader['fog_curve'] = fog_curve
+    shader['pv_matrix'] = camera.pv_matrix
+    shader['orthographic'] = camera.orthographic
+    shader['view_position'] = camera.position
+    shader['view_focus'] = camera.focus
+    shader['fog_min'] = camera.fog_min
+    shader['fog_max'] = camera.fog_max
+    shader['fog_color'] = camera.fog_color
+    shader['fog_curve'] = camera.fog_curve
     shader['use_albedo_texture'] = False
     shader['use_metal_texture'] = False
     shader['use_roughness_texture'] = False
@@ -495,8 +550,8 @@ cdef void render(RenderSet render_set, Matrix44 pv_matrix, bint orthographic, Ve
             zs_array = np.empty(n)
             zs = zs_array
             for i, instance in enumerate(instances):
-                matrix = pv_matrix.mmul(instance.model_matrix)
-                zs[i] = matrix.numbers[14] / matrix.numbers[15]
+                matrix = camera.pv_matrix.mmul(instance.model_matrix)
+                zs[i] = matrix.numbers[14] / matrix.numbers[15] if matrix.numbers[15] != 0 else 0
             indices = zs_array.argsort()
         else:
             indices = np.arange(n, dtype='long')
