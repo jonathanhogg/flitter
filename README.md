@@ -46,10 +46,6 @@ to be made available to the user. A series of renderers turn the nodes
 describing the visuals into 2D and 3D drawing commands (or DMX packets, or laser
 DAC values).
 
-There is some documentation available in the [docs folder](/docs) and a few
-quick [examples](/examples) ready to run out of the box. There is also a
-separate repo containing [many more interesting examples](https://github.com/jonathanhogg/flitter-examples).
-
 ## Installing/running
 
 **Flitter** is implemented in a mix of Python and Cython and requires OpenGL
@@ -134,3 +130,12 @@ rm **/*.c **/*.so
 
 You might also want to install `flake8` and `pytest`, which is what I use for
 linting the code and running the (few) unit tests.
+
+## Learning Flitter
+
+There is *some* documentation available in the [docs folder](/docs) and a few
+quick [examples](/examples) ready to run out-of-the-box.
+
+However, there is also a separate repo containing [many more interesting
+examples](https://github.com/jonathanhogg/flitter-examples) that are worth
+checking out.
