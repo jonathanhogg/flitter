@@ -49,6 +49,7 @@ cdef class Vector:
     cdef int compare(self, Vector other) except -2
     cdef Vector slice(self, Vector index)
     cdef Vector item(self, int i)
+    cdef Vector items(self, int start, int end)
     cpdef double squared_sum(self) noexcept
     cpdef Vector normalize(self)
     cpdef Vector dot(self, Vector other)
