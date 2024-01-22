@@ -175,6 +175,8 @@ cdef class RenderSet:
 
 
 cdef class Camera:
+    cdef str id
+    cdef bint secondary
     cdef Vector position
     cdef Vector focus
     cdef Vector up
@@ -197,6 +199,8 @@ cdef class Camera:
 
     cdef Camera derive(self, Node node, Matrix44 transform_matrix, int max_samples):
         cdef Camera camera = Camera.__new__(Camera)
+        camera.id = node.get_str('id', None)
+        camera.secondary = node.get_bool('secondary', False)
         cdef Vector position = node.get_fvec('position', 3, node.get_fvec('viewpoint', 3, None))
         if position is None:
             camera.position = self.position
@@ -701,6 +705,11 @@ cdef class RenderTarget:
     cdef object color_renderbuffer
     cdef object depth_renderbuffer
     cdef object render_framebuffer
+    cdef tuple clear_color
+
+    @property
+    def texture(self):
+        return self.image_texture
 
     def __init__(self, Camera camera, glctx):
         self.width = camera.width
@@ -714,10 +723,33 @@ cdef class RenderTarget:
             self.color_renderbuffer = glctx.renderbuffer((self.width, self.height), 4, samples=self.samples, dtype=format.moderngl_dtype)
             self.render_framebuffer = glctx.framebuffer(color_attachments=(self.color_renderbuffer,), depth_attachment=self.depth_renderbuffer)
             self.image_framebuffer = glctx.framebuffer(self.image_texture)
-            logger.debug("Created canvas3d {}x{}/{}-bit render target with {}x sampling", self.width, self.height, self.colorbits, self.samples)
+            logger.debug("Created canvas3d {}x{} {}-bit render targets with {}x sampling", self.width, self.height, self.colorbits, self.samples)
         else:
             self.render_framebuffer = glctx.framebuffer(color_attachments=(self.image_texture,), depth_attachment=self.depth_renderbuffer)
-            logger.debug("Created canvas3d {}x{}/{}-bit render target", self.width, self.height, self.colorbits)
+            logger.debug("Created canvas3d {}x{} {}-bit render targets", self.width, self.height, self.colorbits)
+        if camera.fog_max > camera.fog_min:
+            self.clear_color = tuple(camera.fog_color)
+        else:
+            self.clear_color = (0, 0, 0, 0)
+
+    def release(self):
+        self.width = 0
+        self.height = 0
+        self.colorbits = 0
+        self.samples = 0
+        self.image_texture = None
+        self.image_framebuffer = None
+        self.color_renderbuffer = None
+        self.depth_renderbuffer = None
+        self.render_framebuffer = None
+
+    def prepare(self):
+        self.render_framebuffer.use()
+        self.render_framebuffer.clear(*self.clear_color)
+
+    def finalize(self, glctx):
+        if self.image_framebuffer is not None:
+            glctx.copy_framebuffer(self.image_framebuffer, self.render_framebuffer)
 
     cdef bint matches(self, Camera camera):
         return self.width == camera.width and self.height == camera.height and self.colorbits == camera.colorbits and self.samples == camera.samples
@@ -726,26 +758,27 @@ cdef class RenderTarget:
 class Canvas3D(SceneNode):
     def __init__(self, glctx):
         super().__init__(glctx)
-        self._render_target = None
+        self._primary_render_target = None
+        self._secondary_render_targets = {}
         self._total_duration = 0
         self._total_count = 0
 
     @property
     def texture(self):
-        return (<RenderTarget>self._render_target).image_texture if self._render_target is not None else None
+        return (<RenderTarget>self._primary_render_target).texture if self._primary_render_target is not None else None
 
     def release(self):
         self._render_target = None
+        cdef RenderTarget render_target
+        for render_target in self._secondary_render_targets.values():
+            render_target.release()
+        self._secondary_render_targets = {}
 
     def purge(self):
         logger.info("{} draw stats - {:d} x {:.1f}ms = {:.1f}s", self.name, self._total_count,
                     1e3 * self._total_duration / self._total_count, self._total_duration)
         self._total_duration = 0
         self._total_count = 0
-
-    def create(self, engine, node, resized, **kwargs):
-        # Render target creation is postponed until rendering
-        pass
 
     async def descend(self, engine, node, **kwargs):
         # A canvas3d is a leaf node from the perspective of the OpenGL world
@@ -784,23 +817,36 @@ class Canvas3D(SceneNode):
         material.emissive = Zero3
         cdef list render_sets = []
         cdef dict cameras = {}
+        cameras[default_camera.id] = default_camera
         collect(node, transform_matrix, material, None, render_sets, default_camera, cameras, max_samples)
-        cdef str camera_id = node.get_str('camera_id', None)
-        cdef Camera camera = cameras.get(camera_id, default_camera)
-        if self._render_target is None or not (<RenderTarget>self._render_target).matches(camera):
-            self._render_target = RenderTarget(camera, self.glctx)
-        cdef RenderTarget render_target = self._render_target
-        render_target.render_framebuffer.use()
-        if camera.fog_max > camera.fog_min:
-            render_target.render_framebuffer.clear(*camera.fog_color)
-        else:
-            render_target.render_framebuffer.clear()
+        cdef Camera primary_camera = cameras.get(node.get_str('camera_id', default_camera.id), default_camera)
+        if self._primary_render_target is None or not (<RenderTarget>self._primary_render_target).matches(primary_camera):
+            self._primary_render_target = RenderTarget(primary_camera, self.glctx)
+        cdef RenderTarget primary_render_target = self._primary_render_target
+        primary_render_target.prepare()
         cdef RenderSet render_set
         for render_set in render_sets:
             if render_set.instances:
-                render(render_set, camera, self.glctx, objects, references)
-        if render_target.image_framebuffer is not None:
-            self.glctx.copy_framebuffer(render_target.image_framebuffer, render_target.render_framebuffer)
+                render(render_set, primary_camera, self.glctx, objects, references)
+        primary_render_target.finalize(self.glctx)
+        cdef Camera camera
+        cdef RenderTarget secondary_render_target
+        if references is not None:
+            for camera in cameras.values():
+                if camera.secondary and camera.id:
+                    if camera is not primary_camera:
+                        secondary_render_target = self._secondary_render_targets.get(camera.id)
+                        if secondary_render_target is None or not secondary_render_target.matches(camera):
+                            secondary_render_target = RenderTarget(camera, self.glctx)
+                            self._secondary_render_targets[camera.id] = secondary_render_target
+                        secondary_render_target.prepare()
+                        for render_set in render_sets:
+                            if render_set.instances:
+                                render(render_set, camera, self.glctx, objects, references)
+                        secondary_render_target.finalize(self.glctx)
+                        references[camera.id] = secondary_render_target
+                    else:
+                        references[camera.id] = primary_render_target
         self._total_duration += system_clock()
         self._total_count += 1
 
