@@ -188,9 +188,12 @@ cdef class Camera:
     cdef Vector fog_color
     cdef double fog_curve
     cdef Matrix44 pv_matrix
-    cdef Vector size
+    cdef int width
+    cdef int height
+    cdef int colorbits
+    cdef int samples
 
-    cdef Camera derive(self, Node node, Matrix44 transform_matrix):
+    cdef Camera derive(self, Node node, Matrix44 transform_matrix, int max_samples):
         cdef Camera camera = Camera.__new__(Camera)
         cdef Vector position = node.get_fvec('position', 3, node.get_fvec('viewpoint', 3, None))
         if position is None:
@@ -216,8 +219,14 @@ cdef class Camera:
         camera.fog_max = node.get_float('fog_max', self.fog_max)
         camera.fog_color = node.get_fvec('fog_color', 3, self.fog_color)
         camera.fog_curve = max(0, node.get_float('fog_curve', self.fog_curve))
-        camera.size = node.get_fvec('size', 2, self.size)
-        cdef double aspect_ratio = camera.size.numbers[0] / camera.size.numbers[1]
+        cdef Vector size = node.get_fvec('size', 2, Vector((self.width, self.height)))
+        camera.width = max(1, int(size.numbers[0]))
+        camera.height = max(1, int(size.numbers[1]))
+        cdef int colorbits = node.get_int('colorbits', self.colorbits)
+        camera.colorbits = colorbits if colorbits in COLOR_FORMATS else self.colorbits
+        cdef double samples = node.get_float('samples', <double>self.samples)
+        camera.samples = min(1 << int(log2(samples)), max_samples) if samples > 0 else 0
+        cdef double aspect_ratio = (<double>camera.width) / camera.height
         cdef Matrix44 projection_matrix
         if camera.orthographic:
             projection_matrix = Matrix44._ortho(aspect_ratio, camera.ortho_width, camera.near, camera.far)
@@ -265,42 +274,8 @@ cdef Matrix44 update_transform_matrix(Node node, Matrix44 transform_matrix):
     return transform_matrix
 
 
-def draw(Node node, tuple size, glctx, dict objects, dict references):
-    cdef int width, height
-    width, height = size
-    cdef Matrix44 transform_matrix = Matrix44.__new__(Matrix44)
-    cdef Camera default_camera = Camera.__new__(Camera)
-    default_camera.position = Vector((0, 0, width/2))
-    default_camera.focus = Zero3
-    default_camera.up = Vector((0, 1, 0))
-    default_camera.fov = 0.25
-    default_camera.orthographic = False
-    default_camera.ortho_width = width
-    default_camera.near = 1
-    default_camera.far = width
-    default_camera.fog_min = 0
-    default_camera.fog_max = 0
-    default_camera.fog_color = Zero3
-    default_camera.fog_curve = 1
-    default_camera.size = Vector.__new__(Vector, size)
-    default_camera = default_camera.derive(node, transform_matrix)
-    cdef Material material = Material.__new__(Material)
-    material.albedo = Zero3
-    material.roughness = 1
-    material.occlusion = 1
-    material.emissive = Zero3
-    cdef list render_sets = []
-    cdef dict cameras = {}
-    collect(node, transform_matrix, material, None, render_sets, default_camera, cameras)
-    cdef str camera_id = node.get_str('camera_id', None)
-    cdef Camera camera = cameras.get(camera_id, default_camera)
-    cdef RenderSet render_set
-    for render_set in render_sets:
-        if render_set.instances:
-            render(render_set, camera, glctx, objects, references)
-
-
-cdef void collect(Node node, Matrix44 transform_matrix, Material material, RenderSet render_set, list render_sets, Camera default_camera, dict cameras):
+cdef void collect(Node node, Matrix44 transform_matrix, Material material, RenderSet render_set, list render_sets,
+                  Camera default_camera, dict cameras, int max_samples):
     cdef str kind = node.kind
     cdef Light light
     cdef list lights, instances
@@ -344,14 +319,14 @@ cdef void collect(Node node, Matrix44 transform_matrix, Material material, Rende
         material = material.update(node)
         child = node.first_child
         while child is not None:
-            collect(child, transform_matrix, material, render_set, render_sets, default_camera, cameras)
+            collect(child, transform_matrix, material, render_set, render_sets, default_camera, cameras, max_samples)
             child = child.next_sibling
 
     elif node.kind == 'transform':
         transform_matrix = update_transform_matrix(node, transform_matrix)
         child = node.first_child
         while child is not None:
-            collect(child, transform_matrix, material, render_set, render_sets, default_camera, cameras)
+            collect(child, transform_matrix, material, render_set, render_sets, default_camera, cameras, max_samples)
             child = child.next_sibling
 
     elif node.kind == 'group' or node.kind == 'canvas3d':
@@ -374,7 +349,7 @@ cdef void collect(Node node, Matrix44 transform_matrix, Material material, Rende
         render_sets.append(render_set)
         child = node.first_child
         while child is not None:
-            collect(child, transform_matrix, material, render_set, render_sets, default_camera, cameras)
+            collect(child, transform_matrix, material, render_set, render_sets, default_camera, cameras, max_samples)
             child = child.next_sibling
 
     elif node.kind == 'light':
@@ -409,7 +384,7 @@ cdef void collect(Node node, Matrix44 transform_matrix, Material material, Rende
 
     elif node.kind == 'camera':
         if (camera_id := node.get_str('id', None)) is not None:
-            cameras[camera_id] = default_camera.derive(node, transform_matrix)
+            cameras[camera_id] = default_camera.derive(node, transform_matrix, max_samples)
 
 
 cdef Matrix44 instance_start_end_matrix(Vector start, Vector end, double radius):
@@ -710,31 +685,51 @@ cdef void dispatch_instances(glctx, dict objects, shader, Model model, int count
         shader['use_transparency_texture'] = False
 
 
+cdef class RenderTarget:
+    cdef int width
+    cdef int height
+    cdef int colorbits
+    cdef int samples
+    cdef object image_texture
+    cdef object image_framebuffer
+    cdef object color_renderbuffer
+    cdef object depth_renderbuffer
+    cdef object render_framebuffer
+
+    def __init__(self, Camera camera, glctx):
+        self.width = camera.width
+        self.height = camera.height
+        self.colorbits = camera.colorbits
+        self.samples = camera.samples
+        format = COLOR_FORMATS[self.colorbits]
+        self.image_texture = glctx.texture((self.width, self.height), 4, dtype=format.moderngl_dtype)
+        self.depth_renderbuffer = glctx.depth_renderbuffer((self.width, self.height), samples=self.samples)
+        if self.samples:
+            self.color_renderbuffer = glctx.renderbuffer((self.width, self.height), 4, samples=self.samples, dtype=format.moderngl_dtype)
+            self.render_framebuffer = glctx.framebuffer(color_attachments=(self.color_renderbuffer,), depth_attachment=self.depth_renderbuffer)
+            self.image_framebuffer = glctx.framebuffer(self.image_texture)
+            logger.debug("Created canvas3d {}x{}/{}-bit render target with {}x sampling", self.width, self.height, self.colorbits, self.samples)
+        else:
+            self.render_framebuffer = glctx.framebuffer(color_attachments=(self.image_texture,), depth_attachment=self.depth_renderbuffer)
+            logger.debug("Created canvas3d {}x{}/{}-bit render target", self.width, self.height, self.colorbits)
+
+    cdef bint matches(self, Camera camera):
+        return self.width == camera.width and self.height == camera.height and self.colorbits == camera.colorbits and self.samples == camera.samples
+
+
 class Canvas3D(SceneNode):
     def __init__(self, glctx):
         super().__init__(glctx)
-        self._image_texture = None
-        self._image_framebuffer = None
-        self._color_renderbuffer = None
-        self._depth_renderbuffer = None
-        self._render_framebuffer = None
-        self._colorbits = None
-        self._samples = None
+        self._render_target = None
         self._total_duration = 0
         self._total_count = 0
 
     @property
     def texture(self):
-        return self._image_texture
+        return (<RenderTarget>self._render_target).image_texture if self._render_target is not None else None
 
     def release(self):
-        self._colorbits = None
-        self._samples = None
-        self._render_framebuffer = None
-        self._image_texture = None
-        self._image_framebuffer = None
-        self._color_renderbuffer = None
-        self._depth_renderbuffer = None
+        self._render_target = None
 
     def purge(self):
         logger.info("{} draw stats - {:d} x {:.1f}ms = {:.1f}s", self.name, self._total_count,
@@ -743,46 +738,61 @@ class Canvas3D(SceneNode):
         self._total_count = 0
 
     def create(self, engine, node, resized, **kwargs):
-        colorbits = node.get('colorbits', 1, int, self.glctx.extra['colorbits'])
-        if colorbits not in COLOR_FORMATS:
-            colorbits = self.glctx.extra['colorbits']
-        samples = max(0, node.get('samples', 1, int, 0))
-        if samples:
-            samples = min(1 << int(log2(samples)), self.glctx.info['GL_MAX_SAMPLES'])
-        if resized or colorbits != self._colorbits or samples != self._samples:
-            self.release()
-            format = COLOR_FORMATS[colorbits]
-            self._image_texture = self.glctx.texture((self.width, self.height), 4, dtype=format.moderngl_dtype)
-            self._depth_renderbuffer = self.glctx.depth_renderbuffer((self.width, self.height), samples=samples)
-            if samples:
-                self._color_renderbuffer = self.glctx.renderbuffer((self.width, self.height), 4, samples=samples, dtype=format.moderngl_dtype)
-                self._render_framebuffer = self.glctx.framebuffer(color_attachments=(self._color_renderbuffer,), depth_attachment=self._depth_renderbuffer)
-                self._image_framebuffer = self.glctx.framebuffer(self._image_texture)
-                logger.debug("Created canvas3d {}x{}/{}-bit render target with {}x sampling", self.width, self.height, colorbits, samples)
-            else:
-                self._render_framebuffer = self.glctx.framebuffer(color_attachments=(self._image_texture,), depth_attachment=self._depth_renderbuffer)
-                logger.debug("Created canvas3d {}x{}/{}-bit render target", self.width, self.height, colorbits)
-            self._colorbits = colorbits
-            self._samples = samples
+        # Render target creation is postponed until rendering
+        pass
 
     async def descend(self, engine, node, **kwargs):
         # A canvas3d is a leaf node from the perspective of the OpenGL world
         pass
 
-    def render(self, node, references=None, **kwargs):
+    def render(self, Node node, dict references=None, **kwargs):
         self._total_duration -= system_clock()
-        self._render_framebuffer.use()
-        fog_min = node.get('fog_min', 1, float, 0)
-        fog_max = node.get('fog_max', 1, float, 0)
-        if fog_max > fog_min:
-            fog_color = node.get('fog_color', 3, float, (0, 0, 0))
-            self._render_framebuffer.clear(*fog_color)
+        cdef int width = self.width, height = self.height
+        cdef dict objects = self.glctx.extra.setdefault('canvas3d_objects', {})
+        cdef Matrix44 transform_matrix = Matrix44.__new__(Matrix44)
+        cdef Camera default_camera = Camera.__new__(Camera)
+        cdef int max_samples = self.glctx.info['GL_MAX_SAMPLES']
+        default_camera.position = Vector((0, 0, width/2))
+        default_camera.focus = Zero3
+        default_camera.up = Vector((0, 1, 0))
+        default_camera.fov = 0.25
+        default_camera.orthographic = False
+        default_camera.ortho_width = width
+        default_camera.near = 1
+        default_camera.far = width
+        default_camera.fog_min = 0
+        default_camera.fog_max = 0
+        default_camera.fog_color = Zero3
+        default_camera.fog_curve = 1
+        default_camera.width = width
+        default_camera.height = height
+        default_camera.colorbits = self.glctx.extra['colorbits']
+        default_camera.samples = 0
+        default_camera = default_camera.derive(node, transform_matrix, max_samples)
+        cdef Material material = Material.__new__(Material)
+        material.albedo = Zero3
+        material.roughness = 1
+        material.occlusion = 1
+        material.emissive = Zero3
+        cdef list render_sets = []
+        cdef dict cameras = {}
+        collect(node, transform_matrix, material, None, render_sets, default_camera, cameras, max_samples)
+        cdef str camera_id = node.get_str('camera_id', None)
+        cdef Camera camera = cameras.get(camera_id, default_camera)
+        if self._render_target is None or not (<RenderTarget>self._render_target).matches(camera):
+            self._render_target = RenderTarget(camera, self.glctx)
+        cdef RenderTarget render_target = self._render_target
+        render_target.render_framebuffer.use()
+        if camera.fog_max > camera.fog_min:
+            render_target.render_framebuffer.clear(*camera.fog_color)
         else:
-            self._render_framebuffer.clear()
-        objects = self.glctx.extra.setdefault('canvas3d_objects', {})
-        draw(node, (self.width, self.height), self.glctx, objects, references)
-        if self._image_framebuffer is not None:
-            self.glctx.copy_framebuffer(self._image_framebuffer, self._render_framebuffer)
+            render_target.render_framebuffer.clear()
+        cdef RenderSet render_set
+        for render_set in render_sets:
+            if render_set.instances:
+                render(render_set, camera, self.glctx, objects, references)
+        if render_target.image_framebuffer is not None:
+            self.glctx.copy_framebuffer(render_target.image_framebuffer, render_target.render_framebuffer)
         self._total_duration += system_clock()
         self._total_count += 1
 
