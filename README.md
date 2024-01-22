@@ -3,24 +3,29 @@ with trails moving outwards from the centre of the screen.](docs/header.jpg)
 
 # flitter
 
-**flitter** is a [functional programming language](/docs/language.md) and 2D/3D
-visuals engine designed for live performances. While **flitter** supports
-live-coding (live reload of source files while maintaining system state), it is
-designed primarily for driving via a MIDI surface.
+**flitter** is a [functional programming language](/docs/language.md) wrapped
+around a declarative system for describing 2D and 3D visuals. The language is
+designed to encourage an iterative, explorative, play-based approach to
+constructing generative visuals. The engine that runs **flitter** programs is
+able to live reload all code and assets while retaining current system state
+(thus supporting live-coding) while also having strong support for interacting
+with running programs via MIDI surfaces.
+
+**flitter** is designed for expressivity and ease of engine development over
+raw performance, but is sufficiently fast to be able to do interesting things.
 
 The engine that runs the language is capable of:
 
-- 2D drawing (loosely based on the HTML canvas/SVG model)
+- 2D drawing (loosely based on an HTML canvas/SVG model)
 - 3D rendering of primitive shapes and external triangular mesh models (in a
-bunch of formats including OBJ and STL); ambient, directional, point and
+variety of formats including OBJ and STL); ambient, directional, point and
 spot- light sources with (currently shadowless) [PBR](https://en.wikipedia.org/wiki/Physically_based_rendering)
 material shading; simple fog; perspective and orthographic projections;
-texture-mapping with the output of other visual units (like a drawing canvas or
-a video)
+texture-mapping - including with the output of other visual units (like a
+drawing canvas or a video)
 - simulating simple [physical particle systems](/docs/physics.md) (including
 spring/rod/rubber-band constraints, gravity, electrostatic charge, inertia,
-drag, barriers and collisions) and then hooking the simulation output up to
-drawing instructions
+drag, barriers and particle collisions)
 - playing videos at arbitrary speeds (including in reverse, although video will
 stutter if it makes extensive use of P-frames)
 - running GLSL shaders as stacked image generators and filters, with live
@@ -36,20 +41,26 @@ surfaces (other controllers relatively easy to add)
 
 Fundamentally, the system repeatedly evaluates a program with a beat counter
 and the current system state. The output of the program is a tree of nodes that
-describe visuals to be rendered, systems to be simulated and interfaces to be
-made available to the user. A series of renderers turn the nodes describing
-the visuals into 2D and 3D drawing commands (or DMX packets, or laser DAC
-values). It's sort of like using a functional language to build a web page
-DOM - something akin to React.
+describe visuals to be rendered, systems to be simulated and control interfaces
+to be made available to the user. A series of renderers turn the nodes
+describing the visuals into 2D and 3D drawing commands (or DMX packets, or laser
+DAC values).
+
+There is some documentation available in the [docs folder](/docs) and a few
+quick [examples](/examples) ready to run out of the box. There is also a
+separate repo containing [many more interesting examples](https://github.com/jonathanhogg/flitter-examples).
 
 ## Installing/running
 
 **flitter** is implemented in a mix of Python and Cython and requires OpenGL
-3.3 or above. I develop and use it exclusively on Intel macOS. I have done some
-limited testing on an Intel Ubuntu VM and on Apple Silicon and it seems to run
-fine on both of those platforms. I've not heard of anyone trying it on Windows
-yet, but there's no particular reason why it shouldn't work. If you have success
-or otherwise on another platform please let me know / raise an issue.
+3.3 or above. At least Python 3.10 is *required* as the code uses `match`/`case`
+syntax.
+
+I develop and use it exclusively on Intel macOS. I have done some limited
+testing on an Intel Ubuntu VM and on Apple Silicon and it seems to run fine on
+both of those platforms. I've not heard of anyone trying it on Windows yet, but
+there's no particular reason why it shouldn't work. If you have success or
+otherwise on another platform please let me know / raise an issue.
 
 If you want to try it out without cloning the repo, then you can install and
 try it **right now** with:
@@ -67,9 +78,11 @@ flitter path/to/some/flitter/script.fl
 I'd recommend doing this in a Python [virtual env](https://docs.python.org/3/library/venv.html),
 but you do you. Sadly, you won't have the examples handy doing it this way.
 
-If you clone the repo, then you can install from the top level directory with:
+If you clone this repo, then you can install from the top level directory:
 
 ```sh
+git clone https://github.com/jonathanhogg/flitter.git
+cd flitter
 pip3 install .
 ```
 
@@ -80,21 +93,11 @@ flitter examples/hoops.fl
 ```
 
 You might want to add the `--verbose` option to get some more logging. You can
-see a full list of available options with `--help`.
+see the full list of available options with `--help`.
 
-Everything else there is to know can be found in the [docs folder](/docs),
-examples or in the code.
+### Install and runtime dependencies
 
-## More examples
-
-As well as the few [examples](/examples) in this repo, there is a dedicated
-repo containing [more examples](https://github.com/jonathanhogg/flitter-examples).
-
-## Requirements
-
-At least Python 3.10 is *required* as the code uses `match`/`case` syntax.
-
-The full runtime dependencies are:
+The first-level runtime dependencies are:
 
 - `av` - for encoding and decoding video
 - `glfw` - for OpenGL windowing
@@ -109,16 +112,19 @@ The full runtime dependencies are:
 - `regex` - used by `lark` for advanced regular expressions
 - `rtmidi2` - for talking MIDI to control surfaces
 - `skia-python` - for 2D drawing
-- `trimesh` - for generating/loading 3D meshes
+- `trimesh` - for loading 3D meshes
 
 and the install-time dependencies are:
 
 - `cython` - because half of **flitter** is implemented in Cython for speed
 - `setuptools` - to run the build file
 
-If you want to muck about with the code then ensure Cython is installed in
-your runtime environment, do an editable package deployment, throw away the
-built code and let `pyximport` (re)compile it on-the-fly as you go:
+### Editable installations
+
+If you want to muck about with the code then ensure that `cython` and
+`setuptools` are installed in your runtime environment, do an editable
+package deployment, and then throw away the built code and let `pyximport`
+(re)compile it on-the-fly as you go:
 
 ```sh
 pip3 install cython setuptools
