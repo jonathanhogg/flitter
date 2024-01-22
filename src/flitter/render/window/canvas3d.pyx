@@ -179,6 +179,8 @@ cdef class Camera:
     cdef Vector focus
     cdef Vector up
     cdef double fov
+    cdef bint monochrome
+    cdef Vector tint
     cdef bint orthographic
     cdef double ortho_width
     cdef double near
@@ -211,6 +213,8 @@ cdef class Camera:
         else:
             camera.up = transform_matrix.inverse_transpose_matrix33().vmul(up).normalize()
         camera.fov = node.get_float('fov', self.fov)
+        camera.monochrome = node.get_bool('monochrome', self.monochrome)
+        camera.tint = node.get_fvec('tint', 3, self.tint)
         camera.orthographic = node.get_bool('orthographic', self.orthographic)
         camera.ortho_width = node.get_float('width', self.ortho_width)
         camera.near = max(1e-9, node.get_float('near', self.near))
@@ -476,6 +480,8 @@ cdef void render(RenderSet render_set, Camera camera, glctx, dict objects, dict 
                 set_uniform_vector(member, value)
     shader['pv_matrix'] = camera.pv_matrix
     shader['orthographic'] = camera.orthographic
+    shader['monochrome'] = camera.monochrome
+    shader['tint'] = camera.tint
     shader['view_position'] = camera.position
     shader['view_focus'] = camera.focus
     shader['fog_min'] = camera.fog_min
@@ -756,6 +762,8 @@ class Canvas3D(SceneNode):
         default_camera.focus = Zero3
         default_camera.up = Vector((0, 1, 0))
         default_camera.fov = 0.25
+        default_camera.monochrome = False
+        default_camera.tint = One3
         default_camera.orthographic = False
         default_camera.ortho_width = width
         default_camera.near = 1

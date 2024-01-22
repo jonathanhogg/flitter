@@ -20,6 +20,8 @@ uniform int nlights;
 uniform vec3 lights[${max_lights * 4}];
 uniform vec3 view_position;
 uniform vec3 view_focus;
+uniform bool monochrome;
+uniform vec3 tint;
 uniform bool orthographic;
 uniform float fog_max;
 uniform float fog_min;
@@ -143,5 +145,10 @@ void main() {
         }
     }
     float opacity = 1 - transparency;
-    fragment_color = vec4(mix(diffuse_color, fog_color, fog_alpha) * opacity + specular_color * (1 - fog_alpha), opacity);
+    vec3 final_color = mix(diffuse_color, fog_color, fog_alpha) * opacity + specular_color * (1 - fog_alpha);
+    if (monochrome) {
+        float grey = dot(final_color, greyscale);
+        final_color = vec3(grey);
+    }
+    fragment_color = vec4(final_color * tint, opacity);
 }
