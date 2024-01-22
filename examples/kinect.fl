@@ -1,0 +1,5 @@
+
+let SIZE=512;424
+
+!window size=SIZE
+    !kinect output=:combined
