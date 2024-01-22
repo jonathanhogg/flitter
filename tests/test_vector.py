@@ -5,6 +5,11 @@ Tests of the model.Vector class
 import math
 import unittest
 
+try:
+    from scipy.stats import kstest
+except ImportError:
+    kstest = None
+
 from flitter.model import Vector, true, false, null, Node
 
 
@@ -207,8 +212,8 @@ class TestVector(unittest.TestCase):
         self.assertIsNotNone(hash(Vector(test_func)))  # just check it works, value will not be stable
         self.assertIsNotNone(hash(Vector(test_class)))  # just check it works, value will not be stable
 
+    @unittest.skipIf(kstest is None, "no scipy")
     def test_hash_uniformity(self):
-        from scipy.stats import kstest
         hashes = []
         scale = 1 << 64
         for c0 in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ':

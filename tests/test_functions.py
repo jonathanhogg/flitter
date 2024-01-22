@@ -5,6 +5,11 @@ Tests of the flitter language built-in functions
 import math
 import unittest
 
+try:
+    from scipy.stats import kstest
+except ImportError:
+    kstest = None
+
 from flitter.model import Vector, Context, StateDict, null
 from flitter.language.functions import (Uniform, Normal, Beta, counter, hypot, angle, split, ordv, chrv)
 
@@ -70,8 +75,8 @@ class TestUniform(unittest.TestCase):
         self.assertIsNot(source1, source2)
         self.assertEqual(source1[:10_000], source2[:10_000])
 
+    @unittest.skipIf(kstest is None, "no scipy")
     def test_distribution(self):
-        from scipy.stats import kstest
         for i in range(2):
             with self.subTest(i=i):
                 result = kstest(self.FACTORY(i)[:10_000_000], *self.DISTRIBUTION)

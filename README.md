@@ -108,7 +108,6 @@ The full runtime dependencies are:
 - `pyusb` - for low-level communication with the Push 2 and LaserCube
 - `regex` - used by `lark` for advanced regular expressions
 - `rtmidi2` - for talking MIDI to control surfaces
-- `scipy` - used by `trimesh` for some operations
 - `skia-python` - for 2D drawing
 - `trimesh` - for generating/loading 3D meshes
 
