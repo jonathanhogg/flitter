@@ -46,7 +46,6 @@ cdef class Model:
             if name in objects:
                 del objects[name]
             return None, None
-        logger.trace("Preparing model {}", name)
         while len(ModelCache) > MaxModelCacheEntries:
             dead_name = next(iter(ModelCache))
             del ModelCache[dead_name]
@@ -69,6 +68,7 @@ cdef class Model:
             vertex_data = np.hstack((trimesh_model.vertices, vertex_normals, vertex_uvs)).astype('f4')
             index_data = faces.astype('i4')
             buffers = (glctx.buffer(vertex_data), glctx.buffer(index_data))
+        logger.trace("Prepared model {} with {} vertices and {} faces", name, len(trimesh_model.vertices), len(trimesh_model.faces))
         objects[name] = buffers
         return buffers
 
