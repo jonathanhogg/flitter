@@ -1539,6 +1539,7 @@ cdef class Matrix44(Vector):
                 result_numbers[3*i+j] = numbers[4*i+j]
         return result
 
+    @cython.cdivision(True)
     cpdef Matrix33 inverse_transpose_matrix33(self):
         cdef double* numbers = self.numbers
         cdef double s0 = numbers[0]*numbers[5] - numbers[4]*numbers[1]
