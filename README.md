@@ -3,8 +3,8 @@ with trails moving outwards from the centre of the screen.](docs/header.jpg)
 
 # Flitter
 
-**Flitter** is a [functional programming language](/docs/language.md) wrapped
-around a declarative system for describing 2D and 3D visuals. The language is
+**Flitter** is a functional programming language wrapped around a declarative
+system for describing 2D and 3D visuals. [The language](/docs/language.md) is
 designed to encourage an iterative, explorative, play-based approach to
 constructing generative visuals. The engine that runs **Flitter** programs is
 able to live reload all code and assets while retaining current system state
@@ -31,7 +31,8 @@ stutter if it makes extensive use of P-frames)
 - running GLSL shaders as stacked image generators and filters, with live
 manipulation of uniforms and live reload of source
 - compositing all of the above and rendering to one or more windows
-- saving rendering output to image and video files
+- saving rendering output to image and video files (including the lockstep
+frame-by-frame video output suitable for producing perfect loops)
 - driving arbitrary DMX fixtures via a USB DMX interface (currently via an
 Entec-compatible interface or my own crazy hand-built devices)
 - driving a LaserCube plugged in over USB (other lasers probably easy-ish to
