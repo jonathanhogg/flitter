@@ -160,13 +160,21 @@ cdef class Sphere(TrimeshModel):
         cdef int row, col, i=0, j=0
         for row in range(nrows + 1):
             v = <float>row/nrows
-            th = Tau*(v-0.5)/2
-            r = cos(th)
-            z = sin(th)
+            if row == 0:
+                r, z = 0, -1
+            elif row == nrows:
+                r, z = 0, 1
+            else:
+                th = Tau*(v-0.5)/2
+                r, z = cos(th), sin(th)
             for col in range(ncols+1):
                 u = (col+0.5)/ncols if row == 0 else ((col-0.5)/ncols if row == nrows else <float>col/ncols)
-                x = r*cos(Tau*u)
-                y = r*sin(Tau*u)
+                if col == 0:
+                    x, y = r, 0
+                elif col == ncols:
+                    x, y = r, 0
+                else:
+                    x, y = r*cos(Tau*u), r*sin(Tau*u)
                 vertices[i, 0], vertices[i, 1], vertices[i, 2] = x, y, z
                 vertex_normals[i, 0], vertex_normals[i, 1], vertex_normals[i, 2] = x, y, z
                 vertex_uv[i, 0], vertex_uv[i, 1] = u, v
