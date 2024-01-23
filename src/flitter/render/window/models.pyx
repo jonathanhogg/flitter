@@ -75,14 +75,17 @@ cdef class Model:
     cdef Model transform(self, Matrix44 transform_matrix):
         return TransformedModel.get(self, transform_matrix)
 
-    cdef Model intersect(self, Node node, Model other):
-        return IntersectionModel.get(node, self, other)
+    @staticmethod
+    cdef Model intersect(Node node, list models):
+        return IntersectionModel.get(node, models)
 
-    cdef Model union(self, Node node, Model other):
-        return UnionModel.get(node, self, other)
+    @staticmethod
+    cdef Model union(Node node, list models):
+        return UnionModel.get(node, models)
 
-    cdef Model difference(self, Node node, Model other):
-        return DifferenceModel.get(node, self, other)
+    @staticmethod
+    cdef Model difference(Node node, list models):
+        return DifferenceModel.get(node, models)
 
     @staticmethod
     cdef Model get_box(Node node):
@@ -136,36 +139,36 @@ cdef class TransformedModel(Model):
 cdef class BooleanOperationModel(Model):
     cdef double smooth
     cdef double minimum_area
-    cdef Model left
-    cdef Model right
+    cdef list models
 
     cdef bint trimesh_model_unchanged(self):
-        cdef bint left_unchanged = self.left.trimesh_model_unchanged()
-        cdef bint right_unchanged = self.right.trimesh_model_unchanged()
-        if self.trimesh_model is not None and left_unchanged and right_unchanged:
+        cdef bint unchanged = True
+        cdef Model model
+        for model in self.models:
+            unchanged = model.trimesh_model_unchanged() and unchanged
+        if self.trimesh_model is not None and unchanged:
             return True
         self.trimesh_model = self.build_trimesh_model()
         return False
 
     cdef object build_trimesh_model(self):
-        left = self.left.trimesh_model
-        right = self.right.trimesh_model
-        if left is None or right is None:
+        cdef list trimesh_models = []
+        cdef Model model
+        for model in self.models:
+            if model.trimesh_model is None:
+                continue
+            trimesh_model = model.trimesh_model.copy()
+            if not trimesh_model.is_watertight:
+                trimesh_model.merge_vertices(merge_tex=True, merge_norm=True)
+                if not trimesh_model.is_watertight and not trimesh_model.fill_holes():
+                    trimesh_model = trimesh_model.convex_hull
+            trimesh_models.append(trimesh_model)
+        if not trimesh_models:
             return None
-        left = left.copy()
-        if not left.is_watertight:
-            left.merge_vertices(merge_tex=True, merge_norm=True)
-            if not left.is_watertight and not left.fill_holes():
-                left = left.convex_hull
-        if not right.is_watertight:
-            right = right.copy()
-            right.merge_vertices(merge_tex=True, merge_norm=True)
-            if not right.is_watertight and not right.fill_holes():
-                right = right.convex_hull
-        trimesh_model = self.boolean_op(left, right)
+        trimesh_model = self.boolean_op(trimesh_models)
         return trimesh_model if len(trimesh_model.vertices) and len(trimesh_model.faces) else None
 
-    cdef object boolean_op(self, object left, object right):
+    cdef object boolean_op(self, list trimesh_models):
         raise NotImplementedError()
 
     cdef object get_render_trimesh_model(self):
@@ -176,65 +179,74 @@ cdef class BooleanOperationModel(Model):
 
 cdef class IntersectionModel(BooleanOperationModel):
     @staticmethod
-    cdef IntersectionModel get(Node node, Model left, Model right):
+    cdef IntersectionModel get(Node node, list models):
         cdef double smooth = node.get_float('smooth', DefaultSmooth)
         cdef double minimum_area = max(1e-4, node.get_float('minimum_area', DefaultMinimumArea))
-        cdef str name = f'intersect({left.name}, {right.name}, {smooth:g}, {minimum_area:g})'
+        cdef Model child_model
+        cdef list names = []
+        for child_model in models:
+            names.append(child_model.name)
+        cdef str name = f'intersect({", ".join(names)}, {smooth:g}, {minimum_area:g})'
         cdef IntersectionModel model = ModelCache.pop(name, None)
         if model is None:
             model = IntersectionModel.__new__(IntersectionModel)
             model.name = name
             model.smooth = smooth
             model.minimum_area = minimum_area
-            model.left = left
-            model.right = right
+            model.models = models
         ModelCache[name] = model
         return model
 
-    cdef object boolean_op(self, object left, object right):
-        return left.intersection(right)
+    cdef object boolean_op(self, list trimesh_models):
+        return trimesh.boolean.intersection(trimesh_models, engine='manifold')
 
 
 cdef class UnionModel(BooleanOperationModel):
     @staticmethod
-    cdef UnionModel get(Node node, Model left, Model right):
+    cdef UnionModel get(Node node, list models):
         cdef double smooth = node.get_float('smooth', DefaultSmooth)
         cdef double minimum_area = max(1e-4, node.get_float('minimum_area', DefaultMinimumArea))
-        cdef str name = f'union({left.name}, {right.name}, {smooth:g}, {minimum_area:g})'
+        cdef Model child_model
+        cdef list names = []
+        for child_model in models:
+            names.append(child_model.name)
+        cdef str name = f'union({", ".join(names)}, {smooth:g}, {minimum_area:g})'
         cdef UnionModel model = ModelCache.pop(name, None)
         if model is None:
             model = UnionModel.__new__(UnionModel)
             model.name = name
             model.smooth = smooth
             model.minimum_area = minimum_area
-            model.left = left
-            model.right = right
+            model.models = models
         ModelCache[name] = model
         return model
 
-    cdef object boolean_op(self, object left, object right):
-        return left.union(right)
+    cdef object boolean_op(self, list trimesh_models):
+        return trimesh.boolean.union(trimesh_models, engine='manifold')
 
 
 cdef class DifferenceModel(BooleanOperationModel):
     @staticmethod
-    cdef DifferenceModel get(Node node, Model left, Model right):
+    cdef DifferenceModel get(Node node, list models):
         cdef double smooth = node.get_float('smooth', DefaultSmooth)
         cdef double minimum_area = max(1e-4, node.get_float('minimum_area', DefaultMinimumArea))
-        cdef str name = f'difference({left.name}, {right.name}, {smooth:g}, {minimum_area:g})'
+        cdef Model child_model
+        cdef list names = []
+        for child_model in models:
+            names.append(child_model.name)
+        cdef str name = f'difference({", ".join(names)}, {smooth:g}, {minimum_area:g})'
         cdef DifferenceModel model = ModelCache.pop(name, None)
         if model is None:
             model = DifferenceModel.__new__(DifferenceModel)
             model.name = name
             model.smooth = smooth
             model.minimum_area = minimum_area
-            model.left = left
-            model.right = right
+            model.models = models
         ModelCache[name] = model
         return model
 
-    cdef object boolean_op(self, object left, object right):
-        return left.difference(right)
+    cdef object boolean_op(self, list trimesh_models):
+        return trimesh.boolean.difference(trimesh_models, engine='manifold')
 
 
 cdef class PrimitiveModel(Model):

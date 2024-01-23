@@ -322,30 +322,51 @@ cdef Model get_model(Node node, bint top):
     cdef Node child
     cdef Model model = None
     cdef Model child_model = None
+    cdef list models
     if node.kind == 'intersect':
+        models = []
         child = node.first_child
         while child is not None:
             child_model = get_model(child, False)
-            model = child_model if model is None else model.intersect(node, child_model)
+            models.append(child_model)
             child = child.next_sibling
+        if len(models) == 1:
+            model = models[0]
+        else:
+            model = Model.intersect(node, models)
     elif node.kind == 'union':
+        models = []
         child = node.first_child
         while child is not None:
             child_model = get_model(child, False)
-            model = child_model if model is None else model.union(node, child_model)
+            models.append(child_model)
             child = child.next_sibling
+        if len(models) == 1:
+            model = models[0]
+        else:
+            model = Model.union(node, models)
     elif node.kind == 'difference':
+        models = []
         child = node.first_child
         while child is not None:
             child_model = get_model(child, False)
-            model = child_model if model is None else model.difference(node, child_model)
+            models.append(child_model)
             child = child.next_sibling
+        if len(models) == 1:
+            model = models[0]
+        else:
+            model = Model.difference(node, models)
     elif node.kind == 'transform':
+        models = []
         child = node.first_child
         while child is not None:
             child_model = get_model(child, False)
-            model = child_model if model is None else model.union(node, child_model)
+            models.append(child_model)
             child = child.next_sibling
+        if len(models) == 1:
+            model = models[0]
+        else:
+            model = Model.union(node, models)
         if model is not None and (transform_matrix := update_transform_matrix(node, IdentityTransform)) is not IdentityTransform:
             model = model.transform(transform_matrix)
     else:

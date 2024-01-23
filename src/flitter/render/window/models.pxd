@@ -15,10 +15,13 @@ cdef class Model:
     cdef tuple get_buffers(self, object glctx, dict objects)
 
     cdef Model transform(self, Matrix44 transform_matrix)
-    cdef Model intersect(self, Node node, Model model)
-    cdef Model union(self, Node node, Model model)
-    cdef Model difference(self, Node node, Model model)
 
+    @staticmethod
+    cdef Model intersect(Node node, list models)
+    @staticmethod
+    cdef Model union(Node node, list models)
+    @staticmethod
+    cdef Model difference(Node node, list models)
     @staticmethod
     cdef Model get_box(Node node)
     @staticmethod
