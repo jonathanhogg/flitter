@@ -9,42 +9,23 @@ cdef class Model:
     cdef bint invert
     cdef object trimesh_model
 
-    cdef object get_trimesh_model(self)
+    cdef bint trimesh_model_unchanged(self)
+    cdef object build_trimesh_model(self)
+    cdef object get_render_trimesh_model(self)
     cdef tuple get_buffers(self, object glctx, dict objects)
+
     cdef Model transform(self, Matrix44 transform_matrix)
-    cdef Model intersect(self, Model model)
-    cdef Model union(self, Model model)
-    cdef Model difference(self, Model model)
-
-
-cdef class Box(Model):
-    @staticmethod
-    cdef Box get(Node node)
-
-
-cdef class Sphere(Model):
-    cdef int segments
+    cdef Model intersect(self, Node node, Model model)
+    cdef Model union(self, Node node, Model model)
+    cdef Model difference(self, Node node, Model model)
 
     @staticmethod
-    cdef Sphere get(Node node)
-
-
-cdef class Cylinder(Model):
-    cdef int segments
-
+    cdef Model get_box(Node node)
     @staticmethod
-    cdef Cylinder get(Node node)
-
-
-cdef class Cone(Model):
-    cdef int segments
-
+    cdef Model get_sphere(Node node)
     @staticmethod
-    cdef Cone get(Node node)
-
-
-cdef class ExternalModel(Model):
-    cdef str filename
-
+    cdef Model get_cylinder(Node node)
     @staticmethod
-    cdef ExternalModel get(Node node)
+    cdef Model get_cone(Node node)
+    @staticmethod
+    cdef Model get_external(Node node)

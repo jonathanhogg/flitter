@@ -18,7 +18,7 @@ from ... import name_patch
 from ...clock import system_clock
 from ...model cimport Node, Vector, Matrix44, Matrix33, null_, true_
 from .glsl import TemplateLoader
-from .models cimport Model, Box, Cylinder, Cone, Sphere, ExternalModel
+from .models cimport Model
 
 
 logger = name_patch(logger, __name__)
@@ -318,47 +318,48 @@ cdef Matrix44 get_model_transform(Node node, Matrix44 transform_matrix):
     return transform_matrix
 
 
-cdef Model get_model(Node node, Matrix44 transform_matrix):
+cdef Model get_model(Node node, bint top):
     cdef Node child
     cdef Model model = None
     cdef Model child_model = None
     if node.kind == 'intersect':
         child = node.first_child
         while child is not None:
-            child_model = get_model(child, transform_matrix)
-            model = child_model if model is None else model.intersect(child_model)
+            child_model = get_model(child, False)
+            model = child_model if model is None else model.intersect(node, child_model)
             child = child.next_sibling
     elif node.kind == 'union':
         child = node.first_child
         while child is not None:
-            child_model = get_model(child, transform_matrix)
-            model = child_model if model is None else model.union(child_model)
+            child_model = get_model(child, False)
+            model = child_model if model is None else model.union(node, child_model)
             child = child.next_sibling
     elif node.kind == 'difference':
         child = node.first_child
         while child is not None:
-            child_model = get_model(child, transform_matrix)
-            model = child_model if model is None else model.difference(child_model)
+            child_model = get_model(child, False)
+            model = child_model if model is None else model.difference(node, child_model)
             child = child.next_sibling
     elif node.kind == 'transform':
-        transform_matrix = update_transform_matrix(node, transform_matrix)
         child = node.first_child
         while child is not None:
-            child_model = get_model(child, transform_matrix)
-            model = child_model if model is None else model.union(child_model)
+            child_model = get_model(child, False)
+            model = child_model if model is None else model.union(node, child_model)
             child = child.next_sibling
+        if model is not None and (transform_matrix := update_transform_matrix(node, IdentityTransform)) is not IdentityTransform:
+            model = model.transform(transform_matrix)
     else:
         if node.kind == 'box':
-            model = Box.get(node)
+            model = Model.get_box(node)
         elif node.kind == 'sphere':
-            model = Sphere.get(node)
+            model = Model.get_sphere(node)
         elif node.kind == 'cylinder':
-            model = Cylinder.get(node)
+            model = Model.get_cylinder(node)
         elif node.kind == 'cone':
-            model = Cone.get(node)
+            model = Model.get_cone(node)
         elif node.kind == 'model':
-            model = ExternalModel.get(node)
-        if model is not None and (transform_matrix := get_model_transform(node, transform_matrix)) is not IdentityTransform:
+            model = Model.get_external(node)
+        if model is not None and not top and (transform_matrix := get_model_transform(node, IdentityTransform)) is not IdentityTransform:
             model = model.transform(transform_matrix)
     return model
 
@@ -447,7 +448,7 @@ cdef void collect(Node node, Matrix44 transform_matrix, Material material, Rende
         if (camera_id := node.get_str('id', None)) is not None:
             cameras[camera_id] = default_camera.derive(node, transform_matrix, max_samples)
 
-    elif (model := get_model(node, IdentityTransform)) is not None:
+    elif (model := get_model(node, True)) is not None:
         material = material.update(node)
         instance = Instance.__new__(Instance)
         instance.model_matrix = get_model_transform(node, transform_matrix)

@@ -17,6 +17,8 @@ cdef dict ModelCache = {}
 cdef int MaxModelCacheEntries = 4096
 cdef double Tau = 6.283185307179586
 cdef double RootHalf = sqrt(0.5)
+cdef double DefaultSmooth = 0.1
+cdef double DefaultMinimumArea = 0.01
 
 
 cdef class Model:
@@ -26,15 +28,20 @@ cdef class Model:
     def __eq__(self, other):
         return self is other
 
-    cdef object get_trimesh_model(self):
+    cdef bint trimesh_model_unchanged(self):
+        raise NotImplementedError()
+
+    cdef object get_render_trimesh_model(self):
+        return self.trimesh_model
+
+    cdef object build_trimesh_model(self):
         raise NotImplementedError()
 
     cdef tuple get_buffers(self, object glctx, dict objects):
         cdef str name = self.name
-        trimesh_model = self.get_trimesh_model()
-        if trimesh_model is self.trimesh_model and name in objects:
+        if self.trimesh_model_unchanged() and name in objects:
             return objects[name]
-        self.trimesh_model = trimesh_model
+        trimesh_model = self.get_render_trimesh_model()
         if trimesh_model is None:
             if name in objects:
                 del objects[name]
@@ -68,14 +75,34 @@ cdef class Model:
     cdef Model transform(self, Matrix44 transform_matrix):
         return TransformedModel.get(self, transform_matrix)
 
-    cdef Model intersect(self, Model other):
-        return IntersectionModel.get(self, other)
+    cdef Model intersect(self, Node node, Model other):
+        return IntersectionModel.get(node, self, other)
 
-    cdef Model union(self, Model other):
-        return UnionModel.get(self, other)
+    cdef Model union(self, Node node, Model other):
+        return UnionModel.get(node, self, other)
 
-    cdef Model difference(self, Model other):
-        return DifferenceModel.get(self, other)
+    cdef Model difference(self, Node node, Model other):
+        return DifferenceModel.get(node, self, other)
+
+    @staticmethod
+    cdef Model get_box(Node node):
+        return Box.get(node)
+
+    @staticmethod
+    cdef Model get_sphere(Node node):
+        return Sphere.get(node)
+
+    @staticmethod
+    cdef Model get_cylinder(Node node):
+        return Cylinder.get(node)
+
+    @staticmethod
+    cdef Model get_cone(Node node):
+        return Cone.get(node)
+
+    @staticmethod
+    cdef Model get_external(Node node):
+        return ExternalModel.get(node)
 
 
 cdef class TransformedModel(Model):
@@ -94,102 +121,131 @@ cdef class TransformedModel(Model):
         ModelCache[name] = model
         return model
 
-    cdef object get_trimesh_model(self):
-        if self.trimesh_model is None:
-            transform_array = np.array(self.transform_matrix, dtype='float64').reshape((4, 4)).transpose()
-            trimesh_model = self.original.get_trimesh_model().copy().apply_transform(transform_array)
-            self.trimesh_model = trimesh_model if len(trimesh_model.vertices) and len(trimesh_model.faces) else None
-        return self.trimesh_model
+    cdef bint trimesh_model_unchanged(self):
+        if self.original.trimesh_model_unchanged() and self.trimesh_model is not None:
+            return True
+        self.trimesh_model = self.build_trimesh_model()
+        return False
+
+    cdef object build_trimesh_model(self):
+        transform_array = np.array(self.transform_matrix, dtype='float64').reshape((4, 4)).transpose()
+        trimesh_model = self.original.build_trimesh_model().copy().apply_transform(transform_array)
+        return trimesh_model if len(trimesh_model.vertices) and len(trimesh_model.faces) else None
 
 
-cdef class IntersectionModel(Model):
+cdef class BooleanOperationModel(Model):
+    cdef double smooth
+    cdef double minimum_area
     cdef Model left
     cdef Model right
 
+    cdef bint trimesh_model_unchanged(self):
+        cdef bint left_unchanged = self.left.trimesh_model_unchanged()
+        cdef bint right_unchanged = self.right.trimesh_model_unchanged()
+        if self.trimesh_model is not None and left_unchanged and right_unchanged:
+            return True
+        self.trimesh_model = self.build_trimesh_model()
+        return False
+
+    cdef object build_trimesh_model(self):
+        left = self.left.trimesh_model
+        right = self.right.trimesh_model
+        if left is None or right is None:
+            return None
+        left = left.copy()
+        if not left.is_watertight:
+            left.merge_vertices(merge_tex=True, merge_norm=True)
+            if not left.is_watertight and not left.fill_holes():
+                left = left.convex_hull
+        if not right.is_watertight:
+            right = right.copy()
+            right.merge_vertices(merge_tex=True, merge_norm=True)
+            if not right.is_watertight and not right.fill_holes():
+                right = right.convex_hull
+        trimesh_model = self.boolean_op(left, right)
+        return trimesh_model if len(trimesh_model.vertices) and len(trimesh_model.faces) else None
+
+    cdef object boolean_op(self, object left, object right):
+        raise NotImplementedError()
+
+    cdef object get_render_trimesh_model(self):
+        if self.trimesh_model is None:
+            return None
+        return trimesh.graph.smooth_shade(self.trimesh_model, angle=self.smooth*Tau, facet_minarea=1/self.minimum_area)
+
+
+cdef class IntersectionModel(BooleanOperationModel):
     @staticmethod
-    cdef IntersectionModel get(Model left, Model right):
-        cdef str name = f'intersect({left.name}, {right.name})'
+    cdef IntersectionModel get(Node node, Model left, Model right):
+        cdef double smooth = node.get_float('smooth', DefaultSmooth)
+        cdef double minimum_area = max(1e-4, node.get_float('minimum_area', DefaultMinimumArea))
+        cdef str name = f'intersect({left.name}, {right.name}, {smooth:g}, {minimum_area:g})'
         cdef IntersectionModel model = ModelCache.pop(name, None)
         if model is None:
             model = IntersectionModel.__new__(IntersectionModel)
             model.name = name
+            model.smooth = smooth
+            model.minimum_area = minimum_area
             model.left = left
             model.right = right
         ModelCache[name] = model
         return model
 
-    cdef object get_trimesh_model(self):
-        if self.trimesh_model is None:
-            left = self.left.get_trimesh_model()
-            if not left.is_watertight:
-                left = left.convex_hull
-            right = self.right.get_trimesh_model()
-            if not right.is_watertight:
-                right = right.convex_hull
-            trimesh_model = left.copy().intersection(right).smooth_shaded
-            self.trimesh_model = trimesh_model if len(trimesh_model.vertices) and len(trimesh_model.faces) else None
-        return self.trimesh_model
+    cdef object boolean_op(self, object left, object right):
+        return left.intersection(right)
 
 
-cdef class UnionModel(Model):
-    cdef Model left
-    cdef Model right
-
+cdef class UnionModel(BooleanOperationModel):
     @staticmethod
-    cdef UnionModel get(Model left, Model right):
-        cdef str name = f'union({left.name}, {right.name})'
+    cdef UnionModel get(Node node, Model left, Model right):
+        cdef double smooth = node.get_float('smooth', DefaultSmooth)
+        cdef double minimum_area = max(1e-4, node.get_float('minimum_area', DefaultMinimumArea))
+        cdef str name = f'union({left.name}, {right.name}, {smooth:g}, {minimum_area:g})'
         cdef UnionModel model = ModelCache.pop(name, None)
         if model is None:
             model = UnionModel.__new__(UnionModel)
             model.name = name
+            model.smooth = smooth
+            model.minimum_area = minimum_area
             model.left = left
             model.right = right
         ModelCache[name] = model
         return model
 
-    cdef object get_trimesh_model(self):
-        if self.trimesh_model is None:
-            left = self.left.get_trimesh_model()
-            if not left.is_watertight:
-                left = left.convex_hull
-            right = self.right.get_trimesh_model()
-            if not right.is_watertight:
-                right = right.convex_hull
-            trimesh_model = left.copy().union(right).smooth_shaded
-            self.trimesh_model = trimesh_model if len(trimesh_model.vertices) and len(trimesh_model.faces) else None
-        return self.trimesh_model
+    cdef object boolean_op(self, object left, object right):
+        return left.union(right)
 
 
-cdef class DifferenceModel(Model):
-    cdef Model left
-    cdef Model right
-
+cdef class DifferenceModel(BooleanOperationModel):
     @staticmethod
-    cdef DifferenceModel get(Model left, Model right):
-        cdef str name = f'difference({left.name}, {right.name})'
+    cdef DifferenceModel get(Node node, Model left, Model right):
+        cdef double smooth = node.get_float('smooth', DefaultSmooth)
+        cdef double minimum_area = max(1e-4, node.get_float('minimum_area', DefaultMinimumArea))
+        cdef str name = f'difference({left.name}, {right.name}, {smooth:g}, {minimum_area:g})'
         cdef DifferenceModel model = ModelCache.pop(name, None)
         if model is None:
             model = DifferenceModel.__new__(DifferenceModel)
             model.name = name
+            model.smooth = smooth
+            model.minimum_area = minimum_area
             model.left = left
             model.right = right
         ModelCache[name] = model
         return model
 
-    cdef object get_trimesh_model(self):
+    cdef object boolean_op(self, object left, object right):
+        return left.difference(right)
+
+
+cdef class PrimitiveModel(Model):
+    cdef bint trimesh_model_unchanged(self):
         if self.trimesh_model is None:
-            left = self.left.get_trimesh_model()
-            if not left.is_watertight:
-                left = left.convex_hull
-            right = self.right.get_trimesh_model()
-            if not right.is_watertight:
-                right = right.convex_hull
-            trimesh_model = left.copy().difference(right).smooth_shaded
-            self.trimesh_model = trimesh_model if len(trimesh_model.vertices) and len(trimesh_model.faces) else None
-        return self.trimesh_model
+            self.trimesh_model = self.build_trimesh_model()
+            return False
+        return True
 
 
-cdef class Box(Model):
+cdef class Box(PrimitiveModel):
     Vertices = np.array([
         (-.5,-.5,+.5), (+.5,-.5,+.5), (+.5,+.5,+.5), (-.5,+.5,+.5),
         (-.5,+.5,+.5), (+.5,+.5,+.5), (+.5,+.5,-.5), (-.5,+.5,-.5),
@@ -237,15 +293,14 @@ cdef class Box(Model):
         ModelCache[name] = model
         return model
 
-    cdef object get_trimesh_model(self):
-        if self.trimesh_model is not None:
-            return self.trimesh_model
+    cdef object build_trimesh_model(self):
         visual = trimesh.visual.texture.TextureVisuals(uv=Box.VertexUV)
-        self.trimesh_model = trimesh.base.Trimesh(vertices=Box.Vertices, vertex_normals=Box.VertexNormals, faces=Box.Faces, visual=visual)
-        return self.trimesh_model
+        return trimesh.base.Trimesh(vertices=Box.Vertices, vertex_normals=Box.VertexNormals, faces=Box.Faces, visual=visual)
 
 
-cdef class Sphere(Model):
+cdef class Sphere(PrimitiveModel):
+    cdef int segments
+
     @staticmethod
     cdef Sphere get(Node node):
         cdef bint flat = node.get_bool('flat', False)
@@ -269,9 +324,7 @@ cdef class Sphere(Model):
         return model
 
     @cython.cdivision(True)
-    cdef object get_trimesh_model(self):
-        if self.trimesh_model is not None:
-            return self.trimesh_model
+    cdef object build_trimesh_model(self):
         cdef int ncols = self.segments, nrows = ncols//2, nvertices = (nrows+1)*(ncols+1), nfaces = (2+(nrows-2)*2)*ncols
         cdef object vertices_array = np.empty((nvertices, 3), dtype='f4')
         cdef float[:,:] vertices = vertices_array
@@ -312,11 +365,12 @@ cdef class Sphere(Model):
                         j += 1
                 i += 1
         visual = trimesh.visual.texture.TextureVisuals(uv=vertex_uv_array)
-        self.trimesh_model = trimesh.base.Trimesh(vertices=vertices_array, vertex_normals=vertex_normals_array, faces=faces_array, visual=visual)
-        return self.trimesh_model
+        return trimesh.base.Trimesh(vertices=vertices_array, vertex_normals=vertex_normals_array, faces=faces_array, visual=visual)
 
 
-cdef class Cylinder(Model):
+cdef class Cylinder(PrimitiveModel):
+    cdef int segments
+
     @staticmethod
     cdef Cylinder get(Node node):
         cdef bint flat = node.get_bool('flat', False)
@@ -340,9 +394,7 @@ cdef class Cylinder(Model):
 
     @cython.cdivision(True)
     @cython.boundscheck(False)
-    cdef object get_trimesh_model(self):
-        if self.trimesh_model is not None:
-            return self.trimesh_model
+    cdef object build_trimesh_model(self):
         cdef int i, j, k, n = self.segments, m = (n+1)*6
         cdef object vertices_array = np.empty((m, 3), dtype='f4')
         cdef float[:,:] vertices = vertices_array
@@ -403,11 +455,12 @@ cdef class Cylinder(Model):
                 # top face
                 faces[j, 0], faces[j, 1], faces[j, 2] = k+5, k+4, k+4+6
         visual = trimesh.visual.texture.TextureVisuals(uv=vertex_uv_array)
-        self.trimesh_model = trimesh.base.Trimesh(vertices=vertices_array, vertex_normals=vertex_normals_array, faces=faces_array, visual=visual)
-        return self.trimesh_model
+        return trimesh.base.Trimesh(vertices=vertices_array, vertex_normals=vertex_normals_array, faces=faces_array, visual=visual)
 
 
-cdef class Cone(Model):
+cdef class Cone(PrimitiveModel):
+    cdef int segments
+
     @staticmethod
     cdef Cone get(Node node):
         cdef bint flat = node.get_bool('flat', False)
@@ -431,9 +484,7 @@ cdef class Cone(Model):
 
     @cython.cdivision(True)
     @cython.boundscheck(False)
-    cdef object get_trimesh_model(self):
-        if self.trimesh_model is not None:
-            return self.trimesh_model
+    cdef object build_trimesh_model(self):
         cdef int i, j, k, n = self.segments, m = (n+1)*4
         cdef object vertices_array = np.empty((m, 3), dtype='f4')
         cdef float[:,:] vertices = vertices_array
@@ -479,11 +530,12 @@ cdef class Cone(Model):
                 # side face
                 faces[j, 0], faces[j, 1], faces[j, 2] = k+3, k+2, k+2+4
         visual = trimesh.visual.texture.TextureVisuals(uv=vertex_uv_array)
-        self.trimesh_model = trimesh.base.Trimesh(vertices=vertices_array, vertex_normals=vertex_normals_array, faces=faces_array, visual=visual)
-        return self.trimesh_model
+        return trimesh.base.Trimesh(vertices=vertices_array, vertex_normals=vertex_normals_array, faces=faces_array, visual=visual)
 
 
 cdef class ExternalModel(Model):
+    cdef str filename
+
     @staticmethod
     cdef ExternalModel get(Node node):
         cdef str filename = node.get_str('filename', None)
@@ -507,5 +559,12 @@ cdef class ExternalModel(Model):
         ModelCache[name] = model
         return model
 
-    cdef object get_trimesh_model(self):
+    cdef bint trimesh_model_unchanged(self):
+        trimesh_model = self.build_trimesh_model()
+        if self.trimesh_model is trimesh_model:
+            return True
+        self.trimesh_model = trimesh_model
+        return False
+
+    cdef object build_trimesh_model(self):
         return SharedCache[self.filename].read_trimesh_model()

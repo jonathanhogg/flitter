@@ -101,7 +101,7 @@ The first-level runtime dependencies are:
 - `lark` - for the language parser
 - `loguru` - for enhanced logging
 - `mako` - for templating of the GLSL source
-- `manifold3d` - for sold-model boolean operations
+- `manifold3d` - for 3D mesh boolean operations
 - `moderngl` - for a higher-level API to OpenGL
 - `numpy` - for fast memory crunching
 - `pillow` - for saving screenshots as image files
@@ -109,7 +109,7 @@ The first-level runtime dependencies are:
 - `pyusb` - for low-level communication with the Push 2 and LaserCube
 - `regex` - used by `lark` for advanced regular expressions
 - `rtmidi2` - for talking MIDI to control surfaces
-- `scipy` - for computing convex hulls
+- `scipy` - for some 3D mesh operations
 - `skia-python` - for 2D drawing
 - `trimesh` - for loading 3D meshes
 
