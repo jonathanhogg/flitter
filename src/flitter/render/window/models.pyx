@@ -14,6 +14,7 @@ from ...cache import SharedCache
 logger = name_patch(logger, __name__)
 
 cdef dict ModelCache = {}
+cdef int MaxModelCacheEntries = 4096
 cdef double Tau = 6.283185307179586
 cdef double RootHalf = sqrt(0.5)
 
@@ -25,11 +26,6 @@ cdef class Model:
     def __eq__(self, other):
         return self is other
 
-    cdef tuple get_buffers(self, object glctx, dict objects):
-        raise NotImplementedError()
-
-
-cdef class TrimeshModel(Model):
     cdef object get_trimesh_model(self):
         raise NotImplementedError()
 
@@ -43,7 +39,13 @@ cdef class TrimeshModel(Model):
             if name in objects:
                 del objects[name]
             return None, None
-        logger.debug("Preparing model {}", name)
+        logger.trace("Preparing model {}", name)
+        while len(ModelCache) > MaxModelCacheEntries:
+            dead_name = next(iter(ModelCache))
+            del ModelCache[dead_name]
+            if dead_name in objects:
+                del objects[dead_name]
+            logger.trace("Removed model {} from cache", dead_name)
         cdef tuple buffers
         faces = trimesh_model.faces[:,::-1] if self.invert else trimesh_model.faces
         cdef bint has_uv = trimesh_model.visual is not None and isinstance(trimesh_model.visual, trimesh.visual.texture.TextureVisuals)
@@ -63,8 +65,131 @@ cdef class TrimeshModel(Model):
         objects[name] = buffers
         return buffers
 
+    cdef Model transform(self, Matrix44 transform_matrix):
+        return TransformedModel.get(self, transform_matrix)
 
-cdef class Box(TrimeshModel):
+    cdef Model intersect(self, Model other):
+        return IntersectionModel.get(self, other)
+
+    cdef Model union(self, Model other):
+        return UnionModel.get(self, other)
+
+    cdef Model difference(self, Model other):
+        return DifferenceModel.get(self, other)
+
+
+cdef class TransformedModel(Model):
+    cdef Model original
+    cdef Matrix44 transform_matrix
+
+    @staticmethod
+    cdef TransformedModel get(Model original, Matrix44 transform_matrix):
+        cdef str name = f'{original.name}/{hex(transform_matrix.hash(False))[3:]}'
+        cdef TransformedModel model = ModelCache.pop(name, None)
+        if model is None:
+            model = TransformedModel.__new__(TransformedModel)
+            model.name = name
+            model.original = original
+            model.transform_matrix = transform_matrix
+        ModelCache[name] = model
+        return model
+
+    cdef object get_trimesh_model(self):
+        if self.trimesh_model is None:
+            transform_array = np.array(self.transform_matrix, dtype='float64').reshape((4, 4)).transpose()
+            trimesh_model = self.original.get_trimesh_model().copy().apply_transform(transform_array)
+            self.trimesh_model = trimesh_model if len(trimesh_model.vertices) and len(trimesh_model.faces) else None
+        return self.trimesh_model
+
+
+cdef class IntersectionModel(Model):
+    cdef Model left
+    cdef Model right
+
+    @staticmethod
+    cdef IntersectionModel get(Model left, Model right):
+        cdef str name = f'intersect({left.name}, {right.name})'
+        cdef IntersectionModel model = ModelCache.pop(name, None)
+        if model is None:
+            model = IntersectionModel.__new__(IntersectionModel)
+            model.name = name
+            model.left = left
+            model.right = right
+        ModelCache[name] = model
+        return model
+
+    cdef object get_trimesh_model(self):
+        if self.trimesh_model is None:
+            left = self.left.get_trimesh_model()
+            if not left.is_watertight:
+                left = left.convex_hull
+            right = self.right.get_trimesh_model()
+            if not right.is_watertight:
+                right = right.convex_hull
+            trimesh_model = left.copy().intersection(right).smooth_shaded
+            self.trimesh_model = trimesh_model if len(trimesh_model.vertices) and len(trimesh_model.faces) else None
+        return self.trimesh_model
+
+
+cdef class UnionModel(Model):
+    cdef Model left
+    cdef Model right
+
+    @staticmethod
+    cdef UnionModel get(Model left, Model right):
+        cdef str name = f'union({left.name}, {right.name})'
+        cdef UnionModel model = ModelCache.pop(name, None)
+        if model is None:
+            model = UnionModel.__new__(UnionModel)
+            model.name = name
+            model.left = left
+            model.right = right
+        ModelCache[name] = model
+        return model
+
+    cdef object get_trimesh_model(self):
+        if self.trimesh_model is None:
+            left = self.left.get_trimesh_model()
+            if not left.is_watertight:
+                left = left.convex_hull
+            right = self.right.get_trimesh_model()
+            if not right.is_watertight:
+                right = right.convex_hull
+            trimesh_model = left.copy().union(right).smooth_shaded
+            self.trimesh_model = trimesh_model if len(trimesh_model.vertices) and len(trimesh_model.faces) else None
+        return self.trimesh_model
+
+
+cdef class DifferenceModel(Model):
+    cdef Model left
+    cdef Model right
+
+    @staticmethod
+    cdef DifferenceModel get(Model left, Model right):
+        cdef str name = f'difference({left.name}, {right.name})'
+        cdef DifferenceModel model = ModelCache.pop(name, None)
+        if model is None:
+            model = DifferenceModel.__new__(DifferenceModel)
+            model.name = name
+            model.left = left
+            model.right = right
+        ModelCache[name] = model
+        return model
+
+    cdef object get_trimesh_model(self):
+        if self.trimesh_model is None:
+            left = self.left.get_trimesh_model()
+            if not left.is_watertight:
+                left = left.convex_hull
+            right = self.right.get_trimesh_model()
+            if not right.is_watertight:
+                right = right.convex_hull
+            trimesh_model = left.copy().difference(right).smooth_shaded
+            self.trimesh_model = trimesh_model if len(trimesh_model.vertices) and len(trimesh_model.faces) else None
+        return self.trimesh_model
+
+
+cdef class Box(Model):
     Vertices = np.array([
         (-.5,-.5,+.5), (+.5,-.5,+.5), (+.5,+.5,+.5), (-.5,+.5,+.5),
         (-.5,+.5,+.5), (+.5,+.5,+.5), (+.5,+.5,-.5), (-.5,+.5,-.5),
@@ -101,15 +226,15 @@ cdef class Box(TrimeshModel):
     @staticmethod
     cdef Box get(Node node):
         cdef bint invert = node.get_bool('invert', False)
-        cdef str name = 'box/invert' if invert else 'box'
-        cdef Box model = ModelCache.get(name)
+        cdef str name = 'box|invert' if invert else 'box'
+        cdef Box model = ModelCache.pop(name, None)
         if model is None:
             model = Box.__new__(Box)
             model.name = name
             model.flat = False
             model.invert = invert
             model.trimesh_model = None
-            ModelCache[name] = model
+        ModelCache[name] = model
         return model
 
     cdef object get_trimesh_model(self):
@@ -120,19 +245,19 @@ cdef class Box(TrimeshModel):
         return self.trimesh_model
 
 
-cdef class Sphere(TrimeshModel):
+cdef class Sphere(Model):
     @staticmethod
     cdef Sphere get(Node node):
         cdef bint flat = node.get_bool('flat', False)
         cdef bint invert = node.get_bool('invert', False)
         cdef int subdivisions = node.get_int('subdivisions', 3)
         cdef int segments = max(4, node.get_int('segments', 4<<subdivisions))
-        cdef str name = f'!sphere/{segments}'
+        cdef str name = f'!sphere-{segments}'
         if flat:
-            name += '/flat'
+            name += '|flat'
         if invert:
-            name += '/invert'
-        cdef Sphere model = ModelCache.get(name)
+            name += '|invert'
+        cdef Sphere model = ModelCache.pop(name, None)
         if model is None:
             model = Sphere.__new__(Sphere)
             model.name = name
@@ -140,7 +265,7 @@ cdef class Sphere(TrimeshModel):
             model.invert = invert
             model.segments = segments
             model.trimesh_model = None
-            ModelCache[name] = model
+        ModelCache[name] = model
         return model
 
     @cython.cdivision(True)
@@ -191,18 +316,18 @@ cdef class Sphere(TrimeshModel):
         return self.trimesh_model
 
 
-cdef class Cylinder(TrimeshModel):
+cdef class Cylinder(Model):
     @staticmethod
     cdef Cylinder get(Node node):
         cdef bint flat = node.get_bool('flat', False)
         cdef bint invert = node.get_bool('invert', False)
         cdef int segments = max(2, node.get_int('segments', 32))
-        cdef str name = f'!cylinder/{segments}'
+        cdef str name = f'!cylinder-{segments}'
         if flat:
-            name += '/flat'
+            name += '|flat'
         if invert:
-            name += '/invert'
-        cdef Cylinder model = ModelCache.get(name)
+            name += '|invert'
+        cdef Cylinder model = ModelCache.pop(name, None)
         if model is None:
             model = Cylinder.__new__(Cylinder)
             model.name = name
@@ -210,7 +335,7 @@ cdef class Cylinder(TrimeshModel):
             model.invert = invert
             model.segments = segments
             model.trimesh_model = None
-            ModelCache[name] = model
+        ModelCache[name] = model
         return model
 
     @cython.cdivision(True)
@@ -282,18 +407,18 @@ cdef class Cylinder(TrimeshModel):
         return self.trimesh_model
 
 
-cdef class Cone(TrimeshModel):
+cdef class Cone(Model):
     @staticmethod
     cdef Cone get(Node node):
         cdef bint flat = node.get_bool('flat', False)
         cdef bint invert = node.get_bool('invert', False)
         cdef int segments = max(2, node.get_int('segments', 32))
-        cdef str name = f'!cone/{segments}'
+        cdef str name = f'!cone-{segments}'
         if flat:
-            name += '/flat'
+            name += '|flat'
         if invert:
-            name += '/invert'
-        cdef Cone model = ModelCache.get(name)
+            name += '|invert'
+        cdef Cone model = ModelCache.pop(name, None)
         if model is None:
             model = Cone.__new__(Cone)
             model.name = name
@@ -301,7 +426,7 @@ cdef class Cone(TrimeshModel):
             model.invert = invert
             model.segments = segments
             model.trimesh_model = None
-            ModelCache[name] = model
+        ModelCache[name] = model
         return model
 
     @cython.cdivision(True)
@@ -358,7 +483,7 @@ cdef class Cone(TrimeshModel):
         return self.trimesh_model
 
 
-cdef class ExternalModel(TrimeshModel):
+cdef class ExternalModel(Model):
     @staticmethod
     cdef ExternalModel get(Node node):
         cdef str filename = node.get_str('filename', None)
@@ -368,10 +493,10 @@ cdef class ExternalModel(TrimeshModel):
         cdef bint invert = node.get_bool('invert', False)
         cdef str name = filename
         if flat:
-            name += '/flat'
+            name += '|flat'
         if invert:
-            name += '/invert'
-        cdef ExternalModel model = ModelCache.get(name)
+            name += '|invert'
+        cdef ExternalModel model = ModelCache.pop(name, None)
         if model is None:
             model = ExternalModel.__new__(ExternalModel)
             model.name = name
@@ -379,7 +504,7 @@ cdef class ExternalModel(TrimeshModel):
             model.invert = invert
             model.filename = filename
             model.trimesh_model = None
-            ModelCache[name] = model
+        ModelCache[name] = model
         return model
 
     cdef object get_trimesh_model(self):

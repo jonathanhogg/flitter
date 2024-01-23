@@ -27,6 +27,7 @@ cdef Vector Zero3 = Vector((0, 0, 0))
 cdef Vector One3 = Vector((1, 1, 1))
 cdef Vector Xaxis = Vector((1, 0, 0))
 cdef Vector Yaxis = Vector((0, 1, 0))
+cdef Matrix44 IdentityTransform = Matrix44.__new__(Matrix44)
 cdef int DEFAULT_MAX_LIGHTS = 50
 cdef double Pi = 3.141592653589793
 cdef tuple MaterialAttributes = ('color', 'metal', 'roughness', 'shininess', 'occlusion', 'emissive', 'transparency',
@@ -282,6 +283,86 @@ cdef Matrix44 update_transform_matrix(Node node, Matrix44 transform_matrix):
     return transform_matrix
 
 
+cdef Matrix44 instance_start_end_matrix(Vector start, Vector end, double radius):
+    cdef Vector direction = end.sub(start);
+    cdef double length = sqrt(direction.squared_sum())
+    if length == 0 or radius <= 0:
+        return None
+    cdef Vector up = Xaxis if direction.numbers[0] == 0 and direction.numbers[2] == 0 else Yaxis
+    cdef Vector middle = Vector.__new__(Vector)
+    middle.allocate_numbers(3)
+    middle.numbers[0] = (start.numbers[0] + end.numbers[0]) / 2
+    middle.numbers[1] = (start.numbers[1] + end.numbers[1]) / 2
+    middle.numbers[2] = (start.numbers[2] + end.numbers[2]) / 2
+    cdef Vector size = Vector.__new__(Vector)
+    size.allocate_numbers(3)
+    size.numbers[0] = radius
+    size.numbers[1] = radius
+    size.numbers[2] = length
+    return Matrix44._look(middle, start, up).inverse().mmul(Matrix44._scale(size))
+
+
+cdef Matrix44 get_model_transform(Node node, Matrix44 transform_matrix):
+    cdef Vector vec=None, start=None, end=None
+    cdef Matrix44 matrix = None
+    if (start := node.get_fvec('start', 3, None)) is not None and (end := node.get_fvec('end', 3, None)) is not None \
+            and (matrix := instance_start_end_matrix(start, end, node.get_float('radius', 1))) is not None:
+        transform_matrix = transform_matrix.mmul(matrix)
+    else:
+        if (vec := node.get_fvec('position', 3, None)) is not None and (matrix := Matrix44._translate(vec)) is not None:
+            transform_matrix = transform_matrix.mmul(matrix)
+        if (vec := node.get_fvec('rotation', 3, None)) is not None and (matrix := Matrix44._rotate(vec)) is not None:
+            transform_matrix = transform_matrix.mmul(matrix)
+        if (vec := node.get_fvec('size', 3, None)) is not None and (matrix := Matrix44._scale(vec)) is not None:
+            transform_matrix = transform_matrix.mmul(matrix)
+    return transform_matrix
+
+
+cdef Model get_model(Node node, Matrix44 transform_matrix):
+    cdef Node child
+    cdef Model model = None
+    cdef Model child_model = None
+    if node.kind == 'intersect':
+        child = node.first_child
+        while child is not None:
+            child_model = get_model(child, transform_matrix)
+            model = child_model if model is None else model.intersect(child_model)
+            child = child.next_sibling
+    elif node.kind == 'union':
+        child = node.first_child
+        while child is not None:
+            child_model = get_model(child, transform_matrix)
+            model = child_model if model is None else model.union(child_model)
+            child = child.next_sibling
+    elif node.kind == 'difference':
+        child = node.first_child
+        while child is not None:
+            child_model = get_model(child, transform_matrix)
+            model = child_model if model is None else model.difference(child_model)
+            child = child.next_sibling
+    elif node.kind == 'transform':
+        transform_matrix = update_transform_matrix(node, transform_matrix)
+        child = node.first_child
+        while child is not None:
+            child_model = get_model(child, transform_matrix)
+            model = child_model if model is None else model.union(child_model)
+            child = child.next_sibling
+    else:
+        if node.kind == 'box':
+            model = Box.get(node)
+        elif node.kind == 'sphere':
+            model = Sphere.get(node)
+        elif node.kind == 'cylinder':
+            model = Cylinder.get(node)
+        elif node.kind == 'cone':
+            model = Cone.get(node)
+        elif node.kind == 'model':
+            model = ExternalModel.get(node)
+        if model is not None and (transform_matrix := get_model_transform(node, transform_matrix)) is not IdentityTransform:
+            model = model.transform(transform_matrix)
+    return model
+
+
 cdef void collect(Node node, Matrix44 transform_matrix, Material material, RenderSet render_set, list render_sets,
                   Camera default_camera, dict cameras, int max_samples):
     cdef str kind = node.kind
@@ -292,38 +373,10 @@ cdef void collect(Node node, Matrix44 transform_matrix, Material material, Rende
     cdef Node child
     cdef str camera_id, filename, vertex_shader, fragment_shader
     cdef Model model
+    cdef Instance instance
+    cdef tuple model_textures
 
-    if node.kind == 'box':
-        model = Box.get(node)
-        if model is not None:
-            material = material.update(node)
-            add_instance(render_set.instances, model, node, transform_matrix, material)
-
-    elif node.kind == 'sphere':
-        model = Sphere.get(node)
-        if model is not None:
-            material = material.update(node)
-            add_instance(render_set.instances, model, node, transform_matrix, material)
-
-    elif node.kind == 'cylinder':
-        model = Cylinder.get(node)
-        if model is not None:
-            material = material.update(node)
-            add_instance(render_set.instances, model, node, transform_matrix, material)
-
-    elif node.kind == 'cone':
-        model = Cone.get(node)
-        if model is not None:
-            material = material.update(node)
-            add_instance(render_set.instances, model, node, transform_matrix, material)
-
-    elif node.kind == 'model':
-        model = ExternalModel.get(node)
-        if model is not None:
-            material = material.update(node)
-            add_instance(render_set.instances, model, node, transform_matrix, material)
-
-    elif node.kind == 'material':
+    if node.kind == 'material':
         material = material.update(node)
         child = node.first_child
         while child is not None:
@@ -394,44 +447,13 @@ cdef void collect(Node node, Matrix44 transform_matrix, Material material, Rende
         if (camera_id := node.get_str('id', None)) is not None:
             cameras[camera_id] = default_camera.derive(node, transform_matrix, max_samples)
 
-
-cdef Matrix44 instance_start_end_matrix(Vector start, Vector end, double radius):
-    cdef Vector direction = end.sub(start);
-    cdef double length = sqrt(direction.squared_sum())
-    if length == 0 or radius <= 0:
-        return None
-    cdef Vector up = Xaxis if direction.numbers[0] == 0 and direction.numbers[2] == 0 else Yaxis
-    cdef Vector middle = Vector.__new__(Vector)
-    middle.allocate_numbers(3)
-    middle.numbers[0] = (start.numbers[0] + end.numbers[0]) / 2
-    middle.numbers[1] = (start.numbers[1] + end.numbers[1]) / 2
-    middle.numbers[2] = (start.numbers[2] + end.numbers[2]) / 2
-    cdef Vector size = Vector.__new__(Vector)
-    size.allocate_numbers(3)
-    size.numbers[0] = radius
-    size.numbers[1] = radius
-    size.numbers[2] = length
-    return Matrix44._look(middle, start, up).inverse().mmul(Matrix44._scale(size))
-
-
-cdef void add_instance(dict render_instances, Model model, Node node, Matrix44 transform_matrix, Material material):
-    cdef Matrix44 matrix = None
-    cdef Vector vec=None, start=None, end=None
-    if (start := node.get_fvec('start', 3, None)) is not None and (end := node.get_fvec('end', 3, None)) is not None \
-            and (matrix := instance_start_end_matrix(start, end, node.get_float('radius', 1))) is not None:
-        transform_matrix = transform_matrix.mmul(matrix)
-    else:
-        if (vec := node.get_fvec('position', 3, None)) is not None and (matrix := Matrix44._translate(vec)) is not None:
-            transform_matrix = transform_matrix.mmul(matrix)
-        if (vec := node.get_fvec('rotation', 3, None)) is not None and (matrix := Matrix44._rotate(vec)) is not None:
-            transform_matrix = transform_matrix.mmul(matrix)
-        if (vec := node.get_fvec('size', 3, None)) is not None and (matrix := Matrix44._scale(vec)) is not None:
-            transform_matrix = transform_matrix.mmul(matrix)
-    cdef Instance instance = Instance.__new__(Instance)
-    instance.model_matrix = transform_matrix
-    instance.material = material
-    cdef tuple model_textures = (model, material.textures)
-    (<list>render_instances.setdefault(model_textures, [])).append(instance)
+    elif (model := get_model(node, IdentityTransform)) is not None:
+        material = material.update(node)
+        instance = Instance.__new__(Instance)
+        instance.model_matrix = get_model_transform(node, transform_matrix)
+        instance.material = material
+        model_textures = (model, material.textures)
+        (<list>render_set.instances.setdefault(model_textures, [])).append(instance)
 
 
 def fst(tuple ab):
@@ -784,7 +806,7 @@ class Canvas3D(SceneNode):
         self._total_duration -= system_clock()
         cdef int width = self.width, height = self.height
         cdef dict objects = self.glctx.extra.setdefault('canvas3d_objects', {})
-        cdef Matrix44 transform_matrix = Matrix44.__new__(Matrix44)
+        cdef Matrix44 transform_matrix = IdentityTransform
         cdef Camera default_camera = Camera.__new__(Camera)
         cdef int max_samples = self.glctx.info['GL_MAX_SAMPLES']
         default_camera.position = Vector((0, 0, width/2))
