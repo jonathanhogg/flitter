@@ -485,9 +485,9 @@ cdef class MathsBinaryOperation(BinaryOperation):
         cdef Expression expr=BinaryOperation._simplify(self, context)
         if isinstance(expr, MathsBinaryOperation):
             if isinstance(expr.left, Positive):
-                return (type(expr)(expr.left.expr, expr.right))._simplify(context)
+                return (<Expression>type(expr)(expr.left.expr, expr.right))._simplify(context)
             elif isinstance(expr.right, Positive):
-                return (type(expr)(expr.left, expr.right.expr))._simplify(context)
+                return (<Expression>type(expr)(expr.left, expr.right.expr))._simplify(context)
         return expr
 
 
