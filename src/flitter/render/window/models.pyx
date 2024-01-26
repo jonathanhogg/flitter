@@ -28,19 +28,22 @@ cdef class Model:
     def __eq__(self, other):
         return self is other
 
-    cdef bint trimesh_model_unchanged(self):
+    cdef bint check_valid(self):
+        raise NotImplementedError()
+
+    cdef void build_trimesh_model(self):
         raise NotImplementedError()
 
     cdef object get_render_trimesh_model(self):
         return self.trimesh_model
 
-    cdef object build_trimesh_model(self):
-        raise NotImplementedError()
-
     cdef tuple get_buffers(self, object glctx, dict objects):
         cdef str name = self.name
-        if self.trimesh_model_unchanged() and name in objects:
-            return objects[name]
+        if self.check_valid():
+            if name in objects:
+                return objects[name]
+        else:
+            self.build_trimesh_model()
         trimesh_model = self.get_render_trimesh_model()
         if trimesh_model is None:
             if name in objects:
@@ -124,16 +127,27 @@ cdef class TransformedModel(Model):
         ModelCache[name] = model
         return model
 
-    cdef bint trimesh_model_unchanged(self):
-        if self.original.trimesh_model_unchanged() and self.trimesh_model is not None:
+    cdef Model transform(self, Matrix44 transform_matrix):
+        return TransformedModel.get(self.original, transform_matrix.mmul(self.transform_matrix))
+
+    cdef bint check_valid(self):
+        if not self.valid:
+            return False
+        if self.original.check_valid():
             return True
-        self.trimesh_model = self.build_trimesh_model()
+        self.valid = False
         return False
 
-    cdef object build_trimesh_model(self):
-        transform_array = np.array(self.transform_matrix, dtype='float64').reshape((4, 4)).transpose()
-        trimesh_model = self.original.build_trimesh_model().copy().apply_transform(transform_array)
-        return trimesh_model if len(trimesh_model.vertices) and len(trimesh_model.faces) else None
+    cdef void build_trimesh_model(self):
+        if not self.original.check_valid():
+            self.original.build_trimesh_model()
+        if self.original.trimesh_model is not None:
+            transform_array = np.array(self.transform_matrix, dtype='float64').reshape((4, 4)).transpose()
+            trimesh_model = self.original.trimesh_model.copy().apply_transform(transform_array)
+            self.trimesh_model = trimesh_model if len(trimesh_model.vertices) and len(trimesh_model.faces) else None
+        else:
+            self.trimesh_model = None
+        self.valid = True
 
 
 cdef class BooleanOperationModel(Model):
@@ -141,20 +155,40 @@ cdef class BooleanOperationModel(Model):
     cdef double minimum_area
     cdef list models
 
-    cdef bint trimesh_model_unchanged(self):
-        cdef bint unchanged = True
+    @staticmethod
+    cdef str get_name(str operation, double smooth, double minimum_area, list models):
+        cdef Model child_model
+        cdef str name = operation + '('
+        cdef int i = 0
+        for i, child_model in enumerate(models):
+            if i:
+                name += ', '
+            name += child_model.name
+        if smooth != DefaultSmooth:
+            name += f', {smooth:g}'
+        if minimum_area != DefaultMinimumArea:
+            name += f', {minimum_area:g}'
+        name += ')'
+        return name
+
+    cdef bint check_valid(self):
+        if not self.valid:
+            return False
         cdef Model model
         for model in self.models:
-            unchanged = model.trimesh_model_unchanged() and unchanged
-        if self.trimesh_model is not None and unchanged:
+            if not model.check_valid():
+                break
+        else:
             return True
-        self.trimesh_model = self.build_trimesh_model()
+        self.valid = False
         return False
 
-    cdef object build_trimesh_model(self):
+    cdef void build_trimesh_model(self):
         cdef list trimesh_models = []
         cdef Model model
         for model in self.models:
+            if not model.check_valid():
+                model.build_trimesh_model()
             if model.trimesh_model is None:
                 continue
             trimesh_model = model.trimesh_model.copy()
@@ -164,9 +198,11 @@ cdef class BooleanOperationModel(Model):
                     trimesh_model = trimesh_model.convex_hull
             trimesh_models.append(trimesh_model)
         if not trimesh_models:
-            return None
-        trimesh_model = self.boolean_op(trimesh_models)
-        return trimesh_model if len(trimesh_model.vertices) and len(trimesh_model.faces) else None
+            self.trimesh_model = None
+        else:
+            trimesh_model = self.boolean_op(trimesh_models)
+            self.trimesh_model = trimesh_model if len(trimesh_model.vertices) and len(trimesh_model.faces) else None
+        self.valid = True
 
     cdef object boolean_op(self, list trimesh_models):
         raise NotImplementedError()
@@ -182,11 +218,7 @@ cdef class IntersectionModel(BooleanOperationModel):
     cdef IntersectionModel get(Node node, list models):
         cdef double smooth = node.get_float('smooth', DefaultSmooth)
         cdef double minimum_area = max(1e-4, node.get_float('minimum_area', DefaultMinimumArea))
-        cdef Model child_model
-        cdef list names = []
-        for child_model in models:
-            names.append(child_model.name)
-        cdef str name = f'intersect({", ".join(names)}, {smooth:g}, {minimum_area:g})'
+        cdef str name = BooleanOperationModel.get_name('intersect', smooth, minimum_area, models)
         cdef IntersectionModel model = ModelCache.pop(name, None)
         if model is None:
             model = IntersectionModel.__new__(IntersectionModel)
@@ -206,11 +238,7 @@ cdef class UnionModel(BooleanOperationModel):
     cdef UnionModel get(Node node, list models):
         cdef double smooth = node.get_float('smooth', DefaultSmooth)
         cdef double minimum_area = max(1e-4, node.get_float('minimum_area', DefaultMinimumArea))
-        cdef Model child_model
-        cdef list names = []
-        for child_model in models:
-            names.append(child_model.name)
-        cdef str name = f'union({", ".join(names)}, {smooth:g}, {minimum_area:g})'
+        cdef str name = BooleanOperationModel.get_name('union', smooth, minimum_area, models)
         cdef UnionModel model = ModelCache.pop(name, None)
         if model is None:
             model = UnionModel.__new__(UnionModel)
@@ -230,11 +258,7 @@ cdef class DifferenceModel(BooleanOperationModel):
     cdef DifferenceModel get(Node node, list models):
         cdef double smooth = node.get_float('smooth', DefaultSmooth)
         cdef double minimum_area = max(1e-4, node.get_float('minimum_area', DefaultMinimumArea))
-        cdef Model child_model
-        cdef list names = []
-        for child_model in models:
-            names.append(child_model.name)
-        cdef str name = f'difference({", ".join(names)}, {smooth:g}, {minimum_area:g})'
+        cdef str name = BooleanOperationModel.get_name('difference', smooth, minimum_area, models)
         cdef DifferenceModel model = ModelCache.pop(name, None)
         if model is None:
             model = DifferenceModel.__new__(DifferenceModel)
@@ -246,15 +270,15 @@ cdef class DifferenceModel(BooleanOperationModel):
         return model
 
     cdef object boolean_op(self, list trimesh_models):
+        if len(trimesh_models) > 2:
+            union_models = trimesh.boolean.union(trimesh_models[1:], engine='manifold')
+            return trimesh.boolean.difference([trimesh_models[0], union_models], engine='manifold')
         return trimesh.boolean.difference(trimesh_models, engine='manifold')
 
 
 cdef class PrimitiveModel(Model):
-    cdef bint trimesh_model_unchanged(self):
-        if self.trimesh_model is None:
-            self.trimesh_model = self.build_trimesh_model()
-            return False
-        return True
+    cdef bint check_valid(self):
+        return self.valid
 
 
 cdef class Box(PrimitiveModel):
@@ -305,9 +329,10 @@ cdef class Box(PrimitiveModel):
         ModelCache[name] = model
         return model
 
-    cdef object build_trimesh_model(self):
+    cdef void build_trimesh_model(self):
         visual = trimesh.visual.texture.TextureVisuals(uv=Box.VertexUV)
-        return trimesh.base.Trimesh(vertices=Box.Vertices, vertex_normals=Box.VertexNormals, faces=Box.Faces, visual=visual)
+        self.trimesh_model = trimesh.base.Trimesh(vertices=Box.Vertices, vertex_normals=Box.VertexNormals, faces=Box.Faces, visual=visual)
+        self.valid = True
 
 
 cdef class Sphere(PrimitiveModel):
@@ -336,7 +361,7 @@ cdef class Sphere(PrimitiveModel):
         return model
 
     @cython.cdivision(True)
-    cdef object build_trimesh_model(self):
+    cdef void build_trimesh_model(self):
         cdef int ncols = self.segments, nrows = ncols//2, nvertices = (nrows+1)*(ncols+1), nfaces = (2+(nrows-2)*2)*ncols
         cdef object vertices_array = np.empty((nvertices, 3), dtype='f4')
         cdef float[:,:] vertices = vertices_array
@@ -377,7 +402,8 @@ cdef class Sphere(PrimitiveModel):
                         j += 1
                 i += 1
         visual = trimesh.visual.texture.TextureVisuals(uv=vertex_uv_array)
-        return trimesh.base.Trimesh(vertices=vertices_array, vertex_normals=vertex_normals_array, faces=faces_array, visual=visual)
+        self.trimesh_model = trimesh.base.Trimesh(vertices=vertices_array, vertex_normals=vertex_normals_array, faces=faces_array, visual=visual)
+        self.valid = True
 
 
 cdef class Cylinder(PrimitiveModel):
@@ -406,7 +432,7 @@ cdef class Cylinder(PrimitiveModel):
 
     @cython.cdivision(True)
     @cython.boundscheck(False)
-    cdef object build_trimesh_model(self):
+    cdef void build_trimesh_model(self):
         cdef int i, j, k, n = self.segments, m = (n+1)*6
         cdef object vertices_array = np.empty((m, 3), dtype='f4')
         cdef float[:,:] vertices = vertices_array
@@ -467,7 +493,8 @@ cdef class Cylinder(PrimitiveModel):
                 # top face
                 faces[j, 0], faces[j, 1], faces[j, 2] = k+5, k+4, k+4+6
         visual = trimesh.visual.texture.TextureVisuals(uv=vertex_uv_array)
-        return trimesh.base.Trimesh(vertices=vertices_array, vertex_normals=vertex_normals_array, faces=faces_array, visual=visual)
+        self.trimesh_model = trimesh.base.Trimesh(vertices=vertices_array, vertex_normals=vertex_normals_array, faces=faces_array, visual=visual)
+        self.valid = True
 
 
 cdef class Cone(PrimitiveModel):
@@ -496,7 +523,7 @@ cdef class Cone(PrimitiveModel):
 
     @cython.cdivision(True)
     @cython.boundscheck(False)
-    cdef object build_trimesh_model(self):
+    cdef void build_trimesh_model(self):
         cdef int i, j, k, n = self.segments, m = (n+1)*4
         cdef object vertices_array = np.empty((m, 3), dtype='f4')
         cdef float[:,:] vertices = vertices_array
@@ -542,7 +569,8 @@ cdef class Cone(PrimitiveModel):
                 # side face
                 faces[j, 0], faces[j, 1], faces[j, 2] = k+3, k+2, k+2+4
         visual = trimesh.visual.texture.TextureVisuals(uv=vertex_uv_array)
-        return trimesh.base.Trimesh(vertices=vertices_array, vertex_normals=vertex_normals_array, faces=faces_array, visual=visual)
+        self.trimesh_model = trimesh.base.Trimesh(vertices=vertices_array, vertex_normals=vertex_normals_array, faces=faces_array, visual=visual)
+        self.valid = True
 
 
 cdef class ExternalModel(Model):
@@ -571,12 +599,9 @@ cdef class ExternalModel(Model):
         ModelCache[name] = model
         return model
 
-    cdef bint trimesh_model_unchanged(self):
-        trimesh_model = self.build_trimesh_model()
-        if self.trimesh_model is trimesh_model:
-            return True
-        self.trimesh_model = trimesh_model
-        return False
+    cdef bint check_valid(self):
+        return self.trimesh_model is SharedCache[self.filename].read_trimesh_model()
 
-    cdef object build_trimesh_model(self):
-        return SharedCache[self.filename].read_trimesh_model()
+    cdef void build_trimesh_model(self):
+        self.trimesh_model = SharedCache[self.filename].read_trimesh_model()
+        self.valid = True
