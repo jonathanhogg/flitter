@@ -17,8 +17,6 @@ cdef dict ModelCache = {}
 cdef int MaxModelCacheEntries = 4096
 cdef double Tau = 6.283185307179586
 cdef double RootHalf = sqrt(0.5)
-cdef double DefaultSmooth = 0.1
-cdef double DefaultMinimumArea = 0.01
 
 
 cdef class Model:
@@ -34,9 +32,6 @@ cdef class Model:
     cdef void build_trimesh_model(self):
         raise NotImplementedError()
 
-    cdef object get_render_trimesh_model(self):
-        return self.trimesh_model
-
     cdef tuple get_buffers(self, object glctx, dict objects):
         cdef str name = self.name
         if self.check_valid():
@@ -44,7 +39,7 @@ cdef class Model:
                 return objects[name]
         else:
             self.build_trimesh_model()
-        trimesh_model = self.get_render_trimesh_model()
+        trimesh_model = self.trimesh_model
         if trimesh_model is None:
             if name in objects:
                 del objects[name]
@@ -75,20 +70,26 @@ cdef class Model:
         objects[name] = buffers
         return buffers
 
+    cdef Model smooth_shade(self, double smooth, double minimum_area):
+        return SmoothShadedModel.get(self, smooth, minimum_area)
+
     cdef Model transform(self, Matrix44 transform_matrix):
         return TransformedModel.get(self, transform_matrix)
 
-    @staticmethod
-    cdef Model intersect(Node node, list models):
-        return IntersectionModel.get(node, models)
+    cdef Model slice(self, Vector position, Vector normal):
+        return SlicedModel.get(self, position, normal)
 
     @staticmethod
-    cdef Model union(Node node, list models):
-        return UnionModel.get(node, models)
+    cdef Model intersect(list models):
+        return BooleanOperationModel.get('intersection', models)
 
     @staticmethod
-    cdef Model difference(Node node, list models):
-        return DifferenceModel.get(node, models)
+    cdef Model union(list models):
+        return BooleanOperationModel.get('union', models)
+
+    @staticmethod
+    cdef Model difference(list models):
+        return BooleanOperationModel.get('difference', models)
 
     @staticmethod
     cdef Model get_box(Node node):
@@ -111,13 +112,49 @@ cdef class Model:
         return ExternalModel.get(node)
 
 
+cdef class SmoothShadedModel(Model):
+    cdef Model original
+    cdef double smooth
+    cdef double minimum_area
+
+    @staticmethod
+    cdef SmoothShadedModel get(Model original, double smooth, double minimum_area):
+        cdef str name = 'smooth(' + original.name + f', {smooth:g}, '
+        if minimum_area != 0.01:
+            name += f', {minimum_area:g}'
+        name += ')'
+        cdef SmoothShadedModel model = ModelCache.pop(name, None)
+        if model is None:
+            model = SmoothShadedModel.__new__(SmoothShadedModel)
+            model.name = name
+            model.original = original
+            model.smooth = smooth
+            model.minimum_area = max(1e-6, minimum_area)
+        ModelCache[name] = model
+        return model
+
+    cdef bint check_valid(self):
+        if not self.valid:
+            return False
+        if self.original.check_valid():
+            return True
+        self.valid = False
+        return False
+
+    cdef void build_trimesh_model(self):
+        if not self.original.check_valid():
+            self.original.build_trimesh_model()
+        self.trimesh_model = trimesh.graph.smooth_shade(self.original.trimesh_model, angle=self.smooth*Tau, facet_minarea=1/self.minimum_area)
+        self.valid = True
+
+
 cdef class TransformedModel(Model):
     cdef Model original
     cdef Matrix44 transform_matrix
 
     @staticmethod
     cdef TransformedModel get(Model original, Matrix44 transform_matrix):
-        cdef str name = f'{original.name}/{hex(transform_matrix.hash(False))[3:]}'
+        cdef str name = f'{original.name}@{hex(transform_matrix.hash(False))[3:]}'
         cdef TransformedModel model = ModelCache.pop(name, None)
         if model is None:
             model = TransformedModel.__new__(TransformedModel)
@@ -150,13 +187,54 @@ cdef class TransformedModel(Model):
         self.valid = True
 
 
+cdef class SlicedModel(Model):
+    cdef Model original
+    cdef Vector position
+    cdef Vector normal
+
+    @staticmethod
+    cdef SlicedModel get(Model original, Vector position, Vector normal):
+        cdef str name = f'{original.name}/{hex(position.hash(False) ^ normal.hash(False))[3:]}'
+        cdef SlicedModel model = ModelCache.pop(name, None)
+        if model is None:
+            model = SlicedModel.__new__(SlicedModel)
+            model.name = name
+            model.original = original
+            model.position = position
+            model.normal = normal
+        ModelCache[name] = model
+        return model
+
+    cdef Model transform(self, Matrix44 transform_matrix):
+        cdef Vector position = transform_matrix.vmul(self.position)
+        cdef Vector normal = transform_matrix.inverse_transpose_matrix33().vmul(self.normal)
+        return SlicedModel.get(TransformedModel.get(self.original, transform_matrix), position, normal)
+
+    cdef bint check_valid(self):
+        if not self.valid:
+            return False
+        if self.original.check_valid():
+            return True
+        self.valid = False
+        return False
+
+    cdef void build_trimesh_model(self):
+        if not self.original.check_valid():
+            self.original.build_trimesh_model()
+        if self.original.trimesh_model is not None:
+            trimesh_model = self.original.trimesh_model.copy().slice_plane(tuple(self.position), tuple(self.normal.neg()), True)
+            self.trimesh_model = trimesh_model if len(trimesh_model.vertices) and len(trimesh_model.faces) else None
+        else:
+            self.trimesh_model = None
+        self.valid = True
+
+
 cdef class BooleanOperationModel(Model):
-    cdef double smooth
-    cdef double minimum_area
+    cdef str operation
     cdef list models
 
     @staticmethod
-    cdef str get_name(str operation, double smooth, double minimum_area, list models):
+    cdef BooleanOperationModel get(str operation, list models):
         cdef Model child_model
         cdef str name = operation + '('
         cdef int i = 0
@@ -164,12 +242,24 @@ cdef class BooleanOperationModel(Model):
             if i:
                 name += ', '
             name += child_model.name
-        if smooth != DefaultSmooth:
-            name += f', {smooth:g}'
-        if minimum_area != DefaultMinimumArea:
-            name += f', {minimum_area:g}'
         name += ')'
-        return name
+        cdef BooleanOperationModel model = ModelCache.pop(name, None)
+        if model is None:
+            model = BooleanOperationModel.__new__(BooleanOperationModel)
+            model.name = name
+            model.operation = operation
+            model.models = models
+        ModelCache[name] = model
+        return model
+
+    cdef Model transform(self, Matrix44 transform_matrix):
+        cdef Model model
+        cdef list models = []
+        for model in self.models:
+            # if not isinstance(model, TransformedModel):
+            #     return TransformedModel.get(self, transform_matrix)
+            models.append(model.transform(transform_matrix))
+        return BooleanOperationModel.get(self.operation, models)
 
     cdef bint check_valid(self):
         if not self.valid:
@@ -200,80 +290,13 @@ cdef class BooleanOperationModel(Model):
         if not trimesh_models:
             self.trimesh_model = None
         else:
-            trimesh_model = self.boolean_op(trimesh_models)
+            if self.operation == 'difference' and len(trimesh_models) > 2:
+                union_models = trimesh.boolean.boolean_manifold(trimesh_models[1:], 'union')
+                trimesh_model = trimesh.boolean.boolean_manifold([trimesh_models[0], union_models], 'difference')
+            else:
+                trimesh_model = trimesh.boolean.boolean_manifold(trimesh_models, self.operation)
             self.trimesh_model = trimesh_model if len(trimesh_model.vertices) and len(trimesh_model.faces) else None
         self.valid = True
-
-    cdef object boolean_op(self, list trimesh_models):
-        raise NotImplementedError()
-
-    cdef object get_render_trimesh_model(self):
-        if self.trimesh_model is None:
-            return None
-        return trimesh.graph.smooth_shade(self.trimesh_model, angle=self.smooth*Tau, facet_minarea=1/self.minimum_area)
-
-
-cdef class IntersectionModel(BooleanOperationModel):
-    @staticmethod
-    cdef IntersectionModel get(Node node, list models):
-        cdef double smooth = node.get_float('smooth', DefaultSmooth)
-        cdef double minimum_area = max(1e-4, node.get_float('minimum_area', DefaultMinimumArea))
-        cdef str name = BooleanOperationModel.get_name('intersect', smooth, minimum_area, models)
-        cdef IntersectionModel model = ModelCache.pop(name, None)
-        if model is None:
-            model = IntersectionModel.__new__(IntersectionModel)
-            model.name = name
-            model.smooth = smooth
-            model.minimum_area = minimum_area
-            model.models = models
-        ModelCache[name] = model
-        return model
-
-    cdef object boolean_op(self, list trimesh_models):
-        return trimesh.boolean.intersection(trimesh_models, engine='manifold')
-
-
-cdef class UnionModel(BooleanOperationModel):
-    @staticmethod
-    cdef UnionModel get(Node node, list models):
-        cdef double smooth = node.get_float('smooth', DefaultSmooth)
-        cdef double minimum_area = max(1e-4, node.get_float('minimum_area', DefaultMinimumArea))
-        cdef str name = BooleanOperationModel.get_name('union', smooth, minimum_area, models)
-        cdef UnionModel model = ModelCache.pop(name, None)
-        if model is None:
-            model = UnionModel.__new__(UnionModel)
-            model.name = name
-            model.smooth = smooth
-            model.minimum_area = minimum_area
-            model.models = models
-        ModelCache[name] = model
-        return model
-
-    cdef object boolean_op(self, list trimesh_models):
-        return trimesh.boolean.union(trimesh_models, engine='manifold')
-
-
-cdef class DifferenceModel(BooleanOperationModel):
-    @staticmethod
-    cdef DifferenceModel get(Node node, list models):
-        cdef double smooth = node.get_float('smooth', DefaultSmooth)
-        cdef double minimum_area = max(1e-4, node.get_float('minimum_area', DefaultMinimumArea))
-        cdef str name = BooleanOperationModel.get_name('difference', smooth, minimum_area, models)
-        cdef DifferenceModel model = ModelCache.pop(name, None)
-        if model is None:
-            model = DifferenceModel.__new__(DifferenceModel)
-            model.name = name
-            model.smooth = smooth
-            model.minimum_area = minimum_area
-            model.models = models
-        ModelCache[name] = model
-        return model
-
-    cdef object boolean_op(self, list trimesh_models):
-        if len(trimesh_models) > 2:
-            union_models = trimesh.boolean.union(trimesh_models[1:], engine='manifold')
-            return trimesh.boolean.difference([trimesh_models[0], union_models], engine='manifold')
-        return trimesh.boolean.difference(trimesh_models, engine='manifold')
 
 
 cdef class PrimitiveModel(Model):

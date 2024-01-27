@@ -102,6 +102,7 @@ The first-level runtime dependencies are:
 - `loguru` - for enhanced logging
 - `mako` - for templating of the GLSL source
 - `manifold3d` - used by `trimesh` for 3D mesh boolean operations
+- `mapbox_earcut` - used by `trimesh` for triangulating polygons
 - `moderngl` - for a higher-level API to OpenGL
 - `networkx` - used by `trimesh` for some 3D mesh operations
 - `numpy` - for fast memory crunching
@@ -111,6 +112,7 @@ The first-level runtime dependencies are:
 - `regex` - used by `lark` for advanced regular expressions
 - `rtmidi2` - for talking MIDI to control surfaces
 - `scipy` - used by `trimesh` for some 3D mesh operations
+- `shapely` - used by `trimesh` for 2D shape analysis
 - `skia-python` - for 2D drawing
 - `trimesh` - for loading 3D meshes
 

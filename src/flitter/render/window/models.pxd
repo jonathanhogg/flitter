@@ -1,6 +1,6 @@
 # cython: language_level=3, profile=True
 
-from ...model cimport Node, Matrix44
+from ...model cimport Node, Vector, Matrix44
 
 
 cdef class Model:
@@ -12,17 +12,19 @@ cdef class Model:
 
     cdef bint check_valid(self)
     cdef void build_trimesh_model(self)
-    cdef object get_render_trimesh_model(self)
     cdef tuple get_buffers(self, object glctx, dict objects)
 
+    cdef Model smooth_shade(self, double smooth, double minimum_area)
     cdef Model transform(self, Matrix44 transform_matrix)
+    cdef Model slice(self, Vector position, Vector normal)
 
     @staticmethod
-    cdef Model intersect(Node node, list models)
+    cdef Model intersect(list models)
     @staticmethod
-    cdef Model union(Node node, list models)
+    cdef Model union(list models)
     @staticmethod
-    cdef Model difference(Node node, list models)
+    cdef Model difference(list models)
+
     @staticmethod
     cdef Model get_box(Node node)
     @staticmethod
