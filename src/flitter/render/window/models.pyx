@@ -353,7 +353,7 @@ cdef class Box(PrimitiveModel):
     @staticmethod
     cdef Box get(Node node):
         cdef bint invert = node.get_bool('invert', False)
-        cdef str name = 'box|invert' if invert else 'box'
+        cdef str name = '!box|invert' if invert else '!box'
         cdef Box model = ModelCache.pop(name, None)
         if model is None:
             model = Box.__new__(Box)
