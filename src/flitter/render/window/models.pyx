@@ -377,9 +377,8 @@ cdef class Sphere(PrimitiveModel):
     cdef Sphere get(Node node):
         cdef bint flat = node.get_bool('flat', False)
         cdef bint invert = node.get_bool('invert', False)
-        cdef int subdivisions = node.get_int('subdivisions', 3)
-        cdef int segments = max(4, node.get_int('segments', 4<<subdivisions))
-        cdef str name = f'!sphere-{segments}'
+        cdef int segments = max(4, node.get_int('segments', DefaultSegments))
+        cdef str name = f'!sphere-{segments}' if segments != DefaultSegments else '!sphere'
         if flat:
             name += '|flat'
         if invert:
@@ -449,7 +448,7 @@ cdef class Cylinder(PrimitiveModel):
         cdef bint flat = node.get_bool('flat', False)
         cdef bint invert = node.get_bool('invert', False)
         cdef int segments = max(2, node.get_int('segments', DefaultSegments))
-        cdef str name = f'!cylinder-{segments}'
+        cdef str name = f'!cylinder-{segments}' if segments != DefaultSegments else '!cylinder'
         if flat:
             name += '|flat'
         if invert:
@@ -540,7 +539,7 @@ cdef class Cone(PrimitiveModel):
         cdef bint flat = node.get_bool('flat', False)
         cdef bint invert = node.get_bool('invert', False)
         cdef int segments = max(2, node.get_int('segments', DefaultSegments))
-        cdef str name = f'!cone-{segments}'
+        cdef str name = f'!cone-{segments}' if segments != DefaultSegments else '!cone'
         if flat:
             name += '|flat'
         if invert:
