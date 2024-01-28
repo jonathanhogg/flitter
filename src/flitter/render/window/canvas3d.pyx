@@ -330,7 +330,8 @@ cdef Model get_model(Node node, bint top):
         child = node.first_child
         while child is not None:
             child_model = get_model(child, False)
-            models.append(child_model)
+            if child_model is not None:
+                models.append(child_model)
             child = child.next_sibling
         if models:
             model = models[0] if len(models) == 1 else Model.intersect(models)
@@ -339,7 +340,8 @@ cdef Model get_model(Node node, bint top):
         child = node.first_child
         while child is not None:
             child_model = get_model(child, False)
-            models.append(child_model)
+            if child_model is not None:
+                models.append(child_model)
             child = child.next_sibling
         if models:
             model = models[0] if len(models) == 1 else Model.union(models)
@@ -348,7 +350,8 @@ cdef Model get_model(Node node, bint top):
         child = node.first_child
         while child is not None:
             child_model = get_model(child, False)
-            models.append(child_model)
+            if child_model is not None:
+                models.append(child_model)
             child = child.next_sibling
         if models:
             model = models[0] if len(models) == 1 else Model.difference(models)
@@ -357,24 +360,25 @@ cdef Model get_model(Node node, bint top):
         child = node.first_child
         while child is not None:
             child_model = get_model(child, False)
-            models.append(child_model)
+            if child_model is not None:
+                models.append(child_model)
             child = child.next_sibling
         if models:
             model = models[0] if len(models) == 1 else Model.union(models)
             if model is not None and (transform_matrix := update_transform_matrix(node, IdentityTransform)) is not IdentityTransform:
                 model = model.transform(transform_matrix)
     elif node.kind == 'slice':
+        normal = node.get_fvec('normal', 3, None)
+        origin = node.get_fvec('origin', 3, Zero3)
         models = []
         child = node.first_child
         while child is not None:
             child_model = get_model(child, False)
-            models.append(child_model)
+            if child_model is not None:
+                models.append(child_model.slice(origin, normal) if normal is not None else child_model)
             child = child.next_sibling
         if models:
             model = models[0] if len(models) == 1 else Model.union(models)
-            if model is not None and (normal := node.get_fvec('normal', 3, None)) is not None:
-                origin = node.get_fvec('origin', 3, Zero3)
-                model = model.slice(origin, normal.normalize())
     else:
         if node.kind == 'box':
             model = Model.get_box(node)

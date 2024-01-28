@@ -243,7 +243,7 @@ cdef class SlicedModel(ModelTransformer):
             model.name = name
             model.original = original
             model.origin = origin
-            model.normal = normal
+            model.normal = normal.normalize()
         ModelCache[name] = model
         return model
 
