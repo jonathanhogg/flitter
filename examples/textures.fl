@@ -18,7 +18,7 @@
 
 import bloom_filter from 'bloom.fl'
 
-let SIZE=(1920;1080)*2
+let SIZE=1920;1080
     days=beat/60
 
 !window size=SIZE

@@ -395,7 +395,7 @@ cdef Model get_model(Node node, bint top):
                 model = model.smooth_shade(smooth, minimum_area)
             if node.get_bool('invert', False):
                 model = model.invert()
-        elif(transform_matrix := get_model_transform(node, IdentityTransform)) is not IdentityTransform:
+        elif (transform_matrix := get_model_transform(node, IdentityTransform)) is not IdentityTransform:
             model = model.transform(transform_matrix)
     return model
 
