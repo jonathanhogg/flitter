@@ -110,18 +110,19 @@ The first-level runtime dependencies are:
 - `lark` - for the language parser
 - `loguru` - for enhanced logging
 - `mako` - for templating of the GLSL source
-- `manifold3d` - used by `trimesh` for 3D mesh boolean operations
+- `manifold3d` - used by `trimesh` for 3D boolean operations
 - `mapbox_earcut` - used by `trimesh` for triangulating polygons
 - `moderngl` - for a higher-level API to OpenGL
-- `networkx` - used by `trimesh` for some 3D mesh operations
+- `networkx` - used by `trimesh` for graph algorithms
 - `numpy` - for fast memory crunching
 - `pillow` - for saving screenshots as image files
 - `pyserial` - for talking to DMX interfaces
 - `pyusb` - for low-level communication with the Push 2 and LaserCube
 - `regex` - used by `lark` for advanced regular expressions
 - `rtmidi2` - for talking MIDI to control surfaces
-- `scipy` - used by `trimesh` for some 3D mesh operations
-- `shapely` - used by `trimesh` for 2D shape analysis
+- `rtree` - used by `trimesh` for spatial tree intersection
+- `scipy` - used by `trimesh` for computing convex hulls
+- `shapely` - used by `trimesh` for polygon operations
 - `skia-python` - for 2D drawing
 - `trimesh` - for loading 3D meshes
 
