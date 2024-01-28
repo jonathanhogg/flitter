@@ -7,9 +7,9 @@ with trails moving outwards from the centre of the screen.](docs/header.jpg)
 system for describing 2D and 3D visuals. [The language](/docs/language.md) is
 designed to encourage an iterative, explorative, play-based approach to
 constructing generative visuals. The engine that runs **Flitter** programs is
-able to live reload all code and assets while retaining current system state
-(thus supporting live-coding) while also having strong support for interacting
-with running programs via MIDI surfaces.
+able to live reload all code (including shaders) and assets (images, models,
+etc.) while retaining current system state - thus supporting live-coding. It
+also has support for interacting with running programs via MIDI surfaces.
 
 **Flitter** is designed for expressivity and ease of engine development over
 raw performance, but is sufficiently fast to be able to do interesting things.
@@ -17,22 +17,31 @@ raw performance, but is sufficiently fast to be able to do interesting things.
 The engine that runs the language is capable of:
 
 - 2D drawing (loosely based on an HTML canvas/SVG model)
-- 3D rendering of primitive shapes and external triangular mesh models (in a
-variety of formats including OBJ and STL); ambient, directional, point and
-spot- light sources with (currently shadowless) [PBR](https://en.wikipedia.org/wiki/Physically_based_rendering)
-material shading; simple fog; perspective and orthographic projections;
-texture-mapping - including with the output of other visual units (like a
-drawing canvas or a video)
-- simulating simple [physical particle systems](/docs/physics.md) (including
+- 3D rendering, including:
+  - primitive box, sphere, cylinder and cone shapes
+  - external triangular mesh models in a variety of formats including OBJ
+    and STL
+  - texture mapping, including with the output of other visual units (e.g., a
+    drawing canvas or a video)
+  - planar slicing and union, difference and intersection of solid models
+  - ambient, directional, point and spotlight sources (currently shadowless)
+  - [PBR](https://en.wikipedia.org/wiki/Physically_based_rendering) material
+    shading, emissive objects and transparency
+  - multiple cameras with individual control over location, field-of-view, near
+    and far clip planes, render buffer size, color depth, MSAA samples,
+    perspective/orthographic projection, fog, conversion to monochrome and
+    colour tinting
+- simulating simple [physical particle systems](/docs/physics.md), including
 spring/rod/rubber-band constraints, gravity, electrostatic charge, inertia,
-drag, barriers and particle collisions)
-- playing videos at arbitrary speeds (including in reverse, although video will
+drag, barriers and particle collisions
+- playing videos at arbitrary speeds, including in reverse (although video will
 stutter if it makes extensive use of P-frames)
-- running GLSL shaders as stacked image generators and filters, with live
-manipulation of uniforms and live reload of source
+- running GLSL shaders as stacked image filters and generators, with per-frame
+control of arbitrary uniforms
 - compositing all of the above and rendering to one or more windows
-- saving rendering output to image and video files (including the lockstep
-frame-by-frame video output suitable for producing perfect loops)
+- saving rendered output to image and video files (including lockstep
+frame-by-frame video output suitable for producing perfect loops and direct
+generation of animated GIFs)
 - driving arbitrary DMX fixtures via a USB DMX interface (currently via an
 Entec-compatible interface or my own crazy hand-built devices)
 - driving a LaserCube plugged in over USB (other lasers probably easy-ish to
