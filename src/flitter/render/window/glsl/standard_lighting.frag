@@ -17,7 +17,7 @@ flat in float fragment_occlusion;
 out vec4 fragment_color;
 
 uniform int nlights;
-uniform vec3 lights[${max_lights * 4}];
+uniform vec4 lights[${max_lights * 4}];
 uniform vec3 view_position;
 uniform vec3 view_focus;
 uniform bool monochrome;
@@ -98,32 +98,35 @@ void main() {
     float rf0 = (fragment_ior - 1) / (fragment_ior + 1);
     vec3 F0 = mix(vec3(rf0*rf0), albedo, metal);
     for (int i = 0; i < nlights * 4; i += 4) {
-        int light_type = int(lights[i].x);
-        float inner_cone = lights[i].y;
-        float outer_cone = lights[i].z;
-        vec3 light_color = lights[i+1];
-        vec3 light_position = lights[i+2];
-        vec3 light_direction = lights[i+3];
+        int light_type = int(lights[i].w);
+        float inner_cone = lights[i+1].w;
+        float outer_cone = lights[i+2].w;
+        vec3 light_color = lights[i].xyz;
+        vec3 light_position = lights[i+1].xyz;
+        vec3 light_direction = lights[i+2].xyz;
+        vec4 light_falloff = lights[i+3];
         if (light_type == ${Ambient}) {
             diffuse_color += (1 - F0) * (1 - metal) * albedo * light_color * occlusion;
         } else {
             vec3 L;
-            float attenuation;
+            float attenuation = 1;
+            float light_distance = 1;
             if (light_type == ${Point}) {
                 L = light_position - world_position;
-                float light_distance = length(L);
+                light_distance = length(L);
                 L /= light_distance;
-                attenuation = 1 / (1 + light_distance*light_distance);
             } else if (light_type == ${Spot}) {
                 L = light_position - world_position;
-                float light_distance = length(L);
+                light_distance = length(L);
                 L /= light_distance;
                 float spot_cosine = dot(L, -light_direction);
-                attenuation = (1 - clamp((inner_cone-spot_cosine) / (inner_cone-outer_cone), 0, 1)) / (1 + light_distance*light_distance);
+                attenuation = 1 - clamp((inner_cone-spot_cosine) / (inner_cone-outer_cone), 0, 1);
             } else {
                 L = -light_direction;
-                attenuation = 1;
             }
+            float ld2 = light_distance * light_distance;
+            vec4 ds = vec4(1, light_distance, ld2, light_distance * ld2);
+            attenuation /= dot(ds, light_falloff);
             vec3 H = normalize(V + L);
             float NdotL = clamp(dot(N, L), 0, 1);
             float NdotV = clamp(dot(N, V), 0, 1);

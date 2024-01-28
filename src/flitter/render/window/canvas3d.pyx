@@ -27,6 +27,7 @@ cdef Vector Zero3 = Vector((0, 0, 0))
 cdef Vector One3 = Vector((1, 1, 1))
 cdef Vector Xaxis = Vector((1, 0, 0))
 cdef Vector Yaxis = Vector((0, 1, 0))
+cdef Vector DefaultFalloff = Vector((0, 0, 1, 0))
 cdef Matrix44 IdentityTransform = Matrix44.__new__(Matrix44)
 cdef int DEFAULT_MAX_LIGHTS = 50
 cdef double Pi = 3.141592653589793
@@ -52,6 +53,7 @@ cdef class Light:
     cdef Vector color
     cdef Vector position
     cdef Vector direction
+    cdef Vector falloff
 
 
 cdef class Textures:
@@ -368,14 +370,14 @@ cdef Model get_model(Node node, bint top):
             if model is not None and (transform_matrix := update_transform_matrix(node, IdentityTransform)) is not IdentityTransform:
                 model = model.transform(transform_matrix)
     elif node.kind == 'slice':
-        normal = node.get_fvec('normal', 3, None)
+        normal = node.get_fvec('normal', 3, null_)
         origin = node.get_fvec('origin', 3, Zero3)
         models = []
         child = node.first_child
         while child is not None:
             child_model = get_model(child, False)
             if child_model is not None:
-                models.append(child_model.slice(origin, normal) if normal is not None else child_model)
+                models.append(child_model.slice(origin, normal) if normal.as_bool() is not None else child_model)
             child = child.next_sibling
         if models:
             model = models[0] if len(models) == 1 else Model.union(models)
@@ -461,6 +463,7 @@ cdef void collect(Node node, Matrix44 transform_matrix, Material material, Rende
             direction = node.get_fvec('direction', 3, null_)
             light = Light.__new__(Light)
             light.color = color
+            light.falloff = node.get_fvec('falloff', 4, DefaultFalloff)
             if position.length and direction.as_bool():
                 light.type = LightType.Spot
                 inner = max(0, node.get_float('inner', 0))
@@ -561,24 +564,26 @@ cdef void render(RenderSet render_set, Camera camera, glctx, dict objects, dict 
     shader['use_occlusion_texture'] = False
     shader['use_emissive_texture'] = False
     shader['use_transparency_texture'] = False
-    lights_data = view.array((render_set.max_lights, 12), 4, 'f')
+    lights_data = view.array((render_set.max_lights, 16), 4, 'f')
     i = 0
     for lights in render_set.lights:
         for light in lights:
             if i == render_set.max_lights:
                 break
             dest = &lights_data[i, 0]
-            dest[0] = <cython.float>(<int>light.type)
-            dest[1] = light.inner_cone
-            dest[2] = light.outer_cone
+            dest[3] = <cython.float>(<int>light.type)
+            dest[7] = light.inner_cone
+            dest[11] = light.outer_cone
             for j in range(3):
-                dest[j+3] = light.color.numbers[j]
+                dest[j] = light.color.numbers[j]
             if light.position is not None:
                 for j in range(3):
-                    dest[j+6] = light.position.numbers[j]
+                    dest[j+4] = light.position.numbers[j]
             if light.direction is not None:
                 for j in range(3):
-                    dest[j+9] = light.direction.numbers[j]
+                    dest[j+8] = light.direction.numbers[j]
+            for j in range(4):
+                dest[j+12] = light.falloff.numbers[j]
             i += 1
     shader['nlights'] = i
     shader['lights'].write(lights_data)
