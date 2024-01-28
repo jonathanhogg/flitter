@@ -1,50 +1,41 @@
 # cython: language_level=3, profile=True
 
-from ...model cimport Node
+from ...model cimport Node, Vector, Matrix44
+
+
+cdef double DefaultSmooth
 
 
 cdef class Model:
     cdef str name
+    cdef object trimesh_model
+    cdef bint valid
 
+    cdef bint is_constructed(self)
+    cdef bint check_valid(self)
+    cdef void build_trimesh_model(self)
     cdef tuple get_buffers(self, object glctx, dict objects)
 
-
-cdef class TrimeshModel(Model):
-    cdef bint flat
-    cdef bint invert
-    cdef object trimesh_model
-
-    cdef object get_trimesh_model(self)
-
-
-cdef class Box(TrimeshModel):
-    @staticmethod
-    cdef Box get(Node node)
-
-
-cdef class Sphere(TrimeshModel):
-    cdef int segments
+    cdef Model flatten(self)
+    cdef Model invert(self)
+    cdef Model smooth_shade(self, double smooth, double minimum_area)
+    cdef Model transform(self, Matrix44 transform_matrix)
+    cdef Model slice(self, Vector position, Vector normal)
 
     @staticmethod
-    cdef Sphere get(Node node)
-
-
-cdef class Cylinder(TrimeshModel):
-    cdef int segments
+    cdef Model intersect(list models)
+    @staticmethod
+    cdef Model union(list models)
+    @staticmethod
+    cdef Model difference(list models)
 
     @staticmethod
-    cdef Cylinder get(Node node)
-
-
-cdef class Cone(TrimeshModel):
-    cdef int segments
-
+    cdef Model get_box(Node node)
     @staticmethod
-    cdef Cone get(Node node)
-
-
-cdef class ExternalModel(TrimeshModel):
-    cdef str filename
-
+    cdef Model get_sphere(Node node)
     @staticmethod
-    cdef ExternalModel get(Node node)
+    cdef Model get_cylinder(Node node)
+    @staticmethod
+    cdef Model get_cone(Node node)
+    @staticmethod
+    cdef Model get_external(Node node)
