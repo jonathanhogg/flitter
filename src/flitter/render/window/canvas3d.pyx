@@ -322,7 +322,7 @@ cdef Model get_model(Node node, bint top):
     cdef Node child
     cdef Model model = None
     cdef Model child_model = None
-    cdef Vector position, normal
+    cdef Vector position, origin, normal
     cdef list models
     cdef double smooth, minimum_area
     if node.kind == 'intersect':
@@ -332,10 +332,8 @@ cdef Model get_model(Node node, bint top):
             child_model = get_model(child, False)
             models.append(child_model)
             child = child.next_sibling
-        if len(models) == 1:
-            model = models[0]
-        else:
-            model = Model.intersect(models)
+        if models:
+            model = models[0] if len(models) == 1 else Model.intersect(models)
     elif node.kind == 'union':
         models = []
         child = node.first_child
@@ -343,10 +341,8 @@ cdef Model get_model(Node node, bint top):
             child_model = get_model(child, False)
             models.append(child_model)
             child = child.next_sibling
-        if len(models) == 1:
-            model = models[0]
-        else:
-            model = Model.union(models)
+        if models:
+            model = models[0] if len(models) == 1 else Model.union(models)
     elif node.kind == 'difference':
         models = []
         child = node.first_child
@@ -354,10 +350,8 @@ cdef Model get_model(Node node, bint top):
             child_model = get_model(child, False)
             models.append(child_model)
             child = child.next_sibling
-        if len(models) == 1:
-            model = models[0]
-        else:
-            model = Model.difference(models)
+        if models:
+            model = models[0] if len(models) == 1 else Model.difference(models)
     elif node.kind == 'transform':
         models = []
         child = node.first_child
@@ -365,9 +359,10 @@ cdef Model get_model(Node node, bint top):
             child_model = get_model(child, False)
             models.append(child_model)
             child = child.next_sibling
-        model = models[0] if len(models) == 1 else Model.union(models)
-        if model is not None and (transform_matrix := update_transform_matrix(node, IdentityTransform)) is not IdentityTransform:
-            model = model.transform(transform_matrix)
+        if models:
+            model = models[0] if len(models) == 1 else Model.union(models)
+            if model is not None and (transform_matrix := update_transform_matrix(node, IdentityTransform)) is not IdentityTransform:
+                model = model.transform(transform_matrix)
     elif node.kind == 'slice':
         models = []
         child = node.first_child
@@ -375,10 +370,11 @@ cdef Model get_model(Node node, bint top):
             child_model = get_model(child, False)
             models.append(child_model)
             child = child.next_sibling
-        model = models[0] if len(models) == 1 else Model.union(models)
-        if model is not None and (normal := node.get_fvec('normal', 3, None)) is not None:
-            position = node.get_fvec('position', 3, Zero3)
-            model = model.slice(position, normal.normalize())
+        if models:
+            model = models[0] if len(models) == 1 else Model.union(models)
+            if model is not None and (normal := node.get_fvec('normal', 3, None)) is not None:
+                origin = node.get_fvec('origin', 3, Zero3)
+                model = model.slice(origin, normal.normalize())
     else:
         if node.kind == 'box':
             model = Model.get_box(node)
@@ -390,11 +386,17 @@ cdef Model get_model(Node node, bint top):
             model = Model.get_cone(node)
         elif node.kind == 'model':
             model = Model.get_external(node)
-        if model is not None and not top and (transform_matrix := get_model_transform(node, IdentityTransform)) is not IdentityTransform:
+    if model is not None:
+        if top:
+            if node.get_bool('flat', False):
+                model = model.flatten()
+            elif (smooth := node.get_float('smooth', DefaultSmooth if model.is_constructed() else 0)) > 0:
+                minimum_area = max(0, node.get_float('minimum_area', 0))
+                model = model.smooth_shade(smooth, minimum_area)
+            if node.get_bool('invert', False):
+                model = model.invert()
+        elif(transform_matrix := get_model_transform(node, IdentityTransform)) is not IdentityTransform:
             model = model.transform(transform_matrix)
-    if top and (smooth := node.get_float('smooth', DefaultSmooth if model.is_constructed() else 0)) > 0:
-        minimum_area = max(0, node.get_float('minimum_area', 0))
-        model = model.smooth_shade(smooth, minimum_area)
     return model
 
 

@@ -56,24 +56,20 @@ cdef class Model:
                 del objects[dead_name]
             logger.trace("Removed model {} from cache", dead_name)
         cdef tuple buffers
-        faces = trimesh_model.faces[:,::-1] if self.invert else trimesh_model.faces
         cdef bint has_uv = trimesh_model.visual is not None and isinstance(trimesh_model.visual, trimesh.visual.texture.TextureVisuals)
         vertex_uvs = trimesh_model.visual.uv if has_uv else np.zeros((len(trimesh_model.vertices), 2))
-        if self.flat:
-            face_normals = -trimesh_model.face_normals if self.invert else trimesh_model.face_normals
-            vertex_data = np.empty((len(faces), 3, 8), dtype='f4')
-            vertex_data[:,:,0:3] = trimesh_model.vertices[faces]
-            vertex_data[:,:,3:6] = face_normals[:,None,:]
-            vertex_data[:,:,6:8] = vertex_uvs[faces]
-            buffers = (glctx.buffer(vertex_data), None)
-        else:
-            vertex_normals = -trimesh_model.vertex_normals if self.invert else trimesh_model.vertex_normals
-            vertex_data = np.hstack((trimesh_model.vertices, vertex_normals, vertex_uvs)).astype('f4')
-            index_data = faces.astype('i4')
-            buffers = (glctx.buffer(vertex_data), glctx.buffer(index_data))
+        vertex_data = np.hstack((trimesh_model.vertices, trimesh_model.vertex_normals, vertex_uvs)).astype('f4')
+        index_data = trimesh_model.faces.astype('i4')
+        buffers = (glctx.buffer(vertex_data), glctx.buffer(index_data))
         logger.trace("Prepared model {} with {} vertices and {} faces", name, len(trimesh_model.vertices), len(trimesh_model.faces))
         objects[name] = buffers
         return buffers
+
+    cdef Model flatten(self):
+        return FlattenedModel.get(self)
+
+    cdef Model invert(self):
+        return InvertedModel.get(self)
 
     cdef Model smooth_shade(self, double smooth, double minimum_area):
         return SmoothShadedModel.get(self, smooth, minimum_area)
@@ -81,8 +77,8 @@ cdef class Model:
     cdef Model transform(self, Matrix44 transform_matrix):
         return TransformedModel.get(self, transform_matrix)
 
-    cdef Model slice(self, Vector position, Vector normal):
-        return SlicedModel.get(self, position, normal)
+    cdef Model slice(self, Vector origin, Vector normal):
+        return SlicedModel.get(self, origin, normal)
 
     @staticmethod
     cdef Model intersect(list models):
@@ -117,8 +113,61 @@ cdef class Model:
         return ExternalModel.get(node)
 
 
-cdef class SmoothShadedModel(Model):
+cdef class ModelTransformer(Model):
     cdef Model original
+
+    cdef bint check_valid(self):
+        if not self.valid:
+            return False
+        if self.original.check_valid():
+            return True
+        self.valid = False
+        return False
+
+
+cdef class FlattenedModel(ModelTransformer):
+    @staticmethod
+    cdef FlattenedModel get(Model original):
+        cdef str name = f'flat({original.name})'
+        cdef FlattenedModel model = ModelCache.pop(name, None)
+        if model is None:
+            model = FlattenedModel.__new__(FlattenedModel)
+            model.name = name
+            model.original = original
+        ModelCache[name] = model
+        return model
+
+    cdef void build_trimesh_model(self):
+        if not self.original.check_valid():
+            self.original.build_trimesh_model()
+        trimesh_model = self.original.trimesh_model.copy()
+        trimesh_model.unmerge_vertices()
+        self.trimesh_model = trimesh_model
+        self.valid = True
+
+
+cdef class InvertedModel(ModelTransformer):
+    @staticmethod
+    cdef InvertedModel get(Model original):
+        cdef str name = f'invert({original.name})'
+        cdef InvertedModel model = ModelCache.pop(name, None)
+        if model is None:
+            model = InvertedModel.__new__(InvertedModel)
+            model.name = name
+            model.original = original
+        ModelCache[name] = model
+        return model
+
+    cdef void build_trimesh_model(self):
+        if not self.original.check_valid():
+            self.original.build_trimesh_model()
+        trimesh_model = self.original.trimesh_model.copy()
+        trimesh_model.invert()
+        self.trimesh_model = trimesh_model
+        self.valid = True
+
+
+cdef class SmoothShadedModel(ModelTransformer):
     cdef double smooth
     cdef double minimum_area
 
@@ -140,14 +189,6 @@ cdef class SmoothShadedModel(Model):
         ModelCache[name] = model
         return model
 
-    cdef bint check_valid(self):
-        if not self.valid:
-            return False
-        if self.original.check_valid():
-            return True
-        self.valid = False
-        return False
-
     cdef void build_trimesh_model(self):
         if not self.original.check_valid():
             self.original.build_trimesh_model()
@@ -156,8 +197,7 @@ cdef class SmoothShadedModel(Model):
         self.valid = True
 
 
-cdef class TransformedModel(Model):
-    cdef Model original
+cdef class TransformedModel(ModelTransformer):
     cdef Matrix44 transform_matrix
 
     @staticmethod
@@ -175,14 +215,6 @@ cdef class TransformedModel(Model):
     cdef Model transform(self, Matrix44 transform_matrix):
         return TransformedModel.get(self.original, transform_matrix.mmul(self.transform_matrix))
 
-    cdef bint check_valid(self):
-        if not self.valid:
-            return False
-        if self.original.check_valid():
-            return True
-        self.valid = False
-        return False
-
     cdef void build_trimesh_model(self):
         if not self.original.check_valid():
             self.original.build_trimesh_model()
@@ -195,45 +227,36 @@ cdef class TransformedModel(Model):
         self.valid = True
 
 
-cdef class SlicedModel(Model):
-    cdef Model original
-    cdef Vector position
+cdef class SlicedModel(ModelTransformer):
+    cdef Vector origin
     cdef Vector normal
 
     cdef bint is_constructed(self):
         return True
 
     @staticmethod
-    cdef SlicedModel get(Model original, Vector position, Vector normal):
-        cdef str name = f'{original.name}/{hex(position.hash(False) ^ normal.hash(False))[3:]}'
+    cdef SlicedModel get(Model original, Vector origin, Vector normal):
+        cdef str name = f'{original.name}/{hex(origin.hash(False) ^ normal.hash(False))[3:]}'
         cdef SlicedModel model = ModelCache.pop(name, None)
         if model is None:
             model = SlicedModel.__new__(SlicedModel)
             model.name = name
             model.original = original
-            model.position = position
+            model.origin = origin
             model.normal = normal
         ModelCache[name] = model
         return model
 
     cdef Model transform(self, Matrix44 transform_matrix):
-        cdef Vector position = transform_matrix.vmul(self.position)
+        cdef Vector origin = transform_matrix.vmul(self.origin)
         cdef Vector normal = transform_matrix.inverse_transpose_matrix33().vmul(self.normal).normalize()
-        return SlicedModel.get(TransformedModel.get(self.original, transform_matrix), position, normal)
-
-    cdef bint check_valid(self):
-        if not self.valid:
-            return False
-        if self.original.check_valid():
-            return True
-        self.valid = False
-        return False
+        return SlicedModel.get(TransformedModel.get(self.original, transform_matrix), origin, normal)
 
     cdef void build_trimesh_model(self):
         if not self.original.check_valid():
             self.original.build_trimesh_model()
         if self.original.trimesh_model is not None:
-            trimesh_model = self.original.trimesh_model.copy().slice_plane(tuple(self.position), tuple(self.normal.neg()), True)
+            trimesh_model = self.original.trimesh_model.copy().slice_plane(tuple(self.origin), tuple(self.normal.neg()), True)
             self.trimesh_model = trimesh_model if len(trimesh_model.vertices) and len(trimesh_model.faces) else None
         else:
             self.trimesh_model = None
@@ -352,14 +375,11 @@ cdef class Box(PrimitiveModel):
 
     @staticmethod
     cdef Box get(Node node):
-        cdef bint invert = node.get_bool('invert', False)
-        cdef str name = '!box|invert' if invert else '!box'
+        cdef str name = '!box'
         cdef Box model = ModelCache.pop(name, None)
         if model is None:
             model = Box.__new__(Box)
             model.name = name
-            model.flat = False
-            model.invert = invert
             model.trimesh_model = None
         ModelCache[name] = model
         return model
@@ -375,20 +395,12 @@ cdef class Sphere(PrimitiveModel):
 
     @staticmethod
     cdef Sphere get(Node node):
-        cdef bint flat = node.get_bool('flat', False)
-        cdef bint invert = node.get_bool('invert', False)
         cdef int segments = max(4, node.get_int('segments', DefaultSegments))
         cdef str name = f'!sphere-{segments}' if segments != DefaultSegments else '!sphere'
-        if flat:
-            name += '|flat'
-        if invert:
-            name += '|invert'
         cdef Sphere model = ModelCache.pop(name, None)
         if model is None:
             model = Sphere.__new__(Sphere)
             model.name = name
-            model.flat = flat
-            model.invert = invert
             model.segments = segments
             model.trimesh_model = None
         ModelCache[name] = model
@@ -445,20 +457,12 @@ cdef class Cylinder(PrimitiveModel):
 
     @staticmethod
     cdef Cylinder get(Node node):
-        cdef bint flat = node.get_bool('flat', False)
-        cdef bint invert = node.get_bool('invert', False)
         cdef int segments = max(2, node.get_int('segments', DefaultSegments))
         cdef str name = f'!cylinder-{segments}' if segments != DefaultSegments else '!cylinder'
-        if flat:
-            name += '|flat'
-        if invert:
-            name += '|invert'
         cdef Cylinder model = ModelCache.pop(name, None)
         if model is None:
             model = Cylinder.__new__(Cylinder)
             model.name = name
-            model.flat = flat
-            model.invert = invert
             model.segments = segments
             model.trimesh_model = None
         ModelCache[name] = model
@@ -536,20 +540,12 @@ cdef class Cone(PrimitiveModel):
 
     @staticmethod
     cdef Cone get(Node node):
-        cdef bint flat = node.get_bool('flat', False)
-        cdef bint invert = node.get_bool('invert', False)
         cdef int segments = max(2, node.get_int('segments', DefaultSegments))
         cdef str name = f'!cone-{segments}' if segments != DefaultSegments else '!cone'
-        if flat:
-            name += '|flat'
-        if invert:
-            name += '|invert'
         cdef Cone model = ModelCache.pop(name, None)
         if model is None:
             model = Cone.__new__(Cone)
             model.name = name
-            model.flat = flat
-            model.invert = invert
             model.segments = segments
             model.trimesh_model = None
         ModelCache[name] = model
@@ -615,19 +611,11 @@ cdef class ExternalModel(Model):
         cdef str filename = node.get_str('filename', None)
         if not filename:
             return None
-        cdef bint flat = node.get_bool('flat', False)
-        cdef bint invert = node.get_bool('invert', False)
         cdef str name = filename
-        if flat:
-            name += '|flat'
-        if invert:
-            name += '|invert'
         cdef ExternalModel model = ModelCache.pop(name, None)
         if model is None:
             model = ExternalModel.__new__(ExternalModel)
             model.name = name
-            model.flat = flat
-            model.invert = invert
             model.filename = filename
             model.trimesh_model = None
         ModelCache[name] = model

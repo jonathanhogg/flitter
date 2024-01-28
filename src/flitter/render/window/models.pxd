@@ -8,8 +8,6 @@ cdef double DefaultSmooth
 
 cdef class Model:
     cdef str name
-    cdef bint flat
-    cdef bint invert
     cdef object trimesh_model
     cdef bint valid
 
@@ -18,6 +16,8 @@ cdef class Model:
     cdef void build_trimesh_model(self)
     cdef tuple get_buffers(self, object glctx, dict objects)
 
+    cdef Model flatten(self)
+    cdef Model invert(self)
     cdef Model smooth_shade(self, double smooth, double minimum_area)
     cdef Model transform(self, Matrix44 transform_matrix)
     cdef Model slice(self, Vector position, Vector normal)
