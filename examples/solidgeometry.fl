@@ -1,21 +1,40 @@
+-- This example will be initially very jittery as it caches the generated
+-- models. Note the use of the `stepped()` function to limit the number of
+-- cached models to a number that keeps the animation reasonably smooth while
+-- avoiding doing too much model generation.
 
 %pragma tempo 60
 
-func stepped(x, n=256)
+func stepped(x, n=100)
     x*n // 1 / n
 
 !window size=1080
     !canvas3d samples=4 viewpoint=0;0;20 near=1 far=50
         !light color=0.1
-        !light color=0.9 direction=1;-1;-1
+        !light color=0.9 direction=1;0;-1
         !transform rotate=beat/30;beat/20;beat/30
             let n=12
             for i in ..n
-                let r=stepped(2+0.75*sine(beat/10+i/n))
+                let r=2.05+0.7*stepped(sine(beat/10+i/n))
                 !material color=hsv(i/n+beat/30;1;1)
                     !transform rotate_y=i/n translate=0;0;10
-                        (!intersect) if i % 2 == 0 else (!difference)
-                            !box size=4
-                            !sphere size=r
-            !slice position=1;0;0 normal=1;1;0 color=0.5
-                !box size=6;4;4
+                        if i % 2 == 0
+                            !intersect
+                                !box size=4
+                                !sphere size=r
+                        else
+                            !difference
+                                !box size=4
+                                !sphere size=r
+            !union color=0.5 roughness=0.3
+                !slice origin=0;1;0 normal=0.75;1;0
+                    !difference
+                        !box size=4;2;4
+                        !transform translate=0;-0.25;0
+                            !slice origin=0;1;0 normal=0.75;1;0
+                                !box size=3.5;2;3.5
+                    !difference
+                        !cylinder size=0.75;0.75;2 rotation=0.25;0;0
+                        !cylinder size=0.5;0.5;2 rotation=0.25;0;0
+                for i in (-1;1)
+                    !cylinder size=0.75 position=-1;1.125;i rotation=0.25;0;0
