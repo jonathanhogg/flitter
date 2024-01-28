@@ -18,7 +18,7 @@ from ... import name_patch
 from ...clock import system_clock
 from ...model cimport Node, Vector, Matrix44, Matrix33, null_, true_
 from .glsl import TemplateLoader
-from .models cimport Model
+from .models cimport Model, DefaultSmooth
 
 
 logger = name_patch(logger, __name__)
@@ -392,8 +392,8 @@ cdef Model get_model(Node node, bint top):
             model = Model.get_external(node)
         if model is not None and not top and (transform_matrix := get_model_transform(node, IdentityTransform)) is not IdentityTransform:
             model = model.transform(transform_matrix)
-    if top and (smooth := node.get_float('smooth', 0)) > 0:
-        minimum_area = node.get_float('minimum_area', 0.01)
+    if top and (smooth := node.get_float('smooth', DefaultSmooth if model.is_constructed() else 0)) > 0:
+        minimum_area = max(0, node.get_float('minimum_area', 0))
         model = model.smooth_shade(smooth, minimum_area)
     return model
 

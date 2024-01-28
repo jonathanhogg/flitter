@@ -3,6 +3,9 @@
 from ...model cimport Node, Vector, Matrix44
 
 
+cdef double DefaultSmooth
+
+
 cdef class Model:
     cdef str name
     cdef bint flat
@@ -10,6 +13,7 @@ cdef class Model:
     cdef object trimesh_model
     cdef bint valid
 
+    cdef bint is_constructed(self)
     cdef bint check_valid(self)
     cdef void build_trimesh_model(self)
     cdef tuple get_buffers(self, object glctx, dict objects)

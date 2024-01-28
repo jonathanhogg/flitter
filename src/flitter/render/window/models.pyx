@@ -17,6 +17,8 @@ cdef dict ModelCache = {}
 cdef int MaxModelCacheEntries = 4096
 cdef double Tau = 6.283185307179586
 cdef double RootHalf = sqrt(0.5)
+cdef double DefaultSmooth = 0.05
+cdef int DefaultSegments = 64
 
 
 cdef class Model:
@@ -25,6 +27,9 @@ cdef class Model:
 
     def __eq__(self, other):
         return self is other
+
+    cdef bint is_constructed(self):
+        return False
 
     cdef bint check_valid(self):
         raise NotImplementedError()
@@ -119,8 +124,10 @@ cdef class SmoothShadedModel(Model):
 
     @staticmethod
     cdef SmoothShadedModel get(Model original, double smooth, double minimum_area):
-        cdef str name = 'smooth(' + original.name + f', {smooth:g}, '
-        if minimum_area != 0.01:
+        cdef str name = 'smooth(' + original.name
+        if smooth != DefaultSmooth:
+            name += f', {smooth:g}'
+        if minimum_area:
             name += f', {minimum_area:g}'
         name += ')'
         cdef SmoothShadedModel model = ModelCache.pop(name, None)
@@ -129,7 +136,7 @@ cdef class SmoothShadedModel(Model):
             model.name = name
             model.original = original
             model.smooth = smooth
-            model.minimum_area = max(1e-6, minimum_area)
+            model.minimum_area = minimum_area
         ModelCache[name] = model
         return model
 
@@ -144,7 +151,8 @@ cdef class SmoothShadedModel(Model):
     cdef void build_trimesh_model(self):
         if not self.original.check_valid():
             self.original.build_trimesh_model()
-        self.trimesh_model = trimesh.graph.smooth_shade(self.original.trimesh_model, angle=self.smooth*Tau, facet_minarea=1/self.minimum_area)
+        self.trimesh_model = trimesh.graph.smooth_shade(self.original.trimesh_model, angle=self.smooth*Tau,
+                                                        facet_minarea=1/self.minimum_area if self.minimum_area else None)
         self.valid = True
 
 
@@ -192,6 +200,9 @@ cdef class SlicedModel(Model):
     cdef Vector position
     cdef Vector normal
 
+    cdef bint is_constructed(self):
+        return True
+
     @staticmethod
     cdef SlicedModel get(Model original, Vector position, Vector normal):
         cdef str name = f'{original.name}/{hex(position.hash(False) ^ normal.hash(False))[3:]}'
@@ -207,7 +218,7 @@ cdef class SlicedModel(Model):
 
     cdef Model transform(self, Matrix44 transform_matrix):
         cdef Vector position = transform_matrix.vmul(self.position)
-        cdef Vector normal = transform_matrix.inverse_transpose_matrix33().vmul(self.normal)
+        cdef Vector normal = transform_matrix.inverse_transpose_matrix33().vmul(self.normal).normalize()
         return SlicedModel.get(TransformedModel.get(self.original, transform_matrix), position, normal)
 
     cdef bint check_valid(self):
@@ -233,6 +244,9 @@ cdef class BooleanOperationModel(Model):
     cdef str operation
     cdef list models
 
+    cdef bint is_constructed(self):
+        return True
+
     @staticmethod
     cdef BooleanOperationModel get(str operation, list models):
         cdef Model child_model
@@ -256,8 +270,6 @@ cdef class BooleanOperationModel(Model):
         cdef Model model
         cdef list models = []
         for model in self.models:
-            # if not isinstance(model, TransformedModel):
-            #     return TransformedModel.get(self, transform_matrix)
             models.append(model.transform(transform_matrix))
         return BooleanOperationModel.get(self.operation, models)
 
@@ -436,7 +448,7 @@ cdef class Cylinder(PrimitiveModel):
     cdef Cylinder get(Node node):
         cdef bint flat = node.get_bool('flat', False)
         cdef bint invert = node.get_bool('invert', False)
-        cdef int segments = max(2, node.get_int('segments', 32))
+        cdef int segments = max(2, node.get_int('segments', DefaultSegments))
         cdef str name = f'!cylinder-{segments}'
         if flat:
             name += '|flat'
@@ -527,7 +539,7 @@ cdef class Cone(PrimitiveModel):
     cdef Cone get(Node node):
         cdef bint flat = node.get_bool('flat', False)
         cdef bint invert = node.get_bool('invert', False)
-        cdef int segments = max(2, node.get_int('segments', 32))
+        cdef int segments = max(2, node.get_int('segments', DefaultSegments))
         cdef str name = f'!cone-{segments}'
         if flat:
             name += '|flat'
