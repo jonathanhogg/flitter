@@ -27,7 +27,6 @@ logger = name_patch(logger, __name__)
 
 cdef Vector VELOCITY = Vector('velocity')
 cdef Vector CLOCK = Vector('clock')
-cdef double Tau = 6.283185307179586
 
 cdef Normal RandomSource = Normal('_physics')
 cdef unsigned long long RandomIndex = 0
@@ -203,7 +202,7 @@ cdef class DragForceApplier(ParticleForceApplier):
             for i in range(particle.velocity.length):
                 v = particle.velocity.numbers[i]
                 speed_squared += v * v
-            k = min(self.strength * sqrt(speed_squared) * (particle.radius * particle.radius), particle.mass / delta)
+            k = min(self.strength * sqrt(speed_squared) * particle.radius**(particle.force.length-1), particle.mass / delta)
             for i in range(particle.velocity.length):
                 particle.force.numbers[i] = particle.force.numbers[i] - particle.velocity.numbers[i] * k
 
@@ -222,7 +221,7 @@ cdef class BuoyancyForceApplier(ParticleForceApplier):
     cdef void apply(self, Particle particle, double delta) noexcept nogil:
         cdef double displaced_mass, k
         if particle.radius and particle.mass:
-            displaced_mass = (2.0/3.0) * Tau * particle.radius**3 * self.density
+            displaced_mass = particle.radius**particle.force.length * self.density
             k = self.strength * (particle.mass - displaced_mass)
             for i in range(particle.force.length):
                 particle.force.numbers[i] = particle.force.numbers[i] + self.gravity.numbers[i] * k
