@@ -34,6 +34,10 @@ cdef double Pi = 3.141592653589793
 cdef tuple MaterialAttributes = ('color', 'metal', 'roughness', 'shininess', 'occlusion', 'emissive', 'transparency',
                                  'texture_id', 'metal_texture_id', 'roughness_texture_id', 'occlusion_texture_id',
                                  'emissive_texture_id', 'transparency_texture_id')
+cdef tuple TransformAttributes = ('translate', 'scale', 'rotate', 'rotate_x', 'rotate_y', 'rotate_z', 'shear_x', 'shear_y', 'shear_z')
+cdef set GroupAttributes = set(MaterialAttributes)
+GroupAttributes.update(TransformAttributes)
+GroupAttributes.update(('max_lights', 'depth_test', 'cull_face', 'composite', 'vertex', 'fragment'))
 
 cdef object StandardVertexTemplate = TemplateLoader.get_template("standard_lighting.vert")
 cdef object StandardFragmentTemplate = TemplateLoader.get_template("standard_lighting.frag")
@@ -152,7 +156,7 @@ cdef class RenderSet:
     cdef str composite
     cdef object vertex_shader_template
     cdef object fragment_shader_template
-    cdef Node node
+    cdef dict variables
 
     cdef void set_blend(self, glctx):
         glctx.blend_equation = moderngl.FUNC_ADD
@@ -449,7 +453,10 @@ cdef void collect(Node node, Matrix44 transform_matrix, Material material, Rende
         fragment_shader = node.get_str('fragment', None)
         render_set.vertex_shader_template = Template(vertex_shader) if vertex_shader is not None else StandardVertexTemplate
         render_set.fragment_shader_template = Template(fragment_shader) if fragment_shader is not None else StandardFragmentTemplate
-        render_set.node = node
+        render_set.variables = {}
+        for name, value in node._attributes.items():
+            if name not in GroupAttributes:
+                render_set.variables[name] = value
         render_sets.append(render_set)
         child = node.first_child
         while child is not None:
@@ -524,8 +531,9 @@ cdef void render(RenderSet render_set, Camera camera, glctx, dict objects, dict 
     cdef double[:] zs
     cdef long[:] indices
     cdef dict shaders = objects.setdefault('canvas3d_shaders', {})
-    cdef dict variables = {'max_lights': render_set.max_lights, 'Ambient': LightType.Ambient, 'Directional': LightType.Directional,
-                           'Point': LightType.Point, 'Spot': LightType.Spot}
+    cdef dict variables = render_set.variables.copy()
+    variables.update({'max_lights': render_set.max_lights, 'Ambient': LightType.Ambient, 'Directional': LightType.Directional,
+                      'Point': LightType.Point, 'Spot': LightType.Spot})
     cdef str vertex_shader = render_set.vertex_shader_template.render(**variables)
     cdef str fragment_shader = render_set.fragment_shader_template.render(**variables)
     cdef tuple source = (vertex_shader, fragment_shader)
@@ -543,7 +551,7 @@ cdef void render(RenderSet render_set, Camera camera, glctx, dict objects, dict 
         return
     cdef str name
     cdef Vector value
-    for name, value in render_set.node._attributes.items():
+    for name, value in render_set.variables.items():
         if name in shader:
             member = shader[name]
             if isinstance(member, moderngl.Uniform):
