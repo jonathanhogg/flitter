@@ -32,8 +32,8 @@ The engine that runs the language is capable of:
     perspective/orthographic projection, fog, conversion to monochrome and
     colour tinting
 - simulating simple [physical particle systems](/docs/physics.md), including
-spring/rod/rubber-band constraints, gravity, electrostatic charge, inertia,
-drag, barriers and particle collisions
+spring/rod/rubber-band constraints, gravity, electrostatic charge, adhesion,
+buoyancy, inertia, drag, barriers and particle collisions
 - playing videos at arbitrary speeds, including in reverse (although video will
 stutter if it makes extensive use of P-frames)
 - running GLSL shaders as stacked image filters and generators, with per-frame
