@@ -345,6 +345,31 @@ As drag scales with the square of both the speed and particle radius,
 limited to ensure that simulation granularity issues cannot cause a particle to
 reverse direction.
 
+### `!buoyancy`
+
+`!buoyancy` simulates the effect of particles rising or falling within a fluid
+based on their relative density to that fluid and the effects of gravity. The
+force is equal to the mass of the particle minus the displaced mass of the
+surrounding fluid (i.e., the volume of the particle multiplied by the density
+of the fluid) multiplied by the gravity vector.
+
+- `gravity` - vector specifying the direction and magnitude of gravity (default
+is a vector with the last dimension equal to `-1`)
+- `density` - the density of the surrounding fluid (default is `1`)
+- `strength` - force magnitude coefficient
+- `ease` - specifies an amount of simulation time over which to ramp up
+`strength`
+
+Particles with either zero radius or zero mass will be ignored.
+
+```math
+m = { 4 \pi \over 3 } . \textbf{radius}^3 . \textbf{density}
+```
+
+```math
+\vec{F} = \textbf{strength} . \vec{gravity} . ( \textbf{mass} - m )
+```
+
 ## State interaction
 
 For a `!physics` system with `state` set to *prefix*, and a particle with `id`

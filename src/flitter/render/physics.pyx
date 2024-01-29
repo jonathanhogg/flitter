@@ -27,6 +27,7 @@ logger = name_patch(logger, __name__)
 
 cdef Vector VELOCITY = Vector('velocity')
 cdef Vector CLOCK = Vector('clock')
+cdef double Tau = 6.283185307179586
 
 cdef Normal RandomSource = Normal('_physics')
 cdef unsigned long long RandomIndex = 0
@@ -207,6 +208,26 @@ cdef class DragForceApplier(ParticleForceApplier):
                 particle.force.numbers[i] = particle.force.numbers[i] - particle.velocity.numbers[i] * k
 
 
+cdef class BuoyancyForceApplier(ParticleForceApplier):
+    cdef double density
+    cdef Vector gravity
+
+    def __cinit__(self, Node node, double strength, Vector zero):
+        self.density = node.get_float('density', 1)
+        self.gravity = node.get_fvec('gravity', zero.length, zero)
+        if self.gravity is zero:
+            self.gravity = Vector._copy(self.gravity)
+            self.gravity.numbers[zero.length-1] = -1
+
+    cdef void apply(self, Particle particle, double delta) noexcept nogil:
+        cdef double displaced_mass, k
+        if particle.radius and particle.mass:
+            displaced_mass = (2.0/3.0) * Tau * particle.radius**3 * self.density
+            k = self.strength * (particle.mass - displaced_mass)
+            for i in range(particle.force.length):
+                particle.force.numbers[i] = particle.force.numbers[i] + self.gravity.numbers[i] * k
+
+
 cdef class ConstantForceApplier(ParticleForceApplier):
     cdef Vector force
     cdef Vector acceleration
@@ -367,6 +388,8 @@ cdef class PhysicsSystem:
                     specific_forces.append(DistanceForceApplier.__new__(DistanceForceApplier, child, strength, zero))
                 elif child.kind == 'drag':
                     particle_forces.append(DragForceApplier.__new__(DragForceApplier, child, strength, zero))
+                elif child.kind == 'buoyancy':
+                    particle_forces.append(BuoyancyForceApplier.__new__(BuoyancyForceApplier, child, strength, zero))
                 elif child.kind == 'constant':
                     particle_forces.append(ConstantForceApplier.__new__(ConstantForceApplier, child, strength, zero))
                 elif child.kind == 'random':
