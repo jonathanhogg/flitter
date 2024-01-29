@@ -267,11 +267,54 @@ attract each other.
 Except for the ability to have negative charges, electrostatic force operates
 in the same way as gravity – including being ignored for overlapping particles.
 
+### `!adhesion`
+
+`!adhesion` creates an attractive/repulsive force that applies to all pairs of
+particles that overlap. It is proportional to the overlap times the distance
+minus the maximum of the two radii. The result is that two particles that touch
+will draw towards each other until the centre position of one enters the surface
+of the other, at which point they will begin to more strongly repel each other.
+
+- `strength` - force magnitude coefficient
+- `ease` - specifies an amount of simulation time over which to ramp up
+`strength`
+
+```math
+l_{max} = \textbf{radius}_{from} + \textbf{radius}_{to}
+```
+
+```math
+l_{min} = max( \textbf{radius}_{from}, \textbf{radius}_{to} )
+```
+
+```math
+l_{stick} = {l_{max} + l_{min} \over 2}
+```
+
+```math
+overlap = max( 0, l_{max} - l )
+```
+
+```math
+\vec{F} = \textbf{strength} . \vec{d} . overlap^2 . (l - l_{stick})
+```
+
+```math
+\vec{F}_{from} = \vec{F}
+```
+
+```math
+\vec{F}_{to} = -\vec{F}
+```
+
+As adhesion contains a repulsive force, it is not normally necessary to use it
+together with `!collision`.
+
 > **Note**
 >
-> The `!collision`, `!gravity` and `!electrostatic` force appliers are all
-> compute-intensive as they have to consider all particle *pairings* and thus
-> have $O(n^2)$ time-complexity.
+> The `!collision`, `!gravity`, `!electrostatic` and `!adhesion` force appliers
+> are all compute-intensive as they have to consider all particle *pairings*
+> and thus have $O(n^2)$ time-complexity.
 
 ### `!drag`
 
