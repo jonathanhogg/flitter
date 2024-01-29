@@ -271,6 +271,21 @@ cdef class ElectrostaticForceApplier(MatrixPairForceApplier):
                 to_particle.force.numbers[i] = to_particle.force.numbers[i] - f
 
 
+cdef class StickyForceApplier(MatrixPairForceApplier):
+    cdef void apply(self, Particle from_particle, Particle to_particle, Vector direction, double distance, double distance_squared) noexcept nogil:
+        cdef double min_distance, max_distance, f, k
+        cdef long i
+        if from_particle.radius and to_particle.radius:
+            max_distance = from_particle.radius + to_particle.radius
+            min_distance = max_distance - min(from_particle.radius, to_particle.radius)
+            if distance > min_distance and distance < max_distance:
+                k = self.strength * (max_distance - distance) * (distance - min_distance)
+                for i in range(direction.length):
+                    f = direction.numbers[i] * k
+                    from_particle.force.numbers[i] = from_particle.force.numbers[i] + f
+                    to_particle.force.numbers[i] = to_particle.force.numbers[i] - f
+
+
 cdef class PhysicsSystem:
     cdef set state_keys
 
@@ -361,6 +376,8 @@ cdef class PhysicsSystem:
                     matrix_forces.append(GravityForceApplier.__new__(GravityForceApplier, child, strength, zero))
                 elif child.kind == 'electrostatic':
                     matrix_forces.append(ElectrostaticForceApplier.__new__(ElectrostaticForceApplier, child, strength, zero))
+                elif child.kind == 'sticky':
+                    matrix_forces.append(StickyForceApplier.__new__(StickyForceApplier, child, strength, zero))
             child = child.next_sibling
         cdef SpecificPairForceApplier specific_force
         for specific_force in specific_forces:
