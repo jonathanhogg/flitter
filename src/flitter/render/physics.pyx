@@ -424,7 +424,7 @@ cdef class PhysicsSystem:
         if time_vector.length == 1 and time_vector.numbers != NULL:
             last_time = min(time, time_vector.numbers[0])
         else:
-            logger.debug("New physics {!r} with {} particles and {} forces", state_prefix, len(particles),
+            logger.debug("New {}D physics {!r} with {} particles and {} forces", dimensions, state_prefix, len(particles),
                          len(particle_forces) + len(matrix_forces) + len(specific_forces))
             last_time = time
         clock = await asyncio.to_thread(self.calculate, particles, non_anchors, particle_forces, matrix_forces, specific_forces, barriers,
