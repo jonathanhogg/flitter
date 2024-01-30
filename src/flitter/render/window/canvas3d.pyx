@@ -647,8 +647,7 @@ cdef void render(RenderGroup render_group, Camera camera, glctx, dict objects, d
     if transparent_objects:
         n = len(transparent_objects)
         transparent_objects.sort(key=fst)
-        matrices = view.array((n, 25), 4, 'f')
-        materials = view.array((n, 11), 4, 'f')
+        instances_data = view.array((n, 36), 4, 'f')
         k = 0
         for i, transparent_object in enumerate(transparent_objects):
             model = transparent_object[1]
