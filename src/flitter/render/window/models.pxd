@@ -3,7 +3,7 @@
 from ...model cimport Node, Vector, Matrix44
 
 
-cdef double DefaultSmooth
+cdef double DefaultSnapAngle
 
 
 cdef class Model:
@@ -18,7 +18,7 @@ cdef class Model:
 
     cdef Model flatten(self)
     cdef Model invert(self)
-    cdef Model smooth_shade(self, double smooth, double minimum_area)
+    cdef Model snap_edges(self, double snap_angle, double minimum_area)
     cdef Model transform(self, Matrix44 transform_matrix)
     cdef Model slice(self, Vector position, Vector normal)
 

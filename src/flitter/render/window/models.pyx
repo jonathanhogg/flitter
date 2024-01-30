@@ -17,7 +17,7 @@ cdef dict ModelCache = {}
 cdef int MaxModelCacheEntries = 4096
 cdef double Tau = 6.283185307179586
 cdef double RootHalf = sqrt(0.5)
-cdef double DefaultSmooth = 0.05
+cdef double DefaultSnapAngle = 0.05
 cdef int DefaultSegments = 64
 
 
@@ -71,8 +71,8 @@ cdef class Model:
     cdef Model invert(self):
         return InvertedModel.get(self)
 
-    cdef Model smooth_shade(self, double smooth, double minimum_area):
-        return SmoothShadedModel.get(self, smooth, minimum_area)
+    cdef Model snap_edges(self, double snap_angle, double minimum_area):
+        return SnappedEdgesModel.get(self, snap_angle, minimum_area)
 
     cdef Model transform(self, Matrix44 transform_matrix):
         return TransformedModel.get(self, transform_matrix)
@@ -167,24 +167,24 @@ cdef class InvertedModel(ModelTransformer):
         self.valid = True
 
 
-cdef class SmoothShadedModel(ModelTransformer):
-    cdef double smooth
+cdef class SnappedEdgesModel(ModelTransformer):
+    cdef double snap_angle
     cdef double minimum_area
 
     @staticmethod
-    cdef SmoothShadedModel get(Model original, double smooth, double minimum_area):
-        cdef str name = 'smooth(' + original.name
-        if smooth != DefaultSmooth:
-            name += f', {smooth:g}'
+    cdef SnappedEdgesModel get(Model original, double snap_angle, double minimum_area):
+        cdef str name = 'snap(' + original.name
+        if snap_angle != DefaultSnapAngle:
+            name += f', {snap_angle:g}'
         if minimum_area:
             name += f', {minimum_area:g}'
         name += ')'
-        cdef SmoothShadedModel model = ModelCache.pop(name, None)
+        cdef SnappedEdgesModel model = ModelCache.pop(name, None)
         if model is None:
-            model = SmoothShadedModel.__new__(SmoothShadedModel)
+            model = SnappedEdgesModel.__new__(SnappedEdgesModel)
             model.name = name
             model.original = original
-            model.smooth = smooth
+            model.snap_angle = snap_angle
             model.minimum_area = minimum_area
         ModelCache[name] = model
         return model
@@ -192,7 +192,7 @@ cdef class SmoothShadedModel(ModelTransformer):
     cdef void build_trimesh_model(self):
         if not self.original.check_valid():
             self.original.build_trimesh_model()
-        self.trimesh_model = trimesh.graph.smooth_shade(self.original.trimesh_model, angle=self.smooth*Tau,
+        self.trimesh_model = trimesh.graph.smooth_shade(self.original.trimesh_model, angle=self.snap_angle*Tau,
                                                         facet_minarea=1/self.minimum_area if self.minimum_area else None)
         self.valid = True
 

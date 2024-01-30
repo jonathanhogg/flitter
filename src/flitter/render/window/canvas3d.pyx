@@ -18,7 +18,7 @@ from ... import name_patch
 from ...clock import system_clock
 from ...model cimport Node, Vector, Matrix44, Matrix33, null_, true_
 from .glsl import TemplateLoader
-from .models cimport Model, DefaultSmooth
+from .models cimport Model, DefaultSnapAngle
 
 
 logger = name_patch(logger, __name__)
@@ -331,7 +331,7 @@ cdef Model get_model(Node node, bint top):
     cdef Model child_model = None
     cdef Vector position, origin, normal
     cdef list models
-    cdef double smooth, minimum_area
+    cdef double snap_angle, minimum_area
     if node.kind == 'intersect':
         models = []
         child = node.first_child
@@ -401,9 +401,9 @@ cdef Model get_model(Node node, bint top):
         if top:
             if node.get_bool('flat', False):
                 model = model.flatten()
-            elif (smooth := node.get_float('smooth', DefaultSmooth if model.is_constructed() else 0)) > 0:
+            elif (snap_angle := node.get_float('snap_edges', DefaultSnapAngle if model.is_constructed() else 0)) > 0:
                 minimum_area = max(0, node.get_float('minimum_area', 0))
-                model = model.smooth_shade(smooth, minimum_area)
+                model = model.snap_edges(snap_angle, minimum_area)
             if node.get_bool('invert', False):
                 model = model.invert()
         elif (transform_matrix := get_model_transform(node, IdentityTransform)) is not IdentityTransform:
