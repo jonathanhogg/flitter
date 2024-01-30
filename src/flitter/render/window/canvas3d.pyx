@@ -147,7 +147,8 @@ cdef class Instance:
     cdef Material material
 
 
-cdef class RenderSet:
+cdef class RenderGroup:
+    cdef RenderGroup parent_group
     cdef int max_lights
     cdef list lights
     cdef dict instances
@@ -410,7 +411,7 @@ cdef Model get_model(Node node, bint top):
     return model
 
 
-cdef void collect(Node node, Matrix44 transform_matrix, Material material, RenderSet render_set, list render_sets,
+cdef void collect(Node node, Matrix44 transform_matrix, Material material, RenderGroup render_group, list render_groups,
                   Camera default_camera, dict cameras, int max_samples):
     cdef str kind = node.kind
     cdef Light light
@@ -422,45 +423,45 @@ cdef void collect(Node node, Matrix44 transform_matrix, Material material, Rende
     cdef Model model
     cdef Instance instance
     cdef tuple model_textures
+    cdef RenderGroup new_render_group
 
     if node.kind == 'material':
         material = material.update(node)
         child = node.first_child
         while child is not None:
-            collect(child, transform_matrix, material, render_set, render_sets, default_camera, cameras, max_samples)
+            collect(child, transform_matrix, material, render_group, render_groups, default_camera, cameras, max_samples)
             child = child.next_sibling
 
     elif node.kind == 'transform':
         transform_matrix = update_transform_matrix(node, transform_matrix)
         child = node.first_child
         while child is not None:
-            collect(child, transform_matrix, material, render_set, render_sets, default_camera, cameras, max_samples)
+            collect(child, transform_matrix, material, render_group, render_groups, default_camera, cameras, max_samples)
             child = child.next_sibling
 
     elif node.kind == 'group' or node.kind == 'canvas3d':
         transform_matrix = update_transform_matrix(node, transform_matrix)
         material = material.update(node)
-        lights = list(render_set.lights) if render_set is not None else []
-        lights.append([])
-        render_set = RenderSet.__new__(RenderSet)
-        render_set.max_lights = node.get_int('max_lights', DEFAULT_MAX_LIGHTS)
-        render_set.lights = lights
-        render_set.instances = {}
-        render_set.depth_test = node.get_bool('depth_test', True)
-        render_set.cull_face = node.get_bool('cull_face', True)
-        render_set.composite = node.get_str('composite', 'over').lower()
+        new_render_group = RenderGroup.__new__(RenderGroup)
+        new_render_group.parent_group = render_group
+        new_render_group.max_lights = node.get_int('max_lights', DEFAULT_MAX_LIGHTS if render_group is None else render_group.max_lights)
+        new_render_group.lights = []
+        new_render_group.instances = {}
+        new_render_group.depth_test = node.get_bool('depth_test', True if render_group is None else render_group.depth_test)
+        new_render_group.cull_face = node.get_bool('cull_face', True if render_group is None else render_group.cull_face)
+        new_render_group.composite = node.get_str('composite', 'over' if render_group is None else render_group.composite).lower()
         vertex_shader = node.get_str('vertex', None)
         fragment_shader = node.get_str('fragment', None)
-        render_set.vertex_shader_template = Template(vertex_shader) if vertex_shader is not None else StandardVertexTemplate
-        render_set.fragment_shader_template = Template(fragment_shader) if fragment_shader is not None else StandardFragmentTemplate
-        render_set.variables = {}
+        new_render_group.vertex_shader_template = Template(vertex_shader) if vertex_shader is not None else StandardVertexTemplate
+        new_render_group.fragment_shader_template = Template(fragment_shader) if fragment_shader is not None else StandardFragmentTemplate
+        new_render_group.variables = {}
         for name, value in node._attributes.items():
             if name not in GroupAttributes:
-                render_set.variables[name] = value
-        render_sets.append(render_set)
+                new_render_group.variables[name] = value
+        render_groups.append(new_render_group)
         child = node.first_child
         while child is not None:
-            collect(child, transform_matrix, material, render_set, render_sets, default_camera, cameras, max_samples)
+            collect(child, transform_matrix, material, new_render_group, render_groups, default_camera, cameras, max_samples)
             child = child.next_sibling
 
     elif node.kind == 'light':
@@ -491,8 +492,7 @@ cdef void collect(Node node, Matrix44 transform_matrix, Material material, Rende
                 light.type = LightType.Ambient
                 light.position = None
                 light.direction = None
-            lights = render_set.lights[-1]
-            lights.append(light)
+            render_group.lights.append(light)
 
     elif node.kind == 'camera':
         if (camera_id := node.get_str('id', None)) is not None:
@@ -504,14 +504,14 @@ cdef void collect(Node node, Matrix44 transform_matrix, Material material, Rende
         instance.model_matrix = get_model_transform(node, transform_matrix)
         instance.material = material
         model_textures = (model, material.textures)
-        (<list>render_set.instances.setdefault(model_textures, [])).append(instance)
+        (<list>render_group.instances.setdefault(model_textures, [])).append(instance)
 
 
 def fst(tuple ab):
     return ab[0]
 
 
-cdef void render(RenderSet render_set, Camera camera, glctx, dict objects, dict references):
+cdef void render(RenderGroup render_group, Camera camera, glctx, dict objects, dict references):
     cdef list instances, lights, buffers
     cdef cython.float[:, :] instances_data, lights_data
     cdef Material material
@@ -531,11 +531,11 @@ cdef void render(RenderSet render_set, Camera camera, glctx, dict objects, dict 
     cdef double[:] zs
     cdef long[:] indices
     cdef dict shaders = objects.setdefault('canvas3d_shaders', {})
-    cdef dict variables = render_set.variables.copy()
-    variables.update({'max_lights': render_set.max_lights, 'Ambient': LightType.Ambient, 'Directional': LightType.Directional,
+    cdef dict variables = render_group.variables.copy()
+    variables.update({'max_lights': render_group.max_lights, 'Ambient': LightType.Ambient, 'Directional': LightType.Directional,
                       'Point': LightType.Point, 'Spot': LightType.Spot})
-    cdef str vertex_shader = render_set.vertex_shader_template.render(**variables)
-    cdef str fragment_shader = render_set.fragment_shader_template.render(**variables)
+    cdef str vertex_shader = render_group.vertex_shader_template.render(**variables)
+    cdef str fragment_shader = render_group.fragment_shader_template.render(**variables)
     cdef tuple source = (vertex_shader, fragment_shader)
     shader = shaders.get(source)
     if shader is None:
@@ -551,7 +551,7 @@ cdef void render(RenderSet render_set, Camera camera, glctx, dict objects, dict 
         return
     cdef str name
     cdef Vector value
-    for name, value in render_set.variables.items():
+    for name, value in render_group.variables.items():
         if name in shader:
             member = shader[name]
             if isinstance(member, moderngl.Uniform):
@@ -572,11 +572,12 @@ cdef void render(RenderSet render_set, Camera camera, glctx, dict objects, dict 
     shader['use_occlusion_texture'] = False
     shader['use_emissive_texture'] = False
     shader['use_transparency_texture'] = False
-    lights_data = view.array((render_set.max_lights, 16), 4, 'f')
+    lights_data = view.array((render_group.max_lights, 16), 4, 'f')
     i = 0
-    for lights in render_set.lights:
-        for light in lights:
-            if i == render_set.max_lights:
+    cdef RenderGroup group = render_group
+    while group is not None:
+        for light in group.lights:
+            if i == render_group.max_lights:
                 break
             dest = &lights_data[i, 0]
             dest[3] = <cython.float>(<int>light.type)
@@ -593,21 +594,22 @@ cdef void render(RenderSet render_set, Camera camera, glctx, dict objects, dict 
             for j in range(4):
                 dest[j+12] = light.falloff.numbers[j]
             i += 1
+        group = group.parent_group
     shader['nlights'] = i
     shader['lights'].write(lights_data)
     cdef int flags = moderngl.BLEND
-    if render_set.depth_test:
+    if render_group.depth_test:
         flags |= moderngl.DEPTH_TEST
-    if render_set.cull_face:
+    if render_group.cull_face:
         flags |= moderngl.CULL_FACE
     glctx.enable(flags)
-    render_set.set_blend(glctx)
-    for (model, textures), instances in render_set.instances.items():
+    render_group.set_blend(glctx)
+    for (model, textures), instances in render_group.instances.items():
         has_transparency_texture = textures is not None and textures.transparency_id is not None
         n = len(instances)
         instances_data = view.array((n, 36), 4, 'f')
         k = 0
-        if render_set.depth_test:
+        if render_group.depth_test:
             zs_array = np.empty(n)
             zs = zs_array
             for i, instance in enumerate(instances):
@@ -619,7 +621,7 @@ cdef void render(RenderSet render_set, Camera camera, glctx, dict objects, dict 
         for i in indices:
             instance = instances[i]
             material = instance.material
-            if (material.transparency > 0 or has_transparency_texture) and render_set.depth_test:
+            if (material.transparency > 0 or has_transparency_texture) and render_group.depth_test:
                 transparent_objects.append((-zs[i], model, instance))
             else:
                 src = instance.model_matrix.numbers
@@ -887,19 +889,19 @@ class Canvas3D(SceneNode):
         material.roughness = 1
         material.occlusion = 1
         material.emissive = Zero3
-        cdef list render_sets = []
+        cdef list render_groups = []
         cdef dict cameras = {}
         cameras[default_camera.id] = default_camera
-        collect(node, transform_matrix, material, None, render_sets, default_camera, cameras, max_samples)
+        collect(node, transform_matrix, material, None, render_groups, default_camera, cameras, max_samples)
         cdef Camera primary_camera = cameras.get(node.get_str('camera_id', default_camera.id), default_camera)
         if self._primary_render_target is None:
             self._primary_render_target = RenderTarget.__new__(RenderTarget)
         cdef RenderTarget primary_render_target = self._primary_render_target
         primary_render_target.prepare(self.glctx, primary_camera)
-        cdef RenderSet render_set
-        for render_set in render_sets:
-            if render_set.instances:
-                render(render_set, primary_camera, self.glctx, objects, references)
+        cdef RenderGroup render_group
+        for render_group in render_groups:
+            if render_group.instances:
+                render(render_group, primary_camera, self.glctx, objects, references)
         primary_render_target.finalize(self.glctx)
         cdef Camera camera
         cdef RenderTarget secondary_render_target
@@ -912,9 +914,9 @@ class Canvas3D(SceneNode):
                             secondary_render_target = RenderTarget.__new__(RenderTarget)
                             self._secondary_render_targets[camera.id] = secondary_render_target
                         secondary_render_target.prepare(self.glctx, camera)
-                        for render_set in render_sets:
-                            if render_set.instances:
-                                render(render_set, camera, self.glctx, objects, references)
+                        for render_group in render_groups:
+                            if render_group.instances:
+                                render(render_group, camera, self.glctx, objects, references)
                         secondary_render_target.finalize(self.glctx)
                         references[camera.id] = secondary_render_target
                     else:
