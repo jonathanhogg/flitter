@@ -9,6 +9,22 @@ A new physics system is introduced by a `!physics` node at the top level,
 containing a number of `!particle` or `!anchor` nodes along with force applier
 nodes that define the specific physics of the system.
 
+The physics engine is designed – as far as possible – to operate consistently
+across any number of dimensions. For instance, the `!buoyancy` force is
+proportional to the displaced mass, which will be calculated as a density
+coefficient multiplied by the *area* in two dimensions and the *volume* in
+three. When calculating such values, the standard constant terms (e.g.,
+$\pi$ for area and ${4 \over 3} \pi$ for volume) are *not* included in the
+calculations, on the basis that these can be easily incorporated into force
+coefficients for physically-correct operation. The actual equations used for
+each force are given below.
+
+Systems with higher than three dimensions are possible, but their use may be
+limited to theoreticians. On the other hand, one-dimensional systems are
+genuinely useful for simulating objects constrained to move in a single
+dimension - like beads on a wire - where collisions, drag, springs and
+rubber bands are all well defined forces.
+
 ## Nodes
 
 ### `!physics`
@@ -20,7 +36,8 @@ simulation system. The attributes are:
 of the system will be stored in the **flitter** state dictionary with keys
 prefixed by this
 - `dimensions` is a required attribute giving the number of dimensions of the
-system, i.e., the length of the position, value and force vectors
+system, i.e., the length of the position, value and force vectors (must be
+greater than or equal to `1`)
 - `time` is an optional attribute providing the simulation clock
 - `resolution` is an optional attribute specifying a *minimum* simulation step
 interval
@@ -328,7 +345,8 @@ together with `!collision`.
 
 `!drag` simulates the effect of particles moving through a liquid/gas by
 applying a force to each particle, against the direction of movement, in
-proportion to the square of the speed and square of the `radius`. This is
+proportion to the square of the speed and the particle cross-sectional size
+(the radius raised to the power of $\textbf{dimensions} - 1$). This is
 very useful for taking energy out of a simulation, otherwise particles will
 tend to bounce around forever. Particles with zero `radius` will be ignored.
 
