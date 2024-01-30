@@ -270,17 +270,17 @@ in the same way as gravity – including being ignored for overlapping particle
 ### `!adhesion`
 
 `!adhesion` creates an attractive/repulsive force that applies to all pairs of
-particles that overlap. It is proportional to the square of the overlap times
+particles that overlap. It is proportional to the amount of the overlap times
 the particle pair distance minus an "adhesion distance". The result is that two
 particles that touch will draw towards each other until they reach the adhesion
-distance and then will begin to more strongly repel each other.
+distance and then will begin to repel each other.
 
 The adhesion distance is determined by the `overlap` attribute which should be
-between `0` and `1`. At `0`, no overlap is tolerated (this is pointless) and at
-`1`, one particle is allowed to completely submerge within the other.
+between `0` and `1`. At `0`, no overlap is tolerated (resulting in the
+equivalent of a `!collision` force with `power=2`) and at `1`, the smaller
+particle will be drawn completely within the larger.
 
-- `overlap` - a factor controlling the amount of desired overlap (default is
-`0.25`)
+- `overlap` - a factor controlling the amount of overlap (default is `0.25`)
 - `strength` - force magnitude coefficient
 - `ease` - specifies an amount of simulation time over which to ramp up
 `strength`
@@ -294,7 +294,7 @@ l_{min} = | \textbf{radius}_{from} - \textbf{radius}_{to} |
 ```
 
 ```math
-l_{stick} = l_{min} \cdot \textbf{overlap} + l_{max} \cdot ( 1 - \textbf{overlap} )
+l_{adhesion} = l_{min} \cdot \textbf{overlap} + l_{max} \cdot ( 1 - \textbf{overlap} )
 ```
 
 ```math
@@ -302,7 +302,7 @@ l_{overlap} = max( 0, l_{max} - l )
 ```
 
 ```math
-\vec{F} = \textbf{strength} \cdot \vec{d} \cdot l_{overlap}^2 \cdot (l - l_{stick})
+\vec{F} = \textbf{strength} \cdot \vec{d} \cdot l_{overlap}^2 \cdot (l - l_{adhesion})
 ```
 
 ```math

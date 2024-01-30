@@ -306,7 +306,7 @@ cdef class AdhesionForceApplier(MatrixPairForceApplier):
                 overlap_distance = max_distance - distance
                 min_distance = abs(from_particle.radius - to_particle.radius)
                 adhesion_distance = min_distance*self.overlap + max_distance*(1-self.overlap)
-                k = self.strength * overlap_distance * overlap_distance * (distance - adhesion_distance)
+                k = self.strength * overlap_distance * (distance - adhesion_distance)
                 for i in range(direction.length):
                     f = direction.numbers[i] * k
                     from_particle.force.numbers[i] = from_particle.force.numbers[i] + f
