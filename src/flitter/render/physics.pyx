@@ -292,15 +292,21 @@ cdef class ElectrostaticForceApplier(MatrixPairForceApplier):
 
 
 cdef class AdhesionForceApplier(MatrixPairForceApplier):
+    cdef double overlap
+
+    def __cinit__(self, Node node, double strength, Vector zero):
+        self.overlap = min(max(0, node.get_float('overlap', 0.25)), 1)
+
     cdef void apply(self, Particle from_particle, Particle to_particle, Vector direction, double distance, double distance_squared) noexcept nogil:
-        cdef double min_distance, max_distance, f, k
+        cdef double min_distance, max_distance, overlap_distance, adhesion_distance, f, k
         cdef long i
         if from_particle.radius and to_particle.radius:
             max_distance = from_particle.radius + to_particle.radius
             if distance < max_distance:
-                min_distance = (max_distance + max(from_particle.radius, to_particle.radius)) / 2
-                overlap = max_distance - distance
-                k = self.strength * overlap * overlap * (distance - min_distance)
+                overlap_distance = max_distance - distance
+                min_distance = abs(from_particle.radius - to_particle.radius)
+                adhesion_distance = min_distance*self.overlap + max_distance*(1-self.overlap)
+                k = self.strength * overlap_distance * overlap_distance * (distance - adhesion_distance)
                 for i in range(direction.length):
                     f = direction.numbers[i] * k
                     from_particle.force.numbers[i] = from_particle.force.numbers[i] + f

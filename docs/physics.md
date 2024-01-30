@@ -61,7 +61,7 @@ position updated based on this.
 ```
 
 ```math
-\vec{p}_{t+\Delta t} = \vec{p}_t + \vec{v}_{t+\Delta t} . \Delta t
+\vec{p}_{t+\Delta t} = \vec{p}_t + \vec{v}_{t+\Delta t} \cdot \Delta t
 ```
 
 The attributes that specify properties of the particle are:
@@ -170,9 +170,9 @@ l = \left| \vec{p}_\textbf{to} - \vec{p}_\textbf{from} \right|
 
 ```math
 \vec{F} = \begin{cases}
-\textbf{strength} . (l - \textbf{min}) . \vec{d}
+\textbf{strength} \cdot (l - \textbf{min}) \cdot \vec{d}
 & \text{if $l < \textbf{min}$} \\
-\textbf{strength} . (l - \textbf{max}) . \vec{d}
+\textbf{strength} \cdot (l - \textbf{max}) \cdot \vec{d}
 & \text{if $l > \textbf{max}$}
 \end{cases}
 ```
@@ -214,8 +214,8 @@ with zero `mass` will be ignored.
 - `max_distance` - pairs of particles further apart than this will be ignored
 
 ```math
-\vec{F} = \textbf{strength} . \vec{d} .
-{ \textbf{mass}_{from} . \textbf{mass}_{to} \over l^2}
+\vec{F} = \textbf{strength} \cdot \vec{d} \cdot
+{ \textbf{mass}_{from} \cdot \textbf{mass}_{to} \over l^2}
 ```
 
 ```math
@@ -252,8 +252,8 @@ attract each other.
 - `max_distance` - pairs of particles further apart than this will be ignored
 
 ```math
-\vec{F} = \textbf{strength} . \vec{d} .
-{ | \textbf{charge}_{from} | . \textbf{charge}_{to} \over l^2}
+\vec{F} = \textbf{strength} \cdot \vec{d} \cdot
+{ | \textbf{charge}_{from} | \cdot \textbf{charge}_{to} \over l^2}
 ```
 
 ```math
@@ -270,11 +270,17 @@ in the same way as gravity – including being ignored for overlapping particle
 ### `!adhesion`
 
 `!adhesion` creates an attractive/repulsive force that applies to all pairs of
-particles that overlap. It is proportional to the overlap times the distance
-minus the maximum of the two radii. The result is that two particles that touch
-will draw towards each other until the centre position of one enters the surface
-of the other, at which point they will begin to more strongly repel each other.
+particles that overlap. It is proportional to the square of the overlap times
+the particle pair distance minus an "adhesion distance". The result is that two
+particles that touch will draw towards each other until they reach the adhesion
+distance and then will begin to more strongly repel each other.
 
+The adhesion distance is determined by the `overlap` attribute which should be
+between `0` and `1`. At `0`, no overlap is tolerated (this is pointless) and at
+`1`, one particle is allowed to completely submerge within the other.
+
+- `overlap` - a factor controlling the amount of desired overlap (default is
+`0.25`)
 - `strength` - force magnitude coefficient
 - `ease` - specifies an amount of simulation time over which to ramp up
 `strength`
@@ -284,19 +290,19 @@ l_{max} = \textbf{radius}_{from} + \textbf{radius}_{to}
 ```
 
 ```math
-l_{min} = max( \textbf{radius}_{from}, \textbf{radius}_{to} )
+l_{min} = | \textbf{radius}_{from} - \textbf{radius}_{to} |
 ```
 
 ```math
-l_{stick} = {l_{max} + l_{min} \over 2}
+l_{stick} = l_{min} \cdot \textbf{overlap} + l_{max} \cdot ( 1 - \textbf{overlap} )
 ```
 
 ```math
-overlap = max( 0, l_{max} - l )
+l_{overlap} = max( 0, l_{max} - l )
 ```
 
 ```math
-\vec{F} = \textbf{strength} . \vec{d} . overlap^2 . (l - l_{stick})
+\vec{F} = \textbf{strength} \cdot \vec{d} \cdot l_{overlap}^2 \cdot (l - l_{stick})
 ```
 
 ```math
@@ -337,7 +343,7 @@ tend to bounce around forever. Particles with zero `radius` will be ignored.
 ```
 
 ```math
-\vec{F} = \textbf{strength} . (-\vec{d}) . {speed}^2 .
+\vec{F} = \textbf{strength} \cdot (-\vec{d}) \cdot {speed}^2 \cdot
 \textbf{radius}^{\textbf{dimensions} - 1}
 ```
 
@@ -364,11 +370,11 @@ is a vector with the last dimension equal to `-1`)
 Particles with either zero radius or zero mass will be ignored.
 
 ```math
-m = \textbf{radius}^\textbf{dimensions} . \textbf{density}
+m = \textbf{density} \cdot \textbf{radius}^\textbf{dimensions}
 ```
 
 ```math
-\vec{F} = \textbf{strength} . \vec{gravity} . ( \textbf{mass} - m )
+\vec{F} = \textbf{strength} \cdot  \vec{gravity} \cdot  ( \textbf{mass} - m )
 ```
 
 ## State interaction
