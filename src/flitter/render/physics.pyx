@@ -165,10 +165,12 @@ cdef class SpecificPairForceApplier(PairForceApplier):
 
 
 cdef class DistanceForceApplier(SpecificPairForceApplier):
+    cdef double power
     cdef double minimum
     cdef double maximum
 
     def __cinit__(self, Node node, double strength, Vector zero):
+        self.power = max(0, node.get_float('power', 1))
         cdef double fixed
         if (fixed := node.get_float('fixed', 0)) != 0:
             self.minimum = fixed
@@ -181,13 +183,13 @@ cdef class DistanceForceApplier(SpecificPairForceApplier):
         cdef double f, k
         cdef long i
         if self.minimum and distance < self.minimum:
-            k = self.strength * (self.minimum - distance)
+            k = self.strength * (self.minimum - distance) ** self.power
             for i in range(direction.length):
                 f = direction.numbers[i] * k
                 from_particle.force.numbers[i] = from_particle.force.numbers[i] - f
                 to_particle.force.numbers[i] = to_particle.force.numbers[i] + f
         elif self.maximum and distance > self.maximum:
-            k = self.strength * (distance - self.maximum)
+            k = self.strength * (distance - self.maximum) ** self.power
             for i in range(direction.length):
                 f = direction.numbers[i] * k
                 from_particle.force.numbers[i] = from_particle.force.numbers[i] + f
@@ -254,13 +256,18 @@ cdef class RandomForceApplier(ParticleForceApplier):
 
 
 cdef class CollisionForceApplier(MatrixPairForceApplier):
+    cdef double power
+
+    def __cinit__(self, Node node, double strength, Vector zero):
+        self.power = max(0, node.get_float('power', 1))
+
     cdef void apply(self, Particle from_particle, Particle to_particle, Vector direction, double distance, double distance_squared) noexcept nogil:
         cdef double min_distance, f, k
         cdef long i
         if from_particle.radius and to_particle.radius:
             min_distance = from_particle.radius + to_particle.radius
             if distance < min_distance:
-                k = self.strength * (min_distance - distance)
+                k = self.strength * (min_distance - distance) ** self.power
                 for i in range(direction.length):
                     f = direction.numbers[i] * k
                     from_particle.force.numbers[i] = from_particle.force.numbers[i] - f

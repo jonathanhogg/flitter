@@ -147,15 +147,16 @@ gravity)
 
 ### `!distance`
 
-Specifies a force to be applied between two specific particles that linearly
-scales with displacement from a minimum or maximum distance. This can be used
-to simulate various tethers, rubber bands and springs.
+Specifies a force to be applied between two specific particles that scales with
+displacement from a minimum or maximum distance. This can be used to simulate
+various tethers, rubber bands and springs.
 
 - `from` - the `id` of the first particle
 - `to` - the `id` of the second particle
 - `min` - a minimum distance that the two objects can be apart
 - `max` - a maximum distance that the two objects can be apart
 - `fixed` - a shortcut for setting both `min` and `max` to the same value
+- `power` - the power to which the displacement will be raised (default is `1`)
 - `strength` - force magnitude coefficient
 - `ease` - specifies an amount of simulation time over which to ramp up
 `strength`
@@ -170,9 +171,9 @@ l = \left| \vec{p}_\textbf{to} - \vec{p}_\textbf{from} \right|
 
 ```math
 \vec{F} = \begin{cases}
-\textbf{strength} \cdot (l - \textbf{min}) \cdot \vec{d}
+\textbf{strength} \cdot (l - \textbf{min})^\textbf{power} \cdot \vec{d}
 & \text{if $l < \textbf{min}$} \\
-\textbf{strength} \cdot (l - \textbf{max}) \cdot \vec{d}
+\textbf{strength} \cdot (l - \textbf{max})^\textbf{power} \cdot \vec{d}
 & \text{if $l > \textbf{max}$}
 \end{cases}
 ```
@@ -191,6 +192,7 @@ This creates an implicit `!distance` force applier between all pairs of
 particles, with `min` set to the sum of the `radius` attributes of each
 particle. Particles with zero `radius` will be ignored.
 
+- `power` - the power to which the displacement will be raised (default is `1`)
 - `strength` - force magnitude coefficient
 - `ease` - specifies an amount of simulation time over which to ramp up
 `strength`
