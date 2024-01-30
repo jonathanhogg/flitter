@@ -416,7 +416,7 @@ cdef void collect(Node node, Matrix44 transform_matrix, Material material, Rende
     cdef str kind = node.kind
     cdef Light light
     cdef list lights, instances
-    cdef Vector color, position, direction, emissive, diffuse, specular
+    cdef Vector color, position, direction, focus, emissive, diffuse, specular
     cdef double inner, outer
     cdef Node child
     cdef str camera_id, filename, vertex_shader, fragment_shader
@@ -468,7 +468,8 @@ cdef void collect(Node node, Matrix44 transform_matrix, Material material, Rende
         color = node.get_fvec('color', 3, null_)
         if color.as_bool():
             position = node.get_fvec('position', 3, null_)
-            direction = node.get_fvec('direction', 3, null_)
+            focus = node.get_fvec('focus', 3, null_)
+            direction = node.get_fvec('direction', 3, focus.sub(position) if position.length and focus.length else null_)
             light = Light.__new__(Light)
             light.color = color
             light.falloff = node.get_fvec('falloff', 4, DefaultFalloff)
