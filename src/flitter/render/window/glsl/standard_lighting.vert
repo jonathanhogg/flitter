@@ -14,13 +14,9 @@ out vec3 world_position;
 out vec3 world_normal;
 out vec2 texture_uv;
 
-flat out vec3 fragment_albedo;
-flat out float fragment_transparency;
+flat out vec4 fragment_albedo;
 flat out vec3 fragment_emissive;
-flat out float fragment_ior;
-flat out float fragment_metal;
-flat out float fragment_roughness;
-flat out float fragment_occlusion;
+flat out vec4 fragment_properties;
 
 uniform mat4 pv_matrix;
 
@@ -29,11 +25,7 @@ void main() {
     gl_Position = pv_matrix * vec4(world_position, 1);
     world_normal = model_normal_matrix * model_normal;
     texture_uv = model_uv;
-    fragment_albedo = material_albedo.rgb;
+    fragment_albedo = material_albedo;
     fragment_emissive = material_emissive;
-    fragment_ior = material_properties.x;
-    fragment_metal = material_properties.y;
-    fragment_roughness = material_properties.z;
-    fragment_occlusion = material_properties.w;
-    fragment_transparency = material_albedo.a;
+    fragment_properties = material_properties;
 }

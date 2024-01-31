@@ -6,13 +6,9 @@ in vec3 world_position;
 in vec3 world_normal;
 in vec2 texture_uv;
 
-flat in vec3 fragment_albedo;
-flat in float fragment_transparency;
+flat in vec4 fragment_albedo;
 flat in vec3 fragment_emissive;
-flat in float fragment_ior;
-flat in float fragment_metal;
-flat in float fragment_roughness;
-flat in float fragment_occlusion;
+flat in vec4 fragment_properties;
 
 out vec4 fragment_color;
 
@@ -58,44 +54,45 @@ void main() {
     if (fog_alpha == 1) {
         discard;
     }
-    vec3 albedo = fragment_albedo;
+    vec3 albedo = fragment_albedo.rgb;
     if (use_albedo_texture) {
         vec4 texture_color = texture(albedo_texture, texture_uv);
         albedo = albedo * (1 - clamp(texture_color.a, 0, 1)) + texture_color.rgb;
     }
-    float metal = fragment_metal;
-    if (use_metal_texture) {
-        vec4 texture_color = texture(metal_texture, texture_uv);
+    float transparency = fragment_albedo.a;
+    if (use_transparency_texture) {
+        vec4 texture_color = texture(transparency_texture, texture_uv);
         float mono = clamp(dot(texture_color.rgb, greyscale), 0, 1);
-        metal = metal * (1 - clamp(texture_color.a, 0, 1)) + mono;
-    }
-    float roughness = fragment_roughness;
-    if (use_roughness_texture) {
-        vec4 texture_color = texture(roughness_texture, texture_uv);
-        float mono = clamp(dot(texture_color.rgb, greyscale), 0, 1);
-        roughness = roughness * (1 - clamp(texture_color.a, 0, 1)) + mono;
-    }
-    float occlusion = fragment_occlusion ;
-    if (use_occlusion_texture) {
-        vec4 texture_color = texture(occlusion_texture, texture_uv);
-        float mono = clamp(dot(texture_color.rgb, greyscale), 0, 1);
-        occlusion = occlusion * (1 - clamp(texture_color.a, 0, 1)) + mono;
+        transparency = transparency * (1 - clamp(texture_color.a, 0, 1)) + mono;
     }
     vec3 emissive = fragment_emissive;
     if (use_emissive_texture) {
         vec4 emissive_texture_color = texture(emissive_texture, texture_uv);
         emissive = emissive * (1 - clamp(emissive_texture_color.a, 0, 1)) + emissive_texture_color.rgb;
     }
-    float transparency = fragment_transparency;
-    if (use_transparency_texture) {
-        vec4 texture_color = texture(transparency_texture, texture_uv);
+    float ior = fragment_properties.x;
+    float metal = fragment_properties.y;
+    if (use_metal_texture) {
+        vec4 texture_color = texture(metal_texture, texture_uv);
         float mono = clamp(dot(texture_color.rgb, greyscale), 0, 1);
-        transparency = transparency * (1 - clamp(texture_color.a, 0, 1)) + mono;
+        metal = metal * (1 - clamp(texture_color.a, 0, 1)) + mono;
+    }
+    float roughness = fragment_properties.z;
+    if (use_roughness_texture) {
+        vec4 texture_color = texture(roughness_texture, texture_uv);
+        float mono = clamp(dot(texture_color.rgb, greyscale), 0, 1);
+        roughness = roughness * (1 - clamp(texture_color.a, 0, 1)) + mono;
+    }
+    float occlusion = fragment_properties.z;
+    if (use_occlusion_texture) {
+        vec4 texture_color = texture(occlusion_texture, texture_uv);
+        float mono = clamp(dot(texture_color.rgb, greyscale), 0, 1);
+        occlusion = occlusion * (1 - clamp(texture_color.a, 0, 1)) + mono;
     }
     vec3 diffuse_color = vec3(0);
     vec3 specular_color = emissive;
     vec3 N = normalize(world_normal);
-    float rf0 = (fragment_ior - 1) / (fragment_ior + 1);
+    float rf0 = (ior - 1) / (ior + 1);
     vec3 F0 = mix(vec3(rf0*rf0), albedo, metal);
     for (int i = 0; i < nlights * 4; i += 4) {
         int light_type = int(lights[i].w);
