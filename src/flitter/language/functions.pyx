@@ -817,9 +817,11 @@ def hsl(Vector c):
 
 @cython.cdivision(True)
 def hsv(Vector c):
-    if c.length != 3 or c.objects is not None:
+    if not c.length or c.length > 3 or c.objects is not None:
         return null_
-    cdef double h = c.numbers[0], s = c.numbers[1], v = c.numbers[2]
+    cdef double h = c.numbers[0]
+    cdef double s = c.numbers[1] if c.length > 1 else 1
+    cdef double v = c.numbers[2] if c.length == 3 else 1
     s = min(max(0, s), 1)
     v = min(max(0, v), 1)
     cdef double l = v * (1 - s / 2)
