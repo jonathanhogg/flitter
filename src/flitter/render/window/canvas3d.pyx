@@ -11,7 +11,7 @@ from mako.template import Template
 import moderngl
 import numpy as np
 
-from libc.math cimport cos, log2, sqrt
+from libc.math cimport cos, log2, sqrt, tan
 
 from . import SceneNode, COLOR_FORMATS, set_uniform_vector
 from ... import name_patch
@@ -189,6 +189,7 @@ cdef class Camera:
     cdef Vector focus
     cdef Vector up
     cdef double fov
+    cdef str fov_ref
     cdef bint monochrome
     cdef Vector tint
     cdef bint orthographic
@@ -225,6 +226,7 @@ cdef class Camera:
         else:
             camera.up = transform_matrix.inverse_transpose_matrix33().vmul(up).normalize()
         camera.fov = node.get_float('fov', self.fov)
+        camera.fov_ref = node.get_str('fov_ref', self.fov_ref).lower()
         camera.monochrome = node.get_bool('monochrome', self.monochrome)
         camera.tint = node.get_fvec('tint', 3, self.tint)
         camera.orthographic = node.get_bool('orthographic', self.orthographic)
@@ -244,10 +246,28 @@ cdef class Camera:
         camera.samples = min(1 << int(log2(samples)), max_samples) if samples > 0 else 0
         cdef double aspect_ratio = (<double>camera.width) / camera.height
         cdef Matrix44 projection_matrix
+        cdef double gradient, diagonal_ratio
         if camera.orthographic:
             projection_matrix = Matrix44._ortho(aspect_ratio, camera.ortho_width, camera.near, camera.far)
         else:
-            projection_matrix = Matrix44._project(aspect_ratio, camera.fov, camera.near, camera.far)
+            gradient = tan(Pi*camera.fov)
+            if camera.fov_ref == 'diagonal':
+                diagonal_ratio = sqrt(1 + aspect_ratio*aspect_ratio)
+                projection_matrix = Matrix44._project(aspect_ratio*gradient/diagonal_ratio, gradient/diagonal_ratio, camera.near, camera.far) # diagonal
+            elif camera.fov_ref == 'vertical':
+                projection_matrix = Matrix44._project(aspect_ratio*gradient, gradient, camera.near, camera.far) # vertical
+            elif camera.fov_ref == 'wide':
+                if aspect_ratio > 1: # widescreen
+                    projection_matrix = Matrix44._project(gradient, gradient/aspect_ratio, camera.near, camera.far) # horizontal
+                else:
+                    projection_matrix = Matrix44._project(aspect_ratio*gradient, gradient, camera.near, camera.far) # vertical
+            elif camera.fov_ref == 'narrow':
+                if aspect_ratio > 1: # widescreen
+                    projection_matrix = Matrix44._project(aspect_ratio*gradient, gradient, camera.near, camera.far) # vertical
+                else:
+                    projection_matrix = Matrix44._project(gradient, gradient/aspect_ratio, camera.near, camera.far) # horizontal
+            else:
+                projection_matrix = Matrix44._project(gradient, gradient/aspect_ratio, camera.near, camera.far) # horizontal
         camera.pv_matrix = projection_matrix.mmul(Matrix44._look(camera.position, camera.focus, camera.up))
         return camera
 
@@ -871,6 +891,7 @@ class Canvas3D(SceneNode):
         default_camera.focus = Zero3
         default_camera.up = Vector((0, 1, 0))
         default_camera.fov = 0.25
+        default_camera.fov_ref = 'horizontal'
         default_camera.monochrome = False
         default_camera.tint = One3
         default_camera.orthographic = False

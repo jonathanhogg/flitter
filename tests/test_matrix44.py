@@ -32,10 +32,10 @@ class TestMatrix44(unittest.TestCase):
         self.assertRaises(ValueError, Matrix44, [1, 2, 3])
 
     def test_project(self):
-        self.assertTrue(all_isclose(Matrix44.project(1, 0.25, 1, 2), [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, -3, -1, 0, 0, -4, 0]))
-        self.assertTrue(all_isclose(Matrix44.project(2, 0.25, 1, 2), [1, 0, 0, 0, 0, 2, 0, 0, 0, 0, -3, -1, 0, 0, -4, 0]))
-        self.assertTrue(all_isclose(Matrix44.project(2, 0.25, 1, 3), [1, 0, 0, 0, 0, 2, 0, 0, 0, 0, -2, -1, 0, 0, -3, 0]))
-        self.assertTrue(all_isclose(Matrix44.project(2, 1 / 6, 1, 3),
+        self.assertTrue(all_isclose(Matrix44.project(1, 1, 1, 2), [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, -3, -1, 0, 0, -4, 0]))
+        self.assertTrue(all_isclose(Matrix44.project(1, 0.5, 1, 2), [1, 0, 0, 0, 0, 2, 0, 0, 0, 0, -3, -1, 0, 0, -4, 0]))
+        self.assertTrue(all_isclose(Matrix44.project(1, 0.5, 1, 3), [1, 0, 0, 0, 0, 2, 0, 0, 0, 0, -2, -1, 0, 0, -3, 0]))
+        self.assertTrue(all_isclose(Matrix44.project(0.5773502691896256, 0.2886751345948128, 1, 3),
                                     [1.7320508075688776, 0, 0, 0, 0, 3.4641016151377553, 0, 0, 0, 0, -2, -1, 0, 0, -3, 0]))
 
     def test_ortho(self):
@@ -153,7 +153,7 @@ class TestMatrix44(unittest.TestCase):
         self.assertEqual(Matrix44.scale(2) @ [-1, -2, -3, 1], [-2, -4, -6, 1])
 
     def test_inverse(self):
-        a = Matrix44.project(2, 1 / 6, 1, 3)
+        a = Matrix44.project(1, 1, 1, 3)
         b = Matrix44.scale([5, 6, -3])
         c = Matrix44.look([1, 2, 3], [1, 2, 2], [-1, 0, 0])
         self.assertTrue(all_isclose(a.inverse() @ a, Matrix44()))

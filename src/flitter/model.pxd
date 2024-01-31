@@ -78,7 +78,7 @@ cdef class Matrix33(Vector):
 
 cdef class Matrix44(Vector):
     @staticmethod
-    cdef Matrix44 _project(double aspect_ratio, double fov, double near, double far)
+    cdef Matrix44 _project(double xgradient, double ygradient, double near, double far)
     @staticmethod
     cdef Matrix44 _ortho(double aspect_ratio, double width, double near, double far)
     @staticmethod

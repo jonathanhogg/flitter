@@ -1194,12 +1194,11 @@ cdef class Matrix33(Vector):
 cdef class Matrix44(Vector):
     @cython.cdivision(True)
     @staticmethod
-    cdef Matrix44 _project(double aspect_ratio, double fov, double near, double far):
+    cdef Matrix44 _project(double xgradient, double ygradient, double near, double far):
         cdef Matrix44 result = Matrix44.__new__(Matrix44)
         cdef double* numbers = result.numbers
-        cdef double gradient = tan(fov*Pi)
-        numbers[0] = 1 / gradient
-        numbers[5] = aspect_ratio / gradient
+        numbers[0] = 1 / xgradient
+        numbers[5] = 1 / ygradient
         numbers[10] = -(far+near) / (far-near)
         numbers[11] = -1
         numbers[14] = -2*far*near / (far-near)
@@ -1207,8 +1206,8 @@ cdef class Matrix44(Vector):
         return result
 
     @staticmethod
-    def project(aspect_ratio, fov, near, far):
-        return Matrix44._project(aspect_ratio, fov, near, far)
+    def project(xgradient, ygradient, near, far):
+        return Matrix44._project(xgradient, ygradient, near, far)
 
     @cython.cdivision(True)
     @staticmethod
@@ -1219,7 +1218,6 @@ cdef class Matrix44(Vector):
         numbers[5] = 2 * aspect_ratio / width
         numbers[10] = -2 / (far-near)
         numbers[14] = -(far+near) / (far-near)
-        numbers[15] = 1
         return result
 
     @staticmethod
