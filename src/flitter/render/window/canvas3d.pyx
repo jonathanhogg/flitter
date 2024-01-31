@@ -567,12 +567,6 @@ cdef void render(RenderGroup render_group, Camera camera, glctx, dict objects, d
     shader['fog_max'] = camera.fog_max
     shader['fog_color'] = camera.fog_color
     shader['fog_curve'] = camera.fog_curve
-    shader['use_albedo_texture'] = False
-    shader['use_metal_texture'] = False
-    shader['use_roughness_texture'] = False
-    shader['use_occlusion_texture'] = False
-    shader['use_emissive_texture'] = False
-    shader['use_transparency_texture'] = False
     lights_data = view.array((render_group.max_lights, 16), 4, 'f')
     i = 0
     cdef RenderGroup group = render_group
@@ -605,6 +599,14 @@ cdef void render(RenderGroup render_group, Camera camera, glctx, dict objects, d
         flags |= moderngl.CULL_FACE
     glctx.enable(flags)
     render_group.set_blend(glctx)
+    cdef bint shader_supports_textures = 'use_albedo_texture' in shader
+    if shader_supports_textures:
+        shader['use_albedo_texture'] = False
+        shader['use_metal_texture'] = False
+        shader['use_roughness_texture'] = False
+        shader['use_occlusion_texture'] = False
+        shader['use_emissive_texture'] = False
+        shader['use_transparency_texture'] = False
     for (model, textures), instances in render_group.instances.items():
         has_transparency_texture = textures is not None and textures.transparency_id is not None
         n = len(instances)
@@ -644,7 +646,7 @@ cdef void render(RenderGroup render_group, Camera camera, glctx, dict objects, d
                 dest[9] = material.roughness
                 dest[10] = material.occlusion
                 k += 1
-        dispatch_instances(glctx, objects, shader, model, k, instances_data, textures, references)
+        dispatch_instances(glctx, objects, shader, model, k, instances_data, textures if shader_supports_textures else None, references)
     if transparent_objects:
         n = len(transparent_objects)
         transparent_objects.sort(key=fst)
@@ -674,10 +676,10 @@ cdef void render(RenderGroup render_group, Camera camera, glctx, dict objects, d
             dest[10] = material.occlusion
             k += 1
             if i == n-1 or (<tuple>transparent_objects[i+1])[1] is not model:
-                dispatch_instances(glctx, objects, shader, model, k, instances_data, material.textures, references)
+                dispatch_instances(glctx, objects, shader, model, k, instances_data, material.textures if shader_supports_textures else None, references)
                 k = 0
         if k:
-            dispatch_instances(glctx, objects, shader, model, k, instances_data, material.textures, references)
+            dispatch_instances(glctx, objects, shader, model, k, instances_data, material.textures if shader_supports_textures else None, references)
     glctx.disable(flags)
 
 
