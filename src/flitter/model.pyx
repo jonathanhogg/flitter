@@ -10,13 +10,14 @@ from libc.math cimport isnan, floor, ceil, abs, sqrt, sin, cos, tan, isnan
 from cpython.object cimport PyObject
 from cpython.ref cimport Py_INCREF
 from cpython.bool cimport PyBool_FromLong
-from cpython.dict cimport PyDict_GetItem
+from cpython.dict cimport PyDict_GetItem, PyDict_SetItem, PyDict_Contains, PyDict_DelItem, PyDict_Copy
 from cpython.float cimport PyFloat_AS_DOUBLE, PyFloat_FromDouble
-from cpython.list cimport PyList_New, PyList_GET_ITEM, PyList_SET_ITEM
+from cpython.list cimport PyList_New, PyList_GET_SIZE, PyList_GET_ITEM, PyList_SET_ITEM
 from cpython.long cimport (PyLong_FromLongLong, PyLong_FromUnsignedLongLong, PyLong_FromDouble,
                            PyLong_AsLongLong, PyLong_AsUnsignedLongLong, PyLong_AsDouble)
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
 from cpython.object cimport PyObject_RichCompareBool, Py_NE, Py_EQ, Py_LT
+from cpython.set cimport PySet_Add, PySet_New
 from cpython.tuple cimport PyTuple_New, PyTuple_GET_SIZE, PyTuple_GET_ITEM, PyTuple_SET_ITEM, PyTuple_Pack
 from cpython.unicode cimport PyUnicode_DATA, PyUnicode_GET_LENGTH, PyUnicode_KIND, PyUnicode_READ
 from cpython.weakref cimport PyWeakref_NewRef, PyWeakref_GetObject
@@ -211,22 +212,24 @@ cdef class Vector:
 
     @staticmethod
     cdef Vector _copy(Vector other):
-        cdef Vector result = Vector.__new__(Vector)
         cdef int i, n=other.length
-        cdef tuple objects
-        cdef PyObject* objptr
+        if n == 0:
+            return null_
+        cdef Vector result = Vector.__new__(Vector)
         if other.numbers != NULL:
             result.allocate_numbers(n)
             for i in range(n):
                 result.numbers[i] = other.numbers[i]
-        elif other.objects is not None:
-            objects = PyTuple_New(n)
-            for i in range(n):
-                objptr = PyTuple_GET_ITEM(other.objects, i)
-                Py_INCREF(<object>objptr)
-                PyTuple_SET_ITEM(objects, i, <object>objptr)
-            result.objects = objects
-            result.length = n
+            return result
+        cdef tuple objects=other.objects
+        cdef tuple copy_objects = PyTuple_New(n)
+        cdef PyObject* objptr
+        for i in range(n):
+            objptr = PyTuple_GET_ITEM(objects, i)
+            Py_INCREF(<object>objptr)
+            PyTuple_SET_ITEM(copy_objects, i, <object>objptr)
+        result.objects = copy_objects
+        result.length = n
         return result
 
     @staticmethod
@@ -587,37 +590,6 @@ cdef class Vector:
         except ValueError:
             pass
         return default
-
-    cpdef Vector copynodes(self, bint parented=False):
-        cdef tuple src=self.objects
-        if src is None:
-            return self
-        cdef int i, j, n=self.length
-        cdef tuple dest=None
-        cdef PyObject* current
-        cdef PyObject* earlier
-        for i in range(n):
-            current = PyTuple_GET_ITEM(src, i)
-            if type(<object>current) is Node and (not parented or (<Node>current)._parent is not None):
-                if dest is None:
-                    dest = PyTuple_New(n)
-                    for j in range(i):
-                        earlier = PyTuple_GET_ITEM(src, j)
-                        Py_INCREF(<object>earlier)
-                        PyTuple_SET_ITEM(dest, j, <object>earlier)
-                value = (<Node>current).copy()
-                Py_INCREF(value)
-                PyTuple_SET_ITEM(dest, i, value)
-            elif dest is not None:
-                Py_INCREF(<object>current)
-                PyTuple_SET_ITEM(dest, i, <object>current)
-        if dest is None:
-            return self
-        cdef Vector result
-        result = Vector.__new__(Vector)
-        result.objects = dest
-        result.length = n
-        return result
 
     def __repr__(self):
         return self.repr()
@@ -1575,93 +1547,13 @@ cdef class Matrix44(Vector):
         return '\n'.join(rows)
 
 
-NAME_REGEX = re.compile(r'[_a-z][_a-z0-9]*', re.IGNORECASE)
-
-
-@cython.final
-cdef class Query:
-    def __cinit__(self, str query):
-        cdef int i = 0, j, n = len(query)
-        while n > 0 and query[n-1] in ' \t\r\n':
-            n -= 1
-        self.first = False
-        if n > 0 and query[n-1] == '!':
-            n -= 1
-            self.first = True
-        while i < n:
-            if not self.strict and query[i] == '>':
-                self.strict = True
-            elif query[i] not in ' \t\r\n':
-                break
-            i += 1
-        if i == n or query[i] in ('.', '|', '>'):
-            raise ValueError("Query contains empty element")
-        cdef list tag_list = []
-        cdef str name
-        for j in range(i, n+1):
-            if j == n or query[j] in '#.|> ':
-                if j > i:
-                    if query[i] == '#':
-                        if i+1 < j:
-                            name = query[i+1:j]
-                            if NAME_REGEX.fullmatch(name) is None:
-                                raise ValueError(f"Bad tag in query: {name}")
-                            tag_list.append(name)
-                    elif query[i] != '*':
-                        name = query[i:j]
-                        if NAME_REGEX.fullmatch(name) is None:
-                            raise ValueError(f"Bad kind in query: {name}")
-                        self.kind = name
-                    i = j
-                if j < n and query[j] in '.|> \t\r\n':
-                    break
-        if tag_list:
-            self.tags = frozenset(tag_list)
-        if i < n and query[i] == '.':
-            self.stop = True
-            i += 1
-        if i < n and query[i] == '|':
-            j = i + 1
-            while j < n and query[j] not in '> \t\r\n':
-                j += 1
-            self.altquery = Query.__new__(Query, query[i+1:j])
-            i = j
-        if i < n:
-            query = query[i:n]
-            self.subquery = Query.__new__(Query, query)
-
-    def __str__(self):
-        cdef str text = ''
-        if self.strict:
-            text += '> '
-        if self.kind is None and not self.tags:
-            text += '*'
-        else:
-            if self.kind is not None:
-                text += self.kind
-            if self.tags:
-                text += '#' + '#'.join(sorted(self.tags))
-        if self.stop:
-            text += '.'
-        if self.altquery is not None:
-            text += '|' + str(self.altquery)
-        if self.subquery is not None:
-            text += ' ' + str(self.subquery)
-        if self.first:
-            text += '!'
-        return text
-
-    def __repr__(self):
-        return f"Query({str(self)!r})"
-
-
 @cython.final
 cdef class Node:
     def __init__(self, str kind, set tags=None, dict attributes=None):
         self.kind = kind
         self._tags = None if tags is None else tags.copy()
-        self._attributes = {} if attributes is None else attributes.copy()
-        self._attributes_shared = False
+        self._attributes = None if attributes is None else attributes.copy()
+        self._children = ()
 
     def __hash__(self):
         return self.hash()
@@ -1681,38 +1573,18 @@ cdef class Node:
                 self._attributes[key] = value
                 _hash = HASH_UPDATE(_hash, HASH_STRING(<str>key))
                 _hash = HASH_UPDATE(_hash, value.hash(False))
-        cdef Node child = self.first_child
-        while child is not None:
-            _hash = HASH_UPDATE(_hash, child.hash())
-            child = child.next_sibling
+        cdef object child
+        if self._children is not ():
+            for child in self._children:
+                _hash = HASH_UPDATE(_hash, (<Node>child).hash())
         return _hash
-
-    def __setstate__(self, set tags):
-        self._tags = tags
-
-    def __reduce__(self):
-        return Node, (self.kind,), self._tags, self.children, self.__attributes()
 
     @property
     def children(self):
-        cdef Node node = self.first_child
-        while node is not None:
-            yield node
-            node = node.next_sibling
-
-    def __attributes(self):
-        cdef str key
-        cdef Vector value
-        cdef list values
-        cdef int i
-        for key, value in self._attributes.items():
-            if value.objects is not None:
-                yield key, value.objects
-            else:
-                values = []
-                for i in range(value.length):
-                    values.append(value.numbers[i])
-                yield key, values
+        cdef object child
+        if self._children is not None:
+            for child in self._children:
+                yield child
 
     @property
     def tags(self):
@@ -1721,170 +1593,51 @@ cdef class Node:
         else:
             return EmptySet
 
-    @property
-    def parent(self):
-        return <Node>PyWeakref_GetObject(self._parent) if self._parent is not None else None
-
     cpdef Node copy(self):
-        cdef Node self_copy = Node.__new__(Node)
-        self_copy.kind = self.kind
+        cdef Node dst = Node.__new__(Node)
+        dst.kind = self.kind
         if self._tags is not None:
-            self_copy._tags = set(self._tags)
-        self_copy._attributes = self._attributes
-        self_copy._attributes_shared = True
-        self._attributes_shared = True
-        if self.first_child is None:
-            return self_copy
-        cdef Node child_copy, child = self.first_child
-        cdef object self_weakref = PyWeakref_NewRef(self_copy, None)
-        child_copy = child.copy()
-        child_copy._parent = self_weakref
-        self_copy.first_child = child_copy
-        while child.next_sibling is not None:
-            child = child.next_sibling
-            child_copy.next_sibling = child.copy()
-            child_copy = child_copy.next_sibling
-            child_copy._parent = self_weakref
-        self_copy.last_child = child_copy
-        return self_copy
+            dst._tags = set(self._tags)
+        if self._attributes is not None:
+            dst._attributes = self._attributes
+            dst._attributes_shared = True
+            self._attributes_shared = True
+        cdef int i, n
+        cdef tuple dst_children, src_children = self._children
+        cdef PyObject* objptr
+        if src_children is ():
+            dst._children = ()
+        else:
+            n = PyTuple_GET_SIZE(src_children)
+            dst_children = PyTuple_New(n)
+            for i in range(n):
+                objptr = PyTuple_GET_ITEM(src_children, i)
+                Py_INCREF(<object>objptr)
+                PyTuple_SET_ITEM(dst_children, i, <object>objptr)
+            dst._children = dst_children
+        return dst
 
     cpdef void add_tag(self, str tag):
-        if self._tags is None:
-            self._tags = set()
-        self._tags.add(tag)
+        cdef set tags = self._tags
+        if tags is None:
+            tags = set()
+            self._tags = tags
+        PySet_Add(tags, tag)
 
-    cpdef void remove_tag(self, str tag):
-        if self._tags is not None:
-            self._tags.discard(tag)
-            if not self._tags:
-                self._tags = None
+    cpdef void set_attribute(self, str name, Vector value):
+        cdef dict attributes = self._attributes
+        if attributes is None:
+            self._attributes = attributes = {}
+        elif self._attributes_shared:
+            self._attributes = PyDict_Copy(self._attributes)
+            self._attributes_shared = False
+        if value.length:
+            PyDict_SetItem(attributes, name, value)
+        elif PyDict_GetItem(attributes, name) != NULL:
+            PyDict_DelItem(attributes, name)
 
     cpdef void append(self, Node node):
-        cdef Node parent = <Node>PyWeakref_GetObject(node._parent) if node._parent is not None else None
-        if parent is not None:
-            parent.remove(node)
-        node._parent = PyWeakref_NewRef(self, None)
-        if self.last_child is not None:
-            self.last_child.next_sibling = node
-            self.last_child = node
-        else:
-            self.first_child = self.last_child = node
-
-    cdef void append_vector(self, Vector nodes, bint copy):
-        cdef tuple objects = nodes.objects
-        if objects is None:
-            return
-        weak_self = PyWeakref_NewRef(self, None)
-        cdef Node node, last=self.last_child
-        cdef PyObject* obj
-        cdef int i
-        for i in range(nodes.length):
-            obj = PyTuple_GET_ITEM(objects, i)
-            if type(<object>obj) is not Node:
-                continue
-            if copy:
-                node = (<Node>obj).copy()
-            else:
-                node = <Node>obj
-                if node._parent is not None and (obj := PyWeakref_GetObject(node._parent)) != NULL:
-                    (<Node>obj).remove(node)
-            node._parent = weak_self
-            if last is not None:
-                last.next_sibling = node
-            else:
-                self.first_child = node
-            last = node
-        self.last_child = last
-
-    cpdef void insert(self, Node node):
-        cdef Node parent = <Node>PyWeakref_GetObject(node._parent) if node._parent is not None else None
-        if parent is not None:
-            parent.remove(node)
-        node._parent = PyWeakref_NewRef(self, None)
-        node.next_sibling = self.first_child
-        self.first_child = node
-        if self.last_child is None:
-            self.last_child = self.first_child
-
-    def extend(self, nodes):
-        cdef Node node
-        for node in nodes:
-            self.append(node)
-
-    def prepend(self, nodes):
-        cdef Node node
-        for node in reversed(nodes):
-            self.insert(node)
-
-    cpdef void remove(self, Node node):
-        cdef Node parent = <Node>PyWeakref_GetObject(node._parent) if node._parent is not None else None
-        if parent is not self:
-            raise ValueError("Not a child of this node")
-        cdef Node child = self.first_child, previous = None
-        while child is not node:
-            previous = child
-            child = child.next_sibling
-        if previous is None:
-            self.first_child = node.next_sibling
-        else:
-            previous.next_sibling = node.next_sibling
-        if node is self.last_child:
-            self.last_child = previous
-        node._parent = None
-        node.next_sibling = None
-
-    def delete(self):
-        cdef Node parent = <Node>PyWeakref_GetObject(self._parent) if self._parent is not None else None
-        if parent is None:
-            raise TypeError("No parent")
-        parent.remove(self)
-
-    def select(self, qstring):
-        cdef list nodes = []
-        cdef Query query = qstring if isinstance(qstring, Query) else Query.__new__(Query, qstring)
-        self._select(query, nodes, query.first)
-        return nodes
-
-    def select_below(self, qstring):
-        cdef list nodes = []
-        cdef Query query = qstring if isinstance(qstring, Query) else Query.__new__(Query, qstring)
-        cdef Node node = self.first_child
-        while node is not None:
-            if node._select(query, nodes, query.first):
-                break
-            node = node.next_sibling
-        return nodes
-
-    cdef bint _select(self, Query query, list nodes, bint first):
-        cdef frozenset tags
-        cdef Query altquery = query
-        cdef bint descend = not query.strict
-        cdef Node node
-        while altquery is not None:
-            tags = altquery.tags
-            if (altquery.kind is None or altquery.kind == self.kind) and \
-               (tags is None or (self._tags and tags.issubset(self._tags))):
-                if altquery.stop:
-                    descend = False
-                if query.subquery is not None:
-                    node = self.first_child
-                    while node is not None:
-                        if node._select(query.subquery, nodes, first):
-                            return True
-                        node = node.next_sibling
-                else:
-                    nodes.append(self)
-                    if first:
-                        return True
-                break
-            altquery = altquery.altquery
-        if descend:
-            node = self.first_child
-            while node is not None:
-                if node._select(query, nodes, first):
-                    return True
-                node = node.next_sibling
-        return False
+        self._children = self._children + (node,)
 
     cdef bint _equals(self, Node other):
         if self.kind != other.kind:
@@ -1893,52 +1646,34 @@ cdef class Node:
             return False
         if self._attributes != other._attributes:
             return False
-        cdef Node child1 = self.first_child, child2 = other.first_child
-        while child1 is not None and child2 is not None:
-            if not child1._equals(child2):
-                return False
-            child1 = child1.next_sibling
-            child2 = child2.next_sibling
-        return child1 is None and child2 is None
+        if self._children != other._children:
+            return False
+        return True
 
     def __eq__(self, Node other not None):
         return self._equals(other)
 
     def __len__(self):
-        return len(self._attributes)
+        return len(self._attributes) if self._attributes else 0
 
     def __contains__(self, str name):
-        return name in self._attributes
+        return name in self._attributes if self._attributes else False
 
     def __getitem__(self, str name):
         return self._attributes[name]
 
-    def __setitem__(self, str name, value):
-        if self._attributes_shared:
-            self._attributes = dict(self._attributes)
-            self._attributes_shared = False
-        cdef Vector vector = Vector._coerce(value)
-        if vector.length:
-            self._attributes[name] = vector
-        elif name in self._attributes:
-            del self._attributes[name]
-
-    def __delitem__(self, str name):
-        if self._attributes_shared:
-            self._attributes = dict(self._attributes)
-            self._attributes_shared = True
-        del self._attributes[name]
-
     def keys(self):
-        return self._attributes.keys()
+        return self._attributes.keys() if self._attributes else ()
 
     def values(self):
-        return self._attributes.values()
+        return self._attributes.values() if self._attributes else ()
 
     def items(self):
-        return self._attributes.items()
+        return self._attributes.items() if self._attributes else ()
 
     cpdef object get(self, str name, int n=0, type t=None, object default=None):
+        if self._attributes is None:
+            return default
         cdef PyObject* objptr = PyDict_GetItem(self._attributes, name)
         if objptr == NULL:
             return default
@@ -1951,6 +1686,8 @@ cdef class Node:
         return value.match(n, t, default)
 
     cdef Vector get_fvec(self, str name, int n, Vector default):
+        if self._attributes is None:
+            return default
         cdef PyObject* objptr = PyDict_GetItem(self._attributes, name)
         if objptr == NULL:
             return default
@@ -1968,6 +1705,8 @@ cdef class Node:
         return default
 
     cdef double get_float(self, str name, double default):
+        if self._attributes is None:
+            return default
         cdef PyObject* objptr = PyDict_GetItem(self._attributes, name)
         if objptr == NULL:
             return default
@@ -1977,6 +1716,8 @@ cdef class Node:
         return default
 
     cdef int get_int(self, str name, int default):
+        if self._attributes is None:
+            return default
         cdef PyObject* objptr = PyDict_GetItem(self._attributes, name)
         if objptr == NULL:
             return default
@@ -1986,12 +1727,16 @@ cdef class Node:
         return default
 
     cdef bint get_bool(self, str name, bint default):
+        if self._attributes is None:
+            return default
         cdef PyObject* objptr = PyDict_GetItem(self._attributes, name)
         if objptr == NULL:
             return default
         return (<Vector>objptr).as_bool()
 
     cdef str get_str(self, str name, str default):
+        if self._attributes is None:
+            return default
         cdef PyObject* objptr = PyDict_GetItem(self._attributes, name)
         if objptr == NULL:
             return default
@@ -2000,41 +1745,32 @@ cdef class Node:
     def __iter__(self):
         return iter(self._attributes)
 
-    cdef str repr(self):
-        cdef int i, indent = 0
+    cdef void repr(self, list lines, int indent):
+        cdef int i
         cdef str tag, key
         cdef Vector value
-        cdef list parts, lines = []
-        cdef Node node = self
-        while node is not None:
-            parts = []
-            for i in range(indent):
-                parts.append("")
-            parts.append("!" + node.kind)
-            if node._tags:
-                for tag in sorted(node._tags):
-                    parts.append("#" + tag)
-            for key, value in node._attributes.items():
+        cdef list parts
+        parts = []
+        for i in range(indent):
+            parts.append("")
+        parts.append("!" + self.kind)
+        if self._tags:
+            for tag in sorted(self._tags):
+                parts.append("#" + tag)
+        if self._attributes is not None:
+            for key, value in self._attributes.items():
                 parts.append(key + "=" + value.repr())
-            lines.append(" ".join(parts))
-            if node.first_child is not None:
-                node = node.first_child
-                indent += 1
-            elif node is self:
-                break
-            elif node.next_sibling is not None:
-                node = node.next_sibling
-            else:
-                while node is not self and node.next_sibling is None:
-                    indent -= 1
-                    node = <Node>PyWeakref_GetObject(node._parent)
-                if node is self:
-                    break
-                node = node.next_sibling
-        return '\n'.join(lines)
+        lines.append(" ".join(parts))
+        cdef Node child
+        if self._children is not None:
+            for child in self._children:
+                child.repr(lines, indent+1)
+        return
 
     def __repr__(self):
-        return self.repr()
+        cdef list lines = []
+        self.repr(lines, 0)
+        return '\n'.join(lines)
 
 
 cdef class StateDict:

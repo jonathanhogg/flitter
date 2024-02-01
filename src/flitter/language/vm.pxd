@@ -2,7 +2,7 @@
 
 from cpython cimport PyObject
 
-from ..model cimport Vector, Query, Context
+from ..model cimport Vector, Context
 
 
 cdef dict static_builtins
@@ -82,17 +82,10 @@ cdef class Program:
     cpdef void tag(self, str name)
     cpdef void attribute(self, str name)
     cpdef void append(self, int count=?)
-    cpdef void prepend(self)
     cpdef void compose(self, int count)
-    cpdef void set_node_scope(self)
-    cpdef void clear_node_scope(self)
     cpdef void begin_for(self)
     cpdef void next(self, int count, int label)
-    cpdef void push_next(self, int label)
-    cpdef void end_for(self)
     cpdef void end_for_compose(self)
     cpdef void store_global(self, str name)
-    cpdef void search(self, Query query)
     cpdef void func(self, str name, tuple parameters)
-    cpdef void append_root(self)
     cdef void _execute(self, Context context, VectorStack stack, VectorStack lvars, bint record_stats)

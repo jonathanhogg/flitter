@@ -9,7 +9,7 @@ import tracemalloc
 import unittest
 import unittest.mock
 
-from flitter.model import Vector, Node, Query, Context, StateDict, null, true, false
+from flitter.model import Vector, Node, Context, StateDict, null, true, false
 from flitter.language.vm import Program, Function, VectorStack
 
 
@@ -38,26 +38,32 @@ class TestBasicInstructions(unittest.TestCase):
         self.assertEqual(len(stack), 1)
         self.assertEqual(repr(stack[0]), "(!foo #test x=1\n !bar\n !baz)")
 
-    def test_AppendRoot(self):
+    def test_Append(self):
         node = Node('foo', {'test'}, {'x': Vector(1)})
         self.program.literal(node)
-        self.program.append_root()
+        self.program.literal(Node('bar'))
+        self.program.append()
+        self.program.literal(Vector([Node('baz1', None, {'a': Vector(1)}), Node('baz2', None, {'b': Vector(2)})]))
+        self.program.literal(Vector(Node('baz3', None, {'c': Vector(3)})))
+        self.program.append(2)
         stack = self.program.execute(self.context)
-        self.assertEqual(len(stack), 0)
-        self.assertEqual(next(self.context.graph.children), node)
+        self.assertEqual(len(stack), 1)
+        self.assertEqual(repr(stack[0]), "(!foo #test x=1\n !bar\n !baz1 a=1\n !baz2 b=2\n !baz3 c=3)")
 
-    def test_AppendAttribute(self):
+    def test_Attribute(self):
         foo = Node('foo', {'test'}, {'x': Vector(1)})
         bar = Node('bar', None, {'x': Vector(2)})
         self.variables['bar'] = Vector(bar)
         self.program.literal(foo)
+        self.program.literal(bar)
+        self.program.local_push(1)
         self.program.literal(12)
         self.program.attribute('y')
         self.program.literal(5)
         self.program.attribute('x')
         self.program.literal(null)
         self.program.attribute('y')
-        self.program.name('bar')
+        self.program.local_load(0)
         self.program.literal(7)
         self.program.attribute('y')
         stack = self.program.execute(self.context)
@@ -65,15 +71,18 @@ class TestBasicInstructions(unittest.TestCase):
         self.assertEqual(repr(stack[0]), "(!foo #test x=5)")
         self.assertFalse(stack[0][0] is foo)
         self.assertEqual(repr(stack[1]), "(!bar x=2 y=7)")
-        self.assertIs(stack[1][0], bar)
+        self.assertFalse(stack[1][0] is bar)
         self.assertEqual(foo['x'], Vector(1))
 
     def test_Compose(self):
         self.program.literal(3)
         self.program.literal(4)
         self.program.compose(2)
+        self.program.literal(Vector(['a', 'b']))
+        self.program.literal(Vector('c'))
+        self.program.compose(2)
         stack = self.program.execute(self.context)
-        self.assertEqual(stack, [Vector([3, 4])])
+        self.assertEqual(stack, [Vector([3, 4]), Vector(['a', 'b', 'c'])])
 
     def test_Drop(self):
         self.program.literal(3)
@@ -139,7 +148,7 @@ class TestBasicInstructions(unittest.TestCase):
 
     def test_LiteralNodes(self):
         self.program.literal([Node('foo', {'test'}, {'x': Vector(1)}), Node('bar')])
-        self.assertEqual(str(self.program.instructions[-1]), 'LiteralNodes (!foo #test x=1);(!bar)')
+        self.assertEqual(str(self.program.instructions[-1]), 'LiteralNodes (!foo #test x=1, !bar)')
 
     def test_Literal(self):
         self.program.literal(range(10))
@@ -259,17 +268,6 @@ class TestBasicInstructions(unittest.TestCase):
         self.assertEqual(len(stack), 0)
         self.assertEqual(self.context.pragmas, {'x': Vector(3)})
 
-    def test_Prepend(self):
-        node = Node('foo', {'test'}, {'x': Vector(1)})
-        self.program.literal(node)
-        self.program.literal(Node('bar'))
-        self.program.prepend()
-        self.program.literal(Node('baz'))
-        self.program.prepend()
-        stack = self.program.execute(self.context)
-        self.assertEqual(len(stack), 1)
-        self.assertEqual(repr(stack[0]), "(!foo #test x=1\n !baz\n !bar)")
-
     def test_Range(self):
         self.program.literal(0)
         self.program.literal(10)
@@ -277,20 +275,6 @@ class TestBasicInstructions(unittest.TestCase):
         self.program.range()
         stack = self.program.execute(self.context)
         self.assertEqual(stack, [(0, 2, 4, 6, 8)])
-
-    def test_Search(self):
-        foo = Node('foo', {'test'}, {'x': Vector(1)})
-        bar = Node('bar', {'test'}, {'x': Vector(2)})
-        self.context.graph.append(foo)
-        self.context.graph.append(bar)
-        self.program.search(Query('#test'))
-        self.program.search(Query('bar'))
-        self.program.search(Query('#test!'))
-        stack = self.program.execute(self.context)
-        self.assertEqual(len(stack), 3)
-        self.assertEqual(stack[0], Vector([foo, bar]))
-        self.assertEqual(stack[1], Vector([bar]))
-        self.assertEqual(stack[2], Vector([foo]))
 
     def test_Slice(self):
         self.program.literal(range(1, 11))
@@ -480,21 +464,6 @@ class TestForLoops(unittest.TestCase):
         stack = self.program.execute(self.context)
         self.assertEqual(stack, [null])
 
-    def test_next_push(self):
-        NEXT = self.program.new_label()
-        END = self.program.new_label()
-        self.program.literal(Vector.range(5))
-        self.program.begin_for()
-        self.program.label(NEXT)
-        self.program.push_next(END)
-        self.program.literal(2)
-        self.program.mul()
-        self.program.jump(NEXT)
-        self.program.label(END)
-        self.program.end_for()
-        stack = self.program.execute(self.context)
-        self.assertEqual(stack, [0, 2, 4, 6, 8])
-
 
 class TestLocalVars(unittest.TestCase):
     def setUp(self):
@@ -560,12 +529,6 @@ class TestFunc(unittest.TestCase):
         self.func_program.literal(1)
         self.func_program.add()
         self.func_program.label(LABEL1)
-        LABEL2 = self.func_program.new_label()
-        self.func_program.search(Query('#test'))
-        self.func_program.branch_false(LABEL2)
-        self.func_program.literal(2)
-        self.func_program.mul()
-        self.func_program.label(LABEL2)
         self.func_program.link()
         self.program.literal(2)
         self.program.local_push(1)
@@ -627,16 +590,6 @@ class TestFunc(unittest.TestCase):
         self.program.call(2)
         stack = self.program.execute(self.context)
         self.assertEqual(stack, [10])
-
-    def test_graph(self):
-        node = Node('foo', {'test'})
-        self.context.graph.append(node)
-        self.program.literal(3)
-        self.program.literal(4)
-        self.program.local_load(0)
-        self.program.call(2)
-        stack = self.program.execute(self.context)
-        self.assertEqual(stack, [18])
 
 
 class TestCalls(unittest.TestCase):

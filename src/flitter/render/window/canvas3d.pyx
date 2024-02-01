@@ -93,7 +93,7 @@ cdef class Material:
 
     cdef Material update(Material self, Node node):
         for attr in MaterialAttributes:
-            if attr in node._attributes:
+            if node._attributes and attr in node._attributes:
                 break
         else:
             return self
@@ -276,37 +276,38 @@ cdef Matrix44 update_transform_matrix(Node node, Matrix44 transform_matrix):
     cdef Matrix44 matrix
     cdef str attribute
     cdef Vector vector
-    for attribute, vector in node._attributes.items():
-        if attribute == 'translate':
-            if (matrix := Matrix44._translate(vector)) is not None:
-                transform_matrix = transform_matrix.mmul(matrix)
-        elif attribute == 'scale':
-            if (matrix := Matrix44._scale(vector)) is not None:
-                transform_matrix = transform_matrix.mmul(matrix)
-        elif attribute == 'rotate':
-            if (matrix := Matrix44._rotate(vector)) is not None:
-                transform_matrix = transform_matrix.mmul(matrix)
-        elif attribute == 'rotate_x':
-            if vector.numbers !=  NULL and vector.length == 1 and (matrix := Matrix44._rotate_x(vector.numbers[0])) is not None:
-                transform_matrix = transform_matrix.mmul(matrix)
-        elif attribute == 'rotate_y':
-            if vector.numbers !=  NULL and vector.length == 1 and (matrix := Matrix44._rotate_y(vector.numbers[0])) is not None:
-                transform_matrix = transform_matrix.mmul(matrix)
-        elif attribute == 'rotate_z':
-            if vector.numbers !=  NULL and vector.length == 1 and (matrix := Matrix44._rotate_z(vector.numbers[0])) is not None:
-                transform_matrix = transform_matrix.mmul(matrix)
-        elif attribute == 'shear_x':
-            if (matrix := Matrix44._shear_x(vector)) is not None:
-                transform_matrix = transform_matrix.mmul(matrix)
-        elif attribute == 'shear_y':
-            if (matrix := Matrix44._shear_y(vector)) is not None:
-                transform_matrix = transform_matrix.mmul(matrix)
-        elif attribute == 'shear_z':
-            if (matrix := Matrix44._shear_z(vector)) is not None:
-                transform_matrix = transform_matrix.mmul(matrix)
-        elif attribute == 'matrix':
-            if (matrix := Matrix44(vector)) is not None:
-                transform_matrix = transform_matrix.mmul(matrix)
+    if node._attributes:
+        for attribute, vector in node._attributes.items():
+            if attribute == 'translate':
+                if (matrix := Matrix44._translate(vector)) is not None:
+                    transform_matrix = transform_matrix.mmul(matrix)
+            elif attribute == 'scale':
+                if (matrix := Matrix44._scale(vector)) is not None:
+                    transform_matrix = transform_matrix.mmul(matrix)
+            elif attribute == 'rotate':
+                if (matrix := Matrix44._rotate(vector)) is not None:
+                    transform_matrix = transform_matrix.mmul(matrix)
+            elif attribute == 'rotate_x':
+                if vector.numbers !=  NULL and vector.length == 1 and (matrix := Matrix44._rotate_x(vector.numbers[0])) is not None:
+                    transform_matrix = transform_matrix.mmul(matrix)
+            elif attribute == 'rotate_y':
+                if vector.numbers !=  NULL and vector.length == 1 and (matrix := Matrix44._rotate_y(vector.numbers[0])) is not None:
+                    transform_matrix = transform_matrix.mmul(matrix)
+            elif attribute == 'rotate_z':
+                if vector.numbers !=  NULL and vector.length == 1 and (matrix := Matrix44._rotate_z(vector.numbers[0])) is not None:
+                    transform_matrix = transform_matrix.mmul(matrix)
+            elif attribute == 'shear_x':
+                if (matrix := Matrix44._shear_x(vector)) is not None:
+                    transform_matrix = transform_matrix.mmul(matrix)
+            elif attribute == 'shear_y':
+                if (matrix := Matrix44._shear_y(vector)) is not None:
+                    transform_matrix = transform_matrix.mmul(matrix)
+            elif attribute == 'shear_z':
+                if (matrix := Matrix44._shear_z(vector)) is not None:
+                    transform_matrix = transform_matrix.mmul(matrix)
+            elif attribute == 'matrix':
+                if (matrix := Matrix44(vector)) is not None:
+                    transform_matrix = transform_matrix.mmul(matrix)
     return transform_matrix
 
 
@@ -354,42 +355,34 @@ cdef Model get_model(Node node, bint top):
     cdef double snap_angle, minimum_area
     if node.kind == 'intersect':
         models = []
-        child = node.first_child
-        while child is not None:
+        for child in node._children:
             child_model = get_model(child, False)
             if child_model is not None:
                 models.append(child_model)
-            child = child.next_sibling
         if models:
             model = models[0] if len(models) == 1 else Model.intersect(models)
     elif node.kind == 'union':
         models = []
-        child = node.first_child
-        while child is not None:
+        for child in node._children:
             child_model = get_model(child, False)
             if child_model is not None:
                 models.append(child_model)
-            child = child.next_sibling
         if models:
             model = models[0] if len(models) == 1 else Model.union(models)
     elif node.kind == 'difference':
         models = []
-        child = node.first_child
-        while child is not None:
+        for child in node._children:
             child_model = get_model(child, False)
             if child_model is not None:
                 models.append(child_model)
-            child = child.next_sibling
         if models:
             model = models[0] if len(models) == 1 else Model.difference(models)
     elif node.kind == 'transform':
         models = []
-        child = node.first_child
-        while child is not None:
+        for child in node._children:
             child_model = get_model(child, False)
             if child_model is not None:
                 models.append(child_model)
-            child = child.next_sibling
         if models:
             model = models[0] if len(models) == 1 else Model.union(models)
             if model is not None and (transform_matrix := update_transform_matrix(node, IdentityTransform)) is not IdentityTransform:
@@ -398,12 +391,10 @@ cdef Model get_model(Node node, bint top):
         normal = node.get_fvec('normal', 3, null_)
         origin = node.get_fvec('origin', 3, Zero3)
         models = []
-        child = node.first_child
-        while child is not None:
+        for child in node._children:
             child_model = get_model(child, False)
             if child_model is not None:
                 models.append(child_model.slice(origin, normal) if normal.as_bool() is not None else child_model)
-            child = child.next_sibling
         if models:
             model = models[0] if len(models) == 1 else Model.union(models)
     else:
@@ -447,17 +438,13 @@ cdef void collect(Node node, Matrix44 transform_matrix, Material material, Rende
 
     if node.kind == 'material':
         material = material.update(node)
-        child = node.first_child
-        while child is not None:
+        for child in node._children:
             collect(child, transform_matrix, material, render_group, render_groups, default_camera, cameras, max_samples)
-            child = child.next_sibling
 
     elif node.kind == 'transform':
         transform_matrix = update_transform_matrix(node, transform_matrix)
-        child = node.first_child
-        while child is not None:
+        for child in node._children:
             collect(child, transform_matrix, material, render_group, render_groups, default_camera, cameras, max_samples)
-            child = child.next_sibling
 
     elif node.kind == 'group' or node.kind == 'canvas3d':
         transform_matrix = update_transform_matrix(node, transform_matrix)
@@ -475,14 +462,13 @@ cdef void collect(Node node, Matrix44 transform_matrix, Material material, Rende
         new_render_group.vertex_shader_template = Template(vertex_shader) if vertex_shader is not None else StandardVertexTemplate
         new_render_group.fragment_shader_template = Template(fragment_shader) if fragment_shader is not None else StandardFragmentTemplate
         new_render_group.variables = {}
-        for name, value in node._attributes.items():
-            if name not in GroupAttributes:
-                new_render_group.variables[name] = value
+        if node._attributes:
+            for name, value in node._attributes.items():
+                if name not in GroupAttributes:
+                    new_render_group.variables[name] = value
         render_groups.append(new_render_group)
-        child = node.first_child
-        while child is not None:
+        for child in node._children:
             collect(child, transform_matrix, material, new_render_group, render_groups, default_camera, cameras, max_samples)
-            child = child.next_sibling
 
     elif node.kind == 'light':
         color = node.get_fvec('color', 3, null_)

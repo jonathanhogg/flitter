@@ -27,7 +27,6 @@ cdef class Vector:
     cdef str as_string(self)
     cdef unsigned long long hash(self, bint floor_floats)
     cpdef object match(self, int n=?, type t=?, default=?)
-    cpdef Vector copynodes(self, bint parented=?)
     cdef str repr(self)
     cdef Vector neg(self)
     cdef Vector pos(self) noexcept
@@ -110,33 +109,18 @@ cdef class Matrix44(Vector):
     cpdef Matrix33 matrix33(self)
 
 
-cdef class Query:
-    cdef str kind
-    cdef frozenset tags
-    cdef bint strict
-    cdef bint stop
-    cdef bint first
-    cdef Query subquery, altquery
-
-
 cdef class Node:
-    cdef object __weakref__
     cdef readonly str kind
     cdef set _tags
     cdef dict _attributes
     cdef bint _attributes_shared
-    cdef object _parent
-    cdef Node next_sibling, first_child, last_child
+    cdef tuple _children
 
     cdef unsigned long long hash(self)
     cpdef Node copy(self)
     cpdef void add_tag(self, str tag)
-    cpdef void remove_tag(self, str tag)
+    cpdef void set_attribute(self, str name, Vector value)
     cpdef void append(self, Node node)
-    cdef void append_vector(self, Vector nodes, bint copy)
-    cpdef void insert(self, Node node)
-    cpdef void remove(self, Node node)
-    cdef bint _select(self, Query query, list nodes, bint first)
     cdef bint _equals(self, Node other)
     cpdef object get(self, str name, int n=?, type t=?, object default=?)
     cdef Vector get_fvec(self, str name, int n, Vector default)
@@ -144,7 +128,7 @@ cdef class Node:
     cdef int get_int(self, str name, int default)
     cdef bint get_bool(self, str name, bint default)
     cdef str get_str(self, str name, str default)
-    cdef str repr(self)
+    cdef void repr(self, list lines, int indent)
 
 
 cdef class StateDict:

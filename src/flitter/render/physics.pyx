@@ -160,8 +160,8 @@ cdef class SpecificPairForceApplier(PairForceApplier):
     cdef long to_index
 
     def __cinit__(self, Node node, double strength, Vector zero):
-        self.from_particle_id = <Vector>node._attributes.get('from')
-        self.to_particle_id = <Vector>node._attributes.get('to')
+        self.from_particle_id = <Vector>node._attributes.get('from') if node._attributes else None
+        self.to_particle_id = <Vector>node._attributes.get('to') if node._attributes else None
 
 
 cdef class DistanceForceApplier(SpecificPairForceApplier):
@@ -336,7 +336,7 @@ cdef class PhysicsSystem:
         cdef long dimensions = node.get_int('dimensions', 0)
         if dimensions < 1:
             return
-        cdef Vector state_prefix = <Vector>node._attributes.get('state')
+        cdef Vector state_prefix = <Vector>node._attributes.get('state') if node._attributes else None
         if state_prefix is None:
             return
         cdef double time = node.get_float('time', clock)
@@ -358,7 +358,7 @@ cdef class PhysicsSystem:
         for i in range(dimensions):
             zero.numbers[i] = 0
         cdef list particles=[], non_anchors=[], particle_forces=[], matrix_forces=[], specific_forces=[], barriers=[]
-        cdef Node child = node.first_child
+        cdef Node child
         cdef Vector id
         cdef double strength, ease
         cdef dict particles_by_id = {}
@@ -366,7 +366,7 @@ cdef class PhysicsSystem:
         cdef Barrier barrier
         cdef set old_state_keys = self.state_keys
         cdef set new_state_keys = set()
-        while child is not None:
+        for child in node._children:
             if child.kind == 'particle':
                 id = <Vector>child._attributes.get('id')
                 if id is not None:
@@ -414,7 +414,6 @@ cdef class PhysicsSystem:
                     matrix_forces.append(ElectrostaticForceApplier.__new__(ElectrostaticForceApplier, child, strength, zero))
                 elif child.kind == 'adhesion':
                     matrix_forces.append(AdhesionForceApplier.__new__(AdhesionForceApplier, child, strength, zero))
-            child = child.next_sibling
         cdef SpecificPairForceApplier specific_force
         for specific_force in specific_forces:
             specific_force.from_index = particles_by_id.get(specific_force.from_particle_id, -1)

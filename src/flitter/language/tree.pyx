@@ -13,7 +13,7 @@ cimport cython
 from loguru import logger
 
 from .. import name_patch
-from ..model cimport Vector, Node, Query, Context, StateDict, null_, true_, false_, minusone_
+from ..model cimport Vector, Node, Context, StateDict, null_, true_, false_, minusone_
 from .vm cimport Program, builtins, static_builtins, dynamic_builtins
 
 
@@ -105,14 +105,15 @@ cdef class Top(Expression):
 
     cdef void _compile(self, Program program, list lvars):
         cdef Expression expr, node
+        cdef int m = 0
         for expr in self.expressions:
             expr._compile(program, lvars)
-            if isinstance(expr, NodeModifier) and isinstance((<NodeModifier>expr).ultimate_node(), Search):
-                program.drop(1)
-            elif not isinstance(expr, (Let, Import, Function, Pragma)):
-                program.append_root()
-        cdef int i
+            if not isinstance(expr, (Let, Import, Function, Pragma, StoreGlobal)):
+                m += 1
+        if m:
+            program.append(m)
         cdef str name
+        cdef int i
         for i, name in enumerate(reversed(lvars)):
             program.local_load(i)
             program.store_global(name)
@@ -131,7 +132,7 @@ cdef class Top(Expression):
         cdef list bindings = []
         for name, value in context.variables.items():
             if name not in variables and value is not None and isinstance(value, Vector):
-                bindings.append(PolyBinding((name,), Literal(value)))
+                bindings.append(Binding(name, Literal(value)))
         if bindings:
             expressions.append(StoreGlobal(tuple(bindings)))
         return Top(tuple(expressions))
@@ -235,22 +236,15 @@ cdef class InlineSequence(Sequence):
 
 cdef class Literal(Expression):
     cdef readonly Vector value
-    cdef bint copynodes
 
     def __init__(self, Vector value):
         self.value = value
-        self.copynodes = False
-        if self.value.objects is not None:
-            for obj in self.value.objects:
-                if isinstance(obj, Node):
-                    self.copynodes = True
-                    break
 
     cdef void _compile(self, Program program, list lvars):
         program.literal(self.value.intern())
 
     cdef Expression _simplify(self, Context context):
-        return Literal(self.value.copynodes()) if self.copynodes else self
+        return self
 
     def __repr__(self):
         return f'Literal({self.value!r})'
@@ -281,7 +275,7 @@ cdef class Name(Expression):
             elif isinstance(value, Name):
                 return (<Name>value)._simplify(context)
             else:
-                return Literal((<Vector>value).copynodes())
+                return Literal(Vector.copy((<Vector>value)))
         elif (value := static_builtins.get(self.name)) is not None:
             return Literal(value)
         elif self.name not in dynamic_builtins:
@@ -857,12 +851,6 @@ cdef class Call(Expression):
 cdef class NodeModifier(Expression):
     cdef readonly Expression node
 
-    cdef Expression ultimate_node(self):
-        cdef Expression node = self.node
-        while isinstance(node, NodeModifier):
-            node = (<NodeModifier>node).node
-        return node
-
 
 cdef class Tag(NodeModifier):
     cdef readonly str tag
@@ -878,13 +866,18 @@ cdef class Tag(NodeModifier):
     cdef Expression _simplify(self, Context context):
         cdef Expression node = self.node._simplify(context)
         cdef Vector nodes
+        cdef list objects
         cdef Node n
+        cdef int i
         if isinstance(node, Literal):
             nodes = (<Literal>node).value
             if nodes.isinstance(Node):
-                for n in nodes.objects:
+                objects = []
+                for i in range(nodes.length):
+                    n = nodes.objects[i].copy()
                     n.add_tag(self.tag)
-                return node
+                    objects.append(n)
+                return Literal(Vector(objects))
         return Tag(node, self.tag)
 
     def __repr__(self):
@@ -899,109 +892,45 @@ cdef class Attributes(NodeModifier):
         self.bindings = bindings
 
     cdef void _compile(self, Program program, list lvars):
-        cdef Binding binding
-        self.node._compile(program, lvars)
-        if isinstance(self.node, Literal) and (<Literal>self.node).value.length == 1:
-            program.set_node_scope()
-            for binding in self.bindings:
-                binding.expr._compile(program, lvars)
-                program.attribute(binding.name)
-        else:
-            program.dup()
-            program.begin_for()
-            START = program.new_label()
-            END = program.new_label()
-            program.label(START)
-            program.push_next(END)
-            program.set_node_scope()
-            for binding in self.bindings:
-                binding.expr._compile(program, lvars)
-                program.attribute(binding.name)
-            program.drop()
-            program.jump(START)
-            program.label(END)
-            program.end_for()
-        program.clear_node_scope()
-
-    cdef Expression _simplify(self, Context context):
-        cdef Expression node = self
-        cdef list bindings = []
-        cdef Attributes attrs
-        cdef Binding binding
-        cdef set unbound = context.unbound
-        context.unbound = set()
-        while isinstance(node, Attributes):
-            attrs = <Attributes>node
-            for binding in reversed(attrs.bindings):
-                bindings.append(Binding(binding.name, binding.expr._simplify(context)))
-            node = attrs.node
-        cdef bint fast = not context.unbound
-        cdef bint unbound_names = bool(context.unbound)
-        context.unbound = unbound
-        node = node._simplify(context)
-        cdef Vector nodes
-        cdef Node n
-        cdef dict saved
-        if isinstance(node, Literal):
-            nodes = (<Literal>node).value
-            if nodes.isinstance(Node):
-                while bindings and isinstance((<Binding>bindings[-1]).expr, Literal):
-                    binding = bindings.pop()
-                    for n in nodes.objects:
-                        n[binding.name] = (<Literal>binding.expr).value
-                if unbound_names and bindings and nodes.length == 1:
-                    n = nodes.objects[0]
-                    saved = context.variables
-                    context.variables = saved.copy()
-                    for attr in n:
-                        if attr not in context.variables:
-                            context.variables[attr] = n[attr]
-                    while bindings:
-                        binding = bindings.pop()
-                        binding = Binding(binding.name, binding.expr._simplify(context))
-                        if isinstance(binding.expr, Literal):
-                            value = (<Literal>binding.expr).value
-                            n[binding.name] = value
-                            if binding.name not in context.variables:
-                                context.variables[binding.name] = value
-                        else:
-                            bindings.append(binding)
-                            break
-                    context.variables = saved
-        if not bindings:
-            return node
-        bindings.reverse()
-        if fast:
-            return FastAttributes(node, tuple(bindings))
-        return Attributes(node, tuple(bindings))
-
-    def __repr__(self):
-        return f'{self.__class__.__name__}({self.node!r}, {self.bindings!r})'
-
-
-cdef class FastAttributes(Attributes):
-    cdef void _compile(self, Program program, list lvars):
         self.node._compile(program, lvars)
         cdef Binding binding
         for binding in self.bindings:
             binding.expr._compile(program, lvars)
             program.attribute(binding.name)
 
-
-cdef class Search(Expression):
-    cdef readonly Query query
-
-    def __init__(self, Query query):
-        self.query = query
-
-    cdef void _compile(self, Program program, list lvars):
-        program.search(self.query)
-
     cdef Expression _simplify(self, Context context):
-        return self
+        cdef Expression node = self
+        cdef list bindings = []
+        cdef Attributes attrs
+        cdef Binding binding
+        while isinstance(node, Attributes):
+            attrs = <Attributes>node
+            for binding in reversed(attrs.bindings):
+                bindings.append(Binding(binding.name, binding.expr._simplify(context)))
+            node = attrs.node
+        node = node._simplify(context)
+        cdef Vector nodes
+        cdef dict saved
+        cdef int i
+        cdef list objects
+        if isinstance(node, Literal):
+            nodes = (<Literal>node).value
+            if nodes.isinstance(Node):
+                objects = []
+                for i in range(nodes.length):
+                    objects.append(nodes.objects[i].copy())
+                while bindings and isinstance((<Binding>bindings[-1]).expr, Literal):
+                    binding = bindings.pop()
+                    for i in range(nodes.length):
+                        (<Node>objects[i]).set_attribute(binding.name, (<Literal>binding.expr).value)
+                node = Literal(Vector(objects))
+        if not bindings:
+            return node
+        bindings.reverse()
+        return Attributes(node, tuple(bindings))
 
     def __repr__(self):
-        return f'Search({self.query!r})'
+        return f'{self.__class__.__name__}({self.node!r}, {self.bindings!r})'
 
 
 cdef class Append(NodeModifier):
@@ -1020,41 +949,49 @@ cdef class Append(NodeModifier):
         cdef Expression node = self.node._simplify(context)
         cdef Expression children = self.children._simplify(context)
         cdef Vector nodes, childs
-        cdef Node n, c
-        if isinstance(node, Literal) and isinstance(children, Literal):
-            nodes = (<Literal>node).value
-            childs = (<Literal>children).value
-            if nodes.isinstance(Node) and childs.isinstance(Node):
-                for n in nodes.objects:
-                    for c in childs.objects:
-                        n.append(c.copy())
-                return node
+        cdef Node c, n
+        cdef int i
+        cdef list modifiers
+        cdef Expression expr
+        cdef NodeModifier modifier
+        cdef list objects
+        if isinstance(children, Literal):
+            if isinstance(node, Literal):
+                nodes = (<Literal>node).value
+                childs = (<Literal>children).value
+                if nodes.isinstance(Node) and childs.isinstance(Node):
+                    objects = []
+                    for i in range(nodes.length):
+                        n = <Node>nodes.objects[i].copy()
+                        for c in childs.objects:
+                            n.append(c)
+                        objects.append(n)
+                    return Literal(Vector(objects))
+            else:
+                modifiers = []
+                expr = node
+                while isinstance(expr, NodeModifier):
+                    modifiers.append(expr)
+                    expr = (<NodeModifier>expr).node
+                if isinstance(expr, Literal):
+                    expr = Append(expr, children)._simplify(context)
+                    while modifiers:
+                        modifier = modifiers.pop()
+                        if isinstance(modifier, Attributes):
+                            expr = Attributes(expr, (<Attributes>modifier).bindings)
+                        elif isinstance(modifier, Tag):
+                            expr = Tag(expr, (<Tag>modifier).tag)
+                        elif isinstance(modifier, Append):
+                            expr = Append(expr, (<Append>modifier).children)
+                    return expr
+        elif isinstance(children, Sequence) and isinstance((<Sequence>children).expressions[0], Literal):
+            node = Append(node, (<Sequence>children).expressions[0])
+            children = Sequence((<Sequence>children).expressions[1:])
+            return Append(node, children)._simplify(context)
         return Append(node, children)
 
     def __repr__(self):
         return f'{self.__class__.__name__}({self.node!r}, {self.children!r})'
-
-
-cdef class Prepend(Append):
-    cdef void _compile(self, Program program, list lvars):
-        self.node._compile(program, lvars)
-        self.children._compile(program, lvars)
-        program.prepend()
-
-    cdef Expression _simplify(self, Context context):
-        cdef Expression node = self.node._simplify(context)
-        cdef Expression children = self.children._simplify(context)
-        cdef Vector nodes, childs
-        cdef Node n, c
-        if isinstance(node, Literal) and isinstance(children, Literal):
-            nodes = (<Literal>node).value
-            childs = (<Literal>children).value
-            if nodes.isinstance(Node) and childs.isinstance(Node):
-                for n in nodes.objects:
-                    for c in reversed(childs.objects):
-                        n.insert(c.copy())
-                return node
-        return Prepend(node, children)
 
 
 cdef class Binding:
@@ -1128,13 +1065,23 @@ cdef class Let(Expression):
         return f'{self.__class__.__name__}({self.bindings!r})'
 
 
-cdef class StoreGlobal(Let):
+cdef class StoreGlobal(Expression):
+    cdef readonly tuple bindings
+
+    def __init__(self, tuple bindings):
+        self.bindings = bindings
+
     cdef void _compile(self, Program program, list lvars):
-        cdef PolyBinding binding
+        cdef Binding binding
         for binding in self.bindings:
             binding.expr._compile(program, lvars)
-            assert len(binding.names) == 1, "StoreGlobal cannot multi-bind"
-            program.store_global(binding.names[0])
+            program.store_global(binding.name)
+
+    cdef Expression _simplify(self, Context context):
+        return self
+
+    def __repr__(self):
+        return f'StoreGlobal({self.bindings!r})'
 
 
 cdef class InlineLet(Expression):

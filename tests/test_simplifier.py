@@ -9,8 +9,8 @@ from flitter.language.tree import (Top, Pragma, Import, Sequence, InlineSequence
                                    LookupLiteral, Range, UnaryOperation, Negative, Positive, Not, BinaryOperation,
                                    MathsBinaryOperation, Add, Subtract, Multiply, Divide, FloorDivide, Modulo, Power,
                                    Comparison, EqualTo, NotEqualTo, LessThan, GreaterThan, LessThanOrEqualTo, GreaterThanOrEqualTo,
-                                   And, Or, Xor, Slice, FastSlice, Call, NodeModifier, Tag, Attributes, FastAttributes, Search,
-                                   Append, Prepend, Let, StoreGlobal, InlineLet, For, IfCondition, IfElse, Function)
+                                   And, Or, Xor, Slice, FastSlice, Call, NodeModifier, Tag, Attributes,
+                                   Append, Let, StoreGlobal, InlineLet, For, IfCondition, IfElse, Function)
 
 
 class TestLiteral(unittest.TestCase):
@@ -20,15 +20,6 @@ class TestLiteral(unittest.TestCase):
         simplified = expression.simplify()
         self.assertIsInstance(simplified, Literal)
         self.assertEqual(simplified.value, Vector([1, 2, 3]))
-
-    def test_nodes_copied(self):
-        """However, nodes must be copied so that they can be in-place updated."""
-        expression = Literal(Vector([Node('foo'), Node('bar')]))
-        simplified = expression.simplify()
-        self.assertIsInstance(simplified, Literal)
-        self.assertEqual(simplified.value, expression.value)
-        for node1, node2 in zip(simplified.value, expression.value):
-            self.assertIsNot(node1, node2)
 
 
 class TestName(unittest.TestCase):
