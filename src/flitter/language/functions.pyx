@@ -75,9 +75,6 @@ cdef class Uniform(Vector):
             result.numbers[i] = self._item(j)
         return result
 
-    cpdef Vector copynodes(self, bint parented=False):
-        return self
-
     cpdef bint as_bool(self):
         return True
 

@@ -33,8 +33,7 @@ This contains a comment, a `let` statement and a node creation statement.
 Indented statements below this represent child nodes. Any name with a `!` in
 front of it creates a node of that *kind*; the bindings following this specify
 attributes of the node. Nodes can also be followed by one or more `#tag`s to
-add tags that can be later searched for with *queries* (see language features
-below).
+add tags for readability and logging.
 
 When the **flitter** engine is run with this file, it will evaluate the code
 repeatedly (at an attempted 60fps) and render this to screen. Note that one
@@ -355,11 +354,10 @@ vector with 1 million items.
 The purpose of any **flitter** program is to construct a render tree.
 Individual literal nodes are represented by an exclamation mark followed by
 a name, e.g., `!window`. Nodes can be tagged with additional arbitrary names
-that aid in readability and in searching (see [Queries](#queries) below). A
-hash character followed by a name will tag the preceding node (or nodes) with
-that name, e.g., `#top`. A name followed by an equals character will set that
-attribute on the preceding node. The resulting value in both of these instances
-is the tagged/attributed node.
+that aid in readability. A hash character followed by a name will tag the
+preceding node (or nodes) with that name, e.g., `#top`. A name followed by an
+equals character will set that attribute on the preceding node. The resulting
+value in both of these instances is the tagged/attributed node.
 
 For example:
 
@@ -468,34 +466,6 @@ let points=10;20;15;25;20;30;25;35
     for x;y in points:
         !line_to #segment point=x;y
 ```
-
-When evaluating attribute-set operations on a vector of nodes, the attribute
-value is evaluated for each node, bringing that node's attribute names into
-scope on each iteration. For example:
-
-```flitter
-let nodes=((!foo a=a) for a in ..10)
-
-nodes b=a*2
-```
-
-is equivalent to:
-
-```flitter
-!foo a=0 b=0
-!foo a=1 b=2
-!foo a=2 b=4
-!foo a=3 b=6
-!foo a=4 b=8
-!foo a=5 b=10
-!foo a=6 b=12
-!foo a=7 b=14
-!foo a=8 b=16
-!foo a=9 b=18
-```
-
-Generally, this sort of behaviour is obtuse, but the semantics are important
-when using queries (see [Queries](#queries) below).
 
 ## Let expressions
 
@@ -754,82 +724,6 @@ wrapped with `!transform` nodes, the first with `scale=1` and the second with
 `scale=0.75`. The `!transform` nodes returned by the two template function
 calls are appended to the `!canvas` node.
 
-## Queries
-
-Queries allow the node tree so-far to be searched and manipulated. They use
-a CSS-selector-like syntax that is best explained by example:
-
-- `{*}` matches *all* nodes in the tree
-- `{window}` matches all `!window` nodes
-- `{window!}` matches only the *first* `!window` node in the tree
-- `{#spot}` matches any node with the `#spot` tag
-- `{shader#blur}` matches `!shader` nodes with the `#blur` tag
-- `{ellipse|rect}` matches any `!ellipse` or `!rect` node
-- `{group path}` matches `!path` nodes anywhere within a `!group` node
-- `{path>line_to}` matches `!line_to` nodes *immediately* below a `!path` node
-- `{group.}` returns all `!group` nodes reachable from the root, but *not* any
-further `!group` nodes *within* those, i.e., it stops recursive descent on a
-match
-
-The result of a query expression is a vector of matching nodes. Note that nodes
-are appended to the main tree from the top-level after the complete evaluation
-of each expression, including any indented append operations. Thus a query
-evaluated within a nested expression cannot match any node that makes up part
-of that expression. Query searches are *depth-first*.
-
-A query expression may be combined with tag, attribute-set or node-append
-expressions to amend the current tree. For example:
-
-```flitter
-let SIZE=1280;720
-
-!window size=SIZE
-    !canvas size=SIZE color=1 font_size=100
-        !text point=SIZE/2 text="Hello world!"
-
-if beat > 10
-    {canvas} color=1;0;0
-```
-
-In this example, the text will turn red after 10 beats (5 seconds by default).
-
-Appending nodes to a query will append those nodes to all matches:
-
-```flitter
-…
-
-if beat > 10
-    {canvas}
-        !text point=SIZE*(0.5;0.75) text="(RED)" color=1;0;0
-```
-
-Appending queries to a node will re-parent the matching nodes into this new
-position in the tree. For example, the following code combines two queries
-to wrap all nodes within the canvas in a new group that turns them upside down
-and changes the default color to red:
-
-```flitter
-…
-
-if beat > 10
-    {canvas}
-        !group color=1;0;0 translate=SIZE rotate=0.5
-            {canvas>*}
-```
-
-As discussed in **Nodes** above, attributes from the matching nodes are brought
-into scope as names when evaluating attribute-set operations. So a queries can
-be used to amend an existing attribute value, e.g.:
-
-```flitter
-…
-
-{window} size=size*2
-```
-
-will double the `size` attribute of the window, as long as no other binding
-for `size` exists in the current scope.
-
 ## Pseudo-random sources
 
 **flitter** provides three useful sources of pseudo-randomness: `uniform()`,
@@ -1072,9 +966,8 @@ local names, replace `let` names with literal values, evaluate mathematical
 expressions (including some rearranging where necessary to achieve this) and
 generally reduces as much of the evaluation tree as possible to constant values.
 
-Unbound names (which includes all of the globals listed above, like `beat`) and
-queries (`{...}`) are always dynamic, as will then obviously be any expressions
-that include these.
+Unbound names (which includes all of the globals listed above, like `beat`) are
+always dynamic, as will then obviously be any expressions that include these.
 
 After partial-evaluation has simplified the tree (and note that thanks to loop
 unrolling, "simpler" doesn't necessarily mean "smaller"), the tree is compiled

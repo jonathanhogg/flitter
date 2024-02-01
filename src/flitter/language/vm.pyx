@@ -10,20 +10,20 @@ from loguru import logger
 from .. import name_patch
 from ..cache import SharedCache
 from .functions import STATIC_FUNCTIONS, DYNAMIC_FUNCTIONS
-from ..model cimport Vector, Node, Query, StateDict, Context, null_, true_, false_
+from ..model cimport Vector, Node, StateDict, Context, null_, true_, false_
 from .noise import NOISE_FUNCTIONS
 
 from libc.math cimport floor
 from libc.stdint cimport int64_t
 from cpython cimport PyObject, Py_INCREF, Py_DECREF
-from cpython.dict cimport PyDict_GetItem, PyDict_SetItem, PyDict_Contains, PyDict_DelItem, PyDict_Copy
+from cpython.dict cimport PyDict_New, PyDict_GetItem, PyDict_SetItem, PyDict_Contains, PyDict_DelItem, PyDict_Copy
 from cpython.exc cimport PyErr_SetFromErrno
 from cpython.float cimport PyFloat_FromDouble
-from cpython.list cimport PyList_New, PyList_GET_ITEM, PyList_SET_ITEM
+from cpython.list cimport PyList_New, PyList_Append, PyList_GET_ITEM, PyList_SET_ITEM, PyList_GET_SIZE, PyList_GetSlice
 from cpython.mem cimport PyMem_Malloc, PyMem_Free, PyMem_Realloc
 from cpython.object cimport PyObject_Call, PyObject_CallObject, PyObject_HasAttrString
 from cpython.set cimport PySet_Add
-from cpython.tuple cimport PyTuple_New, PyTuple_GET_ITEM, PyTuple_SET_ITEM, PyTuple_GET_SIZE
+from cpython.tuple cimport PyTuple_New, PyTuple_GET_ITEM, PyTuple_SET_ITEM, PyTuple_GET_SIZE, PyTuple_GetSlice
 
 
 cdef extern from "Python.h":
@@ -70,18 +70,15 @@ cdef int CallOutCount = 0
 cdef enum OpCode:
     Add
     Append
-    AppendRoot
     Attribute
     BeginFor
     BranchFalse
     BranchTrue
     Call
     CallFast
-    ClearNodeScope
     Compose
     Drop
     Dup
-    EndFor
     EndForCompose
     Eq
     FloorDiv
@@ -113,11 +110,7 @@ cdef enum OpCode:
     Pos
     Pow
     Pragma
-    Prepend
-    PushNext
     Range
-    Search
-    SetNodeScope
     Slice
     SliceLiteral
     StoreGlobal
@@ -130,18 +123,15 @@ cdef enum OpCode:
 cdef dict OpCodeNames = {
     OpCode.Add: 'Add',
     OpCode.Append: 'Append',
-    OpCode.AppendRoot: 'AppendRoot',
     OpCode.Attribute: 'Attribute',
     OpCode.BeginFor: 'BeginFor',
     OpCode.BranchFalse: 'BranchFalse',
     OpCode.BranchTrue: 'BranchTrue',
     OpCode.Call: 'Call',
     OpCode.CallFast: 'CallFast',
-    OpCode.ClearNodeScope: 'ClearNodeScope',
     OpCode.Compose: 'Compose',
     OpCode.Drop: 'Drop',
     OpCode.Dup: 'Dup',
-    OpCode.EndFor: 'EndFor',
     OpCode.EndForCompose: 'EndForCompose',
     OpCode.Eq: 'Eq',
     OpCode.FloorDiv: 'FloorDiv',
@@ -173,11 +163,7 @@ cdef dict OpCodeNames = {
     OpCode.Pos: 'Pos',
     OpCode.Pow: 'Pow',
     OpCode.Pragma: 'Pragma',
-    OpCode.Prepend: 'Prepend',
-    OpCode.PushNext: 'PushNext',
     OpCode.Range: 'Range',
-    OpCode.Search: 'Search',
-    OpCode.SetNodeScope: 'SetNodeScope',
     OpCode.Slice: 'Slice',
     OpCode.SliceLiteral: 'SliceLiteral',
     OpCode.StoreGlobal: 'StoreGlobal',
@@ -291,17 +277,6 @@ cdef class InstructionStrTuple(Instruction):
         return f'{OpCodeNames[self.code]} {self.svalue!r} {self.tvalue!r}'
 
 
-cdef class InstructionQuery(Instruction):
-    cdef readonly Query value
-
-    def __init__(self, OpCode code, Query value):
-        super().__init__(code)
-        self.value = value
-
-    def __str__(self):
-        return f'{OpCodeNames[self.code]} {self.value!r}'
-
-
 cdef class InstructionLabel(Instruction):
     cdef readonly int label
 
@@ -372,7 +347,16 @@ cdef class VectorStack:
         return self.top + 1
 
     cpdef VectorStack copy(self):
-        return copy(self)
+        cdef VectorStack new_stack = VectorStack.__new__(VectorStack, self.size)
+        cdef int i
+        cdef PyObject* ptr
+        cdef Vector value
+        for i in range(self.top+1):
+            value = Vector._copy(<Vector>self.vectors[i])
+            Py_INCREF(value)
+            new_stack.vectors[i] = <PyObject*>value
+        new_stack.top = self.top
+        return new_stack
 
     cpdef void drop(self, int count=1):
         if self.top+1 < count:
@@ -434,17 +418,6 @@ cdef int increase(VectorStack stack) except 0:
         raise MemoryError()
     stack.size = new_size
     return new_size
-
-cdef inline VectorStack copy(VectorStack stack):
-    cdef VectorStack new_stack = VectorStack.__new__(VectorStack, stack.size)
-    cdef int i
-    cdef PyObject* ptr
-    for i in range(stack.top+1):
-        ptr = stack.vectors[i]
-        Py_INCREF(<Vector>ptr)
-        new_stack.vectors[i] = ptr
-    new_stack.top = stack.top
-    return new_stack
 
 cdef inline void drop(VectorStack stack, int n) noexcept:
     assert stack.top - n >= -1, "Stack empty"
@@ -719,15 +692,125 @@ cdef inline dict import_module(Context context, str filename, bint record_stats,
             import_context.state = context.state
             import_context.variables = {}
             import_context.path = program.path
+            push(program.stack, Vector(Node('root')))
             if record_stats:
                 duration[0] += perf_counter()
-            program._execute(import_context, None, None, record_stats)
+            program._execute(import_context, program.stack, program.lvars, record_stats)
             if record_stats:
                 duration[0] -= perf_counter()
-            assert program.stack.top == -1, "Bad stack"
+            assert program.stack.top == 0, "Bad stack"
+            drop(program.stack, 1)
             assert program.lvars.top == -1, "Bad lvars"
             return import_context.variables
     return None
+
+
+cdef inline void execute_append(VectorStack stack, int count):
+    cdef Vector nodes_vec = peek_at(stack, count)
+    cdef Vector children
+    cdef int i, j, k, m=nodes_vec.length, n, o
+    cdef tuple nodes = nodes_vec.objects
+    cdef tuple src
+    cdef PyObject* objptr
+    cdef Node node
+    cdef tuple dest
+    if nodes is not None:
+        for i in range(m):
+            objptr = PyTuple_GET_ITEM(nodes, i)
+            if type(<object>objptr) is not Node:
+                continue
+            if objptr.ob_refcnt > 1:
+                node = (<Node>objptr).copy()
+                Py_DECREF(<Node>objptr)
+                Py_INCREF(node)
+                PyTuple_SET_ITEM(nodes, i, node)
+            else:
+                node = <Node>objptr
+            n = o = PyTuple_GET_SIZE(node._children)
+            for j in range(count-1, -1, -1):
+                n += peek_at(stack, j).length
+            dest = PyTuple_New(n)
+            for j in range(o):
+                objptr = PyTuple_GET_ITEM(node._children, j)
+                Py_INCREF(<Node>objptr)
+                PyTuple_SET_ITEM(dest, j, <Node>objptr)
+            for j in range(count-1, -1, -1):
+                children = peek_at(stack, j)
+                src = children.objects
+                if src is not None:
+                    for k in range(children.length):
+                        objptr = PyTuple_GET_ITEM(src, k)
+                        if type(<object>objptr) is Node:
+                            Py_INCREF(<Node>objptr)
+                            PyTuple_SET_ITEM(dest, o, <Node>objptr)
+                            o += 1
+            if o < n:
+                for k in range(o, n):
+                    Py_INCREF(None)
+                    PyTuple_SET_ITEM(dest, k, None)
+                if o:
+                    node._children = PyTuple_GetSlice(dest, 0, o)
+                else:
+                    node._children = None
+            else:
+                node._children = dest
+    drop(stack, count)
+
+
+cdef inline execute_attribute(VectorStack stack, str name):
+    cdef Vector value = pop(stack)
+    cdef Vector nodes_vec = peek(stack)
+    cdef tuple nodes = nodes_vec.objects
+    if nodes is None:
+        return
+    cdef PyObject* objptr
+    cdef Node node
+    cdef dict attributes
+    cdef int i, j, m=nodes_vec.length, n=value.length
+    for i in range(m):
+        objptr = PyTuple_GET_ITEM(nodes, i)
+        if type(<object>objptr) is not Node:
+            continue
+        if objptr.ob_refcnt > 1:
+            node = (<Node>objptr).copy()
+            Py_DECREF(<Node>objptr)
+            Py_INCREF(node)
+            PyTuple_SET_ITEM(nodes, i, node)
+        else:
+            node = <Node>objptr
+        attributes = node._attributes
+        if node._attributes_shared:
+            node._attributes = attributes = PyDict_Copy(attributes)
+            node._attributes_shared = False
+        elif attributes is None and n:
+            node._attributes = attributes = PyDict_New()
+        if n:
+            PyDict_SetItem(attributes, name, value)
+        elif attributes is not None and PyDict_GetItem(attributes, name) != NULL:
+            PyDict_DelItem(attributes, name)
+
+
+cdef inline execute_tag(VectorStack stack, str name):
+    cdef Vector nodes_vec = peek(stack)
+    cdef int i, j, m=nodes_vec.length
+    cdef tuple nodes = nodes_vec.objects
+    cdef PyObject* objptr
+    cdef Node node
+    if nodes is not None:
+        for i in range(m):
+            objptr = PyTuple_GET_ITEM(nodes, i)
+            if type(<object>objptr) is not Node:
+                continue
+            if objptr.ob_refcnt > 1:
+                node = (<Node>objptr).copy()
+                Py_DECREF(<Node>objptr)
+                Py_INCREF(node)
+                PyTuple_SET_ITEM(nodes, i, node)
+            else:
+                node = <Node>objptr
+            if (<Node>node)._tags is None:
+                (<Node>node)._tags = set()
+            PySet_Add((<Node>node)._tags, name)
 
 
 cdef class Program:
@@ -750,6 +833,23 @@ cdef class Program:
     def set_top(self, object top):
         self.top = top
 
+    def execute(self, Context context, list lvars=None, bint record_stats=False):
+        """This is a test-harness function. Do not use."""
+        if not self.linked:
+            self.link()
+        cdef VectorStack lvars_stack = VectorStack()
+        cdef Vector vector
+        if lvars:
+            for vector in lvars:
+                lvars_stack.push(vector)
+        cdef VectorStack stack = VectorStack()
+        self._execute(context, stack, lvars_stack, record_stats)
+        if lvars is not None:
+            lvars.clear()
+            while len(lvars_stack):
+                lvars.insert(0, lvars_stack.pop())
+        return stack.pop_list(len(stack))
+
     def run(self, StateDict state=None, dict variables=None, bint record_stats=False):
         cdef dict context_vars = None
         cdef str key
@@ -761,7 +861,9 @@ cdef class Program:
             for key, value in variables.items():
                 context_vars[key] = Vector._coerce(value)
         cdef Context context = Context(state=state, variables=context_vars, path=self.path)
-        self._execute(context, None, None, record_stats)
+        push(self.stack, Vector(context.graph))
+        self._execute(context, self.stack, self.lvars, record_stats)
+        context.graph = pop(self.stack).objects[0]
         assert self.stack.top == -1, "Bad stack"
         assert self.lvars.top == -1, "Bad lvars"
         return context
@@ -806,8 +908,7 @@ cdef class Program:
                         instructions.pop()
                         instruction = Instruction(OpCode.MulAdd)
                 elif last.code == OpCode.Literal:
-                    if (<InstructionVector>last).value.length == 0 \
-                            and (instruction.code == OpCode.Append or instruction.code == OpCode.AppendRoot):
+                    if (<InstructionVector>last).value.length == 0 and instruction.code == OpCode.Append:
                         instructions.pop()
                         continue
             instructions.append(instruction)
@@ -854,7 +955,7 @@ cdef class Program:
             else:
                 for obj in vector.objects:
                     if type(obj) is Node:
-                        self.instructions.append(InstructionVector(OpCode.LiteralNodes, vector))
+                        self.instructions.append(InstructionTuple(OpCode.LiteralNodes, vector.objects))
                         return
         self.instructions.append(InstructionVector(OpCode.Literal, vector))
 
@@ -957,17 +1058,8 @@ cdef class Program:
     cpdef void append(self, int count=1):
         self.instructions.append(InstructionInt(OpCode.Append, count))
 
-    cpdef void prepend(self):
-        self.instructions.append(Instruction(OpCode.Prepend))
-
     cpdef void compose(self, int count):
         self.instructions.append(InstructionInt(OpCode.Compose, count))
-
-    cpdef void set_node_scope(self):
-        self.instructions.append(Instruction(OpCode.SetNodeScope))
-
-    cpdef void clear_node_scope(self):
-        self.instructions.append(Instruction(OpCode.ClearNodeScope))
 
     cpdef void begin_for(self):
         self.instructions.append(Instruction(OpCode.BeginFor))
@@ -975,64 +1067,31 @@ cdef class Program:
     cpdef void next(self, int count, int label):
         self.instructions.append(InstructionJumpInt(OpCode.Next, label, count))
 
-    cpdef void push_next(self, int label):
-        self.instructions.append(InstructionJump(OpCode.PushNext, label))
-
-    cpdef void end_for(self):
-        self.instructions.append(Instruction(OpCode.EndFor))
-
     cpdef void end_for_compose(self):
         self.instructions.append(Instruction(OpCode.EndForCompose))
 
     cpdef void store_global(self, str name):
         self.instructions.append(InstructionStr(OpCode.StoreGlobal, name))
 
-    cpdef void search(self, Query query):
-        self.instructions.append(InstructionQuery(OpCode.Search, query))
-
     cpdef void func(self, str name, tuple parameters):
         self.instructions.append(InstructionStrTuple(OpCode.Func, name, parameters))
 
-    cpdef void append_root(self):
-        self.instructions.append(Instruction(OpCode.AppendRoot))
-
-    def execute(self, Context context, list lvars=None, bint record_stats=False):
-        """This is a test-harness function. Do not use."""
-        if not self.linked:
-            self.link()
-        cdef VectorStack lvars_stack = VectorStack()
-        cdef Vector vector
-        if lvars:
-            for vector in lvars:
-                lvars_stack.push(vector)
-        cdef VectorStack stack = VectorStack()
-        self._execute(context, stack, lvars_stack, record_stats)
-        if lvars is not None:
-            lvars.clear()
-            while len(lvars_stack):
-                lvars.insert(0, lvars_stack.pop())
-        return stack.pop_list(len(stack))
-
     cdef void _execute(self, Context context, VectorStack stack, VectorStack lvars, bint record_stats):
         global CallOutCount, CallOutDuration
-        if stack is None:
-            stack = self.stack
-        if lvars is None:
-            lvars = self.lvars
         cdef int i, j, m, n, pc=0, program_end=len(self.instructions)
-        cdef dict node_scope=None, variables=context.variables, builtins=all_builtins, state=context.state._state
+        cdef dict variables=context.variables, builtins=all_builtins, state=context.state._state
         cdef list loop_sources=[]
         cdef LoopSource loop_source = None
         cdef double duration, call_duration
 
+        cdef list instructions=self.instructions
         cdef Instruction instruction=None
         cdef str filename
         cdef object name, arg, node
-        cdef tuple names, args
+        cdef tuple names, args, nodes
         cdef Vector r1, r2, r3
-        cdef dict attributes, import_variables, kwargs
+        cdef dict import_variables, kwargs
         cdef list values
-        cdef Query query
         cdef Function function
         cdef PyObject* objptr
 
@@ -1040,7 +1099,7 @@ cdef class Program:
 
         try:
             while 0 <= pc < program_end:
-                instruction = <Instruction>PyList_GET_ITEM(self.instructions, pc)
+                instruction = <Instruction>PyList_GET_ITEM(instructions, pc)
                 pc += 1
                 if record_stats:
                     duration = -perf_counter()
@@ -1092,19 +1151,31 @@ cdef class Program:
 
                 elif instruction.code == OpCode.LiteralNode:
                     r1 = Vector.__new__(Vector)
-                    r1.objects = ((<InstructionNode>instruction).value.copy(),)
+                    r1.objects = ((<InstructionNode>instruction).value,)
                     r1.length = 1
                     push(stack, r1)
                     r1 = None
 
                 elif instruction.code == OpCode.LiteralNodes:
-                    push(stack, (<InstructionVector>instruction).value.copynodes())
+                    nodes = (<InstructionTuple>instruction).value
+                    n = PyTuple_GET_SIZE(nodes)
+                    r1 = Vector.__new__(Vector)
+                    r1.objects = PyTuple_New(n)
+                    for i in range(n):
+                        objptr = PyTuple_GET_ITEM(nodes, i)
+                        Py_INCREF(<object>objptr)
+                        PyTuple_SET_ITEM(r1.objects, i, <object>objptr)
+                    r1.length = n
+                    push(stack, r1)
+                    r1 = nodes = None
 
                 elif instruction.code == OpCode.LocalDrop:
                     drop(lvars, (<InstructionInt>instruction).value)
 
                 elif instruction.code == OpCode.LocalLoad:
-                    push(stack, peek_at(lvars, (<InstructionInt>instruction).value).copynodes(True))
+                    r1 = peek_at(lvars, (<InstructionInt>instruction).value)
+                    push(stack, Vector._copy(r1) if r1.objects is not None else r1)
+                    r1 = None
 
                 elif instruction.code == OpCode.LocalPush:
                     r1 = pop(stack)
@@ -1121,8 +1192,6 @@ cdef class Program:
                     objptr = PyDict_GetItem(variables, name)
                     if objptr == NULL:
                         objptr = PyDict_GetItem(builtins, name)
-                    if objptr == NULL and node_scope is not None:
-                        objptr = PyDict_GetItem(node_scope, name)
                     if objptr != NULL:
                         push(stack, <Vector>objptr)
                     else:
@@ -1295,7 +1364,7 @@ cdef class Program:
                     function.__name__ = (<InstructionStrTuple>instruction).svalue
                     function.parameters = (<InstructionStrTuple>instruction).tvalue
                     function.program = <Program>pop(stack).objects[0]
-                    function.lvars = copy(lvars)
+                    function.lvars = lvars.copy()
                     function.root_path = context.path
                     n = PyTuple_GET_SIZE(function.parameters)
                     function.defaults = pop_tuple(stack, n) if n else ()
@@ -1306,72 +1375,13 @@ cdef class Program:
                     function = r1 = None
 
                 elif instruction.code == OpCode.Tag:
-                    name = (<InstructionStr>instruction).value
-                    r1 = peek(stack)
-                    if r1.objects is not None:
-                        for i in range(r1.length):
-                            objptr = PyTuple_GET_ITEM(r1.objects, i)
-                            if type(<object>objptr) is Node:
-                                if (<Node>objptr)._tags is None:
-                                    (<Node>objptr)._tags = set()
-                                PySet_Add((<Node>objptr)._tags, name)
-                    name = r1 = None
-                    objptr = NULL
+                    execute_tag(stack, (<InstructionStr>instruction).value)
 
                 elif instruction.code == OpCode.Attribute:
-                    r2 = pop(stack)
-                    r1 = peek(stack)
-                    if r1.objects is not None:
-                        name = (<InstructionStr>instruction).value
-                        for i in range(r1.length):
-                            objptr = PyTuple_GET_ITEM(r1.objects, i)
-                            if type(<object>objptr) is Node:
-                                attributes = (<Node>objptr)._attributes
-                                if (<Node>objptr)._attributes_shared:
-                                    (<Node>objptr)._attributes = attributes = PyDict_Copy(attributes)
-                                    (<Node>objptr)._attributes_shared = False
-                                if r2.length:
-                                    PyDict_SetItem(attributes, name, r2)
-                                elif PyDict_Contains(attributes, name) == 1:
-                                    PyDict_DelItem(attributes, name)
-                    r1 = r2 = name = attributes = None
-                    objptr = NULL
+                    execute_attribute(stack, (<InstructionStr>instruction).value)
 
                 elif instruction.code == OpCode.Append:
-                    m = (<InstructionInt>instruction).value
-                    r1 = peek_at(stack, m)
-                    if r1.objects is not None:
-                        n = r1.length - 1
-                        for i in range(m-1, -1, -1):
-                            r2 = peek_at(stack, i)
-                            if r2.objects is not None:
-                                for j in range(r1.length):
-                                    objptr = PyTuple_GET_ITEM(r1.objects, j)
-                                    if type(<object>objptr) is Node:
-                                        (<Node>objptr).append_vector(r2, j != n)
-                    drop(stack, m)
-                    r1 = r2 = None
-                    objptr = NULL
-
-                elif instruction.code == OpCode.Prepend:
-                    r2 = pop(stack)
-                    r1 = peek(stack)
-                    if r1.objects is not None and r2.objects is not None:
-                        n = r1.length - 1
-                        for i, node in enumerate(r1.objects):
-                            if type(node) is Node:
-                                if i == n:
-                                    for j in range(r2.length-1, -1, -1):
-                                        objptr = PyTuple_GET_ITEM(r2.objects, j)
-                                        if type(<object>objptr) is Node:
-                                            (<Node>node).insert(<Node>objptr)
-                                else:
-                                    for j in range(r2.length-1, -1, -1):
-                                        objptr = PyTuple_GET_ITEM(r2.objects, j)
-                                        if type(<object>objptr) is Node:
-                                            (<Node>node).insert((<Node>objptr).copy())
-                    r1 = r2 = node = None
-                    objptr = NULL
+                    execute_append(stack, (<InstructionInt>instruction).value)
 
                 elif instruction.code == OpCode.Compose:
                     push(stack, pop_composed(stack, (<InstructionInt>instruction).value))
@@ -1394,20 +1404,6 @@ cdef class Program:
                             loop_source.position += 1
                         loop_source.iterations += 1
 
-                elif instruction.code == OpCode.PushNext:
-                    if loop_source.position == loop_source.source.length:
-                        pc += (<InstructionJump>instruction).offset
-                    else:
-                        push(stack, loop_source.source.item(loop_source.position))
-                        loop_source.position += 1
-                        loop_source.iterations += 1
-
-                elif instruction.code == OpCode.EndFor:
-                    if loop_sources:
-                        loop_source = <LoopSource>loop_sources.pop()
-                    else:
-                        loop_source = None
-
                 elif instruction.code == OpCode.EndForCompose:
                     push(stack, pop_composed(stack, loop_source.iterations))
                     if loop_sources:
@@ -1415,51 +1411,8 @@ cdef class Program:
                     else:
                         loop_source = None
 
-                elif instruction.code == OpCode.SetNodeScope:
-                    r1 = peek(stack)
-                    if r1.objects is not None and r1.length == 1:
-                        objptr = PyTuple_GET_ITEM(r1.objects, 0)
-                        if type(<object>objptr) is Node:
-                            if (<Node>objptr)._attributes_shared:
-                                (<Node>objptr)._attributes = PyDict_Copy((<Node>objptr)._attributes)
-                                (<Node>objptr)._attributes_shared = False
-                            node_scope = (<Node>objptr)._attributes
-                    r1 = None
-                    objptr = NULL
-
-                elif instruction.code == OpCode.ClearNodeScope:
-                    node_scope = None
-
                 elif instruction.code == OpCode.StoreGlobal:
                     PyDict_SetItem(variables, (<InstructionStr>instruction).value, pop(stack))
-
-                elif instruction.code == OpCode.Search:
-                    node = context.graph.first_child
-                    values = []
-                    query = (<InstructionQuery>instruction).value
-                    while node is not None:
-                        if (<Node>node)._select(query, values, query.first):
-                            break
-                        node = (<Node>node).next_sibling
-                    if values:
-                        r1 = <Vector>Vector.__new__(Vector)
-                        r1.objects = tuple(values)
-                        r1.length = len(values)
-                    else:
-                        r1 = null_
-                    push(stack, r1)
-                    node = values = query = r1 = None
-
-                elif instruction.code == OpCode.AppendRoot:
-                    r1 = pop(stack)
-                    if r1.objects is not None:
-                        for i in range(r1.length):
-                            objptr = PyTuple_GET_ITEM(r1.objects, i)
-                            if type(<object>objptr) is Node:
-                                if (<Node>objptr)._parent is None:
-                                    context.graph.append(<Node>objptr)
-                    r1 = None
-                    objptr = NULL
 
                 else:
                     raise ValueError(f"Unrecognised instruction: {instruction}")

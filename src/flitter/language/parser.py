@@ -59,9 +59,6 @@ class FlitterTransformer(Transformer):
     def STRING(self, token):
         return model.Vector(intern(literal_eval(token)))
 
-    def QUERY(self, token):
-        return model.Query(token[1:-1])
-
     def range(self, start, stop, step):
         return tree.Range(tree.Literal(model.null) if start is None else start, stop, tree.Literal(model.null) if step is None else step)
 
@@ -122,8 +119,6 @@ class FlitterTransformer(Transformer):
     pos = tree.Positive
     power = tree.Power
     pragma = tree.Pragma
-    prepend = tree.Prepend
-    search = tree.Search
     sequence = tree.Sequence
     slice = tree.Slice
     subtract = tree.Subtract

@@ -89,7 +89,7 @@ class TestVector(unittest.TestCase):
         self.assertIs(Vector.coerce(-1), Vector.coerce(-1))
 
     def test_copy(self):
-        for x in (null, Vector(["Hello ", "world!"]), Vector.range(10)):
+        for x in (Vector(["Hello ", "world!"]), Vector.range(10)):
             y = Vector.copy(x)
             self.assertEqual(x, y)
             self.assertFalse(x is y)
@@ -239,34 +239,6 @@ class TestVector(unittest.TestCase):
         self.assertIs(true.match(1, bool), True)
         self.assertEqual(true.match(2, bool), [True, True])
         self.assertEqual(Vector([0, 1]).match(2, bool), [False, True])
-
-    def test_copynodes(self):
-        self.assertIs(null.copynodes(), null)
-        vector = Vector([1, 2, 3])
-        self.assertIs(vector.copynodes(), vector)
-        vector = Vector([1, 2, "Hello"])
-        self.assertIs(vector.copynodes(), vector)
-        color = Vector([1, 0, 1])
-        vector = Vector(["Hello", Node('foo', {'bar'}, {'color': color})])
-        copy = vector.copynodes()
-        self.assertIsNot(copy, vector)
-        self.assertIs(copy[0], vector[0])
-        self.assertIsNot(copy[1], vector[1])
-        self.assertEqual(copy[1].kind, 'foo')
-        self.assertEqual(copy[1].tags, {'bar'})
-        self.assertIs(copy[1]['color'], color)
-
-    def test_copynodes_parented(self):
-        foo = Node('foo')
-        bar = Node('bar')
-        foo.append(bar)
-        foo_vector = Vector(foo)
-        bar_vector = Vector(bar)
-        foo_copy = foo_vector.copynodes(True)
-        self.assertIs(foo_copy, foo_vector)
-        bar_copy = bar_vector.copynodes(True)
-        self.assertIsNot(bar_copy, bar_vector)
-        self.assertEqual(bar_copy, bar_vector)
 
     def test_repr(self):
         self.assertEqual(repr(null), "null")

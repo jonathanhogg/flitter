@@ -6,7 +6,6 @@ from ..model cimport Vector
 cdef class Uniform(Vector):
     cdef double _item(self, unsigned long long i) noexcept nogil
     cpdef Vector slice(self, Vector index)
-    cpdef Vector copynodes(self, bint parented=?)
     cpdef bint as_bool(self)
 
 
