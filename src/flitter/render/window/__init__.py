@@ -502,20 +502,21 @@ class Window(ProgramNode):
         if node.kind == 'key':
             if 'state' in node:
                 key_name = node.get('name', 1, str)
-                key_constant = 'KEY_' + key_name.upper()
-                if hasattr(glfw, key_constant):
-                    key = getattr(glfw, key_constant)
-                    state = node['state']
-                    self._keys[key] = state
-                    if state not in engine.state:
-                        if self.window is not None and glfw.get_key(self.window, key) == glfw.PRESS:
-                            engine.state[state] = 1
-                            engine.state[state.concat(Vector('pushed'))] = 1
-                            engine.state[state.concat(Vector('released'))] = 0
-                        else:
-                            engine.state[state] = 0
-                            engine.state[state.concat(Vector('pushed'))] = 0
-                            engine.state[state.concat(Vector('released'))] = 1
+                if key_name:
+                    key_constant = 'KEY_' + key_name.upper()
+                    if hasattr(glfw, key_constant):
+                        key = getattr(glfw, key_constant)
+                        state = node['state']
+                        self._keys[key] = state
+                        if state not in engine.state:
+                            if self.window is not None and glfw.get_key(self.window, key) == glfw.PRESS:
+                                engine.state[state] = 1
+                                engine.state[state.concat(Vector('pushed'))] = 1
+                                engine.state[state.concat(Vector('released'))] = 0
+                            else:
+                                engine.state[state] = 0
+                                engine.state[state.concat(Vector('pushed'))] = 0
+                                engine.state[state.concat(Vector('released'))] = 1
             return True
         elif node.kind == 'pointer':
             if 'state' in node:
