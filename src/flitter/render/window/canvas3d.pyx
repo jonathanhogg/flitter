@@ -526,7 +526,7 @@ cdef void render(RenderGroup render_group, Camera camera, glctx, dict objects, d
     cdef Model model
     cdef Textures textures
     cdef int i, j, k, n
-    cdef double z
+    cdef double z, w
     cdef double* src
     cdef float* dest
     cdef Instance instance
@@ -623,7 +623,27 @@ cdef void render(RenderGroup render_group, Camera camera, glctx, dict objects, d
             zs = zs_array
             for i, instance in enumerate(instances):
                 matrix = camera.pv_matrix.mmul(instance.model_matrix)
-                zs[i] = matrix.numbers[14] / matrix.numbers[15] if matrix.numbers[15] != 0 else 0
+                z = matrix.numbers[14]
+                w = matrix.numbers[15]
+                if matrix.numbers[2] > 0:
+                    z -= matrix.numbers[2]
+                    w -= matrix.numbers[3]
+                else:
+                    z += matrix.numbers[2]
+                    w += matrix.numbers[3]
+                if matrix.numbers[6] > 0:
+                    z -= matrix.numbers[6]
+                    w -= matrix.numbers[7]
+                else:
+                    z += matrix.numbers[6]
+                    w += matrix.numbers[7]
+                if matrix.numbers[10] > 0:
+                    z -= matrix.numbers[10]
+                    w -= matrix.numbers[11]
+                else:
+                    z += matrix.numbers[10]
+                    w += matrix.numbers[11]
+                zs[i] = z / w if w != 0 else -1
             indices = zs_array.argsort()
         else:
             indices = np.arange(n, dtype='long')
