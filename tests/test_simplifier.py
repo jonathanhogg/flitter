@@ -5,11 +5,10 @@ Tests of the language simplifier
 import unittest
 
 from flitter.model import Vector, Node, null, true, false
-from flitter.language.tree import (Top, Pragma, Import, Sequence, InlineSequence, Literal, Name, FunctionName, Lookup,
-                                   LookupLiteral, Range, UnaryOperation, Negative, Positive, Not, BinaryOperation,
-                                   MathsBinaryOperation, Add, Subtract, Multiply, Divide, FloorDivide, Modulo, Power,
-                                   Comparison, EqualTo, NotEqualTo, LessThan, GreaterThan, LessThanOrEqualTo, GreaterThanOrEqualTo,
-                                   And, Or, Xor, Slice, FastSlice, Call, NodeModifier, Tag, Attributes,
+from flitter.language.tree import (Top, Pragma, Import, Sequence, InlineSequence, Literal, Name, FunctionName, Lookup, LookupLiteral,
+                                   Range, Negative, Positive, Not, Add, Subtract, Multiply, Divide, FloorDivide, Modulo, Power,
+                                   EqualTo, NotEqualTo, LessThan, GreaterThan, LessThanOrEqualTo, GreaterThanOrEqualTo, And, Or, Xor,
+                                   Slice, FastSlice, Call, NodeModifier, Tag, Attributes,
                                    Append, Let, StoreGlobal, InlineLet, For, IfCondition, IfElse, Function)
 
 
@@ -43,3 +42,11 @@ class TestName(unittest.TestCase):
         simplified = expression.simplify(dynamic={'x'})
         self.assertIsInstance(simplified, Name)
         self.assertEqual(simplified.name, 'x')
+
+
+class TestNegative(unittest.TestCase):
+    def test_literal(self):
+        expression = Negative(Literal(Vector(5)))
+        simplified = expression.simplify()
+        self.assertIsInstance(simplified, Literal)
+        self.assertEqual(simplified.value, Vector(-5))
