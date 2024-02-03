@@ -469,8 +469,6 @@ cdef class Vector:
         cdef str text = ""
         cdef PyObject* objptr
         cdef int i, n = self.length
-        cdef double number
-        cdef str symbol
         if self.objects is not None:
             if n == 1:
                 objptr = PyTuple_GET_ITEM(self.objects, 0)
@@ -481,7 +479,8 @@ cdef class Vector:
                 if type(<object>objptr) is str:
                     text += <str>objptr
                 elif isinstance(<object>objptr, (float, int)):
-                    text += f"{<object>objptr:.9g}"
+                    number= <object>objptr
+                    text += SymbolTable.get(number, f'{number:.9g}')
         elif n:
             for i in range(n):
                 text += SymbolTable.get(self.numbers[i], f'{self.numbers[i]:.9g}')
@@ -627,22 +626,10 @@ cdef class Vector:
         else:
             for obj in self.objects:
                 if isinstance(obj, (float, int)):
-                    number = obj
-                    parts.append(SymbolTable.get(number, f'{number:.9g}'))
+                    symbol = SymbolTable.get(obj)
+                    parts.append(':' + symbol if symbol is not None else f'{obj:.9g}')
                 elif isinstance(obj, str):
-                    if len(obj):
-                        s = obj
-                        for i, c in enumerate(s):
-                            if c == ord('_') or (c >= ord('a') and c <= ord('z')) or (c >= ord('A') and c <= ord('Z')) or \
-                               (i > 0 and c >= ord('0') and c <= ord('9')):
-                                pass
-                            else:
-                                parts.append(repr(s))
-                                break
-                        else:
-                            parts.append(":" + s)
-                    else:
-                        parts.append("''")
+                    parts.append(repr(<str>obj))
                 else:
                     parts.append("(" + repr(obj) + ")")
         return ";".join(parts)
