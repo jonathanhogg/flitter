@@ -56,10 +56,10 @@ but the return value from `sine()` here is automagically extended out to the
 
 `true` and `false` are synonyms for `1` and `0`. Truthfulness is represented by
 any non-empty vector that contains something other than 0 or the empty string.
-Names prefixed with a `:` are *symbols*, which are converted into magic numbers
-(see [Symbols](#symbols) below for details). When a string is required, such as
-the `text` attribute of `!text` in the example above or the `composite`
-attribute of `!canvas`, each element of the vector will be re-interpreted as a
+Names prefixed with a `:` are *symbols*, which should be considered as opaque
+values (see [Symbols](#symbols) below for details). When a string is required,
+such as the `text` attribute of `!text` in the example above or the `composite`
+attribute of `!canvas`, each element of the vector will be converted to a
 string as necessary and then these concatenated together, e.g.,
 `"Hello ";name;"!"`. Symbols return to being strings (without the leading `:`)
 in this conversion.
@@ -149,8 +149,7 @@ of zeros – e.g. when specifying the brightness of point and spot lights:
 
 ### Symbols
 
-Symbols are strings that are interpreted as numbers within the language.
-Symbols are deterministically converted to large negative numbers in the
+Symbols are deterministically converted to *very* large negative numbers in the
 parser. Whenever a string value is expected by the engine, numbers in vectors
 will be looked-up in the symbol table to see if they match a known symbol. If
 so, the number will be converted into the matching string.
@@ -164,8 +163,9 @@ Symbols are useful for short strings that are used as enumerations, e.g.:
 ```
 
 The `composite` attribute of `!canvas` takes a string representing the name of
-the blend function to use when drawing, and using a symbol instead of a string
-makes the intent more obvious.
+the blend function to use when drawing. This could equivalently be written as
+`composite="add"`, but using a symbol makes the code more readable and the
+intent more obvious.
 
 However, the key reason for using symbols is when constructing state key
 vectors or seed vectors (see [State](#state) and [Pseudo-random
@@ -174,10 +174,12 @@ much faster than vectors containing strings and so there will be a significant
 speed advantage to using symbols in these cases.
 
 Note that, because they are really just numbers, symbols can be used in
-mathematical operations. They shouldn't be. While a clash between a symbol's
-number and an actual number being used in a **Flitter** program is possible,
-it shouldn't cause any problems unless that number needs to be converted into
-a string – in which case, the number will not display correctly.
+mathematical operations. They shouldn't be, and are deliberately massive to
+hopefully cause bad things to happen if they are. While a clash between a
+symbol's number and an actual number being used in a **Flitter** program is
+possible, it is very unlikely and shouldn't cause any problems unless that
+number needs to be converted into a string – in which case, the number will not
+display correctly.
 
 ## Operators
 
