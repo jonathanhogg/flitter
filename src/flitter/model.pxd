@@ -16,6 +16,8 @@ cdef class Vector:
     cdef Vector _copy(Vector other)
     @staticmethod
     cdef Vector _compose(list vectors)
+    @staticmethod
+    cdef Vector _symbol(str symbol)
 
     cdef int allocate_numbers(self, int n) except -1
     cdef void deallocate_numbers(self) noexcept

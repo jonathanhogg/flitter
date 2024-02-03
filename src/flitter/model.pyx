@@ -30,6 +30,8 @@ cdef frozenset EmptySet = frozenset()
 cdef tuple AstypeArgs = (np.float64, 'K', 'unsafe', True, False)
 cdef type ndarray = np.ndarray
 
+cdef dict SymbolTable = {}
+
 
 cdef union double_long:
     double f
@@ -285,6 +287,20 @@ cdef class Vector:
         return result
 
     @staticmethod
+    def symbol(str symbol):
+        return Vector._symbol(symbol)
+
+    @staticmethod
+    cdef Vector _symbol(str symbol):
+        cdef unsigned long long code = HASH_STRING(symbol)
+        cdef double number = - <double>((code >> 16) << 4)
+        cdef Vector result = Vector.__new__(Vector)
+        result.allocate_numbers(1)
+        result.numbers[0] = number
+        SymbolTable[number] = symbol
+        return result
+
+    @staticmethod
     def range(*args):
         cdef Vector result = Vector.__new__(Vector)
         if len(args) == 1:
@@ -453,6 +469,8 @@ cdef class Vector:
         cdef str text = ""
         cdef PyObject* objptr
         cdef int i, n = self.length
+        cdef double number
+        cdef str symbol
         if self.objects is not None:
             if n == 1:
                 objptr = PyTuple_GET_ITEM(self.objects, 0)
@@ -466,7 +484,7 @@ cdef class Vector:
                     text += f"{<object>objptr:.9g}"
         elif n:
             for i in range(n):
-                text += f"{self.numbers[i]:.9g}"
+                text += SymbolTable.get(self.numbers[i], f'{self.numbers[i]:.9g}')
         return text
 
     def __iter__(self):
@@ -601,13 +619,16 @@ cdef class Vector:
         if n == 0:
             return "null"
         cdef list parts = []
+        cdef str symbol
         if self.numbers != NULL:
             for i in range(n):
-                parts.append(f"{self.numbers[i]:.9g}")
+                symbol = SymbolTable.get(self.numbers[i])
+                parts.append(':' + symbol if symbol is not None else f'{self.numbers[i]:.9g}')
         else:
             for obj in self.objects:
                 if isinstance(obj, (float, int)):
-                    parts.append(f"{obj:.9g}")
+                    number = obj
+                    parts.append(SymbolTable.get(number, f'{number:.9g}'))
                 elif isinstance(obj, str):
                     if len(obj):
                         s = obj

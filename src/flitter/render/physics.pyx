@@ -25,8 +25,8 @@ cdef extern from "Python.h":
 
 logger = name_patch(logger, __name__)
 
-cdef Vector VELOCITY = Vector('velocity')
-cdef Vector CLOCK = Vector('clock')
+cdef Vector VELOCITY = Vector._symbol('velocity')
+cdef Vector CLOCK = Vector._symbol('clock')
 
 cdef Normal RandomSource = Normal('_physics')
 cdef unsigned long long RandomIndex = 0
