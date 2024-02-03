@@ -24,6 +24,8 @@ from .models cimport Model, DefaultSnapAngle
 logger = name_patch(logger, __name__)
 
 cdef Vector Zero3 = Vector((0, 0, 0))
+cdef Vector Zero4 = Vector((0, 0, 0, 0))
+cdef Vector Greyscale = Vector((0.299, 0.587, 0.114))
 cdef Vector One3 = Vector((1, 1, 1))
 cdef Vector Xaxis = Vector((1, 0, 0))
 cdef Vector Yaxis = Vector((0, 1, 0))
@@ -844,13 +846,16 @@ cdef class RenderTarget:
             else:
                 self.render_framebuffer = glctx.framebuffer(color_attachments=(self.image_texture,), depth_attachment=self.depth_renderbuffer)
                 logger.debug("Created canvas3d {}x{} {}-bit render targets", self.width, self.height, self.colorbits)
-        cdef tuple clear_color
+        cdef Vector clear_color
         if camera.fog_max > camera.fog_min:
-            clear_color = tuple(camera.fog_color) + (1,)
+            clear_color = camera.fog_color
+            if camera.monochrome:
+                clear_color = clear_color.dot(Greyscale)
+            clear_color = clear_color.mul(camera.tint).concat(true_)
         else:
-            clear_color = (0, 0, 0, 0)
+            clear_color = Zero4
         self.render_framebuffer.use()
-        self.render_framebuffer.clear(*clear_color)
+        self.render_framebuffer.clear(*tuple(clear_color))
 
     def finalize(self, glctx):
         if self.image_framebuffer is not None:
