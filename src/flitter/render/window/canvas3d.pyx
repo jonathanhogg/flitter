@@ -599,7 +599,15 @@ cdef void render(RenderGroup render_group, Camera camera, glctx, dict objects, d
             i += 1
         group = group.parent_group
     shader['nlights'] = i
-    shader['lights'].write(lights_data)
+    shader['lights_data'].binding = 1
+    name = f'canvas3d_lights-{render_group.max_lights}'
+    lights_buffer = objects.get(name)
+    if lights_buffer is None:
+        lights_buffer = glctx.buffer(lights_data)
+        objects[name] = lights_buffer
+    else:
+        lights_buffer.write(lights_data)
+    lights_buffer.bind_to_uniform_block(1)
     cdef int flags = moderngl.BLEND
     if render_group.depth_test:
         flags |= moderngl.DEPTH_TEST

@@ -13,7 +13,9 @@ flat in vec4 fragment_properties;
 out vec4 fragment_color;
 
 uniform int nlights;
-uniform vec4 lights[${max_lights * 4}];
+uniform lights_data {
+    vec4 lights[${max_lights * 4}];
+};
 uniform vec3 view_position;
 uniform vec3 view_focus;
 uniform bool monochrome;
@@ -51,9 +53,6 @@ void main() {
         V /= view_distance;
     }
     float fog_alpha = (fog_max > fog_min) && (fog_curve > 0) ? pow(clamp((view_distance - fog_min) / (fog_max - fog_min), 0, 1), 1/fog_curve) : 0;
-    if (fog_alpha == 1) {
-        discard;
-    }
     vec3 albedo = fragment_albedo.rgb;
     if (use_albedo_texture) {
         vec4 texture_color = texture(albedo_texture, texture_uv);
