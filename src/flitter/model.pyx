@@ -540,13 +540,16 @@ cdef class Vector:
         cdef list values
         cdef double f
         cdef object obj
+        cdef PyObject* objptr
         if self.objects is None:
             if t is float:
                 t = None
-            if t is None or t is int or t is bool:
+            if t is None or t is int or t is bool or t is str:
                 if n == 0 or n == m:
                     if n == 1:
                         f = self.numbers[0]
+                        if t is str:
+                            return SymbolTable.get(self.numbers[0], default)
                         if t is int:
                             return <long long>floor(f)
                         elif t is bool:
@@ -556,7 +559,12 @@ cdef class Vector:
                         values = PyList_New(m)
                         for i in range(m):
                             f = self.numbers[i]
-                            if t is int:
+                            if t is str:
+                                objptr = PyDict_GetItem(SymbolTable, PyFloat_FromDouble(f))
+                                if objptr == NULL:
+                                    return default
+                                obj = <object>objptr
+                            elif t is int:
                                 obj = PyLong_FromDouble(floor(f))
                             elif t is bool:
                                 obj = PyBool_FromLong(f != 0)
@@ -568,7 +576,12 @@ cdef class Vector:
                 elif m == 1:
                     values = PyList_New(n)
                     f = self.numbers[0]
-                    if t is int:
+                    if t is str:
+                        objptr = PyDict_GetItem(SymbolTable, PyFloat_FromDouble(f))
+                        if objptr == NULL:
+                            return default
+                        obj = <object>objptr
+                    elif t is int:
                         obj = PyLong_FromDouble(floor(f))
                     elif t is bool:
                         obj = PyBool_FromLong(f != 0)
@@ -584,6 +597,8 @@ cdef class Vector:
         try:
             if m == 1:
                 obj = <object>PyTuple_GET_ITEM(self.objects, 0)
+                if t is str and type(obj) is float and (symbol := SymbolTable.get(obj)) is not None:
+                    obj = symbol
                 if t is not None:
                     obj = t(obj)
                 if n == 1:
@@ -599,6 +614,8 @@ cdef class Vector:
                 values = PyList_New(m)
                 for i in range(m):
                     obj = <object>PyTuple_GET_ITEM(self.objects, i)
+                    if t is str and type(obj) is float and (symbol := SymbolTable.get(obj)) is not None:
+                        obj = symbol
                     if t is not None:
                         obj = t(obj)
                     Py_INCREF(obj)
