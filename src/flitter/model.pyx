@@ -1602,19 +1602,7 @@ cdef class Node:
             dst._attributes = self._attributes
             dst._attributes_shared = True
             self._attributes_shared = True
-        cdef int i, n
-        cdef tuple dst_children, src_children = self._children
-        cdef PyObject* objptr
-        if src_children is ():
-            dst._children = ()
-        else:
-            n = PyTuple_GET_SIZE(src_children)
-            dst_children = PyTuple_New(n)
-            for i in range(n):
-                objptr = PyTuple_GET_ITEM(src_children, i)
-                Py_INCREF(<object>objptr)
-                PyTuple_SET_ITEM(dst_children, i, <object>objptr)
-            dst._children = dst_children
+        dst._children = self._children
         return dst
 
     cpdef void add_tag(self, str tag):
