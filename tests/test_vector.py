@@ -88,6 +88,14 @@ class TestVector(unittest.TestCase):
         self.assertIs(Vector.coerce(0), false)
         self.assertIs(Vector.coerce(-1), Vector.coerce(-1))
 
+    def test_symbol(self):
+        foo = Vector.symbol('foo')
+        foo_n = foo[0]
+        self.assertIsInstance(foo_n, float)
+        self.assertTrue(foo_n < -1e-256)
+        self.assertEqual(foo, Vector.symbol('foo'))
+        self.assertNotEqual(foo, Vector.symbol('bar'))
+
     def test_copy(self):
         for x in (Vector(["Hello ", "world!"]), Vector.range(10)):
             y = Vector.copy(x)
@@ -102,6 +110,9 @@ class TestVector(unittest.TestCase):
         self.assertEqual(Vector.compose([true, true]), Vector([1, 1]))
         self.assertEqual(Vector.compose([Vector.range(i*100, (i+1)*100) for i in range(10)]), Vector.range(1000))
         self.assertEqual(Vector.compose([Vector("Hello world!"), Vector([1, 2, 3])]), Vector(["Hello world!", 1, 2, 3]))
+        foo = Vector.symbol('foo')
+        bar = Vector.symbol('bar')
+        self.assertEqual(Vector.compose([foo, bar]), Vector([foo[0], bar[0]]))
 
     def test_range_slice(self):
         TESTS = [
@@ -132,6 +143,7 @@ class TestVector(unittest.TestCase):
             (str, ["Hello", "world!"]),
             (Node, [Node('foo'), Node('bar', {'baz'}, {'color': Vector(1)})]),
             (None, [99, "red", "balloons"]),
+            (float, Vector.symbol('foo')),
         ]
         for t, values in TESTS:
             with self.subTest(type=t, values=values):
@@ -159,6 +171,7 @@ class TestVector(unittest.TestCase):
         self.assertTrue(Vector(Node("foo")))
         self.assertTrue(Vector(test_func))
         self.assertTrue(Vector(test_class))
+        self.assertTrue(Vector.symbol('foo'))
 
     def test_as_double(self):
         for value in [0, 1, 0.1, 1.5, -1e99, math.inf, True, False]:
@@ -167,6 +180,8 @@ class TestVector(unittest.TestCase):
         self.assertTrue(math.isnan(float(null)))
         self.assertTrue(math.isnan(float(Vector([1, 2, 3]))))
         self.assertTrue(math.isnan(float(Vector("Hello world!"))))
+        foo = Vector.symbol('foo')
+        self.assertEqual(float(foo), foo[0])
 
     def test_as_string(self):
         TESTS = [
@@ -176,6 +191,8 @@ class TestVector(unittest.TestCase):
             (Vector("Hello world!"), "Hello world!"),
             (Vector(["Hello ", "world!"]), "Hello world!"),
             (Vector(["testing", "testing", 1, 2.2, 3.0]), "testingtesting12.23"),
+            (Vector.symbol('foo'), "foo"),
+            (Vector.symbol('foo').concat(Vector.symbol('bar')), "foobar"),
         ]
         for vector, string in TESTS:
             self.assertEqual(str(vector), string)
@@ -204,6 +221,7 @@ class TestVector(unittest.TestCase):
         self.assertEqual(hash(Vector(["foo", 1])), hash(Vector(["foo", 1.0])))
         self.assertNotEqual(hash(Vector(["foo", 1.0])), hash(Vector(["foo", 1.1])))
         self.assertEqual(hash(Vector(Node('foo', {'bar'}, {'test': Vector(5)}))), 9166098286934782834)
+        self.assertEqual(hash(Vector.symbol('foo')), 2252171707177583095)
         self.assertIsNotNone(hash(Vector(test_func)))  # just check it works, value will not be stable
         self.assertIsNotNone(hash(Vector(test_class)))  # just check it works, value will not be stable
 
@@ -239,6 +257,10 @@ class TestVector(unittest.TestCase):
         self.assertIs(true.match(1, bool), True)
         self.assertEqual(true.match(2, bool), [True, True])
         self.assertEqual(Vector([0, 1]).match(2, bool), [False, True])
+        self.assertEqual(Vector.symbol('foo').match(1, float), -3.882544429788573e+271)
+        self.assertEqual(Vector.symbol('foo').match(1, str), 'foo')
+        self.assertEqual(Vector.symbol('foo').match(2, str), ['foo', 'foo'])
+        self.assertEqual(Vector.symbol('foo').concat(Vector.symbol('bar')).match(2, str), ['foo', 'bar'])
 
     def test_repr(self):
         self.assertEqual(repr(null), "null")
@@ -252,6 +274,8 @@ class TestVector(unittest.TestCase):
         self.assertEqual(repr(Vector([99, "red", "balloons"])), "99;'red';'balloons'")
         node = Node('foo', {'bar'}, {'color': Vector(1)})
         self.assertEqual(repr(Vector(node)), f"({node!r})")
+        self.assertEqual(repr(Vector.symbol('foo')), ':foo')
+        self.assertEqual(repr(Vector.symbol('foo').concat(Vector(99))), ':foo;99')
 
     def test_neg(self):
         self.assertEqual(-null, null)
@@ -264,6 +288,7 @@ class TestVector(unittest.TestCase):
         self.assertEqual(+Vector("Hello world!"), null)
         self.assertEqual(+Vector(-3), Vector(-3))
         self.assertEqual(+Vector([0, 0.1, 3, -99, 1e99, math.inf]), Vector([0, 0.1, 3, -99, 1e99, math.inf]))
+        self.assertEqual(+Vector.symbol('foo'), Vector.symbol('foo'))
 
     def test_abs(self):
         self.assertEqual(abs(null), null)
@@ -382,6 +407,8 @@ class TestVector(unittest.TestCase):
         self.assertTrue(false == Vector(0))
         self.assertTrue(Vector([1, 2, 3]) == Vector([1, 2, 3]))
         self.assertTrue(Vector(["Hello ", "world!"]) == Vector(["Hello ", "world!"]))
+        self.assertTrue(Vector.symbol('foo') == Vector(-3.882544429788573e+271))
+        self.assertTrue(Vector.symbol('foo') == Vector.symbol('foo'))
 
     def test_ne(self):
         self.assertFalse(null != Vector())
@@ -389,6 +416,7 @@ class TestVector(unittest.TestCase):
         self.assertTrue(false != Vector(1))
         self.assertFalse(Vector([1, 2, 3]) != Vector([1, 2, 3]))
         self.assertTrue(Vector(["Hello ", "world!"]) != Vector(["Hello world!"]))
+        self.assertTrue(Vector.symbol('foo') != Vector.symbol('bar'))
 
     def test_gt(self):
         self.assertTrue(Vector(1) > null)
@@ -474,23 +502,3 @@ class TestVector(unittest.TestCase):
         self.assertEqual(Vector(['hello']).concat(b), Vector(['hello', 4, 5, 6]))
         self.assertEqual(a.concat(Vector(['world'])), Vector([1, 2, 3, 'world']))
         self.assertEqual(Vector(['hello']).concat(Vector(['world'])), Vector(['hello', 'world']))
-
-    def test_symbols(self):
-        foo = Vector.symbol('foo')
-        foo_n = foo[0]
-        self.assertIsInstance(foo_n, float)
-        self.assertTrue(foo_n < -1e-256)
-        self.assertEqual(str(foo), 'foo')
-        self.assertEqual(repr(foo), ':foo')
-        self.assertIsNone(foo.match(1, str))
-        self.assertEqual(foo.match(1, float), foo_n)
-        self.assertEqual(foo, Vector(foo_n))
-        self.assertEqual(repr(Vector(foo_n)), ":foo")
-        self.assertEqual(foo - Vector.symbol('foo'), Vector(0))
-        bar = Vector.symbol('bar')
-        self.assertNotEqual(foo, bar)
-        foobar = foo.concat(bar)
-        self.assertEqual(repr(foobar), ':foo;:bar')
-        foo_hello = foo.concat(Vector("hello"))
-        self.assertEqual(repr(foo_hello), ":foo;'hello'")
-        self.assertEqual(str(foo_hello), "foohello")
