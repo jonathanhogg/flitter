@@ -293,7 +293,7 @@ cdef class Vector:
     @staticmethod
     cdef Vector _symbol(str symbol):
         cdef unsigned long long code = HASH_STRING(symbol)
-        cdef double number = - <double>(((code >> 28) << 16) | 0xC0DE)
+        cdef double number = <double>(code >> 12) * -1e256
         cdef Vector result = Vector.__new__(Vector)
         result.allocate_numbers(1)
         result.numbers[0] = number

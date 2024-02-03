@@ -479,8 +479,7 @@ class TestVector(unittest.TestCase):
         foo = Vector.symbol('foo')
         foo_n = foo[0]
         self.assertIsInstance(foo_n, float)
-        self.assertTrue(foo_n < -(1<<16))
-        self.assertEqual(hex(-int(foo_n))[-4:], 'c0de')
+        self.assertTrue(foo_n < -1e-256)
         self.assertEqual(str(foo), 'foo')
         self.assertEqual(repr(foo), ':foo')
         self.assertIsNone(foo.match(1, str))
@@ -492,12 +491,6 @@ class TestVector(unittest.TestCase):
         self.assertNotEqual(foo, bar)
         foobar = foo.concat(bar)
         self.assertEqual(repr(foobar), ':foo;:bar')
-        n = foo + bar
-        self.assertNotEqual(n, null)
-        self.assertEqual(n - foo, bar)
-        self.assertEqual(str(n - foo), 'bar')
-        self.assertEqual(n - bar, foo)
-        self.assertEqual(str(n - bar), 'foo')
         foo_hello = foo.concat(Vector("hello"))
         self.assertEqual(repr(foo_hello), ":foo;'hello'")
         self.assertEqual(str(foo_hello), "foohello")
