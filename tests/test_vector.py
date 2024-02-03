@@ -477,12 +477,16 @@ class TestVector(unittest.TestCase):
 
     def test_symbols(self):
         foo = Vector.symbol('foo')
+        foo_n = foo[0]
+        self.assertIsInstance(foo_n, float)
+        self.assertTrue(foo_n < -(1<<16))
+        self.assertEqual(hex(-int(foo_n))[-4:], 'c0de')
         self.assertEqual(str(foo), 'foo')
         self.assertEqual(repr(foo), ':foo')
         self.assertIsNone(foo.match(1, str))
-        self.assertEqual(foo.match(1, float), -3882544429788560.0)
-        self.assertEqual(foo, Vector(-3882544429788560.0))
-        self.assertEqual(repr(Vector(-3882544429788560.0)), ":foo")
+        self.assertEqual(foo.match(1, float), foo_n)
+        self.assertEqual(foo, Vector(foo_n))
+        self.assertEqual(repr(Vector(foo_n)), ":foo")
         self.assertEqual(foo - Vector.symbol('foo'), Vector(0))
         bar = Vector.symbol('bar')
         self.assertNotEqual(foo, bar)
