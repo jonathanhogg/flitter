@@ -513,7 +513,7 @@ cdef class Vector:
                     y = HASH_STRING(<str>value)
                 elif type(<object>value) is float:
                     if floor_floats:
-                        y = <unsigned long long>(<long long>floor(PyFloat_AS_DOUBLE(<object>value)))
+                        y = double_long(f=floor(PyFloat_AS_DOUBLE(<object>value))).l
                     else:
                         y = double_long(f=PyFloat_AS_DOUBLE(<object>value)).l
                 elif type(<object>value) is int:
@@ -527,7 +527,7 @@ cdef class Vector:
         else:
             for i in range(self.length):
                 if floor_floats:
-                    y = <unsigned long long>(<long long>floor(self.numbers[i]))
+                    y = double_long(f=floor(self.numbers[i])).l
                 else:
                     y = double_long(f=self.numbers[i]).l
                 _hash = HASH_UPDATE(_hash, y)
