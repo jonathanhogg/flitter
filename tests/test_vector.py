@@ -476,3 +476,19 @@ class TestVector(unittest.TestCase):
         self.assertEqual(Vector(['hello']).concat(b), Vector(['hello', 4, 5, 6]))
         self.assertEqual(a.concat(Vector(['world'])), Vector([1, 2, 3, 'world']))
         self.assertEqual(Vector(['hello']).concat(Vector(['world'])), Vector(['hello', 'world']))
+
+    def test_symbols(self):
+        foo = Vector.symbol('foo')
+        self.assertEqual(str(foo), 'foo')
+        self.assertEqual(repr(foo), ':foo')
+        self.assertEqual(foo - Vector.symbol('foo'), Vector(0))
+        bar = Vector.symbol('bar')
+        self.assertNotEqual(foo, bar)
+        foobar = foo.concat(bar)
+        self.assertEqual(repr(foobar), ':foo;:bar')
+        n = foo + bar
+        self.assertNotEqual(n, null)
+        self.assertEqual(n - foo, bar)
+        self.assertEqual(str(n - foo), 'bar')
+        self.assertEqual(n - bar, foo)
+        self.assertEqual(str(n - bar), 'foo')
