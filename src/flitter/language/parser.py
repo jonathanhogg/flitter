@@ -54,7 +54,7 @@ class FlitterTransformer(Transformer):
         return intern(str(token)[1:])
 
     def SYMBOL(self, token):
-        return model.Vector.symbol(intern(str(token)[1:]))
+        return model.Vector.symbol(str(token)[1:]).intern()
 
     def STRING(self, token):
         return model.Vector(intern(literal_eval(token)))
