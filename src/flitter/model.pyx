@@ -1036,7 +1036,35 @@ true = true_
 false = false_
 
 
-cdef class Matrix33(Vector):
+cdef class Matrix(Vector):
+    @staticmethod
+    cdef Matrix _translate(Vector v):
+        raise NotImplementedError
+
+    @staticmethod
+    cdef Matrix _scale(Vector v):
+        raise NotImplementedError
+
+    @staticmethod
+    cdef Matrix _rotate(Vector v):
+        raise NotImplementedError
+
+
+    cdef Matrix mmul(self, Matrix b):
+        raise NotImplementedError
+
+    cdef Vector vmul(self, Vector b):
+        raise NotImplementedError
+
+    cpdef Matrix inverse(self):
+        raise NotImplementedError
+
+    cpdef Matrix transpose(self):
+        raise NotImplementedError
+
+
+
+cdef class Matrix33(Matrix):
     @staticmethod
     cdef Matrix33 _translate(Vector v):
         cdef Matrix33 result
@@ -1078,7 +1106,10 @@ cdef class Matrix33(Vector):
         return Matrix33._scale(Vector._coerce(v))
 
     @staticmethod
-    cdef Matrix33 _rotate(double turns):
+    cdef Matrix33 _rotate(Vector v):
+        if v.length != 1 or v.numbers is NULL:
+            return None
+        cdef double turns = v.numbers[0]
         if isnan(turns):
             return None
         cdef double theta = turns*Tau, cth = cos(theta), sth = sin(theta)
@@ -1092,7 +1123,7 @@ cdef class Matrix33(Vector):
 
     @staticmethod
     def rotate(turns):
-        return Matrix33._rotate(float(turns))
+        return Matrix33._rotate(Vector._coerce(turns))
 
     @cython.cdivision(True)
     def __cinit__(self, obj=None):
@@ -1113,8 +1144,10 @@ cdef class Matrix33(Vector):
             self.numbers[i] = k if i % 4 == 0 else 0
         self.length = 9
 
-    cdef Matrix33 mmul(self, Matrix33 b):
+    cdef Matrix33 mmul(self, Matrix b):
         cdef Matrix33 result = Matrix33.__new__(Matrix33)
+        if b.length != 9:
+            return None
         cdef double* numbers = result.numbers
         cdef double* a_numbers = self.numbers
         cdef double* b_numbers = b.numbers
@@ -1179,6 +1212,21 @@ cdef class Matrix33(Vector):
                 result_numbers[i*3+j] = numbers[j*3+i]
         return result
 
+    cpdef Matrix33 matrix22(self):
+        cdef double* numbers = self.numbers
+        cdef Matrix33 result = Matrix33.__new__(Matrix33)
+        cdef double* result_numbers = result.numbers
+        cdef int i, j
+        for i in range(3):
+            for j in range(3):
+                if i == 2 and j == 2:
+                    result_numbers[i*3+j] = 1
+                elif i == 2 or j == 2:
+                    result_numbers[i*3+j] = 0
+                else:
+                    result_numbers[i*3+j] = numbers[j*3+i]
+        return result
+
     def __repr__(self):
         cdef list rows = []
         cdef double* numbers = self.numbers
@@ -1188,7 +1236,7 @@ cdef class Matrix33(Vector):
         return '\n'.join(rows)
 
 
-cdef class Matrix44(Vector):
+cdef class Matrix44(Matrix):
     @cython.cdivision(True)
     @staticmethod
     cdef Matrix44 _project(double xgradient, double ygradient, double near, double far):
@@ -1433,7 +1481,9 @@ cdef class Matrix44(Vector):
             self.numbers[i] = k if i % 5 == 0 else 0
         self.length = 16
 
-    cdef Matrix44 mmul(self, Matrix44 b):
+    cdef Matrix44 mmul(self, Matrix b):
+        if b.length != 16:
+            return None
         cdef Matrix44 result = Matrix44.__new__(Matrix44)
         cdef double* numbers = result.numbers
         cdef double* a_numbers = self.numbers

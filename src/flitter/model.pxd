@@ -63,21 +63,36 @@ cdef Vector false_
 cdef Vector minusone_
 
 
-cdef class Matrix33(Vector):
+cdef class Matrix(Vector):
+    @staticmethod
+    cdef Matrix _translate(Vector v)
+    @staticmethod
+    cdef Matrix _scale(Vector v)
+    @staticmethod
+    cdef Matrix _rotate(Vector v)
+
+    cdef Matrix mmul(self, Matrix b)
+    cdef Vector vmul(self, Vector b)
+    cpdef Matrix inverse(self)
+    cpdef Matrix transpose(self)
+
+
+cdef class Matrix33(Matrix):
     @staticmethod
     cdef Matrix33 _translate(Vector v)
     @staticmethod
     cdef Matrix33 _scale(Vector v)
     @staticmethod
-    cdef Matrix33 _rotate(double turns)
+    cdef Matrix33 _rotate(Vector v)
 
-    cdef Matrix33 mmul(self, Matrix33 b)
+    cdef Matrix33 mmul(self, Matrix b)
     cdef Vector vmul(self, Vector b)
     cpdef Matrix33 inverse(self)
     cpdef Matrix33 transpose(self)
+    cpdef Matrix33 matrix22(self)
 
 
-cdef class Matrix44(Vector):
+cdef class Matrix44(Matrix):
     @staticmethod
     cdef Matrix44 _project(double xgradient, double ygradient, double near, double far)
     @staticmethod
@@ -103,7 +118,7 @@ cdef class Matrix44(Vector):
     @staticmethod
     cdef Matrix44 _shear_z(Vector v)
 
-    cdef Matrix44 mmul(self, Matrix44 b)
+    cdef Matrix44 mmul(self, Matrix b)
     cdef Vector vmul(self, Vector b)
     cpdef Matrix44 inverse(self)
     cpdef Matrix44 transpose(self)

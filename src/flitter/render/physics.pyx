@@ -8,7 +8,7 @@ import asyncio
 from loguru import logger
 
 from .. import name_patch
-from ..model cimport Vector, Node, StateDict, null_
+from ..model cimport Vector, Node, Matrix, Matrix33, Matrix44, StateDict, null_
 from ..language.functions cimport Normal
 
 from libc.math cimport sqrt, isinf, isnan, abs
@@ -45,21 +45,29 @@ cdef class Particle:
     cdef double charge
     cdef double ease
 
-    def __cinit__(self, Node node, Vector id, Vector zero, Vector prefix, StateDict state):
+    def __cinit__(self, Node node, Vector id, Vector zero, Matrix transform_matrix, Matrix normal_matrix, Vector prefix, StateDict state):
         self.id = id
         self.position_state_key = prefix.concat(self.id).intern()
-        cdef Vector position = state.get_item(self.position_state_key)
-        if position.length == zero.length and position.numbers != NULL:
-            self.position = Vector._copy(position)
-        else:
-            self.position = Vector._copy(node.get_fvec('position', zero.length, zero))
         self.velocity_state_key = self.position_state_key.concat(VELOCITY).intern()
+        cdef Vector position = state.get_item(self.position_state_key)
         cdef Vector velocity = state.get_item(self.velocity_state_key)
-        if velocity.length == zero.length and velocity.numbers != NULL:
-            self.velocity = Vector._copy(velocity)
-        else:
-            self.velocity = Vector._copy(node.get_fvec('velocity', zero.length, zero))
+        if position.length != zero.length or position.numbers == NULL:
+            position = node.get_fvec('position', zero.length, zero)
+            if transform_matrix is not None:
+                position = transform_matrix.vmul(position)
+            else:
+                position = Vector._copy(position)
+        self.position = position
+        if velocity.length != zero.length or velocity.numbers == NULL:
+            velocity = node.get_fvec('velocity', zero.length, zero)
+            if transform_matrix is not None:
+                velocity = transform_matrix.vmul(velocity)
+            else:
+                velocity = Vector._copy(velocity)
+        self.velocity = velocity
         self.initial_force = node.get_fvec('force', zero.length, zero)
+        if transform_matrix is not None:
+            self.initial_force = transform_matrix.vmul(self.initial_force)
         self.force = Vector._copy(self.initial_force)
         self.radius = max(0, node.get_float('radius', 1))
         self.mass = max(0, node.get_float('mass', 1))
@@ -92,7 +100,7 @@ cdef class Particle:
 
 
 cdef class Anchor(Particle):
-    def __cinit__(self, Node node, Vector id, Vector zero, Vector prefix, StateDict state):
+    def __cinit__(self, Node node, Vector id, Vector zero, Matrix transform_matrix, Matrix normal_matrix, Vector prefix, StateDict state):
         self.position = node.get_fvec('position', zero.length, zero)
         self.velocity = Vector._copy(zero)
 
@@ -105,9 +113,13 @@ cdef class Barrier:
     cdef Vector normal
     cdef float restitution
 
-    def __cinit__(self, Node node, Vector zero):
+    def __cinit__(self, Node node, Vector zero, Matrix transform_matrix, Matrix normal_matrix):
         self.position = node.get_fvec('position', zero.length, zero)
         self.normal = node.get_fvec('normal', zero.length, zero).normalize()
+        if transform_matrix is not None:
+            self.position = transform_matrix.vmul(self.position)
+        if normal_matrix is not None:
+            self.normal = normal_matrix.vmul(self.normal).normalize()
         self.restitution = node.get_float('restitution', 1)
 
     cdef void apply(self, Particle particle, double delta) noexcept nogil:
@@ -132,7 +144,7 @@ cdef class Barrier:
 cdef class ForceApplier:
     cdef double strength
 
-    def __cinit__(self, Node node, double strength, Vector zero):
+    def __cinit__(self, Node node, double strength, Vector zero, Matrix transform_matrix, Matrix normal_matrix):
         self.strength = strength
 
 
@@ -149,7 +161,7 @@ cdef class ParticleForceApplier(ForceApplier):
 cdef class MatrixPairForceApplier(PairForceApplier):
     cdef double max_distance_squared
 
-    def __cinit__(self, Node node, double strength, Vector zero):
+    def __cinit__(self, Node node, double strength, Vector zero, Matrix transform_matrix, Matrix normal_matrix):
         self.max_distance_squared = max(0, node.get_float('max_distance', 0)) ** 2
 
 
@@ -159,7 +171,7 @@ cdef class SpecificPairForceApplier(PairForceApplier):
     cdef long from_index
     cdef long to_index
 
-    def __cinit__(self, Node node, double strength, Vector zero):
+    def __cinit__(self, Node node, double strength, Vector zero, Matrix transform_matrix, Matrix normal_matrix):
         self.from_particle_id = <Vector>node._attributes.get('from') if node._attributes else None
         self.to_particle_id = <Vector>node._attributes.get('to') if node._attributes else None
 
@@ -169,7 +181,7 @@ cdef class DistanceForceApplier(SpecificPairForceApplier):
     cdef double minimum
     cdef double maximum
 
-    def __cinit__(self, Node node, double strength, Vector zero):
+    def __cinit__(self, Node node, double strength, Vector zero, Matrix transform_matrix, Matrix normal_matrix):
         self.power = max(0, node.get_float('power', 1))
         cdef double fixed
         if (fixed := node.get_float('fixed', 0)) != 0:
@@ -213,12 +225,14 @@ cdef class BuoyancyForceApplier(ParticleForceApplier):
     cdef double density
     cdef Vector gravity
 
-    def __cinit__(self, Node node, double strength, Vector zero):
+    def __cinit__(self, Node node, double strength, Vector zero, Matrix transform_matrix, Matrix normal_matrix):
         self.density = node.get_float('density', 1)
         self.gravity = node.get_fvec('gravity', zero.length, zero)
         if self.gravity is zero:
             self.gravity = Vector._copy(self.gravity)
             self.gravity.numbers[zero.length-1] = -1
+        if transform_matrix is not None:
+            self.gravity = transform_matrix.vmul(self.gravity)
 
     cdef void apply(self, Particle particle, double delta) noexcept nogil:
         cdef double displaced_mass, k
@@ -233,11 +247,14 @@ cdef class ConstantForceApplier(ParticleForceApplier):
     cdef Vector force
     cdef Vector acceleration
 
-    def __cinit__(self, Node node, double strength, Vector zero):
+    def __cinit__(self, Node node, double strength, Vector zero, Matrix transform_matrix, Matrix normal_matrix):
         cdef Vector force
         cdef long i
         self.force = node.get_fvec('force', zero.length, zero)
         self.acceleration = node.get_fvec('acceleration', zero.length, zero)
+        if normal_matrix is not None:
+            self.force = normal_matrix.vmul(self.force)
+            self.acceleration = normal_matrix.vmul(self.acceleration)
 
     cdef void apply(self, Particle particle, double delta) noexcept nogil:
         cdef long i
@@ -258,7 +275,7 @@ cdef class RandomForceApplier(ParticleForceApplier):
 cdef class CollisionForceApplier(MatrixPairForceApplier):
     cdef double power
 
-    def __cinit__(self, Node node, double strength, Vector zero):
+    def __cinit__(self, Node node, double strength, Vector zero, Matrix transform_matrix, Matrix normal_matrix):
         self.power = max(0, node.get_float('power', 1))
 
     cdef void apply(self, Particle from_particle, Particle to_particle, Vector direction, double distance, double distance_squared) noexcept nogil:
@@ -301,7 +318,7 @@ cdef class ElectrostaticForceApplier(MatrixPairForceApplier):
 cdef class AdhesionForceApplier(MatrixPairForceApplier):
     cdef double overlap
 
-    def __cinit__(self, Node node, double strength, Vector zero):
+    def __cinit__(self, Node node, double strength, Vector zero, Matrix transform_matrix, Matrix normal_matrix):
         self.overlap = min(max(0, node.get_float('overlap', 0.25)), 1)
 
     cdef void apply(self, Particle from_particle, Particle to_particle, Vector direction, double distance, double distance_squared) noexcept nogil:
@@ -352,68 +369,10 @@ cdef class PhysicsSystem:
             clock = time_vector.numbers[0]
         else:
             clock = 0
-        cdef Vector zero = Vector.__new__(Vector)
-        zero.allocate_numbers(dimensions)
-        cdef long i
-        for i in range(dimensions):
-            zero.numbers[i] = 0
         cdef list particles=[], non_anchors=[], particle_forces=[], matrix_forces=[], specific_forces=[], barriers=[]
-        cdef Node child
-        cdef Vector id
-        cdef double strength, ease
         cdef dict particles_by_id = {}
-        cdef Particle particle
-        cdef Barrier barrier
-        cdef set old_state_keys = self.state_keys
-        cdef set new_state_keys = set()
-        for child in node._children:
-            if child.kind == 'particle':
-                id = <Vector>child._attributes.get('id')
-                if id is not None:
-                    particle = Particle.__new__(Particle, child, id, zero, state_prefix, state)
-                    particles_by_id[id] = len(particles)
-                    particles.append(particle)
-                    non_anchors.append(particle)
-                    new_state_keys.add(particle.position_state_key)
-                    old_state_keys.discard(particle.position_state_key)
-                    new_state_keys.add(particle.velocity_state_key)
-                    old_state_keys.discard(particle.velocity_state_key)
-            elif child.kind == 'anchor':
-                id = <Vector>child._attributes.get('id')
-                if id is not None:
-                    particle = Anchor.__new__(Anchor, child, id, zero, state_prefix, state)
-                    particles_by_id[id] = len(particles)
-                    particles.append(particle)
-                    new_state_keys.add(particle.position_state_key)
-                    old_state_keys.discard(particle.position_state_key)
-                    new_state_keys.add(particle.velocity_state_key)
-                    old_state_keys.discard(particle.velocity_state_key)
-            elif child.kind == 'barrier':
-                barrier = Barrier.__new__(Barrier, child, zero)
-                barriers.append(barrier)
-            else:
-                strength = child.get_float('strength', 1)
-                ease = child.get_float('ease', 0)
-                if ease > 0 and ease < clock:
-                    strength *= clock/ease;
-                if child.kind == 'distance':
-                    specific_forces.append(DistanceForceApplier.__new__(DistanceForceApplier, child, strength, zero))
-                elif child.kind == 'drag':
-                    particle_forces.append(DragForceApplier.__new__(DragForceApplier, child, strength, zero))
-                elif child.kind == 'buoyancy':
-                    particle_forces.append(BuoyancyForceApplier.__new__(BuoyancyForceApplier, child, strength, zero))
-                elif child.kind == 'constant':
-                    particle_forces.append(ConstantForceApplier.__new__(ConstantForceApplier, child, strength, zero))
-                elif child.kind == 'random':
-                    particle_forces.append(RandomForceApplier.__new__(RandomForceApplier, child, strength, zero))
-                elif child.kind == 'collision':
-                    matrix_forces.append(CollisionForceApplier.__new__(CollisionForceApplier, child, strength, zero))
-                elif child.kind == 'gravity':
-                    matrix_forces.append(GravityForceApplier.__new__(GravityForceApplier, child, strength, zero))
-                elif child.kind == 'electrostatic':
-                    matrix_forces.append(ElectrostaticForceApplier.__new__(ElectrostaticForceApplier, child, strength, zero))
-                elif child.kind == 'adhesion':
-                    matrix_forces.append(AdhesionForceApplier.__new__(AdhesionForceApplier, child, strength, zero))
+        self.gather(state_prefix, state, clock, dimensions, node, None,
+                    particles, non_anchors, particles_by_id, particle_forces, matrix_forces, specific_forces, barriers)
         cdef SpecificPairForceApplier specific_force
         for specific_force in specific_forces:
             specific_force.from_index = particles_by_id.get(specific_force.from_particle_id, -1)
@@ -428,6 +387,7 @@ cdef class PhysicsSystem:
             last_time = time
         clock = await asyncio.to_thread(self.calculate, particles, non_anchors, particle_forces, matrix_forces, specific_forces, barriers,
                                         dimensions, engine.realtime, speed_of_light, time, last_time, resolution, clock)
+        cdef Particle particle
         for particle in particles:
             state.set_item(particle.position_state_key, particle.position)
             state.set_item(particle.velocity_state_key, particle.velocity)
@@ -439,6 +399,98 @@ cdef class PhysicsSystem:
         time_vector.allocate_numbers(1)
         time_vector.numbers[0] = clock
         state.set_item(state_prefix.concat(CLOCK), time_vector)
+
+    cdef void gather(self, Vector state_prefix, StateDict state, double clock, int dimensions, Node node,
+                     Matrix transform_matrix, list particles, list non_anchors, dict particles_by_id,
+                     list particle_forces, list matrix_forces, list specific_forces, list barriers):
+        cdef Vector zero = Vector.__new__(Vector)
+        zero.allocate_numbers(dimensions)
+        cdef long i
+        for i in range(dimensions):
+            zero.numbers[i] = 0
+        cdef Node child
+        cdef Vector id, value
+        cdef double strength, ease
+        cdef Particle particle
+        cdef Barrier barrier
+        cdef set old_state_keys = self.state_keys
+        cdef set new_state_keys = set()
+        cdef str key
+        cdef Matrix matrix = None, temp_matrix = None, normal_matrix = None
+        if transform_matrix is not None:
+            if dimensions == 2:
+                normal_matrix = (<Matrix33>transform_matrix).inverse().transpose().matrix22()
+            elif dimensions == 3:
+                normal_matrix = (<Matrix44>transform_matrix).inverse().transpose().matrix33()
+        for child in node._children:
+            if child.kind == 'particle':
+                id = <Vector>child._attributes.get('id')
+                if id is not None:
+                    particle = Particle.__new__(Particle, child, id, zero, transform_matrix, normal_matrix, state_prefix, state)
+                    particles_by_id[id] = len(particles)
+                    particles.append(particle)
+                    non_anchors.append(particle)
+                    new_state_keys.add(particle.position_state_key)
+                    old_state_keys.discard(particle.position_state_key)
+                    new_state_keys.add(particle.velocity_state_key)
+                    old_state_keys.discard(particle.velocity_state_key)
+            elif child.kind == 'anchor':
+                id = <Vector>child._attributes.get('id')
+                if id is not None:
+                    particle = Anchor.__new__(Anchor, child, id, zero, transform_matrix, normal_matrix, state_prefix, state)
+                    particles_by_id[id] = len(particles)
+                    particles.append(particle)
+                    new_state_keys.add(particle.position_state_key)
+                    old_state_keys.discard(particle.position_state_key)
+                    new_state_keys.add(particle.velocity_state_key)
+                    old_state_keys.discard(particle.velocity_state_key)
+            elif child.kind == 'barrier':
+                barrier = Barrier.__new__(Barrier, child, zero, transform_matrix, normal_matrix)
+                barriers.append(barrier)
+            elif child.kind == 'transform':
+                if dimensions == 2:
+                    temp_matrix = <Matrix>Matrix33.__new__(Matrix33) if transform_matrix is None else transform_matrix
+                    for key, value in child._attributes.items():
+                        if key == 'scale' and (matrix := Matrix33._scale(value)) is not None:
+                            temp_matrix = temp_matrix.mmul(matrix)
+                        elif key == 'translate' and (matrix := Matrix33._translate(value)) is not None:
+                            temp_matrix = temp_matrix.mmul(matrix)
+                        elif key == 'rotate' and (matrix := Matrix33._rotate(value.as_float())) is not None:
+                            temp_matrix = temp_matrix.mmul(matrix)
+                elif dimensions == 3:
+                    temp_matrix = <Matrix>Matrix44.__new__(Matrix44) if transform_matrix is None else transform_matrix
+                    for key, value in child._attributes.items():
+                        if key == 'scale' and (matrix := Matrix44._scale(value)) is not None:
+                            temp_matrix = temp_matrix.mmul(matrix)
+                        elif key == 'translate' and (matrix := Matrix44._translate(value)) is not None:
+                            temp_matrix = temp_matrix.mmul(matrix)
+                        elif key == 'rotate' and (matrix := Matrix44._rotate(value)) is not None:
+                            temp_matrix = temp_matrix.mmul(matrix)
+                self.gather(state_prefix, state, clock, dimensions, child, temp_matrix,
+                            particles, non_anchors, particles_by_id, particle_forces, matrix_forces, specific_forces, barriers)
+            else:
+                strength = child.get_float('strength', 1)
+                ease = child.get_float('ease', 0)
+                if ease > 0 and ease < clock:
+                    strength *= clock/ease;
+                if child.kind == 'distance':
+                    specific_forces.append(DistanceForceApplier.__new__(DistanceForceApplier, child, strength, zero, transform_matrix, normal_matrix))
+                elif child.kind == 'drag':
+                    particle_forces.append(DragForceApplier.__new__(DragForceApplier, child, strength, zero, transform_matrix, normal_matrix))
+                elif child.kind == 'buoyancy':
+                    particle_forces.append(BuoyancyForceApplier.__new__(BuoyancyForceApplier, child, strength, zero, transform_matrix, normal_matrix))
+                elif child.kind == 'constant':
+                    particle_forces.append(ConstantForceApplier.__new__(ConstantForceApplier, child, strength, zero, transform_matrix, normal_matrix))
+                elif child.kind == 'random':
+                    particle_forces.append(RandomForceApplier.__new__(RandomForceApplier, child, strength, zero, transform_matrix, normal_matrix))
+                elif child.kind == 'collision':
+                    matrix_forces.append(CollisionForceApplier.__new__(CollisionForceApplier, child, strength, zero, transform_matrix, normal_matrix))
+                elif child.kind == 'gravity':
+                    matrix_forces.append(GravityForceApplier.__new__(GravityForceApplier, child, strength, zero, transform_matrix, normal_matrix))
+                elif child.kind == 'electrostatic':
+                    matrix_forces.append(ElectrostaticForceApplier.__new__(ElectrostaticForceApplier, child, strength, zero, transform_matrix, normal_matrix))
+                elif child.kind == 'adhesion':
+                    matrix_forces.append(AdhesionForceApplier.__new__(AdhesionForceApplier, child, strength, zero, transform_matrix, normal_matrix))
         cdef Vector state_key
         for state_key in old_state_keys:
             state.set_item(state_key, null_)
