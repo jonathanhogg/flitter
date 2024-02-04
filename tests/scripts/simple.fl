@@ -1,0 +1,7 @@
+
+!window size=SIZE
+    !record filename=OUTPUT
+        !canvas
+            !path
+                !rect size=SIZE
+                !fill color=1;0;0
