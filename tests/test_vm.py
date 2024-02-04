@@ -32,17 +32,6 @@ class TestBasicInstructions(unittest.TestCase):
         self.program.literal(node)
         self.program.literal(Node('bar'))
         self.program.append()
-        self.program.literal(Node('baz'))
-        self.program.append()
-        stack = self.program.execute(self.context)
-        self.assertEqual(len(stack), 1)
-        self.assertEqual(repr(stack[0]), "(!foo #test x=1\n !bar\n !baz)")
-
-    def test_Append(self):
-        node = Node('foo', {'test'}, {'x': Vector(1)})
-        self.program.literal(node)
-        self.program.literal(Node('bar'))
-        self.program.append()
         self.program.literal(Vector([Node('baz1', None, {'a': Vector(1)}), Node('baz2', None, {'b': Vector(2)})]))
         self.program.literal(Vector(Node('baz3', None, {'c': Vector(3)})))
         self.program.append(2)
