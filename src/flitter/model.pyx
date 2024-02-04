@@ -30,6 +30,8 @@ cdef frozenset EmptySet = frozenset()
 cdef tuple AstypeArgs = (np.float64, 'K', 'unsafe', True, False)
 cdef type ndarray = np.ndarray
 
+cdef dict SymbolTable = {}
+
 
 cdef union double_long:
     double f
@@ -285,6 +287,20 @@ cdef class Vector:
         return result
 
     @staticmethod
+    def symbol(str symbol):
+        return Vector._symbol(symbol)
+
+    @staticmethod
+    cdef Vector _symbol(str symbol):
+        cdef unsigned long long code = HASH_STRING(symbol)
+        cdef double number = <double>(code >> 12) * -1e292
+        cdef Vector result = Vector.__new__(Vector)
+        result.allocate_numbers(1)
+        result.numbers[0] = number
+        SymbolTable[number] = symbol
+        return result
+
+    @staticmethod
     def range(*args):
         cdef Vector result = Vector.__new__(Vector)
         if len(args) == 1:
@@ -463,10 +479,11 @@ cdef class Vector:
                 if type(<object>objptr) is str:
                     text += <str>objptr
                 elif isinstance(<object>objptr, (float, int)):
-                    text += f"{<object>objptr:.9g}"
+                    number= <object>objptr
+                    text += SymbolTable.get(number, f'{number:.9g}')
         elif n:
             for i in range(n):
-                text += f"{self.numbers[i]:.9g}"
+                text += SymbolTable.get(self.numbers[i], f'{self.numbers[i]:.9g}')
         return text
 
     def __iter__(self):
@@ -496,7 +513,7 @@ cdef class Vector:
                     y = HASH_STRING(<str>value)
                 elif type(<object>value) is float:
                     if floor_floats:
-                        y = <unsigned long long>(<long long>floor(PyFloat_AS_DOUBLE(<object>value)))
+                        y = double_long(f=floor(PyFloat_AS_DOUBLE(<object>value))).l
                     else:
                         y = double_long(f=PyFloat_AS_DOUBLE(<object>value)).l
                 elif type(<object>value) is int:
@@ -510,7 +527,7 @@ cdef class Vector:
         else:
             for i in range(self.length):
                 if floor_floats:
-                    y = <unsigned long long>(<long long>floor(self.numbers[i]))
+                    y = double_long(f=floor(self.numbers[i])).l
                 else:
                     y = double_long(f=self.numbers[i]).l
                 _hash = HASH_UPDATE(_hash, y)
@@ -523,13 +540,16 @@ cdef class Vector:
         cdef list values
         cdef double f
         cdef object obj
+        cdef PyObject* objptr
         if self.objects is None:
             if t is float:
                 t = None
-            if t is None or t is int or t is bool:
+            if t is None or t is int or t is bool or t is str:
                 if n == 0 or n == m:
                     if n == 1:
                         f = self.numbers[0]
+                        if t is str:
+                            return SymbolTable.get(self.numbers[0], default)
                         if t is int:
                             return <long long>floor(f)
                         elif t is bool:
@@ -539,7 +559,12 @@ cdef class Vector:
                         values = PyList_New(m)
                         for i in range(m):
                             f = self.numbers[i]
-                            if t is int:
+                            if t is str:
+                                objptr = PyDict_GetItem(SymbolTable, PyFloat_FromDouble(f))
+                                if objptr == NULL:
+                                    return default
+                                obj = <object>objptr
+                            elif t is int:
                                 obj = PyLong_FromDouble(floor(f))
                             elif t is bool:
                                 obj = PyBool_FromLong(f != 0)
@@ -551,7 +576,12 @@ cdef class Vector:
                 elif m == 1:
                     values = PyList_New(n)
                     f = self.numbers[0]
-                    if t is int:
+                    if t is str:
+                        objptr = PyDict_GetItem(SymbolTable, PyFloat_FromDouble(f))
+                        if objptr == NULL:
+                            return default
+                        obj = <object>objptr
+                    elif t is int:
                         obj = PyLong_FromDouble(floor(f))
                     elif t is bool:
                         obj = PyBool_FromLong(f != 0)
@@ -567,6 +597,8 @@ cdef class Vector:
         try:
             if m == 1:
                 obj = <object>PyTuple_GET_ITEM(self.objects, 0)
+                if t is str and type(obj) is float and (symbol := SymbolTable.get(obj)) is not None:
+                    obj = symbol
                 if t is not None:
                     obj = t(obj)
                 if n == 1:
@@ -582,6 +614,8 @@ cdef class Vector:
                 values = PyList_New(m)
                 for i in range(m):
                     obj = <object>PyTuple_GET_ITEM(self.objects, i)
+                    if t is str and type(obj) is float and (symbol := SymbolTable.get(obj)) is not None:
+                        obj = symbol
                     if t is not None:
                         obj = t(obj)
                     Py_INCREF(obj)
@@ -601,27 +635,18 @@ cdef class Vector:
         if n == 0:
             return "null"
         cdef list parts = []
+        cdef str symbol
         if self.numbers != NULL:
             for i in range(n):
-                parts.append(f"{self.numbers[i]:.9g}")
+                symbol = SymbolTable.get(self.numbers[i])
+                parts.append(':' + symbol if symbol is not None else f'{self.numbers[i]:.9g}')
         else:
             for obj in self.objects:
                 if isinstance(obj, (float, int)):
-                    parts.append(f"{obj:.9g}")
+                    symbol = SymbolTable.get(obj)
+                    parts.append(':' + symbol if symbol is not None else f'{obj:.9g}')
                 elif isinstance(obj, str):
-                    if len(obj):
-                        s = obj
-                        for i, c in enumerate(s):
-                            if c == ord('_') or (c >= ord('a') and c <= ord('z')) or (c >= ord('A') and c <= ord('Z')) or \
-                               (i > 0 and c >= ord('0') and c <= ord('9')):
-                                pass
-                            else:
-                                parts.append(repr(s))
-                                break
-                        else:
-                            parts.append(":" + s)
-                    else:
-                        parts.append("''")
+                    parts.append(repr(<str>obj))
                 else:
                     parts.append("(" + repr(obj) + ")")
         return ";".join(parts)

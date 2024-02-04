@@ -6,6 +6,8 @@ import unittest
 
 from flitter.model import Node, Vector, null
 
+from test_vector import FOO_SYMBOL_NUMBER
+
 
 class TestNode(unittest.TestCase):
     """
@@ -98,6 +100,7 @@ class TestNode(unittest.TestCase):
         self.node1.set_attribute('float1', Vector(1.5))
         self.node1.set_attribute('float2', Vector((0, 0)))
         self.node1.set_attribute('float3', Vector((1, 2, 3.5)))
+        self.node1.set_attribute('symbol', Vector.symbol('foo'))
         self.assertEqual(self.node1.get('missing'), None)
         self.assertEqual(self.node1.get('missing', 0, float), None)
         self.assertEqual(self.node1.get('missing', 1, str), None)
@@ -124,6 +127,8 @@ class TestNode(unittest.TestCase):
         self.assertEqual(self.node1.get('float2', 1, bool), False)
         self.assertEqual(self.node1.get('float2', 2, bool), [False, False])
         self.assertEqual(self.node1.get('float2', 3, bool), None)
+        self.assertEqual(self.node1.get('symbol', 1, str), 'foo')
+        self.assertEqual(self.node1.get('symbol', 1, float), FOO_SYMBOL_NUMBER)
 
     def test_repr(self):
         self.assertEqual(repr(self.node1), '!node1')
@@ -133,8 +138,9 @@ class TestNode(unittest.TestCase):
         self.node2.append(self.node3)
         self.node1.append(self.node2)
         self.node1.append(self.node5)
+        self.node1.set_attribute('foo', Vector.symbol('foo'))
         self.assertEqual(repr(self.node1), """
-!node1
+!node1 foo=:foo
  !node2 #bar #baz
   !node3 #bar #baz color=1
    !node4
