@@ -8,6 +8,9 @@ import unittest
 from flitter.model import Vector, true, false, null, Node
 
 
+FOO_SYMBOL_NUMBER = -3.882544429788573e+307
+
+
 def test_func():
     pass
 
@@ -221,7 +224,7 @@ class TestVector(unittest.TestCase):
         self.assertEqual(hash(Vector(["foo", 1])), hash(Vector(["foo", 1.0])))
         self.assertNotEqual(hash(Vector(["foo", 1.0])), hash(Vector(["foo", 1.1])))
         self.assertEqual(hash(Vector(Node('foo', {'bar'}, {'test': Vector(5)}))), 9166098286934782834)
-        self.assertEqual(hash(Vector.symbol('foo')), 2252171707177583095)
+        self.assertEqual(hash(Vector.symbol('foo')), hash(Vector(FOO_SYMBOL_NUMBER)))
         self.assertIsNotNone(hash(Vector(test_func)))  # just check it works, value will not be stable
         self.assertIsNotNone(hash(Vector(test_class)))  # just check it works, value will not be stable
 
@@ -257,7 +260,7 @@ class TestVector(unittest.TestCase):
         self.assertIs(true.match(1, bool), True)
         self.assertEqual(true.match(2, bool), [True, True])
         self.assertEqual(Vector([0, 1]).match(2, bool), [False, True])
-        self.assertEqual(Vector.symbol('foo').match(1, float), -3.882544429788573e+271)
+        self.assertEqual(Vector.symbol('foo').match(1, float), FOO_SYMBOL_NUMBER)
         self.assertEqual(Vector.symbol('foo').match(1, str), 'foo')
         self.assertEqual(Vector.symbol('foo').match(2, str), ['foo', 'foo'])
         self.assertEqual(Vector.symbol('foo').concat(Vector.symbol('bar')).match(2, str), ['foo', 'bar'])
@@ -407,7 +410,7 @@ class TestVector(unittest.TestCase):
         self.assertTrue(false == Vector(0))
         self.assertTrue(Vector([1, 2, 3]) == Vector([1, 2, 3]))
         self.assertTrue(Vector(["Hello ", "world!"]) == Vector(["Hello ", "world!"]))
-        self.assertTrue(Vector.symbol('foo') == Vector(-3.882544429788573e+271))
+        self.assertTrue(Vector.symbol('foo') == Vector(FOO_SYMBOL_NUMBER))
         self.assertTrue(Vector.symbol('foo') == Vector.symbol('foo'))
 
     def test_ne(self):

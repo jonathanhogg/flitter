@@ -6,6 +6,8 @@ import unittest
 
 from flitter.model import Node, Vector, null
 
+from test_vector import FOO_SYMBOL_NUMBER
+
 
 class TestNode(unittest.TestCase):
     """
@@ -126,7 +128,7 @@ class TestNode(unittest.TestCase):
         self.assertEqual(self.node1.get('float2', 2, bool), [False, False])
         self.assertEqual(self.node1.get('float2', 3, bool), None)
         self.assertEqual(self.node1.get('symbol', 1, str), 'foo')
-        self.assertEqual(self.node1.get('symbol', 1, float), -3.882544429788573e+271)
+        self.assertEqual(self.node1.get('symbol', 1, float), FOO_SYMBOL_NUMBER)
 
     def test_repr(self):
         self.assertEqual(repr(self.node1), '!node1')
