@@ -70,4 +70,4 @@ version = {attr = "flitter.__version__"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-flitter = ["*.frag", "*.vert", "*.glsl", "*.pxd"]
+"*" = ["*.lark", "*.pxd", "*.glsl", "*.frag", "*.vert"]
