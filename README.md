@@ -144,8 +144,9 @@ pip3 install --editable .
 rm **/*.c **/*.so
 ```
 
-You might also want to install `flake8` and `pytest`, which is what I use for
-linting the code and running the (few) unit tests.
+You might also want to install `flake8` and `pytest` (and `pytest-xvfb` on Linux
+if you want to run tests without a windowing environment), which is what I use
+for linting the code and running the tests.
 
 ## Learning Flitter
 

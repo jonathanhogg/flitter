@@ -38,7 +38,7 @@ def main():
     parser.add_argument('--fps', type=int, default=60, help="Target framerate")
     parser.add_argument('--screen', type=int, default=0, help="Default screen number")
     parser.add_argument('--fullscreen', action='store_true', default=False, help="Default to full screen")
-    parser.add_argument('--vsync', action='store_true', default=False, help="Default to winow vsync")
+    parser.add_argument('--vsync', action='store_true', default=False, help="Default to window vsync")
     parser.add_argument('--state', type=str, help="State save/restore file")
     parser.add_argument('--autoreset', type=float, help="Auto-reset state on idle")
     parser.add_argument('--simplifystate', type=float, default=10, help="Simplify on state after stable period")
@@ -46,16 +46,16 @@ def main():
     parser.add_argument('--define', '-D', action='append', default=[], type=keyvalue, dest='defines', help="Define variable for evaluation")
     parser.add_argument('--vmstats', action='store_true', default=False, help="Report VM statistics")
     parser.add_argument('--runtime', type=float, help="Seconds to run for before exiting")
+    parser.add_argument('--offscreen', action='store_true', default=False, help="Swap windows for offscreens")
     parser.add_argument('script', nargs='+', help="Script to execute")
     args = parser.parse_args()
     logger = configure_logger(args.level)
     controller = EngineController(target_fps=args.fps, screen=args.screen, fullscreen=args.fullscreen, vsync=args.vsync,
                                   state_file=args.state, autoreset=args.autoreset, state_simplify_wait=args.simplifystate,
                                   realtime=not args.lockstep, defined_variables=dict(args.defines), vm_stats=args.vmstats,
-                                  run_time=args.runtime)
+                                  run_time=args.runtime, offscreen=args.offscreen)
     for script in args.script:
         controller.load_page(script)
-    controller.switch_to_page(0)
 
     try:
         if args.profile:

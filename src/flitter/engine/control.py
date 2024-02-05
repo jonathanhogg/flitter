@@ -19,13 +19,14 @@ from ..render import get_renderer
 class EngineController:
     def __init__(self, target_fps=60, screen=0, fullscreen=False, vsync=False, state_file=None,
                  autoreset=None, state_simplify_wait=0, realtime=True, defined_variables=None, vm_stats=False,
-                 run_time=None):
+                 run_time=None, offscreen=False):
         self.default_fps = target_fps
         self.target_fps = target_fps
         self.realtime = realtime
         self.screen = screen
         self.fullscreen = fullscreen
         self.vsync = vsync
+        self.offscreen = offscreen
         self.autoreset = autoreset
         self.state_simplify_wait = state_simplify_wait
         if defined_variables:
@@ -54,9 +55,11 @@ class EngineController:
 
     def load_page(self, filename):
         page_number = len(self.pages)
-        path = SharedCache[filename]
+        path = SharedCache.get_with_root(filename, '.')
         self.pages.append((path, self.global_state.setdefault(str(path), StateDict())))
         logger.info("Added code page {}: {}", page_number, path)
+        if page_number == 0:
+            self.switch_to_page(0)
 
     def switch_to_page(self, page_number):
         if self.pages is not None and 0 <= page_number < len(self.pages):
@@ -172,7 +175,7 @@ class EngineController:
                 names = {'beat': beat, 'quantum': self.counter.quantum, 'tempo': self.counter.tempo,
                          'delta': delta, 'clock': frame_time, 'performance': performance,
                          'fps': self.target_fps, 'realtime': self.realtime,
-                         'screen': self.screen, 'fullscreen': self.fullscreen, 'vsync': self.vsync,
+                         'screen': self.screen, 'fullscreen': self.fullscreen, 'vsync': self.vsync, 'offscreen': self.offscreen,
                          'sample': self.sample}
 
                 program = self.current_path.read_flitter_program(static=self.defined_variables, dynamic=names)
