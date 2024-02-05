@@ -5,7 +5,7 @@ Flitter main entry point
 import argparse
 import asyncio
 
-from flitter import configure_logger
+from flitter import configure_logger, __version__
 from .control import EngineController
 
 
@@ -50,6 +50,7 @@ def main():
     parser.add_argument('script', nargs='+', help="Script to execute")
     args = parser.parse_args()
     logger = configure_logger(args.level)
+    logger.info("Flitter version {}", __version__)
     controller = EngineController(target_fps=args.fps, screen=args.screen, fullscreen=args.fullscreen, vsync=args.vsync,
                                   state_file=args.state, autoreset=args.autoreset, state_simplify_wait=args.simplifystate,
                                   realtime=not args.lockstep, defined_variables=dict(args.defines), vm_stats=args.vmstats,
