@@ -56,7 +56,6 @@ def main():
                                   run_time=args.runtime, offscreen=args.offscreen)
     for script in args.script:
         controller.load_page(script)
-    controller.switch_to_page(0)
 
     try:
         if args.profile:
