@@ -3,6 +3,8 @@ with trails moving outwards from the centre of the screen.](docs/header.jpg)
 
 # Flitter
 
+[![Python package](https://github.com/jonathanhogg/flitter/actions/workflows/python-package.yml/badge.svg)](https://github.com/jonathanhogg/flitter/actions/workflows/python-package.yml)
+
 **Flitter** is a functional programming language wrapped around a declarative
 system for describing 2D and 3D visuals. [The language](/docs/language.md) is
 designed to encourage an iterative, explorative, play-based approach to
