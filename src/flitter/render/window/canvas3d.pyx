@@ -159,7 +159,7 @@ cdef class RenderGroup:
     cdef str composite
     cdef object vertex_shader_template
     cdef object fragment_shader_template
-    cdef dict variables
+    cdef dict names
 
     cdef void set_blend(self, glctx):
         glctx.blend_equation = moderngl.FUNC_ADD
@@ -463,11 +463,11 @@ cdef void collect(Node node, Matrix44 transform_matrix, Material material, Rende
         fragment_shader = node.get_str('fragment', None)
         new_render_group.vertex_shader_template = Template(vertex_shader) if vertex_shader is not None else StandardVertexTemplate
         new_render_group.fragment_shader_template = Template(fragment_shader) if fragment_shader is not None else StandardFragmentTemplate
-        new_render_group.variables = {}
+        new_render_group.names = {}
         if node._attributes:
             for name, value in node._attributes.items():
                 if name not in GroupAttributes:
-                    new_render_group.variables[name] = value
+                    new_render_group.names[name] = value
         render_groups.append(new_render_group)
         for child in node._children:
             collect(child, transform_matrix, material, new_render_group, render_groups, default_camera, cameras, max_samples)
@@ -540,11 +540,11 @@ cdef void render(RenderGroup render_group, Camera camera, glctx, dict objects, d
     cdef double[:] zs
     cdef long[:] indices
     cdef dict shaders = objects.setdefault('canvas3d_shaders', {})
-    cdef dict variables = render_group.variables.copy()
-    variables.update({'max_lights': render_group.max_lights, 'Ambient': LightType.Ambient, 'Directional': LightType.Directional,
+    cdef dict names = render_group.names.copy()
+    names.update({'max_lights': render_group.max_lights, 'Ambient': LightType.Ambient, 'Directional': LightType.Directional,
                       'Point': LightType.Point, 'Spot': LightType.Spot})
-    cdef str vertex_shader = render_group.vertex_shader_template.render(**variables)
-    cdef str fragment_shader = render_group.fragment_shader_template.render(**variables)
+    cdef str vertex_shader = render_group.vertex_shader_template.render(**names)
+    cdef str fragment_shader = render_group.fragment_shader_template.render(**names)
     cdef tuple source = (vertex_shader, fragment_shader)
     shader = shaders.get(source)
     if shader is None:
@@ -560,7 +560,7 @@ cdef void render(RenderGroup render_group, Camera camera, glctx, dict objects, d
         return
     cdef str name
     cdef Vector value
-    for name, value in render_group.variables.items():
+    for name, value in render_group.names.items():
         if name in shader:
             member = shader[name]
             if isinstance(member, moderngl.Uniform):

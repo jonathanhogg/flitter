@@ -18,7 +18,7 @@ from ..render import get_renderer
 
 class EngineController:
     def __init__(self, target_fps=60, screen=0, fullscreen=False, vsync=False, state_file=None,
-                 autoreset=None, state_simplify_wait=0, realtime=True, defined_variables=None, vm_stats=False,
+                 autoreset=None, state_simplify_wait=0, realtime=True, defined_names=None, vm_stats=False,
                  run_time=None, offscreen=False):
         self.default_fps = target_fps
         self.target_fps = target_fps
@@ -29,10 +29,10 @@ class EngineController:
         self.offscreen = offscreen
         self.autoreset = autoreset
         self.state_simplify_wait = state_simplify_wait
-        if defined_variables:
-            self.defined_variables = {key: Vector.coerce(value) for key, value in defined_variables.items()}
+        if defined_names:
+            self.defined_names = {key: Vector.coerce(value) for key, value in defined_names.items()}
         else:
-            self.defined_variables = {}
+            self.defined_names = {}
         self.vm_stats = vm_stats
         self.run_time = run_time
         self.state_file = Path(state_file) if state_file is not None else None
@@ -178,7 +178,7 @@ class EngineController:
                          'screen': self.screen, 'fullscreen': self.fullscreen, 'vsync': self.vsync, 'offscreen': self.offscreen,
                          'sample': self.sample}
 
-                program = self.current_path.read_flitter_program(static=self.defined_variables, dynamic=names)
+                program = self.current_path.read_flitter_program(static=self.defined_names, dynamic=names)
                 if program is not current_program:
                     level = 'SUCCESS' if current_program is None else 'INFO'
                     logger.log(level, "Loaded page {}: {}", self.current_page, self.current_path)
@@ -212,7 +212,7 @@ class EngineController:
                 housekeeping += now
                 execution -= now
                 if run_program is not None:
-                    context = run_program.run(state=self.state, variables=names, record_stats=self.vm_stats)
+                    context = run_program.run(state=self.state, names=names, record_stats=self.vm_stats)
                 else:
                     context = Context()
                 self.handle_pragmas(context.pragmas, frame_time)

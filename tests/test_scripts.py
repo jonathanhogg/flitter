@@ -27,9 +27,9 @@ class TestRendering(unittest.TestCase):
         self.input_path = Path(tempfile.mktemp('.png'))
         self.output_path = Path(tempfile.mktemp('.png'))
         self.controller = EngineController(realtime=False, target_fps=1, run_time=1, offscreen=True,
-                                           defined_variables={'SIZE': self.SIZE,
-                                                              'INPUT': str(self.input_path),
-                                                              'OUTPUT': str(self.output_path)})
+                                           defined_names={'SIZE': self.SIZE,
+                                                          'INPUT': str(self.input_path),
+                                                          'OUTPUT': str(self.output_path)})
 
     def tearDown(self):
         if self.script_path.exists():

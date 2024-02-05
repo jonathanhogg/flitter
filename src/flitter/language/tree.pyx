@@ -78,7 +78,7 @@ cdef class Expression:
         if dynamic is not None:
             for key in dynamic:
                 context_vars[key] = None
-        cdef Context context = Context(state=state, variables=context_vars)
+        cdef Context context = Context(state=state, names=context_vars)
         cdef Expression expr
         try:
             expr = self._simplify(context)
@@ -123,15 +123,15 @@ cdef class Top(Expression):
     cdef Expression _simplify(self, Context context):
         cdef list expressions = []
         cdef Expression expr
-        cdef dict variables = dict(context.variables)
+        cdef dict names = dict(context.names)
         for expr in self.expressions:
             expr = expr._simplify(context)
             if not isinstance(expr, Literal) or (<Literal>expr).value.length:
                 expressions.append(expr)
         cdef str name
         cdef list bindings = []
-        for name, value in context.variables.items():
-            if name not in variables and value is not None and isinstance(value, Vector):
+        for name, value in context.names.items():
+            if name not in names and value is not None and isinstance(value, Vector):
                 bindings.append(Binding(name, Literal(value)))
         if bindings:
             expressions.append(StoreGlobal(tuple(bindings)))
@@ -176,7 +176,7 @@ cdef class Import(Expression):
     cdef Expression _simplify(self, Context context):
         cdef str name
         for name in self.names:
-            context.variables[name] = None
+            context.names[name] = None
         return Import(self.names, self.filename._simplify(context))
 
     def __repr__(self):
@@ -208,11 +208,11 @@ cdef class Sequence(Expression):
     cdef Expression _simplify(self, Context context):
         cdef list expressions = []
         cdef Expression expr
-        cdef dict saved = context.variables
-        context.variables = saved.copy()
+        cdef dict saved = context.names
+        context.names = saved.copy()
         for expr in self.expressions:
             expressions.append(expr._simplify(context))
-        context.variables = saved
+        context.names = saved
         return sequence_pack(expressions)
 
     def __repr__(self):
@@ -266,8 +266,8 @@ cdef class Name(Expression):
             program.name(self.name)
 
     cdef Expression _simplify(self, Context context):
-        if self.name in context.variables:
-            value = context.variables[self.name]
+        if self.name in context.names:
+            value = context.names[self.name]
             if value is None:
                 return self
             elif isinstance(value, Function):
@@ -810,7 +810,7 @@ cdef class Call(Expression):
         cdef dict kwargs
         cdef int i
         if isinstance(function, FunctionName):
-            func_expr = context.variables[(<FunctionName>function).name]
+            func_expr = context.names[(<FunctionName>function).name]
             kwargs = {binding.name: binding.expr for binding in keyword_args}
             bindings = []
             for i, binding in enumerate(func_expr.parameters):
@@ -1045,17 +1045,17 @@ cdef class Let(Expression):
                 n = len(binding.names)
                 if n == 1:
                     name = binding.names[0]
-                    context.variables[name] = value
+                    context.names[name] = value
                 else:
                     for i, name in enumerate(binding.names):
-                        context.variables[name] = value.item(i)
+                        context.names[name] = value.item(i)
             elif isinstance(expr, Name) and len(binding.names) == 1:
                 name = binding.names[0]
                 if (<Name>expr).name != name:
-                    context.variables[name] = expr
+                    context.names[name] = expr
             else:
                 for name in binding.names:
-                    context.variables[name] = None
+                    context.names[name] = None
                 remaining.append(PolyBinding(binding.names, expr))
         if remaining:
             return Let(tuple(remaining))
@@ -1105,8 +1105,8 @@ cdef class InlineLet(Expression):
             lvars.pop()
 
     cdef Expression _simplify(self, Context context):
-        cdef dict saved = context.variables
-        context.variables = saved.copy()
+        cdef dict saved = context.names
+        context.names = saved.copy()
         cdef list remaining = []
         cdef PolyBinding binding
         cdef Expression expr
@@ -1120,20 +1120,20 @@ cdef class InlineLet(Expression):
                 n = len(binding.names)
                 if n == 1:
                     name = binding.names[0]
-                    context.variables[name] = value
+                    context.names[name] = value
                 else:
                     for i, name in enumerate(binding.names):
-                        context.variables[name] = value.item(i)
+                        context.names[name] = value.item(i)
             elif isinstance(expr, Name) and len(binding.names) == 1:
                 name = binding.names[0]
                 if (<Name>expr).name != name:
-                    context.variables[name] = expr
+                    context.names[name] = expr
             else:
                 for name in binding.names:
-                    context.variables[name] = None
+                    context.names[name] = None
                 remaining.append(PolyBinding(binding.names, expr))
         body = self.body._simplify(context)
-        context.variables = saved
+        context.names = saved
         if remaining:
             return InlineLet(body, tuple(remaining))
         return body
@@ -1175,23 +1175,23 @@ cdef class For(Expression):
         cdef Expression body, source=self.source._simplify(context)
         cdef list remaining = []
         cdef Vector values, single
-        cdef dict saved = context.variables
-        context.variables = saved.copy()
+        cdef dict saved = context.names
+        context.names = saved.copy()
         cdef str name
         if not isinstance(source, Literal):
             for name in self.names:
-                context.variables[name] = None
+                context.names[name] = None
             body = self.body._simplify(context)
-            context.variables = saved
+            context.names = saved
             return For(self.names, source, body)
         values = (<Literal>source).value
         cdef int i=0, n=values.length
         while i < n:
             for name in self.names:
-                context.variables[name] = values.item(i)
+                context.names[name] = values.item(i)
                 i += 1
             remaining.append(self.body._simplify(context))
-        context.variables = saved
+        context.names = saved
         return sequence_pack(remaining)
 
     def __repr__(self):
@@ -1297,20 +1297,20 @@ cdef class Function(Expression):
             if expr is not None and not isinstance(expr, Literal):
                 literal = False
             parameters.append(Binding(parameter.name, expr))
-        cdef dict saved = context.variables
+        cdef dict saved = context.names
         cdef str key, name
         cdef set unbound = context.unbound
         context.unbound = set()
-        context.variables = {}
+        context.names = {}
         for key, value in saved.items():
             if value is not None:
-                context.variables[key] = value
+                context.names[key] = value
         for parameter in parameters:
-            context.variables[parameter.name] = None
+            context.names[parameter.name] = None
         expr = self.expr._simplify(context)
         cdef Function function = Function(self.name, tuple(parameters), expr)
-        context.variables = saved
-        context.variables[self.name] = function if literal and not context.unbound else None
+        context.names = saved
+        context.names[self.name] = function if literal and not context.unbound else None
         if unbound is not None:
             context.unbound.difference_update(saved)
             unbound.update(context.unbound)

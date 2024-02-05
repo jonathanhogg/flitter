@@ -27,7 +27,7 @@ def main():
         pass
     else:
         setproctitle.setproctitle('flitter')
-    parser = argparse.ArgumentParser(description="Flitter")
+    parser = argparse.ArgumentParser(description=f"Flitter language interpreter, version {__version__}")
     parser.set_defaults(level=None)
     levels = parser.add_mutually_exclusive_group()
     levels.add_argument('--trace', action='store_const', const='TRACE', dest='level', help="Trace logging")
@@ -43,20 +43,20 @@ def main():
     parser.add_argument('--autoreset', type=float, help="Auto-reset state on idle")
     parser.add_argument('--simplifystate', type=float, default=10, help="Simplify on state after stable period")
     parser.add_argument('--lockstep', action='store_true', default=False, help="Run clock in non-realtime mode")
-    parser.add_argument('--define', '-D', action='append', default=[], type=keyvalue, dest='defines', help="Define variable for evaluation")
+    parser.add_argument('--define', '-D', action='append', default=[], type=keyvalue, dest='defines', help="Define name for evaluation")
     parser.add_argument('--vmstats', action='store_true', default=False, help="Report VM statistics")
     parser.add_argument('--runtime', type=float, help="Seconds to run for before exiting")
     parser.add_argument('--offscreen', action='store_true', default=False, help="Swap windows for offscreens")
-    parser.add_argument('script', nargs='+', help="Script to execute")
+    parser.add_argument('program', nargs='+', help="Program(s) to load")
     args = parser.parse_args()
     logger = configure_logger(args.level)
     logger.info("Flitter version {}", __version__)
     controller = EngineController(target_fps=args.fps, screen=args.screen, fullscreen=args.fullscreen, vsync=args.vsync,
                                   state_file=args.state, autoreset=args.autoreset, state_simplify_wait=args.simplifystate,
-                                  realtime=not args.lockstep, defined_variables=dict(args.defines), vm_stats=args.vmstats,
+                                  realtime=not args.lockstep, defined_names=dict(args.defines), vm_stats=args.vmstats,
                                   run_time=args.runtime, offscreen=args.offscreen)
-    for script in args.script:
-        controller.load_page(script)
+    for program in args.program:
+        controller.load_page(program)
 
     try:
         if args.profile:

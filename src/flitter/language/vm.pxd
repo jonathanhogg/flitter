@@ -35,7 +35,7 @@ cdef class Program:
     cdef readonly object path
     cdef readonly object top
     cdef readonly VectorStack stack
-    cdef readonly VectorStack lvars
+    cdef readonly VectorStack lnames
     cdef int next_label
 
     cpdef void link(self)
@@ -88,4 +88,4 @@ cdef class Program:
     cpdef void end_for_compose(self)
     cpdef void store_global(self, str name)
     cpdef void func(self, str name, tuple parameters)
-    cdef void _execute(self, Context context, VectorStack stack, VectorStack lvars, bint record_stats)
+    cdef void _execute(self, Context context, VectorStack stack, VectorStack lnames, bint record_stats)

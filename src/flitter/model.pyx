@@ -1871,8 +1871,8 @@ cdef class StateDict:
 
 
 cdef class Context:
-    def __init__(self, dict variables=None, StateDict state=None, Node graph=None, dict pragmas=None, object path=None, Context parent=None):
-        self.variables = variables if variables is not None else {}
+    def __init__(self, dict names=None, StateDict state=None, Node graph=None, dict pragmas=None, object path=None, Context parent=None):
+        self.names = names if names is not None else {}
         self.state = state
         self.graph = graph if graph is not None else Node('root')
         self.pragmas = pragmas if pragmas is not None else {}

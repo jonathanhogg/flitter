@@ -17,8 +17,8 @@ class TestBasicInstructions(unittest.TestCase):
     def setUp(self):
         self.program = Program()
         self.state = StateDict()
-        self.variables = {}
-        self.context = Context(state=self.state, variables=self.variables)
+        self.names = {}
+        self.context = Context(state=self.state, names=self.names)
 
     def test_Add(self):
         self.program.literal(3)
@@ -42,7 +42,7 @@ class TestBasicInstructions(unittest.TestCase):
     def test_Attribute(self):
         foo = Node('foo', {'test'}, {'x': Vector(1)})
         bar = Node('bar', None, {'x': Vector(2)})
-        self.variables['bar'] = Vector(bar)
+        self.names['bar'] = Vector(bar)
         self.program.literal(foo)
         self.program.literal(bar)
         self.program.local_push(1)
@@ -162,7 +162,7 @@ class TestBasicInstructions(unittest.TestCase):
         self.program.store_global('z')
         stack = self.program.execute(self.context)
         self.assertEqual(len(stack), 0)
-        self.assertEqual(self.variables, {'x': Vector([1, 2]), 'y': Vector(3), 'z': Vector("Hello world!")})
+        self.assertEqual(self.names, {'x': Vector([1, 2]), 'y': Vector(3), 'z': Vector("Hello world!")})
 
     def test_Lookup(self):
         self.state['y'] = 12
@@ -205,7 +205,7 @@ class TestBasicInstructions(unittest.TestCase):
         self.assertEqual(stack, [12])
 
     def test_Name(self):
-        self.variables['y'] = 12
+        self.names['y'] = 12
         self.program.name('x')
         self.program.name('y')
         stack = self.program.execute(self.context)
@@ -322,8 +322,8 @@ class TestJumps(unittest.TestCase):
     def setUp(self):
         self.program = Program()
         self.state = StateDict()
-        self.variables = {}
-        self.context = Context(state=self.state, variables=self.variables)
+        self.names = {}
+        self.context = Context(state=self.state, names=self.names)
 
     def test_jump(self):
         LABEL = self.program.new_label()
@@ -374,8 +374,8 @@ class TestForLoops(unittest.TestCase):
     def setUp(self):
         self.program = Program()
         self.state = StateDict()
-        self.variables = {}
-        self.context = Context(state=self.state, variables=self.variables)
+        self.names = {}
+        self.context = Context(state=self.state, names=self.names)
 
     def test_simple(self):
         NEXT = self.program.new_label()
@@ -458,8 +458,8 @@ class TestLocalVars(unittest.TestCase):
     def setUp(self):
         self.program = Program()
         self.state = StateDict()
-        self.variables = {}
-        self.context = Context(state=self.state, variables=self.variables)
+        self.names = {}
+        self.context = Context(state=self.state, names=self.names)
 
     def test_simple(self):
         self.program.literal(5)
@@ -503,8 +503,8 @@ class TestFunc(unittest.TestCase):
     def setUp(self):
         self.program = Program()
         self.state = StateDict()
-        self.variables = {}
-        self.context = Context(state=self.state, variables=self.variables)
+        self.names = {}
+        self.context = Context(state=self.state, names=self.names)
         self.func_program = Program()
         self.func_program.local_load(1)
         self.func_program.local_load(0)
@@ -528,12 +528,12 @@ class TestFunc(unittest.TestCase):
         self.program.local_push(1)
 
     def test_declare(self):
-        lvars = []
-        stack = self.program.execute(self.context, lvars=lvars)
+        lnames = []
+        stack = self.program.execute(self.context, lnames=lnames)
         self.assertEqual(len(stack), 0)
-        self.assertEqual(len(lvars), 2)
-        self.assertEqual(lvars[0], 2)
-        function, = lvars[1]
+        self.assertEqual(len(lnames), 2)
+        self.assertEqual(lnames[0], 2)
+        function, = lnames[1]
         self.assertTrue(isinstance(function, Function))
         self.assertEqual(function.__name__, 'f')
         self.assertEqual(function.parameters, ('x', 'y'))
@@ -548,7 +548,7 @@ class TestFunc(unittest.TestCase):
         stack = self.program.execute(self.context)
         self.assertEqual(stack, [9])
 
-    def test_additional_lvars(self):
+    def test_additional_lnames(self):
         self.program.literal(-2)
         self.program.local_push(1)
         self.program.literal(3)
@@ -588,8 +588,8 @@ class TestCalls(unittest.TestCase):
         self.test_function = unittest.mock.Mock()
         del self.test_function.context_func
         self.context_function = unittest.mock.Mock(context_func=True)
-        self.variables = {'test': Vector(self.test_function), 'context': Vector(self.context_function)}
-        self.context = Context(state=self.state, variables=self.variables)
+        self.names = {'test': Vector(self.test_function), 'context': Vector(self.context_function)}
+        self.context = Context(state=self.state, names=self.names)
 
     def test_no_args(self):
         self.test_function.return_value = Vector(12)

@@ -143,7 +143,7 @@ cdef class StateDict:
 
 
 cdef class Context:
-    cdef readonly dict variables
+    cdef readonly dict names
     cdef readonly set unbound
     cdef readonly dict pragmas
     cdef readonly StateDict state
