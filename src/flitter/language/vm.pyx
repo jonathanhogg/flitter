@@ -4,7 +4,6 @@
 Flitter language stack-based virtual machine
 """
 
-import cython
 from loguru import logger
 
 from .. import name_patch
@@ -16,10 +15,9 @@ from .noise import NOISE_FUNCTIONS
 from libc.math cimport floor
 from libc.stdint cimport int64_t
 from cpython cimport PyObject, Py_INCREF, Py_DECREF
-from cpython.dict cimport PyDict_New, PyDict_GetItem, PyDict_SetItem, PyDict_Contains, PyDict_DelItem, PyDict_Copy
-from cpython.exc cimport PyErr_SetFromErrno
+from cpython.dict cimport PyDict_New, PyDict_GetItem, PyDict_SetItem, PyDict_DelItem, PyDict_Copy
 from cpython.float cimport PyFloat_FromDouble
-from cpython.list cimport PyList_New, PyList_Append, PyList_GET_ITEM, PyList_SET_ITEM, PyList_GET_SIZE, PyList_GetSlice
+from cpython.list cimport PyList_New, PyList_GET_ITEM, PyList_SET_ITEM
 from cpython.mem cimport PyMem_Malloc, PyMem_Free, PyMem_Realloc
 from cpython.object cimport PyObject_Call, PyObject_CallObject, PyObject_HasAttrString
 from cpython.set cimport PySet_Add
@@ -48,8 +46,10 @@ cdef dict static_builtins = {
 static_builtins.update(STATIC_FUNCTIONS)
 static_builtins.update(NOISE_FUNCTIONS)
 
+
 def debug(value):
     return value
+
 
 cdef object _debug_func = debug
 
@@ -349,7 +349,6 @@ cdef class VectorStack:
     cpdef VectorStack copy(self):
         cdef VectorStack new_stack = VectorStack.__new__(VectorStack, self.size)
         cdef int i
-        cdef PyObject* ptr
         cdef Vector value
         for i in range(self.top+1):
             value = Vector._copy(<Vector>self.vectors[i])
@@ -766,7 +765,7 @@ cdef inline execute_attribute(VectorStack stack, str name):
     cdef PyObject* objptr
     cdef Node node
     cdef dict attributes
-    cdef int i, j, m=nodes_vec.length, n=value.length
+    cdef int i,  m=nodes_vec.length, n=value.length
     for i in range(m):
         objptr = PyTuple_GET_ITEM(nodes, i)
         if type(<object>objptr) is not Node:
@@ -792,7 +791,7 @@ cdef inline execute_attribute(VectorStack stack, str name):
 
 cdef inline execute_tag(VectorStack stack, str name):
     cdef Vector nodes_vec = peek(stack)
-    cdef int i, j, m=nodes_vec.length
+    cdef int i, m=nodes_vec.length
     cdef tuple nodes = nodes_vec.objects
     cdef PyObject* objptr
     cdef Node node
@@ -1078,7 +1077,7 @@ cdef class Program:
 
     cdef void _execute(self, Context context, VectorStack stack, VectorStack lnames, bint record_stats):
         global CallOutCount, CallOutDuration
-        cdef int i, j, m, n, pc=0, program_end=len(self.instructions)
+        cdef int i, n, pc=0, program_end=len(self.instructions)
         cdef dict global_names=context.names, builtins=all_builtins, state=context.state._state
         cdef list loop_sources=[]
         cdef LoopSource loop_source = None
@@ -1087,11 +1086,10 @@ cdef class Program:
         cdef list instructions=self.instructions
         cdef Instruction instruction=None
         cdef str filename
-        cdef object name, arg, node
+        cdef object name
         cdef tuple names, args, nodes
         cdef Vector r1, r2, r3
         cdef dict import_names, kwargs
-        cdef list values
         cdef Function function
         cdef PyObject* objptr
 
@@ -1422,7 +1420,7 @@ cdef class Program:
                     StatsCount[<int>instruction.code] += 1
                     StatsDuration[<int>instruction.code] += duration
 
-        except:
+        except Exception:
             if instruction is not None:
                 logger.error("VM exception processing:\n{} <--",
                              "\n".join(str(instruction) for instruction in self.instructions[pc-5:pc]))

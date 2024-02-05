@@ -1,26 +1,21 @@
 # cython: language_level=3, profile=False, boundscheck=False, wraparound=False
 
-import re
-
 import cython
-from cython cimport view
 import numpy as np
 
-from libc.math cimport isnan, floor, ceil, abs, sqrt, sin, cos, tan, isnan
+from libc.math cimport isnan, floor, ceil, abs as double_abs, sqrt, sin, cos, isnan
 from cpython.object cimport PyObject
 from cpython.ref cimport Py_INCREF
 from cpython.bool cimport PyBool_FromLong
-from cpython.dict cimport PyDict_GetItem, PyDict_SetItem, PyDict_Contains, PyDict_DelItem, PyDict_Copy
+from cpython.dict cimport PyDict_GetItem, PyDict_SetItem, PyDict_DelItem, PyDict_Copy
 from cpython.float cimport PyFloat_AS_DOUBLE, PyFloat_FromDouble
-from cpython.list cimport PyList_New, PyList_GET_SIZE, PyList_GET_ITEM, PyList_SET_ITEM
-from cpython.long cimport (PyLong_FromLongLong, PyLong_FromUnsignedLongLong, PyLong_FromDouble,
-                           PyLong_AsLongLong, PyLong_AsUnsignedLongLong, PyLong_AsDouble)
+from cpython.list cimport PyList_New, PyList_GET_ITEM, PyList_SET_ITEM
+from cpython.long cimport (PyLong_FromDouble, PyLong_AsLongLong, PyLong_AsDouble)
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
 from cpython.object cimport PyObject_RichCompareBool, Py_NE, Py_EQ, Py_LT
-from cpython.set cimport PySet_Add, PySet_New
-from cpython.tuple cimport PyTuple_New, PyTuple_GET_SIZE, PyTuple_GET_ITEM, PyTuple_SET_ITEM, PyTuple_Pack
+from cpython.set cimport PySet_Add
+from cpython.tuple cimport PyTuple_New, PyTuple_GET_ITEM, PyTuple_SET_ITEM, PyTuple_Pack
 from cpython.unicode cimport PyUnicode_DATA, PyUnicode_GET_LENGTH, PyUnicode_KIND, PyUnicode_READ
-from cpython.weakref cimport PyWeakref_NewRef, PyWeakref_GetObject
 
 
 cdef double Pi = 3.141592653589793
@@ -113,8 +108,6 @@ cpdef void initialize_numbers_cache(int max_size):
     cdef int i, n = max_size >> 4
     if max_size & 0xf == 0:
         n -= 1
-    cdef void* ptr
-    cdef void* next
     if NumbersCacheSize:
         empty_numbers_cache()
         PyMem_Free(NumbersCache)
@@ -630,8 +623,6 @@ cdef class Vector:
 
     cdef str repr(self):
         cdef int i, n = self.length
-        cdef str s
-        cdef Py_UNICODE c
         if n == 0:
             return "null"
         cdef list parts = []
@@ -678,7 +669,7 @@ cdef class Vector:
         cdef Vector result = Vector.__new__(Vector)
         if self.numbers != NULL:
             for i in range(result.allocate_numbers(n)):
-                result.numbers[i] = abs(self.numbers[i])
+                result.numbers[i] = double_abs(self.numbers[i])
         return result
 
     def __add__(self, other):
@@ -1149,24 +1140,24 @@ cdef class Matrix33(Vector):
     @cython.cdivision(True)
     cpdef Matrix33 inverse(self):
         cdef double* numbers = self.numbers
-        cdef double s0 = numbers[0]*numbers[4]*numbers[8];
-        cdef double s1 = numbers[7]*numbers[5];
-        cdef double s2 = numbers[1]*numbers[3]*numbers[8];
-        cdef double s3 = numbers[5]*numbers[6];
-        cdef double s4 = numbers[2]*numbers[3]*numbers[7];
-        cdef double s5 = numbers[4]*numbers[6];
-        cdef double invdet = 1 / (s0 - s1 - s2 - s3 + s4 - s5);
+        cdef double s0 = numbers[0]*numbers[4]*numbers[8]
+        cdef double s1 = numbers[7]*numbers[5]
+        cdef double s2 = numbers[1]*numbers[3]*numbers[8]
+        cdef double s3 = numbers[5]*numbers[6]
+        cdef double s4 = numbers[2]*numbers[3]*numbers[7]
+        cdef double s5 = numbers[4]*numbers[6]
+        cdef double invdet = 1 / (s0 - s1 - s2 - s3 + s4 - s5)
         cdef Matrix33 result = Matrix33.__new__(Matrix33)
         cdef double* result_numbers = result.numbers
-        result_numbers[0] = (numbers[4]*numbers[8] - numbers[7]*numbers[5]) * invdet;
-        result_numbers[1] = (numbers[2]*numbers[7] - numbers[1]*numbers[8]) * invdet;
-        result_numbers[2] = (numbers[1]*numbers[5] - numbers[2]*numbers[4]) * invdet;
-        result_numbers[3] = (numbers[5]*numbers[6] - numbers[3]*numbers[8]) * invdet;
-        result_numbers[4] = (numbers[0]*numbers[8] - numbers[2]*numbers[6]) * invdet;
-        result_numbers[5] = (numbers[3]*numbers[2] - numbers[0]*numbers[5]) * invdet;
-        result_numbers[6] = (numbers[3]*numbers[7] - numbers[6]*numbers[4]) * invdet;
-        result_numbers[7] = (numbers[6]*numbers[1] - numbers[0]*numbers[7]) * invdet;
-        result_numbers[8] = (numbers[0]*numbers[4] - numbers[3]*numbers[1]) * invdet;
+        result_numbers[0] = (numbers[4]*numbers[8] - numbers[7]*numbers[5]) * invdet
+        result_numbers[1] = (numbers[2]*numbers[7] - numbers[1]*numbers[8]) * invdet
+        result_numbers[2] = (numbers[1]*numbers[5] - numbers[2]*numbers[4]) * invdet
+        result_numbers[3] = (numbers[5]*numbers[6] - numbers[3]*numbers[8]) * invdet
+        result_numbers[4] = (numbers[0]*numbers[8] - numbers[2]*numbers[6]) * invdet
+        result_numbers[5] = (numbers[3]*numbers[2] - numbers[0]*numbers[5]) * invdet
+        result_numbers[6] = (numbers[3]*numbers[7] - numbers[6]*numbers[4]) * invdet
+        result_numbers[7] = (numbers[6]*numbers[1] - numbers[0]*numbers[7]) * invdet
+        result_numbers[8] = (numbers[0]*numbers[4] - numbers[3]*numbers[1]) * invdet
         return result
 
     cpdef Matrix33 transpose(self):
@@ -1371,7 +1362,7 @@ cdef class Matrix44(Vector):
 
     @staticmethod
     cdef Matrix44 _shear_x(Vector v):
-        cdef Matrix44 matrix, result = None
+        cdef Matrix44 result = None
         if v is not None and v.numbers is not NULL and v.length in (1, 2):
             result = Matrix44.__new__(Matrix44)
             numbers = result.numbers
@@ -1386,7 +1377,7 @@ cdef class Matrix44(Vector):
 
     @staticmethod
     cdef Matrix44 _shear_y(Vector v):
-        cdef Matrix44 matrix, result = None
+        cdef Matrix44 result = None
         if v is not None and v.numbers is not NULL and v.length in (1, 2):
             result = Matrix44.__new__(Matrix44)
             numbers = result.numbers
@@ -1401,7 +1392,7 @@ cdef class Matrix44(Vector):
 
     @staticmethod
     cdef Matrix44 _shear_z(Vector v):
-        cdef Matrix44 matrix, result = None
+        cdef Matrix44 result = None
         if v is not None and v.numbers is not NULL and v.length in (1, 2):
             result = Matrix44.__new__(Matrix44)
             numbers = result.numbers

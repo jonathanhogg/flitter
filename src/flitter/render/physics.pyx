@@ -13,7 +13,6 @@ from ..language.functions cimport Normal
 
 from libc.math cimport sqrt, isinf, isnan, abs
 from cpython cimport PyObject
-from cpython.dict cimport PyDict_GetItem
 
 cdef extern from "Python.h":
     # Note: I am explicitly (re)defining these as not requiring the GIL for speed.
@@ -222,6 +221,7 @@ cdef class BuoyancyForceApplier(ParticleForceApplier):
 
     cdef void apply(self, Particle particle, double delta) noexcept nogil:
         cdef double displaced_mass, k
+        cdef long i
         if particle.radius and particle.mass:
             displaced_mass = particle.radius**particle.force.length * self.density
             k = self.strength * (particle.mass - displaced_mass)
@@ -234,8 +234,6 @@ cdef class ConstantForceApplier(ParticleForceApplier):
     cdef Vector acceleration
 
     def __cinit__(self, Node node, double strength, Vector zero):
-        cdef Vector force
-        cdef long i
         self.force = node.get_fvec('force', zero.length, zero)
         self.acceleration = node.get_fvec('acceleration', zero.length, zero)
 
@@ -395,7 +393,7 @@ cdef class PhysicsSystem:
                 strength = child.get_float('strength', 1)
                 ease = child.get_float('ease', 0)
                 if ease > 0 and ease < clock:
-                    strength *= clock/ease;
+                    strength *= clock/ease
                 if child.kind == 'distance':
                     specific_forces.append(DistanceForceApplier.__new__(DistanceForceApplier, child, strength, zero))
                 elif child.kind == 'drag':
@@ -447,13 +445,11 @@ cdef class PhysicsSystem:
     cdef double calculate(self, list particles, list non_anchors, list particle_forces, list matrix_forces, list specific_forces, list barriers,
                           int dimensions, bint realtime, double speed_of_light,
                           double time, double last_time, double resolution, double clock):
-        cdef long i, j, k, l, m, n=len(particles), o=len(non_anchors)
+        cdef long i, j, k, ii, m, n=len(particles), o=len(non_anchors)
         cdef double delta
         cdef Vector direction = Vector.__new__(Vector)
         direction.allocate_numbers(dimensions)
         cdef double d, distance, distance_squared
-        cdef PyObject* from_index
-        cdef PyObject* to_index
         cdef PyObject* from_particle
         cdef PyObject* to_particle
         cdef PyObject* force
@@ -498,8 +494,8 @@ cdef class PhysicsSystem:
                                         distance_squared < (<MatrixPairForceApplier>force).max_distance_squared:
                                     if distance == -1:
                                         distance = sqrt(distance_squared)
-                                        for l in range(dimensions):
-                                            direction.numbers[l] /= distance
+                                        for ii in range(dimensions):
+                                            direction.numbers[ii] /= distance
                                     (<MatrixPairForceApplier>force).apply(<Particle>from_particle, <Particle>to_particle,
                                                                           direction, distance, distance_squared)
                 for i in range(n):

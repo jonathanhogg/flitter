@@ -8,13 +8,11 @@ the tree down to a "simpler" form by propogating constants. As this can result
 in unrolling loops, simpler does not necessarily mean "smaller."
 """
 
-cimport cython
-
 from loguru import logger
 
 from .. import name_patch
 from ..model cimport Vector, Node, Context, StateDict, null_, true_, false_, minusone_
-from .vm cimport Program, builtins, static_builtins, dynamic_builtins
+from .vm cimport Program, static_builtins, dynamic_builtins
 
 
 logger = name_patch(logger, __name__)
@@ -24,7 +22,6 @@ cdef Literal NoOp = Literal(null_)
 
 cdef Expression sequence_pack(list expressions):
     cdef Expression expr
-    cdef Literal literal
     cdef Vector value
     cdef list vectors, remaining = []
     cdef bint has_let = False
@@ -104,7 +101,7 @@ cdef class Top(Expression):
         self.expressions = expressions
 
     cdef void _compile(self, Program program, list lvars):
-        cdef Expression expr, node
+        cdef Expression expr
         cdef int m = 0
         for expr in self.expressions:
             expr._compile(program, lvars)
@@ -722,7 +719,6 @@ cdef class Slice(Expression):
         cdef Expression index = self.index._simplify(context)
         cdef Vector expr_value
         cdef Vector index_value
-        cdef str name
         if isinstance(expr, Literal) and isinstance(index, Literal):
             expr_value = (<Literal>expr).value
             index_value = (<Literal>index).value
@@ -910,7 +906,6 @@ cdef class Attributes(NodeModifier):
             node = attrs.node
         node = node._simplify(context)
         cdef Vector nodes
-        cdef dict saved
         cdef int i
         cdef list objects
         if isinstance(node, Literal):
@@ -1174,7 +1169,7 @@ cdef class For(Expression):
     cdef Expression _simplify(self, Context context):
         cdef Expression body, source=self.source._simplify(context)
         cdef list remaining = []
-        cdef Vector values, single
+        cdef Vector values
         cdef dict saved = context.names
         context.names = saved.copy()
         cdef str name
@@ -1298,7 +1293,7 @@ cdef class Function(Expression):
                 literal = False
             parameters.append(Binding(parameter.name, expr))
         cdef dict saved = context.names
-        cdef str key, name
+        cdef str key
         cdef set unbound = context.unbound
         context.unbound = set()
         context.names = {}

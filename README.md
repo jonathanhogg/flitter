@@ -70,11 +70,11 @@ both of those platforms. I've not heard of anyone trying it on Windows yet, but
 there's no particular reason why it shouldn't work. If you have success or
 otherwise on another platform please let me know / raise an issue.
 
-If you want to try it out without cloning the repo, then you can install and
-try it **right now** with:
+If you want to try **Flitter** then you can install the latest [`flitter-lang`
+PyPI package](https://pypi.org/project/flitter-lang/) with:
 
 ```sh
-pip3 install https://github.com/jonathanhogg/flitter/archive/main.zip
+pip3 install flitter-lang
 ```
 
 and then:
@@ -84,9 +84,17 @@ flitter path/to/some/flitter/script.fl
 ```
 
 I'd recommend doing this in a Python [virtual env](https://docs.python.org/3/library/venv.html),
-but you do you. Sadly, you won't have the examples handy doing it this way.
+but you do you.
 
-If you clone this repo, then you can install from the top level directory:
+If you want to live on the bleeding edge, then you can install from the current
+head of the `main` branch with:
+
+```sh
+pip3 install https://github.com/jonathanhogg/flitter/archive/main.zip
+```
+
+However, if you clone this repo instead, then you can install from the top
+level directory:
 
 ```sh
 git clone https://github.com/jonathanhogg/flitter.git
@@ -94,7 +102,7 @@ cd flitter
 pip3 install .
 ```
 
-Then you can run one of the examples easily with:
+and have direct access to the example programs:
 
 ```sh
 flitter examples/hoops.fl
@@ -146,9 +154,9 @@ pip3 install --editable .
 rm **/*.c **/*.so
 ```
 
-You might also want to install `flake8` and `pytest` (and `pytest-xvfb` on Linux
-if you want to run tests without a windowing environment), which is what I use
-for linting the code and running the tests.
+If you want to lint the code and run the tests then you might also want to
+install `flake8`, `cython-lint` and `pytest` (plus `pytest-xvfb` on Linux if
+you want to run the functional tests without a windowing environment).
 
 ## Learning Flitter
 

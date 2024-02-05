@@ -7,7 +7,7 @@ Flitter language functions
 
 import cython
 
-from libc.math cimport isnan, isinf, floor, round, sin, cos, asin, acos, sqrt, exp, ceil, atan2, log, log2, log10
+from libc.math cimport floor, round, sin, cos, asin, acos, sqrt, exp, ceil, atan2, log, log2, log10
 from cpython.object cimport PyObject
 from cpython.ref cimport Py_INCREF
 from cpython.tuple cimport PyTuple_New, PyTuple_GET_ITEM, PyTuple_SET_ITEM
@@ -133,13 +133,13 @@ def counter(Context context, Vector counter_id, Vector clockv, Vector speedv=nul
     new_state.allocate_numbers(m)
     for i in range(n):
         j = i * 2
-        clock = clockv.numbers[i%clockv.length]
+        clock = clockv.numbers[i % clockv.length]
         if j+1 < counter_state.length:
             offset = counter_state.numbers[j]
             current_speed = counter_state.numbers[j+1]
-            speed = speedv.numbers[i%speedv.length] if speedv.length else current_speed
+            speed = speedv.numbers[i % speedv.length] if speedv.length else current_speed
         else:
-            current_speed = speed = speedv.numbers[i%speedv.length] if speedv.length else 1
+            current_speed = speed = speedv.numbers[i % speedv.length] if speedv.length else 1
             offset = clock * speed
         count = clock * current_speed - offset
         countv.numbers[i] = count
@@ -365,7 +365,7 @@ def impulse(Vector xs not None, Vector cs=None):
     for i in range(ys.allocate_numbers(xs.length)):
         x = xs.numbers[i]
         x -= floor(x)
-        c = cs.numbers[i%n] if cs is not None else 0.25
+        c = cs.numbers[i % n] if cs is not None else 0.25
         if x < c:
             y = 1 - x/c
             y = 1 - y*y
@@ -534,7 +534,7 @@ def floorv(Vector xs not None):
 
 
 def sumv(Vector xs not None, Vector zs=true_):
-    cdef int i, j, k, n = xs.length
+    cdef int i, j, n = xs.length
     if n == 0 or xs.objects is not None or zs.length != 1 or zs.objects is not None:
         return null_
     cdef Vector ys = Vector.__new__(Vector)
@@ -751,7 +751,7 @@ def zipv(*vectors):
             if v.length > n:
                 n = v.length
             numeric = numeric and v.objects is None
-    cdef int i, j, k, p, m = len(vs)
+    cdef int i, j, p, m = len(vs)
     if m == 0:
         return null_
     if m == 1:
@@ -769,12 +769,11 @@ def zipv(*vectors):
                 zp[i*m] = v.numbers[i % p]
     else:
         zs.objects = PyTuple_New(n * m)
-        k = 0
         for i in range(n):
             for j in range(m):
                 v = vs[j]
                 if v.objects is None:
-                    obj =  v.numbers[i % v.length]
+                    obj = v.numbers[i % v.length]
                 else:
                     obj = <object>PyTuple_GET_ITEM(v.objects, i % v.length)
                 Py_INCREF(obj)
@@ -793,6 +792,7 @@ cdef double hue_to_rgb(double m1, double m2, double h):
         return m1 + (m2 - m1) * (4 - h)
     return m1
 
+
 cdef Vector hsl_to_rgb(double h, double s, double l):
     cdef double m2 = l * (s + 1) if l <= 0.5 else l + s - l*s
     cdef double m1 = l * 2 - m2
@@ -804,25 +804,27 @@ cdef Vector hsl_to_rgb(double h, double s, double l):
     rgb.numbers[2] = hue_to_rgb(m1, m2, h - 2)
     return rgb
 
-def hsl(Vector c):
-    if c.length != 3 or c.objects is not None:
+
+def hsl(Vector color):
+    if color.length != 3 or color.objects is not None:
         return null_
-    cdef double h = c.numbers[0], s = c.numbers[1], l = c.numbers[2]
-    s = min(max(0, s), 1)
-    l = min(max(0, l), 1)
-    return hsl_to_rgb(h, s, l)
+    cdef double hue = color.numbers[0], saturation = color.numbers[1], lightness = color.numbers[2]
+    saturation = min(max(0, saturation), 1)
+    lightness = min(max(0, lightness), 1)
+    return hsl_to_rgb(hue, saturation, lightness)
+
 
 @cython.cdivision(True)
-def hsv(Vector c):
-    if not c.length or c.length > 3 or c.objects is not None:
+def hsv(Vector color):
+    if not color.length or color.length > 3 or color.objects is not None:
         return null_
-    cdef double h = c.numbers[0]
-    cdef double s = c.numbers[1] if c.length > 1 else 1
-    cdef double v = c.numbers[2] if c.length == 3 else 1
-    s = min(max(0, s), 1)
-    v = min(max(0, v), 1)
-    cdef double l = v * (1 - s / 2)
-    return hsl_to_rgb(h, 0 if l == 0 or l == 1 else (v - l) / min(l, 1 - l), l)
+    cdef double hue = color.numbers[0]
+    cdef double saturation = color.numbers[1] if color.length > 1 else 1
+    cdef double value = color.numbers[2] if color.length == 3 else 1
+    saturation = min(max(0, saturation), 1)
+    value = min(max(0, value), 1)
+    cdef double lightness = value * (1 - saturation / 2)
+    return hsl_to_rgb(hue, 0 if lightness == 0 or lightness == 1 else (value - lightness) / min(lightness, 1 - lightness), lightness)
 
 
 @cython.cdivision(True)

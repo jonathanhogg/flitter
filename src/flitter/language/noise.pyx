@@ -132,7 +132,7 @@ cdef double noise2(Vector perm, double x, double y) noexcept nogil:
 
 @cython.cdivision(True)
 cdef double noise3(Vector perm, double x, double y, double z) noexcept nogil:
-    cdef long xsb, ysb, zsb, xsv_ext, ysv_ext, zsv_ext, xsv_ext0, xsv_ext1, ysv_ext0, ysv_ext1, zsv_ext0, zsv_ext1
+    cdef long xsb, ysb, zsb, xsv_ext0, xsv_ext1, ysv_ext0, ysv_ext1, zsv_ext0, zsv_ext1
     stretch_offset = (x + y + z) * STRETCH_CONSTANT3
     xs = x + stretch_offset
     ys = y + stretch_offset
@@ -608,7 +608,7 @@ def octnoise(Vector seed, Vector octaves, Vector roughness, *args):
         coords.append(Vector._copy(arg))
     cdef int i, j, n = <int>octaves.numbers[0]
     cdef double weight_sum = 0, weight = 1, k = roughness.numbers[0]
-    cdef Vector seed_i, single, result = null_
+    cdef Vector single, result = null_
     for i in range(n):
         if i == 0:
             result = _noise(get_perm(seed, i), coords)

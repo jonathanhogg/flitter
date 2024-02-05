@@ -24,18 +24,24 @@ cdef class Model:
 
     @staticmethod
     cdef Model intersect(list models)
+
     @staticmethod
     cdef Model union(list models)
+
     @staticmethod
     cdef Model difference(list models)
 
     @staticmethod
     cdef Model get_box(Node node)
+
     @staticmethod
     cdef Model get_sphere(Node node)
+
     @staticmethod
     cdef Model get_cylinder(Node node)
+
     @staticmethod
     cdef Model get_cone(Node node)
+
     @staticmethod
     cdef Model get_external(Node node)

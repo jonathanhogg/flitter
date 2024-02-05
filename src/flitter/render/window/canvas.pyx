@@ -6,12 +6,11 @@ Flitter drawing canvas based on Skia
 
 import array
 import functools
-from pathlib import Path
 
 import cython
 from cpython cimport array, PyObject
 from cpython.dict cimport PyDict_GetItem, PyDict_SetItem
-from libc.math cimport acos, sqrt, round
+from libc.math cimport acos, sqrt
 from libc.stdint cimport int64_t
 from loguru import logger
 import skia
@@ -355,9 +354,9 @@ cdef object update_paint(Node node, start_paint, colorspace):
 
 
 cdef object update_font(Node node, font):
-    if node._attributes is not None and ('font_size' in node._attributes
-            or 'font_family' in node._attributes or 'font_weight' in node._attributes
-            or 'font_width' in node._attributes or 'font_slant' in node._attributes):
+    if node._attributes is not None and ('font_size' in node._attributes or
+                                         'font_family' in node._attributes or 'font_weight' in node._attributes or
+                                         'font_width' in node._attributes or 'font_slant' in node._attributes):
         typeface = font.getTypeface()
         font_style = typeface.fontStyle()
         font_family = node.get('font_family', 1, str, typeface.getFamilyName())

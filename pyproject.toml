@@ -71,3 +71,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "*" = ["*.lark", "*.pxd", "*.glsl", "*.frag", "*.vert"]
+
+[tool.cython-lint]
+max-line-length = 160
+# ignore = ['E503', 'E504']

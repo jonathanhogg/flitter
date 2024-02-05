@@ -9,7 +9,7 @@ import struct
 
 import cython
 from loguru import logger
-from libc.math cimport sqrt, abs, round, isnan, cos, sin
+from libc.math cimport sqrt, abs, round, cos, sin
 import numpy as np
 import usb.core
 
@@ -110,7 +110,7 @@ cdef class LaserDriver:
     @cython.wraparound(False)
     cpdef draw_path(self, points, tuple color):
         cdef int i, j, n, m
-        cdef double a, s, dv, dx, dy, l, x, y
+        cdef double a, s, dv, dx, dy, d, x, y
         cdef double[:] accels, distances, speeds, lengths
         cdef double[:, :] samples, coords, normals
         cdef double r, g, b
@@ -127,14 +127,14 @@ cdef class LaserDriver:
         for j in range(1, n):
             dx = coords[j, 0] - coords[i, 0]
             dy = coords[j, 1] - coords[i, 1]
-            l = sqrt(dx*dx + dy*dy)
-            if l < self._epsilon:
+            d = sqrt(dx*dx + dy*dy)
+            if d < self._epsilon:
                 n -= 1
                 continue
-            lengths[i] = l
-            normals[i, 0] = dx / l
-            normals[i, 1] = dy / l
-            accels[i] = a / (max(abs(dx), abs(dy)) / l)
+            lengths[i] = d
+            normals[i, 0] = dx / d
+            normals[i, 1] = dy / d
+            accels[i] = a / (max(abs(dx), abs(dy)) / d)
             i += 1
             if i != j:
                 coords[i, 0] = coords[j, 0]
@@ -187,8 +187,8 @@ cdef class LaserCubeDriver(LaserDriver):
     GET_MINOR_VERSION = 0x8c
     CLEAR_RINGBUFFER = 0x8d
 
-    cdef _device
-    cdef _control_out, _control_in, _data_out
+    cdef object _device
+    cdef object _control_out, _control_in, _data_out
     cdef int _dac_min, _dac_range, _max_dac_rate
     cdef double _dac_lag
 
@@ -360,7 +360,7 @@ cdef class Laser:
 
     def draw_paths(self, list paths not None):
         cdef list points
-        cdef tuple pair, color, point, last=(0.5, 0.5)
+        cdef tuple pair, color, last=(0.5, 0.5)
         cdef int i, nearest_i
         cdef double d, nearest_d=0
         while paths:

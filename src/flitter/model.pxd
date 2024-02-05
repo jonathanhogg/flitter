@@ -12,10 +12,13 @@ cdef class Vector:
 
     @staticmethod
     cdef Vector _coerce(object other)
+
     @staticmethod
     cdef Vector _copy(Vector other)
+
     @staticmethod
     cdef Vector _compose(list vectors)
+
     @staticmethod
     cdef Vector _symbol(str symbol)
 
@@ -66,8 +69,10 @@ cdef Vector minusone_
 cdef class Matrix33(Vector):
     @staticmethod
     cdef Matrix33 _translate(Vector v)
+
     @staticmethod
     cdef Matrix33 _scale(Vector v)
+
     @staticmethod
     cdef Matrix33 _rotate(double turns)
 
@@ -80,26 +85,37 @@ cdef class Matrix33(Vector):
 cdef class Matrix44(Vector):
     @staticmethod
     cdef Matrix44 _project(double xgradient, double ygradient, double near, double far)
+
     @staticmethod
     cdef Matrix44 _ortho(double aspect_ratio, double width, double near, double far)
+
     @staticmethod
     cdef Matrix44 _look(Vector from_position, Vector to_position, Vector up_direction)
+
     @staticmethod
     cdef Matrix44 _translate(Vector v)
+
     @staticmethod
     cdef Matrix44 _scale(Vector v)
+
     @staticmethod
     cdef Matrix44 _rotate_x(double turns)
+
     @staticmethod
     cdef Matrix44 _rotate_y(double turns)
+
     @staticmethod
     cdef Matrix44 _rotate_z(double turns)
+
     @staticmethod
     cdef Matrix44 _rotate(Vector v)
+
     @staticmethod
     cdef Matrix44 _shear_x(Vector v)
+
     @staticmethod
     cdef Matrix44 _shear_y(Vector v)
+
     @staticmethod
     cdef Matrix44 _shear_z(Vector v)
 

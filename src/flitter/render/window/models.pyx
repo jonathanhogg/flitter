@@ -341,36 +341,36 @@ cdef class PrimitiveModel(Model):
 
 cdef class Box(PrimitiveModel):
     Vertices = np.array([
-        (-.5,-.5,+.5), (+.5,-.5,+.5), (+.5,+.5,+.5), (-.5,+.5,+.5),
-        (-.5,+.5,+.5), (+.5,+.5,+.5), (+.5,+.5,-.5), (-.5,+.5,-.5),
-        (+.5,+.5,+.5), (+.5,-.5,+.5), (+.5,-.5,-.5), (+.5,+.5,-.5),
-        (+.5,+.5,-.5), (+.5,-.5,-.5), (-.5,-.5,-.5), (-.5,+.5,-.5),
-        (-.5,+.5,-.5), (-.5,-.5,-.5), (-.5,-.5,+.5), (-.5,+.5,+.5),
-        (-.5,-.5,-.5), (+.5,-.5,-.5), (+.5,-.5,+.5), (-.5,-.5,+.5),
+        (-.5, -.5, +.5), (+.5, -.5, +.5), (+.5, +.5, +.5), (-.5, +.5, +.5),
+        (-.5, +.5, +.5), (+.5, +.5, +.5), (+.5, +.5, -.5), (-.5, +.5, -.5),
+        (+.5, +.5, +.5), (+.5, -.5, +.5), (+.5, -.5, -.5), (+.5, +.5, -.5),
+        (+.5, +.5, -.5), (+.5, -.5, -.5), (-.5, -.5, -.5), (-.5, +.5, -.5),
+        (-.5, +.5, -.5), (-.5, -.5, -.5), (-.5, -.5, +.5), (-.5, +.5, +.5),
+        (-.5, -.5, -.5), (+.5, -.5, -.5), (+.5, -.5, +.5), (-.5, -.5, +.5),
     ], dtype='f4')
     VertexNormals = np.array([
-        (0,0,1), (0,0,1), (0,0,1), (0,0,1),
-        (0,1,0), (0,1,0), (0,1,0), (0,1,0),
-        (1,0,0), (1,0,0), (1,0,0), (1,0,0),
-        (0,0,-1), (0,0,-1), (0,0,-1), (0,0,-1),
-        (-1,0,0), (-1,0,0), (-1,0,0), (-1,0,0),
-        (0,-1,0), (0,-1,0), (0,-1,0), (0,-1,0),
+        (0, 0, 1), (0, 0, 1), (0, 0, 1), (0, 0, 1),
+        (0, 1, 0), (0, 1, 0), (0, 1, 0), (0, 1, 0),
+        (1, 0, 0), (1, 0, 0), (1, 0, 0), (1, 0, 0),
+        (0, 0, -1), (0, 0, -1), (0, 0, -1), (0, 0, -1),
+        (-1, 0, 0), (-1, 0, 0), (-1, 0, 0), (-1, 0, 0),
+        (0, -1, 0), (0, -1, 0), (0, -1, 0), (0, -1, 0),
     ], dtype='f4')
     VertexUV = np.array([
-        (0,0), (1/6,0), (1/6,1), (0,1),
-        (1/6,0), (2/6,0), (2/6,1), (1/6,1),
-        (2/6,0), (3/6,0), (3/6,1), (2/6,1),
-        (3/6,0), (4/6,0), (4/6,1), (3/6,1),
-        (4/6,0), (5/6,0), (5/6,1), (4/6,1),
-        (5/6,0), (6/6,0), (6/6,1), (5/6,1),
+        (0, 0), (1/6, 0), (1/6, 1), (0, 1),
+        (1/6, 0), (2/6, 0), (2/6, 1), (1/6, 1),
+        (2/6, 0), (3/6, 0), (3/6, 1), (2/6, 1),
+        (3/6, 0), (4/6, 0), (4/6, 1), (3/6, 1),
+        (4/6, 0), (5/6, 0), (5/6, 1), (4/6, 1),
+        (5/6, 0), (6/6, 0), (6/6, 1), (5/6, 1),
     ], dtype='f4')
     Faces = np.array([
-        (0,1,2), (2,3,0),
-        (4,5,6), (6,7,4),
-        (8,9,10), (10,11,8),
-        (12,13,14), (14,15,12),
-        (16,17,18), (18,19,16),
-        (20,21,22), (22,23,20),
+        (0, 1, 2), (2, 3, 0),
+        (4, 5, 6), (6, 7, 4),
+        (8, 9, 10), (10, 11, 8),
+        (12, 13, 14), (14, 15, 12),
+        (16, 17, 18), (18, 19, 16),
+        (20, 21, 22), (22, 23, 20),
     ], dtype='i4')
 
     @staticmethod
@@ -410,13 +410,13 @@ cdef class Sphere(PrimitiveModel):
     cdef void build_trimesh_model(self):
         cdef int ncols = self.segments, nrows = ncols//2, nvertices = (nrows+1)*(ncols+1), nfaces = (2+(nrows-2)*2)*ncols
         cdef object vertices_array = np.empty((nvertices, 3), dtype='f4')
-        cdef float[:,:] vertices = vertices_array
+        cdef float[:, :] vertices = vertices_array
         cdef object vertex_normals_array = np.empty((nvertices, 3), dtype='f4')
-        cdef float[:,:] vertex_normals = vertex_normals_array
+        cdef float[:, :] vertex_normals = vertex_normals_array
         cdef object vertex_uv_array = np.empty((nvertices, 2), dtype='f4')
-        cdef float[:,:] vertex_uv = vertex_uv_array
+        cdef float[:, :] vertex_uv = vertex_uv_array
         cdef object faces_array = np.empty((nfaces, 3), dtype='i4')
-        cdef int[:,:] faces = faces_array
+        cdef int[:, :] faces = faces_array
         cdef float x, y, z, r, th, u, v
         cdef int row, col, i=0, j=0
         for row in range(nrows + 1):
@@ -473,14 +473,14 @@ cdef class Cylinder(PrimitiveModel):
     cdef void build_trimesh_model(self):
         cdef int i, j, k, n = self.segments, m = (n+1)*6
         cdef object vertices_array = np.empty((m, 3), dtype='f4')
-        cdef float[:,:] vertices = vertices_array
+        cdef float[:, :] vertices = vertices_array
         cdef object vertex_normals_array = np.empty((m, 3), dtype='f4')
-        cdef float[:,:] vertex_normals = vertex_normals_array
+        cdef float[:, :] vertex_normals = vertex_normals_array
         cdef object vertex_uv_array = np.empty((m, 2), dtype='f4')
-        cdef float[:,:] vertex_uv = vertex_uv_array
+        cdef float[:, :] vertex_uv = vertex_uv_array
         cdef object faces_array = np.empty((n*4, 3), dtype='i4')
-        cdef int[:,:] faces = faces_array
-        cdef float x, y, th, u, uu
+        cdef int[:, :] faces = faces_array
+        cdef float x, y, th, u, u_
         for i in range(n+1):
             j = k = i * 6
             u = <float>i / n
@@ -556,14 +556,14 @@ cdef class Cone(PrimitiveModel):
     cdef void build_trimesh_model(self):
         cdef int i, j, k, n = self.segments, m = (n+1)*4
         cdef object vertices_array = np.empty((m, 3), dtype='f4')
-        cdef float[:,:] vertices = vertices_array
+        cdef float[:, :] vertices = vertices_array
         cdef object vertex_normals_array = np.empty((m, 3), dtype='f4')
-        cdef float[:,:] vertex_normals = vertex_normals_array
+        cdef float[:, :] vertex_normals = vertex_normals_array
         cdef object vertex_uv_array = np.empty((m, 2), dtype='f4')
-        cdef float[:,:] vertex_uv = vertex_uv_array
+        cdef float[:, :] vertex_uv = vertex_uv_array
         cdef object faces_array = np.empty((n*2, 3), dtype='i4')
-        cdef int[:,:] faces = faces_array
-        cdef float x, y, th, u, uu
+        cdef int[:, :] faces = faces_array
+        cdef float x, y, th, u, u_
         for i in range(n+1):
             j = k = i * 4
             u = <double>i / n

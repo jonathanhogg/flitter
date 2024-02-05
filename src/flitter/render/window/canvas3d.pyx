@@ -180,7 +180,7 @@ cdef class RenderGroup:
         elif self.composite == 'darken':
             glctx.blend_equation = moderngl.MIN
             glctx.blend_func = moderngl.ONE, moderngl.ONE
-        else: # over
+        else:   # over
             glctx.blend_func = moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA
 
 
@@ -255,21 +255,21 @@ cdef class Camera:
             gradient = tan(Pi*camera.fov)
             if camera.fov_ref == 'diagonal':
                 diagonal_ratio = sqrt(1 + aspect_ratio*aspect_ratio)
-                projection_matrix = Matrix44._project(aspect_ratio*gradient/diagonal_ratio, gradient/diagonal_ratio, camera.near, camera.far) # diagonal
+                projection_matrix = Matrix44._project(aspect_ratio*gradient/diagonal_ratio, gradient/diagonal_ratio, camera.near, camera.far)  # diagonal
             elif camera.fov_ref == 'vertical':
-                projection_matrix = Matrix44._project(aspect_ratio*gradient, gradient, camera.near, camera.far) # vertical
+                projection_matrix = Matrix44._project(aspect_ratio*gradient, gradient, camera.near, camera.far)  # vertical
             elif camera.fov_ref == 'wide':
-                if aspect_ratio > 1: # widescreen
-                    projection_matrix = Matrix44._project(gradient, gradient/aspect_ratio, camera.near, camera.far) # horizontal
+                if aspect_ratio > 1:  # widescreen
+                    projection_matrix = Matrix44._project(gradient, gradient/aspect_ratio, camera.near, camera.far)  # horizontal
                 else:
-                    projection_matrix = Matrix44._project(aspect_ratio*gradient, gradient, camera.near, camera.far) # vertical
+                    projection_matrix = Matrix44._project(aspect_ratio*gradient, gradient, camera.near, camera.far)  # vertical
             elif camera.fov_ref == 'narrow':
-                if aspect_ratio > 1: # widescreen
-                    projection_matrix = Matrix44._project(aspect_ratio*gradient, gradient, camera.near, camera.far) # vertical
+                if aspect_ratio > 1:  # widescreen
+                    projection_matrix = Matrix44._project(aspect_ratio*gradient, gradient, camera.near, camera.far)  # vertical
                 else:
-                    projection_matrix = Matrix44._project(gradient, gradient/aspect_ratio, camera.near, camera.far) # horizontal
+                    projection_matrix = Matrix44._project(gradient, gradient/aspect_ratio, camera.near, camera.far)  # horizontal
             else:
-                projection_matrix = Matrix44._project(gradient, gradient/aspect_ratio, camera.near, camera.far) # horizontal
+                projection_matrix = Matrix44._project(gradient, gradient/aspect_ratio, camera.near, camera.far)  # horizontal
         camera.pv_matrix = projection_matrix.mmul(Matrix44._look(camera.position, camera.focus, camera.up))
         return camera
 
@@ -290,13 +290,13 @@ cdef Matrix44 update_transform_matrix(Node node, Matrix44 transform_matrix):
                 if (matrix := Matrix44._rotate(vector)) is not None:
                     transform_matrix = transform_matrix.mmul(matrix)
             elif attribute == 'rotate_x':
-                if vector.numbers !=  NULL and vector.length == 1 and (matrix := Matrix44._rotate_x(vector.numbers[0])) is not None:
+                if vector.numbers != NULL and vector.length == 1 and (matrix := Matrix44._rotate_x(vector.numbers[0])) is not None:
                     transform_matrix = transform_matrix.mmul(matrix)
             elif attribute == 'rotate_y':
-                if vector.numbers !=  NULL and vector.length == 1 and (matrix := Matrix44._rotate_y(vector.numbers[0])) is not None:
+                if vector.numbers != NULL and vector.length == 1 and (matrix := Matrix44._rotate_y(vector.numbers[0])) is not None:
                     transform_matrix = transform_matrix.mmul(matrix)
             elif attribute == 'rotate_z':
-                if vector.numbers !=  NULL and vector.length == 1 and (matrix := Matrix44._rotate_z(vector.numbers[0])) is not None:
+                if vector.numbers != NULL and vector.length == 1 and (matrix := Matrix44._rotate_z(vector.numbers[0])) is not None:
                     transform_matrix = transform_matrix.mmul(matrix)
             elif attribute == 'shear_x':
                 if (matrix := Matrix44._shear_x(vector)) is not None:
@@ -314,7 +314,7 @@ cdef Matrix44 update_transform_matrix(Node node, Matrix44 transform_matrix):
 
 
 cdef Matrix44 instance_start_end_matrix(Vector start, Vector end, double radius):
-    cdef Vector direction = end.sub(start);
+    cdef Vector direction = end.sub(start)
     cdef double length = sqrt(direction.squared_sum())
     if length == 0 or radius <= 0:
         return None
@@ -352,7 +352,7 @@ cdef Model get_model(Node node, bint top):
     cdef Node child
     cdef Model model = None
     cdef Model child_model = None
-    cdef Vector position, origin, normal
+    cdef Vector origin, normal
     cdef list models
     cdef double snap_angle, minimum_area
     if node.kind == 'intersect':
@@ -426,13 +426,11 @@ cdef Model get_model(Node node, bint top):
 
 cdef void collect(Node node, Matrix44 transform_matrix, Material material, RenderGroup render_group, list render_groups,
                   Camera default_camera, dict cameras, int max_samples):
-    cdef str kind = node.kind
     cdef Light light
-    cdef list lights, instances
-    cdef Vector color, position, direction, focus, emissive, diffuse, specular
+    cdef Vector color, position, direction, focus
     cdef double inner, outer
     cdef Node child
-    cdef str camera_id, filename, vertex_shader, fragment_shader
+    cdef str camera_id, vertex_shader, fragment_shader
     cdef Model model
     cdef Instance instance
     cdef tuple model_textures
@@ -521,7 +519,7 @@ def fst(tuple ab):
 
 
 cdef void render(RenderGroup render_group, Camera camera, glctx, dict objects, dict references):
-    cdef list instances, lights, buffers
+    cdef list instances
     cdef cython.float[:, :] instances_data, lights_data
     cdef Material material
     cdef Light light
@@ -542,7 +540,7 @@ cdef void render(RenderGroup render_group, Camera camera, glctx, dict objects, d
     cdef dict shaders = objects.setdefault('canvas3d_shaders', {})
     cdef dict names = render_group.names.copy()
     names.update({'max_lights': render_group.max_lights, 'Ambient': LightType.Ambient, 'Directional': LightType.Directional,
-                      'Point': LightType.Point, 'Spot': LightType.Spot})
+                  'Point': LightType.Point, 'Spot': LightType.Spot})
     cdef str vertex_shader = render_group.vertex_shader_template.render(**names)
     cdef str fragment_shader = render_group.fragment_shader_template.render(**names)
     cdef tuple source = (vertex_shader, fragment_shader)
@@ -838,7 +836,8 @@ cdef class RenderTarget:
         self.render_framebuffer = None
 
     def prepare(self, glctx, Camera camera):
-        if self.render_framebuffer is None or self.width != camera.width or self.height != camera.height or self.colorbits != camera.colorbits or self.samples != camera.samples:
+        if self.render_framebuffer is None or self.width != camera.width or self.height != camera.height \
+                or self.colorbits != camera.colorbits or self.samples != camera.samples:
             self.width = camera.width
             self.height = camera.height
             self.colorbits = camera.colorbits
