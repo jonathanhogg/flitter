@@ -1,13 +1,13 @@
 ![Screenshot from a Flitter program showing colourful distorted ellipse shapes
-with trails moving outwards from the centre of the screen.](docs/header.jpg)
+with trails moving outwards from the centre of the screen.](https://github.com/jonathanhogg/flitter/raw/main/docs/header.jpg)
 
 # Flitter
 
 [![Python package](https://github.com/jonathanhogg/flitter/actions/workflows/python-package.yml/badge.svg)](https://github.com/jonathanhogg/flitter/actions/workflows/python-package.yml)
 
 **Flitter** is a functional programming language wrapped around a declarative
-system for describing 2D and 3D visuals. [The language](/docs/language.md) is
-designed to encourage an iterative, explorative, play-based approach to
+system for describing 2D and 3D visuals. [The language](https://github.com/jonathanhogg/flitter/blob/main/docs/language.md)
+is designed to encourage an iterative, explorative, play-based approach to
 constructing generative visuals. The engine that runs **Flitter** programs is
 able to live reload all code (including shaders) and assets (images, models,
 etc.) while retaining current system state - thus supporting live-coding. It
@@ -33,9 +33,9 @@ The engine that runs the language is capable of:
     and far clip planes, render buffer size, color depth, MSAA samples,
     perspective/orthographic projection, fog, conversion to monochrome and
     colour tinting
-- simulating simple [physical particle systems](/docs/physics.md), including
-spring/rod/rubber-band constraints, gravity, electrostatic charge, adhesion,
-buoyancy, inertia, drag, barriers and particle collisions
+- simulating simple [physical particle systems](https://github.com/jonathanhogg/flitter/blob/main/docs/physics.md),
+including spring/rod/rubber-band constraints, gravity, electrostatic charge,
+adhesion, buoyancy, inertia, drag, barriers and particle collisions
 - playing videos at arbitrary speeds, including in reverse (although video will
 stutter if it makes extensive use of P-frames)
 - running GLSL shaders as stacked image filters and generators, with per-frame
@@ -152,8 +152,9 @@ for linting the code and running the tests.
 
 ## Learning Flitter
 
-There is *some* documentation available in the [docs folder](/docs) and a few
-quick [examples](/examples) ready to run out-of-the-box.
+There is *some* documentation available in the [docs folder](https://github.com/jonathanhogg/flitter/blob/main/docs)
+and a few quick [examples](https://github.com/jonathanhogg/flitter/blob/main/examples)
+ready to run out-of-the-box.
 
 However, there is also a separate repo containing [many more interesting
 examples](https://github.com/jonathanhogg/flitter-examples) that are worth

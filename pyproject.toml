@@ -14,7 +14,7 @@ maintainers = [
 ]
 readme = "README.md"
 license = {file="LICENSE"}
-keywords = ["language"]
+keywords = ["language", "opengl", "live-coding", "live-visuals"]
 classifiers = [
   "Development Status :: 4 - Beta",
   "Intended Audience :: Developers",
