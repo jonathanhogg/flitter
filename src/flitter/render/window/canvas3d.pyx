@@ -794,8 +794,44 @@ cdef void dispatch_instances(glctx, dict objects, shader, Model model, int count
             shader['use_transparency_texture'] = True
             shader['transparency_texture'] = unit_id
     instances_buffer = glctx.buffer(instances_data)
-    buffers = [(vertex_buffer, '3f 3f 2f', 'model_position', 'model_normal', 'model_uv'),
-               (instances_buffer, '16f 9f 4f 3f 4f/i', 'model_matrix', 'model_normal_matrix', 'material_albedo', 'material_emissive', 'material_properties')]
+    cdef list buffers = []
+    cdef str format = '3f'
+    cdef list names = ['model_position']
+    if 'model_normal' in shader:
+        format += ' 3f'
+        names.append('model_normal')
+    else:
+        format += ' 3x4'
+    if 'model_uv' in shader:
+        format += ' 2f'
+        names.append('model_uv')
+    else:
+        format += ' 2x4'
+    buffers.append((vertex_buffer, format) + tuple(names))
+    format = '16f'
+    names = ['model_matrix']
+    if 'model_normal_matrix' in shader:
+        format += ' 9f'
+        names.append('model_normal_matrix')
+    else:
+        format += ' 9x4'
+    if 'material_albedo' in shader:
+        format += ' 4f'
+        names.append('material_albedo')
+    else:
+        format += ' 4x4'
+    if 'material_emissive' in shader:
+        format += ' 3f'
+        names.append('material_emissive')
+    else:
+        format += ' 3x4'
+    if 'material_properties' in shader:
+        format += ' 4f'
+        names.append('material_properties')
+    else:
+        format += ' 4x4'
+    format += '/i'
+    buffers.append((instances_buffer, format) + tuple(names))
     render_array = glctx.vertex_array(shader, buffers, index_buffer=index_buffer, mode=moderngl.TRIANGLES)
     render_array.render(instances=count)
     if samplers is not None:
