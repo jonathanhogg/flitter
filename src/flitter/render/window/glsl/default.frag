@@ -3,6 +3,7 @@
 in vec2 coord;
 out vec4 color;
 uniform float alpha = 1;
+uniform float gamma = 1;
 % for name in child_textures:
 uniform sampler2D ${name};
 % endfor
@@ -22,7 +23,7 @@ void main() {
     merged = composite_${composite}(child, merged);
 %         endif
 %     endfor
-    color = merged * alpha;
+    color = gamma == 1 ? merged * alpha : pow(merged * alpha, vec4(gamma));
 % else:
     color = vec4(0);
 % endif

@@ -607,8 +607,9 @@ class Window(ProgramNode):
             else:
                 logger.debug("{} resized to {}x{}", self.name, width, height)
 
-    def render(self, node, **kwargs):
-        super().render(node, **kwargs)
+    def render(self, node, window_gamma=1, **kwargs):
+        gamma = node.get('gamma', 1, float, window_gamma)
+        super().render(node, gamma=gamma, **kwargs)
         vsync = node.get('vsync', 1, bool, self.default_vsync)
         glfw.swap_interval(1 if vsync else 0)
         glfw.swap_buffers(self.window)

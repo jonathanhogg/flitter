@@ -19,7 +19,7 @@ from ..render import get_renderer
 class EngineController:
     def __init__(self, target_fps=60, screen=0, fullscreen=False, vsync=False, state_file=None,
                  autoreset=None, state_simplify_wait=0, realtime=True, defined_names=None, vm_stats=False,
-                 run_time=None, offscreen=False):
+                 run_time=None, offscreen=False, window_gamma=1):
         self.default_fps = target_fps
         self.target_fps = target_fps
         self.realtime = realtime
@@ -27,6 +27,7 @@ class EngineController:
         self.fullscreen = fullscreen
         self.vsync = vsync
         self.offscreen = offscreen
+        self.window_gamma = window_gamma
         self.autoreset = autoreset
         self.state_simplify_wait = state_simplify_wait
         if defined_names:
@@ -174,7 +175,7 @@ class EngineController:
                 last = beat
                 names = {'beat': beat, 'quantum': self.counter.quantum, 'tempo': self.counter.tempo,
                          'delta': delta, 'clock': frame_time, 'performance': performance,
-                         'fps': self.target_fps, 'realtime': self.realtime,
+                         'fps': self.target_fps, 'realtime': self.realtime, 'window_gamma': self.window_gamma,
                          'screen': self.screen, 'fullscreen': self.fullscreen, 'vsync': self.vsync, 'offscreen': self.offscreen,
                          'sample': self.sample}
 
