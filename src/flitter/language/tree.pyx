@@ -769,11 +769,6 @@ cdef class Call(Expression):
         if self.args:
             for expr in self.args:
                 expr._compile(program, lnames)
-        if isinstance(self.function, Literal) and not self.keyword_args:
-            value = (<Literal>self.function).value
-            if value.length == 1 and value.objects is not None and callable(value.objects[0]) and not hasattr(value.objects[0], 'context_func'):
-                program.call_fast(value.objects[0], len(self.args))
-                return
         cdef Binding keyword_arg
         if self.keyword_args:
             for keyword_arg in self.keyword_args:

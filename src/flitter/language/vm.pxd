@@ -78,7 +78,6 @@ cdef class Program:
     cpdef void slice(self)
     cpdef void slice_literal(self, Vector value)
     cpdef void call(self, int count, tuple names=?)
-    cpdef void call_fast(self, object function, int count)
     cpdef void tag(self, str name)
     cpdef void attribute(self, str name)
     cpdef void append(self, int count=?)

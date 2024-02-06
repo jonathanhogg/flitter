@@ -64,7 +64,6 @@ cdef enum OpCode:
     BranchFalse
     BranchTrue
     Call
-    CallFast
     Compose
     Drop
     Dup
@@ -117,7 +116,6 @@ cdef dict OpCodeNames = {
     OpCode.BranchFalse: 'BranchFalse',
     OpCode.BranchTrue: 'BranchTrue',
     OpCode.Call: 'Call',
-    OpCode.CallFast: 'CallFast',
     OpCode.Compose: 'Compose',
     OpCode.Drop: 'Drop',
     OpCode.Dup: 'Dup',
@@ -165,10 +163,11 @@ cdef dict OpCodeNames = {
 
 cdef initialize_stats():
     global StatsCount, StatsDuration
-    StatsCount = <int*>PyMem_Malloc(OpCode.MAX * sizeof(int))
-    StatsDuration = <double*>PyMem_Malloc(OpCode.MAX * sizeof(double))
+    cdef int n = OpCode.MAX + 1
+    StatsCount = <int*>PyMem_Malloc(n * sizeof(int))
+    StatsDuration = <double*>PyMem_Malloc(n * sizeof(double))
     cdef unsigned int i
-    for i in range(OpCode.MAX):
+    for i in range(n):
         StatsCount[i] = 0
         StatsDuration[i] = 0
 
@@ -553,8 +552,38 @@ cdef class Function:
     cdef readonly tuple parameters
     cdef readonly tuple defaults
     cdef readonly Program program
+    cdef readonly VectorStack stack
     cdef readonly VectorStack lnames
     cdef readonly object root_path
+    cdef readonly bint record_stats
+
+    def __call__(self, Context context, *args, **kwargs):
+        cdef int i, lnames_top, m, n=PyTuple_GET_SIZE(args)
+        cdef PyObject* objptr
+        cdef object saved_path
+        cdef double call_duration
+        m = PyTuple_GET_SIZE(self.parameters)
+        lnames_top = self.lnames.top
+        for i in range(m):
+            if i < n:
+                push(self.lnames, <Vector>PyTuple_GET_ITEM(args, i))
+            elif kwargs is not None and (objptr := PyDict_GetItem(kwargs, <object>PyTuple_GET_ITEM(self.parameters, i))) != NULL:
+                push(self.lnames, <Vector>objptr)
+            else:
+                push(self.lnames, <Vector>PyTuple_GET_ITEM(self.defaults, i))
+        saved_path = context.path
+        context.path = self.root_path
+        if self.record_stats:
+            call_duration = -perf_counter()
+        self.program._execute(context, self.stack, self.lnames, self.record_stats)
+        if self.record_stats:
+            call_duration += perf_counter()
+            StatsDuration[<int>OpCode.Call] -= call_duration
+        drop(self.lnames, m)
+        assert self.stack.top == 0, "Bad function return stack"
+        assert self.lnames.top == lnames_top, "Bad function return lnames"
+        context.path = saved_path
+        return pop(self.stack)
 
 
 cdef class LoopSource:
@@ -568,10 +597,12 @@ def log_vm_stats():
     cdef double duration, total=0
     cdef int count
     cdef unsigned int i
-    cdef double start, end, overhead, per_execution
+    cdef double start, before, end, overhead, per_execution
     start = perf_counter()
     for count in range(10000):
         end = perf_counter()
+        StatsCount[<int>OpCode.MAX] += 1
+        StatsDuration[<int>OpCode.MAX] += end
     overhead = (end - start) / 10000
     if CallOutCount:
         duration = max(0, CallOutDuration - CallOutCount*overhead)
@@ -597,63 +628,35 @@ def log_vm_stats():
 
 cdef inline void call_helper(Context context, VectorStack stack, object function, tuple args, dict kwargs, bint record_stats, double* duration):
     global CallOutDuration, CallOutCount
-    cdef int i, top, lnames_top, m, n=PyTuple_GET_SIZE(args)
+    cdef int i, n=PyTuple_GET_SIZE(args)
     cdef double call_duration
-    cdef tuple parameters, defaults, context_args
-    cdef VectorStack lnames
-    cdef PyObject* objptr
-    cdef object saved_path
-    if type(function) is Function:
-        lnames = (<Function>function).lnames
-        parameters = (<Function>function).parameters
-        defaults = (<Function>function).defaults
-        m = PyTuple_GET_SIZE(parameters)
-        for i in range(m):
-            if i < n:
-                push(lnames, <Vector>PyTuple_GET_ITEM(args, i))
-            elif kwargs is not None and (objptr := PyDict_GetItem(kwargs, <object>PyTuple_GET_ITEM(parameters, i))) != NULL:
-                push(lnames, <Vector>objptr)
-            else:
-                push(lnames, <Vector>PyTuple_GET_ITEM(defaults, i))
-        lnames_top = lnames.top
-        top = stack.top
-        saved_path = context.path
-        context.path = (<Function>function).root_path
-        if record_stats:
-            call_duration = -perf_counter()
-        (<Function>function).program._execute(context, stack, lnames, record_stats)
-        if record_stats:
-            call_duration += perf_counter()
-            duration[0] = duration[0] - call_duration
-        assert stack.top == top + 1, "Bad function return stack"
-        assert lnames.top == lnames_top, "Bad function return lnames"
-        drop(lnames, m)
-        context.path = saved_path
-    else:
-        if PyObject_HasAttrString(function, ContextFunc):
-            context_args = PyTuple_New(n+1)
-            Py_INCREF(context)
-            PyTuple_SET_ITEM(context_args, 0, context)
-            for i in range(n):
-                obj = PyTuple_GET_ITEM(args, i)
-                Py_INCREF(<object>obj)
-                PyTuple_SET_ITEM(context_args, i+1, <object>obj)
-            args = context_args
-        if record_stats:
-            call_duration = -perf_counter()
-        try:
-            if kwargs is None:
-                push(stack, PyObject_CallObject(function, args))
-            else:
-                push(stack, PyObject_Call(function, args, kwargs))
-        except Exception as exc:
-            PySet_Add(context.errors, f"Error calling {function!r}\n{str(exc)}")
-            push(stack, null_)
-        if record_stats:
-            call_duration += perf_counter()
-            CallOutDuration += call_duration
-            CallOutCount += 1
-            duration[0] = duration[0] - call_duration
+    cdef tuple context_args
+    cdef bint is_func = type(function) is Function
+    record_stats &= not is_func
+    if is_func or PyObject_HasAttrString(function, ContextFunc):
+        context_args = PyTuple_New(n+1)
+        Py_INCREF(context)
+        PyTuple_SET_ITEM(context_args, 0, context)
+        for i in range(n):
+            obj = PyTuple_GET_ITEM(args, i)
+            Py_INCREF(<object>obj)
+            PyTuple_SET_ITEM(context_args, i+1, <object>obj)
+        args = context_args
+    if record_stats:
+        call_duration = -perf_counter()
+    try:
+        if kwargs is None:
+            push(stack, PyObject_CallObject(function, args))
+        else:
+            push(stack, PyObject_Call(function, args, kwargs))
+    except Exception as exc:
+        PySet_Add(context.errors, f"Error calling {function!r}\n{str(exc)}")
+        push(stack, null_)
+    if record_stats:
+        call_duration += perf_counter()
+        CallOutDuration += call_duration
+        CallOutCount += 1
+        duration[0] = duration[0] - call_duration
 
 
 cdef inline dict import_module(Context context, str filename, bint record_stats, double* duration):
@@ -1030,9 +1033,6 @@ cdef class Program:
     cpdef void call(self, int count, tuple names=None):
         self.instructions.append(InstructionIntTuple(OpCode.Call, count, names))
 
-    cpdef void call_fast(self, object function, int count):
-        self.instructions.append(InstructionObjectInt(OpCode.CallFast, function, count))
-
     cpdef void tag(self, str name):
         self.instructions.append(InstructionStr(OpCode.Tag, name))
 
@@ -1325,30 +1325,15 @@ cdef class Program:
                         push(stack, null_)
                     r1 = kwargs = args = None
 
-                elif instruction.code == OpCode.CallFast:
-                    args = pop_tuple(stack, (<InstructionObjectInt>instruction).value)
-                    if record_stats:
-                        call_duration = -perf_counter()
-                    try:
-                        r1 = PyObject_CallObject((<InstructionObjectInt>instruction).obj, args)
-                    except Exception as exc:
-                        PySet_Add(context.errors, f"Error calling {function!r}\n{str(exc)}")
-                        r1 = null_
-                    if record_stats:
-                        call_duration += perf_counter()
-                        CallOutDuration += call_duration
-                        CallOutCount += 1
-                        duration -= call_duration
-                    push(stack, r1)
-                    args = r1 = None
-
                 elif instruction.code == OpCode.Func:
                     function = Function.__new__(Function)
                     function.__name__ = (<InstructionStrTuple>instruction).svalue
                     function.parameters = (<InstructionStrTuple>instruction).tvalue
                     function.program = <Program>pop(stack).objects[0]
                     function.lnames = lnames.copy()
+                    function.stack = VectorStack.__new__(VectorStack)
                     function.root_path = context.path
+                    function.record_stats = record_stats
                     n = PyTuple_GET_SIZE(function.parameters)
                     function.defaults = pop_tuple(stack, n) if n else ()
                     r1 = <Vector>Vector.__new__(Vector)
