@@ -8,8 +8,15 @@ import tempfile
 import unittest
 
 import PIL.Image
+import PIL.ImageChops
+import PIL.ImageStat
 
 from flitter.engine.control import EngineController
+
+
+def image_diff(reference_img, img):
+    """Return the RMS per-pixel difference of two images for each of the channels"""
+    return PIL.ImageStat.Stat(PIL.ImageChops.difference(reference_img, img)).rms
 
 
 class TestRendering(unittest.TestCase):
