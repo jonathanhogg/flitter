@@ -25,6 +25,12 @@ def context_func(func):
     return func
 
 
+@context_func
+def debug(Context context, Vector value):
+    context.logs.add(value.repr())
+    return value
+
+
 cdef class Uniform(Vector):
     def __cinit__(self, value=None):
         self._hash = self.hash(True)
@@ -916,6 +922,7 @@ STATIC_FUNCTIONS = {
 }
 
 DYNAMIC_FUNCTIONS = {
+    'debug': Vector(debug),
     'counter': Vector(counter),
     'csv': Vector(read_csv),
     'read': Vector(read_text),

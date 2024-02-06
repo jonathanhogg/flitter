@@ -38,6 +38,7 @@ logger = name_patch(logger, __name__)
 
 cdef const char* ContextFunc = "context_func\0"
 
+cdef dict dynamic_builtins = DYNAMIC_FUNCTIONS
 cdef dict static_builtins = {
     'true': true_,
     'false': false_,
@@ -45,18 +46,6 @@ cdef dict static_builtins = {
 }
 static_builtins.update(STATIC_FUNCTIONS)
 static_builtins.update(NOISE_FUNCTIONS)
-
-
-def debug(value):
-    return value
-
-
-cdef object _debug_func = debug
-
-cdef dict dynamic_builtins = {
-    'debug': Vector(_debug_func),
-}
-dynamic_builtins.update(DYNAMIC_FUNCTIONS)
 
 cdef dict all_builtins = {}
 all_builtins.update(dynamic_builtins)
@@ -640,10 +629,6 @@ cdef inline void call_helper(Context context, VectorStack stack, object function
         assert lnames.top == lnames_top, "Bad function return lnames"
         drop(lnames, m)
         context.path = saved_path
-    elif function is _debug_func and n == 1 and kwargs is None:
-        obj = PyTuple_GET_ITEM(args, 0)
-        PySet_Add(context.logs, (<Vector>obj).repr())
-        push(stack, <Vector>obj)
     else:
         if PyObject_HasAttrString(function, ContextFunc):
             context_args = PyTuple_New(n+1)
