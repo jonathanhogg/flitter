@@ -763,7 +763,6 @@ cdef class Call(Expression):
         self.keyword_args = keyword_args
 
     cdef void _compile(self, Program program, list lnames):
-        cdef Vector value
         cdef Expression expr
         cdef list names = []
         if self.args:

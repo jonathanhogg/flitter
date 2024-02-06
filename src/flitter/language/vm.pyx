@@ -597,7 +597,7 @@ def log_vm_stats():
     cdef double duration, total=0
     cdef int count
     cdef unsigned int i
-    cdef double start, before, end, overhead, per_execution
+    cdef double start, end, overhead, per_execution
     start = perf_counter()
     for count in range(10000):
         end = perf_counter()
@@ -1066,7 +1066,7 @@ cdef class Program:
         cdef dict global_names=context.names, builtins=all_builtins, state=context.state._state
         cdef list loop_sources=[]
         cdef LoopSource loop_source = None
-        cdef double duration, call_duration
+        cdef double duration
 
         cdef list instructions=self.instructions
         cdef Instruction instruction=None
