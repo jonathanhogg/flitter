@@ -1,5 +1,5 @@
 
-name: Python linting
+name: CI lint
 
 on:
   push:

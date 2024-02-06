@@ -1,7 +1,7 @@
 # This workflow will install Python dependencies, run tests and lint with a variety of Python versions
 # For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
 
-name: Python package
+name: Release package
 
 on:
   release:
@@ -30,7 +30,7 @@ jobs:
         path: dist/
 
   publish-to-pypi:
-    name: Publish Python distribution to PyPI
+    name: Publish package to PyPI
     needs:
     - build
     runs-on: ubuntu-latest
@@ -40,7 +40,7 @@ jobs:
     permissions:
       id-token: write
     steps:
-    - name: Download the distribution
+    - name: Retrieve the distribution
       uses: actions/download-artifact@v4
       with:
         path: dist/
