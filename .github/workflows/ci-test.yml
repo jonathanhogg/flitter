@@ -5,11 +5,11 @@ on:
   push:
     branches: ["main"]
     paths:
-    - ".github/workflows/python-test.yml"
+    - ".github/workflows/ci-test.yml"
     - "pyproject.toml"
     - "setup.py"
     - "src/**/*"
-    - "tests/*"
+    - "tests/**/*"
   pull_request:
     branches: ["main"]
 

@@ -3,7 +3,8 @@ with trails moving outwards from the centre of the screen.](https://github.com/j
 
 # Flitter
 
-[![Python tests](https://github.com/jonathanhogg/flitter/actions/workflows/python-test.yml/badge.svg)](https://github.com/jonathanhogg/flitter/actions/workflows/python-test.yml)
+[![CI lint](https://github.com/jonathanhogg/flitter/actions/workflows/ci-lint.yml/badge.svg?)](https://github.com/jonathanhogg/flitter/actions/workflows/ci-lint.yml)
+[![CI test](https://github.com/jonathanhogg/flitter/actions/workflows/ci-test.yml/badge.svg?)](https://github.com/jonathanhogg/flitter/actions/workflows/ci-test.yml)
 
 **Flitter** is a functional programming language wrapped around a declarative
 system for describing 2D and 3D visuals. [The language](https://github.com/jonathanhogg/flitter/blob/main/docs/language.md)

@@ -5,9 +5,13 @@ on:
   push:
     branches: ["main"]
     paths:
-    - ".github/workflows/python-lint.yml"
-    - "src/**/*"
-    - "tests/*"
+    - ".github/workflows/ci-lint.yml"
+    - "pyproject.toml"
+    - ".flake8"
+    - "src/**/*.py"
+    - "src/**/*.pyx"
+    - "src/**/*.pxd"
+    - "tests/**/*.py"
   pull_request:
     branches: ["main"]
 
