@@ -521,10 +521,11 @@ class TestFunc(unittest.TestCase):
         self.func_program.link()
         self.program.literal(2)
         self.program.local_push(1)
+        self.program.local_load(0)
         self.program.literal(null)
         self.program.literal(1)
         self.program.literal(self.func_program)
-        self.program.func('f', ('x', 'y'))
+        self.program.func('f', ('x', 'y'), 1)
         self.program.local_push(1)
 
     def test_declare(self):

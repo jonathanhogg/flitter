@@ -160,7 +160,7 @@ cdef class StateDict:
 
 cdef class Context:
     cdef readonly dict names
-    cdef readonly set unbound
+    cdef readonly set captures
     cdef readonly dict pragmas
     cdef readonly StateDict state
     cdef readonly Node graph
@@ -168,3 +168,5 @@ cdef class Context:
     cdef readonly Context parent
     cdef readonly set errors
     cdef readonly set logs
+    cdef readonly object stack
+    cdef readonly object lnames

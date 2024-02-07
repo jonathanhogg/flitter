@@ -252,17 +252,19 @@ cdef class InstructionIntTuple(Instruction):
         return f'{OpCodeNames[self.code]} {self.ivalue!r} {self.tvalue!r}'
 
 
-cdef class InstructionStrTuple(Instruction):
+cdef class InstructionStrTupleInt(Instruction):
     cdef readonly str svalue
     cdef readonly tuple tvalue
+    cdef readonly int ivalue
 
-    def __init__(self, OpCode code, str svalue, tuple tvalue):
+    def __init__(self, OpCode code, str svalue, tuple tvalue, int ivalue):
         super().__init__(code)
         self.svalue = svalue
         self.tvalue = tvalue
+        self.ivalue = ivalue
 
     def __str__(self):
-        return f'{OpCodeNames[self.code]} {self.svalue!r} {self.tvalue!r}'
+        return f'{OpCodeNames[self.code]} {self.svalue!r} {self.tvalue!r} {self.ivalue!r}'
 
 
 cdef class InstructionLabel(Instruction):
@@ -552,20 +554,20 @@ cdef class Function:
     cdef readonly tuple parameters
     cdef readonly tuple defaults
     cdef readonly Program program
-    cdef readonly VectorStack stack
-    cdef readonly VectorStack lnames
     cdef readonly object root_path
     cdef readonly bint record_stats
+    cdef readonly tuple captures
 
     def __call__(self, Context context, *args, **kwargs):
-        cdef int i, lnames_top, stack_top, m, n=PyTuple_GET_SIZE(args)
+        cdef int i, lnames_top, stack_top, k=PyTuple_GET_SIZE(self.captures), m=PyTuple_GET_SIZE(self.parameters), n=PyTuple_GET_SIZE(args)
         cdef PyObject* objptr
         cdef object saved_path
-        m = PyTuple_GET_SIZE(self.parameters)
-        cdef VectorStack lnames = self.lnames.copy()
+        cdef VectorStack lnames = context.lnames
         lnames_top = lnames.top
-        cdef VectorStack stack = self.stack
+        cdef VectorStack stack = context.stack
         stack_top = stack.top
+        for i in range(k):
+            push(lnames, <Vector>PyTuple_GET_ITEM(self.captures, i))
         push(lnames, Vector.__new__(Vector, self))
         for i in range(m):
             if i < n:
@@ -576,8 +578,8 @@ cdef class Function:
                 push(lnames, <Vector>PyTuple_GET_ITEM(self.defaults, i))
         saved_path = context.path
         context.path = self.root_path
-        self.program._execute(context, stack, lnames, self.record_stats)
-        drop(lnames, m + 1)
+        self.program._execute(context, self.record_stats)
+        drop(lnames, k + 1 + m)
         cdef Vector result = pop(stack)
         assert stack.top == stack_top, "Bad function return stack"
         assert lnames.top == lnames_top, "Bad function return lnames"
@@ -659,36 +661,37 @@ cdef inline void call_helper(Context context, VectorStack stack, object function
 
 
 cdef inline dict import_module(Context context, str filename, bint record_stats, double* duration):
-    cdef Context import_context
     cdef Program program = SharedCache.get_with_root(filename, context.path).read_flitter_program()
-    if program is not None:
-        import_context = context
-        while import_context is not None:
-            if import_context.path is program.path:
-                PySet_Add(context.errors, f"Circular import of {filename}")
-                break
-            import_context = import_context.parent
-        else:
-            import_context = Context.__new__(Context)
-            import_context.parent = context
-            import_context.errors = context.errors
-            import_context.logs = context.logs
-            import_context.graph = context.graph
-            import_context.pragmas = context.pragmas
-            import_context.state = context.state
-            import_context.names = {}
-            import_context.path = program.path
-            push(program.stack, Vector(Node('root')))
-            if record_stats:
-                duration[0] += perf_counter()
-            program._execute(import_context, program.stack, program.lnames, record_stats)
-            if record_stats:
-                duration[0] -= perf_counter()
-            assert program.stack.top == 0, "Bad stack"
-            drop(program.stack, 1)
-            assert program.lnames.top == -1, "Bad lnames"
-            return import_context.names
-    return None
+    if program is None:
+        return None
+    cdef Context import_context = context
+    while import_context is not None:
+        if import_context.path is program.path:
+            PySet_Add(context.errors, f"Circular import of {filename}")
+            return None
+        import_context = import_context.parent
+    cdef VectorStack stack=context.stack, lnames=context.lnames
+    cdef int stack_top=stack.top, lnames_top=lnames.top
+    import_context = Context.__new__(Context)
+    import_context.parent = context
+    import_context.errors = context.errors
+    import_context.logs = context.logs
+    import_context.pragmas = context.pragmas
+    import_context.state = context.state
+    import_context.names = {}
+    import_context.path = program.path
+    import_context.stack = stack
+    import_context.lnames = lnames
+    push(stack, Vector(Node('root')))
+    if record_stats:
+        duration[0] += perf_counter()
+    program._execute(import_context, record_stats)
+    if record_stats:
+        duration[0] -= perf_counter()
+    drop(stack, 1)
+    assert stack.top == stack_top, "Bad stack"
+    assert lnames.top == lnames_top, "Bad lnames"
+    return import_context.names
 
 
 cdef inline void execute_append(VectorStack stack, int count):
@@ -803,8 +806,6 @@ cdef class Program:
     def __cinit__(self):
         self.instructions = []
         self.linked = False
-        self.stack = VectorStack.__new__(VectorStack)
-        self.lnames = VectorStack.__new__(VectorStack)
         self.next_label = 1
 
     def __len__(self):
@@ -823,20 +824,22 @@ cdef class Program:
         """This is a test-harness function. Do not use."""
         if not self.linked:
             self.link()
-        cdef VectorStack lnames_stack = VectorStack()
+        if context.lnames is None:
+            context.lnames = VectorStack()
         if lnames:
             for item in lnames:
-                lnames_stack.push(Vector._coerce(item))
-        cdef VectorStack stack = VectorStack()
+                context.lnames.push(Vector._coerce(item))
+        if context.stack is None:
+            context.stack = VectorStack()
         if initial_stack:
             for item in initial_stack:
-                stack.push(Vector._coerce(item))
-        self._execute(context, stack, lnames_stack, record_stats)
+                context.stack.push(Vector._coerce(item))
+        self._execute(context, record_stats)
         if lnames is not None:
             lnames.clear()
-            while len(lnames_stack):
-                lnames.insert(0, lnames_stack.pop())
-        return stack.pop_list(len(stack))
+            while len(context.lnames):
+                lnames.insert(0, context.lnames.pop())
+        return context.stack.pop_list(len(context.stack))
 
     def run(self, StateDict state=None, dict names=None, bint record_stats=False):
         cdef dict context_names = None
@@ -849,11 +852,17 @@ cdef class Program:
             for key, value in names.items():
                 context_names[key] = Vector._coerce(value)
         cdef Context context = Context(state=state, names=context_names, path=self.path)
+        if self.stack is None:
+            self.stack = VectorStack.__new__(VectorStack)
+        context.stack = self.stack
+        if self.lnames is None:
+            self.lnames = VectorStack.__new__(VectorStack)
+        context.lnames = self.lnames
         push(self.stack, Vector(context.graph))
-        self._execute(context, self.stack, self.lnames, record_stats)
+        self._execute(context, record_stats)
         context.graph = pop(self.stack).objects[0]
-        assert self.stack.top == -1, "Bad stack"
-        assert self.lnames.top == -1, "Bad lnames"
+        assert (<VectorStack>self.stack).top == -1, "Bad stack"
+        assert (<VectorStack>self.lnames).top == -1, "Bad lnames"
         return context
 
     cpdef void link(self):
@@ -1058,11 +1067,12 @@ cdef class Program:
     cpdef void store_global(self, str name):
         self.instructions.append(InstructionStr(OpCode.StoreGlobal, name))
 
-    cpdef void func(self, str name, tuple parameters):
-        self.instructions.append(InstructionStrTuple(OpCode.Func, name, parameters))
+    cpdef void func(self, str name, tuple parameters, int ncaptures=0):
+        self.instructions.append(InstructionStrTupleInt(OpCode.Func, name, parameters, ncaptures))
 
-    cdef void _execute(self, Context context, VectorStack stack, VectorStack lnames, bint record_stats):
+    cdef void _execute(self, Context context, bint record_stats):
         global CallOutCount, CallOutDuration
+        cdef VectorStack stack=context.stack, lnames=context.lnames
         cdef int i, n, pc=0, program_end=len(self.instructions)
         cdef dict global_names=context.names, builtins=all_builtins, state=context.state._state
         cdef list loop_sources=[]
@@ -1328,15 +1338,14 @@ cdef class Program:
 
                 elif instruction.code == OpCode.Func:
                     function = Function.__new__(Function)
-                    function.__name__ = (<InstructionStrTuple>instruction).svalue
-                    function.parameters = (<InstructionStrTuple>instruction).tvalue
+                    function.__name__ = (<InstructionStrTupleInt>instruction).svalue
+                    function.parameters = (<InstructionStrTupleInt>instruction).tvalue
                     function.program = <Program>pop(stack).objects[0]
-                    function.lnames = lnames.copy()
-                    function.stack = VectorStack.__new__(VectorStack)
                     function.root_path = context.path
                     function.record_stats = record_stats
                     n = PyTuple_GET_SIZE(function.parameters)
-                    function.defaults = pop_tuple(stack, n) if n else ()
+                    function.defaults = pop_tuple(stack, n)
+                    function.captures = pop_tuple(stack, (<InstructionStrTupleInt>instruction).ivalue)
                     r1 = <Vector>Vector.__new__(Vector)
                     r1.objects = (function,)
                     r1.length = 1

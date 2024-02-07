@@ -1869,6 +1869,5 @@ cdef class Context:
         self.pragmas = pragmas if pragmas is not None else {}
         self.path = path
         self.parent = parent
-        self.unbound = None
         self.errors = set()
         self.logs = set()
