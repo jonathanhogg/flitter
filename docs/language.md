@@ -691,7 +691,9 @@ will evaluate to `!foo z=15` *not* `!foo z=25`.
 
 A function definition is itself an implicit `let` that binds the function
 definition to the function name in the definition scope. Functions are values
-in the **flitter** language and may be manipulated as such.
+in the **flitter** language and may be manipulated as such. Functions may also
+recursively call themselves. That is, the function name is in scope within the
+body of the function.
 
 Function calls may include out-of-order named arguments, e.g.:
 
@@ -705,6 +707,14 @@ func multiply_add(x, y=1, z)
 will bind the arguments to parameters with `x` taking the value `2`, `y` taking
 the value `1` and `z` taking the value `3`. Named arguments should be given
 *after* any positional arguments and should not repeat positional arguments.
+
+Functions that have all literal (or unspecified) default parameter values, and
+that do not reference any non-local names within the body, will be in-lined by
+the simplifier at each call site. The simplifier is then able to bind the
+parameters to the argument expressions and continue simplifying the body on
+that basis. Therefore, it is often more efficient to pass dynamic values (such
+as `beat`) into the function as parameters than allow them to be captured from
+the environment.
 
 ## Template function calls
 
@@ -741,6 +751,9 @@ draws another circle 25% smaller in red on top. Both `!path` nodes will be
 wrapped with `!transform` nodes, the first with `scale=1` and the second with
 `scale=0.75`. The `!transform` nodes returned by the two template function
 calls are appended to the `!canvas` node.
+
+As template function calls convert into regular function calls, templates may
+be used recursively.
 
 ## Pseudo-random sources
 
