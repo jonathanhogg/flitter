@@ -86,5 +86,6 @@ cdef class Program:
     cpdef void next(self, int count, int label)
     cpdef void end_for_compose(self)
     cpdef void store_global(self, str name)
-    cpdef void func(self, str name, tuple parameters, int ncaptures=?)
-    cdef void _execute(self, Context context, bint record_stats)
+    cpdef void func(self, int label, str name, tuple parameters, int ncaptures=?)
+    cpdef void exit(self)
+    cdef void _execute(self, Context context, int pc, bint record_stats)

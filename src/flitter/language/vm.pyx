@@ -71,6 +71,7 @@ cdef enum OpCode:
     Eq
     FloorDiv
     Func
+    Exit
     Ge
     Gt
     Import
@@ -123,6 +124,7 @@ cdef dict OpCodeNames = {
     OpCode.Eq: 'Eq',
     OpCode.FloorDiv: 'FloorDiv',
     OpCode.Func: 'Func',
+    OpCode.Exit: 'Exit',
     OpCode.Ge: 'Ge',
     OpCode.Gt: 'Gt',
     OpCode.Import: 'Import',
@@ -252,21 +254,6 @@ cdef class InstructionIntTuple(Instruction):
         return f'{OpCodeNames[self.code]} {self.ivalue!r} {self.tvalue!r}'
 
 
-cdef class InstructionStrTupleInt(Instruction):
-    cdef readonly str svalue
-    cdef readonly tuple tvalue
-    cdef readonly int ivalue
-
-    def __init__(self, OpCode code, str svalue, tuple tvalue, int ivalue):
-        super().__init__(code)
-        self.svalue = svalue
-        self.tvalue = tvalue
-        self.ivalue = ivalue
-
-    def __str__(self):
-        return f'{OpCodeNames[self.code]} {self.svalue!r} {self.tvalue!r} {self.ivalue!r}'
-
-
 cdef class InstructionLabel(Instruction):
     cdef readonly int label
 
@@ -303,6 +290,21 @@ cdef class InstructionJumpInt(InstructionJump):
         if self.offset:
             return f'{OpCodeNames[self.code]} {self.value!r} .L{self.label} ({self.offset:+d})'
         return f'{OpCodeNames[self.code]} {self.value!r} .L{self.label}'
+
+
+cdef class InstructionFunc(InstructionJump):
+    cdef readonly str name
+    cdef readonly tuple parameters
+    cdef readonly int ncaptures
+
+    def __init__(self, OpCode code, int label, str name, tuple parameters, int ncaptures):
+        super().__init__(code, label)
+        self.name = name
+        self.parameters = parameters
+        self.ncaptures = ncaptures
+
+    def __str__(self):
+        return f'{OpCodeNames[self.code]} {self.svalue!r} {self.tvalue!r} {self.ivalue!r}'
 
 
 cdef class InstructionObjectInt(Instruction):
@@ -554,6 +556,7 @@ cdef class Function:
     cdef readonly tuple parameters
     cdef readonly tuple defaults
     cdef readonly Program program
+    cdef readonly int address
     cdef readonly object root_path
     cdef readonly bint record_stats
     cdef readonly tuple captures
@@ -578,7 +581,7 @@ cdef class Function:
                 push(lnames, <Vector>PyTuple_GET_ITEM(self.defaults, i))
         saved_path = context.path
         context.path = self.root_path
-        self.program._execute(context, self.record_stats)
+        self.program._execute(context, self.address, self.record_stats)
         drop(lnames, k + 1 + m)
         cdef Vector result = pop(stack)
         assert stack.top == stack_top, "Bad function return stack"
@@ -685,7 +688,7 @@ cdef inline dict import_module(Context context, str filename, bint record_stats,
     push(stack, Vector(Node('root')))
     if record_stats:
         duration[0] += perf_counter()
-    program._execute(import_context, record_stats)
+    program._execute(import_context, 0, record_stats)
     if record_stats:
         duration[0] -= perf_counter()
     drop(stack, 1)
@@ -834,7 +837,7 @@ cdef class Program:
         if initial_stack:
             for item in initial_stack:
                 context.stack.push(Vector._coerce(item))
-        self._execute(context, record_stats)
+        self._execute(context, 0, record_stats)
         if lnames is not None:
             lnames.clear()
             while len(context.lnames):
@@ -859,7 +862,7 @@ cdef class Program:
             self.lnames = VectorStack.__new__(VectorStack)
         context.lnames = self.lnames
         push(self.stack, Vector(context.graph))
-        self._execute(context, record_stats)
+        self._execute(context, 0, record_stats)
         context.graph = pop(self.stack).objects[0]
         assert (<VectorStack>self.stack).top == -1, "Bad stack"
         assert (<VectorStack>self.lnames).top == -1, "Bad lnames"
@@ -1067,13 +1070,16 @@ cdef class Program:
     cpdef void store_global(self, str name):
         self.instructions.append(InstructionStr(OpCode.StoreGlobal, name))
 
-    cpdef void func(self, str name, tuple parameters, int ncaptures=0):
-        self.instructions.append(InstructionStrTupleInt(OpCode.Func, name, parameters, ncaptures))
+    cpdef void func(self, int label, str name, tuple parameters, int ncaptures=0):
+        self.instructions.append(InstructionFunc(OpCode.Func, label, name, parameters, ncaptures))
 
-    cdef void _execute(self, Context context, bint record_stats):
+    cpdef void exit(self):
+        self.instructions.append(Instruction(OpCode.Exit))
+
+    cdef void _execute(self, Context context, int pc, bint record_stats):
         global CallOutCount, CallOutDuration
         cdef VectorStack stack=context.stack, lnames=context.lnames
-        cdef int i, n, pc=0, program_end=len(self.instructions)
+        cdef int i, n, program_end=len(self.instructions)
         cdef dict global_names=context.names, builtins=all_builtins, state=context.state._state
         cdef list loop_sources=[]
         cdef LoopSource loop_source = None
@@ -1109,6 +1115,9 @@ cdef class Program:
 
                 elif instruction.code == OpCode.Jump:
                     pc += (<InstructionJump>instruction).offset
+
+                elif instruction.code == OpCode.Exit:
+                    pc = program_end
 
                 elif instruction.code == OpCode.BranchTrue:
                     if pop(stack).as_bool():
@@ -1338,14 +1347,15 @@ cdef class Program:
 
                 elif instruction.code == OpCode.Func:
                     function = Function.__new__(Function)
-                    function.__name__ = (<InstructionStrTupleInt>instruction).svalue
-                    function.parameters = (<InstructionStrTupleInt>instruction).tvalue
-                    function.program = <Program>pop(stack).objects[0]
+                    function.__name__ = (<InstructionFunc>instruction).name
+                    function.parameters = (<InstructionFunc>instruction).parameters
+                    function.program = self
+                    function.address = (<InstructionFunc>instruction).offset + pc
                     function.root_path = context.path
                     function.record_stats = record_stats
                     n = PyTuple_GET_SIZE(function.parameters)
                     function.defaults = pop_tuple(stack, n)
-                    function.captures = pop_tuple(stack, (<InstructionStrTupleInt>instruction).ivalue)
+                    function.captures = pop_tuple(stack, (<InstructionFunc>instruction).ncaptures)
                     r1 = <Vector>Vector.__new__(Vector)
                     r1.objects = (function,)
                     r1.length = 1
