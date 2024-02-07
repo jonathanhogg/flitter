@@ -558,32 +558,31 @@ cdef class Function:
     cdef readonly bint record_stats
 
     def __call__(self, Context context, *args, **kwargs):
-        cdef int i, lnames_top, m, n=PyTuple_GET_SIZE(args)
+        cdef int i, lnames_top, stack_top, m, n=PyTuple_GET_SIZE(args)
         cdef PyObject* objptr
         cdef object saved_path
-        cdef double call_duration
         m = PyTuple_GET_SIZE(self.parameters)
-        lnames_top = self.lnames.top
+        cdef VectorStack lnames = self.lnames.copy()
+        lnames_top = lnames.top
+        cdef VectorStack stack = self.stack
+        stack_top = stack.top
+        push(lnames, Vector.__new__(Vector, self))
         for i in range(m):
             if i < n:
-                push(self.lnames, <Vector>PyTuple_GET_ITEM(args, i))
+                push(lnames, <Vector>PyTuple_GET_ITEM(args, i))
             elif kwargs is not None and (objptr := PyDict_GetItem(kwargs, <object>PyTuple_GET_ITEM(self.parameters, i))) != NULL:
-                push(self.lnames, <Vector>objptr)
+                push(lnames, <Vector>objptr)
             else:
-                push(self.lnames, <Vector>PyTuple_GET_ITEM(self.defaults, i))
+                push(lnames, <Vector>PyTuple_GET_ITEM(self.defaults, i))
         saved_path = context.path
         context.path = self.root_path
-        if self.record_stats:
-            call_duration = -perf_counter()
-        self.program._execute(context, self.stack, self.lnames, self.record_stats)
-        if self.record_stats:
-            call_duration += perf_counter()
-            StatsDuration[<int>OpCode.Call] -= call_duration
-        drop(self.lnames, m)
-        assert self.stack.top == 0, "Bad function return stack"
-        assert self.lnames.top == lnames_top, "Bad function return lnames"
+        self.program._execute(context, stack, lnames, self.record_stats)
+        drop(lnames, m + 1)
+        cdef Vector result = pop(stack)
+        assert stack.top == stack_top, "Bad function return stack"
+        assert lnames.top == lnames_top, "Bad function return lnames"
         context.path = saved_path
-        return pop(self.stack)
+        return result
 
 
 cdef class LoopSource:
@@ -632,7 +631,6 @@ cdef inline void call_helper(Context context, VectorStack stack, object function
     cdef double call_duration
     cdef tuple context_args
     cdef bint is_func = type(function) is Function
-    record_stats &= not is_func
     if is_func or PyObject_HasAttrString(function, ContextFunc):
         context_args = PyTuple_New(n+1)
         Py_INCREF(context)
@@ -654,9 +652,10 @@ cdef inline void call_helper(Context context, VectorStack stack, object function
         push(stack, null_)
     if record_stats:
         call_duration += perf_counter()
-        CallOutDuration += call_duration
-        CallOutCount += 1
         duration[0] = duration[0] - call_duration
+        if not is_func:
+            CallOutDuration += call_duration
+            CallOutCount += 1
 
 
 cdef inline dict import_module(Context context, str filename, bint record_stats, double* duration):
@@ -820,16 +819,18 @@ cdef class Program:
     def set_top(self, object top):
         self.top = top
 
-    def execute(self, Context context, list lnames=None, bint record_stats=False):
+    def execute(self, Context context, list initial_stack=None, list lnames=None, bint record_stats=False):
         """This is a test-harness function. Do not use."""
         if not self.linked:
             self.link()
         cdef VectorStack lnames_stack = VectorStack()
-        cdef Vector vector
         if lnames:
-            for vector in lnames:
-                lnames_stack.push(vector)
+            for item in lnames:
+                lnames_stack.push(Vector._coerce(item))
         cdef VectorStack stack = VectorStack()
+        if initial_stack:
+            for item in initial_stack:
+                stack.push(Vector._coerce(item))
         self._execute(context, stack, lnames_stack, record_stats)
         if lnames is not None:
             lnames.clear()

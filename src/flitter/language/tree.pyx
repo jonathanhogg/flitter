@@ -802,7 +802,7 @@ cdef class Call(Expression):
         if isinstance(function, FunctionName):
             func_expr = context.names[(<FunctionName>function).name]
             kwargs = {binding.name: binding.expr for binding in keyword_args}
-            bindings = []
+            bindings = [PolyBinding(((<FunctionName>function).name,), func_expr)]
             for i, binding in enumerate(func_expr.parameters):
                 if i < len(args):
                     bindings.append(PolyBinding((binding.name,), <Expression>args[i]))
@@ -1113,6 +1113,9 @@ cdef class InlineLet(Expression):
                 else:
                     for i, name in enumerate(binding.names):
                         context.names[name] = value.item(i)
+            elif isinstance(expr, Function) and len(binding.names) == 1:
+                name = binding.names[0]
+                context.names[name] = expr
             elif isinstance(expr, Name) and len(binding.names) == 1:
                 name = binding.names[0]
                 if (<Name>expr).name != name:
@@ -1268,7 +1271,7 @@ cdef class Function(Expression):
             else:
                 parameter.expr._compile(program, lnames)
         cdef Program body = Program.__new__(Program)
-        self.expr._compile(body, lnames + names)
+        self.expr._compile(body, lnames + [self.name] + names)
         body.optimize()
         body.link()
         program.literal(body)
@@ -1294,6 +1297,7 @@ cdef class Function(Expression):
         for key, value in saved.items():
             if value is not None:
                 context.names[key] = value
+        context.names[self.name] = None
         for parameter in parameters:
             context.names[parameter.name] = None
         expr = self.expr._simplify(context)
