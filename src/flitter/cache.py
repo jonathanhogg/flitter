@@ -98,7 +98,8 @@ class CachePath:
         return data
 
     def read_flitter_program(self, static=None, dynamic=None):
-        current_program = self._cache.get('flitter', False)
+        key = 'flitter', tuple(sorted(static.items())) if static else None, tuple(dynamic) if dynamic else ()
+        current_program = self._cache.get(key, False)
         if current_program is not False and self.check_unmodified():
             return current_program
         if self._mtime is None:
@@ -123,7 +124,7 @@ class CachePath:
                 now = system_clock()
                 simplify_time += now
                 compile_time = -now
-                program = top.compile()
+                program = top.compile(initial_lnames=tuple(dynamic) if dynamic else ())
                 program.set_top(top)
                 program.set_path(self)
                 compile_time += system_clock()
@@ -141,7 +142,7 @@ class CachePath:
             except Exception as exc:
                 logger.opt(exception=exc).error("Error reading program: {}", self._path)
                 program = current_program
-        self._cache['flitter'] = program
+        self._cache[key] = program
         return program
 
     def read_csv_vector(self, row_number):

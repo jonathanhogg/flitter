@@ -91,7 +91,6 @@ cdef enum OpCode:
     Mod
     Mul
     MulAdd
-    Name
     Ne
     Neg
     Next
@@ -144,7 +143,6 @@ cdef dict OpCodeNames = {
     OpCode.Mod: 'Mod',
     OpCode.Mul: 'Mul',
     OpCode.MulAdd: 'MulAdd',
-    OpCode.Name: 'Name',
     OpCode.Ne: 'Ne',
     OpCode.Neg: 'Neg',
     OpCode.Next: 'Next',
@@ -808,6 +806,7 @@ cdef inline execute_tag(VectorStack stack, str name):
 cdef class Program:
     def __cinit__(self):
         self.instructions = []
+        self.initial_lnames = ()
         self.linked = False
         self.next_label = 1
 
@@ -825,6 +824,7 @@ cdef class Program:
 
     def execute(self, Context context, list initial_stack=None, list lnames=None, bint record_stats=False):
         """This is a test-harness function. Do not use."""
+        assert self.initial_lnames == ()
         if not self.linked:
             self.link()
         if context.lnames is None:
@@ -852,9 +852,18 @@ cdef class Program:
             self.lnames = VectorStack.__new__(VectorStack)
         context.lnames = self.lnames
         context.path = self.path
+        cdef int i, n=PyTuple_GET_SIZE(self.initial_lnames)
+        cdef PyObject* objptr
+        for i in range(n):
+            objptr = PyDict_GetItem(context.names, <object>PyTuple_GET_ITEM(self.initial_lnames, i))
+            if objptr != NULL:
+                push(self.lnames, <Vector>objptr)
+            else:
+                push(self.lnames, null_)
         push(self.stack, Vector(context.root))
         self._execute(context, 0, record_stats)
         context.root = pop(self.stack).objects[0]
+        drop(self.lnames, n)
         assert (<VectorStack>self.stack).top == -1, "Bad stack"
         assert (<VectorStack>self.lnames).top == -1, "Bad lnames"
 
@@ -957,9 +966,6 @@ cdef class Program:
 
     cpdef void local_drop(self, int count):
         self.instructions.append(InstructionInt(OpCode.LocalDrop, count))
-
-    cpdef void name(self, str name):
-        self.instructions.append(InstructionStr(OpCode.Name, name))
 
     cpdef void lookup(self):
         self.instructions.append(Instruction(OpCode.Lookup))
@@ -1070,7 +1076,7 @@ cdef class Program:
         global CallOutCount, CallOutDuration
         cdef VectorStack stack=context.stack, lnames=context.lnames
         cdef int i, n, program_end=len(self.instructions)
-        cdef dict global_names=context.names, builtins=all_builtins, state=context.state._state
+        cdef dict global_names=context.names, state=context.state._state
         cdef list loop_sources=[]
         cdef LoopSource loop_source = None
         cdef double duration
@@ -1078,7 +1084,6 @@ cdef class Program:
         cdef list instructions=self.instructions
         cdef Instruction instruction=None
         cdef str filename
-        cdef object name
         cdef tuple names, args, nodes
         cdef Vector r1, r2, r3
         cdef dict import_names, kwargs
@@ -1179,19 +1184,6 @@ cdef class Program:
                         for i in range(n):
                             push(lnames, r1.item(i))
                     r1 = None
-
-                elif instruction.code == OpCode.Name:
-                    name = (<InstructionStr>instruction).value
-                    objptr = PyDict_GetItem(global_names, name)
-                    if objptr == NULL:
-                        objptr = PyDict_GetItem(builtins, name)
-                    if objptr != NULL:
-                        push(stack, <Vector>objptr)
-                    else:
-                        push(stack, null_)
-                        PySet_Add(context.errors, f"Unbound name '{<str>name}'")
-                    name = None
-                    objptr = NULL
 
                 elif instruction.code == OpCode.Lookup:
                     objptr = PyDict_GetItem(state, peek(stack))

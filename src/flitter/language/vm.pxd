@@ -34,6 +34,7 @@ cdef class Program:
     cdef bint linked
     cdef readonly object path
     cdef readonly object top
+    cdef readonly tuple initial_lnames
     cdef readonly VectorStack stack
     cdef readonly VectorStack lnames
     cdef int next_label
@@ -53,7 +54,6 @@ cdef class Program:
     cpdef void local_push(self, int count)
     cpdef void local_load(self, int offset)
     cpdef void local_drop(self, int count)
-    cpdef void name(self, str name)
     cpdef void lookup(self)
     cpdef void lookup_literal(self, Vector value)
     cpdef void range(self)

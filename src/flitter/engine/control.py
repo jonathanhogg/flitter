@@ -178,7 +178,7 @@ class EngineController:
                     now = system_clock()
                     simplify_time += now
                     compile_time = -now
-                    run_program = top.compile()
+                    run_program = top.compile(initial_lnames=tuple(names))
                     run_program.set_path(current_program.path)
                     run_program.set_top(top)
                     compile_time += system_clock()

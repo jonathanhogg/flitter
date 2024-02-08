@@ -59,9 +59,10 @@ cdef Expression sequence_pack(list expressions):
 
 
 cdef class Expression:
-    def compile(self):
+    def compile(self, tuple initial_lnames=()):
         cdef Program program = Program.__new__(Program)
-        self._compile(program, [])
+        program.initial_lnames = initial_lnames
+        self._compile(program, list(initial_lnames))
         program.optimize()
         program.link()
         return program
@@ -110,12 +111,14 @@ cdef class Top(Expression):
         if m:
             program.append(m)
         cdef str name
-        cdef int i
-        for i, name in enumerate(reversed(lnames)):
-            program.local_load(i)
-            program.store_global(name)
-        if lnames:
-            program.local_drop(len(lnames))
+        m = len(program.initial_lnames)
+        cdef int i, n=len(lnames)
+        if n > m:
+            for i in range(n-m):
+                name = lnames[n-1-i]
+                program.local_load(i)
+                program.store_global(name)
+            program.local_drop(n-m)
 
     cdef Expression _simplify(self, Context context):
         cdef list expressions = []
@@ -260,7 +263,11 @@ cdef class Name(Expression):
                 program.local_load(i)
                 break
         else:
-            program.name(self.name)
+            if self.name in dynamic_builtins:
+                program.literal(dynamic_builtins[self.name])
+            else:
+                logger.warning("Name should have been removed by simplifier: {}", self.name)
+                program.literal(null_)
 
     cdef Expression _simplify(self, Context context):
         if self.name in context.names:
@@ -1275,7 +1282,8 @@ cdef class Function(Expression):
                     program.local_load(i)
                     break
             else:
-                program.name(name)
+                logger.warning("Name should have been removed by simplifier: {}", name)
+                program.literal(null_)
             function_lnames.append(name)
         function_lnames.append(self.name)
         cdef list parameters = []

@@ -204,13 +204,6 @@ class TestBasicInstructions(unittest.TestCase):
         stack = self.program.execute(self.context)
         self.assertEqual(stack, [12])
 
-    def test_Name(self):
-        self.names['y'] = 12
-        self.program.name('x')
-        self.program.name('y')
-        stack = self.program.execute(self.context)
-        self.assertEqual(stack, [null, 12])
-
     def test_Ne(self):
         self.program.literal(3)
         self.program.literal(4)
@@ -640,18 +633,18 @@ class TestCalls(unittest.TestCase):
 
     def test_no_args(self):
         self.test_function.return_value = Vector(12)
-        self.program.name('test')
+        self.program.local_load(0)
         self.program.call(0)
-        stack = self.program.execute(self.context)
+        stack = self.program.execute(self.context, lnames=[self.test_function])
         self.assertEqual(stack, [12])
         self.test_function.assert_called_once_with()
 
     def test_one_arg(self):
         self.test_function.return_value = Vector(12)
         self.program.literal(1)
-        self.program.name('test')
+        self.program.local_load(0)
         self.program.call(1)
-        stack = self.program.execute(self.context)
+        stack = self.program.execute(self.context, lnames=[self.test_function])
         self.assertEqual(stack, [12])
         self.test_function.assert_called_once_with(Vector(1))
 
@@ -659,9 +652,9 @@ class TestCalls(unittest.TestCase):
         self.test_function.return_value = Vector(12)
         self.program.literal(1)
         self.program.literal(2)
-        self.program.name('test')
+        self.program.local_load(0)
         self.program.call(2)
-        stack = self.program.execute(self.context)
+        stack = self.program.execute(self.context, lnames=[self.test_function])
         self.assertEqual(stack, [12])
         self.test_function.assert_called_once_with(Vector(1), Vector(2))
 
@@ -669,9 +662,9 @@ class TestCalls(unittest.TestCase):
         self.test_function.return_value = Vector(12)
         self.program.literal(1)
         self.program.literal(2)
-        self.program.name('test')
+        self.program.local_load(0)
         self.program.call(0, ('x', 'y'))
-        stack = self.program.execute(self.context)
+        stack = self.program.execute(self.context, lnames=[self.test_function])
         self.assertEqual(stack, [12])
         self.test_function.assert_called_once_with(x=Vector(1), y=Vector(2))
 
@@ -680,9 +673,9 @@ class TestCalls(unittest.TestCase):
         self.program.literal(1)
         self.program.literal(2)
         self.program.literal(3)
-        self.program.name('test')
+        self.program.local_load(0)
         self.program.call(1, ('x', 'y'))
-        stack = self.program.execute(self.context)
+        stack = self.program.execute(self.context, lnames=[self.test_function])
         self.assertEqual(stack, [12])
         self.test_function.assert_called_once_with(Vector(1), x=Vector(2), y=Vector(3))
 
@@ -691,9 +684,9 @@ class TestCalls(unittest.TestCase):
         self.program.literal(1)
         self.program.literal(2)
         self.program.literal(3)
-        self.program.name('context')
+        self.program.local_load(0)
         self.program.call(1, ('x', 'y'))
-        stack = self.program.execute(self.context)
+        stack = self.program.execute(self.context, lnames=[self.context_function])
         self.assertEqual(stack, [12])
         self.context_function.assert_called_once_with(self.context, Vector(1), x=Vector(2), y=Vector(3))
 
