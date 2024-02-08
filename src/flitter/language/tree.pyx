@@ -780,8 +780,11 @@ cdef class Call(Expression):
             for keyword_arg in self.keyword_args:
                 names.append(keyword_arg.name)
                 keyword_arg.expr._compile(program, lnames)
-        self.function._compile(program, lnames)
-        program.call(len(self.args) if self.args else 0, tuple(names) if names else None)
+        if not names and isinstance(self.function, Literal) and (<Literal>self.function).value.length == 1 and (<Literal>self.function).value.objects is not None:
+            program.call_fast((<Literal>self.function).value.objects[0], len(self.args) if self.args else 0)
+        else:
+            self.function._compile(program, lnames)
+            program.call(len(self.args) if self.args else 0, tuple(names) if names else None)
 
     cdef Expression _simplify(self, Context context):
         cdef Expression function = self.function._simplify(context)

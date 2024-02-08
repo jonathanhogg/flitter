@@ -627,12 +627,13 @@ class TestCalls(unittest.TestCase):
         self.state = StateDict()
         self.test_function = unittest.mock.Mock()
         del self.test_function.context_func
+        self.test_function.return_value = Vector(12)
         self.context_function = unittest.mock.Mock(context_func=True)
+        self.context_function.return_value = Vector(12)
         self.names = {'test': Vector(self.test_function), 'context': Vector(self.context_function)}
         self.context = Context(state=self.state, names=self.names)
 
     def test_no_args(self):
-        self.test_function.return_value = Vector(12)
         self.program.local_load(0)
         self.program.call(0)
         stack = self.program.execute(self.context, lnames=[self.test_function])
@@ -640,7 +641,6 @@ class TestCalls(unittest.TestCase):
         self.test_function.assert_called_once_with()
 
     def test_one_arg(self):
-        self.test_function.return_value = Vector(12)
         self.program.literal(1)
         self.program.local_load(0)
         self.program.call(1)
@@ -649,7 +649,6 @@ class TestCalls(unittest.TestCase):
         self.test_function.assert_called_once_with(Vector(1))
 
     def test_multiple_args(self):
-        self.test_function.return_value = Vector(12)
         self.program.literal(1)
         self.program.literal(2)
         self.program.local_load(0)
@@ -659,7 +658,6 @@ class TestCalls(unittest.TestCase):
         self.test_function.assert_called_once_with(Vector(1), Vector(2))
 
     def test_kwargs(self):
-        self.test_function.return_value = Vector(12)
         self.program.literal(1)
         self.program.literal(2)
         self.program.local_load(0)
@@ -669,7 +667,6 @@ class TestCalls(unittest.TestCase):
         self.test_function.assert_called_once_with(x=Vector(1), y=Vector(2))
 
     def test_args_kwargs(self):
-        self.test_function.return_value = Vector(12)
         self.program.literal(1)
         self.program.literal(2)
         self.program.literal(3)
@@ -680,7 +677,6 @@ class TestCalls(unittest.TestCase):
         self.test_function.assert_called_once_with(Vector(1), x=Vector(2), y=Vector(3))
 
     def test_context_func(self):
-        self.context_function.return_value = Vector(12)
         self.program.literal(1)
         self.program.literal(2)
         self.program.literal(3)
@@ -689,6 +685,27 @@ class TestCalls(unittest.TestCase):
         stack = self.program.execute(self.context, lnames=[self.context_function])
         self.assertEqual(stack, [12])
         self.context_function.assert_called_once_with(self.context, Vector(1), x=Vector(2), y=Vector(3))
+
+    def test_call_fast_multiple_args(self):
+        self.program.literal(1)
+        self.program.literal(2)
+        self.program.call_fast(self.test_function, 2)
+        stack = self.program.execute(self.context)
+        self.assertEqual(stack, [12])
+        self.test_function.assert_called_once_with(Vector(1), Vector(2))
+
+    def test_call_fast_single_arg(self):
+        self.program.literal(1)
+        self.program.call_fast(self.test_function, 1)
+        stack = self.program.execute(self.context)
+        self.assertEqual(stack, [12])
+        self.test_function.assert_called_once_with(Vector(1))
+
+    def test_call_fast_no_args(self):
+        self.program.call_fast(self.test_function, 0)
+        stack = self.program.execute(self.context)
+        self.assertEqual(stack, [12])
+        self.test_function.assert_called_once_with()
 
 
 class TestStack(unittest.TestCase):

@@ -28,6 +28,7 @@ cdef extern from "Python.h":
     ctypedef int64_t _PyTime_t
     _PyTime_t _PyTime_GetPerfCounter() noexcept nogil
     double _PyTime_AsSecondsDouble(_PyTime_t t) noexcept nogil
+    object PyObject_CallOneArg(object callable_object, object arg)
 
 
 cdef inline double perf_counter() noexcept nogil:
@@ -64,6 +65,7 @@ cdef enum OpCode:
     BranchFalse
     BranchTrue
     Call
+    CallFast
     Compose
     Drop
     Dup
@@ -116,6 +118,7 @@ cdef dict OpCodeNames = {
     OpCode.BranchFalse: 'BranchFalse',
     OpCode.BranchTrue: 'BranchTrue',
     OpCode.Call: 'Call',
+    OpCode.CallFast: 'CallFast',
     OpCode.Compose: 'Compose',
     OpCode.Drop: 'Drop',
     OpCode.Dup: 'Dup',
@@ -1042,6 +1045,9 @@ cdef class Program:
     cpdef void call(self, int count, tuple names=None):
         self.instructions.append(InstructionIntTuple(OpCode.Call, count, names))
 
+    cpdef void call_fast(self, function, int count):
+        self.instructions.append(InstructionObjectInt(OpCode.CallFast, function, count))
+
     cpdef void tag(self, str name):
         self.instructions.append(InstructionStr(OpCode.Tag, name))
 
@@ -1079,7 +1085,7 @@ cdef class Program:
         cdef dict global_names=context.names, state=context.state._state
         cdef list loop_sources=[]
         cdef LoopSource loop_source = None
-        cdef double duration
+        cdef double duration, call_duration
 
         cdef list instructions=self.instructions
         cdef Instruction instruction=None
@@ -1326,6 +1332,32 @@ cdef class Program:
                     else:
                         push(stack, null_)
                     r1 = kwargs = args = None
+
+                elif instruction.code == OpCode.CallFast:
+                    n = (<InstructionObjectInt>instruction).value
+                    if n == 1:
+                        if record_stats:
+                            call_duration = -perf_counter()
+                        try:
+                            poke(stack, PyObject_CallOneArg((<InstructionObjectInt>instruction).obj, peek(stack)))
+                        except Exception as exc:
+                            PySet_Add(context.errors, f"Error calling {(<InstructionObjectInt>instruction).obj!r}\n{str(exc)}")
+                            poke(stack, null_)
+                    else:
+                        args = pop_tuple(stack, n)
+                        if record_stats:
+                            call_duration = -perf_counter()
+                        try:
+                            push(stack, PyObject_CallObject((<InstructionObjectInt>instruction).obj, args))
+                        except Exception as exc:
+                            PySet_Add(context.errors, f"Error calling {(<InstructionObjectInt>instruction).obj!r}\n{str(exc)}")
+                            push(stack, null_)
+                        args = None
+                    if record_stats:
+                        call_duration += perf_counter()
+                        duration -= call_duration
+                        CallOutDuration += call_duration
+                        CallOutCount += 1
 
                 elif instruction.code == OpCode.Func:
                     function = Function.__new__(Function)
