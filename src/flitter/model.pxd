@@ -163,10 +163,11 @@ cdef class Context:
     cdef readonly set captures
     cdef readonly dict pragmas
     cdef readonly StateDict state
-    cdef readonly Node graph
+    cdef readonly Node root
     cdef readonly object path
     cdef readonly Context parent
     cdef readonly set errors
     cdef readonly set logs
+    cdef readonly dict references
     cdef readonly object stack
     cdef readonly object lnames

@@ -81,13 +81,12 @@ class SceneNode:
 
     @property
     def texture_data(self):
-        if self._texture_data is not None:
-            return self._texture_data
-        texture = self.texture
-        if texture is not None:
+        if self._texture_data is None and (texture := self.texture) is not None:
             dtype = {'f1': 'uint8', 'f2': 'float16', 'f4': 'float32'}[texture.dtype]
             data = np.ndarray((texture.height, texture.width, texture.components), dtype, texture.read())
-            self._texture_data = data
+            self._texture_data = data.astype('float64')
+            if dtype == 'uint8':
+                self._texture_data /= 255
         return self._texture_data
 
     @property

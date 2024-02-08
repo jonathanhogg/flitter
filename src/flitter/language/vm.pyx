@@ -9,7 +9,7 @@ from loguru import logger
 from .. import name_patch
 from ..cache import SharedCache
 from .functions import STATIC_FUNCTIONS, DYNAMIC_FUNCTIONS
-from ..model cimport Vector, Node, StateDict, Context, null_, true_, false_
+from ..model cimport Vector, Node, Context, null_, true_, false_
 from .noise import NOISE_FUNCTIONS
 
 from libc.math cimport floor
@@ -304,7 +304,7 @@ cdef class InstructionFunc(InstructionJump):
         self.ncaptures = ncaptures
 
     def __str__(self):
-        return f'{OpCodeNames[self.code]} {self.svalue!r} {self.tvalue!r} {self.ivalue!r}'
+        return f'{OpCodeNames[self.code]} L{self.label!r} {self.name!r} {self.parameters!r} {self.ncaptures!r}'
 
 
 cdef class InstructionObjectInt(Instruction):
@@ -844,29 +844,19 @@ cdef class Program:
                 lnames.insert(0, context.lnames.pop())
         return context.stack.pop_list(len(context.stack))
 
-    def run(self, StateDict state=None, dict names=None, bint record_stats=False):
-        cdef dict context_names = None
-        cdef str key
-        cdef object value
-        if state is None:
-            state = StateDict()
-        if names is not None:
-            context_names = {}
-            for key, value in names.items():
-                context_names[key] = Vector._coerce(value)
-        cdef Context context = Context(state=state, names=context_names, path=self.path)
+    def run(self, Context context, bint record_stats=False):
         if self.stack is None:
             self.stack = VectorStack.__new__(VectorStack)
         context.stack = self.stack
         if self.lnames is None:
             self.lnames = VectorStack.__new__(VectorStack)
         context.lnames = self.lnames
-        push(self.stack, Vector(context.graph))
+        context.path = self.path
+        push(self.stack, Vector(context.root))
         self._execute(context, 0, record_stats)
-        context.graph = pop(self.stack).objects[0]
+        context.root = pop(self.stack).objects[0]
         assert (<VectorStack>self.stack).top == -1, "Bad stack"
         assert (<VectorStack>self.lnames).top == -1, "Bad lnames"
-        return context
 
     cpdef void link(self):
         cdef Instruction instruction
