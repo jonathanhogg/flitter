@@ -95,9 +95,9 @@ class EngineController:
         if self.current_page > 0:
             self.switch_page = self.current_page - 1
 
-    async def update_renderers(self, graph, **kwargs):
+    async def update_renderers(self, root, **kwargs):
         nodes_by_kind = {}
-        for node in graph.children:
+        for node in root.children:
             nodes_by_kind.setdefault(node.kind, []).append(node)
         tasks = []
         references = dict(self._references)
@@ -142,21 +142,6 @@ class EngineController:
         self.state_timestamp = None
         self.global_state_dirty = True
 
-    def sample(self, texture_id, coord, default=null):
-        if len(coord) != 2 \
-                or (scene_node := self._references.get(str(texture_id))) is None \
-                or (data := scene_node.texture_data) is None:
-            return default
-        height, width, _ = data.shape
-        x = int(coord[0] * width)
-        y = int(coord[1] * height)
-        if x < 0 or x >= width or y < 0 or y >= height:
-            return default
-        color = data[y, x]
-        if data.dtype == 'uint8':
-            color = color / 255
-        return Vector(color)
-
     async def run(self):
         try:
             frames = []
@@ -176,8 +161,7 @@ class EngineController:
                 names = {'beat': beat, 'quantum': self.counter.quantum, 'tempo': self.counter.tempo,
                          'delta': delta, 'clock': frame_time, 'performance': performance,
                          'fps': self.target_fps, 'realtime': self.realtime, 'window_gamma': self.window_gamma,
-                         'screen': self.screen, 'fullscreen': self.fullscreen, 'vsync': self.vsync, 'offscreen': self.offscreen,
-                         'sample': self.sample}
+                         'screen': self.screen, 'fullscreen': self.fullscreen, 'vsync': self.vsync, 'offscreen': self.offscreen}
 
                 program = self.current_path.read_flitter_program(static=self.defined_names, dynamic=names)
                 if program is not current_program:
@@ -213,7 +197,9 @@ class EngineController:
                 housekeeping += now
                 execution -= now
                 if run_program is not None:
-                    context = run_program.run(state=self.state, names=names, record_stats=self.vm_stats)
+                    context = Context(names={key: Vector.coerce(value) for key, value in names.items()},
+                                      state=self.state, references=self._references)
+                    run_program.run(context, record_stats=self.vm_stats)
                 else:
                     context = Context()
                 self.handle_pragmas(context.pragmas, frame_time)
@@ -230,7 +216,7 @@ class EngineController:
                 execution += now
                 render -= now
 
-                self._references = await self.update_renderers(context.graph, **names)
+                self._references = await self.update_renderers(context.root, **names)
 
                 now = system_clock()
                 render += now

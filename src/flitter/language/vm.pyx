@@ -9,7 +9,7 @@ from loguru import logger
 from .. import name_patch
 from ..cache import SharedCache
 from .functions import STATIC_FUNCTIONS, DYNAMIC_FUNCTIONS
-from ..model cimport Vector, Node, StateDict, Context, null_, true_, false_
+from ..model cimport Vector, Node, Context, null_, true_, false_
 from .noise import NOISE_FUNCTIONS
 
 from libc.math cimport floor
@@ -38,6 +38,7 @@ logger = name_patch(logger, __name__)
 
 cdef const char* ContextFunc = "context_func\0"
 
+cdef dict dynamic_builtins = DYNAMIC_FUNCTIONS
 cdef dict static_builtins = {
     'true': true_,
     'false': false_,
@@ -45,18 +46,6 @@ cdef dict static_builtins = {
 }
 static_builtins.update(STATIC_FUNCTIONS)
 static_builtins.update(NOISE_FUNCTIONS)
-
-
-def debug(value):
-    return value
-
-
-cdef object _debug_func = debug
-
-cdef dict dynamic_builtins = {
-    'debug': Vector(_debug_func),
-}
-dynamic_builtins.update(DYNAMIC_FUNCTIONS)
 
 cdef dict all_builtins = {}
 all_builtins.update(dynamic_builtins)
@@ -75,7 +64,6 @@ cdef enum OpCode:
     BranchFalse
     BranchTrue
     Call
-    CallFast
     Compose
     Drop
     Dup
@@ -83,6 +71,7 @@ cdef enum OpCode:
     Eq
     FloorDiv
     Func
+    Exit
     Ge
     Gt
     Import
@@ -128,7 +117,6 @@ cdef dict OpCodeNames = {
     OpCode.BranchFalse: 'BranchFalse',
     OpCode.BranchTrue: 'BranchTrue',
     OpCode.Call: 'Call',
-    OpCode.CallFast: 'CallFast',
     OpCode.Compose: 'Compose',
     OpCode.Drop: 'Drop',
     OpCode.Dup: 'Dup',
@@ -136,6 +124,7 @@ cdef dict OpCodeNames = {
     OpCode.Eq: 'Eq',
     OpCode.FloorDiv: 'FloorDiv',
     OpCode.Func: 'Func',
+    OpCode.Exit: 'Exit',
     OpCode.Ge: 'Ge',
     OpCode.Gt: 'Gt',
     OpCode.Import: 'Import',
@@ -176,10 +165,11 @@ cdef dict OpCodeNames = {
 
 cdef initialize_stats():
     global StatsCount, StatsDuration
-    StatsCount = <int*>PyMem_Malloc(OpCode.MAX * sizeof(int))
-    StatsDuration = <double*>PyMem_Malloc(OpCode.MAX * sizeof(double))
+    cdef int n = OpCode.MAX + 1
+    StatsCount = <int*>PyMem_Malloc(n * sizeof(int))
+    StatsDuration = <double*>PyMem_Malloc(n * sizeof(double))
     cdef unsigned int i
-    for i in range(OpCode.MAX):
+    for i in range(n):
         StatsCount[i] = 0
         StatsDuration[i] = 0
 
@@ -264,19 +254,6 @@ cdef class InstructionIntTuple(Instruction):
         return f'{OpCodeNames[self.code]} {self.ivalue!r} {self.tvalue!r}'
 
 
-cdef class InstructionStrTuple(Instruction):
-    cdef readonly str svalue
-    cdef readonly tuple tvalue
-
-    def __init__(self, OpCode code, str svalue, tuple tvalue):
-        super().__init__(code)
-        self.svalue = svalue
-        self.tvalue = tvalue
-
-    def __str__(self):
-        return f'{OpCodeNames[self.code]} {self.svalue!r} {self.tvalue!r}'
-
-
 cdef class InstructionLabel(Instruction):
     cdef readonly int label
 
@@ -313,6 +290,21 @@ cdef class InstructionJumpInt(InstructionJump):
         if self.offset:
             return f'{OpCodeNames[self.code]} {self.value!r} .L{self.label} ({self.offset:+d})'
         return f'{OpCodeNames[self.code]} {self.value!r} .L{self.label}'
+
+
+cdef class InstructionFunc(InstructionJump):
+    cdef readonly str name
+    cdef readonly tuple parameters
+    cdef readonly int ncaptures
+
+    def __init__(self, OpCode code, int label, str name, tuple parameters, int ncaptures):
+        super().__init__(code, label)
+        self.name = name
+        self.parameters = parameters
+        self.ncaptures = ncaptures
+
+    def __str__(self):
+        return f'{OpCodeNames[self.code]} L{self.label!r} {self.name!r} {self.parameters!r} {self.ncaptures!r}'
 
 
 cdef class InstructionObjectInt(Instruction):
@@ -564,8 +556,38 @@ cdef class Function:
     cdef readonly tuple parameters
     cdef readonly tuple defaults
     cdef readonly Program program
-    cdef readonly VectorStack lnames
+    cdef readonly int address
     cdef readonly object root_path
+    cdef readonly bint record_stats
+    cdef readonly tuple captures
+
+    def __call__(self, Context context, *args, **kwargs):
+        cdef int i, lnames_top, stack_top, k=PyTuple_GET_SIZE(self.captures), m=PyTuple_GET_SIZE(self.parameters), n=PyTuple_GET_SIZE(args)
+        cdef PyObject* objptr
+        cdef object saved_path
+        cdef VectorStack lnames = context.lnames
+        lnames_top = lnames.top
+        cdef VectorStack stack = context.stack
+        stack_top = stack.top
+        for i in range(k):
+            push(lnames, <Vector>PyTuple_GET_ITEM(self.captures, i))
+        push(lnames, Vector.__new__(Vector, self))
+        for i in range(m):
+            if i < n:
+                push(lnames, <Vector>PyTuple_GET_ITEM(args, i))
+            elif kwargs is not None and (objptr := PyDict_GetItem(kwargs, <object>PyTuple_GET_ITEM(self.parameters, i))) != NULL:
+                push(lnames, <Vector>objptr)
+            else:
+                push(lnames, <Vector>PyTuple_GET_ITEM(self.defaults, i))
+        saved_path = context.path
+        context.path = self.root_path
+        self.program._execute(context, self.address, self.record_stats)
+        drop(lnames, k + 1 + m)
+        cdef Vector result = pop(stack)
+        assert stack.top == stack_top, "Bad function return stack"
+        assert lnames.top == lnames_top, "Bad function return lnames"
+        context.path = saved_path
+        return result
 
 
 cdef class LoopSource:
@@ -583,6 +605,8 @@ def log_vm_stats():
     start = perf_counter()
     for count in range(10000):
         end = perf_counter()
+        StatsCount[<int>OpCode.MAX] += 1
+        StatsDuration[<int>OpCode.MAX] += end
     overhead = (end - start) / 10000
     if CallOutCount:
         duration = max(0, CallOutDuration - CallOutCount*overhead)
@@ -608,100 +632,69 @@ def log_vm_stats():
 
 cdef inline void call_helper(Context context, VectorStack stack, object function, tuple args, dict kwargs, bint record_stats, double* duration):
     global CallOutDuration, CallOutCount
-    cdef int i, top, lnames_top, m, n=PyTuple_GET_SIZE(args)
+    cdef int i, n=PyTuple_GET_SIZE(args)
     cdef double call_duration
-    cdef tuple parameters, defaults, context_args
-    cdef VectorStack lnames
-    cdef PyObject* objptr
-    cdef object saved_path
-    if type(function) is Function:
-        lnames = (<Function>function).lnames
-        parameters = (<Function>function).parameters
-        defaults = (<Function>function).defaults
-        m = PyTuple_GET_SIZE(parameters)
-        for i in range(m):
-            if i < n:
-                push(lnames, <Vector>PyTuple_GET_ITEM(args, i))
-            elif kwargs is not None and (objptr := PyDict_GetItem(kwargs, <object>PyTuple_GET_ITEM(parameters, i))) != NULL:
-                push(lnames, <Vector>objptr)
-            else:
-                push(lnames, <Vector>PyTuple_GET_ITEM(defaults, i))
-        lnames_top = lnames.top
-        top = stack.top
-        saved_path = context.path
-        context.path = (<Function>function).root_path
-        if record_stats:
-            call_duration = -perf_counter()
-        (<Function>function).program._execute(context, stack, lnames, record_stats)
-        if record_stats:
-            call_duration += perf_counter()
-            duration[0] = duration[0] - call_duration
-        assert stack.top == top + 1, "Bad function return stack"
-        assert lnames.top == lnames_top, "Bad function return lnames"
-        drop(lnames, m)
-        context.path = saved_path
-    elif function is _debug_func and n == 1 and kwargs is None:
-        obj = PyTuple_GET_ITEM(args, 0)
-        PySet_Add(context.logs, (<Vector>obj).repr())
-        push(stack, <Vector>obj)
-    else:
-        if PyObject_HasAttrString(function, ContextFunc):
-            context_args = PyTuple_New(n+1)
-            Py_INCREF(context)
-            PyTuple_SET_ITEM(context_args, 0, context)
-            for i in range(n):
-                obj = PyTuple_GET_ITEM(args, i)
-                Py_INCREF(<object>obj)
-                PyTuple_SET_ITEM(context_args, i+1, <object>obj)
-            args = context_args
-        if record_stats:
-            call_duration = -perf_counter()
-        try:
-            if kwargs is None:
-                push(stack, PyObject_CallObject(function, args))
-            else:
-                push(stack, PyObject_Call(function, args, kwargs))
-        except Exception as exc:
-            PySet_Add(context.errors, f"Error calling {function!r}\n{str(exc)}")
-            push(stack, null_)
-        if record_stats:
-            call_duration += perf_counter()
+    cdef tuple context_args
+    cdef bint is_func = type(function) is Function
+    if is_func or PyObject_HasAttrString(function, ContextFunc):
+        context_args = PyTuple_New(n+1)
+        Py_INCREF(context)
+        PyTuple_SET_ITEM(context_args, 0, context)
+        for i in range(n):
+            obj = PyTuple_GET_ITEM(args, i)
+            Py_INCREF(<object>obj)
+            PyTuple_SET_ITEM(context_args, i+1, <object>obj)
+        args = context_args
+    if record_stats:
+        call_duration = -perf_counter()
+    try:
+        if kwargs is None:
+            push(stack, PyObject_CallObject(function, args))
+        else:
+            push(stack, PyObject_Call(function, args, kwargs))
+    except Exception as exc:
+        PySet_Add(context.errors, f"Error calling {function!r}\n{str(exc)}")
+        push(stack, null_)
+    if record_stats:
+        call_duration += perf_counter()
+        duration[0] = duration[0] - call_duration
+        if not is_func:
             CallOutDuration += call_duration
             CallOutCount += 1
-            duration[0] = duration[0] - call_duration
 
 
 cdef inline dict import_module(Context context, str filename, bint record_stats, double* duration):
-    cdef Context import_context
     cdef Program program = SharedCache.get_with_root(filename, context.path).read_flitter_program()
-    if program is not None:
-        import_context = context
-        while import_context is not None:
-            if import_context.path is program.path:
-                PySet_Add(context.errors, f"Circular import of {filename}")
-                break
-            import_context = import_context.parent
-        else:
-            import_context = Context.__new__(Context)
-            import_context.parent = context
-            import_context.errors = context.errors
-            import_context.logs = context.logs
-            import_context.graph = context.graph
-            import_context.pragmas = context.pragmas
-            import_context.state = context.state
-            import_context.names = {}
-            import_context.path = program.path
-            push(program.stack, Vector(Node('root')))
-            if record_stats:
-                duration[0] += perf_counter()
-            program._execute(import_context, program.stack, program.lnames, record_stats)
-            if record_stats:
-                duration[0] -= perf_counter()
-            assert program.stack.top == 0, "Bad stack"
-            drop(program.stack, 1)
-            assert program.lnames.top == -1, "Bad lnames"
-            return import_context.names
-    return None
+    if program is None:
+        return None
+    cdef Context import_context = context
+    while import_context is not None:
+        if import_context.path is program.path:
+            PySet_Add(context.errors, f"Circular import of {filename}")
+            return None
+        import_context = import_context.parent
+    cdef VectorStack stack=context.stack, lnames=context.lnames
+    cdef int stack_top=stack.top, lnames_top=lnames.top
+    import_context = Context.__new__(Context)
+    import_context.parent = context
+    import_context.errors = context.errors
+    import_context.logs = context.logs
+    import_context.pragmas = context.pragmas
+    import_context.state = context.state
+    import_context.names = {}
+    import_context.path = program.path
+    import_context.stack = stack
+    import_context.lnames = lnames
+    push(stack, Vector(Node('root')))
+    if record_stats:
+        duration[0] += perf_counter()
+    program._execute(import_context, 0, record_stats)
+    if record_stats:
+        duration[0] -= perf_counter()
+    drop(stack, 1)
+    assert stack.top == stack_top, "Bad stack"
+    assert lnames.top == lnames_top, "Bad lnames"
+    return import_context.names
 
 
 cdef inline void execute_append(VectorStack stack, int count):
@@ -816,8 +809,6 @@ cdef class Program:
     def __cinit__(self):
         self.instructions = []
         self.linked = False
-        self.stack = VectorStack.__new__(VectorStack)
-        self.lnames = VectorStack.__new__(VectorStack)
         self.next_label = 1
 
     def __len__(self):
@@ -832,40 +823,40 @@ cdef class Program:
     def set_top(self, object top):
         self.top = top
 
-    def execute(self, Context context, list lnames=None, bint record_stats=False):
+    def execute(self, Context context, list initial_stack=None, list lnames=None, bint record_stats=False):
         """This is a test-harness function. Do not use."""
         if not self.linked:
             self.link()
-        cdef VectorStack lnames_stack = VectorStack()
-        cdef Vector vector
+        if context.lnames is None:
+            context.lnames = VectorStack()
         if lnames:
-            for vector in lnames:
-                lnames_stack.push(vector)
-        cdef VectorStack stack = VectorStack()
-        self._execute(context, stack, lnames_stack, record_stats)
+            for item in lnames:
+                context.lnames.push(Vector._coerce(item))
+        if context.stack is None:
+            context.stack = VectorStack()
+        if initial_stack:
+            for item in initial_stack:
+                context.stack.push(Vector._coerce(item))
+        self._execute(context, 0, record_stats)
         if lnames is not None:
             lnames.clear()
-            while len(lnames_stack):
-                lnames.insert(0, lnames_stack.pop())
-        return stack.pop_list(len(stack))
+            while len(context.lnames):
+                lnames.insert(0, context.lnames.pop())
+        return context.stack.pop_list(len(context.stack))
 
-    def run(self, StateDict state=None, dict names=None, bint record_stats=False):
-        cdef dict context_names = None
-        cdef str key
-        cdef object value
-        if state is None:
-            state = StateDict()
-        if names is not None:
-            context_names = {}
-            for key, value in names.items():
-                context_names[key] = Vector._coerce(value)
-        cdef Context context = Context(state=state, names=context_names, path=self.path)
-        push(self.stack, Vector(context.graph))
-        self._execute(context, self.stack, self.lnames, record_stats)
-        context.graph = pop(self.stack).objects[0]
-        assert self.stack.top == -1, "Bad stack"
-        assert self.lnames.top == -1, "Bad lnames"
-        return context
+    def run(self, Context context, bint record_stats=False):
+        if self.stack is None:
+            self.stack = VectorStack.__new__(VectorStack)
+        context.stack = self.stack
+        if self.lnames is None:
+            self.lnames = VectorStack.__new__(VectorStack)
+        context.lnames = self.lnames
+        context.path = self.path
+        push(self.stack, Vector(context.root))
+        self._execute(context, 0, record_stats)
+        context.root = pop(self.stack).objects[0]
+        assert (<VectorStack>self.stack).top == -1, "Bad stack"
+        assert (<VectorStack>self.lnames).top == -1, "Bad lnames"
 
     cpdef void link(self):
         cdef Instruction instruction
@@ -1045,9 +1036,6 @@ cdef class Program:
     cpdef void call(self, int count, tuple names=None):
         self.instructions.append(InstructionIntTuple(OpCode.Call, count, names))
 
-    cpdef void call_fast(self, object function, int count):
-        self.instructions.append(InstructionObjectInt(OpCode.CallFast, function, count))
-
     cpdef void tag(self, str name):
         self.instructions.append(InstructionStr(OpCode.Tag, name))
 
@@ -1072,16 +1060,20 @@ cdef class Program:
     cpdef void store_global(self, str name):
         self.instructions.append(InstructionStr(OpCode.StoreGlobal, name))
 
-    cpdef void func(self, str name, tuple parameters):
-        self.instructions.append(InstructionStrTuple(OpCode.Func, name, parameters))
+    cpdef void func(self, int label, str name, tuple parameters, int ncaptures=0):
+        self.instructions.append(InstructionFunc(OpCode.Func, label, name, parameters, ncaptures))
 
-    cdef void _execute(self, Context context, VectorStack stack, VectorStack lnames, bint record_stats):
+    cpdef void exit(self):
+        self.instructions.append(Instruction(OpCode.Exit))
+
+    cdef void _execute(self, Context context, int pc, bint record_stats):
         global CallOutCount, CallOutDuration
-        cdef int i, n, pc=0, program_end=len(self.instructions)
+        cdef VectorStack stack=context.stack, lnames=context.lnames
+        cdef int i, n, program_end=len(self.instructions)
         cdef dict global_names=context.names, builtins=all_builtins, state=context.state._state
         cdef list loop_sources=[]
         cdef LoopSource loop_source = None
-        cdef double duration, call_duration
+        cdef double duration
 
         cdef list instructions=self.instructions
         cdef Instruction instruction=None
@@ -1113,6 +1105,9 @@ cdef class Program:
 
                 elif instruction.code == OpCode.Jump:
                     pc += (<InstructionJump>instruction).offset
+
+                elif instruction.code == OpCode.Exit:
+                    pc = program_end
 
                 elif instruction.code == OpCode.BranchTrue:
                     if pop(stack).as_bool():
@@ -1340,32 +1335,17 @@ cdef class Program:
                         push(stack, null_)
                     r1 = kwargs = args = None
 
-                elif instruction.code == OpCode.CallFast:
-                    args = pop_tuple(stack, (<InstructionObjectInt>instruction).value)
-                    if record_stats:
-                        call_duration = -perf_counter()
-                    try:
-                        r1 = PyObject_CallObject((<InstructionObjectInt>instruction).obj, args)
-                    except Exception as exc:
-                        PySet_Add(context.errors, f"Error calling {function!r}\n{str(exc)}")
-                        r1 = null_
-                    if record_stats:
-                        call_duration += perf_counter()
-                        CallOutDuration += call_duration
-                        CallOutCount += 1
-                        duration -= call_duration
-                    push(stack, r1)
-                    args = r1 = None
-
                 elif instruction.code == OpCode.Func:
                     function = Function.__new__(Function)
-                    function.__name__ = (<InstructionStrTuple>instruction).svalue
-                    function.parameters = (<InstructionStrTuple>instruction).tvalue
-                    function.program = <Program>pop(stack).objects[0]
-                    function.lnames = lnames.copy()
+                    function.__name__ = (<InstructionFunc>instruction).name
+                    function.parameters = (<InstructionFunc>instruction).parameters
+                    function.program = self
+                    function.address = (<InstructionFunc>instruction).offset + pc
                     function.root_path = context.path
+                    function.record_stats = record_stats
                     n = PyTuple_GET_SIZE(function.parameters)
-                    function.defaults = pop_tuple(stack, n) if n else ()
+                    function.defaults = pop_tuple(stack, n)
+                    function.captures = pop_tuple(stack, (<InstructionFunc>instruction).ncaptures)
                     r1 = <Vector>Vector.__new__(Vector)
                     r1.objects = (function,)
                     r1.length = 1

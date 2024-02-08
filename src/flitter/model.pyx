@@ -1862,13 +1862,14 @@ cdef class StateDict:
 
 
 cdef class Context:
-    def __init__(self, dict names=None, StateDict state=None, Node graph=None, dict pragmas=None, object path=None, Context parent=None):
+    def __init__(self, dict names=None, StateDict state=None, Node root=None, dict pragmas=None,
+                 object path=None, Context parent=None, dict references=None):
         self.names = names if names is not None else {}
         self.state = state
-        self.graph = graph if graph is not None else Node('root')
+        self.root = root if root is not None else Node('root')
         self.pragmas = pragmas if pragmas is not None else {}
         self.path = path
         self.parent = parent
-        self.unbound = None
         self.errors = set()
         self.logs = set()
+        self.references = references

@@ -25,6 +25,32 @@ def context_func(func):
     return func
 
 
+@context_func
+def debug(Context context, Vector value):
+    context.logs.add(value.repr())
+    return value
+
+
+@context_func
+@cython.boundscheck(False)
+def sample(Context context, Vector texture_id, Vector coord, Vector default=null_):
+    cdef const double[:, :, :] data
+    if coord.length != 2 or coord.numbers == NULL \
+            or (scene_node := context.references.get(texture_id.as_string())) is None \
+            or not hasattr(scene_node, 'texture_data') or (data := scene_node.texture_data) is None:
+        return default
+    cdef int height=data.shape[0], width=data.shape[1], x=int(coord.numbers[0] * width), y=int(coord.numbers[1] * height)
+    if x < 0 or x >= width or y < 0 or y >= height:
+        return default
+    cdef const double[:] color = data[y, x]
+    cdef Vector result = Vector.__new__(Vector)
+    result.allocate_numbers(3)
+    result.numbers[0] = color[0]
+    result.numbers[1] = color[1]
+    result.numbers[2] = color[2]
+    return result
+
+
 cdef class Uniform(Vector):
     def __cinit__(self, value=None):
         self._hash = self.hash(True)
@@ -916,6 +942,8 @@ STATIC_FUNCTIONS = {
 }
 
 DYNAMIC_FUNCTIONS = {
+    'debug': Vector(debug),
+    'sample': Vector(sample),
     'counter': Vector(counter),
     'csv': Vector(read_csv),
     'read': Vector(read_text),

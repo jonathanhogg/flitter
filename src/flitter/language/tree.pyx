@@ -276,8 +276,8 @@ cdef class Name(Expression):
         elif (value := static_builtins.get(self.name)) is not None:
             return Literal(value)
         elif self.name not in dynamic_builtins:
-            if context.unbound is not None:
-                context.unbound.add(self.name)
+            if context.captures is not None:
+                context.captures.add(self.name)
             else:
                 context.errors.add(f"Unbound name '{self.name}'")
                 return NoOp
@@ -763,17 +763,11 @@ cdef class Call(Expression):
         self.keyword_args = keyword_args
 
     cdef void _compile(self, Program program, list lnames):
-        cdef Vector value
         cdef Expression expr
         cdef list names = []
         if self.args:
             for expr in self.args:
                 expr._compile(program, lnames)
-        if isinstance(self.function, Literal) and not self.keyword_args:
-            value = (<Literal>self.function).value
-            if value.length == 1 and value.objects is not None and callable(value.objects[0]) and not hasattr(value.objects[0], 'context_func'):
-                program.call_fast(value.objects[0], len(self.args))
-                return
         cdef Binding keyword_arg
         if self.keyword_args:
             for keyword_arg in self.keyword_args:
@@ -807,8 +801,9 @@ cdef class Call(Expression):
         cdef int i
         if isinstance(function, FunctionName):
             func_expr = context.names[(<FunctionName>function).name]
+            assert not func_expr.captures, "Cannot inline functions with captured names"
             kwargs = {binding.name: binding.expr for binding in keyword_args}
-            bindings = []
+            bindings = [PolyBinding(((<FunctionName>function).name,), func_expr)]
             for i, binding in enumerate(func_expr.parameters):
                 if i < len(args):
                     bindings.append(PolyBinding((binding.name,), <Expression>args[i]))
@@ -1119,6 +1114,9 @@ cdef class InlineLet(Expression):
                 else:
                     for i, name in enumerate(binding.names):
                         context.names[name] = value.item(i)
+            elif isinstance(expr, Function) and len(binding.names) == 1:
+                name = binding.names[0]
+                context.names[name] = expr
             elif isinstance(expr, Name) and len(binding.names) == 1:
                 name = binding.names[0]
                 if (<Name>expr).name != name:
@@ -1258,27 +1256,45 @@ cdef class Function(Expression):
     cdef readonly str name
     cdef readonly tuple parameters
     cdef readonly Expression expr
+    cdef readonly tuple captures
 
-    def __init__(self, str name, tuple parameters, Expression expr):
+    def __init__(self, str name, tuple parameters, Expression expr, tuple captures=None):
         self.name = name
         self.parameters = parameters
         self.expr = expr
+        self.captures = captures
 
     cdef void _compile(self, Program program, list lnames):
+        cdef str name
+        cdef list function_lnames = []
+        assert self.captures is not None, "Simplifier must be run to correctly compile functions"
+        cdef int i, n=len(lnames)-1
+        for name in self.captures:
+            for i in range(len(lnames)):
+                if name == <str>lnames[n-i]:
+                    program.local_load(i)
+                    break
+            else:
+                program.name(name)
+            function_lnames.append(name)
+        function_lnames.append(self.name)
+        cdef list parameters = []
         cdef Binding parameter
-        cdef list names = []
         for parameter in self.parameters:
-            names.append(parameter.name)
+            parameters.append(parameter.name)
             if parameter.expr is None:
                 program.literal(null_)
             else:
                 parameter.expr._compile(program, lnames)
-        cdef Program body = Program.__new__(Program)
-        self.expr._compile(body, lnames + names)
-        body.optimize()
-        body.link()
-        program.literal(body)
-        program.func(self.name, tuple(names))
+            function_lnames.append(parameter.name)
+        START = program.new_label()
+        END = program.new_label()
+        program.jump(END)
+        program.label(START)
+        self.expr._compile(program, function_lnames)
+        program.exit()
+        program.label(END)
+        program.func(START, self.name, tuple(parameters), len(self.captures))
         program.local_push(1)
         lnames.append(self.name)
 
@@ -1294,23 +1310,24 @@ cdef class Function(Expression):
             parameters.append(Binding(parameter.name, expr))
         cdef dict saved = context.names
         cdef str key
-        cdef set unbound = context.unbound
-        context.unbound = set()
+        cdef set captures = context.captures
+        context.captures = set()
         context.names = {}
         for key, value in saved.items():
             if value is not None:
                 context.names[key] = value
+        context.names[self.name] = None
         for parameter in parameters:
             context.names[parameter.name] = None
         expr = self.expr._simplify(context)
-        cdef Function function = Function(self.name, tuple(parameters), expr)
+        cdef Function function = Function(self.name, tuple(parameters), expr, tuple(context.captures))
         context.names = saved
-        context.names[self.name] = function if literal and not context.unbound else None
-        if unbound is not None:
-            context.unbound.difference_update(saved)
-            unbound.update(context.unbound)
-        context.unbound = unbound
+        context.names[self.name] = function if literal and not context.captures else None
+        if captures is not None:
+            context.captures.difference_update(saved)
+            captures.update(context.captures)
+        context.captures = captures
         return function
 
     def __repr__(self):
-        return f'Function({self.name!r}, {self.parameters!r}, {self.expr!r})'
+        return f'Function({self.name!r}, {self.parameters!r}, {self.expr!r}, {self.captures!r})'
