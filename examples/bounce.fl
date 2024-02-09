@@ -1,5 +1,5 @@
 
-import bloom_filter from 'bloom.fl'
+import bloom_filter from 'common/bloom.fl'
 
 let SIZE=1080;1080
     NBALLS=120
