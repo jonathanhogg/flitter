@@ -396,7 +396,7 @@ cdef Model get_model(Node node, bint top):
         for child in node._children:
             child_model = get_model(child, False)
             if child_model is not None:
-                models.append(child_model.slice(origin, normal) if normal.as_bool() is not None else child_model)
+                models.append(child_model.slice(origin, normal) if normal.as_bool() else child_model)
         if models:
             model = models[0] if len(models) == 1 else Model.union(models)
     else:

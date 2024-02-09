@@ -192,8 +192,11 @@ cdef class SnappedEdgesModel(ModelTransformer):
     cdef void build_trimesh_model(self):
         if not self.original.check_valid():
             self.original.build_trimesh_model()
-        self.trimesh_model = trimesh.graph.smooth_shade(self.original.trimesh_model, angle=self.snap_angle*Tau,
-                                                        facet_minarea=1/self.minimum_area if self.minimum_area else None)
+        if self.original.trimesh_model is not None:
+            self.trimesh_model = trimesh.graph.smooth_shade(self.original.trimesh_model, angle=self.snap_angle*Tau,
+                                                            facet_minarea=1/self.minimum_area if self.minimum_area else None)
+        else:
+            self.trimesh_model = None
         self.valid = True
 
 
@@ -230,9 +233,6 @@ cdef class TransformedModel(ModelTransformer):
 cdef class SlicedModel(ModelTransformer):
     cdef Vector origin
     cdef Vector normal
-
-    cdef bint is_constructed(self):
-        return True
 
     @staticmethod
     cdef SlicedModel get(Model original, Vector origin, Vector normal):
@@ -296,6 +296,13 @@ cdef class BooleanOperationModel(Model):
             models.append(model.transform(transform_matrix))
         return BooleanOperationModel.get(self.operation, models)
 
+    cdef Model slice(self, Vector origin, Vector normal):
+        cdef Model model
+        cdef list models = []
+        for model in self.models:
+            models.append(model.slice(origin, normal))
+        return BooleanOperationModel.get(self.operation, models)
+
     cdef bint check_valid(self):
         if not self.valid:
             return False
@@ -318,8 +325,9 @@ cdef class BooleanOperationModel(Model):
                 continue
             trimesh_model = model.trimesh_model.copy()
             if not trimesh_model.is_watertight:
-                trimesh_model.merge_vertices(merge_tex=True, merge_norm=True)
+                trimesh_model.process(validate=True, merge_tex=True, merge_norm=True)
                 if not trimesh_model.is_watertight and not trimesh_model.fill_holes():
+                    logger.warning("Computing convex hull of: {}", model.name)
                     trimesh_model = trimesh_model.convex_hull
             trimesh_models.append(trimesh_model)
         if not trimesh_models:
@@ -486,8 +494,10 @@ cdef class Cylinder(PrimitiveModel):
             u = <float>i / n
             u_ = (i+0.5) / n
             th = Tau * u
-            x = cos(th)
-            y = sin(th)
+            if i == 0 or i == n:
+                x, y = 1, 0
+            else:
+                x, y = cos(th), sin(th)
             # bottom centre (k):
             vertices[j, 0], vertices[j, 1], vertices[j, 2] = 0, 0, -0.5
             vertex_normals[j, 0], vertex_normals[j, 1], vertex_normals[j, 2] = 0, 0, -1
