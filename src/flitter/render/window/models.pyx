@@ -250,7 +250,7 @@ cdef class SlicedModel(ModelTransformer):
     cdef Model transform(self, Matrix44 transform_matrix):
         cdef Vector origin = transform_matrix.vmul(self.origin)
         cdef Vector normal = transform_matrix.inverse_transpose_matrix33().vmul(self.normal).normalize()
-        return SlicedModel.get(TransformedModel.get(self.original, transform_matrix), origin, normal)
+        return SlicedModel.get(self.original.transform(transform_matrix), origin, normal)
 
     cdef void build_trimesh_model(self):
         if not self.original.check_valid():
@@ -273,6 +273,15 @@ cdef class BooleanOperationModel(Model):
     @staticmethod
     cdef BooleanOperationModel get(str operation, list models):
         cdef Model child_model
+        cdef list collected_models
+        if operation == 'union':
+            collected_models = []
+            for child_model in models:
+                if isinstance(child_model, BooleanOperationModel) and (<BooleanOperationModel>child_model).operation == 'union':
+                    collected_models.extend((<BooleanOperationModel>child_model).models)
+                else:
+                    collected_models.append(child_model)
+            models = collected_models
         cdef str name = operation + '('
         cdef int i = 0
         for i, child_model in enumerate(models):
@@ -299,8 +308,12 @@ cdef class BooleanOperationModel(Model):
     cdef Model slice(self, Vector origin, Vector normal):
         cdef Model model
         cdef list models = []
-        for model in self.models:
-            models.append(model.slice(origin, normal))
+        cdef int i
+        for i, model in enumerate(self.models):
+            if i == 0 or self.operation == 'union':
+                models.append(model.slice(origin, normal))
+            else:
+                models.append(model)
         return BooleanOperationModel.get(self.operation, models)
 
     cdef bint check_valid(self):
@@ -493,10 +506,10 @@ cdef class Cylinder(PrimitiveModel):
             j = k = i * 6
             u = <float>i / n
             u_ = (i+0.5) / n
-            th = Tau * u
             if i == 0 or i == n:
                 x, y = 1, 0
             else:
+                th = Tau * u
                 x, y = cos(th), sin(th)
             # bottom centre (k):
             vertices[j, 0], vertices[j, 1], vertices[j, 2] = 0, 0, -0.5
@@ -578,10 +591,12 @@ cdef class Cone(PrimitiveModel):
             j = k = i * 4
             u = <double>i / n
             u_ = (i+0.5) / n
-            th = Tau * u
             th_ = Tau * u_
-            x = cos(th)
-            y = sin(th)
+            if i == 0 or i == n:
+                x, y = 1, 0
+            else:
+                th = Tau * u
+                x, y = cos(th), sin(th)
             # bottom centre (k):
             vertices[j, 0], vertices[j, 1], vertices[j, 2] = 0, 0, -0.5
             vertex_normals[j, 0], vertex_normals[j, 1], vertex_normals[j, 2] = 0, 0, -1
