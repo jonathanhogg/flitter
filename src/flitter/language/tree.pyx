@@ -780,16 +780,19 @@ cdef class Call(Expression):
             for keyword_arg in self.keyword_args:
                 names.append(keyword_arg.name)
                 keyword_arg.expr._compile(program, lnames)
-        if not names and isinstance(self.function, Literal) and (<Literal>self.function).value.length == 1 \
-                and (<Literal>self.function).value.objects is not None:
-            program.call_fast((<Literal>self.function).value.objects[0], len(self.args) if self.args else 0)
+        if not names and isinstance(self.function, Literal) \
+                and (<Literal>self.function).value.length == 1 \
+                and (<Literal>self.function).value.objects is not None \
+                and not isinstance(function := (<Literal>self.function).value.objects[0], Function):
+            program.call_fast(function, len(self.args) if self.args else 0)
         else:
             self.function._compile(program, lnames)
             program.call(len(self.args) if self.args else 0, tuple(names) if names else None)
 
     cdef Expression _simplify(self, Context context):
         cdef Expression function = self.function._simplify(context)
-        cdef bint literal = isinstance(function, Literal) and (<Literal>function).value.objects is not None
+        cdef bint literal = isinstance(function, FunctionName) or \
+            (isinstance(function, Literal) and (<Literal>function).value.objects is not None)
         cdef Expression arg, expr
         cdef list args = []
         if self.args:
@@ -813,19 +816,20 @@ cdef class Call(Expression):
         if isinstance(function, FunctionName):
             func_expr = context.names[(<FunctionName>function).name]
             assert not func_expr.captures, "Cannot inline functions with captured names"
-            kwargs = {binding.name: binding.expr for binding in keyword_args}
-            bindings = [PolyBinding(((<FunctionName>function).name,), func_expr)]
-            for i, binding in enumerate(func_expr.parameters):
-                if i < len(args):
-                    bindings.append(PolyBinding((binding.name,), <Expression>args[i]))
-                elif binding.name in kwargs:
-                    bindings.append(PolyBinding((binding.name,), <Expression>kwargs[binding.name]))
-                elif binding.expr is not None:
-                    bindings.append(PolyBinding((binding.name,), binding.expr))
-                else:
-                    bindings.append(PolyBinding((binding.name,), Literal(null_)))
-            expr = InlineLet(func_expr.expr, tuple(bindings))._simplify(context)
-            return expr
+            if not func_expr.recursive or literal:
+                kwargs = {binding.name: binding.expr for binding in keyword_args}
+                bindings = [PolyBinding(((<FunctionName>function).name,), func_expr)]
+                for i, binding in enumerate(func_expr.parameters):
+                    if i < len(args):
+                        bindings.append(PolyBinding((binding.name,), <Expression>args[i]))
+                    elif binding.name in kwargs:
+                        bindings.append(PolyBinding((binding.name,), <Expression>kwargs[binding.name]))
+                    elif binding.expr is not None:
+                        bindings.append(PolyBinding((binding.name,), binding.expr))
+                    else:
+                        bindings.append(PolyBinding((binding.name,), Literal(null_)))
+                expr = InlineLet(func_expr.expr, tuple(bindings))._simplify(context)
+                return expr
         cdef list vector_args, results
         cdef Literal literal_arg
         if literal:
@@ -1268,12 +1272,14 @@ cdef class Function(Expression):
     cdef readonly tuple parameters
     cdef readonly Expression expr
     cdef readonly tuple captures
+    cdef readonly bint recursive
 
-    def __init__(self, str name, tuple parameters, Expression expr, tuple captures=None):
+    def __init__(self, str name, tuple parameters, Expression expr, tuple captures=None, bint recursive=False):
         self.name = name
         self.parameters = parameters
         self.expr = expr
         self.captures = captures
+        self.recursive = recursive
 
     cdef void _compile(self, Program program, list lnames):
         cdef str name
@@ -1326,13 +1332,15 @@ cdef class Function(Expression):
         context.captures = set()
         context.names = {}
         for key, value in saved.items():
-            if value is not None:
+            if value is not None and key != self.name:
                 context.names[key] = value
-        context.names[self.name] = None
         for parameter in parameters:
             context.names[parameter.name] = None
         expr = self.expr._simplify(context)
-        cdef Function function = Function(self.name, tuple(parameters), expr, tuple(context.captures))
+        cdef recursive = self.name in context.captures
+        if recursive:
+            context.captures.discard(self.name)
+        cdef Function function = Function(self.name, tuple(parameters), expr, tuple(context.captures), recursive)
         context.names = saved
         context.names[self.name] = function if literal and not context.captures else None
         if captures is not None:
@@ -1342,4 +1350,4 @@ cdef class Function(Expression):
         return function
 
     def __repr__(self):
-        return f'Function({self.name!r}, {self.parameters!r}, {self.expr!r}, {self.captures!r})'
+        return f'Function({self.name!r}, {self.parameters!r}, {self.expr!r}, {self.captures!r}, {self.recursive!r})'
