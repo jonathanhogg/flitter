@@ -22,7 +22,7 @@ class test_class:
 
 def all_isclose(xs, ys):
     for x, y in zip(xs, ys):
-        if not math.isclose(x, y):
+        if not (math.isclose(x, y) or math.isnan(x) and math.isnan(y)):
             return False
     return True
 
@@ -298,6 +298,24 @@ class TestVector(unittest.TestCase):
         self.assertEqual(abs(Vector("Hello world!")), null)
         self.assertEqual(abs(Vector(-3)), Vector(3))
         self.assertEqual(abs(Vector([0, 0.1, 3, -99, 1e99, math.inf])), Vector([0, 0.1, 3, 99, 1e99, math.inf]))
+
+    def test_ceil(self):
+        self.assertEqual(math.ceil(null), null)
+        self.assertEqual(math.ceil(Vector("Hello world!")), null)
+        self.assertEqual(math.ceil(Vector(-3.5)), Vector(-3))
+        self.assertEqual(math.ceil(Vector([0, 0.1, 3.5, -99.5, 1e-99, math.inf])), Vector([0, 1, 4, -99, 1, math.inf]))
+
+    def test_floor(self):
+        self.assertEqual(math.floor(null), null)
+        self.assertEqual(math.floor(Vector("Hello world!")), null)
+        self.assertEqual(math.floor(Vector(-3.5)), Vector(-4))
+        self.assertEqual(math.floor(Vector([0, 0.1, 3.5, -99.5, 1e-99, math.inf])), Vector([0, 0, 3, -100, 0, math.inf]))
+
+    def test_fract(self):
+        self.assertEqual(null.fract(), null)
+        self.assertEqual(Vector("Hello world!").fract(), null)
+        self.assertEqual(Vector(-3.5).fract(), Vector(0.5))
+        self.assertTrue(all_isclose(Vector([0, 0.1, 3.5, -99.5, 1e-99, math.inf]).fract(), Vector([0, 0.1, 0.5, 0.5, 1e-99, math.nan])))
 
     def test_add(self):
         x = Vector([1, 0.1, -5, 1e6, math.inf])

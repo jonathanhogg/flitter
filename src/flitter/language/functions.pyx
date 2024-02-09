@@ -7,7 +7,7 @@ Flitter language functions
 
 import cython
 
-from libc.math cimport floor, round, sin, cos, asin, acos, sqrt, exp, ceil, atan2, log, log2, log10
+from libc.math cimport floor, round, sin, cos, asin, acos, sqrt, exp, atan2, log, log2, log10
 from cpython.object cimport PyObject
 from cpython.ref cimport Py_INCREF
 from cpython.tuple cimport PyTuple_New, PyTuple_GET_ITEM, PyTuple_SET_ITEM
@@ -536,27 +536,15 @@ def roundv(Vector xs not None):
 
 
 def ceilv(Vector xs not None):
-    if xs.numbers == NULL:
-        return null_
-    cdef Vector ys = Vector.__new__(Vector)
-    cdef double x, y
-    for i in range(ys.allocate_numbers(xs.length)):
-        x = xs.numbers[i]
-        y = ceil(x)
-        ys.numbers[i] = y
-    return ys
+    return xs.ceil()
 
 
 def floorv(Vector xs not None):
-    if xs.numbers == NULL:
-        return null_
-    cdef Vector ys = Vector.__new__(Vector)
-    cdef double x, y
-    for i in range(ys.allocate_numbers(xs.length)):
-        x = xs.numbers[i]
-        y = floor(x)
-        ys.numbers[i] = y
-    return ys
+    return xs.floor()
+
+
+def fract(Vector xs not None):
+    return xs.fract()
 
 
 def sumv(Vector xs not None, Vector zs=true_):
@@ -905,6 +893,7 @@ STATIC_FUNCTIONS = {
     'cos': Vector(cosv),
     'exp': Vector(expv),
     'floor': Vector(floorv),
+    'fract': Vector(fract),
     'hsl': Vector(hsl),
     'hsv': Vector(hsv),
     'hypot': Vector(hypot),

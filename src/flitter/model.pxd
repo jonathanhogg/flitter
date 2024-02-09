@@ -36,6 +36,9 @@ cdef class Vector:
     cdef Vector neg(self)
     cdef Vector pos(self) noexcept
     cdef Vector abs(self)
+    cdef Vector ceil(self)
+    cdef Vector floor(self)
+    cpdef Vector fract(self)
     cdef Vector add(self, Vector other)
     cpdef Vector mul_add(self, Vector left, Vector right)
     cdef Vector sub(self, Vector other)

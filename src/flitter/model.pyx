@@ -3,7 +3,7 @@
 import cython
 import numpy as np
 
-from libc.math cimport isnan, floor, ceil, abs as double_abs, sqrt, sin, cos, isnan
+from libc.math cimport isnan, floor as c_floor, ceil as c_ceil, abs as c_abs, sqrt, sin, cos, isnan
 from cpython.object cimport PyObject
 from cpython.ref cimport Py_INCREF
 from cpython.bool cimport PyBool_FromLong
@@ -390,7 +390,7 @@ cdef class Vector:
                 return
         else:
             return
-        cdef int i, n = <int>ceil((stop - start) / step)
+        cdef int i, n = <int>c_ceil((stop - start) / step)
         if n > 0:
             for i in range(self.allocate_numbers(n)):
                 self.numbers[i] = start + step * i
@@ -506,7 +506,7 @@ cdef class Vector:
                     y = HASH_STRING(<str>value)
                 elif type(<object>value) is float:
                     if floor_floats:
-                        y = double_long(f=floor(PyFloat_AS_DOUBLE(<object>value))).l
+                        y = double_long(f=c_floor(PyFloat_AS_DOUBLE(<object>value))).l
                     else:
                         y = double_long(f=PyFloat_AS_DOUBLE(<object>value)).l
                 elif type(<object>value) is int:
@@ -520,7 +520,7 @@ cdef class Vector:
         else:
             for i in range(self.length):
                 if floor_floats:
-                    y = double_long(f=floor(self.numbers[i])).l
+                    y = double_long(f=c_floor(self.numbers[i])).l
                 else:
                     y = double_long(f=self.numbers[i]).l
                 _hash = HASH_UPDATE(_hash, y)
@@ -544,7 +544,7 @@ cdef class Vector:
                         if t is str:
                             return SymbolTable.get(self.numbers[0], default)
                         if t is int:
-                            return <long long>floor(f)
+                            return <long long>c_floor(f)
                         elif t is bool:
                             return f != 0
                         return f
@@ -558,7 +558,7 @@ cdef class Vector:
                                     return default
                                 obj = <object>objptr
                             elif t is int:
-                                obj = PyLong_FromDouble(floor(f))
+                                obj = PyLong_FromDouble(c_floor(f))
                             elif t is bool:
                                 obj = PyBool_FromLong(f != 0)
                             else:
@@ -575,7 +575,7 @@ cdef class Vector:
                             return default
                         obj = <object>objptr
                     elif t is int:
-                        obj = PyLong_FromDouble(floor(f))
+                        obj = PyLong_FromDouble(c_floor(f))
                     elif t is bool:
                         obj = PyBool_FromLong(f != 0)
                     else:
@@ -669,7 +669,37 @@ cdef class Vector:
         cdef Vector result = Vector.__new__(Vector)
         if self.numbers != NULL:
             for i in range(result.allocate_numbers(n)):
-                result.numbers[i] = double_abs(self.numbers[i])
+                result.numbers[i] = c_abs(self.numbers[i])
+        return result
+
+    def __ceil__(self):
+        return self.ceil()
+
+    cdef Vector ceil(self):
+        cdef int i, n = self.length
+        cdef Vector result = Vector.__new__(Vector)
+        if self.numbers != NULL:
+            for i in range(result.allocate_numbers(n)):
+                result.numbers[i] = c_ceil(self.numbers[i])
+        return result
+
+    def __floor__(self):
+        return self.floor()
+
+    cdef Vector floor(self):
+        cdef int i, n = self.length
+        cdef Vector result = Vector.__new__(Vector)
+        if self.numbers != NULL:
+            for i in range(result.allocate_numbers(n)):
+                result.numbers[i] = c_floor(self.numbers[i])
+        return result
+
+    cpdef Vector fract(self):
+        cdef int i, n = self.length
+        cdef Vector result = Vector.__new__(Vector)
+        if self.numbers != NULL:
+            for i in range(result.allocate_numbers(n)):
+                result.numbers[i] = self.numbers[i] - c_floor(self.numbers[i])
         return result
 
     def __add__(self, other):
@@ -753,7 +783,7 @@ cdef class Vector:
         cdef Vector result = Vector.__new__(Vector)
         if self.numbers != NULL and other.numbers != NULL:
             for i in range(result.allocate_numbers(max(n, m))):
-                result.numbers[i] = floor(self.numbers[i % n] / other.numbers[i % m])
+                result.numbers[i] = c_floor(self.numbers[i % n] / other.numbers[i % m])
         return result
 
     def __mod__(self, other):
@@ -770,7 +800,7 @@ cdef class Vector:
         if self.numbers != NULL and other.numbers != NULL:
             for i in range(result.allocate_numbers(max(n, m))):
                 x, y = self.numbers[i % n], other.numbers[i % m]
-                result.numbers[i] = x - floor(x / y) * y
+                result.numbers[i] = x - c_floor(x / y) * y
         return result
 
     def __pow__(self, other, modulo):
@@ -880,7 +910,7 @@ cdef class Vector:
         if src is not None:
             result.objects = dest = PyTuple_New(m)
             for i in range(o):
-                j = <int>floor(index.numbers[i])
+                j = <int>c_floor(index.numbers[i])
                 if j >= 0 and j < n:
                     objptr = PyTuple_GET_ITEM(src, j)
                     Py_INCREF(<object>objptr)
@@ -889,7 +919,7 @@ cdef class Vector:
         elif m:
             result.allocate_numbers(m)
             for i in range(o):
-                j = <int>floor(index.numbers[i])
+                j = <int>c_floor(index.numbers[i])
                 if j >= 0 and j < n:
                     result.numbers[k] = self.numbers[j]
                     k += 1

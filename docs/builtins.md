@@ -27,6 +27,8 @@ this function intelligently caches and will convert numeric-looking columns in
 the row into numeric values
 - `exp(x)` - return *e* raised to the power of *x*
 - `floor(x)` - return mathematical floor of *x*
+- `fract(x)` - return mathematical fractional part of *x* (equivalent to
+`x - floor(x)`)
 - `hsl(h;s;l)` - return a 3-vector of *R*, *G* and *B* in the range *[0,1]*
 from a 3-vector of hue, saturation and lightness (also in the range *[0,1]*)
 - `hsv(h;s;v)` - return a 3-vector of *R*, *G* and *B* in the range *[0,1]*
