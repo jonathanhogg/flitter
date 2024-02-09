@@ -7,7 +7,7 @@ func bloom_filter(nodes, radius, size, contrast=1.5, sigma=0.6)
                 nodes
         else
             nodes#bloom_source id=:bloom_source
-        !shader#blur size=size horizontal=false radius=ry sigma=sigma fragment=read("glsl/blur.frag")
-            !shader#blur horizontal=true radius=rx sigma=sigma fragment=read("glsl/blur.frag")
-                !shader#contrast contrast=contrast brightness=(1-contrast)/2 fragment=read("glsl/color_adjust.frag")
+        !shader#blur size=size horizontal=false radius=ry sigma=sigma fragment=read("../glsl/blur.frag")
+            !shader#blur horizontal=true radius=rx sigma=sigma fragment=read("../glsl/blur.frag")
+                !shader#contrast contrast=contrast brightness=(1-contrast)/2 fragment=read("../glsl/color_adjust.frag")
                     !reference id=:bloom_source
