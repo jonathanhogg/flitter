@@ -97,12 +97,30 @@ class TestBasicInstructions(unittest.TestCase):
         stack = self.program.execute(self.context)
         self.assertEqual(stack, [false, true])
 
+    def test_Ceil(self):
+        self.program.literal(-3.5)
+        self.program.ceil()
+        stack = self.program.execute(self.context)
+        self.assertEqual(stack, [-3])
+
+    def test_Floor(self):
+        self.program.literal(-3.5)
+        self.program.floor()
+        stack = self.program.execute(self.context)
+        self.assertEqual(stack, [-4])
+
     def test_FloorDiv(self):
         self.program.literal(11)
         self.program.literal(4)
         self.program.floordiv()
         stack = self.program.execute(self.context)
         self.assertEqual(stack, [2])
+
+    def test_Fract(self):
+        self.program.literal(-3.5)
+        self.program.fract()
+        stack = self.program.execute(self.context)
+        self.assertEqual(stack, [0.5])
 
     def test_Ge(self):
         self.program.literal(3)

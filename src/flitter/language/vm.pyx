@@ -12,7 +12,7 @@ from .functions import STATIC_FUNCTIONS, DYNAMIC_FUNCTIONS
 from ..model cimport Vector, Node, Context, null_, true_, false_
 from .noise import NOISE_FUNCTIONS
 
-from libc.math cimport floor
+from libc.math cimport floor as c_floor
 from libc.stdint cimport int64_t
 from cpython cimport PyObject, Py_INCREF, Py_DECREF
 from cpython.dict cimport PyDict_New, PyDict_GetItem, PyDict_SetItem, PyDict_DelItem, PyDict_Copy
@@ -66,12 +66,15 @@ cdef enum OpCode:
     BranchTrue
     Call
     CallFast
+    Ceil
     Compose
     Drop
     Dup
     EndForCompose
     Eq
+    Floor
     FloorDiv
+    Fract
     Func
     Exit
     Ge
@@ -119,12 +122,15 @@ cdef dict OpCodeNames = {
     OpCode.BranchTrue: 'BranchTrue',
     OpCode.Call: 'Call',
     OpCode.CallFast: 'CallFast',
+    OpCode.Ceil: 'Ceil',
     OpCode.Compose: 'Compose',
     OpCode.Drop: 'Drop',
     OpCode.Dup: 'Dup',
     OpCode.EndForCompose: 'EndForCompose',
     OpCode.Eq: 'Eq',
+    OpCode.Floor: 'Floor',
     OpCode.FloorDiv: 'FloorDiv',
+    OpCode.Fract: 'Fract',
     OpCode.Func: 'Func',
     OpCode.Exit: 'Exit',
     OpCode.Ge: 'Ge',
@@ -420,6 +426,7 @@ cdef inline void drop(VectorStack stack, int n) noexcept:
         stack.vectors[stack.top+i] = NULL
 
 cdef inline int push(VectorStack stack, Vector vector) except 0:
+    assert vector is not None
     stack.top += 1
     if stack.top == stack.size:
         increase(stack)
@@ -540,12 +547,14 @@ cdef inline Vector peek_at(VectorStack stack, int offset) noexcept:
     return <Vector>stack.vectors[stack.top-offset]
 
 cdef inline void poke(VectorStack stack, Vector vector) noexcept:
+    assert vector is not None
     assert stack.top > -1, "Stack empty"
     Py_DECREF(<Vector>stack.vectors[stack.top])
     Py_INCREF(vector)
     stack.vectors[stack.top] = <PyObject*>vector
 
 cdef inline void poke_at(VectorStack stack, int offset, Vector vector) noexcept:
+    assert vector is not None
     assert stack.top-offset > -1, "Stack empty"
     Py_DECREF(<Vector>stack.vectors[stack.top-offset])
     Py_INCREF(vector)
@@ -865,10 +874,12 @@ cdef class Program:
                 push(self.lnames, null_)
         push(self.stack, Vector(context.root))
         self._execute(context, 0, record_stats)
-        context.root = pop(self.stack).objects[0]
+        assert (<VectorStack>self.lnames).top == n-1, "Bad lnames"
         drop(self.lnames, n)
-        assert (<VectorStack>self.stack).top == -1, "Bad stack"
-        assert (<VectorStack>self.lnames).top == -1, "Bad lnames"
+        assert (<VectorStack>self.stack).top == 0, "Bad stack"
+        cdef Vector result = pop(self.stack)
+        assert result.length == 1 and result.objects is not None and isinstance(result.objects[0], Node), "Bad root node"
+        context.root = result.objects[0]
 
     cpdef void link(self):
         cdef Instruction instruction
@@ -985,6 +996,15 @@ cdef class Program:
     cpdef void pos(self):
         self.instructions.append(Instruction(OpCode.Pos))
 
+    cpdef void ceil(self):
+        self.instructions.append(Instruction(OpCode.Ceil))
+
+    cpdef void floor(self):
+        self.instructions.append(Instruction(OpCode.Floor))
+
+    cpdef void fract(self):
+        self.instructions.append(Instruction(OpCode.Fract))
+
     cpdef void not_(self):
         self.instructions.append(Instruction(OpCode.Not))
 
@@ -1038,7 +1058,7 @@ cdef class Program:
 
     cpdef void slice_literal(self, Vector value):
         if value.length == 1 and value.numbers != NULL:
-            self.instructions.append(InstructionInt(OpCode.IndexLiteral, <int>floor(value.numbers[0])))
+            self.instructions.append(InstructionInt(OpCode.IndexLiteral, <int>c_floor(value.numbers[0])))
         else:
             self.instructions.append(InstructionVector(OpCode.SliceLiteral, value))
 
@@ -1221,6 +1241,15 @@ cdef class Program:
                 elif instruction.code == OpCode.Pos:
                     if peek(stack).objects is not None:
                         poke(stack, null_)
+
+                elif instruction.code == OpCode.Ceil:
+                    poke(stack, peek(stack).ceil())
+
+                elif instruction.code == OpCode.Floor:
+                    poke(stack, peek(stack).floor())
+
+                elif instruction.code == OpCode.Fract:
+                    poke(stack, peek(stack).fract())
 
                 elif instruction.code == OpCode.Not:
                     poke(stack, false_ if peek(stack).as_bool() else true_)

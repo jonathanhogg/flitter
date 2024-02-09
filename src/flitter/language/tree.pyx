@@ -380,13 +380,19 @@ cdef class UnaryOperation(Expression):
     def __init__(self, Expression expr):
         self.expr = expr
 
+    cdef void _compile(self, Program program, list lnames):
+        self.expr._compile(program, lnames)
+        self._compile_op(program)
+
+    cdef void _compile_op(self, Program program):
+        raise NotImplementedError()
+
     def __repr__(self):
         return f'{self.__class__.__name__}({self.expr!r})'
 
 
 cdef class Negative(UnaryOperation):
-    cdef void _compile(self, Program program, list lnames):
-        self.expr._compile(program, lnames)
+    cdef void _compile_op(self, Program program):
         program.neg()
 
     cdef Expression _simplify(self, Context context):
@@ -409,8 +415,7 @@ cdef class Negative(UnaryOperation):
 
 
 cdef class Positive(UnaryOperation):
-    cdef void _compile(self, Program program, list lnames):
-        self.expr._compile(program, lnames)
+    cdef void _compile_op(self, Program program):
         program.pos()
 
     cdef Expression _simplify(self, Context context):
@@ -423,8 +428,7 @@ cdef class Positive(UnaryOperation):
 
 
 cdef class Not(UnaryOperation):
-    cdef void _compile(self, Program program, list lnames):
-        self.expr._compile(program, lnames)
+    cdef void _compile_op(self, Program program):
         program.not_()
 
     cdef Expression _simplify(self, Context context):
@@ -432,6 +436,39 @@ cdef class Not(UnaryOperation):
         if isinstance(expr, Literal):
             return Literal(false_ if (<Literal>expr).value.as_bool() else true_)
         return Not(expr)
+
+
+cdef class Ceil(UnaryOperation):
+    cdef void _compile_op(self, Program program):
+        program.ceil()
+
+    cdef Expression _simplify(self, Context context):
+        cdef Expression expr = self.expr._simplify(context)
+        if isinstance(expr, Literal):
+            return Literal((<Literal>expr).value.ceil())
+        return Ceil(expr)
+
+
+cdef class Floor(UnaryOperation):
+    cdef void _compile_op(self, Program program):
+        program.floor()
+
+    cdef Expression _simplify(self, Context context):
+        cdef Expression expr = self.expr._simplify(context)
+        if isinstance(expr, Literal):
+            return Literal((<Literal>expr).value.floor())
+        return Floor(expr)
+
+
+cdef class Fract(UnaryOperation):
+    cdef void _compile_op(self, Program program):
+        program.fract()
+
+    cdef Expression _simplify(self, Context context):
+        cdef Expression expr = self.expr._simplify(context)
+        if isinstance(expr, Literal):
+            return Literal((<Literal>expr).value.fract())
+        return Fract(expr)
 
 
 cdef class BinaryOperation(Expression):
@@ -493,9 +530,7 @@ cdef class Add(MathsBinaryOperation):
     cdef Vector op(self, Vector left, Vector right):
         return left.add(right)
 
-    cdef void _compile(self, Program program, list lnames):
-        self.left._compile(program, lnames)
-        self.right._compile(program, lnames)
+    cdef void _compile_op(self, Program program):
         program.add()
 
     cdef Expression constant_left(self, Vector left, Expression right):
@@ -579,6 +614,10 @@ cdef class FloorDivide(MathsBinaryOperation):
     cdef void _compile_op(self, Program program):
         program.floordiv()
 
+    cdef Expression constant_right(self, Expression left, Vector right):
+        if right.eq(true_):
+            return Floor(left)
+
 
 cdef class Modulo(MathsBinaryOperation):
     cdef Vector op(self, Vector left, Vector right):
@@ -586,6 +625,10 @@ cdef class Modulo(MathsBinaryOperation):
 
     cdef void _compile_op(self, Program program):
         program.mod()
+
+    cdef Expression constant_right(self, Expression left, Vector right):
+        if right.eq(true_):
+            return Fract(left)
 
 
 cdef class Power(MathsBinaryOperation):
@@ -847,6 +890,13 @@ cdef class Call(Expression):
                         break
             else:
                 return sequence_pack(results)
+        if isinstance(function, Literal) and len(args) == 1:
+            if (<Literal>function).value == static_builtins['ceil']:
+                return Ceil(args[0])
+            elif (<Literal>function).value == static_builtins['floor']:
+                return Floor(args[0])
+            if (<Literal>function).value == static_builtins['fract']:
+                return Fract(args[0])
         cdef Call call = Call(function, tuple(args), tuple(keyword_args))
         return call
 
