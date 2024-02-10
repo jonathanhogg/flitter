@@ -72,12 +72,12 @@ based on their properties, current positions and velocities. These forces will
 then be applied to the current velocity to generate a new velocity and the
 position updated based on this.
 
-```math
+```{math}
 \vec{v}_{t+\Delta t} = \vec{v}_t +
 \left( \sum_{i=0}^n \vec{F}_i \right) {\Delta t \over M}
 ```
 
-```math
+```{math}
 \vec{p}_{t+\Delta t} = \vec{p}_t + \vec{v}_{t+\Delta t} \cdot \Delta t
 ```
 
@@ -178,15 +178,15 @@ various tethers, rubber bands and springs.
 - `ease` - specifies an amount of simulation time over which to ramp up
 `strength`
 
-```math
+```{math}
 l = \left| \vec{p}_\textbf{to} - \vec{p}_\textbf{from} \right|
 ```
 
-```math
+```{math}
 \vec{d} = {\vec{p}_\textbf{to} - \vec{p}_\textbf{from} \over l}
 ```
 
-```math
+```{math}
 \vec{F} = \begin{cases}
 \textbf{strength} \cdot (l - \textbf{min})^\textbf{power} \cdot \vec{d}
 & \text{if $l < \textbf{min}$} \\
@@ -195,11 +195,11 @@ l = \left| \vec{p}_\textbf{to} - \vec{p}_\textbf{from} \right|
 \end{cases}
 ```
 
-```math
+```{math}
 \vec{F}_\textbf{from} = \vec{F}
 ```
 
-```math
+```{math}
 \vec{F}_\textbf{to} = -\vec{F}
 ```
 
@@ -232,16 +232,16 @@ with zero `mass` will be ignored.
 `strength`
 - `max_distance` - pairs of particles further apart than this will be ignored
 
-```math
+```{math}
 \vec{F} = \textbf{strength} \cdot \vec{d} \cdot
 { \textbf{mass}_{from} \cdot \textbf{mass}_{to} \over l^2}
 ```
 
-```math
+```{math}
 \vec{F}_{from} = \vec{F}
 ```
 
-```math
+```{math}
 \vec{F}_{to} = -\vec{F}
 ```
 
@@ -270,16 +270,16 @@ attract each other.
 `strength`
 - `max_distance` - pairs of particles further apart than this will be ignored
 
-```math
+```{math}
 \vec{F} = \textbf{strength} \cdot \vec{d} \cdot
 { | \textbf{charge}_{from} | \cdot \textbf{charge}_{to} \over l^2}
 ```
 
-```math
+```{math}
 \vec{F}_{from} = \vec{F}
 ```
 
-```math
+```{math}
 \vec{F}_{to} = -\vec{F}
 ```
 
@@ -304,31 +304,31 @@ particle will be drawn completely within the larger.
 - `ease` - specifies an amount of simulation time over which to ramp up
 `strength`
 
-```math
+```{math}
 l_{max} = \textbf{radius}_{from} + \textbf{radius}_{to}
 ```
 
-```math
+```{math}
 l_{min} = | \textbf{radius}_{from} - \textbf{radius}_{to} |
 ```
 
-```math
+```{math}
 l_{adhesion} = l_{min} \cdot \textbf{overlap} + l_{max} \cdot ( 1 - \textbf{overlap} )
 ```
 
-```math
+```{math}
 l_{overlap} = max( 0, l_{max} - l )
 ```
 
-```math
+```{math}
 \vec{F} = \textbf{strength} \cdot \vec{d} \cdot l_{overlap}^2 \cdot (l - l_{adhesion})
 ```
 
-```math
+```{math}
 \vec{F}_{from} = \vec{F}
 ```
 
-```math
+```{math}
 \vec{F}_{to} = -\vec{F}
 ```
 
@@ -354,15 +354,15 @@ tend to bounce around forever. Particles with zero `radius` will be ignored.
 - `ease` - specifies an amount of simulation time over which to ramp up
 `strength`
 
-```math
+```{math}
 {speed} = |\vec{v}_t|
 ```
 
-```math
+```{math}
 \vec{d} = { \vec{v}_t \over {speed} }
 ```
 
-```math
+```{math}
 \vec{F} = \textbf{strength} \cdot (-\vec{d}) \cdot {speed}^2 \cdot
 \textbf{radius}^{\textbf{dimensions} - 1}
 ```
@@ -389,11 +389,11 @@ is a vector with the last dimension equal to `-1`)
 
 Particles with either zero radius or zero mass will be ignored.
 
-```math
+```{math}
 m = \textbf{density} \cdot \textbf{radius}^\textbf{dimensions}
 ```
 
-```math
+```{math}
 \vec{F} = \textbf{strength} \cdot  \vec{gravity} \cdot  ( \textbf{mass} - m )
 ```
 
@@ -439,7 +439,7 @@ The `beat` clock is used as the simulation time, allowing the simulation to be
 sped up or slowed down by altering the tempo. `resolution` is calculated to
 match the current tempo to the target frame-rate.
 
-```flitter
+```{flitter}
 %pragma tempo 60
 
 let SIZE=1080;1080
