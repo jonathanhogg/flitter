@@ -7,7 +7,6 @@ with trails moving outwards from the centre of the screen.](https://github.com/j
 [![CI test](https://github.com/jonathanhogg/flitter/actions/workflows/ci-test.yml/badge.svg?)](https://github.com/jonathanhogg/flitter/actions/workflows/ci-test.yml)
 [![docs](https://readthedocs.org/projects/flitter/badge/?version=latest)](https://flitter.readthedocs.io/en/latest/?badge=latest)
 
-
 **Flitter** is a functional programming language wrapped around a declarative
 system for describing 2D and 3D visuals. [The language](https://github.com/jonathanhogg/flitter/blob/main/docs/language.md)
 is designed to encourage an iterative, explorative, play-based approach to
@@ -163,10 +162,11 @@ you want to run the functional tests without a windowing environment).
 
 ## Learning Flitter
 
-There is *some* documentation available in the [docs folder](https://github.com/jonathanhogg/flitter/blob/main/docs)
-and a few quick [examples](https://github.com/jonathanhogg/flitter/blob/main/examples)
-ready to run out-of-the-box.
+The documentation is available in the [docs
+folder](https://github.com/jonathanhogg/flitter/blob/main/docs) or at the
+[Flitter readthedocs site](https://flitter.readthedocs.io/).
 
-However, there is also a separate repo containing [many more interesting
-examples](https://github.com/jonathanhogg/flitter-examples) that are worth
-checking out.
+There are a few quick [examples](https://github.com/jonathanhogg/flitter/blob/main/examples)
+in the main repository. However, there is also a separate repo containing [many
+more interesting examples](https://github.com/jonathanhogg/flitter-examples)
+that are worth checking out.
