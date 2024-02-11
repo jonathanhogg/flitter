@@ -1,5 +1,5 @@
 
-# Flitter Windowing
+# Windowing
 
 `!window`s composite their children and a `!canvas` is transparent until drawn
 into. The blending function for compositing is controlled with the `blend`

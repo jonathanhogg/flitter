@@ -18,6 +18,7 @@ raw performance, but is sufficiently fast to be able to do interesting things.
 ## Documentation
 
 ```{toctree}
+:maxdepth: 1
 background.md
 install.md
 language.md

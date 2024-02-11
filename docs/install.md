@@ -1,5 +1,5 @@
 
-# Installing and Running Flitter
+# Installing and Running
 
 **Flitter** is implemented in a mix of Python and Cython and requires OpenGL
 3.3 or above. At least Python 3.10 is *required* as the code uses `match`/`case`

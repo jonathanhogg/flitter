@@ -1,5 +1,5 @@
 
-# The Flitter Language
+# The Language
 
 ## Quick introduction
 
