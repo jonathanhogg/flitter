@@ -1,6 +1,6 @@
 # Flitter Physics Simulation
 
-**flitter** supports a simple system for running physics simulations of particle
+**Flitter** supports a simple system for running physics simulations of particle
 systems. The physics engine is configured with a set of nodes and will store the
 current position and velocity of each particle in the state dictionary, allowing
 it to be linked back to rendering code and nodes.
@@ -29,11 +29,11 @@ rubber bands are all well defined forces.
 
 ### `!physics`
 
-A `!physics` node at the top level in a **flitter** script creates a new
+A `!physics` node at the top level in a **Flitter** script creates a new
 simulation system. The attributes are:
 
 - `state` is a required attribute giving a state prefix key; all of the state
-of the system will be stored in the **flitter** state dictionary with keys
+of the system will be stored in the **Flitter** state dictionary with keys
 prefixed by this
 - `dimensions` is a required attribute giving the number of dimensions of the
 system, i.e., the length of the position, value and force vectors (must be
@@ -54,7 +54,7 @@ actual amount of simulation time that has passed (see **State interaction**
 below).
 
 If `time` and `resolution` are not specified then the system will default to
-**flitter**'s internal frame clock and the target frame-rate interval
+**Flitter**'s internal frame clock and the target frame-rate interval
 respectively. This means that the simulation time units will be seconds and the
 simulation will advance in time steps equal to the frame interval.
 
@@ -439,7 +439,7 @@ The `beat` clock is used as the simulation time, allowing the simulation to be
 sped up or slowed down by altering the tempo. `resolution` is calculated to
 match the current tempo to the target frame-rate.
 
-```{flitter}
+```flitter
 %pragma tempo 60
 
 let SIZE=1080;1080
@@ -477,11 +477,11 @@ move apart at the beginning.
 
 ## Non-realtime mode
 
-If the **flitter** engine is run in non-realtime mode, with the `--lockstep`
+If the **Flitter** engine is run in non-realtime mode, with the `--lockstep`
 command-line option, then the simulation behaviour with regard to the
 `resolution` attribute is slightly different. In non-realtime mode,
-`resolution` still represents a minimum interval that the simulation will use
-but instead of lagging if the frame-rate is slower than this, additional
+`resolution` still represents a minimum interval that the simulation will use,
+but instead of lagging if the frame-rate is slower than this additional
 simulation steps will be inserted to keep the simulation up to date.
 
 For example, if resolution is set to `1/60` and the engine is run with

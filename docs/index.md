@@ -17,12 +17,14 @@ raw performance, but is sufficiently fast to be able to do interesting things.
 
 ## Documentation
 
-- [Flitter's Background](background.md)
-- [Installing and Running Flitter](install.md)
-- [The Flitter Language](language.md)
-- [Flitter Built-in Functions](builtins.md)
-- [Flitter Windowing](windows.md)
-- [Flitter Physics Simulation](physics.md)
+```{toctree}
+background.md
+install.md
+language.md
+builtins.md
+windows.md
+physics.md
+```
 
 ## Examples
 

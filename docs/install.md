@@ -5,11 +5,11 @@
 3.3 or above. At least Python 3.10 is *required* as the code uses `match`/`case`
 syntax.
 
-I develop and use it exclusively on Intel macOS. I have done some limited
-testing on an Intel Ubuntu VM and on Apple Silicon and it seems to run fine on
-both of those platforms. I've not heard of anyone trying it on Windows yet, but
-there's no particular reason why it shouldn't work. If you have success or
-otherwise on another platform please let me know / raise an issue.
+It is developed exclusively on Intel macOS. Some limited testing has been done
+on an Intel Ubuntu VM and on Apple Silicon and it seems to run fine on
+both of those platforms. There have been no reports of it having been tried
+on Windows yet, but there's no particular reason why it shouldn't work. If you
+have success or otherwise on another platform please get in touch.
 
 If you want to try **Flitter** then you can install the latest [`flitter-lang`
 PyPI package](https://pypi.org/project/flitter-lang/) with:
@@ -24,7 +24,9 @@ and then run it with:
 flitter path/to/some/flitter/script.fl
 ```
 
-It is recommended to do this in a Python [virtual env](https://docs.python.org/3/library/venv.html).
+It is recommended to do the install into a Python [virtual
+environment](https://docs.python.org/3/library/venv.html) as **Flitter** draws
+in quite a few dependencies.
 
 If you want to live on the bleeding edge, then you can install from the current
 head of the `main` branch with:
@@ -33,7 +35,7 @@ head of the `main` branch with:
 pip3 install https://github.com/jonathanhogg/flitter/archive/main.zip
 ```
 
-However, if you clone this repo instead, then you can install from the top
+However, if you clone the repo instead, then you can install from the top
 level directory:
 
 ```sh
@@ -42,7 +44,7 @@ cd flitter
 pip3 install .
 ```
 
-and have direct access to the example programs:
+keep up-to-date with developments and have direct access to the example programs:
 
 ```sh
 flitter examples/hoops.fl
@@ -83,10 +85,10 @@ and the install-time dependencies are:
 
 ## Editable installations
 
-If you want to muck about with the code then ensure that `cython` and
-`setuptools` are installed in your runtime environment, do an editable
-package deployment, and then throw away the built code and let `pyximport`
-(re)compile it on-the-fly as you go:
+If you want to edit the code then ensure that `cython` and `setuptools` are
+installed in your runtime environment, do an editable package deployment, and
+then throw away the built code. The code makes use of `pyximport` to (re)compile
+the Cython code on-the-fly as **Flitter** runs:
 
 ```sh
 pip3 install cython setuptools
