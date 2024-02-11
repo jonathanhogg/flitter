@@ -1,5 +1,5 @@
 
-# The Language
+# The Flitter Language
 
 ## Quick introduction
 
@@ -363,48 +363,6 @@ appended to a `!window` node, which is the final value of this expression.
 Running this program as-is will result in a red window with the title "Hello
 world!".
 
-### Attribute name scoping
-
-Existing attributes of a node are brought into scope as names when evaluating
-the value of an attribute-set expression, e.g.:
-
-```flitter
-!rect point=200;100 size=(500;500)-point
-```
-
-is equivalent to:
-
-```flitter
-!rect point=200;100 size=300;400
-```
-
-Attribute names introduced in this way are added into a special "0-th" scope
-outside of built-ins and engine-supplied names. Thus, if an attribute name
-matches a name already in scope, then that existing name "wins". So:
-
-```flitter
-let point=400;200
-
-!rect point=200;100 size=(500;500)-point
-```
-
-results in a 100x300 rectangle.
-
-This rule is important for allowing the language partial-evaluator to determine
-bindings. As nodes are themselves values, the above can be legally written as:
-
-```flitter
-let point=400;200
-    rectangle=(!rect point=200;100)
-
-rectangle size=(500;500)-point
-```
-
-Without the special rule for attribute name binding, the partial-evaluator
-would not (in the general case) be able to statically determine whether the use
-of `point` in the `size=` attribute refers to the name introduced with the `let`
-or an attribute of the `rectangle` value.
-
 ### Vector node operations
 
 As nodes are values, and thus vectors, tag unary-postfix operations and
@@ -434,8 +392,9 @@ let points=10;20;15;25;20;30;25;35
 ## Let expressions
 
 Values may be bound to names with the `let` keyword. It is followed by one or
-more `name=expression`s. The expressions are immediately evaluated and the
-resulting values are added into the scope of the expressions below.
+more `name=expression`s. The expressions are evaluated from left to right, with
+each name being bound to the resulting value and added into the scope of the
+current sequence.
 
 Lets may be used at the top-level in a **flitter** script or anywhere within
 a block-structured sequence, i.e., within append, function, conditional and
@@ -462,17 +421,6 @@ will evaluate to the two top-level nodes:
 !bar x=10
 ```
 
-There is also an inline version of let known as `where`. This allows names to
-be bound within a non-sequence expression, e.g.:
-
-```flitter
-!foo x=(x*x where x=10)
-```
-
-Note that `where` has higher precedence than `;` vector composition and so
-`x;x*x where x=10` is equivalent to `x;(x*x where x=10)` and thus the binding
-is only in scope for the `x*x` expression.
-
 A `let` expression may bind multiple names at once, which apply immediately
 in the order they are given, and supports using indentation for continuance.
 For example:
@@ -496,6 +444,20 @@ vector is shorter then the unmatched names will be bound to `null`.
 
 Names introduced with a `let` can redefine engine-supplied values, like `beat`,
 and built-ins, like `sin`.
+
+## Where
+
+There is also an inline version of `let` known as `where`. This allows names to
+be bound within a non-sequence expression, e.g.:
+
+```flitter
+!foo x=(x*x where x=10)
+```
+
+It is good practice, although not always necessary, to surround `where`
+expressions with parentheses to make the scope clear. However, note that `where`
+has higher precedence than `;` vector composition and so `(x;x*x where x=10)` is
+equivalent to `x;(x*x where x=10)`.
 
 ## Conditionals
 

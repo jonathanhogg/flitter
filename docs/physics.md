@@ -1,4 +1,4 @@
-# Physics simulation
+# Flitter Physics Simulation
 
 **flitter** supports a simple system for running physics simulations of particle
 systems. The physics engine is configured with a set of nodes and will store the

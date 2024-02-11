@@ -1,4 +1,4 @@
-# Built-in functions
+# Flitter Built-in Functions
 
 - `abs(x)` - return absolute value of *x* (ignoring sign)
 - `accumulate(xs)` - return a vector with the same length as *xs* formed by
