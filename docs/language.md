@@ -3,7 +3,7 @@
 
 ## Quick introduction
 
-**flitter** is a declarative tree-construction language (`Node` in the model).
+**Flitter** is a declarative tree-construction language (`Node` in the model).
 All values are arrays (`Vector` in the model), delimited with semicolons, and
 all maths is piece-wise. Short vectors are repeated as necessary in binary
 operations, i.e., `(1;2;3;4) * 2` is `2;4;6;8`. The `null` value is an empty
@@ -35,7 +35,7 @@ front of it creates a node of that *kind*; the bindings following this specify
 attributes of the node. Nodes can also be followed by one or more `#tag`s to
 add tags for readability and logging.
 
-When the **flitter** engine is run with this file, it will evaluate the code
+When the **Flitter** engine is run with this file, it will evaluate the code
 repeatedly (at an attempted 60fps) and render this to screen. Note that one
 explicitly specifies a window to be drawn into. The engine supports multiple
 windows.
@@ -92,7 +92,7 @@ The engine-supplied global values are:
 All values are vectors of either floating point numbers, Unicode strings, nodes
 or functions (or a mix thereof). The vector implementation is optimised for
 vectors of numbers, particularly short vectors. There are no dedicated integer
-values in **flitter** and so one should be careful of relying on integer numbers
+values in **Flitter** and so one should be careful of relying on integer numbers
 outside of the safe integer range of a double-precision floating point
 (-2^53..2^53).
 
@@ -123,9 +123,9 @@ x;y+1 == x;(y+1)
 
 ### SI Prefixes
 
-**flitter** supports adding an SI prefix to the end of a number. This is
+**Flitter** supports adding an SI prefix to the end of a number. This is
 confusing terminology, but an SI prefix is a prefix to a unit suffix.
-**flitter** does *not* support units, so you just end up with the SI prefix
+**Flitter** does *not* support units, so you just end up with the SI prefix
 as a suffix. (Confused yet?)
 
 The allowed SI prefixes are:
@@ -181,7 +181,7 @@ number will become the symbol name.
 
 ## Operators
 
-**flitter** supports the usual range of operators, with a lean towards the
+**Flitter** supports the usual range of operators, with a lean towards the
 syntax and semantics of Python. The binary mathematical operators are:
 
 - *x* `+` *y* - addition
@@ -313,7 +313,7 @@ vector with 1 million items.
 
 ## Nodes
 
-The purpose of any **flitter** program is to construct a render tree.
+The purpose of any **Flitter** program is to construct a render tree.
 Individual literal nodes are represented by an exclamation mark followed by
 a name, e.g., `!window`. Nodes can be tagged with additional arbitrary names
 that aid in readability. A hash character followed by a name will tag the
@@ -394,7 +394,7 @@ more `name=expression`s. The expressions are evaluated from left to right, with
 each name being bound to the resulting value and added into the scope of the
 current sequence.
 
-Lets may be used at the top-level in a **flitter** script or anywhere within
+Lets may be used at the top-level in a **Flitter** script or anywhere within
 a block-structured sequence, i.e., within append, function, conditional and
 loop bodies. Each of these sequences represents a new let scope and names
 that are re-bound will hide the same name in an outer scope. The outer scope
@@ -597,7 +597,7 @@ will evaluate to `!foo z=15` *not* `!foo z=25`.
 
 A function definition is itself an implicit `let` that binds the function
 definition to the function name in the definition scope. Functions are values
-in the **flitter** language and may be manipulated as such. Functions may also
+in the **Flitter** language and may be manipulated as such. Functions may also
 recursively call themselves. That is, the function name is in scope within the
 body of the function.
 
@@ -663,7 +663,7 @@ be used recursively.
 
 ## Pseudo-random sources
 
-**flitter** provides three useful sources of pseudo-randomness: `uniform()`,
+**Flitter** provides three useful sources of pseudo-randomness: `uniform()`,
 `normal()` and `beta()`. These built-in functions return special "infinite"
 vectors that may only be indexed. These infinite vectors provide a reproducible
 stream of numbers matching the *Uniform(0,1)*, *Normal(0,1)* and *Beta(2,2)*
@@ -700,7 +700,7 @@ sizes and hues. Note the use of symbols (`:x`, `:y`, etc.) combined with the
 index of the circle to create unique seeds. This code will draw exactly the
 same sequence of circles *every* time it is run as the pseudo-random functions
 are stable on their seed argument. There is no mechanism for generating true
-random numbers in **flitter**.
+random numbers in **Flitter**.
 
 The pseudo-random streams can be indexed with a range vector to generate a
 vector of numbers, e.g.: `uniform(:some_seed)[..100]` will generate a 100-vector
@@ -724,7 +724,7 @@ attempts to use them in mathematical expressions will evaluate to `null`.
 ## Noise functions
 
 Often, more useful than a random source is a noise function. These produce
-smoothly changing output values across one or more input dimensions. **flitter**
+smoothly changing output values across one or more input dimensions. **Flitter**
 contains an implementation of [OpenSimplex 2S](https://github.com/KdotJPG/OpenSimplex2)
 noise in 1, 2 and 3 dimensions.
 
@@ -785,7 +785,7 @@ let n = 4
 
 Here the scale of the inputs doubles with each iteration and the weight halves.
 
-**flitter** provides a function that will do this calculation significantly faster
+**Flitter** provides a function that will do this calculation significantly faster
 than the equivalent code:
 
 `octnoise(` *seed* `,` *n* `,` *k* `,` *x* *[* `,` *y* *[* `,` *z* *] ] ]* `)`
@@ -843,8 +843,8 @@ already been initialised, then the speed will default to 1.
 
 ## State
 
-Any interactive component of **flitter**, such as a MIDI controller,
-communicates with a running **flitter** program via a *state* mapping. This can
+Any interactive component of **Flitter**, such as a MIDI controller,
+communicates with a running **Flitter** program via a *state* mapping. This can
 be queried with the `$` operator like so:
 
 ```flitter
