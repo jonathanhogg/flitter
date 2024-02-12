@@ -1,5 +1,5 @@
 
-# Flitter's Background
+# Background
 
 This is probably my third implementation of a variant of these ideas.
 Originally, I developed a simple visuals system as an embedding in Python
@@ -18,7 +18,7 @@ launch. The work was partially supported by Ableton, who gave me an artist
 discount on a Push 2. I've been working on **Flitter** off-and-on since then,
 developing it as a live tool.
 
-While **Flitter** supports live -coding, that's not primarily why or how I
+While **Flitter** supports live-coding, that's not primarily why or how I
 designed it. As a programmer, I enjoy using code to create visual artwork and I
 am fascinated by how generating all of the visuals live affords me the ability
 to improvise a performance. However, I'm interested in complex, narrative
