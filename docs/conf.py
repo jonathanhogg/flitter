@@ -31,6 +31,6 @@ html_theme_options = {
     'github_button': True,
     'github_user': 'jonathanhogg',
     'github_repo': 'flitter',
-    'description': "A functional programming language for describing 2D and 3D visuals",
+    'description': "A functional programming language and declarative system for describing 2D and 3D visuals",
     'show_relbars': True,
 }
