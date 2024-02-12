@@ -130,18 +130,18 @@ as a suffix. (Confused yet?)
 
 The allowed SI prefixes are:
 
-- `T` - x 10e12
-- `G` - x 10e9
-- `M` - x 10e6
-- `k` - x 10e3
-- `m` - x 10e-3
-- `u` or `µ` - x 10e-6
-- `n` - x 10e-9
-- `p` - x 10e-12
+- `T` – $\times 10^{12}$
+- `G` – $\times 10^{9}$
+- `M` – $\times 10^{6}$
+- `k` – $\times 10^{3}$
+- `m` – $\times 10^{-3}$
+- `u` – $\times 10^{-6}$ (also `µ`)
+- `n` – $\times 10^{-9}$
+- `p` – $\times 10^{-12}$
 
-So you can suffix any number with one of these, e.g., `10m` is the same as
+You can suffix any number with one of these letters, e.g., `10m` is the same as
 `0.01`. They are primarily useful for avoiding difficult-to-read long sequences
-of zeros – e.g. when specifying the brightness of point and spot lights:
+of zeros, for example, when specifying the brightness of point and spot lights:
 
 ```flitter
 !light position=0 color=1M
