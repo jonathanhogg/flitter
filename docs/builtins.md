@@ -2,7 +2,7 @@
 
 ## Full list of functions
 
-abs(x)
+`abs(` *x* `)`
 : Return absolute value of *x* (ignoring sign).
 
 accumulate(xs)
@@ -37,7 +37,8 @@ temperature *t*, scaled so that `colortemp(6503.5)` (the sRGB whitepoint
 correlated colour temperature) is close to `1;1;1`; the approximation only holds
 within the range *[1667,25000]* and, strictly speaking, values below 1900°K are
 outside the sRGB gamut; irradiance is proportional to the 4th power of the
-temperature, so the value becomes *significantly* larger at higher temperatures.
+temperature, so the values are very small at low temperatures and become
+*significantly* larger at higher temperatures.
 
 cos(x)
 : Return cosine of *x* (with *x* expressed in *turns*).
@@ -271,9 +272,9 @@ where:
 - *y* is an optional second dimension
 - *z* is an optional third dimension
 
-The individual weight for each octave iteration (from $0$ to $n-1$) is computed
+For each octave iteration (from $0$ to $n-1$), the individual weight is computed
 as $k^{-i}$ and the scaling factor for the inputs as $2^i$. A unique seed value
-for each iteration is derived from *seed*.
+for each iteration is derived automatically from *seed*.
 
 The equivalent `octnoise()` call to the code above would be:
 
