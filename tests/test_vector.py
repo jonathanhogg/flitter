@@ -100,6 +100,7 @@ class TestVector(unittest.TestCase):
         self.assertEqual(math.floor(foo), foo)
         self.assertEqual(foo, Vector.symbol('foo'))
         self.assertNotEqual(foo, Vector.symbol('bar'))
+        self.assertIs(str(foo), 'foo')
 
     def test_copy(self):
         for x in (Vector(["Hello ", "world!"]), Vector.range(10)):

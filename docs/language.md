@@ -149,7 +149,9 @@ of zeros – e.g. when specifying the brightness of point and spot lights:
 
 ### Symbols
 
-Symbols are useful for short strings that are used as enumerations, e.g.:
+Symbols are names that can be used as values. They are used in various places
+in the rendering engine for specifying enumerated values, e.g., the `composite`
+attribute of `!canvas` specifies the blend function to use when drawing:
 
 ```flitter
 !window
@@ -157,31 +159,25 @@ Symbols are useful for short strings that are used as enumerations, e.g.:
         …
 ```
 
-The `composite` attribute of `!canvas` takes a string representing the name of
-the blend function to use when drawing. This could equivalently be written as
-`composite="add"`, but using a symbol makes the code more readable and the
-intent more obvious.
+They are also commonly used when constructing state key vectors or seed vectors
+(see [State](#state) and [Pseudo-random sources](#pseudo-random-sources) below).
+Although strings may be used for the same purpose, symbols are more readable in
+the code and are specifically optimised in the engine for faster execution.
 
-Symbols are deterministically converted to *very* large negative numbers in the
-parser ($< -10^{292}$). Whenever a string value is expected by the engine,
-numbers in vectors will be looked-up in the symbol table to see if they match a
-known symbol. If so, the number will be converted into the matching string. This
-should be treated as an implementation detail and not relied upon in code.
-Symbols should be considered to be opaque values.
+Symbols should be considered to be opaque values. They are actually
+deterministically converted to *very* large negative numbers in the parser
+($< -10^{292}$). Whenever a name value is expected by the engine, numbers will
+be looked-up in the symbol table to see if they match a known symbol. If so, the
+number will be converted into the matching name. This should be treated as an
+implementation detail and not relied upon in code. In particular, because they
+are really just numbers, symbols *can* be used in mathematical operations. They
+shouldn't be, and are deliberately massive to hopefully cause bad things to
+happen if they are.
 
-A principal use-case for symbols is when constructing state key vectors or seed
-vectors (see [State](#state) and [Pseudo-random sources](#pseudo-random-sources)
-below). Numeric vectors can be hashed much faster than vectors containing
-strings and so there will be a significant speed advantage to using symbols in
-these cases.
-
-Note that, because they are really just numbers, symbols can be used in
-mathematical operations. They shouldn't be, and are deliberately massive to
-hopefully cause bad things to happen if they are. While a clash between a
-symbol's number and an actual number being used in a **Flitter** program is
-possible, it is very unlikely and shouldn't cause any problems unless that
-number needs to be converted into a string – in which case, the number will not
-display correctly.
+While a clash between a symbol's number and an actual number being used in a
+**Flitter** program is possible, it is very unlikely and wouldn't cause any
+problems unless that number is converted into a string – in which case, the
+number will become the symbol name.
 
 ## Operators
 

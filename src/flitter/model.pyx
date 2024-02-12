@@ -462,9 +462,11 @@ cdef class Vector:
         return self.as_string()
 
     cdef str as_string(self):
-        cdef str text = ""
         cdef PyObject* objptr
         cdef int i, n = self.length
+        if self.numbers != NULL and n == 1 and (objptr := PyDict_GetItem(SymbolTable, self.numbers[0])) != NULL:
+            return <str>objptr
+        cdef str text = ""
         if self.objects is not None:
             if n == 1:
                 objptr = PyTuple_GET_ITEM(self.objects, 0)
