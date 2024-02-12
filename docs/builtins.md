@@ -207,8 +207,7 @@ The basic noise function is:
 
 where:
 
-- *seed* is a seed value, as per [Psuedo-random sources](#pseudo-random-sources)
-above
+- *seed* is a seed value, as per [Pseudo-random sources](language.md#pseudo-random-sources)
 - *x* is the first dimension
 - *y* is an optional second dimension
 - *z* is an optional third dimension
@@ -224,7 +223,7 @@ counter as one of the inputs, yielding a 1D or 2D noise function that will
 smoothly change over time for the same input space.
 
 The function is entirely deterministic - always producing the same output
-for the same inputs. The *seed* value can be used to create multiple
+for the same inputs. The *seed* value should be used to create multiple
 independent noise sources.
 
 ### Multi-value vector inputs
@@ -272,11 +271,11 @@ where:
 - *y* is an optional second dimension
 - *z* is an optional third dimension
 
-The individual weight for each iteration is computed as *k<sup>-i</sup>* and the
-scaling factor for the inputs as *2<sup>i</sup>*. A unique seed value for each
-iteration is derived from *seed*.
+The individual weight for each octave iteration (from $0$ to $n-1$) is computed
+as $k^{-i}$ and the scaling factor for the inputs as $2^i$. A unique seed value
+for each iteration is derived from *seed*.
 
-So the equivalent call to the code above would be:
+The equivalent `octnoise()` call to the code above would be:
 
 ```flitter
 let z = octnoise(:seed, 4, 0.5, x, y)
