@@ -149,11 +149,6 @@ of zeros – e.g. when specifying the brightness of point and spot lights:
 
 ### Symbols
 
-Symbols are deterministically converted to *very* large negative numbers in the
-parser. Whenever a string value is expected by the engine, numbers in vectors
-will be looked-up in the symbol table to see if they match a known symbol. If
-so, the number will be converted into the matching string.
-
 Symbols are useful for short strings that are used as enumerations, e.g.:
 
 ```flitter
@@ -167,11 +162,18 @@ the blend function to use when drawing. This could equivalently be written as
 `composite="add"`, but using a symbol makes the code more readable and the
 intent more obvious.
 
-However, the key reason for using symbols is when constructing state key
-vectors or seed vectors (see [State](#state) and [Pseudo-random
-sources](#pseudo-random-sources) below). Numeric vectors can be hashed
-much faster than vectors containing strings and so there will be a significant
-speed advantage to using symbols in these cases.
+Symbols are deterministically converted to *very* large negative numbers in the
+parser ($< -10^{292}$). Whenever a string value is expected by the engine,
+numbers in vectors will be looked-up in the symbol table to see if they match a
+known symbol. If so, the number will be converted into the matching string. This
+should be treated as an implementation detail and not relied upon in code.
+Symbols should be considered to be opaque values.
+
+A principal use-case for symbols is when constructing state key vectors or seed
+vectors (see [State](#state) and [Pseudo-random sources](#pseudo-random-sources)
+below). Numeric vectors can be hashed much faster than vectors containing
+strings and so there will be a significant speed advantage to using symbols in
+these cases.
 
 Note that, because they are really just numbers, symbols can be used in
 mathematical operations. They shouldn't be, and are deliberately massive to

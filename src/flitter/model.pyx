@@ -21,6 +21,7 @@ from cpython.unicode cimport PyUnicode_DATA, PyUnicode_GET_LENGTH, PyUnicode_KIN
 cdef double Pi = 3.141592653589793
 cdef double Tau = 6.283185307179586
 cdef double NaN = float("nan")
+cdef unsigned long long SymbolPrefix = <unsigned long long>(0xffe0_0000_0000_0000)
 cdef frozenset EmptySet = frozenset()
 cdef tuple AstypeArgs = (np.float64, 'K', 'unsafe', True, False)
 cdef type ndarray = np.ndarray
@@ -285,12 +286,14 @@ cdef class Vector:
 
     @staticmethod
     cdef Vector _symbol(str symbol):
+        # Symbols are the top 52 bits of the FNV-1a string hash multiplied by -0x1p1023
         cdef unsigned long long code = HASH_STRING(symbol)
-        cdef double number = <double>(code >> 12) * -1e292
+        cdef double number = double_long(l=SymbolPrefix | (code >> 12)).f
+        assert number not in SymbolTable or SymbolTable[number] == symbol, "Symbol table hash collision"
+        SymbolTable[number] = symbol
         cdef Vector result = Vector.__new__(Vector)
         result.allocate_numbers(1)
         result.numbers[0] = number
-        SymbolTable[number] = symbol
         return result
 
     @staticmethod

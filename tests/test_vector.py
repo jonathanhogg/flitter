@@ -8,7 +8,7 @@ import unittest
 from flitter.model import Vector, true, false, null, Node
 
 
-FOO_SYMBOL_NUMBER = -3.882544429788573e+307
+FOO_SYMBOL_NUMBER = float.fromhex('-0x1.dcb27518fed9dp+1023')
 
 
 def test_func():
@@ -95,7 +95,9 @@ class TestVector(unittest.TestCase):
         foo = Vector.symbol('foo')
         foo_n = foo[0]
         self.assertIsInstance(foo_n, float)
-        self.assertTrue(foo_n < -1e-256)
+        self.assertTrue(foo_n < float.fromhex('-1p1023'))
+        self.assertEqual(math.floor(foo_n), foo_n)
+        self.assertEqual(math.floor(foo), foo)
         self.assertEqual(foo, Vector.symbol('foo'))
         self.assertNotEqual(foo, Vector.symbol('bar'))
 
@@ -115,7 +117,7 @@ class TestVector(unittest.TestCase):
         self.assertEqual(Vector.compose([Vector("Hello world!"), Vector([1, 2, 3])]), Vector(["Hello world!", 1, 2, 3]))
         foo = Vector.symbol('foo')
         bar = Vector.symbol('bar')
-        self.assertEqual(Vector.compose([foo, bar]), Vector([foo[0], bar[0]]))
+        self.assertEqual(Vector.compose([foo, bar]), Vector([float(foo), float(bar)]))
 
     def test_range_slice(self):
         TESTS = [
