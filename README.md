@@ -9,9 +9,9 @@ with trails moving outwards from the centre of the screen.](https://github.com/j
 
 **Flitter** is a functional programming language and declarative system for
 describing 2D and 3D visuals. [The
-language](https://github.com/jonathanhogg/flitter/blob/main/docs/language.md)
-is designed to encourage an iterative, explorative, play-based approach to
-constructing visuals.
+language](https://flitter.readthedocs.io/en/latest/language.html) is designed
+to encourage an iterative, explorative, play-based approach to constructing
+visuals.
 
 The engine is able to live reload all code and assets (including shaders,
 images, videos, models, etc.) while retaining the current system state - thus
@@ -38,10 +38,10 @@ The engine that runs the language is capable of:
     and far clip planes, render buffer size, color depth, MSAA samples,
     perspective/orthographic projection, fog, conversion to monochrome and
     colour tinting
-- simulating simple [physical particle
-systems](https://github.com/jonathanhogg/flitter/blob/main/docs/physics.md),
-including spring/rod/rubber-band constraints, gravity, electrostatic charge,
-adhesion, buoyancy, inertia, drag, barriers and particle collisions
+- simulating [physical particle
+systems](https://flitter.readthedocs.io/en/latest/physics.html), including
+spring/rod/rubber-band constraints, gravity, electrostatic charge, adhesion,
+buoyancy, inertia, drag, barriers and particle collisions
 - playing videos at arbitrary speeds, including in reverse (although video will
 stutter if it makes extensive use of P-frames)
 - running GLSL shaders as stacked image filters and generators, with per-frame
@@ -78,8 +78,7 @@ documentation](https://flitter.readthedocs.io/en/latest/install.html).
 ## Documentation
 
 The documentation is available on the [Flitter **Read** *the* **Docs**
-pages](https://flitter.readthedocs.io/) or in the [docs
-folder](https://github.com/jonathanhogg/flitter/blob/main/docs).
+pages](https://flitter.readthedocs.io/).
 
 There are a few quick
 [examples](https://github.com/jonathanhogg/flitter/blob/main/examples)
