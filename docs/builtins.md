@@ -1,6 +1,6 @@
 # Built-in Functions
 
-## Full list of functions
+## Full list of functions
 
 abs(x)
 : Return absolute value of *x* (ignoring sign).
