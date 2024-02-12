@@ -25,4 +25,4 @@ exclude_patterns = []
 html_theme = 'alabaster'
 # html_static_path = ['_static']
 
-myst_enable_extensions = ['dollarmath']
+myst_enable_extensions = ['dollarmath', 'deflist', 'colon_fence']

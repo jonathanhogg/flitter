@@ -62,7 +62,17 @@ If `time` *is* specified then `resolution` should be set to a sensible matching
 value somewhere at or above the expected increment in `time` at the engine
 frame-rate.
 
-All other nodes described below must be contained with a `!physics` node.
+All other nodes described below must be contained with the `!physics` node.
+
+:::{note}
+Starting a simulation with forces immediately applied can cause wild instability
+due to massive forces being computed. This applies particularly when using a
+collision force applier and particle starting positions that may overlap. To
+avoid this, all forces can be "eased"-in with the `ease` attribute. This
+specifies an amount of simulation time to linearly ramp up the strength of the
+force applier, giving an amount of time for particles to settle into more stable
+positions.
+:::
 
 ### `!particle`
 
@@ -108,16 +118,6 @@ cannot be the subject of a force, meaning they will always continue travelling
 at their initial velocity (or remain fixed at their initial position).
 However, particles with zero mass will still be considered when computing
 forces on other particles.
-
-> **A note on "easing"**
->
-> Starting a simulation with forces immediately applied can cause wild
-> instability due to massive forces being computed. This applies particularly
-> when using a collision force applier and particle starting positions that may
-> overlap. To avoid this, all forces can be "eased"-in with the `ease`
-> attribute. This specifies an amount of simulation time to linearly ramp up
-> the strength of the force applier, giving an amount of time for particles to
-> settle into a more stable position.
 
 ### `!anchor`
 
@@ -335,11 +335,11 @@ l_{overlap} = max( 0, l_{max} - l )
 As adhesion contains a repulsive force, it is not normally necessary to use it
 together with `!collision`.
 
-> **Note**
->
-> The `!collision`, `!gravity`, `!electrostatic` and `!adhesion` force appliers
-> are all compute-intensive as they have to consider all particle *pairings*
-> and thus have $O(n^2)$ time-complexity.
+:::{note}
+The `!collision`, `!gravity`, `!electrostatic` and `!adhesion` force appliers
+are all compute-intensive as they have to consider all particle *pairings*
+and thus have $O(n^2)$ time-complexity.
+:::
 
 ### `!drag`
 
