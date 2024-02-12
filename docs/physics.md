@@ -421,19 +421,17 @@ not use `:clock` as the id of a particle.
 
 ## Example
 
-This example creates a "petri dish" of "cell" particles with
-normally-distributed random charges. An `!electrostatic` force applier makes
-the cells drift together or apart, clumping up into different shapes. Chains of
-cells with alternating charge will form and break up.
+This example creates a "petri dish" of cell particles with normally-distributed
+random charges. An `!electrostatic` force applier makes the cells drift together
+or apart, clumping up into different shapes. Chains of cells with alternating
+charge will form and break up.
 
 A `!collision` force applier stops them from overlapping with each other and a
 `!distance` force applier is used to constrain the particles within the dish
 by setting a maximum distance for each from an anchor in the middle. A `!drag`
 force applier slows the particles as if they are moving through a liquid.
-
-Without any external forces, this system will quickly come to a static
-equilibirum, so random forces are derived from the `noise()` function and
-applied directly to each particle with the `force` attribute.
+Without any external forces, the drag will cause this system to come to a static
+equilibrium, so a `!random` Brownian motion force is applied to each particle.
 
 The `beat` clock is used as the simulation time, allowing the simulation to be
 sped up or slowed down by altering the tempo. `resolution` is calculated to
@@ -443,26 +441,26 @@ match the current tempo to the target frame-rate.
 %pragma tempo 60
 
 let SIZE=1080;1080
-    NBUBBLES=200
+    NCELLS=200
     RADIUS=15
     DISH=500
 
 !physics state=:cells dimensions=2 time=beat resolution=tempo/60/fps
     !anchor id=:middle position=0;0
-    for i in ..NBUBBLES
-        let start=(beta(:start;i)[..2]-0.5)*2*DISH
-            random=2*RADIUS*(noise(:x;i, beat/2);noise(:y;i, beat/2))
-            charge=10*normal(:charge)[i]
-        !particle id=i charge=charge radius=RADIUS position=start force=random
+    for i in ..NCELLS
+        let start=(DISH-RADIUS)*beta(:r)[i]*polar(uniform(:th)[i])
+            charge=normal(:charge)[i]
+        !particle id=i charge=charge radius=RADIUS position=start
         !distance strength=1000 max=DISH-RADIUS from=i to=:middle
-    !electrostatic strength=1000 ease=10
-    !collision strength=200 ease=10
-    !drag strength=0.0001
+    !electrostatic strength=200 ease=10
+    !collision ease=10
+    !drag strength=0.001
+    !random strength=10
 
 !window size=SIZE
     !canvas color=1 translate=SIZE/2
         !path
-            for i in ..NBUBBLES
+            for i in ..NCELLS
                 !ellipse point=$(:cells;i) radius=RADIUS
             !fill color=0;0.5;0
         !path
