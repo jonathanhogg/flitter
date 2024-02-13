@@ -152,6 +152,10 @@ the *x* and *y* axes flipped).
 
 ## Pseudo-random functions
 
+**Flitter** provides three useful sources of pseudo-randomness. These functions
+return special "infinite" vectors that may only be indexed. These infinite
+vectors provide a reproducible stream of pseudo-random numbers.
+
 `beta(` *seed* `)`
 : A *Beta(2,2)* distribution pseudo-random source.
 
@@ -161,14 +165,10 @@ the *x* and *y* axes flipped).
 `uniform(` *seed* `)`
 : A *Uniform(0,1)* distribution pseudo-random source.
 
-**Flitter** provides three useful sources of pseudo-randomness. These functions
-return special "infinite" vectors that may only be indexed. These infinite
-vectors provide a reproducible stream of pseudo-random numbers.
-
 The single argument to all of the functions is a vector that acts as the
 pseudo-random seed. Floating-point numbers within this seed vector are truncated
-to whole numbers before the seed is calculated. This is deliberate to allow new
-seeds to be generated at intervals, e.g.: `uniform(:foo;beat)` will create a new
+to integer numbers before the seed is calculated. This is to allow new seeds to
+be easily generated at intervals, e.g.: `uniform(:foo;beat)` will create a new
 stream of pseudo-random numbers for each beat of the main clock. Multiplying or
 dividing this seed value then allows for different intervals, e.g., four times a
 beat: `uniform(:foo;beat*4)`.
@@ -221,10 +221,10 @@ attempts to use them in mathematical expressions will evaluate to `null`.
 
 `noise(` *seed* `,` *x* *[* `,` *y* *[* `,` *z* *] ] ]* `)`
 : [OpenSimplex 2S](https://github.com/KdotJPG/OpenSimplex2) noise function
-- *seed* is a seed value, as per [Pseudo-random sources](#pseudo-random-sources)
-- *x* is the first dimension
-- *y* is an optional second dimension
-- *z* is an optional third dimension
+  - *seed* is a seed value, as per [Pseudo-random sources](#pseudo-random-sources)
+  - *x* is the first dimension
+  - *y* is an optional second dimension
+  - *z* is an optional third dimension
 
 The function returns a value in the range *(-1,1)*. The function can be thought
 of as creating a wiggly line in 1 dimension, a landscape with hills and dips in
@@ -277,12 +277,12 @@ faster than the equivalent code:
 `octnoise(` *seed* `,` *n* `,` *k* `,` *x* *[* `,` *y* *[* `,` *z* *] ] ]* `)`
 : Multi-octave [OpenSimplex 2S](https://github.com/KdotJPG/OpenSimplex2) noise
 function
-- *seed* is a seed value
-- *n* is the number of octaves
-- *k* is a weight constant
-- *x* is the first dimension
-- *y* is an optional second dimension
-- *z* is an optional third dimension
+  - *seed* is a seed value
+  - *n* is the number of octaves
+  - *k* is a weight constant
+  - *x* is the first dimension
+  - *y* is an optional second dimension
+  - *z* is an optional third dimension
 
 For each octave iteration (from $0$ to $n-1$), the individual weight is computed
 as $k^{-i}$ and the scaling factor for the inputs as $2^i$. A unique seed value
