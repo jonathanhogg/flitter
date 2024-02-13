@@ -1,6 +1,21 @@
 # Built-in Functions
 
-## Full list of functions
+## Vector utility functions
+
+`len(` *xs* `)`
+: Return the length of vector *xs*.
+
+`shuffle(` *source* `,` *xs* `)`
+: Return the shuffled elements of *xs* using the pseudo-random *source* (which
+should be the result of calling `uniform(...)`).
+
+`zip(` *xs* `,` *ys* [ `,` ...] `)`
+: Return a vector formed by interleaving values from each argument vector; for
+*m* arguments the resulting vector will be *n * m* elements long, where *n* is
+the length of the longest vector; short arguments will repeat, so
+`zip(1;2;3;4, 0) == (1;0;2;0;3;0;4;0)`.
+
+## Basic mathematical functions
 
 `abs(` *x* `)`
 : Return absolute value of *x* (ignoring sign).
@@ -18,27 +33,8 @@ accumulator starting at *0*.
 `asin(` *x* `)`
 : Return the arc-sine (in *turns*) of *x*.
 
-`beta(` *seed* `)`
-: See [Pseudo-random sources](language.md#pseudo-random-sources) section in the
-language documentation.
-
-`bounce(` *x* `)`
-: Return a repeating bouncing wave (akin to a perfectly bouncing
-ball) in the range *[0,1]* with one wave per unit of *x*, with the *0* point
-when `x%1 == 0` and the *1* point when `x%1 == 0.5`.
-
 `ceil(` *x* `)`
 : Return mathematical ceiling of *x*.
-
-`colortemp(` *t* `)`
-: Return a 3-vector of *R*, *G* and *B* **linear sRGB** values for an
-approximation of the irradiance of a Planckian (blackbody) radiator at
-temperature *t*, scaled so that `colortemp(6503.5)` (the sRGB whitepoint
-correlated colour temperature) is close to `1;1;1`; the approximation only holds
-within the range *[1667,25000]* and, strictly speaking, values below 1900°K are
-outside the sRGB gamut; irradiance is proportional to the 4th power of the
-temperature, so the values are very small at low temperatures and become
-*significantly* larger at higher temperatures.
 
 `cos(` *x* `)`
 : Return cosine of *x* (with *x* expressed in *turns*).
@@ -46,12 +42,6 @@ temperature, so the values are very small at low temperatures and become
 `counter(` ... `)`
 : See explanation in the [Counters](language.md#counters) section of the
 language documentation.
-
-`csv(` *filename* `,` *row* `)`
-: Return a vector of values obtained by reading a
-specific *row* (indexed from *0*) from the CSV file with the given *filename*;
-this function intelligently caches and will convert numeric-looking columns in
-the row into numeric values.
 
 `exp(` *x* `)`
 : Return *e* raised to the power of *x*.
@@ -62,29 +52,10 @@ the row into numeric values.
 `fract(` *x* `)`
 : Return mathematical fractional part of *x* (equivalent to `x - floor(x)`).
 
-`hsl(` *h* `;` *s* `;` *l* `)`
-: Return a 3-vector of *R*, *G* and *B* in the range *[0,1]* from a 3-vector of
-hue, saturation and lightness (also in the range *[0,1]*).
-
-`hsv(` *h* `;` *s* `;` *v* `)`
-: Return a 3-vector of *R*, *G* and *B* in the range *[0,1]* from a 3-vector of
-hue, saturation and value (also in the range *[0,1]*).
-
 `hypot(` *x* `,` [...] `)`
 : Return the square root of the sum of the square of each value in `x` with one
 argument, with multiple arguments return a vector formed by calculating the same
 for the 1st, 2nd, etc., element of each of the argument vectors.
-
-`impulse(` *x* [ `,` *c=0.25* ] `)`
-: Return a repeating impulse wave in the range *[0,1]* with one wave per unit of
-*x*, with the *0* point when `x%1 == 0` and the *1* point when `x%1 == c`.
-
-`len(` *xs* `)`
-: Return the length of vector *xs*.
-
-`linear(` *x* `)`
-: a linear "easing" function in the range *[0, 1]* with values of *x* less than
-*0* returning *0* and values greater than *1* returning *1*.
 
 `log(` *x* `)`
 : Return natural log of *x*.
@@ -117,91 +88,85 @@ of the arguments in vector sort order.
 the index of the smallest argument in vector sort order (with the 1st argument
 being index *0*).
 
-`noise(` ... `)`
-: See [Noise functions](#noise-functions) below.
-
-`normal(` *seed* `)`
-: See [Pseudo-random sources](language.md#pseudo-random-sources) section in the
-language documentation.
-
 `normalize(` *x* `)`
 : Return `x / hypot(x)`.
-
-`octnoise(` ... `)`
-: See [Noise functions](#noise-functions) below.
 
 `polar(` *th* `)`
 : Equivalent to `zip(cos(th), sin(th))`.
 
-`quad(` *x* `)`
-: A quadratic "easing" function in the range *[0, 1]* with values of *x* less
-than *0* returning *0* and values greater than *1* returning *1*.
-
-`read(` *filename* `)`
-: Returns a single string value containing the entire text of *filename* (this
-function intelligently caches).
-
 `round(` *x* `)`
 : Return mathematical round of *x*, with *0.5* rounding up.
-
-`sawtooth(` *x* `)`
-: A repeating sawtooth wave function in the range *[0,1)* with one wave per unit
-of *x*, with the *0* point at `x%1 == 0` and linearly rising towards *1*.
-
-`sharkfin(` *x* `)`
-: A repeating sharkfin wave function in the range *[0,1]* with one wave per unit
-of *x*, with the *0* point when `x%1 == 0` and the *1* point when `x%1 == 0.5`.
-
-`shuffle(` *source* `,` *xs* `)`
-: Return the shuffled elements of *xs* using the psuedo-random *source* (which
-should be the result of calling `uniform(...)`).
 
 `sin(` *x* `)`
 : Return sine of *x* (with *x* expressed in *turns*).
 
+`sqrt(` *x* `)`
+: Return the square root of *x*.
+
+`sum(` *xs* `)`
+: Return a single numeric value obtained by summing each element of vector *xs*.
+
+## Waveform functions
+
+All of the waveform functions return a repeating wave in the *y* range [0,1]
+with one wave per unit of *x*.
+
+`bounce(` *x* `)`
+: A bouncing wave akin to a perfectly bouncing ball.
+
+`impulse(` *x* [ `,` *c=0.25* ] `)`
+: A cubic rising and falling wave with the high point at *c*.
+
+`sawtooth(` *x* `)`
+: A rising sawtooth wave function.
+
+`sharkfin(` *x* `)`
+: A "shark fin" wave function made up of two 1/8th parts of a sine wave.
+
 `sine(` *x* `)`
-: A repeating sine wave function in the range *[0,1]* with one wave per unit of
-*x*, with the *0* point when `x%1 == 0` and the *1* point when `x%1 == 0.5`.
+: A sine wave shifted so that it begins and ends at *0*.
+
+`square(` *x* `)`
+: A square wave with the rising edge at *0.5*.
+
+`triangle(` *x* `)`
+: A symmetric triangle wave function.
+
+![Waveform shapes](waveforms.png)
+
+## Easing functions
+
+`linear(` *x* `)`
+: a linear "easing" function in the range *[0, 1]* with values of *x* less than
+*0* returning *0* and values greater than *1* returning *1*.
+
+`quad(` *x* `)`
+: A quadratic "easing" function in the range *[0, 1]* with values of *x* less
+than *0* returning *0* and values greater than *1* returning *1*.
 
 `snap(` *x* `)`
 : A square-root "easing" function in the range *[0, 1]* with values of *x* less
 than *0* returning *0* and values greater than *1* returning *1* (conceptually
 a quadratic easing function with *x* and *y* axes flipped).
 
-`split(` *text* `)`
-: Return a vector formed by splitting the string *text* at newlines (not
-included).
+## Pseudo-random functions
 
-`sqrt(` *x* `)`
-: Return the square root of *x*.
+`beta(` *seed* `)`
+: See [Pseudo-random sources](language.md#pseudo-random-sources) section in the
+language documentation.
 
-`square(` *x* `)`
-: A repeating square waveform in the range *[0,1)* with one wave per unit
-of *x* and the rising edge at `x%1 == 0.5`.
-
-`sum(` *xs* `)`
-: Return a single numeric value obtained by summing each element of vector *xs*.
-
-`triangle(` *x* `)`
-: A repeating triangle wave function in the range *[0,1]* with one wave per unit
-of *x*, with the *0* point when `x%1 == 0` and the *1* point when `x%1 == 0.5`.
+`normal(` *seed* `)`
+: See [Pseudo-random sources](language.md#pseudo-random-sources) section in the
+language documentation.
 
 `uniform(` *seed* `)`
 : See [Pseudo-random sources](language.md#pseudo-random-sources) section in the
 language documentation.
 
-`zip(` *xs* `,` *ys* [ `,` ...] `)`
-: Return a vector formed by interleaving values from each argument vector; for
-*m* arguments the resulting vector will be *n * m* elements long, where *n* is
-the length of the longest vector; short arguments will repeat, so
-`zip(1;2;3;4, 0) == (1;0;2;0;3;0;4;0)`.
-
 ## Noise functions
 
-Often, more useful than a random source is a noise function. These produce
-smoothly changing output values across one or more input dimensions. **Flitter**
-contains an implementation of [OpenSimplex 2S](https://github.com/KdotJPG/OpenSimplex2)
-noise in 1, 2 and 3 dimensions.
+[OpenSimplex 2S](https://github.com/KdotJPG/OpenSimplex2) noise functions
+producing smoothly changing output values across 1 to 3 input dimensions.
 
 The basic noise function is:
 
@@ -284,3 +249,47 @@ let z = octnoise(:seed, 4, 0.5, x, y)
 ```
 
 Again, this function will accept *n*-vectors as inputs.
+
+## Color functions
+
+`colortemp(` *t* `)`
+: Return a 3-vector of *R*, *G* and *B* **linear sRGB** values for an
+approximation of the irradiance of a Planckian (blackbody) radiator at
+temperature *t*, scaled so that `colortemp(6503.5)` (the sRGB whitepoint
+correlated colour temperature) is close to `1;1;1`; the approximation only holds
+within the range *[1667,25000]* and, strictly speaking, values below 1900°K are
+outside the sRGB gamut; irradiance is proportional to the 4th power of the
+temperature, so the values are very small at low temperatures and become
+*significantly* larger at higher temperatures.
+
+`hsl(` *h* `;` *s* `;` *l* `)`
+: Return a 3-vector of *R*, *G* and *B* in the range *[0,1]* from a 3-vector of
+hue, saturation and lightness (also in the range *[0,1]*).
+
+`hsv(` *h* `;` *s* `;` *v* `)`
+: Return a 3-vector of *R*, *G* and *B* in the range *[0,1]* from a 3-vector of
+hue, saturation and value (also in the range *[0,1]*).
+
+## Text functions
+
+`chr(` *o* `)`
+: Return the unicode character identified by the ordinal number *o*.
+
+`ord(` *c* `)`
+: Return the ordinal number of unicode character *c* (as a string).
+
+`split(` *text* `)`
+: Return a vector formed by splitting the string *text* at newlines (not
+included).
+
+## File functions
+
+`csv(` *filename* `,` *row* `)`
+: Return a vector of values obtained by reading a
+specific *row* (indexed from *0*) from the CSV file with the given *filename*;
+this function intelligently caches and will convert numeric-looking columns in
+the row into numeric values.
+
+`read(` *filename* `)`
+: Returns a single string value containing the entire text of *filename* (this
+function intelligently caches).
