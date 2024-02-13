@@ -7,7 +7,7 @@ Flitter language functions
 
 import cython
 
-from libc.math cimport floor, round, sin, cos, asin, acos, sqrt, exp, atan2, log, log2, log10
+from libc.math cimport floor, round, sin, cos, tan, asin, acos, sqrt, exp, atan2, log, log2, log10
 from cpython.object cimport PyObject
 from cpython.ref cimport Py_INCREF
 from cpython.tuple cimport PyTuple_New, PyTuple_GET_ITEM, PyTuple_SET_ITEM
@@ -250,6 +250,16 @@ def cosv(Vector theta not None):
     cdef int i, n = theta.length
     for i in range(ys.allocate_numbers(n)):
         ys.numbers[i] = cos(theta.numbers[i] * Tau)
+    return ys
+
+
+def tanv(Vector theta not None):
+    if theta.numbers == NULL:
+        return null_
+    cdef Vector ys = Vector.__new__(Vector)
+    cdef int i, n = theta.length
+    for i in range(ys.allocate_numbers(n)):
+        ys.numbers[i] = tan(theta.numbers[i] * Tau)
     return ys
 
 
@@ -927,6 +937,7 @@ STATIC_FUNCTIONS = {
     'sqrt': Vector(sqrtv),
     'square': Vector(square),
     'sum': Vector(sumv),
+    'tan': Vector(tanv),
     'triangle': Vector(triangle),
     'uniform': Vector(Uniform),
     'zip': Vector(zipv),

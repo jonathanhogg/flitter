@@ -50,26 +50,27 @@ the length of the longest vector; short arguments will repeat, so
 `acos(` *x* `)`
 : Return arc-cosine (in *turns* not radians) of *x*.
 
-`angle(` *x* `,` *y* `)`
-: Return the angle (in *turns*) of the cartesian vector *x,y*.
+`angle(` *x* `;` *y* `)` (or `angle(` *x* `,` *y* `)`)
+: Return the angle (in *turns*) of the cartesian vector *x,y*
+(`angle(polar(th)) == th`, equivalent of `atan2(y, x)` in other languages).
 
 `asin(` *x* `)`
 : Return the arc-sine (in *turns*) of *x*.
 
 `ceil(` *x* `)`
-: Return mathematical ceiling of *x*.
+: Return the smallest integer number larger than *x*.
 
 `cos(` *x* `)`
 : Return cosine of *x* (with *x* expressed in *turns*).
 
 `exp(` *x* `)`
-: Return *e* raised to the power of *x*.
+: Return $e$ raised to the power of *x*.
 
 `floor(` *x* `)`
-: Return mathematical floor of *x*.
+: Return the largest integer number smaller than *x*.
 
 `fract(` *x* `)`
-: Return mathematical fractional part of *x* (equivalent to `x - floor(x)`).
+: Return fractional part of *x* (equivalent to `x - floor(x)`).
 
 `hypot(` *x* `,` [...] `)`
 : Return the square root of the sum of the square of each value in `x` with one
@@ -77,13 +78,13 @@ argument, with multiple arguments return a vector formed by calculating the same
 for the 1st, 2nd, etc., element of each of the argument vectors.
 
 `log(` *x* `)`
-: Return natural log of *x*.
+: Return natural logarithm ($log_e$) of *x* (`log(exp(x)) == x`)
 
 `log2(` *x* `)`
-: Return log 2 of *x*.
+: Return $log_2$ of *x*.
 
 `log10(` *x* `)`
-: Return log 10 of *x*.
+: Return $log_10$ of *x*.
 
 `map(` *x* `,` *y* `,` *z* `)`
 : Map a value of *x* in the range *[0,1]* into the range *[y,z]*; equivalent
@@ -93,7 +94,8 @@ to `y*x + (1-y)*z` (including in n-vector semantics).
 : Return `x / hypot(x)`.
 
 `polar(` *th* `)`
-: Equivalent to `zip(cos(th), sin(th))`.
+: Return the unit cartesian pair *x;y* matching the angle *th* (expressed in
+*turns*) – equivalent to `zip(cos(th), sin(th))`.
 
 `round(` *x* `)`
 : Return *x* rounded to the nearest integer number, with *0.5* rounding up.
@@ -103,6 +105,9 @@ to `y*x + (1-y)*z` (including in n-vector semantics).
 
 `sqrt(` *x* `)`
 : Return the square root of *x*.
+
+`tan(` *x* `)`
+: Return the tangent of *x* (with *x* expressed in *turns*).
 
 ## Waveform functions
 
@@ -166,14 +171,14 @@ vectors provide a reproducible stream of pseudo-random numbers.
 : A *Uniform(0,1)* distribution pseudo-random source.
 
 The single argument to all of the functions is a vector that acts as the
-pseudo-random seed. Floating-point numbers within this seed vector are truncated
+pseudo-random seed. Floating-point numbers within this seed vector are *floor*ed
 to integer numbers before the seed is calculated. This is to allow new seeds to
 be easily generated at intervals, e.g.: `uniform(:foo;beat)` will create a new
 stream of pseudo-random numbers for each beat of the main clock. Multiplying or
 dividing this seed value then allows for different intervals, e.g., four times a
 beat: `uniform(:foo;beat*4)`.
 
-Similarly, the index value to the infinite-vector is truncated to pick a
+Similarly, the index value to the infinite-vector is *floor*ed to pick a
 specific number in the stream. For example:
 
 ```flitter
@@ -213,9 +218,10 @@ pick off the first few values, e.g.:
 let x;y;z = uniform(:position)
 ```
 
-They are considered to be `true` in conditional expressions (`if`, `and`, etc.).
-In all other aspects, pseudo-random streams behave like the `null` vector, e.g.,
-attempts to use them in mathematical expressions will evaluate to `null`.
+The streams are considered to be `true` in conditional expressions (`if`, `and`,
+etc.). In all other aspects, pseudo-random streams behave like the `null`
+vector, e.g., attempts to use them in mathematical expressions will evaluate to
+`null`.
 
 ## Noise functions
 
