@@ -220,9 +220,7 @@ attempts to use them in mathematical expressions will evaluate to `null`.
 ## Noise functions
 
 `noise(` *seed* `,` *x* *[* `,` *y* *[* `,` *z* *] ] ]* `)`
-: [OpenSimplex 2S](https://github.com/KdotJPG/OpenSimplex2) noise across 1 to 3
-input dimensions.
-
+: [OpenSimplex 2S](https://github.com/KdotJPG/OpenSimplex2) noise function
 - *seed* is a seed value, as per [Pseudo-random sources](#pseudo-random-sources)
 - *x* is the first dimension
 - *y* is an optional second dimension
@@ -277,9 +275,8 @@ Here the scale of the inputs doubles with each iteration and the weight halves.
 faster than the equivalent code:
 
 `octnoise(` *seed* `,` *n* `,` *k* `,` *x* *[* `,` *y* *[* `,` *z* *] ] ]* `)`
-
-where:
-
+: Multi-octave [OpenSimplex 2S](https://github.com/KdotJPG/OpenSimplex2) noise
+function
 - *seed* is a seed value
 - *n* is the number of octaves
 - *k* is a weight constant
