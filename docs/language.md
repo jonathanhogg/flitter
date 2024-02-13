@@ -3,18 +3,17 @@
 
 ## Quick introduction
 
-**Flitter** is a declarative tree-construction language (`Node` in the model).
-All values are arrays (`Vector` in the model), delimited with semicolons, and
-all maths is piece-wise. Short vectors are repeated as necessary in binary
-operations, i.e., `(1;2;3;4) * 2` is `2;4;6;8`. The `null` value is an empty
-array and most expressions evaluate to this in event of an error. In particular,
-all maths expressions involving a `null` will evaluate to `null`.
+**Flitter** is a declarative tree-construction language. All values are vectors,
+delimited with semicolons, and all maths is piece-wise. Short vectors are
+repeated as necessary in binary operations, i.e., `(1;2;3;4) * 2` is `2;4;6;8`.
+The `null` value is an empty vector and most expressions evaluate to this in
+the event of an error. In particular, all maths expressions involving a `null`
+will evaluate to `null`.
 
 A-la Python, indentation represents block structuring. `let` statements name
 constant values, everything else is largely about creating nodes to append to
-the implicit *root* node of the tree. There are *no variables*. The language
-is sort of pure-functional, if you imagine that the statements are monadic on
-a monad encapsulating the current tree.
+the implicit *root* node of the tree. There are *no variables* – the language
+is pure-functional.
 
 The simplest program would be something like:
 
@@ -180,138 +179,6 @@ While a clash between a symbol's number and an actual number being used in a
 problems unless that number is converted into a string – in which case, the
 number will become the symbol name.
 
-## Operators
-
-**Flitter** supports the usual range of operators, with a lean towards the
-syntax and semantics of Python. The binary mathematical operators are:
-
-- *x* `+` *y* - addition
-- *x* `-` *y* - subtraction
-- *x* `/` *y* - division
-- *x* `*` *y* - multiplication
-- *x* `//` *y* - floor division (i.e, divide and round down)
-- *x* `%` *y* - modulo (pairs with floor division)
-- *x* `**` *y* - raise *x* to the power *y*
-
-All of these operations return a vector with the same length as the longer of
-*x* and *y*. The shorter vector is repeated as necessary. Note that, as well as
-this meaning `(1;2;3;4) + 1` is equal to `2;3;4;5`, it also means that
-`(1;2;3;4) + (1;-1)` is equal to `2;1;4;3`. The operators are left-associative,
-with `**` having the highest precedence, then `/`, `*`, `//` and `%` at the next
-level, and finally `+` and `-`.
-
-The `%` modulo operator follows the Python convention rather than C style. It
-is best understood as the remainder of a `//` floor division:
-
-```flitter
-x % y == x - x // y * y
-```
-
-This means that `%` will provide a seamless repeating sequence around zero:
-
-```flitter
-(-10..10) // 5 == (-2;-2;-2;-2;-2;-1;-1;-1;-1;-1; 0; 0; 0; 0; 0; 1; 1; 1; 1; 1)
-(-10..10) % 5  == ( 0; 1; 2; 3; 4; 0; 1; 2; 3; 4; 0; 1; 2; 3; 4; 0; 1; 2; 3; 4)
-```
-
-The unary mathematical operators are:
-
-- `-` *x* - negate
-- `+` *x* - identity
-
-They sit between `**` and `/`, `*`, `//` and `%` in precedence and so:
-
-```flitter
--x ** y == -(x ** y)
--x * y == (-x) * y
-```
-
-All of the mathematical operators return `null` if either *x* or *y* is an
-empty or non-numeric vector. Therefore, unary `+x` will return `x` iff `x` is
-numeric and `null` otherwise.
-
-Logical operators:
-
-- *x* `or` *y* - shortcut or: returns *x* if *x* is true, *y* otherwise
-- *x* `and` *y* - shortcut and: returns *x* if *x* is false, *y* otherwise
-- *x* `xor` *y* - exclusive or: returns *y* if *x* is false, *x* if *y* is
-  false, `false` otherwise
-- `not` *x* - logical inverse: returns `false` if *x* is true, `true` otherwise
-
-## Function calling
-
-Functions are called in the normal way, with the name of the function followed
-by zero or more arguments, separated by commas, within parentheses, e.g.,
-`cos(x)` or `zip(xs, ys)`.
-
-Most built-in functions will do something sensible with an n-vector, e.g.,
-`sin(0.1;0.2)` will return a vector equivalent to `sin(0.1);sin(0.2)`, but
-will be substantially faster for long vectors. Some functions operate with both
-multiple arguments *and* n-vectors, e.g.:
-
-```flitter
-hypot(3;4) == 5
-hypot(3, 4) == 5
-hypot(3;30, 4;40) == (5;50)
-```
-
-As functions are themselves first-order objects in the language, they may be
-composed into vectors. The language takes the orthogonal approach that calling
-a function vector is identical to composing the result of calling each function
-with the arguments, i.e., `(sin;cos)(x) == (sin(x);cos(x))`. This is arguably
-obtuse behaviour.
-
-The **Flitter** [built-in functions](builtins.md) are documented separately.
-
-## Sequences
-
-The result of evaluating an indented sequence of expressions separated by
-line breaks – such as might be found in the body of a loop, conditional or
-function – is the vector composition of the result of each expression. These
-need not necessarily be node expressions, it is perfectly normal for functions
-to operator on, and return, numeric or string vectors. For example:
-
-```flitter
-func fib(n, x=0, y=1)
-    x
-    if n > 1
-        fib(n-1, y, x+y)
-```
-
-This recursive function returns an `n`-item (at least one) vector of Fibonacci
-numbers beginning with `x;y`.
-
-```flitter
-debug(fib(10))
-```
-
-will output the following on the console:
-
-```flitter
-0;1;1;2;3;5;8;13;21;34
-```
-
-## Ranges
-
-```flitter
-start..stop|step
-```
-
-A range creates a vector beginning at `start` and incrementing (or
-decrementing if negative) by `step` until the value is equal to or passes
-`stop` - the last value is *not* included in the range, i.e., it is a
-half-open range.
-
-`start` and `|step` may be omitted, in which case the vector will begin at 0
-and increment by 1. Therefore:
-
-- `..10` evaluates to the vector `0;1;2;3;4;5;6;7;8;9`
-- `1..21|5` evaluates to the vector `1;6;11;16`
-- `1..0|-0.1` evaluates to the vector `1;0.9;0.8;0.7;0.6;0.5;0.4;0.3;0.2;0.1`
-
-Ranges are *not* lazy like they are in Python, so `0..1000000` will create a
-vector with 1 million items.
-
 ## Nodes
 
 The purpose of any **Flitter** program is to construct a render tree.
@@ -388,6 +255,85 @@ let points=10;20;15;25;20;30;25;35
         !line_to #segment point=x;y
 ```
 
+## Ranges
+
+```flitter
+start..stop|step
+```
+
+A range creates a vector beginning at `start` and incrementing (or
+decrementing if negative) by `step` until the value is equal to or passes
+`stop` - the last value is *not* included in the range, i.e., it is a
+half-open range.
+
+`start` and `|step` may be omitted, in which case the vector will begin at 0
+and increment by 1. Therefore:
+
+- `..10` evaluates to the vector `0;1;2;3;4;5;6;7;8;9`
+- `1..21|5` evaluates to the vector `1;6;11;16`
+- `1..0|-0.1` evaluates to the vector `1;0.9;0.8;0.7;0.6;0.5;0.4;0.3;0.2;0.1`
+
+Ranges are *not* lazy like they are in Python, so `0..1000000` will create a
+vector with 1 million items.
+
+## Operators
+
+**Flitter** supports the usual range of operators, with a lean towards the
+syntax and semantics of Python. The binary mathematical operators are:
+
+- *x* `+` *y* - addition
+- *x* `-` *y* - subtraction
+- *x* `/` *y* - division
+- *x* `*` *y* - multiplication
+- *x* `//` *y* - floor division (i.e, divide and round down)
+- *x* `%` *y* - modulo (pairs with floor division)
+- *x* `**` *y* - raise *x* to the power *y*
+
+All of these operations return a vector with the same length as the longer of
+*x* and *y*. The shorter vector is repeated as necessary. Note that, as well as
+this meaning `(1;2;3;4) + 1` is equal to `2;3;4;5`, it also means that
+`(1;2;3;4) + (1;-1)` is equal to `2;1;4;3`. The operators are left-associative,
+with `**` having the highest precedence, then `/`, `*`, `//` and `%` at the next
+level, and finally `+` and `-`.
+
+The `%` modulo operator follows the Python convention rather than C style. It
+is best understood as the remainder of a `//` floor division:
+
+```flitter
+x % y == x - x // y * y
+```
+
+This means that `%` will provide a seamless repeating sequence around zero:
+
+```flitter
+(-10..10) // 5 == (-2;-2;-2;-2;-2;-1;-1;-1;-1;-1; 0; 0; 0; 0; 0; 1; 1; 1; 1; 1)
+(-10..10) % 5  == ( 0; 1; 2; 3; 4; 0; 1; 2; 3; 4; 0; 1; 2; 3; 4; 0; 1; 2; 3; 4)
+```
+
+The unary mathematical operators are:
+
+- `-` *x* - negate
+- `+` *x* - identity
+
+They sit between `**` and `/`, `*`, `//` and `%` in precedence and so:
+
+```flitter
+-x ** y == -(x ** y)
+-x * y == (-x) * y
+```
+
+All of the mathematical operators return `null` if either *x* or *y* is an
+empty or non-numeric vector. Therefore, unary `+x` will return `x` iff `x` is
+numeric and `null` otherwise.
+
+Logical operators:
+
+- *x* `or` *y* - shortcut or: returns *x* if *x* is true, *y* otherwise
+- *x* `and` *y* - shortcut and: returns *x* if *x* is false, *y* otherwise
+- *x* `xor` *y* - exclusive or: returns *y* if *x* is false, *x* if *y* is
+  false, `false` otherwise
+- `not` *x* - logical inverse: returns `false` if *x* is true, `true` otherwise
+
 ## Let expressions
 
 Values may be bound to names with the `let` keyword. It is followed by one or
@@ -457,6 +403,34 @@ It is good practice, although not always necessary, to surround `where`
 expressions with parentheses to make the scope clear. However, note that `where`
 has higher precedence than `;` vector composition and so `(x;x*x where x=10)` is
 equivalent to `x;(x*x where x=10)`.
+
+## Sequences
+
+The result of evaluating an indented sequence of expressions separated by
+line breaks – such as might be found in the body of a loop, conditional or
+function – is the vector composition of the result of each expression. These
+need not necessarily be node expressions, it is perfectly normal for functions
+to operator on, and return, numeric or string vectors. For example:
+
+```flitter
+func fib(n, x=0, y=1)
+    x
+    if n > 1
+        fib(n-1, y, x+y)
+```
+
+This recursive function returns an `n`-item (at least one) vector of Fibonacci
+numbers beginning with `x;y`.
+
+```flitter
+debug(fib(10))
+```
+
+will output the following on the console:
+
+```flitter
+0;1;1;2;3;5;8;13;21;34
+```
 
 ## Conditionals
 
@@ -565,6 +539,31 @@ This will evaluate to:
 !line points=0;0;1;5;2;10;3;15;4;20
 ```
 
+## Function calling
+
+Functions are called in the normal way, with the name of the function followed
+by zero or more arguments, separated by commas, within parentheses, e.g.,
+`cos(x)` or `zip(xs, ys)`.
+
+Most built-in functions will do something sensible with an n-vector, e.g.,
+`sin(0.1;0.2)` will return a vector equivalent to `sin(0.1);sin(0.2)`, but
+will be substantially faster for long vectors. Some functions operate with both
+multiple arguments *and* n-vectors, e.g.:
+
+```flitter
+hypot(3;4) == 5
+hypot(3, 4) == 5
+hypot(3;30, 4;40) == (5;50)
+```
+
+As functions are themselves first-order objects in the language, they may be
+composed into vectors. The language takes the orthogonal approach that calling
+a function vector is identical to composing the result of calling each function
+with the arguments, i.e., `(sin;cos)(x) == (sin(x);cos(x))`. This is arguably
+obtuse behaviour.
+
+The **Flitter** [built-in functions](builtins.md) are documented separately.
+
 ## User-defined functions
 
 ```flitter
@@ -602,7 +601,8 @@ in the **Flitter** language and may be manipulated as such. Functions may also
 recursively call themselves. That is, the function name is in scope within the
 body of the function.
 
-Function calls may include out-of-order named arguments, e.g.:
+Function calls to user-defined functions may include out-of-order named
+arguments, e.g.:
 
 ```flitter
 func multiply_add(x, y=1, z)
