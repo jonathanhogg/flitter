@@ -84,7 +84,7 @@ for the 1st, 2nd, etc., element of each of the argument vectors.
 : Return $log_2$ of *x*.
 
 `log10(` *x* `)`
-: Return $log_10$ of *x*.
+: Return $log_{10}$ of *x*.
 
 `map(` *x* `,` *y* `,` *z* `)`
 : Map a value of *x* in the range *[0,1]* into the range *[y,z]*; equivalent
