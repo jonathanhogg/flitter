@@ -10,10 +10,10 @@ The `null` value is an empty vector and most expressions evaluate to this in
 the event of an error. In particular, all maths expressions involving a `null`
 will evaluate to `null`.
 
-A-la Python, indentation represents block structuring. `let` statements name
-constant values, everything else is largely about creating nodes to append to
-the implicit *root* node of the tree. There are *no variables* – the language
-is pure-functional.
+A-la Python (or Haskell), indentation represents block structuring. `let`
+statements name constant values, everything else is largely about creating nodes
+to append to the implicit *root* node of the tree. There are *no variables* –
+the language is pure-functional.
 
 The simplest program would be something like:
 
@@ -93,7 +93,7 @@ or functions (or a mix thereof). The vector implementation is optimised for
 vectors of numbers, particularly short vectors. There are no dedicated integer
 values in **Flitter** and so one should be careful of relying on integer numbers
 outside of the safe integer range of a double-precision floating point
-(-2^53..2^53).
+($-2^{53}$ .. $2^{53}$).
 
 Mathematical operators operate only on pure number vectors. Using them on
 anything else will return the empty vector (`null`). Unicode strings can be
@@ -111,8 +111,8 @@ repeated as necessary. This means that:
 (1;2;3;4;5;6;7;8;9) + (1;2;3) == (2;4;6;5;7;9;8;10;12)
 ```
 
-Note that the vector composition operator `;` has a very low precedence and so
-composed vectors will often have to be wrapped in parentheses when used with
+Note that the vector composition operator `;` has a *very* low precedence and so
+composed vectors will generally have to be wrapped in parentheses when used with
 operators:
 
 ```flitter
@@ -123,7 +123,7 @@ x;y+1 == x;(y+1)
 ### SI Prefixes
 
 **Flitter** supports adding an SI prefix to the end of a number. This is
-confusing terminology, but an SI prefix is a prefix to a unit suffix.
+confusing terminology, but an SI prefix is a prefix to a units suffix.
 **Flitter** does *not* support units, so you just end up with the SI prefix
 as a suffix. (Confused yet?)
 
@@ -146,11 +146,30 @@ of zeros, for example, when specifying the brightness of point and spot lights:
 !light position=0 color=1M
 ```
 
+### Unicode Strings
+
+All **Flitter** source code files are assumed to be UTF-8 encoded and Unicode
+symbols are permitted in all string values. In-line strings may be denoted with
+single `'` or double `"` straight quotes. Strings may be broken across multiple
+lines by enclosing them in triple-single (`'''`) or triple-double (`"""`)
+quotes. The usual range of backslash escape sequences are supported within
+strings, including Unicode hexadecimal characters with `\u`.
+
+Anywhere in the rendering engine where strings values are expected, vectors will
+be converted into a single string value. This will be done by concatenating each
+element of the vector after converting any non-string values into strings.
+Numeric values will be converted into their "general" representation (integer
+numbers will not have a decimal component, very large numbers will use `e`
+notation) with a maximum of 9 decimal places. Functions will be converted into
+their function name. Nodes will be converted into their "kind" name without
+the `!` node literal character, tags, attributes or children.
+
 ### Symbols
 
 Symbols are names that can be used as values. They are used in various places
-in the rendering engine for specifying enumerated values, e.g., the `composite`
-attribute of `!canvas` specifies the blend function to use when drawing:
+in the rendering engine for specifying enumerated values. For example, the
+`composite` attribute of `!canvas` specifies the blend function to use when
+drawing:
 
 ```flitter
 !window
@@ -166,12 +185,12 @@ optimised in the engine for faster execution.
 
 Symbols should be considered to be opaque values. They are actually
 deterministically converted to *very* large negative numbers in the parser
-($< -10^{292}$). Whenever a name value is expected by the engine, numbers will
-be looked-up in the symbol table to see if they match a known symbol. If so, the
-number will be converted into the matching name. This should be treated as an
-implementation detail and not relied upon in code. In particular, because they
-are really just numbers, symbols *can* be used in mathematical operations. They
-shouldn't be, and are deliberately massive to hopefully cause bad things to
+(below $-10^{292}$). Whenever a name value is expected by the engine, numbers
+will be looked-up in the symbol table to see if they match a known symbol. If
+so, the number will be converted into the matching name. This should be treated
+as an implementation detail and not relied upon in code. In particular, because
+they are really just numbers, symbols *can* be used in mathematical operations.
+They shouldn't be, and are deliberately massive to hopefully cause bad things to
 happen if they are.
 
 While a clash between a symbol's number and an actual number being used in a
