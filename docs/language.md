@@ -160,9 +160,10 @@ attribute of `!canvas` specifies the blend function to use when drawing:
 ```
 
 They are also commonly used when constructing state key vectors or seed vectors
-(see [State](#state) and [Pseudo-random sources](#pseudo-random-sources) below).
-Although strings may be used for the same purpose, symbols are more readable in
-the code and are specifically optimised in the engine for faster execution.
+(see [State](#state) below and [Pseudo-random
+sources](builtins.md#pseudo-random-sources)). Although strings may be used for
+the same purpose, symbols are more readable in the code and are specifically
+optimised in the engine for faster execution.
 
 Symbols should be considered to be opaque values. They are actually
 deterministically converted to *very* large negative numbers in the parser
@@ -661,96 +662,6 @@ calls are appended to the `!canvas` node.
 As template function calls convert into regular function calls, templates may
 be used recursively.
 
-## Pseudo-random sources
-
-**Flitter** provides three useful sources of pseudo-randomness: `uniform()`,
-`normal()` and `beta()`. These built-in functions return special "infinite"
-vectors that may only be indexed. These infinite vectors provide a reproducible
-stream of numbers matching the *Uniform(0,1)*, *Normal(0,1)* and *Beta(2,2)*
-distributions.
-
-The single argument to both functions is a vector that acts as the
-pseudo-random seed. Floating-point numbers within this seed vector are truncated
-to whole numbers before the seed is calculated. This is deliberate to allow new
-seeds to be generated at intervals, e.g.: `uniform(:foo;beat)` will create a new
-stream of pseudo-random numbers for each beat of the main clock. Multiplying or
-dividing this seed value then allows for different intervals, e.g., four times a
-beat: `uniform(:foo;beat*4)`.
-
-Similarly, the index value to the infinite-vector is truncated to pick a
-specific number in the stream. For example:
-
-```flitter
-let SIZE=1280;720
-
-!window size=SIZE
-    !canvas
-        for i in ..10
-            let x=uniform(:x;i)[beat] y=uniform(:y;i)[beat]
-                r=2*beta(:r;i)[beat] h=uniform(:h;i)[beat]
-            !path
-                !ellipse point=(x;y)*SIZE radius=r*50
-                !fill color=hsv(h;1;1)
-```
-
-This will create 10 circles distributed uniformly around the window with
-different radii clustered around 50 pixels and different uniformly picked hues.
-Every beat, the circles will be drawn in different places and with different
-sizes and hues. Note the use of symbols (`:x`, `:y`, etc.) combined with the
-index of the circle to create unique seeds. This code will draw exactly the
-same sequence of circles *every* time it is run as the pseudo-random functions
-are stable on their seed argument. There is no mechanism for generating true
-random numbers in **Flitter**.
-
-The pseudo-random streams can be indexed with a range vector to generate a
-vector of numbers, e.g.: `uniform(:some_seed)[..100]` will generate a 100-vector
-of uniformly distributed numbers. The streams are arbitrarily long and are
-unit-cost to call, so indexing the billionth number takes the same amount of
-time as the 0th. Unlike normal vectors, the streams also extend into negative
-indices (which actually wrap around to the end of the 64-bit unsigned integer
-index range).
-
-Pseudo-random streams may be bound to a name list in a `let` expression to
-pick off the first few values, e.g.:
-
-```flitter
-let x;y;z = uniform(:position)
-```
-
-They are considered to be `true` in conditional expressions (`if`, `and`, etc.).
-In all other aspects, pseudo-random streams behave like the `null` vector, e.g.,
-attempts to use them in mathematical expressions will evaluate to `null`.
-
-## Counters
-
-Arbitrary counters can be managed with the `counter()` function. This takes
-either two or three arguments and **has state side-effects**.
-
-In the three-argument form, `counter(counter_id, clock, speed)`, the function
-will create or update a counter with a specific `clock` value and `speed`,
-storing the current state of the counter in the state mapping with the given
-`counter_id` key. The function returns the current count.
-
-Counters begin at zero and increment upwards by `speed` every unit increase of
-`clock`. The counter speed can be changed at any point and the counter will
-return the count at the previous speed before switching to counting with the
-new speed. The stored state only changes when the speed changes. `clock`
-*should* be a monotonically increasing number, such as `beat`. `speed` is
-allowed to be zero to stop the counter or negative to count downwards.
-
-Either `clock` or `speed` can be given as an n-vector to create a
-multi-dimensional counter. This can be useful, for instance, to move an object
-through space with a velocity vector:
-
-```flitter
-let velocity = 0.2;-1.5;3.0
-    position = counter(:thing_position, beat, velocity)
-```
-
-The two argument form of the function omits the speed and returns the count
-matching the value of `clock` at the last counter speed. If the counter has not
-already been initialised, then the speed will default to 1.
-
 ## State
 
 Any interactive component of **Flitter**, such as a MIDI controller,
@@ -779,11 +690,11 @@ A key is any vector of numbers and/or strings (/symbols). As the `;` operator
 binds with very low precedence, a non-singleton key needs to be surrounded with
 brackets, e.g., `$(:circle;:radius)`.
 
-The state system is also used by the [physics engine](./physics.md) to
+The state system is also used by the [physics engine](physics.md) to
 communicate particle properties back to the program and by counters (see
-[Counters](#counters) above) for storing a starting clock value and current
-speed. Be careful when choosing state keys to avoid collisions between these
-different uses.
+[Counters](builtins,md#counters)) for storing a starting clock value and current
+counter rate. Be careful when choosing state keys to avoid collisions between
+these different uses.
 
 ## Pragmas
 
