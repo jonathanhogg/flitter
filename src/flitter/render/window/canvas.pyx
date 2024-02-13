@@ -770,8 +770,8 @@ cpdef object _draw(Node node, Node parent, ctx, paint, font, path, dict stats, d
             if node.get('center', 1, bool, True):
                 bounds = skia.Rect(0, 0, 0, 0)
                 font.measureText(text, bounds=bounds, paint=text_paint)
-                rx = bounds.x() + bounds.width()/2
-                ry = bounds.y() + bounds.height()/2
+                rx = (bounds.fLeft + bounds.fRight)/2
+                ry = (bounds.fBottom + bounds.fTop)/2
                 ctx.drawString(text, x-rx, y-ry, font, text_paint)
             else:
                 ctx.drawString(text, x, y, font, text_paint)

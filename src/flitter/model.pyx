@@ -479,6 +479,8 @@ cdef class Vector:
                 elif isinstance(<object>objptr, (float, int)):
                     number= <object>objptr
                     text += SymbolTable.get(number, f'{number:.9g}')
+                elif callable(<object>objptr) and hasattr(<object>objptr, '__name__'):
+                    text += (<object>objptr).__name__
         elif n:
             for i in range(n):
                 text += SymbolTable.get(self.numbers[i], f'{self.numbers[i]:.9g}')

@@ -75,9 +75,9 @@ hue, saturation and value (also in the range *[0,1]*).
 argument, with multiple arguments return a vector formed by calculating the same
 for the 1st, 2nd, etc., element of each of the argument vectors.
 
-`impulse(` *x* [ `,` *y=0.25* ] `)`
+`impulse(` *x* [ `,` *c=0.25* ] `)`
 : Return a repeating impulse wave in the range *[0,1]* with one wave per unit of
-*x*, with the *0* point when `x%1 == 0` and the *1* point when `x%1 == y`.
+*x*, with the *0* point when `x%1 == 0` and the *1* point when `x%1 == c`.
 
 `len(` *xs* `)`
 : Return the length of vector *xs*.

@@ -387,17 +387,19 @@ def impulse(Vector xs not None, Vector cs=None):
         return null_
     cdef Vector ys = Vector.__new__(Vector)
     cdef int n=cs.length
-    cdef double x, c, y
+    cdef double x, c, y, yy
     for i in range(ys.allocate_numbers(xs.length)):
         x = xs.numbers[i]
         x -= floor(x)
         c = cs.numbers[i % n] if cs is not None else 0.25
         if x < c:
             y = 1 - x/c
-            y = 1 - y*y
+            yy = y * y
+            y = 1 - yy*y
         else:
             y = 1 - (x-c)/(1-c)
-            y = y*y
+            yy = y * y
+            y = yy*y
         ys.numbers[i] = y
     return ys
 
