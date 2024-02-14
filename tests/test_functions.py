@@ -6,7 +6,7 @@ import math
 import unittest
 
 from flitter.model import Vector, Context, StateDict, null
-from flitter.language.functions import (Uniform, Normal, Beta, counter, hypot, angle, split, ordv, chrv)
+from flitter.language.functions import (uniform, normal, beta, counter, hypot, angle, split, ordv, chrv)
 
 
 Tau = 2*math.pi
@@ -20,7 +20,7 @@ def all_isclose(xs, ys, rel_tol=1e-9, abs_tol=0):
 
 
 class TestUniform(unittest.TestCase):
-    FACTORY = Uniform
+    FACTORY = uniform
     DISTRIBUTION = ('uniform',)
     LOWER = 0
     UPPER = 1
@@ -94,12 +94,12 @@ class TestUniform(unittest.TestCase):
 
 
 class TestBeta(TestUniform):
-    FACTORY = Beta
+    FACTORY = beta
     DISTRIBUTION = ('beta', (2, 2))
 
 
 class TestNormal(TestUniform):
-    FACTORY = Normal
+    FACTORY = normal
     DISTRIBUTION = ('norm',)
     LOWER = -10
     UPPER = 10
