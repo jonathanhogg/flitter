@@ -11,7 +11,7 @@ import cython
 
 from libc.math cimport floor
 
-from .functions cimport Uniform, shuffle
+from .functions cimport uniform, shuffle
 from ..model cimport Vector, null_
 
 
@@ -580,12 +580,12 @@ cdef Vector _noise(Vector perm, list args):
 
 cdef Vector get_perm(Vector seed, int i):
     cdef unsigned long long seed_hash = seed.hash(True) ^ <unsigned long long>i
-    cdef Uniform uniform
+    cdef uniform prng
     cdef Vector perm = <Vector>PermCache.get(seed_hash)
     if perm is None:
-        uniform = Uniform.__new__(Uniform)
-        uniform._hash = seed_hash
-        perm = shuffle(uniform, PERM_RANGE)
+        prng = uniform.__new__(uniform)
+        prng._hash = seed_hash
+        perm = shuffle(prng, PERM_RANGE)
         if len(PermCache) == MAX_PERM_CACHE_ITEMS:
             PermCache.pop(next(iter(PermCache)))
         PermCache[seed_hash] = perm

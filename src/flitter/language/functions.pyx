@@ -51,7 +51,7 @@ def sample(Context context, Vector texture_id, Vector coord, Vector default=null
     return result
 
 
-cdef class Uniform(Vector):
+cdef class uniform(Vector):
     def __cinit__(self, value=None):
         self._hash = self.hash(True)
         self.deallocate_numbers()
@@ -108,12 +108,12 @@ cdef class Uniform(Vector):
         return f"{self.__class__.__name__}({self._hash!r})"
 
 
-cdef class Beta(Uniform):
+cdef class beta(uniform):
     cdef double _item(self, unsigned long long i) noexcept nogil:
         i <<= 2
-        cdef double u1 = Uniform._item(self, i)
-        cdef double u2 = Uniform._item(self, i + 1)
-        cdef double u3 = Uniform._item(self, i + 2)
+        cdef double u1 = uniform._item(self, i)
+        cdef double u2 = uniform._item(self, i + 1)
+        cdef double u3 = uniform._item(self, i + 2)
         if u1 <= u2 and u1 <= u3:
             return min(u2, u3)
         if u2 <= u1 and u2 <= u3:
@@ -121,7 +121,7 @@ cdef class Beta(Uniform):
         return min(u1, u2)
 
 
-cdef class Normal(Uniform):
+cdef class normal(uniform):
     @cython.cdivision(True)
     cdef double _item(self, unsigned long long i) noexcept nogil:
         # Use the Box-Muller transform to approximate the normal distribution
@@ -131,8 +131,8 @@ cdef class Normal(Uniform):
         if odd:
             i ^= 1
         if not self.cached or i != self.i:
-            u1 = Uniform._item(self, i)
-            u2 = Uniform._item(self, i + 1)
+            u1 = uniform._item(self, i)
+            u2 = uniform._item(self, i + 1)
             if u1 < 1 / <double>(1<<32):
                 u1, u2 = u2, u1
             self.R = sqrt(-2 * log(u1))
@@ -511,7 +511,7 @@ def snap(Vector xs not None):
     return ys
 
 
-cpdef shuffle(Uniform source, Vector xs):
+cpdef shuffle(uniform source, Vector xs):
     if xs.length == 0:
         return null_
     cdef int i, j, n = xs.length
@@ -559,12 +559,12 @@ def fract(Vector xs not None):
     return xs.fract()
 
 
-def sumv(Vector xs not None, Vector zs=true_):
+def sumv(Vector xs not None, Vector w=true_):
     cdef int i, j, n = xs.length
-    if n == 0 or xs.objects is not None or zs.length != 1 or zs.objects is not None:
+    if n == 0 or xs.objects is not None or w.length != 1 or w.objects is not None:
         return null_
     cdef Vector ys = Vector.__new__(Vector)
-    cdef int m = <int>(zs.numbers[0])
+    cdef int m = <int>(w.numbers[0])
     if m < 1:
         return null_
     ys.allocate_numbers(m)
@@ -897,7 +897,7 @@ STATIC_FUNCTIONS = {
     'acos': Vector(acosv),
     'angle': Vector(angle),
     'asin': Vector(asinv),
-    'beta': Vector(Beta),
+    'beta': Vector(beta),
     'bounce': Vector(bounce),
     'ceil': Vector(ceilv),
     'chr': Vector(chrv),
@@ -920,7 +920,7 @@ STATIC_FUNCTIONS = {
     'maxindex': Vector(maxindex),
     'min': Vector(minv),
     'minindex': Vector(minindex),
-    'normal': Vector(Normal),
+    'normal': Vector(normal),
     'normalize': Vector(normalize),
     'ord': Vector(ordv),
     'point_towards': Vector(point_towards),
@@ -939,7 +939,7 @@ STATIC_FUNCTIONS = {
     'sum': Vector(sumv),
     'tan': Vector(tanv),
     'triangle': Vector(triangle),
-    'uniform': Vector(Uniform),
+    'uniform': Vector(uniform),
     'zip': Vector(zipv),
 }
 
