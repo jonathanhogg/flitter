@@ -766,6 +766,17 @@ def mapv(Vector xs not None, Vector ys not None, Vector zs not None):
 
 
 @cython.cdivision(True)
+def clamp(Vector xs not None, Vector ys not None, Vector zs not None):
+    if xs.numbers == NULL or ys.numbers == NULL or zs.numbers == NULL:
+        return null_
+    cdef int i, m=xs.length, n=ys.length, o=zs.length
+    cdef Vector ws = Vector.__new__(Vector)
+    for i in range(ws.allocate_numbers(max(m, n, o))):
+        ws.numbers[i] = min(max(ys.numbers[i % n], xs.numbers[i % m]), zs.numbers[i % o])
+    return ws
+
+
+@cython.cdivision(True)
 def zipv(*vectors):
     cdef bint numeric = True
     cdef list vs = []
@@ -901,6 +912,7 @@ STATIC_FUNCTIONS = {
     'bounce': Vector(bounce),
     'ceil': Vector(ceilv),
     'chr': Vector(chrv),
+    'clamp': Vector(clamp),
     'colortemp': Vector(colortemp),
     'cos': Vector(cosv),
     'exp': Vector(expv),

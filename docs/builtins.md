@@ -62,6 +62,11 @@ the length of the longest vector; short arguments will repeat, so
 `ceil(` *x* `)`
 : Return the smallest integer number larger than *x*.
 
+`clamp(` *x*, *y*, *z* `)`
+: Clamp *x* to be no less than *y* and no greater than *z*. This function
+generalises to n-vectors, returning a vector the length of the longest of
+*x*, *y* and *z*, and repeating items from any of the vectors as necessary.
+
 `cos(` *x* `)`
 : Return cosine of *x* (with *x* expressed in *turns*).
 
@@ -374,14 +379,14 @@ of each character will be returned.
 included).
 
 `ord()` and `chr()` can be used together with indexing to isolate a specific
-character from a string. For example:
+character range from a string. For example:
 
 ```flitter
 let s = "Hello world!"
-    c = chr(ord(s)[4])
+    c = chr(ord(s)[4..7])
 ```
 
-The name `c` will take the value `"o"`.
+The name `c` will have the value `"o w"`.
 
 ## File functions
 
