@@ -11,20 +11,20 @@ accumulator starting at *0*.
 `len(` *xs* `)`
 : Return the length of vector *xs*.
 
-`max(` *x* [ `,` ...] `)`
+`max(` *x* [ `,` ... ] `)`
 : Return the maximum value in the vector *x* with one argument, or the largest
 of the arguments in vector sort order.
 
-`maxindex(` *x* [ `,` ...] `)`
+`maxindex(` *x* [ `,` ... ] `)`
 : Return the index of the maximum value in the vector *x* with one argument, or
 the index of the largest argument in vector sort order (with the 1st argument
 being index *0*).
 
-`min(` *x* [ `,` ...] `)`
+`min(` *x* [ `,` ... ] `)`
 : Return the minimum value in the vector *x* with one argument, or the smallest
 of the arguments in vector sort order.
 
-`minindex(` *x* [ `,` ...] `)`
+`minindex(` *x* [ `,` ... ] `)`
 : Return the index of the minimum value in the vector *x* with one argument, or
 the index of the smallest argument in vector sort order (with the 1st argument
 being index *0*).
@@ -33,10 +33,12 @@ being index *0*).
 : Return the shuffled elements of *xs* using the pseudo-random *source* (which
 should be the result of calling `uniform(...)`).
 
-`sum(` *xs* `)`
-: Return a single numeric value obtained by summing each element of vector *xs*.
+`sum(` *xs* [ `,` *w=1* ] `)`
+: Return a numeric value, of length *w*, obtained by summing together
+*w*-element groups of *xs*, i.e., `xs[0..w]` + `xs[w..2*w]` + `xs[2*w..3*w]` +
+... up to the end of *xs* with the final group truncated if necessary.
 
-`zip(` *xs* `,` *ys* [ `,` ...] `)`
+`zip(` *xs* `,` *ys* [ `,` ... ] `)`
 : Return a vector formed by interleaving values from each argument vector; for
 *m* arguments the resulting vector will be *n * m* elements long, where *n* is
 the length of the longest vector; short arguments will repeat, so
@@ -158,28 +160,38 @@ the *x* and *y* axes flipped).
 ## Pseudo-random functions
 
 **Flitter** provides three useful sources of pseudo-randomness. These functions
-return special "infinite" vectors that may only be indexed. These infinite
-vectors provide a reproducible stream of pseudo-random numbers.
+return special "infinite" vectors that may only be
+[indexed](language.md#indexing). These infinite vectors provide reproducible
+streams of pseudo-random numbers.
 
-`beta(` *seed* `)`
+`beta(` [ *seed* ] `)`
 : A *Beta(2,2)* distribution pseudo-random source.
 
-`normal(` *seed* `)`
+`normal(` [ *seed* ] `)`
 : A *Normal(0,1)* distribution pseudo-random source.
 
-`uniform(` *seed* `)`
+`uniform(` [ *seed* ] `)`
 : A *Uniform(0,1)* distribution pseudo-random source.
 
-The single argument to all of the functions is a vector that acts as the
-pseudo-random seed. Floating-point numbers within this seed vector are *floor*ed
-to integer numbers before the seed is calculated. This is to allow new seeds to
-be easily generated at intervals, e.g.: `uniform(:foo;beat)` will create a new
-stream of pseudo-random numbers for each beat of the main clock. Multiplying or
-dividing this seed value then allows for different intervals, e.g., four times a
-beat: `uniform(:foo;beat*4)`.
+![Pseudo-random distributions](pseudorandoms.png)
 
-Similarly, the index value to the infinite-vector is *floor*ed to pick a
-specific number in the stream. For example:
+The single argument to all of the functions is a vector that acts as the
+pseudo-random seed. Floating-point numbers within this seed vector are
+*floor*-ed to integer numbers before the seed is calculated. This is to allow
+new seeds to be easily generated at intervals, e.g.: `uniform(:foo;beat)` will
+create a new stream of pseudo-random numbers for each beat of the main clock.
+Multiplying or dividing this seed value then allows for different intervals,
+e.g., four times a beat: `uniform(:foo;beat*4)`.
+
+The pseudo-random streams can be indexed with a range vector to generate a
+vector of numbers, e.g.: `uniform(:some_seed)[..100]` will generate a 100-vector
+of uniformly distributed numbers. The streams are arbitrarily long and are
+unit-cost to call, so indexing the billionth number takes the same amount of
+time as the 0th. Unlike normal vectors, the streams also extend into negative
+indices (which actually wrap around to the end of the 64-bit unsigned integer
+index range).
+
+For example:
 
 ```flitter
 let SIZE=1280;720
@@ -187,8 +199,8 @@ let SIZE=1280;720
 !window size=SIZE
     !canvas
         for i in ..10
-            let x=uniform(:x;i)[beat] y=uniform(:y;i)[beat]
-                r=2*beta(:r;i)[beat] h=uniform(:h;i)[beat]
+            let x=uniform(:x;beat)[i] y=uniform(:y;beat)[i]
+                r=2*beta(:r;beat)[i] h=uniform(:h;beat)[i]
             !path
                 !ellipse point=(x;y)*SIZE radius=r*50
                 !fill color=hsv(h;1;1)
@@ -203,14 +215,6 @@ same sequence of circles *every* time it is run as the pseudo-random functions
 are stable on their seed argument. There is no mechanism for generating true
 random numbers in **Flitter**.
 
-The pseudo-random streams can be indexed with a range vector to generate a
-vector of numbers, e.g.: `uniform(:some_seed)[..100]` will generate a 100-vector
-of uniformly distributed numbers. The streams are arbitrarily long and are
-unit-cost to call, so indexing the billionth number takes the same amount of
-time as the 0th. Unlike normal vectors, the streams also extend into negative
-indices (which actually wrap around to the end of the 64-bit unsigned integer
-index range).
-
 Pseudo-random streams may be bound to a name list in a `let` expression to
 pick off the first few values, e.g.:
 
@@ -218,10 +222,9 @@ pick off the first few values, e.g.:
 let x;y;z = uniform(:position)
 ```
 
-The streams are considered to be `true` in conditional expressions (`if`, `and`,
-etc.). In all other aspects, pseudo-random streams behave like the `null`
-vector, e.g., attempts to use them in mathematical expressions will evaluate to
-`null`.
+Streams are considered to be `true` in conditional expressions (`if`, `and`,
+etc.). In all other aspects, they behave like the `null` vector, e.g., attempts
+to use them in mathematical expressions will evaluate to `null`.
 
 ## Noise functions
 
@@ -358,14 +361,27 @@ hue, saturation and value (also in the range *[0,1]*).
 ## Text functions
 
 `chr(` *o* `)`
-: Return the unicode character identified by the ordinal number *o*.
+: Return the unicode character identified by the ordinal number *o*. If *o* is
+a multi-element
 
 `ord(` *c* `)`
-: Return the ordinal number of unicode character *c* (as a string).
+: Return the ordinal number of unicode character *c* (interpreted as a string).
+If *c* evaluates to a multi-character string then a vector of the ordinal number
+of each character will be returned.
 
 `split(` *text* `)`
 : Return a vector formed by splitting the string *text* at newlines (not
 included).
+
+`ord()` and `chr()` can be used together with indexing to isolate a specific
+character from a string. For example:
+
+```flitter
+let s = "Hello world!"
+    c = chr(ord(s)[4])
+```
+
+The name `c` will take the value `"o"`.
 
 ## File functions
 

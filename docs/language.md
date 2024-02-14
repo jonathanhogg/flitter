@@ -309,6 +309,43 @@ and increment by 1. Therefore:
 Ranges are *not* lazy like they are in Python, so `0..1000000` will create a
 vector with 1 million items.
 
+## Indexing
+
+Specific elements, or ranges of elements, may be extracted from a multi-element
+vector using indexing. Indexing uses the familiar syntax:
+
+*src*`[`*index*`]`
+
+As *all* values in **Flitter** are vectors, *index* may
+itself be a multi-element vector.
+
+The rules for indexing/slicing an *n*-element vector, *src*, are:
+
+- If *index* is `null`, the operation will evaluate to `null`
+- *index* **must** be an entirely numeric vector or it will be treated as `null`
+- *index* is considered element-at-a-time
+- Non-integer indices are *floor*-ed to the next integer value down
+- Indices count from $0$, values less than $0$ or greater than $n-1$ are invalid
+and will be ignored
+- Otherwise, the matching element from *src* will be extracted
+- All matching elements are composed together into a new vector
+
+[Ranges](#ranges) are a convenient way to create indices for slicing a vector,
+e.g., `xs[..5]` will extract the first 5 elements of `xs` – if `xs` has fewer
+than 5 elements then it just evaluates to `xs`. Indices do not need to be
+contiguous or in any specific order. It is perfectly valid to use `x[1;6;0]`
+to extract the 2nd, 7th and 1st items, in that order.
+
+There is no way to reference items from the end of a vector except with the use
+of the `len()` built-in function, e.g., `xs[len(xs)-1]` to extract the last
+item of `xs`.
+
+Indexing of Unicode string vectors extracts the *n*-th element of the vector,
+*not* the *n*-th character of the string. Therefore `("Hello ";"world!")[0]` is
+`"Hello "`. See the `ord()` and `chr()` [text
+functions](builtins.md#text-functions) for a mechanism for extracting individual
+characters.
+
 ## Operators
 
 **Flitter** supports the usual range of operators, with a lean towards the
