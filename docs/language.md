@@ -86,6 +86,19 @@ The engine-supplied global values are:
 - `realtime` - a `true`/`false` value indicating whether the engine is running
     in realtime mode (the default) or not (with the `--lockstep` option)
 
+## Unicode Support
+
+All **Flitter** source files must be UTF-8 encoded. All names, including
+[symbols](#symbols) and [node](#nodes) kinds and attributes, must begin with a
+Unicode alphabetic character or an underscore and then may contain any number
+and combination of underscores and Unicode alphanumeric characters. Therefore
+names may contain the full range of non-Latin characters including diacritics.
+
+All **Flitter** language keywords and supported render nodes and attributes use
+only Latin characters and are generally English words or abbreviations (using US
+spelling). Therefore, **Flitter** programs can be written using only ASCII
+characters, but feel free to use hieroglyphs if you wish.
+
 ## Values
 
 All values are vectors of either floating point numbers, Unicode strings, nodes
@@ -148,12 +161,12 @@ of zeros, for example, when specifying the brightness of point and spot lights:
 
 ### Unicode Strings
 
-All **Flitter** source code files are assumed to be UTF-8 encoded and Unicode
-symbols are permitted in all string values. In-line strings may be denoted with
-single `'` or double `"` straight quotes. Strings may be broken across multiple
-lines by enclosing them in triple-single (`'''`) or triple-double (`"""`)
-quotes. The usual range of backslash escape sequences are supported within
-strings, including Unicode hexadecimal characters with `\u`.
+All **Flitter** source code files must be UTF-8 encoded and all Unicode
+characters are permitted in string values. In-line strings may be denoted with
+straight single (`'`) or double (`"`) quotes. Strings may be broken across
+multiple lines by enclosing them in triple-single (`'''`) or triple-double
+(`"""`) quotes. The usual range of backslash escape sequences are supported
+within strings, including Unicode hexadecimal escapes with `\u`.
 
 Anywhere in the rendering engine where strings values are expected, vectors will
 be converted into a single string value. This will be done by concatenating each
@@ -161,8 +174,9 @@ element of the vector after converting any non-string values into strings.
 Numeric values will be converted into their "general" representation (integer
 numbers will not have a decimal component, very large numbers will use `e`
 notation) with a maximum of 9 decimal places. Functions will be converted into
-their function name. Nodes will be converted into their "kind" name without
-the `!` node literal character, tags, attributes or children.
+the function name. Nodes will be converted into their kind, without the node
+literal exclamation character `!`, tags, attributes or children. Symbols will be
+converted into their name, without the `:` character.
 
 ### Symbols
 
@@ -198,7 +212,7 @@ While a clash between a symbol's number and an actual number being used in a
 problems unless that number is converted into a string – in which case, the
 number will become the symbol name.
 
-## Nodes
+### Nodes
 
 The purpose of any **Flitter** program is to construct a render tree.
 Individual literal nodes are represented by an exclamation mark followed by
@@ -248,7 +262,7 @@ appended to a `!window` node, which is the final value of this expression.
 Running this program as-is will result in a red window with the title "Hello
 world!".
 
-### Vector node operations
+#### Vector node operations
 
 As nodes are values, and thus vectors, tag unary-postfix operations and
 attribute-set binary operations are able to operate on a vector of nodes
@@ -262,7 +276,7 @@ let points=10;20;15;25;20;30;25;35
     ((!line_to point=x;y) for x;y in points) #segment
 ```
 
-is a strange, but perfectly legal, way of doing the equivalent (and more
+This is a strange, but perfectly legal, way of doing the equivalent (and more
 readable):
 
 ```flitter
@@ -731,30 +745,89 @@ defaults are 120 and 4, respectively), and the *current* target frame rate of
 the engine (default is 60 or the value specified with the `--fps` command-line
 option).
 
-## Partial-evaluation
+## Parsing
+
+**Flitter** uses an LALR(1) parser with a contextual lexer. This means that, in
+general, there are *no reserved keywords*. The following is perfectly legal
+code that will parse and run:
+
+```flitter
+let let=..10
+
+for in in let
+    !let in=in
+```
+
+This is convenient in allowing things like `from` to be used as a keyword in an
+`import` `from` expression and also as an attribute name in a `!distance from=`
+physics node. However, it would be best not to rely on this flexibility too
+much as it will fail in many contexts. For instance, this very similar code to
+the above will not parse:
+
+```flitter
+let let=..10
+
+for in in let
+    !let for=in
+```
+
+This is because `for` cannot be used as an attribute name here as it is also
+a valid parser match at this point for the `for` keyword of an in-line `for`
+expression.
+
+## Simplification
 
 When a source file is loaded it is parsed into an abstract syntax tree and then
-that is *partially-evaluated*. This attempts to evaluate all static expressions.
-The partial-evaluator is quite sophisticated and is able to construct static
-parts of node trees, unroll loops with constant source vectors, evaluate
-conditionals with constant tests, call functions with constant arguments
-(including creating pseudo-random streams), inline functions that contain only
-local names, replace `let` names with literal values, evaluate mathematical
-expressions (including some rearranging where necessary to achieve this) and
-generally reduces as much of the evaluation tree as possible to constant values.
+that is *partially-evaluated* by the simplifier. This attempts to evaluate all
+static expressions. The simplifier is quite sophisticated and is able to
+construct static parts of node trees, unroll loops with constant source vectors,
+evaluate conditionals with constant tests, call functions with constant
+arguments (including creating pseudo-random streams), inline functions that
+contain only local names, replace `let` names with literal values, evaluate
+mathematical expressions (including some rearranging where necessary to achieve
+this) and generally reduces as much of the expression tree as possible to
+constant values.
 
-Unbound names (which includes all of the globals listed above, like `beat`) are
-always dynamic, as will then obviously be any expressions that include these.
+Known global names (like `beat`) are always dynamic and so generally any
+expressions that include these will be dynamic. However, unbound names are
+interpreted as null values, therefore the simplifier will simply replace these
+with static `null`s, issuing a warning as it does so. It is sometimes useful to
+leave unbound names in a program in order to allow behaviour to be switched at
+run-time using the `--define NAME=value` command-line option. As the simplifier
+is able to follow these null values through conditionals, it will not affect
+performance and such uses can be considered similar to `#if` preprocessor
+instructions in other languages.
 
-After partial-evaluation has simplified the tree (and note that thanks to loop
-unrolling, "simpler" doesn't necessarily mean "smaller"), the tree is compiled
-into instructions for a stack-based virtual machine. These instructions are
-interpreted to run the program.
+After the simplifier has partially-evaluated the tree (and note that thanks to
+loop unrolling, "simpler" doesn't necessarily mean "smaller"), the tree is
+compiled into instructions for a stack-based virtual machine. These instructions
+are interpreted to run the program.
 
-The partial-evaluator and compiler can run again incorporating the state if
-that has been stable for a period of time (configurable with the `--evalstate`
-command-line option). If the state then changes (i.e., a pad or encoder is
-touched) the engine will return to the original compiled program. Counters
-update the state whenever their speed changes, and so doing this continously
-will defeat state-based partial-evaluation. The physics engine updates state on
-every iteration and so does the same.
+The simplifier and compiler can run again incorporating state if that has been
+stable for a period of time (configurable with the `--evalstate` command-line
+option). If the state then changes (i.e., a pad or encoder is touched) the
+engine will return to the original compiled program.
+[Counters](functions.md#counters) update the state whenever their rate changes,
+and so doing this often will defeat state-based partial-evaluation. The physics
+engine updates state on every iteration and so does the same.
+
+## Run-time Error Behaviour
+
+**Flitter** is designed for live performance and so makes every attempt to
+charge on in the presence of errors. Most erroneous behaviour is simply silently
+ignored – such as numerical operations on non-numerical values resulting in
+`null`s. Some erroneous behaviour will log warnings or errors – such as using
+an unbound name or calling a built-in function with an incorrect number of
+arguments – before also evaluating to `null`.
+
+If a live code change makes a program un-parseable then the engine will log a
+parser error and continue executing the previously loaded version of the file.
+Unfortunately, this does not hold for GLSL shader code, which resolves to
+strings that are parsed and compiled on-the-fly and so parse/compile errors in
+this will cause the runtime to ignore the code completely. This will cause
+`!shader` nodes to fall-back to their default pass-through behaviour and
+models contained in a `!canvas3d` group with a custom shader will stop being
+rendered.
+
+It is generally a good idea to keep the console log from **Flitter** visible
+when making live changes to be able to spot errors if they come up.
