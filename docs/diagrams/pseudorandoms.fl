@@ -1,0 +1,36 @@
+
+let SIZE=1500;500
+    DIAGRAM=SIZE/(3;1)
+    SIDE=min(DIAGRAM)*0.6
+    COUNT=10000
+    BUCKETS=21
+    YMAX=2.5*COUNT/BUCKETS
+
+!window size=SIZE
+    !record filename='pseudorandoms.png'
+        !canvas color=0
+            !path
+                !rect size=SIZE
+                !fill color=1
+            for i;distribution in zip(..3, beta;normal;uniform)
+                let x=i%4 y=0
+                !group translate=(x;y)*DIAGRAM+(DIAGRAM-SIDE)/2 scale=SIDE/100
+                    !transform translate=0;-10
+                        !path
+                            !rect point=0 size=100
+                            !stroke color=0.75 stroke_width=1
+                        let start=-3 if distribution == normal else 0
+                            end=3 if distribution == normal else 1
+                            width=end-start
+                            ns=(distribution()[..COUNT]-start)/width*BUCKETS//1
+                        !transform scale=100/BUCKETS;100
+                            for i in ..BUCKETS
+                                let count=sum(1 if n == i for n in ns) or 0
+                                !path
+                                    !rect point=i+0.1;1 size=0.8;-count/YMAX
+                                    !fill
+                        !font font_family='Georgia' font_slant=:italic font_size=10
+                            for i in ..width+1
+                                !text point=100*i/width;110 text=start+i
+                        !font font_family='Menlo' font_weight=:bold font_size=12
+                            !text point=50;125 text=distribution;'()'

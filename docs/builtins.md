@@ -137,7 +137,7 @@ with one wave per unit of *x*.
 `triangle(` *x* `)`
 : A symmetric triangle wave function.
 
-![Waveform function diagrams](waveforms.png)
+![Waveform function diagrams](diagrams/waveforms.png)
 
 ## Easing functions
 
@@ -155,7 +155,7 @@ than *1* returning *1*.
 : A square-root easing function (conceptually a quadratic easing function with
 the *x* and *y* axes flipped).
 
-![Easing function diagrams](easings.png)
+![Easing function diagrams](diagrams/easings.png)
 
 ## Pseudo-random functions
 
@@ -173,7 +173,7 @@ streams of pseudo-random numbers.
 `uniform(` [ *seed* ] `)`
 : A *Uniform(0,1)* distribution pseudo-random source.
 
-![Pseudo-random distributions](pseudorandoms.png)
+![Pseudo-random distributions](diagrams/pseudorandoms.png)
 
 The single argument to all of the functions is a vector that acts as the
 pseudo-random seed. Floating-point numbers within this seed vector are
