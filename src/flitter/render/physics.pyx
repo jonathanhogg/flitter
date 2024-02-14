@@ -9,7 +9,7 @@ from loguru import logger
 
 from .. import name_patch
 from ..model cimport Vector, Node, StateDict, null_
-from ..language.functions cimport Normal
+from ..language.functions cimport normal
 
 from libc.math cimport sqrt, isinf, isnan, abs
 from cpython cimport PyObject
@@ -27,7 +27,7 @@ logger = name_patch(logger, __name__)
 cdef Vector VELOCITY = Vector._symbol('velocity')
 cdef Vector CLOCK = Vector._symbol('clock')
 
-cdef Normal RandomSource = Normal('_physics')
+cdef normal RandomSource = normal('_physics')
 cdef unsigned long long RandomIndex = 0
 
 
