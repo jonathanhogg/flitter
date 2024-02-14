@@ -4,17 +4,19 @@ let SIZE=1500;500
     SIDE=min(DIAGRAM)*0.6
 
 !window size=SIZE
-    !record filename='easings.png'
+    !canvas
+        !path
+            !rect size=SIZE
+            !fill color=1
+    !record filename='easings.png' keep_alpha=true
         !canvas color=0
-            !path
-                !rect size=SIZE
-                !fill color=1
             for i;easing in zip(..3, linear;quad;snap)
                 let x=i%4 y=0
                 !group translate=(x;y)*DIAGRAM+(DIAGRAM-SIDE)/2 scale=SIDE/100
                     !transform translate=0;-10
                         !path
                             !rect point=0 size=100
+                            !fill color=1
                             !stroke color=0.75 stroke_width=1
                         !path
                             !line points=(x;1-easing(x))*100 for x in 0..1.01|0.01

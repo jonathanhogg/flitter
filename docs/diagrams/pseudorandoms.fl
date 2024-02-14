@@ -7,17 +7,19 @@ let SIZE=1500;500
     YMAX=2.5*COUNT/BUCKETS
 
 !window size=SIZE
-    !record filename='pseudorandoms.png'
+    !canvas
+        !path
+            !rect size=SIZE
+            !fill color=1
+    !record filename='pseudorandoms.png' keep_alpha=true
         !canvas color=0
-            !path
-                !rect size=SIZE
-                !fill color=1
             for i;distribution in zip(..3, beta;normal;uniform)
                 let x=i%4 y=0
                 !group translate=(x;y)*DIAGRAM+(DIAGRAM-SIDE)/2 scale=SIDE/100
                     !transform translate=0;-10
                         !path
                             !rect point=0 size=100
+                            !fill color=1
                             !stroke color=0.75 stroke_width=1
                         let start=-3 if distribution == normal else 0
                             end=3 if distribution == normal else 1

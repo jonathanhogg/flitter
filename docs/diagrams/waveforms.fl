@@ -4,17 +4,19 @@ let SIZE=2000;1000
     SIDE=min(DIAGRAM)*0.6
 
 !window size=SIZE
-    !record filename='waveforms.png'
+    !canvas
+        !path
+            !rect size=SIZE
+            !fill color=1
+    !record filename='waveforms.png' keep_alpha=true
         !canvas color=0
-            !path
-                !rect size=SIZE
-                !fill color=1
             for i;waveform in zip(..7, bounce;impulse;sawtooth;sharkfin;sine;square;triangle)
                 let x=i%4 y=i//4
                 !group translate=(x;y)*DIAGRAM+(DIAGRAM-SIDE)/2 scale=SIDE/100
                     !transform translate=0;-10
                         !path
                             !rect point=0 size=100
+                            !fill color=1
                             !stroke color=0.75 stroke_width=1
                         !path
                             !line points=(x;1-waveform(x))*100 for x in 0..1.01|0.01
