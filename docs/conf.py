@@ -9,7 +9,6 @@
 project = 'Flitter'
 copyright = '2024, Jonathan Hogg'
 author = 'Jonathan Hogg'
-release = '1.0.0b4'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
