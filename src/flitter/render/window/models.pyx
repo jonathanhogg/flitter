@@ -271,7 +271,7 @@ cdef class BooleanOperationModel(Model):
         return True
 
     @staticmethod
-    cdef BooleanOperationModel get(str operation, list models):
+    cdef Model get(str operation, list models):
         cdef Model child_model
         cdef list collected_models
         if operation == 'union':
@@ -282,8 +282,20 @@ cdef class BooleanOperationModel(Model):
                 else:
                     collected_models.append(child_model)
             models = collected_models
+        cdef set found = set()
+        cdef int i
+        collected_models = []
+        for i, child_model in enumerate(models):
+            if child_model in found:
+                if operation == 'difference' and i and child_model is collected_models[0]:
+                    return None
+                continue
+            found.add(child_model)
+            collected_models.append(child_model)
+        models = collected_models
+        if len(models) == 1:
+            return models[0]
         cdef str name = operation + '('
-        cdef int i = 0
         for i, child_model in enumerate(models):
             if i:
                 name += ', '
