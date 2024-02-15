@@ -1431,7 +1431,10 @@ cdef class Program:
                     else:
                         n = (<InstructionJumpInt>instruction).value
                         for i in range(n-1, -1, -1):
-                            poke_at(lnames, i, loop_source.source.item(loop_source.position))
+                            if loop_source.position >= loop_source.source.length:
+                                poke_at(lnames, i, null_)
+                            else:
+                                poke_at(lnames, i, loop_source.source.item(loop_source.position))
                             loop_source.position += 1
                         loop_source.iterations += 1
 

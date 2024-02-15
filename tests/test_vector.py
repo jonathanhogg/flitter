@@ -120,6 +120,20 @@ class TestVector(unittest.TestCase):
         bar = Vector.symbol('bar')
         self.assertEqual(Vector.compose([foo, bar]), Vector([float(foo), float(bar)]))
 
+    def test_indexing(self):
+        numbers = Vector.range(10)
+        for i in range(-10, 20):
+            self.assertEqual(numbers[i], i % 10)
+        objects = Vector([str(i) for i in range(10)])
+        for i in range(-10, 20):
+            self.assertEqual(objects[i], str(i % 10))
+
+    def test_slicing(self):
+        numbers = Vector.range(10)
+        self.assertEqual(numbers[Vector.range(-10, 20)], Vector.range(-10, 20) % 10)
+        objects = Vector([str(i) for i in range(10)])
+        self.assertEqual(objects[Vector.range(-10, 20)], [str(i % 10) for i in range(-10, 20)])
+
     def test_range_slice(self):
         TESTS = [
             ((None,), []),
