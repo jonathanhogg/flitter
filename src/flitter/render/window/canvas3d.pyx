@@ -441,8 +441,8 @@ cdef void collect(Node node, Matrix44 transform_matrix, Material material, Rende
         new_render_group.composite = node.get_str('composite', 'over' if render_group is None else render_group.composite).lower()
         vertex_shader = node.get_str('vertex', None)
         fragment_shader = node.get_str('fragment', None)
-        new_render_group.vertex_shader_template = Template(vertex_shader) if vertex_shader is not None else StandardVertexTemplate
-        new_render_group.fragment_shader_template = Template(fragment_shader) if fragment_shader is not None else StandardFragmentTemplate
+        new_render_group.vertex_shader_template = Template(vertex_shader) if vertex_shader is not None else None
+        new_render_group.fragment_shader_template = Template(fragment_shader) if fragment_shader is not None else None
         new_render_group.names = {}
         if node._attributes:
             for name, value in node._attributes.items():
@@ -501,6 +501,24 @@ def fst(tuple ab):
     return ab[0]
 
 
+cdef object get_shader(object glctx, dict shaders, dict names, object vertex_shader_template, object fragment_shader_template):
+    cdef str vertex_shader = vertex_shader_template.render(**names)
+    cdef str fragment_shader = fragment_shader_template.render(**names)
+    cdef tuple source = (vertex_shader, fragment_shader)
+    shader = shaders.get(source, False)
+    if shader is not False:
+        return shader
+    try:
+        shader = glctx.program(vertex_shader=vertex_shader, fragment_shader=fragment_shader)
+    except Exception as exc:
+        logger.error("Group shader compile failed:\n{}", '\n'.join(str(exc).strip().split('\n')[4:]))
+        shader = None
+    else:
+        logger.debug("Compiled group shader program")
+    shaders[source] = shader
+    return shader
+
+
 cdef void render(RenderGroup render_group, Camera camera, glctx, dict objects, dict references):
     cdef list instances
     cdef cython.float[:, :] instances_data, lights_data
@@ -524,21 +542,13 @@ cdef void render(RenderGroup render_group, Camera camera, glctx, dict objects, d
     cdef dict names = render_group.names.copy()
     names.update({'max_lights': render_group.max_lights, 'Ambient': LightType.Ambient, 'Directional': LightType.Directional,
                   'Point': LightType.Point, 'Spot': LightType.Spot})
-    cdef str vertex_shader = render_group.vertex_shader_template.render(**names)
-    cdef str fragment_shader = render_group.fragment_shader_template.render(**names)
-    cdef tuple source = (vertex_shader, fragment_shader)
-    shader = shaders.get(source)
+    shader = None
+    if render_group.vertex_shader_template is not None or render_group.fragment_shader_template is not None:
+        shader = get_shader(glctx, shaders, names,
+                            render_group.vertex_shader_template or StandardVertexTemplate,
+                            render_group.fragment_shader_template or StandardFragmentTemplate)
     if shader is None:
-        try:
-            shader = glctx.program(vertex_shader=vertex_shader, fragment_shader=fragment_shader)
-        except Exception as exc:
-            logger.error("Shader program compile failed:\n{}", '\n'.join(str(exc).strip().split('\n')[4:]))
-            shader = False
-        else:
-            logger.debug("Compiled shader program")
-        shaders[source] = shader
-    if shader is False:
-        return
+        shader = get_shader(glctx, shaders, names, StandardVertexTemplate, StandardFragmentTemplate)
     cdef str name
     cdef Vector value
     for name, value in render_group.names.items():

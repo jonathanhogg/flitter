@@ -880,8 +880,8 @@ Unfortunately, this does not hold for GLSL shader code, which resolves to
 strings that are parsed and compiled on-the-fly and so parse/compile errors in
 this will cause the runtime to ignore the code completely. This will cause
 `!shader` nodes to fall-back to their default pass-through behaviour and
-models contained in a `!canvas3d` group with a custom shader will stop being
-rendered.
+models contained in a `!canvas3d` group with a custom shader will fall back on
+the default shader.
 
 It is generally a good idea to keep the console log from **Flitter** visible
 when making live changes to be able to spot errors if they come up.
