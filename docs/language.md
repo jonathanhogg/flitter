@@ -321,13 +321,11 @@ itself be a multi-element vector.
 
 The rules for indexing/slicing an *n*-element vector, *src*, are:
 
-- If *index* is `null`, the operation will evaluate to `null`
+- If either *index* or *src* is `null`, the operation will evaluate to `null`
 - *index* **must** be an entirely numeric vector or it will be treated as `null`
 - *index* is considered element-at-a-time
 - Non-integer indices are *floor*-ed to the next integer value down
-- Indices count from $0$, values less than $0$ or greater than $n-1$ are invalid
-and will be ignored
-- Otherwise, the matching element from *src* will be extracted
+- Indices are used, modulo the length of *src*, to select an item from *src*
 - All matching elements are composed together into a new vector
 
 [Ranges](#ranges) are a convenient way to create indices for slicing a vector,
@@ -336,15 +334,22 @@ than 5 elements then it just evaluates to `xs`. Indices do not need to be
 contiguous or in any specific order. It is perfectly valid to use `x[1;6;0]`
 to extract the 2nd, 7th and 1st items, in that order.
 
-There is no way to reference items from the end of a vector except with the use
-of the `len()` built-in function, e.g., `xs[len(xs)-1]` to extract the last
-item of `xs`.
+As indices are used modulo the length of the source vector, indices past the
+end of the vector will wrap around to the beginning and negative indices will
+select items backwards from the end. This means that `xs[-1]` can be used to
+pick out the last element of `xs`. It also means that all index values of a
+single element vector will return that element, and that a value can be easily
+expanded out to a long vector with a range. For example, the following will set
+`xs` to the number `5` repeated 100 times:
+
+```
+let xs = 5[..100]
+```
 
 Indexing of Unicode string vectors extracts the *n*-th element of the vector,
 *not* the *n*-th character of the string. Therefore `("Hello ";"world!")[0]` is
-`"Hello "`. See the `ord()` and `chr()` [text
-functions](builtins.md#text-functions) for a mechanism for extracting individual
-characters.
+`"Hello "`. See the [text functions](builtins.md#text-functions) for a mechanism
+for extracting individual characters or ranges of characters.
 
 ## Operators
 
@@ -445,7 +450,7 @@ let x=1 y=2
     z=x*y
 ```
 
-A let binding may also specify multiple names separated with a semicolon to
+A let binding may also specify multiple names separated with semicolons to
 do an unpacked vector binding. For example:
 
 ```flitter
@@ -453,9 +458,20 @@ let x;y=SIZE/2
 ```
 
 This will pick off the first two items from the vector result of evaluating the
-expression and bind them in order to the names `x` and `y`. If the vector is
-longer than the number of names given then additional items are ignored. If the
-vector is shorter then the unmatched names will be bound to `null`.
+expression and bind them in order to the names `x` and `y`. The above code is
+roughly the same as:
+
+```flitter
+let src=SIZE/2
+    x=src[0]
+    y=src[1]
+```
+
+Therefore, unpacked binding follows the rules for [indexing](#indexing). If the
+source vector is longer than the number of names given then additional items are
+ignored. If the vector is shorter, then the the additional names will be bound
+to items wrapped around from the start again. If the vector is `null` then all
+names will be bound to `null`.
 
 Names introduced with a `let` can redefine engine-supplied values, like `beat`,
 and built-ins, like `sin`.
@@ -569,9 +585,10 @@ vector that represents the result value of the loop. Normally this would be a
 vector of nodes to be appended to some enclosing node.
 
 When multiple names are given, each iteration will take multiple values from the
-source vector. If there are not enough values left in the source vector to bind
-all names in the last iteration, then the names lacking values will be bound to
-`null`.
+source vector. Unlike [unpacked vector binding](#let-expressions), if there are
+not enough values left in the source vector to bind all names in the last
+iteration, then the names lacking matching values will be bound to `null`, i.e.,
+a `for` loop cannot iterate past the end of the source vector.
 
 Iterating with multiple names is particularly useful combined with the `zip()`
 function, which merges multiple vectors together:

@@ -907,44 +907,36 @@ cdef class Vector:
         return result
 
     cdef Vector slice(self, Vector index):
-        if index.numbers == NULL:
+        cdef int i, j, m = index.length, n = self.length
+        if index.numbers == NULL or n == 0:
             return null_
-        cdef int i, j, k = 0, m = 0, n = self.length, o = index.length
-        for i in range(o):
-            if 0 <= index.numbers[i] < n:
-                m += 1
         cdef Vector result = Vector.__new__(Vector)
         cdef tuple src = self.objects, dest
         cdef PyObject* objptr
         if src is not None:
             result.objects = dest = PyTuple_New(m)
-            for i in range(o):
-                j = <int>c_floor(index.numbers[i])
-                if j >= 0 and j < n:
-                    objptr = PyTuple_GET_ITEM(src, j)
-                    Py_INCREF(<object>objptr)
-                    PyTuple_SET_ITEM(dest, k, <object>objptr)
-                    k += 1
+            for i in range(m):
+                j = (<int>c_floor(index.numbers[i])) % n
+                objptr = PyTuple_GET_ITEM(src, j)
+                Py_INCREF(<object>objptr)
+                PyTuple_SET_ITEM(dest, i, <object>objptr)
+            result.length = m
         elif m:
             result.allocate_numbers(m)
-            for i in range(o):
-                j = <int>c_floor(index.numbers[i])
-                if j >= 0 and j < n:
-                    result.numbers[k] = self.numbers[j]
-                    k += 1
-        assert k == m
-        result.length = k
+            for i in range(m):
+                j = (<int>c_floor(index.numbers[i])) % n
+                result.numbers[i] = self.numbers[j]
         return result
 
     cdef Vector item(self, int i):
         cdef int n = self.length
-        if i < 0 or i >= n:
+        if n == 0:
             return null_
         cdef Vector result = Vector.__new__(Vector)
         cdef tuple objects = self.objects
         cdef PyObject* objptr
         if objects is not None:
-            objptr = PyTuple_GET_ITEM(objects, i)
+            objptr = PyTuple_GET_ITEM(objects, i % n)
             if type(<object>objptr) is float:
                 result.allocate_numbers(1)
                 result.numbers[0] = PyFloat_AS_DOUBLE(<object>objptr)
@@ -956,7 +948,7 @@ cdef class Vector:
                 result.length = 1
         else:
             result.allocate_numbers(1)
-            result.numbers[0] = self.numbers[i]
+            result.numbers[0] = self.numbers[i % n]
         return result
 
     @cython.cdivision(True)
