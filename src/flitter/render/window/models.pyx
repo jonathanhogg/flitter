@@ -19,6 +19,7 @@ cdef double Tau = 6.283185307179586
 cdef double RootHalf = sqrt(0.5)
 cdef double DefaultSnapAngle = 0.05
 cdef int DefaultSegments = 64
+cdef Matrix44 IdentityTransform = Matrix44.__new__(Matrix44)
 
 
 cdef class Model:
@@ -64,6 +65,9 @@ cdef class Model:
         logger.trace("Prepared model {} with {} vertices and {} faces", name, len(trimesh_model.vertices), len(trimesh_model.faces))
         objects[name] = buffers
         return buffers
+
+    cdef tuple instance(self, Matrix44 model_matrix):
+        return self, model_matrix
 
     cdef Model flatten(self):
         return FlattenedModel.get(self)
@@ -204,7 +208,9 @@ cdef class TransformedModel(ModelTransformer):
     cdef Matrix44 transform_matrix
 
     @staticmethod
-    cdef TransformedModel get(Model original, Matrix44 transform_matrix):
+    cdef Model get(Model original, Matrix44 transform_matrix):
+        if transform_matrix.eq(IdentityTransform):
+            return original
         cdef str name = f'{original.name}@{hex(transform_matrix.hash(False))[3:]}'
         cdef TransformedModel model = ModelCache.pop(name, None)
         if model is None:
@@ -214,6 +220,9 @@ cdef class TransformedModel(ModelTransformer):
             model.transform_matrix = transform_matrix
         ModelCache[name] = model
         return model
+
+    cdef tuple instance(self, Matrix44 model_matrix):
+        return self.original, model_matrix.mmul(self.transform_matrix)
 
     cdef Model transform(self, Matrix44 transform_matrix):
         return TransformedModel.get(self.original, transform_matrix.mmul(self.transform_matrix))
@@ -282,20 +291,24 @@ cdef class BooleanOperationModel(Model):
                 else:
                     collected_models.append(child_model)
             models = collected_models
-        cdef set found = set()
-        cdef int i
+        cdef set existing = set()
         collected_models = []
-        for i, child_model in enumerate(models):
-            if child_model in found:
-                if operation == 'difference' and i and child_model is collected_models[0]:
+        for child_model in models:
+            if child_model is None:
+                continue
+            if child_model in existing:
+                if operation == 'difference' and len(collected_models) and child_model is collected_models[0]:
                     return None
                 continue
-            found.add(child_model)
+            existing.add(child_model)
             collected_models.append(child_model)
         models = collected_models
+        if len(models) == 0:
+            return None
         if len(models) == 1:
             return models[0]
         cdef str name = operation + '('
+        cdef int i
         for i, child_model in enumerate(models):
             if i:
                 name += ', '

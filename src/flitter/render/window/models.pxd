@@ -15,6 +15,7 @@ cdef class Model:
     cdef bint check_valid(self)
     cdef void build_trimesh_model(self)
     cdef tuple get_buffers(self, object glctx, dict objects)
+    cdef tuple instance(self, Matrix44 model_matrix)
 
     cdef Model flatten(self)
     cdef Model invert(self)

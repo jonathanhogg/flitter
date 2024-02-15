@@ -351,56 +351,35 @@ cdef Matrix44 get_model_transform(Node node, Matrix44 transform_matrix):
 cdef Model get_model(Node node, bint top):
     cdef Node child
     cdef Model model = None
-    cdef Model child_model = None
     cdef Vector origin, normal
     cdef list models
     cdef double snap_angle, minimum_area
     if node.kind == 'intersect':
         models = []
         for child in node._children:
-            child_model = get_model(child, False)
-            if child_model is not None:
-                models.append(child_model)
-        if models:
-            model = models[0] if len(models) == 1 else Model.intersect(models)
-    elif node.kind == 'union':
+            models.append(get_model(child, False))
+        model = Model.intersect(models)
+    elif node.kind == 'union' or node.kind == 'transform':
         models = []
         for child in node._children:
-            child_model = get_model(child, False)
-            if child_model is not None:
-                models.append(child_model)
-        if models:
-            model = models[0] if len(models) == 1 else Model.union(models)
+            models.append(get_model(child, False))
+        model = Model.union(models)
+        if node.kind == 'transform':
+            model = model.transform(update_transform_matrix(node, IdentityTransform))
     elif node.kind == 'difference':
         models = []
         for child in node._children:
-            child_model = get_model(child, False)
-            if child_model is not None:
-                models.append(child_model)
-        if models:
-            model = models[0] if len(models) == 1 else Model.difference(models)
-    elif node.kind == 'transform':
-        models = []
-        for child in node._children:
-            child_model = get_model(child, False)
-            if child_model is not None:
-                models.append(child_model)
-        if models:
-            model = models[0] if len(models) == 1 else Model.union(models)
-            if model is not None and (transform_matrix := update_transform_matrix(node, IdentityTransform)) is not IdentityTransform:
-                model = model.transform(transform_matrix)
+            models.append(get_model(child, False))
+        model = Model.difference(models)
     elif node.kind == 'slice':
         normal = node.get_fvec('normal', 3, null_)
         origin = node.get_fvec('origin', 3, Zero3)
         models = []
         for child in node._children:
-            child_model = get_model(child, False)
-            if child_model is not None:
-                models.append(child_model)
-        if models:
-            model = models[0] if len(models) == 1 else Model.union(models)
-            if model is not None and normal.as_bool():
-                model = model.slice(origin, normal)
+            models.append(get_model(child, False))
+        model = Model.union(models)
+        if model is not None and normal.as_bool():
+            model = model.slice(origin, normal)
     else:
         if node.kind == 'box':
             model = Model.get_box(node)
@@ -421,8 +400,8 @@ cdef Model get_model(Node node, bint top):
                 model = model.snap_edges(snap_angle, minimum_area)
             if node.get_bool('invert', False):
                 model = model.invert()
-        elif (transform_matrix := get_model_transform(node, IdentityTransform)) is not IdentityTransform:
-            model = model.transform(transform_matrix)
+        elif node.kind != 'transform':
+            model = model.transform(get_model_transform(node, IdentityTransform))
     return model
 
 
@@ -437,6 +416,7 @@ cdef void collect(Node node, Matrix44 transform_matrix, Material material, Rende
     cdef Instance instance
     cdef tuple model_textures
     cdef RenderGroup new_render_group
+    cdef Matrix44 model_matrix
 
     if node.kind == 'material':
         material = material.update(node)
@@ -508,9 +488,10 @@ cdef void collect(Node node, Matrix44 transform_matrix, Material material, Rende
             cameras[camera_id] = default_camera.derive(node, transform_matrix, max_samples)
 
     elif (model := get_model(node, True)) is not None:
+        model, model_matrix = model.instance(get_model_transform(node, transform_matrix))
         material = material.update(node)
         instance = Instance.__new__(Instance)
-        instance.model_matrix = get_model_transform(node, transform_matrix)
+        instance.model_matrix = model_matrix
         instance.material = material
         model_textures = (model, material.textures)
         (<list>render_group.instances.setdefault(model_textures, [])).append(instance)
