@@ -506,8 +506,12 @@ class TestLocalVars(unittest.TestCase):
         self.program.local_load(1)
         self.program.add()
         self.program.local_drop(2)
+        self.program.literal([1, 2])
+        self.program.local_push(3)
+        self.program.local_load(0)
+        self.program.local_drop(3)
         stack = self.program.execute(self.context)
-        self.assertEqual(stack, [2, 3])
+        self.assertEqual(stack, [2, 3, 1])
 
 
 class TestFunc(unittest.TestCase):
