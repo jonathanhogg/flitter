@@ -551,54 +551,67 @@ cdef void render(RenderGroup render_group, Camera camera, glctx, dict objects, d
         shader = get_shader(glctx, shaders, names, StandardVertexTemplate, StandardFragmentTemplate)
     cdef str name
     cdef Vector value
+    cdef int base_unit_id = 1
     for name, value in render_group.names.items():
         if name in shader:
             member = shader[name]
             if isinstance(member, moderngl.Uniform):
-                set_uniform_vector(member, value)
+                if member.fmt == '1i' and (scene_node := references.get(value.as_string())) is not None \
+                        and hasattr(scene_node, 'texture') and scene_node.texture is not None:
+                    sampler = glctx.sampler(texture=scene_node.texture, filter=(moderngl.NEAREST, moderngl.NEAREST))
+                    sampler.use(base_unit_id)
+                    member.value = base_unit_id
+                    base_unit_id += 1
+                elif value.numbers != NULL:
+                    set_uniform_vector(member, value)
     shader['pv_matrix'] = camera.pv_matrix
     shader['orthographic'] = camera.orthographic
-    shader['monochrome'] = camera.monochrome
-    shader['tint'] = camera.tint
+    if 'monochrome' in shader:
+        shader['monochrome'] = camera.monochrome
+    if 'tint' in shader:
+        shader['tint'] = camera.tint
     shader['view_position'] = camera.position
     shader['view_focus'] = camera.focus
-    shader['fog_min'] = camera.fog_min
-    shader['fog_max'] = camera.fog_max
-    shader['fog_color'] = camera.fog_color
-    shader['fog_curve'] = camera.fog_curve
-    lights_data = view.array((render_group.max_lights, 16), 4, 'f')
-    i = 0
-    cdef RenderGroup group = render_group
-    while group is not None:
-        for light in group.lights:
-            if i == render_group.max_lights:
-                break
-            dest = &lights_data[i, 0]
-            dest[3] = <cython.float>(<int>light.type)
-            dest[7] = light.inner_cone
-            dest[11] = light.outer_cone
-            for j in range(3):
-                dest[j] = light.color.numbers[j]
-            if light.position is not None:
+    if 'fog_color' in shader:
+        shader['fog_min'] = camera.fog_min
+        shader['fog_max'] = camera.fog_max
+        shader['fog_color'] = camera.fog_color
+        shader['fog_curve'] = camera.fog_curve
+    cdef RenderGroup group
+    if 'nlights' in shader:
+        lights_data = view.array((render_group.max_lights, 16), 4, 'f')
+        i = 0
+        group = render_group
+        while group is not None:
+            for light in group.lights:
+                if i == render_group.max_lights:
+                    break
+                dest = &lights_data[i, 0]
+                dest[3] = <cython.float>(<int>light.type)
+                dest[7] = light.inner_cone
+                dest[11] = light.outer_cone
                 for j in range(3):
-                    dest[j+4] = light.position.numbers[j]
-            if light.direction is not None:
-                for j in range(3):
-                    dest[j+8] = light.direction.numbers[j]
-            for j in range(4):
-                dest[j+12] = light.falloff.numbers[j]
-            i += 1
-        group = group.parent_group
-    shader['nlights'] = i
-    shader['lights_data'].binding = 1
-    name = f'canvas3d_lights-{render_group.max_lights}'
-    lights_buffer = objects.get(name)
-    if lights_buffer is None:
-        lights_buffer = glctx.buffer(lights_data)
-        objects[name] = lights_buffer
-    else:
-        lights_buffer.write(lights_data)
-    lights_buffer.bind_to_uniform_block(1)
+                    dest[j] = light.color.numbers[j]
+                if light.position is not None:
+                    for j in range(3):
+                        dest[j+4] = light.position.numbers[j]
+                if light.direction is not None:
+                    for j in range(3):
+                        dest[j+8] = light.direction.numbers[j]
+                for j in range(4):
+                    dest[j+12] = light.falloff.numbers[j]
+                i += 1
+            group = group.parent_group
+        shader['nlights'] = i
+        shader['lights_data'].binding = 1
+        name = f'canvas3d_lights-{render_group.max_lights}'
+        lights_buffer = objects.get(name)
+        if lights_buffer is None:
+            lights_buffer = glctx.buffer(lights_data)
+            objects[name] = lights_buffer
+        else:
+            lights_buffer.write(lights_data)
+        lights_buffer.bind_to_uniform_block(1)
     cdef int flags = moderngl.BLEND
     if render_group.depth_test:
         flags |= moderngl.DEPTH_TEST
@@ -673,7 +686,8 @@ cdef void render(RenderGroup render_group, Camera camera, glctx, dict objects, d
                 dest[9] = material.roughness
                 dest[10] = material.occlusion
                 k += 1
-        dispatch_instances(glctx, objects, shader, model, k, instances_data, textures if shader_supports_textures else None, references)
+        dispatch_instances(glctx, objects, shader, model, k, instances_data,
+                           textures if shader_supports_textures else None, references, base_unit_id)
     if transparent_objects:
         n = len(transparent_objects)
         transparent_objects.sort(key=fst)
@@ -703,14 +717,17 @@ cdef void render(RenderGroup render_group, Camera camera, glctx, dict objects, d
             dest[10] = material.occlusion
             k += 1
             if i == n-1 or (<tuple>transparent_objects[i+1])[1] is not model:
-                dispatch_instances(glctx, objects, shader, model, k, instances_data, material.textures if shader_supports_textures else None, references)
+                dispatch_instances(glctx, objects, shader, model, k, instances_data,
+                                   material.textures if shader_supports_textures else None, references, base_unit_id)
                 k = 0
         if k:
-            dispatch_instances(glctx, objects, shader, model, k, instances_data, material.textures if shader_supports_textures else None, references)
+            dispatch_instances(glctx, objects, shader, model, k, instances_data,
+                               material.textures if shader_supports_textures else None, references, base_unit_id)
     glctx.disable(flags)
 
 
-cdef void dispatch_instances(glctx, dict objects, shader, Model model, int count, cython.float[:, :] instances_data, Textures textures, dict references):
+cdef void dispatch_instances(glctx, dict objects, shader, Model model, int count, cython.float[:, :] instances_data,
+                             Textures textures, dict references, int base_unit_id):
     vertex_buffer, index_buffer = model.get_buffers(glctx, objects)
     if vertex_buffer is None:
         return
@@ -724,66 +741,72 @@ cdef void dispatch_instances(glctx, dict objects, shader, Model model, int count
             if textures.albedo_id in unit_ids:
                 unit_id = unit_ids[textures.albedo_id]
             else:
-                unit_id = len(unit_ids) + 1
+                unit_id = base_unit_id
                 unit_ids[textures.albedo_id] = unit_id
                 sampler = glctx.sampler(texture=scene_node.texture, filter=(moderngl.LINEAR, moderngl.LINEAR))
                 sampler.use(unit_id)
                 samplers.append(sampler)
+                base_unit_id += 1
             shader['use_albedo_texture'] = True
             shader['albedo_texture'] = unit_id
         if (scene_node := references.get(textures.metal_id)) is not None and hasattr(scene_node, 'texture') and scene_node.texture is not None:
             if textures.metal_id in unit_ids:
                 unit_id = unit_ids[textures.metal_id]
             else:
-                unit_id = len(unit_ids) + 1
+                unit_id = base_unit_id
                 unit_ids[textures.metal_id] = unit_id
                 sampler = glctx.sampler(texture=scene_node.texture, filter=(moderngl.LINEAR, moderngl.LINEAR))
                 sampler.use(unit_id)
                 samplers.append(sampler)
+                base_unit_id += 1
             shader['use_metal_texture'] = True
             shader['metal_texture'] = unit_id
         if (scene_node := references.get(textures.roughness_id)) is not None and hasattr(scene_node, 'texture') and scene_node.texture is not None:
             if textures.roughness_id in unit_ids:
                 unit_id = unit_ids[textures.roughness_id]
             else:
-                unit_id = len(unit_ids) + 1
+                unit_id = base_unit_id
                 unit_ids[textures.roughness_id] = unit_id
                 sampler = glctx.sampler(texture=scene_node.texture, filter=(moderngl.LINEAR, moderngl.LINEAR))
                 sampler.use(unit_id)
                 samplers.append(sampler)
+                base_unit_id += 1
             shader['use_roughness_texture'] = True
             shader['roughness_texture'] = unit_id
         if (scene_node := references.get(textures.occlusion_id)) is not None and hasattr(scene_node, 'texture') and scene_node.texture is not None:
             if textures.occlusion_id in unit_ids:
                 unit_id = unit_ids[textures.occlusion_id]
             else:
-                unit_id = len(unit_ids) + 1
+                unit_id = base_unit_id
                 unit_ids[textures.occlusion_id] = unit_id
                 sampler = glctx.sampler(texture=scene_node.texture, filter=(moderngl.LINEAR, moderngl.LINEAR))
                 sampler.use(unit_id)
                 samplers.append(sampler)
+                base_unit_id += 1
             shader['use_occlusion_texture'] = True
             shader['occlusion_texture'] = unit_id
         if (scene_node := references.get(textures.emissive_id)) is not None and hasattr(scene_node, 'texture') and scene_node.texture is not None:
             if textures.emissive_id in unit_ids:
                 unit_id = unit_ids[textures.emissive_id]
             else:
-                unit_id = len(unit_ids) + 1
+                unit_id = base_unit_id
                 unit_ids[textures.emissive_id] = unit_id
                 sampler = glctx.sampler(texture=scene_node.texture, filter=(moderngl.LINEAR, moderngl.LINEAR))
                 sampler.use(unit_id)
                 samplers.append(sampler)
+                base_unit_id += 1
             shader['use_emissive_texture'] = True
             shader['emissive_texture'] = unit_id
         if (scene_node := references.get(textures.transparency_id)) is not None and hasattr(scene_node, 'texture') and scene_node.texture is not None:
             if textures.transparency_id in unit_ids:
                 unit_id = unit_ids[textures.transparency_id]
             else:
-                unit_id = len(unit_ids) + 1
+                unit_id = base_unit_id
                 unit_ids[textures.transparency_id] = unit_id
                 sampler = glctx.sampler(texture=scene_node.texture, filter=(moderngl.LINEAR, moderngl.LINEAR))
                 sampler.use(unit_id)
                 samplers.append(sampler)
+                base_unit_id += 1
             shader['use_transparency_texture'] = True
             shader['transparency_texture'] = unit_id
     instances_buffer = glctx.buffer(instances_data)
