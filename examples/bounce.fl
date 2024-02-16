@@ -18,7 +18,7 @@ let SIZE=1080;1080
     !barrier position=0;-50;0 normal=0;1;0 restitution=0.95
     !barrier position=0;50;0 normal=0;-1;0 restitution=0.95
     !constant acceleration=0;0;-200
-    !collision strength=1k power=2
+    !collision strength=100 power=2
 
 !window size=SIZE colorbits=16
     @bloom_filter radius=hypot(SIZE)/200
