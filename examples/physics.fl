@@ -2,7 +2,7 @@
 -- To record a 30 second video, run:
 -- flitter examples/physics.fl --verbose --lockstep --define RECORD=1
 
-import bloom_filter from 'common/bloom.fl'
+import bloom_filter from 'common/filters.fl'
 
 let SIZE=(1080;1080) * (1 if RECORD else 2)
     CYCLE=beat/30
@@ -29,7 +29,7 @@ let bubble_radii=MIN_BUBBLE_RADIUS+(1+noise(:radii, i*NOISE_SCALE, NOISE_T))/2*(
 
 !window size=SIZE colorbits=16
     !record filename=('blobs.m4v' if RECORD and CYCLE > 1) codec=:hevc crf=20 limit=30
-        @bloom_filter size=SIZE/2 radius=hypot(SIZE)/300
+        @bloom_filter blursize=SIZE/2 radius=hypot(SIZE)/300
             !canvas3d viewpoint=0;0;-1200 focus=0 near=1 far=2000 fov=60/360 samples=4
                 !light color=2;0;0
                 !light color=-1.9;0;0 direction=0;0;1

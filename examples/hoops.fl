@@ -4,7 +4,7 @@
 let SIZE=1920;1080 RADIUS=hypot(SIZE)*0.25 THICKNESS=hypot(SIZE)*0.25 OFFSET=SIZE*0.05 N=10
 
 !window size=SIZE*2/3
-    !shader size=SIZE fragment=read("glsl/feedback.frag") mixing=0.01 glow=0.5 scale=1.3
+    !shader size=SIZE fragment=read("glsl/feedback.frag") mixer=0.01 glow=0.5 scale=1.3
         !canvas size=SIZE composite=:add antialias=N<25
             !group#arcs translate=SIZE/2
                 for i in ..N

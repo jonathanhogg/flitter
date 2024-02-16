@@ -1,0 +1,60 @@
+
+
+func rbox(_, position=0, size=1, rotation=null, radius=null, segments=null)
+    let radius=clamp(radius/size if radius != null else 0.25, 0, 0.5)
+        inner=1-radius*2
+        segments=max(1, segments//8)*8 if segments != null
+    !union position=position size=size rotation=rotation
+        if inner[1] and inner[2]
+            !box size=1;inner[1];inner[2]
+        if inner[0] and inner[1]
+            !box size=inner[0];1;inner[2]
+        if inner[0] and inner[1]
+            !box size=inner[0];inner[1];1
+        if radius[0] and radius[1] and radius[2]
+            for x in (-1;1)*inner[0]/2
+                for y in (-1;1)*inner[1]/2
+                    for z in (-1;1)*inner[2]/2
+                        !sphere segments=segments position=x;y;z size=radius
+        if radius[0] and radius[1] and inner[2]
+            for x in (-1;1)*inner[0]/2
+                for y in (-1;1)*inner[1]/2
+                    !transform translate=x;y;0 scale=radius[0];radius[1];inner[2]
+                        !cylinder segments=segments
+        if radius[0] and inner[1] and radius[2]
+            for x in (-1;1)*inner[0]/2
+                for z in (-1;1)*inner[2]/2
+                    !transform translate=x;0;z scale=radius[0];inner[1];radius[2]
+                        !cylinder segments=segments rotation=0.25;0;0
+        if inner[0] and radius[1] and radius[2]
+            for y in (-1;1)*inner[1]/2
+                for z in (-1;1)*inner[2]/2
+                    !transform translate=0;y;z scale=inner[0];radius[1];radius[2]
+                        !cylinder segments=segments rotation=0;0.25;0
+
+
+!window size=1920;1080
+    !canvas3d
+        !light color=0.2
+        !light color=0.8 direction=-1
+        !material color=1 roughness=0.3
+            !transform rotate=beat/30 scale=250
+                let b=beat//6%6
+                if b == 0
+                    -- rounded box
+                    @rbox
+                elif b == 1
+                    -- simple box
+                    @rbox radius=0
+                elif b == 2
+                    -- rounded edges in one plane
+                    @rbox radius=0.25;0.25;0
+                elif b == 3
+                    -- cylinder
+                    @rbox radius=0.5;0.5;0
+                elif b == 4
+                    -- capsule
+                    @rbox size=1;1;2 radius=0.5
+                else
+                    -- sphere
+                    @rbox radius=0.5

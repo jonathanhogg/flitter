@@ -13,7 +13,7 @@
 
 %pragma tempo 60
 
-import bloom_filter from 'common/bloom.fl'
+import bloom_filter from 'common/filters.fl'
 
 let SIZE=1920;1080
 
