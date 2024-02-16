@@ -11,7 +11,7 @@ from .. import name_patch
 from ..model cimport Vector, Node, StateDict, null_
 from ..language.functions cimport normal
 
-from libc.math cimport sqrt, isinf, isnan, abs
+from libc.math cimport sqrt, isinf, isnan, abs, floor
 from cpython cimport PyObject
 
 cdef extern from "Python.h":
@@ -26,6 +26,7 @@ logger = name_patch(logger, __name__)
 
 cdef Vector VELOCITY = Vector._symbol('velocity')
 cdef Vector CLOCK = Vector._symbol('clock')
+cdef Vector RUN = Vector._symbol('run')
 
 cdef normal RandomSource = normal('_physics')
 cdef unsigned long long RandomIndex = 0
@@ -331,6 +332,7 @@ cdef class PhysicsSystem:
         pass
 
     async def update(self, engine, Node node, double clock, **kwargs):
+        cdef long run = node.get_int('run', 0)
         cdef long dimensions = node.get_int('dimensions', 0)
         if dimensions < 1:
             return
@@ -350,6 +352,22 @@ cdef class PhysicsSystem:
             clock = time_vector.numbers[0]
         else:
             clock = 0
+        cdef Vector last_run_vector = state.get_item(state_prefix.concat(RUN))
+        cdef long last_run
+        if last_run_vector.length == 1 and last_run_vector.numbers != NULL:
+            last_run = <long>floor(last_run_vector.numbers[0])
+        else:
+            last_run = run
+        cdef Vector state_key
+        if run != last_run:
+            logger.debug("Reset physics system {!r} for run {}", state_prefix, run)
+            for state_key in self.state_keys:
+                state.set_item(state_key, null_)
+            self.state_keys = set()
+        cdef Vector run_vector = Vector.__new__(Vector)
+        run_vector.allocate_numbers(1)
+        run_vector.numbers[0] = run
+        state.set_item(state_prefix.concat(RUN), run_vector)
         cdef Vector zero = Vector.__new__(Vector)
         zero.allocate_numbers(dimensions)
         cdef long i
@@ -437,7 +455,6 @@ cdef class PhysicsSystem:
         time_vector.allocate_numbers(1)
         time_vector.numbers[0] = clock
         state.set_item(state_prefix.concat(CLOCK), time_vector)
-        cdef Vector state_key
         for state_key in old_state_keys:
             state.set_item(state_key, null_)
         self.state_keys = new_state_keys

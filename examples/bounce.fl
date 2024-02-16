@@ -1,14 +1,17 @@
 
+%pragma tempo 60
+
 import bloom_filter from 'common/bloom.fl'
 
 let SIZE=1080;1080
     NBALLS=120
-    RADII=(beta(:radii)[..NBALLS]+0.5)*5
+    RUN=beat/20
+    RADII=(beta(:radii;RUN)[..NBALLS]+0.5)*5
 
-!physics dimensions=3 state=:balls
+!physics dimensions=3 state=:balls run=RUN
     for i in ..NBALLS
-        let start=(uniform(:pos;i)[..3]-0.5)*100+(0;0;50)
-            velocity=normal(:xy;i)[..2]*50;200*beta(:z)[i]
+        let start=(uniform(:pos;RUN;i)[..3]-0.5)*100+(0;0;50)
+            velocity=normal(:xy;RUN;i)[..2]*50;200*beta(:z;RUN)[i]
         !particle id=i position=start velocity=velocity radius=RADII[i] mass=RADII[i]**2/10
     !drag strength=50u
     !barrier position=0;0;0 normal=0;0;1 restitution=0.95

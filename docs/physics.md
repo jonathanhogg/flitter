@@ -41,6 +41,8 @@ greater than or equal to `1`)
 - `time` is an optional attribute providing the simulation clock
 - `resolution` is an optional attribute specifying a *minimum* simulation step
 interval
+- `run` specifies a "run" number for this simulation, non-integer values will
+be *floor*ed.
 
 The simulation maintains an internal simulation clock which begins at zero and
 advances in steps equal to the minimum of `resolution` or the difference between
@@ -61,6 +63,11 @@ simulation will advance in time steps equal to the frame interval.
 If `time` *is* specified then `resolution` should be set to a sensible matching
 value somewhere at or above the expected increment in `time` at the engine
 frame-rate.
+
+If `run` changes then the current system state is abandoned and the simulation
+will begin again from the starting positions and velocities of each particle.
+As this value is *floor*ed before being used, a simulation can be easily reset
+at intervals by setting `run=beat/interval`.
 
 All other nodes described below must be contained with the `!physics` node.
 
@@ -406,6 +413,7 @@ dictionary:
 - *prefix* - the last simulation timestamp (either the last value of the `time`
 attribute or the internal engine frame time)
 - *prefix*`;:clock` - the internal simulation clock
+- *prefix*`;:run` - the last run number (as an integer value)
 - *prefix*`;`*id* - the last position of the particle
 - *prefix*`;`*id*`;:velocity` - the last velocity of the particle
 
