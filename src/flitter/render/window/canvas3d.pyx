@@ -519,7 +519,7 @@ cdef object get_shader(object glctx, dict shaders, dict names, object vertex_sha
     return shader
 
 
-cdef void render(RenderGroup render_group, Camera camera, glctx, dict objects, dict references):
+cdef void render(RenderTarget render_target, RenderGroup render_group, Camera camera, glctx, dict objects, dict references):
     cdef list instances
     cdef cython.float[:, :] instances_data, lights_data
     cdef Material material
@@ -689,6 +689,7 @@ cdef void render(RenderGroup render_group, Camera camera, glctx, dict objects, d
         dispatch_instances(glctx, objects, shader, model, k, instances_data,
                            textures if shader_supports_textures else None, references, base_unit_id)
     if transparent_objects:
+        render_target.depth_write(False)
         n = len(transparent_objects)
         transparent_objects.sort(key=fst)
         instances_data = view.array((n, 36), 4, 'f')
@@ -723,6 +724,7 @@ cdef void render(RenderGroup render_group, Camera camera, glctx, dict objects, d
         if k:
             dispatch_instances(glctx, objects, shader, model, k, instances_data,
                                material.textures if shader_supports_textures else None, references, base_unit_id)
+        render_target.depth_write(True)
     glctx.disable(flags)
 
 
@@ -920,6 +922,9 @@ cdef class RenderTarget:
         if self.image_framebuffer is not None:
             glctx.copy_framebuffer(self.image_framebuffer, self.render_framebuffer)
 
+    def depth_write(self, bint enabled):
+        self.render_framebuffer.depth_mask = enabled
+
 
 class Canvas3D(SceneNode):
     def __init__(self, glctx):
@@ -994,7 +999,7 @@ class Canvas3D(SceneNode):
         cdef RenderGroup render_group
         for render_group in render_groups:
             if render_group.instances:
-                render(render_group, primary_camera, self.glctx, objects, references)
+                render(primary_render_target, render_group, primary_camera, self.glctx, objects, references)
         primary_render_target.finalize(self.glctx)
         cdef Camera camera
         cdef RenderTarget secondary_render_target
@@ -1009,7 +1014,7 @@ class Canvas3D(SceneNode):
                         secondary_render_target.prepare(self.glctx, camera)
                         for render_group in render_groups:
                             if render_group.instances:
-                                render(render_group, camera, self.glctx, objects, references)
+                                render(secondary_render_target, render_group, camera, self.glctx, objects, references)
                         secondary_render_target.finalize(self.glctx)
                         references[camera.id] = secondary_render_target
                     else:
