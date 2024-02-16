@@ -146,7 +146,7 @@ cdef class Node:
     cpdef object get(self, str name, int n=?, type t=?, object default=?)
     cdef Vector get_fvec(self, str name, int n, Vector default)
     cdef double get_float(self, str name, double default)
-    cdef int get_int(self, str name, int default)
+    cdef long get_int(self, str name, long default)
     cdef bint get_bool(self, str name, bint default)
     cdef str get_str(self, str name, str default)
     cdef void repr(self, list lines, int indent)

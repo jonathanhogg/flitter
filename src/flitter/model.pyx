@@ -1750,7 +1750,7 @@ cdef class Node:
             return value.numbers[0]
         return default
 
-    cdef int get_int(self, str name, int default):
+    cdef long get_int(self, str name, long default):
         if self._attributes is None:
             return default
         cdef PyObject* objptr = PyDict_GetItem(self._attributes, name)
@@ -1758,7 +1758,7 @@ cdef class Node:
             return default
         cdef Vector value = <Vector>objptr
         if value.numbers != NULL and value.length == 1:
-            return <int>value.numbers[0]
+            return <long>c_floor(value.numbers[0])
         return default
 
     cdef bint get_bool(self, str name, bint default):
