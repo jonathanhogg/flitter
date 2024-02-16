@@ -41,8 +41,10 @@ greater than or equal to `1`)
 - `time` is an optional attribute providing the simulation clock
 - `resolution` is an optional attribute specifying a *minimum* simulation step
 interval
-- `run` specifies a "run" number for this simulation, non-integer values will
-be *floor*ed.
+- `run` specifies an optional "run number" for this simulation, non-integer
+values will be *floor*ed
+- `speed_of_light` is an optional attribute that, if set, specifies an upper
+limit to any particle's computed speed
 
 The simulation maintains an internal simulation clock which begins at zero and
 advances in steps equal to the minimum of `resolution` or the difference between

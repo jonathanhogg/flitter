@@ -77,15 +77,17 @@ cdef class Particle:
                 k = delta / self.mass
                 if self.ease > 0 and clock < self.ease:
                     k *= clock / self.ease
-                speed = 0
                 for i in range(n):
-                    d = self.velocity.numbers[i] + self.force.numbers[i] * k
-                    self.velocity.numbers[i] = d
-                    speed += d * d
-                if speed > speed_of_light * speed_of_light:
-                    k = speed_of_light / sqrt(speed)
+                    self.velocity.numbers[i] = self.velocity.numbers[i] + self.force.numbers[i] * k
+                if speed_of_light > 0:
+                    speed = 0
                     for i in range(n):
-                        self.velocity.numbers[i] = self.velocity.numbers[i] * k
+                        d = self.velocity.numbers[i]
+                        speed += d * d
+                    if speed > speed_of_light * speed_of_light:
+                        k = speed_of_light / sqrt(speed)
+                        for i in range(n):
+                            self.velocity.numbers[i] = self.velocity.numbers[i] * k
         for i in range(n):
             self.position.numbers[i] = self.position.numbers[i] + self.velocity.numbers[i] * delta
             self.force.numbers[i] = self.initial_force.numbers[i]
@@ -343,9 +345,7 @@ cdef class PhysicsSystem:
         cdef double resolution = node.get_float('resolution', 1/engine.target_fps)
         if resolution <= 0:
             return
-        cdef double speed_of_light = node.get_float('speed_of_light', 1e9)
-        if speed_of_light <= 0:
-            return
+        cdef double speed_of_light = max(0, node.get_float('speed_of_light', 0))
         cdef StateDict state = engine.state
         cdef Vector time_vector = state.get_item(state_prefix.concat(CLOCK))
         if time_vector.length == 1 and time_vector.numbers != NULL:
