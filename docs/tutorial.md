@@ -75,7 +75,7 @@ Nodes form a *tree*, with each allowed to have multiple child nodes. The
 structure of this tree is created through indentation. Any number of indented
 nodes given below another node will become children of that node. All children
 of a specific node must be indented to the same level. Indenting in further,
-as has been done with the `!text` node causes a new parent/child relationship.
+as has been done with the `!text` node, causes a new parent/child relationship.
 So the `!canvas` node is a child of `!window` and the `!text` node is a child
 of `!canvas`.
 
@@ -154,10 +154,10 @@ color apply.
 `!group` nodes alter the drawing context for the nodes that they contain. They
 are able to change the local transformation matrix that establishes the drawing
 coordinate system, including rotating and scaling; change the default drawing
-color, and various other *paint* properties, like line width; and set default
-font properties, including font size, and the typeface family and weight. We
-still have to specify the actual text to be drawn at both nodes as this is
-individual to each `!text` node.
+color, and various other *paint* properties like line width; and set default
+font properties, including font size, the typeface family and weight. We still
+have to specify the actual text to be drawn at both nodes as this is individual
+to each `!text` node.
 
 An important lesson to learn from this tiny example is that both structure (this
 is *in* that) and context (like origin and paint color) are managed through
