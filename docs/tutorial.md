@@ -34,7 +34,7 @@ At this point we should probably put something inside the window. Change the
 code to read:
 
 ```{code-block} flitter
-:emphasize-lines 2
+:emphasize-lines: 2
 
 !window size=1920;1080
     !canvas
@@ -53,7 +53,7 @@ after `!canvas`.
 We should start actually drawing something. Change the file to read:
 
 ```{code-block} flitter
-:emphasize-lines 3
+:emphasize-lines: 3
 
 !window size=1920;1080
     !canvas
@@ -108,7 +108,7 @@ window.
 Add the following line to the code:
 
 ```{code-block} flitter
-:emphasize-lines 4
+:emphasize-lines: 4
 
 !window size=1920;1080
     !canvas
@@ -134,7 +134,7 @@ the intention is more clear. Try changing the code to the following (be careful
 of the new indentation):
 
 ```{code-block} flitter
-:emphasize-lines 3,4,5
+:emphasize-lines: 3,4,5
 
 !window size=1920;1080
     !canvas
