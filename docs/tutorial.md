@@ -11,7 +11,11 @@ instantly.
 
 **Flitter** is first-and-foremost a [declarative
 language](https://en.wikipedia.org/wiki/Declarative_programming) for describing
-visuals. Let's start with the simplest example:
+visuals. What is to be drawn is declared, or *described*, in a similar way to
+how [SVG](https://developer.mozilla.org/en-US/docs/Web/SVG) works, with the
+engine then being responsible for doing the work necessary to show those visuals.
+
+Let's start with the simplest example:
 
 ```flitter
 !window size=1920;1080
@@ -159,8 +163,27 @@ font properties, including font size, the typeface family and weight. We still
 have to specify the actual text to be drawn at both nodes as this is individual
 to each `!text` node.
 
-An important lesson to learn from this tiny example is that both structure (this
-is *in* that) and context (like origin and paint color) are managed through
-indentation in **Flitter**. Whereas other drawing systems might have a drawing
-context that needs to be explicitly saved and restored, in **Flitter** one only
-needs to change the indentation level.
+Try adding a final line to this program (again, note the indentation level):
+
+```{code-block} flitter
+:emphasize-lines: 6
+
+!window size=1920;1080
+    !canvas
+        !group font_size=100 translate=960;540 color=1;0;0
+            !text text="Hello world!" color=1
+            !text text="Hello world!" point=2;-2
+        !text text="Figure 1:" point=100;100 color=1
+```
+
+This new piece of text is drawn very small in the top left of the window. This
+is because it has reverted to the default font size, which is just 14px, and
+the default drawing origin of the top left. In fact, if we had left off the
+`color=1` atribute then it wouldn't have appeared at all, as the default drawing
+color is black. None of the drawing context introduced by the `!group` node is
+retained outside of it.
+
+An important lesson to learn from this tiny example is that both block structure
+(this is *in* that) and context (like origin and paint color) are managed through
+indentation in **Flitter**. There are no braces or close tags, and no need to
+explicitly save and restore context.
