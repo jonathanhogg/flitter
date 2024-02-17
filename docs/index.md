@@ -23,6 +23,7 @@ raw performance, but is fast enough to be able to do interesting things.
 :maxdepth: 2
 background.md
 install.md
+tutorial.md
 language.md
 builtins.md
 windows.md
