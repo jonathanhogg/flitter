@@ -34,6 +34,7 @@ cdef inline double perf_counter() noexcept nogil:
 logger = name_patch(logger, __name__)
 
 cdef double Tau = 6.283185307179586
+cdef str DefaultFontFamily = 'Helvetica'
 
 cdef dict TextureFormatColorType = {
     'f1': (GL_RGBA8, skia.kRGBA_8888_ColorType),
@@ -609,7 +610,7 @@ cpdef object draw(Node node, ctx, paint=None, font=None, path=None, dict stats=N
     ctx.save()
     update_context(node, ctx)
     paint = update_paint(node, skia.Paint(AntiAlias=True) if paint is None else paint, colorspace)
-    font = update_font(node, skia.Font(skia.Typeface(), 14) if font is None else font)
+    font = update_font(node, skia.Font(skia.Typeface(DefaultFontFamily), 14) if font is None else font)
     path = skia.Path()
     cdef Node child
     for child in node._children:
