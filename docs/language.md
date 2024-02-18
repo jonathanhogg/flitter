@@ -11,9 +11,9 @@ the event of an error. In particular, all maths expressions involving a `null`
 will evaluate to `null`.
 
 A-la Python (or Haskell), indentation represents block structuring. `let`
-statements name constant values, everything else is largely about creating nodes
-to append to the implicit *root* node of the tree. There are *no variables* –
-the language is pure-functional.
+expressions name constant values, everything else is largely about creating
+nodes to append to the implicit *root* node of the tree. There are *no
+variables* – the language is pure-functional.
 
 The simplest program would be something like:
 
@@ -28,8 +28,8 @@ let SIZE=1280;720
             !text point=SIZE/2 text="Hello world!"
 ```
 
-This contains a comment, a `let` statement and a node creation statement.
-Indented statements below this represent child nodes. Any name with a `!` in
+This contains a comment, a `let` expression and a node creation expression.
+Indented expressions below this represent child nodes. Any name with a `!` in
 front of it creates a node of that *kind*; the bindings following this specify
 attributes of the node. Nodes can also be followed by one or more `#tag`s to
 add tags for readability and logging.

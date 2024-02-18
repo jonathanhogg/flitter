@@ -193,13 +193,11 @@ An important lesson to learn from this tiny example is that both block structure
 through indentation in **Flitter**. There are no braces or close tags, and no
 need to explicitly save and restore context.
 
-## Programming Visuals
+## Named Values
 
 So far, the code we've written looks more like configuration data than a
 program. Let's try using some of the features we would normally associate with
 a programming language.
-
-### Named Values
 
 The concept of *named values* is common across programming, usually in the form
 of *variables*. **Flitter** has no variables as it is a (largely) [pure
@@ -328,39 +326,40 @@ indented.
 
 We have made use of a [range expression](language.md#ranges) to provide the
 source vector for this loop. Ranges specify a start value, a stop value, and
-a step size. This range runs from `offset` towards `0`, stepping by `-1` each
-time. The result for `offset` equal to `10` is the vector
-`10;9;8;7;6;5;4;3;2;1`. The stop value is *not* included in the vector. The loop
-iterates across this vector, binding `i` to the next value on each iteration.
-The result of a `for` loop is a composed vector of the result of each evaluation
-of the loop body.
+a step size. The stop value is *not* included in the vector. The `|` step value
+is optional and taken as `1` if not given. The start value is also optional and
+will be taken as `0` if not given. Thus, `..n` is a quick way to get the values
+`0` to `n-1`. This range runs from `offset` towards `0`, stepping by `-1` each
+time. With `offset` equal to `10`, this gives the vector `10;9;8;7;6;5;4;3;2;1`.
 
-The result of this loop is a 10-item vector of `!text` nodes and these are then
-composed together with the following `!text` node so that the function returns
-a vector of 11 nodes. These 11 nodes are then appended to the group.
+The `for` loop iterates across this vector, binding `i` to the next value on
+each iteration. Loops evaluate to vector composed of the result of each
+evaluation of the loop body. The result of this loop is a 10-item vector of
+`!text` nodes and these are then composed together with the following `!text`
+node so that the function returns a vector of 11 nodes. These 11 nodes are then
+appended to the group.
 
 :::{note}
 **Flitter** is a *strict* functional programming language, and so ranges are
-fully evaluated before use. For this reason, **Flitter** ranges *must* include
-a stop value. The only exception to strict evaluation is the usual
-[short-circuit logical
+fully evaluated before use. For this reason, ranges **must** include a stop
+value and the range `..1000000` will create a 1 million item long numeric
+vector.
+
+The only exception to strict evaluation is the usual [short-circuit logical
 operations](https://en.wikipedia.org/wiki/Short-circuit_evaluation) (see
 [Operators](language.md#operators) in the language documentation).
 :::
 
-## Animating Visuals
+## Animation
 
 While this code is starting to look more like a program, it still results in
 unchanging graphical output. In fact, **Flitter** is able to recognise that this
 program is entirely static and it will be compiled down to a single literal node
-tree with little-to-no program execution actually occurring on each frame – the
-function call is inlined and the loop unrolled.
+tree – the function call is inlined and the loop unrolled.
 
 Let's introduce some animation. Animation in **Flitter** is achieved by writing
 a program that introduces some visual change linked to time. The main way that
-we incorporate time is with the use of the `beat` global name. This provides
-a monotonically increasing value linked to the current program *tempo*. The
-default tempo is 120bpm, or 2 beats per second.
+we incorporate time is with the use of the `beat` global name:
 
 ```{code-block} flitter
 :emphasize-lines: 11
@@ -379,9 +378,11 @@ func text3d(text, offset, shadow_color)
         !text text="Figure 1:" point=100;100 color=1
 ```
 
-Here we are calling the `hsv()` function with a 3-item vector of hue, saturation
-and value. The hue is calculated from the current beat counter. At 120bpm it
-will take 5 seconds to cycle around the hue wheel.
+`beat` provides a monotonically increasing value linked to the current program
+*tempo*. The default tempo is 120bpm, or 2 beats per second. Here we are calling
+the `hsv()` function with a 3-item vector of hue, saturation and value. Hue is
+calculated by dividing the current beat counter by `10`. At 120bpm it will take
+5 seconds to cycle around the hue wheel.
 
 Let's make our example a bit more trippy by animating the individual pieces of
 text that make up the 3D shadow:
@@ -438,7 +439,7 @@ only be bound within that sequence (and only for expressions following the
 
 We are effectively using the `text3d()` function to define a new kind of
 compound node. This is such a common pattern, that **Flitter** provides some
-additional syntactic sugar to make the intention of the code easier to read:
+syntactic sugar to make the intention of the code easier to read:
 
 ```{code-block} flitter
 :emphasize-lines: 3,12
@@ -460,11 +461,12 @@ func text3d(_, text, offset, start_hue)
 
 The `@` character introduces a [template function
 call](language.md#template-function-calls). It is followed by the name of the
-function and then named arguments, using the same convention node attributes.
+function and then a number of named arguments, using the same convention as node
+attributes.
 
 Note that we've added a new initial parameter to the `text3d()` function
 definition. If a template function call has an indented sequence of expressions,
-then the resulting vector from evaluating those expressions is passed in as the
+then the result vector from evaluating those expressions is passed in as the
 first argument. This allows a template function call to be provided with "child"
 nodes that it can manipulate and return – often they are appended as children to
 whatever node or nodes the function creates. In this case, we do not expect any
@@ -497,3 +499,53 @@ func text3d(_, text, offset=100, start_hue=0)
 The named arguments can be given in any order. Any function parameters that
 lack a default value and that are not specified as arguments will be given the
 special value `null`, which is the empty vector.
+
+## If Expressions
+
+This new version of `text3d()` is great, but we can no longer specify a simple
+colored shadow. We can make the code switch between different pieces of
+behaviour with an `if` expression:
+
+```{code-block} flitter
+:emphasize-lines: 3,6,7,8,9,15
+
+let SIZE=1920;1080
+
+func text3d(_, text, offset=100, start_hue, shadow_color)
+    for i in offset..0|-1
+        let k=i/offset
+        if start_hue != null
+            !text text=text point=-i;i color=hsv(start_hue-k;1;1-k)
+        else
+            !text text=text point=-i;i color=shadow_color*(1-k)
+    !text text=text
+
+!window size=SIZE
+    !canvas
+        !group font_size=100 translate=SIZE/2 color=1
+            @text3d text="Hello world!" shadow_color=1;0;0 -- start_hue=beat/10
+        !text text="Figure 1:" point=100;100 color=1
+```
+
+Here we've removed the default value from `start_hue` and added back in a
+`shadow_color` parameter again. Inside the loop we test whether `start_hue` is
+the `null` vector, which would indicate that it has not been supplied as an
+argument, and draw the shadow text using `shadow_color` instead. We retain
+the fading behaviour by multiplying this color by `1-k` so that it fades to
+black. As colors are just numerical vectors, we can use normal mathematical
+operations on them.
+
+We've added a `shadow_color` argument in the template function call and also
+put `--` in front of the previous `start_hue` argument. This begins a comment
+block that extends to the end of the line. Thus, putting `--` in front of any
+code will cause the parser to ignore it.
+
+## Summary
+
+This tutorial has introduced most of the important features of programming with
+**Flitter**. The remaining language features are documented in [the language
+documentation](language.md). It is important to remember that the language
+itself does not render any output and that expressions like `!text` are **not**
+instructions to draw text, but node expressions to be gathered up into a tree
+that is then passed to the rendering framework. Individual renderers will treat
+these nodes in different ways.
