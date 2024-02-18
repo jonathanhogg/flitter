@@ -403,9 +403,10 @@ numeric and `null` otherwise.
 
 Logical operators:
 
-- *x* `or` *y* - shortcut or: returns *x* if *x* is true, *y* otherwise
-- *x* `and` *y* - shortcut and: returns *x* if *x* is false, *y* otherwise
-- *x* `xor` *y* - exclusive or: returns *y* if *x* is false, *x* if *y* is
+- *x* `or` *y* - short-circuiting *or*: returns *x* if *x* is true, *y* otherwise
+- *x* `and` *y* - short-circuiting *and*: returns *x* if *x* is false, *y*
+  otherwise
+- *x* `xor` *y* - *exclusive or*: returns *y* if *x* is false, *x* if *y* is
   false, `false` otherwise
 - `not` *x* - logical inverse: returns `false` if *x* is true, `true` otherwise
 

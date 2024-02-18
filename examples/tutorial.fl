@@ -1,6 +1,6 @@
 let SIZE=1920;1080
 
-func text3d(text, offset, start_hue)
+func text3d(_, text, offset, start_hue)
     for i in offset..0|-1
         let k=i/offset
         !text text=text point=-i;i color=hsv(start_hue-k;1;1-k)
@@ -9,5 +9,5 @@ func text3d(text, offset, start_hue)
 !window size=SIZE
     !canvas
         !group font_size=100 translate=SIZE/2 color=1
-            text3d("Hello world!", 100, beat/10)
+            @text3d text="Hello world!" offset=100 start_hue=beat/10
         !text text="Figure 1:" point=100;100 color=1

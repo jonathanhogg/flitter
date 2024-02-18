@@ -263,7 +263,7 @@ func text3d(text, offset, shadow_color)
 
 We introduce a new function with `func`. This is followed by the name of the
 new function and its parameters. The body of the function is simply a sequence
-of indented statements below it. We call the function in the normal way.
+of indented expressions below it. We call the function in the familiar way.
 
 But what is actually happening here? The function call evaluates to two `!text`
 nodes. These are composed into a 2-item vector and *this* is the return value
@@ -321,21 +321,32 @@ func text3d(text, offset, shadow_color)
         !text text="Figure 1:" point=100;100 color=1
 ```
 
-A `for` loop iterates over a source vector given on the right of `in`, binding
-each item to the name given on the left, and then evaluating the body of the
-loop. As for function definition, the body is indented.
+A `for` loop iterates over a source vector given after the `in` keyword,
+binding the value of each item to the name given between `for` and `in`, and
+then evaluating the body of the loop. As with function definitions, the body is
+indented.
 
 We have made use of a [range expression](language.md#ranges) to provide the
-source vector for the loop. This specified a start value, a stop value, and
+source vector for this loop. Ranges specify a start value, a stop value, and
 a step size. This range runs from `offset` towards `0`, stepping by `-1` each
-time. The result, for `offset` equal to `10`, is the vector
-`10;9;8;7;6;5;4;3;2;1`. Note that the stop value is *not* included in the
-vector. The range expression is fully evaluated to this vector and then the
-loop iterates across it, each time `i` will be bound to the next item.
+time. The result for `offset` equal to `10` is the vector
+`10;9;8;7;6;5;4;3;2;1`. The stop value is *not* included in the vector. The loop
+iterates across this vector, binding `i` to the next value on each iteration.
+The result of a `for` loop is a composed vector of the result of each evaluation
+of the loop body.
 
-The result of this loop is a 10-item vector of `!text` nodes and these are
+The result of this loop is a 10-item vector of `!text` nodes and these are then
 composed together with the following `!text` node so that the function returns
-a vector of 11 nodes that are appended to the group.
+a vector of 11 nodes. These 11 nodes are then appended to the group.
+
+:::{note}
+**Flitter** is a *strict* functional programming language, and so ranges are
+fully evaluated before use. For this reason, **Flitter** ranges *must* include
+a stop value. The only exception to strict evaluation is the usual
+[short-circuit logical
+operations](https://en.wikipedia.org/wiki/Short-circuit_evaluation) (see
+[Operators](language.md#operators) in the language documentation).
+:::
 
 ## Animating Visuals
 
@@ -398,8 +409,7 @@ this slightly for each iteration. The starting hue changes with the beat counter
 so that we get a constantly moving spectrum shadow. We've increased the offset
 to `100` so that the effect is more apparent.
 
-As a final flourish for this example, let's make the 3D shadow fade into the
-distance:
+As a further flourish, let's make the 3D shadow fade into the distance:
 
 ```{code-block} flitter
 :emphasize-lines: 5,6
@@ -418,3 +428,72 @@ func text3d(text, offset, start_hue)
             text3d("Hello world!", 100, beat/10)
         !text text="Figure 1:" point=100;100 color=1
 ```
+
+Note that we've introduced a new name, `k`, inside the body of the `for` loop.
+Names can be introduced with `let` in any expression sequence. The name will
+only be bound within that sequence (and only for expressions following the
+`let`). Therefore, outside of the loop the name `k` is not defined.
+
+## Template Functions
+
+We are effectively using the `text3d()` function to define a new kind of
+compound node. This is such a common pattern, that **Flitter** provides some
+additional syntactic sugar to make the intention of the code easier to read:
+
+```{code-block} flitter
+:emphasize-lines: 3,12
+
+let SIZE=1920;1080
+
+func text3d(_, text, offset, start_hue)
+    for i in offset..0|-1
+        let k=i/offset
+        !text text=text point=-i;i color=hsv(start_hue-k;1;1-k)
+    !text text=text
+
+!window size=SIZE
+    !canvas
+        !group font_size=100 translate=SIZE/2 color=1
+            @text3d text="Hello world!" offset=100 start_hue=beat/10
+        !text text="Figure 1:" point=100;100 color=1
+```
+
+The `@` character introduces a [template function
+call](language.md#template-function-calls). It is followed by the name of the
+function and then named arguments, using the same convention node attributes.
+
+Note that we've added a new initial parameter to the `text3d()` function
+definition. If a template function call has an indented sequence of expressions,
+then the resulting vector from evaluating those expressions is passed in as the
+first argument. This allows a template function call to be provided with "child"
+nodes that it can manipulate and return – often they are appended as children to
+whatever node or nodes the function creates. In this case, we do not expect any
+such nodes and will ignore any that exist so, by convention, we name this
+parameter `_` to indicate that it is unused.
+
+The result is a normal function call, but the idea that we mean this to be a new
+kind of user-defined node is made clearer. In fact, we can also provide default
+values to the parameters in the function definition and this allows us to skip
+arguments in the call:
+
+```{code-block} flitter
+:emphasize-lines: 3,12
+
+let SIZE=1920;1080
+
+func text3d(_, text, offset=100, start_hue=0)
+    for i in offset..0|-1
+        let k=i/offset
+        !text text=text point=-i;i color=hsv(start_hue-k;1;1-k)
+    !text text=text
+
+!window size=SIZE
+    !canvas
+        !group font_size=100 translate=SIZE/2 color=1
+            @text3d text="Hello world!" start_hue=beat/10
+        !text text="Figure 1:" point=100;100 color=1
+```
+
+The named arguments can be given in any order. Any function parameters that
+lack a default value and that are not specified as arguments will be given the
+special value `null`, which is the empty vector.
