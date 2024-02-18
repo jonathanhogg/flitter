@@ -284,7 +284,7 @@ let points=10;20;15;25;20;30;25;35
 
 !path
     !move_to point=0;0
-    for x;y in points:
+    for x;y in points
         !line_to #segment point=x;y
 ```
 
@@ -780,7 +780,7 @@ brackets, e.g., `$(:circle;:radius)`.
 
 The state system is also used by the [physics engine](physics.md) to
 communicate particle properties back to the program and by counters (see
-[Counters](builtins,md#counters)) for storing a starting clock value and current
+[Counters](builtins.md#counters)) for storing a starting clock value and current
 counter rate. Be careful when choosing state keys to avoid collisions between
 these different uses.
 
