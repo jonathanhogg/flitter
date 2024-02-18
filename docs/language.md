@@ -262,7 +262,7 @@ appended to a `!window` node, which is the final value of this expression.
 Running this program as-is will result in a red window with the title "Hello
 world!".
 
-#### Vector node operations
+#### Vector Node Operations
 
 As nodes are values, and thus vectors, tag unary-postfix operations and
 attribute-set binary operations are able to operate on a vector of nodes
@@ -409,7 +409,7 @@ Logical operators:
   false, `false` otherwise
 - `not` *x* - logical inverse: returns `false` if *x* is true, `true` otherwise
 
-## Let expressions
+## Let Expressions
 
 Values may be bound to names with the `let` keyword. It is followed by one or
 more `name=expression`s. The expressions are evaluated from left to right, with
@@ -571,7 +571,7 @@ conditional expressions as necessary to achieve this, e.g.:
 !foo x=(x if x < 10 else (x*2 if x < 20 else x*3))
 ```
 
-## Loops
+## For Loops
 
 ```flitter
 for name《;name…》 in expression
@@ -651,7 +651,7 @@ obtuse behaviour.
 
 The **Flitter** [built-in functions](builtins.md) are documented separately.
 
-## User-defined functions
+## Function Definitions
 
 ```flitter
 func name(parameter《=default》《, parameter…》)
