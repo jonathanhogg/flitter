@@ -1,6 +1,8 @@
 
 # Windowing
 
+[This is all due for a rewrite]
+
 `!window`s composite their children and a `!canvas` is transparent until drawn
 into. The blending function for compositing is controlled with the `blend`
 attribute on `!window`, which defaults to `:over` (source-over), but may be

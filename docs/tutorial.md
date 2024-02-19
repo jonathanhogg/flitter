@@ -337,7 +337,7 @@ will be taken as `0` if not given. Thus, `..n` is a quick way to get the values
 time. With `offset` equal to `10`, this gives the vector `10;9;8;7;6;5;4;3;2;1`.
 
 The `for` loop iterates across this vector, binding `i` to the next value on
-each iteration. Loops evaluate to vector composed of the result of each
+each iteration. Loops evaluate to a vector composed of the result of each
 evaluation of the loop body. The result of this loop is a 10-item vector of
 `!text` nodes and these are then composed together with the following `!text`
 node so that the function returns a vector of 11 nodes. These 11 nodes are then

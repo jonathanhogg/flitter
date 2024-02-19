@@ -27,6 +27,7 @@ tutorial.md
 language.md
 builtins.md
 windows.md
+canvas3d.md
 physics.md
 ```
 
