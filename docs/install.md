@@ -28,8 +28,8 @@ On a recent Linux box, all you should need to do is make sure that you have a
 Python3 development environment. On a Debian-variant, like Ubuntu, this would
 just be:
 
-```{sh}
-sudo apt install python3-dev
+```console
+$ sudo apt install python3-dev
 ```
 
 It is recommended to do the install into a Python [virtual
@@ -38,8 +38,8 @@ on quite a few dependencies (see below). This is especially important if you are
 using the latest Python 3.12 as it will simply refuse to install packages into
 the system environment. This is generally something as simple as:
 
-```{sh}
-python3 -m venv ~/.virtualenvs/flitter
+```console
+$ python3 -m venv ~/.virtualenvs/flitter
 ```
 
 However, then ensuring that `~/.virtualenvs/flitter/bin` is in your `PATH` is
@@ -51,37 +51,37 @@ If you've safely navigated getting a working Python development environment, you
 can install you can install the latest [`flitter-lang` PyPI
 package](https://pypi.org/project/flitter-lang/) with:
 
-```{sh}
-pip3 install flitter-lang
+```console
+$ pip3 install flitter-lang
 ```
 
 and then run it with:
 
-```{sh}
-flitter path/to/some/flitter/script.fl
+```console
+$ flitter path/to/some/flitter/script.fl
 ```
 
 If you want to live on the bleeding edge, then you can install from the current
 head of the `main` branch with:
 
-```{sh}
-pip3 install https://github.com/jonathanhogg/flitter/archive/main.zip
+```console
+$ pip3 install https://github.com/jonathanhogg/flitter/archive/main.zip
 ```
 
 However, if you clone the repo instead, then you can install from the top
 level directory:
 
-```{sh}
-git clone https://github.com/jonathanhogg/flitter.git
-cd flitter
-pip3 install .
+```console
+$ git clone https://github.com/jonathanhogg/flitter.git
+$ cd flitter
+$ pip3 install .
 ```
 
 keep up-to-date with developments and have direct access to the example
 programs:
 
-```{sh}
-flitter examples/hoops.fl
+```console
+$ flitter examples/hoops.fl
 ```
 
 ## Python package dependencies
@@ -123,10 +123,10 @@ installed in your runtime environment, do an editable package deployment, and
 then throw away the built code. The code automatically makes use of `pyximport`
 to (re)compile Cython code on-the-fly as **Flitter** runs:
 
-```{sh}
-pip3 install cython setuptools
-pip3 install --editable .
-rm **/*.c **/*.so
+```console
+$ pip3 install cython setuptools
+$ pip3 install --editable .
+$ rm **/*.c **/*.so
 ```
 
 If you want to lint the code and run the tests then you might also want to
