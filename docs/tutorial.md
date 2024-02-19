@@ -41,7 +41,7 @@ code to read:
 :emphasize-lines: 2
 
 !window size=1920;1080
-    !canvas
+  !canvas
 ```
 
 You can leave **Flitter** running in the terminal, changes to the file will
@@ -60,8 +60,8 @@ We should start actually drawing something. Change the file to read:
 :emphasize-lines: 3
 
 !window size=1920;1080
-    !canvas
-        !text text="Hello world!" font_size=100 point=960;540 color=1
+  !canvas
+    !text text="Hello world!" font_size=100 point=960;540 color=1
 ```
 
 You should see the words "Hello world!" appear in white in the middle of the
@@ -81,7 +81,10 @@ nodes given below another node will become children of that node. All children
 of a specific node must be indented to the same level. Indenting in further,
 as has been done with the `!text` node, causes a new parent/child relationship.
 So the `!canvas` node is a child of `!window` and the `!text` node is a child
-of `!canvas`.
+of `!canvas`. There is no specific rule to how many spaces you use for
+indenting, we're using 2 spaces in this tutorial to save space, 4 is probably
+more common. Do not use hard tabs. Or do, but know that your life will be
+miserable.
 
 Names, including node kinds and attributes, may be any Unicode alphabetic
 character or an underscore, followed by any number of Unicode alphanumeric
@@ -120,9 +123,9 @@ Add the following line to the code:
 :emphasize-lines: 3
 
 !window size=1920;1080
-    !canvas
-        !text text="Hello world!" font_size=100 point=958;542 color=1;0;0
-        !text text="Hello world!" font_size=100 point=960;540 color=1
+  !canvas
+    !text text="Hello world!" font_size=100 point=958;542 color=1;0;0
+    !text text="Hello world!" font_size=100 point=960;540 color=1
 ```
 
 You should see the window now displays the original message in white, overlaid
@@ -147,10 +150,10 @@ of the new indentation):
 :emphasize-lines: 3,4,5
 
 !window size=1920;1080
-    !canvas
-        !group font_size=100 translate=960;540 color=1
-            !text text="Hello world!" point=-2;2 color=1;0;0
-            !text text="Hello world!" color=1
+  !canvas
+    !group font_size=100 translate=960;540 color=1
+      !text text="Hello world!" point=-2;2 color=1;0;0
+      !text text="Hello world!"
 ```
 
 Here we place the two `!text` nodes inside a `!group` node that abstracts out
@@ -175,11 +178,11 @@ Try adding a final line to this program (again, note the indentation level):
 :emphasize-lines: 6
 
 !window size=1920;1080
-    !canvas
-        !group font_size=100 translate=960;540 color=1
-            !text text="Hello world!" point=-2;2 color=1;0;0
-            !text text="Hello world!" color=1
-        !text text="Figure 1:" point=100;100 color=1
+  !canvas
+    !group font_size=100 translate=960;540 color=1
+      !text text="Hello world!" point=-2;2 color=1;0;0
+      !text text="Hello world!"
+    !text text="Figure 1:" point=100;100 color=1
 ```
 
 This new piece of text is drawn much smaller in the top left of the window. This
@@ -216,11 +219,11 @@ expressions](language.md#let-expressions):
 let SIZE=1920;1080
 
 !window size=SIZE
-    !canvas
-        !group font_size=100 translate=SIZE/2 color=1
-            !text text="Hello world!" point=-2;2 color=1;0;0
-            !text text="Hello world!" color=1
-        !text text="Figure 1:" point=100;100 color=1
+  !canvas
+    !group font_size=100 translate=SIZE/2 color=1
+      !text text="Hello world!" point=-2;2 color=1;0;0
+      !text text="Hello world!"
+    !text text="Figure 1:" point=100;100 color=1
 ```
 
 A `let` expression declares a new name, bound to a value, that is available for
@@ -250,14 +253,14 @@ abstract out the repeated `!text` nodes as well.
 let SIZE=1920;1080
 
 func text3d(text, offset, shadow_color)
-    !text text=text point=-offset;offset color=shadow_color
-    !text text=text
+  !text text=text point=-offset;offset color=shadow_color
+  !text text=text
 
 !window size=SIZE
-    !canvas
-        !group font_size=100 translate=SIZE/2 color=1
-            text3d("Hello world!", 2, 1;0;0)
-        !text text="Figure 1:" point=100;100 color=1
+  !canvas
+    !group font_size=100 translate=SIZE/2 color=1
+      text3d("Hello world!", 2, 1;0;0)
+    !text text="Figure 1:" point=100;100 color=1
 ```
 
 We introduce a new function with `func`. This is followed by the name of the
@@ -289,14 +292,14 @@ What if we change the program so that the `offset` value is larger? For example:
 let SIZE=1920;1080
 
 func text3d(text, offset, shadow_color)
-    !text text=text point=-offset;offset color=shadow_color
-    !text text=text
+  !text text=text point=-offset;offset color=shadow_color
+  !text text=text
 
 !window size=SIZE
-    !canvas
-        !group font_size=100 translate=SIZE/2 color=1
-            text3d("Hello world!", 10, 1;0;0)
-        !text text="Figure 1:" point=100;100 color=1
+  !canvas
+    !group font_size=100 translate=SIZE/2 color=1
+      text3d("Hello world!", 10, 1;0;0)
+    !text text="Figure 1:" point=100;100 color=1
 ```
 
 The 3D effect of the text starts to break down and we end up with two separate
@@ -309,15 +312,15 @@ of text in the `shadow_color` using a [`for` loop](language.md#for-loops):
 let SIZE=1920;1080
 
 func text3d(text, offset, shadow_color)
-    for i in offset..0|-1
-        !text text=text point=-i;i color=shadow_color
-    !text text=text
+  for i in offset..0|-1
+    !text text=text point=-i;i color=shadow_color
+  !text text=text
 
 !window size=SIZE
-    !canvas
-        !group font_size=100 translate=SIZE/2 color=1
-            text3d("Hello world!", 10, 1;0;0)
-        !text text="Figure 1:" point=100;100 color=1
+  !canvas
+    !group font_size=100 translate=SIZE/2 color=1
+      text3d("Hello world!", 10, 1;0;0)
+    !text text="Figure 1:" point=100;100 color=1
 ```
 
 A `for` loop iterates over a source vector given after the `in` keyword,
@@ -368,15 +371,15 @@ we incorporate time is with the use of the `beat` global name:
 let SIZE=1920;1080
 
 func text3d(text, offset, shadow_color)
-    for i in offset..0|-1
-        !text text=text point=-i;i color=shadow_color
-    !text text=text
+  for i in offset..0|-1
+    !text text=text point=-i;i color=shadow_color
+  !text text=text
 
 !window size=SIZE
-    !canvas
-        !group font_size=100 translate=SIZE/2 color=1
-            text3d("Hello world!", 10, hsv(beat/10;1;1))
-        !text text="Figure 1:" point=100;100 color=1
+  !canvas
+    !group font_size=100 translate=SIZE/2 color=1
+      text3d("Hello world!", 10, hsv(beat/10;1;1))
+    !text text="Figure 1:" point=100;100 color=1
 ```
 
 `beat` provides a monotonically increasing value linked to the current program
@@ -394,15 +397,15 @@ text that make up the 3D shadow:
 let SIZE=1920;1080
 
 func text3d(text, offset, start_hue)
-    for i in offset..0|-1
-        !text text=text point=-i;i color=hsv(start_hue-i/offset;1;1)
-    !text text=text
+  for i in offset..0|-1
+    !text text=text point=-i;i color=hsv(start_hue-i/offset;1;1)
+  !text text=text
 
 !window size=SIZE
-    !canvas
-        !group font_size=100 translate=SIZE/2 color=1
-            text3d("Hello world!", 100, beat/10)
-        !text text="Figure 1:" point=100;100 color=1
+  !canvas
+    !group font_size=100 translate=SIZE/2 color=1
+      text3d("Hello world!", 100, beat/10)
+    !text text="Figure 1:" point=100;100 color=1
 ```
 
 Now we are calling the `hsv()` function inside the loop for each text node,
@@ -419,16 +422,16 @@ As a further flourish, let's make the 3D shadow fade into the distance:
 let SIZE=1920;1080
 
 func text3d(text, offset, start_hue)
-    for i in offset..0|-1
-        let k=i/offset
-        !text text=text point=-i;i color=hsv(start_hue-k;1;1-k)
-    !text text=text
+  for i in offset..0|-1
+    let k=i/offset
+    !text text=text point=-i;i color=hsv(start_hue-k;1;1-k)
+  !text text=text
 
 !window size=SIZE
-    !canvas
-        !group font_size=100 translate=SIZE/2 color=1
-            text3d("Hello world!", 100, beat/10)
-        !text text="Figure 1:" point=100;100 color=1
+  !canvas
+    !group font_size=100 translate=SIZE/2 color=1
+      text3d("Hello world!", 100, beat/10)
+    !text text="Figure 1:" point=100;100 color=1
 ```
 
 Note that we've introduced a new name, `k`, inside the body of the `for` loop.
@@ -448,16 +451,16 @@ syntactic sugar to make the intention of the code easier to read:
 let SIZE=1920;1080
 
 func text3d(_, text, offset, start_hue)
-    for i in offset..0|-1
-        let k=i/offset
-        !text text=text point=-i;i color=hsv(start_hue-k;1;1-k)
-    !text text=text
+  for i in offset..0|-1
+    let k=i/offset
+    !text text=text point=-i;i color=hsv(start_hue-k;1;1-k)
+  !text text=text
 
 !window size=SIZE
-    !canvas
-        !group font_size=100 translate=SIZE/2 color=1
-            @text3d text="Hello world!" offset=100 start_hue=beat/10
-        !text text="Figure 1:" point=100;100 color=1
+  !canvas
+    !group font_size=100 translate=SIZE/2 color=1
+      @text3d text="Hello world!" offset=100 start_hue=beat/10
+    !text text="Figure 1:" point=100;100 color=1
 ```
 
 The `@` character introduces a [template function
@@ -485,16 +488,16 @@ arguments in the call:
 let SIZE=1920;1080
 
 func text3d(_, text, offset=100, start_hue=0)
-    for i in offset..0|-1
-        let k=i/offset
-        !text text=text point=-i;i color=hsv(start_hue-k;1;1-k)
-    !text text=text
+  for i in offset..0|-1
+    let k=i/offset
+    !text text=text point=-i;i color=hsv(start_hue-k;1;1-k)
+  !text text=text
 
 !window size=SIZE
-    !canvas
-        !group font_size=100 translate=SIZE/2 color=1
-            @text3d text="Hello world!" start_hue=beat/10
-        !text text="Figure 1:" point=100;100 color=1
+  !canvas
+    !group font_size=100 translate=SIZE/2 color=1
+      @text3d text="Hello world!" start_hue=beat/10
+    !text text="Figure 1:" point=100;100 color=1
 ```
 
 The named arguments can be given in any order. Any function parameters that
@@ -513,19 +516,19 @@ behaviour with an `if` expression:
 let SIZE=1920;1080
 
 func text3d(_, text, offset=100, start_hue, shadow_color)
-    for i in offset..0|-1
-        let k=i/offset
-        if start_hue != null
-            !text text=text point=-i;i color=hsv(start_hue-k;1;1-k)
-        else
-            !text text=text point=-i;i color=shadow_color*(1-k)
-    !text text=text
+  for i in offset..0|-1
+    let k=i/offset
+    if start_hue != null
+      !text text=text point=-i;i color=hsv(start_hue-k;1;1-k)
+    else
+      !text text=text point=-i;i color=shadow_color*(1-k)
+  !text text=text
 
 !window size=SIZE
-    !canvas
-        !group font_size=100 translate=SIZE/2 color=1
-            @text3d text="Hello world!" shadow_color=1;0;0 -- start_hue=beat/10
-        !text text="Figure 1:" point=100;100 color=1
+  !canvas
+    !group font_size=100 translate=SIZE/2 color=1
+      @text3d text="Hello world!" shadow_color=1;0;0 -- start_hue=beat/10
+    !text text="Figure 1:" point=100;100 color=1
 ```
 
 Here we've removed the default value from `start_hue` and added back in a
