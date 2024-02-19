@@ -22,8 +22,9 @@ Let's start with the simplest example:
 
 Save this to a file, say `tutorial.fl`, and execute it with:
 
-```sh
-flitter tutorial.fl
+```console
+$ flitter tutorial.fl
+09:09:23.036 11632:.engine.control  | SUCCESS: Loaded page 0: tutorial.fl
 ```
 
 A 16:9 black window should open. The `size=1920;1080` declares that we want to
