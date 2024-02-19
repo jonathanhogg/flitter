@@ -23,12 +23,12 @@ rendering tree. If not specified, then the default canvas camera is used.
 
 Beyond this single attribute, the `!canvas3d` node combines the functionality of
 [transforms](#transforms), [render groups](#render-groups) and
-[cameras](#cameras). All of the attributes listed below for those nodes is also
+[cameras](#cameras). All of the attributes listed below for those nodes are also
 supported on the `!canvas3d` node.
 
 ## Transforms
 
-The `!transform` node applies changes the local transformation matrix that
+The `!transform` node applies changes to the local transformation matrix that
 defines the coordinate system for all of the enclosed nodes. The supported
 attributes are:
 
@@ -37,7 +37,7 @@ attributes are:
 
 `scale=`*sX*`;`*sY*`;`*sZ*
 : Scales the coordinate system so that each unit of $x$, $y$ and $z$ become
-$sX \cdot x$, $sY \cdot x$ and $sZ \cdot z$ in the current coordinate system.
+${sX} \cdot x$, ${sY} \cdot y$ and ${sZ} \cdot z$ in the current coordinate system.
 If given as a single item vector then scale all axes by that amount.
 
 `rotate=`*tX*`;`*tY*`;`*tZ*
@@ -109,8 +109,7 @@ Additional lights beyond this number will be ignored when rendering this group.
 The default is 50. The default shader supports up to a few hundred lights.
 Changing this attribute will cause the program to be recompiled.
 
-`composite=` [ `:over` | `:dest_over` | `:lighten` | `:darken` | `:add` |
-`:difference` | `:multiply` ]
+`composite=` [ `:over` | `:dest_over` | `:lighten` | `:darken` | `:add` | `:difference` | `:multiply` ]
 : Control the OpenGL blend mode used when rendering models that overlap each
 other. The default is `:over`.
 
