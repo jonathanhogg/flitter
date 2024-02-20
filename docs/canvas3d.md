@@ -22,9 +22,9 @@ The `!canvas3d` node has only one attribute that is unique to it.
 rendering tree. If not specified, then the default canvas camera is used.
 
 Beyond this single attribute, the `!canvas3d` node combines the functionality of
-[transforms](#transforms), [render groups](#render-groups) and
-[cameras](#cameras). All of the attributes listed below for those nodes are also
-supported on the `!canvas3d` node.
+[transforms](#transforms), [render groups](#render-groups), [cameras](#cameras)
+and [materials](#materials). All of the attributes listed below for those nodes
+are also supported on the `!canvas3d` node.
 
 ## Transforms
 
@@ -341,14 +341,14 @@ transformation matrix.
 or as an absolute position (`focus`). `focus` can **only** be used if `position`
 has also been specified.
 
-`outer=` *OUTER*
+`outer=` `0`…`0.5`
 : Specifies the angle of the *cone* of a spotlight beam, in *turns*. Defaults to
 `0.25`, i.e., 90°, which means the light will shine out 45° all around from
 the central direction line.
 
-`inner=` *INNER*
+`inner=` `0`…`outer`
 : Specifies the portion of a spotlight beam angle that is at full brightness, in
-*turns*. Outside of this angle, the light will fall-off towards 0 at `outer`.
+*turns*. Outside of this angle, the light will dim towards 0 at `outer`.
 Defaults to `0`.
 
 `falloff=` *A*`;`*B*`;`*C*`;`*D*
@@ -398,12 +398,71 @@ location as the light and give it an `emissive` [material](#materials) color.
 As long as this model is convex, and the light is positioned within it, the
 light will not affect the model.
 
-**Flitter** does **not** support shadow-casting and these lights will illuminate
-all models in the render group regardless of occlusion.
+**Flitter** does **not** support shadow-casting and lights will illuminate all
+models in the render group regardless of occlusion.
 
 ## Materials
 
-(placeholder)
+Materials specify the surface properties of models. A "current" material is
+maintained alongside the local transformation matrix. This material is
+changed by specifying properties using the attributes below on `!canvas3d` or
+`!group` nodes, on specific `!material` nodes, or directly on [models](#models).
+
+The `!material` node only makes changes to the current material and this then
+applies to any models defined as children of that node. `!material` nodes may
+be intermixed in the hierarchy with `!transform` nodes, i.e., a model could
+be placed within a `!material` node inside a `!transform` node, or within
+a `!transform` node inside `!material` node. This allows for significant
+flexibility in combining multiple models that share material or location
+properties.
+
+**Flitter** uses [physically-based rendering](#physically-based-rendering) and
+so the material properties are defined in terms of that standard workflow.
+
+The supported material attributes are:
+
+`metal=` [ `true` | `false` | `0`…`1` ]
+: Specifies whether the material is a metal or a dielectric. Logically, this
+value is a boolean. However, values between `0` and `1` **are** supported to
+represent a mix of these two properties. This is primarily useful when a
+metal [texture map](#texture-mapping) is used, to allow for smooth edge
+conditions between areas of metal and some other material (corrosion for
+example).
+
+`color=` *R*`;`*G*`;`*B*
+: Specifies the albedo color of dielectrics or the base reflectivity of metals.
+It defaults to `0;0;0`. These values would not normally be greater than `1`, but
+there is no limit defined and so models can reflect more light than falls on
+them for special-effect purposes.
+
+`ior=` *IOR*
+: Specifies the index-of-refraction of the material surface. This alters how
+light is scattered off the surface. The default is `1.5`, which is a reasonable
+value for most solid materials.
+
+`roughness=` `0`…`1`
+: Specifies the roughness of the material, where `0` is a perfectly shiny
+surface and `1` is completely matt.
+
+`occlusion=` `0`…`1`
+: Specifies an ambient occlusion level for the material. Ambient lights will be
+multiplied by this value when being applied. This is really only useful when
+this property is [texture mapped](#texture-mapping), where it allows for parts
+of a model to be occluded.
+
+`emissive=` *R*`;`*G*`;`*B*
+: Specifies an amount of color that this object emits. This does *not* make the
+model into a [light](#lights), it only affects how the surface of the model
+is rendered. These values may be greater than `1`, and this is not an uncommon
+thing to do if tone-mapping or bloom-filtering is in use.
+
+`transparency=` `0`…`1`
+: Specifies how transparent this material is, with `0` (the default) being not
+transparent at all and `1` meaning fully transparent. **Flitter** does **not**
+support refraction, so objects will not appear realistically "glassy". Any
+transparency value greater than `0` will affect the [model render
+order](#instance-ordering). Transparency applies only to diffuse light scattered
+from the surface, specular reflections will be calculated as normal.
 
 ## Models
 
