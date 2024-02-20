@@ -466,7 +466,124 @@ from the surface, specular reflections will be calculated as normal.
 
 ## Models
 
-(placeholder)
+Actual renderable objects are placed in the scene with model nodes. There are
+a number of built-in primitive models and the ability to load an arbitrary
+triangular mesh from a file. All model nodes share a set of common attributes:
+
+`position=` *X*`;`*Y*`;`*Z*
+: Specifies a local position for the origin of the model. This will be `0;0;0`
+if not specified. This allows models to be easily positioned using an enclosing
+`!transform` node instead.
+
+`size=` *sX*`;`*sY*`;`*sZ*
+: Specifies a "size" for the model, which is just a scaling factor. Makes most
+sense when the model is unit-sized. The default is `1;1;1`.
+
+`rotation=` *tX*`;`*tY*`;`*tZ*
+: Specifies rotation (in *turns*) around the respective axes. The default is
+`0;0;0`.
+
+These three attributes are equivalent to:
+
+```flitter
+!transform translate=X;Y;Z rotate=tX;tY;tZ scale=sX;sY;sZ
+    …
+```
+
+However, the `position`, `size` and `rotation` attributes may be specified in
+any order and the resulting local transformation matrix will be calculated
+with the transforms applied in this specific order.
+
+An alternative to `position`/`size`/`rotation` placement is the attributes:
+
+`start=` *X0*`;`*Y0*`;`*Z0*
+: Specifies the position of the point $(0, 0, -0.5)$ of the model.
+
+`end=` *X1*`;`*Y1*`;`*Z1*
+: Specifies the position of the point $(0, 0, 0.5)$ of the model.
+
+`radius=` *R*
+: Specifies an $x$ and $y$-axis scale.
+
+These attributes are specifically designed to be used with unit-radius and
+unit-length models that have their origin in their centre of mass, which
+conveniently matches the `!cylinder` and `!cone` [primitives](#primitive-models)
+below. They encompass a position, rotation and $z$-axis scaling with `start`
+and `end`, and then a scaling in the other two axes with `radius`.
+
+In addition to these transformation attributes, all models may have
+[material](#materials) attributes that provide material properties specific to
+the model.
+
+All model date is aggressively cached but automatically rebuilt if required.
+This includes automatically reloading external models if the file modification
+time-stamp changes. Multiple instances of the *same* model are actually collated
+and [dispatched simultaneously](#instance-ordering) to the GPU.
+
+### Primitive Models
+
+These models are all generated on-the-fly and all of them have their origin at
+their centre of mass.
+
+`!box`
+: This model represents a unit-edge cube, i.e, the corners are at
+$(±0.5, ±0.5, ±0.5)$. This model has UV coordinates for [texture
+mapping](#texture-mapping) that map each face to a $1/6$ vertical slice of the
+UV space.
+
+`!sphere`
+: This model represents a unit-radius sphere (strictly speaking, the surface is
+made up of triangular faces with corners at `1`). UV coordinates use the
+Equirectangular projection.
+
+`!cylinder`
+: This is a unit-radius and unit-height cylinder with its axis of rotational
+symmetry in the $z$ direction. UV coordinates are similar to an Equirectangular
+projection, with the bottom circle mapped to the lower $1/4$ of the UV space,
+the top to the top $1/4$, and the middle $1/2$ wrapped around the sides of the
+cylinder.
+
+`!cone`
+: This is a unit-radius and unit-height cone with its axis of rotational
+symmetry in the $z$ direction. UV coordinates are similar to `!cylinder` except
+that the upper $3/4$ of the UV space are wrapped around the sides of the cone.
+``
+
+The nodes `!sphere`, `!cylinder` and `!cone` all support an additional
+attribute:
+
+`segments=` *N*
+: This specifies the number of segments to be generated in the model. For a
+cylinder this will be the number of rectangles making up the sides and the
+number of triangles making up the top and bottom circles. Cones are very
+similar except that the sides are made up of triangles as well. For spheres,
+the value gives the number of stripes of longitude and the number of stripes of
+latitude will be half this. The default in all primitives is `64`.
+
+:::{warning}
+The number of model vertices and faces scales linearly or quadratically (in the
+case of spheres) with the number of `segments` and so this should be no greater
+than that necessary to eliminate obvious visual artefacts.
+
+That said, when rendering large numbers of a particular kind of primitive, it
+is best to keep them all at the same value for `segments`, as this allows the
+engine to dispatch them simultaneously.
+:::
+
+### External Models
+
+External mesh models are loaded with the `!model` node, which takes the
+single additional attribute:
+
+`filename=` *FILENAME*
+: Specifies the model file to load, relative to the program path. The model
+will be automatically reloaded if this file changes.
+
+Meshes are loaded using the [**trimesh**](https://trimesh.org) library and so
+**Flitter** supports all of the file-types supported by that, which includes
+OBJ and STL files. No material properties are loaded, just the triangular mesh,
+so you will need to re-specify the material properties using a `!material`
+node or on the `!model` node itself.
 
 ## Physically-Based Rendering
 
