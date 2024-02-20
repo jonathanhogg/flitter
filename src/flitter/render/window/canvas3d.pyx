@@ -245,7 +245,7 @@ cdef class Camera:
         cdef int colorbits = node.get_int('colorbits', self.colorbits)
         camera.colorbits = colorbits if colorbits in COLOR_FORMATS else self.colorbits
         cdef double samples = node.get_float('samples', <double>self.samples)
-        camera.samples = min(1 << int(log2(samples)), max_samples) if samples > 0 else 0
+        camera.samples = min(1 << int(log2(samples)), max_samples) if samples >= 2 else 0
         cdef double aspect_ratio = (<double>camera.width) / camera.height
         cdef Matrix44 projection_matrix
         cdef double gradient, diagonal_ratio
