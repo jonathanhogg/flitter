@@ -463,8 +463,8 @@ cdef void collect(Node node, Matrix44 transform_matrix, Material material, Rende
             light.falloff = node.get_fvec('falloff', 4, DefaultFalloff)
             if position.length and direction.as_bool():
                 light.type = LightType.Spot
-                inner = max(0, node.get_float('inner', 0))
-                outer = max(inner, node.get_float('outer', 0.25))
+                outer = max(node.get_float('outer', 0.25), 0.5)
+                inner = min(max(0, node.get_float('inner', 0)), outer)
                 light.inner_cone = cos(inner * Pi)
                 light.outer_cone = cos(outer * Pi)
                 light.position = transform_matrix.vmul(position)
