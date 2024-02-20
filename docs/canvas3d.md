@@ -1,8 +1,17 @@
 
-# 3D Canvases
+# 3D Rendering
 
-3D rendering in **Flitter** is achieved by adding a `!canvas3d` node into a
-[window rendering tree](windows.md). For example:
+## Overview
+
+3D rendering in **Flitter** uses a forward renderer with a [physically-based
+rendering](https://en.wikipedia.org/wiki/Physically_based_rendering) model.
+Shadow-casting is **not** supported. Transparency **is** supported using ordered
+rendering.
+
+## 3D Canvases
+
+A 3D canvas is added into the [window rendering tree](windows.md) with a
+`!canvas3d` node. For example:
 
 ```flitter
 !window size=1920;1080
@@ -13,9 +22,10 @@
 `!canvas3d` differs from `!canvas` not just in number of dimensions, but in the
 entire rendering approach. While the contents of a regular 2D canvas are mostly
 interpreted as individual drawing instructions, the contents of a 3D canvas
-build a scene containing models, lights and one or more cameras.
+build a scene containing models, lights and one or more cameras. This scene is
+then passed to one or more 3D shader programs to render.
 
-The `!canvas3d` node has only one attribute that is unique to it.
+The `!canvas3d` node has only one attribute that is unique to it:
 
 `camera_id=` *ID*
 : This specifies the camera to use for the output of this node in the window
@@ -157,6 +167,26 @@ Also worth noting is that, while **Flitter** internally keeps to OpenGL version
 specifier if your platform supports it. On macOS, the highest OpenGL version
 supported is 4.1.
 :::
+
+### Instance Ordering
+
+Within a render group, all instances of specific models are dispatched to the
+GPU in one call, with per-instance data providing the specific transformation
+matrix and [material properties](#materials). Instances that have no
+transparency are sorted from front-to-back before being dispatched so that early
+depth-testing can discard fragments of occluded instances. This is done for each
+model in turn.
+
+After non-transparent instances have been dispatched, all instances with
+transparency of all models are collected together and rendered in back-to-front
+depth order. If a sequence of successive instances are of the same model, then
+they will be dispatched in a single call.
+
+Instance ordering is based on the model transformation matrix and assumes that
+models have their centre placed at the model origin and are unit-sized. This
+will generally work for the built-in [primitive models](#primitive-models), but
+may fail to correctly sort for [external models](#external-models) and so
+a mix of different models with transparency may draw in the wrong order.
 
 ## Cameras
 
@@ -585,13 +615,149 @@ OBJ and STL files. No material properties are loaded, just the triangular mesh,
 so you will need to re-specify the material properties using a `!material`
 node or on the `!model` node itself.
 
-## Physically-Based Rendering
+### Model Shading
 
-(placeholder)
+The primitive models are all designed with in-built seams and vertex normals
+such that they render in a sane way: flat sides are uniformly flat and curved
+sides have interpolated normals that ensure they render smoothly.
 
-## Instance Ordering
+You can *probably* assume that any external model you load is designed sensibly,
+but there are a couple of model shading controls that can be used to force
+specific shading behaviour. These are controlled with the following attributes
+on the model node:
 
-(placeholder)
+`flat=` [ `true` | `false` ]
+: Setting `flat=true` will cause all faces to be disconnected so that each face
+shades as a separate flat surface.
+
+:::{note}
+Flat shading will create duplicate vertices at all edges. Basically, the model
+will have the same number of faces, but three distinct vertices per face.
+:::
+
+For finer-grained control over shading, there is an edge snapping algorithm
+that will take a smooth-shaded model, find sharp edges and split them into
+seams. This algorithm can be controlled with these attributes:
+
+`snap_edges=` `0`…`0.5`
+: This specifies the minimum edge angle (in *turns*) at which to snap. It
+represents the difference between the normals of the adjoining faces, so an
+angle of `0` would mean that the two faces are in the same plane, `0.25` would
+mean that they are at right angles to one another. Specifying `0.5` will disable
+the algorithm completely, `0` will cause all edges to be snapped (which is
+equivalent to specifying `flat=true`).
+
+`minimum_area=` `0`…`1`
+: This specifies a minimum area for a face below which it will be ignored by the
+algorithm. This is given as a ratio of face area to total model area. If not
+specified, then all faces will be considered.
+
+## Constructive Solid Geometry
+
+**Flitter** supports [Constructive Solid
+Geometry](https://en.wikipedia.org/wiki/Constructive_solid_geometry) (CSG) using
+features of the **trimesh** and **manifold3d** packages (plus a handful of other
+utility libraries). This is managed by creating a hierarchy of operation,
+transform and model nodes.
+
+The basic CSG operation nodes are:
+
+`!union`
+: Combines all child nodes together into a single model.
+
+`!intersect`
+: Computes the intersection of all child nodes.
+
+`!difference`
+: Computes the first child node with all following child nodes subtracted from
+it.
+
+These take no operation-specific attributes.
+
+Additionally, there is a `!slice` node that cuts a model with a plane specified
+with the attributes:
+
+`origin=` *X*`;`*Y*`;`*Z*
+: The origin of the cutting plane.
+
+`normal=` *nX*`;`*nY*`;`*nZ*
+: The normal of the cutting plane (surface "up" direction).
+
+Everything on the positive side of the cutting plane will be discarded from the
+computed model, and then the engine will attempt to fill the holes left in the
+mesh by doing this. The `!slice` node may have multiple child nodes, in which
+case they will be `!union`-ed together.
+
+A model construction hierarchy may also contain `!transform` nodes at any point.
+These differ from normal transformations in that they apply an actual
+transform to the model vertices so that they can then be combined with other
+models. This also applies to the usual `position`, `size` and `rotation`
+attributes on models, which will be automatically converted into the equivalent
+transform nodes in the hierarchy.
+
+The result of a model construction is a new model. This will be cached so that
+the actual operations are only carried out once. Using the same hierarchy in
+multiple places will result in multiple instances of the same model, as normal.
+Any change to the hierarchy, including changes to slice planes or any
+transforms will result in the model being regenerated.
+
+:::{warning}
+Animating a transform or slice operation inside a model construction hierarchy
+will cause the model to be reconstructed repeatedly. If the construction
+operations are non-trivial to carry out, then this will slow the engine down
+significantly.
+
+If the animation loops, then you can take advantage of caching by "stepping"
+the animated values so that they loop through a fixed, repeating sequence of
+values. For instance using the following code will cause a new model to be
+created on every frame, as the maths varies slightly every time.
+
+```flitter
+!difference
+    !sphere size=2
+    !cylinder size=(r;r;4) where r=0.5+sine(beat/10)
+```
+
+Using this code will create a maximum of 50 versions of the model and repeat
+them:
+
+```flitter
+!difference
+    !sphere size=2
+    !cylinder size=(r;r;4) where r=0.5+sine(beat/10)*50//1/50
+```
+:::
+
+The CSG operations require all models to be "watertight" for them to work. This
+means that there are no disconnected edges in the model and no holes. This
+might seem pretty straightforward but none of the **Flitter** primitive models
+satisfy these constraints. They are all designed to have sane normals and UV
+coordinates, which requires them to have split seams and duplicated vertices.
+
+**Flitter** will check models before attempting to operate on them. If any of
+the constituent models of a CSG operation are not watertight, it will attempt
+to "fix" them with the following – increasingly intrusive – steps:
+
+- First the model will be processed to merge all duplicate vertices and remove
+any duplicate faces
+- If the model is still not watertight, then an attempt will be made to cap any
+holes
+- If this fails then a convex hull will be computed from the model and this used
+instead.
+
+Note that the last step, computing a convex hull, is basically shrink-wrapping
+the model. This will work fine if the original model was already convex, but if
+not this will paper over any concave sections. A warning will be written to the
+console if this step is taken.
+
+The result of any CSG operation will also be a watertight mesh, this means that
+the model will have computed vertex normals based on the average of the
+surrounding face normals. For a smooth object, this will render as expected.
+However, a model with any sharp edges will show strange shading distortions at
+these edges. For this reason, constructed models automatically default to
+applying [edge snapping](#model-shading) with `snap_edges=0.05`, or about 18°.
+This can be controlled by adding a `snap_edges` attribute to the top node in the
+hierarchy.
 
 ## Texture Mapping
 
