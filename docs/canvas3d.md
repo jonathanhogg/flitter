@@ -192,9 +192,9 @@ a mix of different models with transparency may draw in the wrong order.
 
 A default camera is created at the same time as the canvas and is configured
 by specifying camera attributes on the `!canvas3d` node. Additional cameras
-can be defined anywhere inside the hierarchy of `!transform` and `!group` nodes.
-Cameras defined in this way count as objects within the scene and so will
-respect any local transformation matrix in effect.
+can be defined anywhere inside the scene tree where a [model](#models) can
+be placed. Cameras defined in this way count as objects within the scene and so
+will respect any local transformation matrix in effect.
 
 Any attributes not specified on a `!camera` node will take the same values as
 the `!canvas3d` node default camera. The defaults given below apply to any
@@ -440,11 +440,10 @@ changed by specifying properties using the attributes below on `!canvas3d` or
 
 The `!material` node only makes changes to the current material and this then
 applies to any models defined as children of that node. `!material` nodes may
-be intermixed in the hierarchy with `!transform` nodes, i.e., a model could
-be placed within a `!material` node inside a `!transform` node, or within
-a `!transform` node inside `!material` node. This allows for significant
-flexibility in combining multiple models that share material or location
-properties.
+be intermixed in the tree with `!transform` nodes, i.e., a model could be placed
+within a `!material` node inside a `!transform` node, or within a `!transform`
+node inside `!material` node. This allows for significant flexibility in
+combining multiple models that share material or location properties.
 
 **Flitter** uses physically-based rendering and so the material properties are
 defined in terms of that standard workflow.
@@ -615,16 +614,16 @@ OBJ and STL files. No material properties are loaded, just the triangular mesh,
 so you will need to re-specify the material properties using a `!material`
 node or on the `!model` node itself.
 
-### Model Shading
+### Smooth and Flat Model Shading
 
-The primitive models are all designed with in-built seams and vertex normals
-such that they render in a sane way: flat sides are uniformly flat and curved
-sides have interpolated normals that ensure they render smoothly.
+The primitive models are all designed with seams and vertex normals so that
+they render in a sane way: flat sides are uniformly flat and curved sides have
+interpolated normals that ensure they render smoothly.
 
 You can *probably* assume that any external model you load is designed sensibly,
 but there are a couple of model shading controls that can be used to force
 specific shading behaviour. These are controlled with the following attributes
-on the model node:
+on a model node:
 
 `flat=` [ `true` | `false` ]
 : Setting `flat=true` will cause all faces to be disconnected so that each face
@@ -652,13 +651,17 @@ equivalent to specifying `flat=true`).
 algorithm. This is given as a ratio of face area to total model area. If not
 specified, then all faces will be considered.
 
+## Texture Mapping
+
+(placeholder)
+
 ## Constructive Solid Geometry
 
 **Flitter** supports [Constructive Solid
 Geometry](https://en.wikipedia.org/wiki/Constructive_solid_geometry) (CSG) using
 features of the **trimesh** and **manifold3d** packages (plus a handful of other
-utility libraries). This is managed by creating a hierarchy of operation,
-transform and model nodes.
+utility libraries). This is managed by creating a tree of operation, transform
+and model nodes.
 
 The basic CSG operation nodes are:
 
@@ -683,29 +686,35 @@ with the attributes:
 `normal=` *nX*`;`*nY*`;`*nZ*
 : The normal of the cutting plane (surface "up" direction).
 
-Everything on the positive side of the cutting plane will be discarded from the
-computed model, and then the engine will attempt to fill the holes left in the
-mesh by doing this. The `!slice` node may have multiple child nodes, in which
-case they will be `!union`-ed together.
+Everything on the up side of the cutting plane will be cut, and then the engine
+will attempt to fill the holes left in the mesh – this may not succeed for
+complex shapes. The `!slice` node may have multiple child nodes, in which case
+the result will be equivalent to a slice of the `!union` of the child nodes.
 
-A model construction hierarchy may also contain `!transform` nodes at any point.
-These differ from normal transformations in that they apply an actual
-transform to the model vertices so that they can then be combined with other
-models. This also applies to the usual `position`, `size` and `rotation`
-attributes on models, which will be automatically converted into the equivalent
-transform nodes in the hierarchy.
+A model construction tree may contain `!transform` nodes at any point. These
+differ from normal transformations in that they apply the transforms to the
+actual model vertices to construct new models that can then be operated on.
+This also applies to the usual `position`, `size` and `rotation` attributes on
+sub-models, which will be automatically converted into equivalent transform
+nodes in the model tree.
 
-The result of a model construction is a new model. This will be cached so that
-the actual operations are only carried out once. Using the same hierarchy in
-multiple places will result in multiple instances of the same model, as normal.
-Any change to the hierarchy, including changes to slice planes or any
-transforms will result in the model being regenerated.
+:::{note}
+A model construction tree **cannot** contain [lights](#lights) or
+[cameras](#cameras), and these nodes will be ignored if encountered.
+:::
+
+The top node of a tree of model construction operations represents a new model.
+It therefore supports all of the standard [model](#models) and
+[material](#materials) attributes. The model will be cached so that each
+unique sequence of operations is only carried out once. Using the same tree in
+multiple places will result in multiple instances of this model as normal. Any
+change to the tree, including changes to slice planes or any transforms will
+result in a new model being generated.
 
 :::{warning}
-Animating a transform or slice operation inside a model construction hierarchy
-will cause the model to be reconstructed repeatedly. If the construction
-operations are non-trivial to carry out, then this will slow the engine down
-significantly.
+Animating a transform or slice operation inside a model construction tree will
+cause the model to be reconstructed repeatedly. If the construction operations
+are non-trivial to carry out, then this will slow the engine down significantly.
 
 If the animation loops, then you can take advantage of caching by "stepping"
 the animated values so that they loop through a fixed, repeating sequence of
@@ -745,20 +754,16 @@ holes
 - If this fails then a convex hull will be computed from the model and this used
 instead.
 
-Note that the last step, computing a convex hull, is basically shrink-wrapping
-the model. This will work fine if the original model was already convex, but if
-not this will paper over any concave sections. A warning will be written to the
+Note that the last step, computing a convex hull, effectively shrink-wraps the
+model. This will work fine if the original model was already convex, but if not
+this will paper over any concave sections. A warning will be written to the
 console if this step is taken.
 
 The result of any CSG operation will also be a watertight mesh, this means that
-the model will have computed vertex normals based on the average of the
-surrounding face normals. For a smooth object, this will render as expected.
-However, a model with any sharp edges will show strange shading distortions at
-these edges. For this reason, constructed models automatically default to
-applying [edge snapping](#model-shading) with `snap_edges=0.05`, or about 18°.
-This can be controlled by adding a `snap_edges` attribute to the top node in the
-hierarchy.
-
-## Texture Mapping
-
-(placeholder)
+all adjacent faces will have shared vertices with normals computed as an average
+of the face normals. For a smooth object, this will render correctly. However,
+a model with any sharp edges will show strange shading distortions at these
+edges. For this reason, constructed models automatically have [edge
+snapping](#model-shading) applied with the snap angle set to 0.05 turns (about
+18°). This can be controlled by adding an explicit `snap_edges` attribute to the
+top node in the model construction tree.
