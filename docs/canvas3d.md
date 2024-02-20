@@ -101,6 +101,16 @@ the `!canvas3d` node. However, additional render groups can be created inside
 the canvas, including within nested `!transform` nodes, in which case the local
 transform matrix will apply within the group, or even within another group.
 
+If any lights are defined *inside* the render group, those lights will apply
+*only* to the models inside that group, along with any lights defined in the
+enclosing groups or at the top level of the `!canvas3d` node (which is itself
+a render group).
+
+Pulling models and lights into a `!group` is a useful way to limit lighting
+effects within the scene. As there is no support for shadow-casting in
+**Flitter**, this can be particularly useful to limit the effect of enclosed
+lights that shouldn't affect the rest of the scene.
+
 The supported attributes are:
 
 `max_lights=`*N*
@@ -129,27 +139,24 @@ an arbitrary order.
 : Supply an override vertex shader as a text string containing the GLSL code.
 Usually this would be read from a file with the [`read()` built-in
 function](builtins.md#file-functions). If unspecified, the standard internal
-[PBR shader](#pbr-shading) will be used.
+[physically-based renderer](#physically-based-rendering) will be used.
 
 `fragment=`*TEXT*
 : Supply an override fragment shader as a text string containing the GLSL code.
 Usually this would be read from a file with the [`read()` built-in
 function](builtins.md#file-functions). If unspecified, the standard internal
-[PBR shader](#pbr-shading) will be used.
+[physically-based renderer](#physically-based-rendering) will be used.
 
+:::{note}
 Supplying your own shader program is beyond the scope of this document, but
 there is [an example of doing this available in the **flitter-examples**
 repo](https://github.com/jonathanhogg/flitter-examples/blob/main/genuary2024/day29.fl).
 
-If any lights are defined *inside* the render group, those lights will apply
-*only* to the models inside that group, along with any lights defined in the
-enclosing groups or at the top level of the `!canvas3d` node (which is itself
-a render group).
-
-Pulling models and lights into a `!group` is a useful way to limit lighting
-effects within the scene. As there is no support for shadow-casting in
-**Flitter**, this can be particularly useful to limit the effect of enclosed
-lights that shouldn't affect the rest of the scene.
+Also worth noting is that, while **Flitter** internally keeps to OpenGL version
+3.3, you should be OK to use a higher version number in your shader `#version`
+specifier if your platform supports it. On macOS, the highest OpenGL version
+supported is 4.1.
+:::
 
 ## Cameras
 
@@ -160,8 +167,8 @@ Cameras defined in this way count as objects within the scene and so will
 respect any local transformation matrix in effect.
 
 Any attributes not specified on a `!camera` node will take the same values as
-the default camera from the `!canvas3d` node. The defaults given below apply
-to any attribute not specified there either.
+the `!canvas3d` node default camera. The defaults given below apply to any
+attribute not specified there either.
 
 The supported attributes are:
 
@@ -179,8 +186,9 @@ rendering tree.
 : If set to `true`, this camera will be rendered regardless of whether it is
 the current primary camera and the resulting output will be made available
 as a texture for referencing, either with a `!reference` node within the
-window rendering tree, with a `texture_id` attribute on an `!image, or even
-as a [texture mapped on a model](#texture-mapping).
+window rendering tree, with a `texture_id` attribute on an `!image`, or even
+as a [texture mapped on a model](#texture-mapping). This defaults to `false`
+and is **not** inherited from the default camera.
 
 `position=` *X*`;`*Y*`;`*Z* | `viewpoint=` *X*`;`*Y*`;`*Z*
 : The position of this camera, respecting any local transformation matrix.
@@ -188,16 +196,15 @@ It is common to use `viewpoint` when specifying this attribute on a `!canvas3d`
 node to make clear that this is referring to the position of the camera.
 
 `focus=` *X*`;`*Y*`;`*Z*
-: A point that the camera is pointing towards, respecting any local
-transformation matrix. The direction of this from the position of the camera
-provides camera view direction – its *z*-axis.
+: A point that the camera is aimed towards, respecting any local transformation
+matrix. The direction of this from the camera `position` provides the camera
+view direction – its *z*-axis.
 
 `up=` *X*`;`*Y*`;`*Z*
 : A vector giving the *y*-axis of the camera. This is a direction not
-an absolute position, respects any local transformation matrix, and will be
-normalized. If this direction is not at right angles to the camera view
-direction, then it will be corrected first. The camera *x*-axis is derived from
-this and the view direction.
+an absolute position. It respects any local rotations. If this direction is not
+at right angles to the camera view direction, then it will be corrected while
+maintaining the plane formed by the two.
 
 :::{note}
 `position`, `focus` and `up` are all converted into the world coordinate system
@@ -270,25 +277,27 @@ its parent(s) in the window rendering tree. If not specified on any ancestor
 node, it defaults to `16` bits.
 
 :::{warning}
-It is generally a bad idea to use 8-bit color depth with the 3D renderer. As all
-rendering calculations are done in *linear* color space and the conversion to
-monitor sRGB *logarithmic* space is done as a final window rendering step,
-starting with only 8-bits of color resolution will end up producing visible
-banding in dark areas of the window as this range gets expanded out by the sRGB
-transfer function. Working in 16-bits provides plenty of precision.
+It is a bad idea to use 8-bit color depth with the 3D renderer. All rendering
+calculations are done in *linear* color space and the conversion to
+monitor sRGB *logarithmic* space is done as a final window rendering step.
+Starting with only 8-bits of color resolution will produce visible banding in
+darker areas of the window, as this range gets expanded by the logarithmic
+conversion while the bright range is compressed. Working in 16-bits provides
+ample precision to ensure that the final sRGB output is smooth.
 
 The second advantage to working in 16-bits is that the color space expands out
 to half-floats instead of 256-level $[0,1]$ pseudo-floats. This means that
 channel values greater than 1 won't clip. As the lighting calculations often
 produce high brightness values – particularly in specular reflections or near
-point and spot lights – clipping severely reduces your room to correct for
-this with a tone-mapping pass and/or bloom filter.
+point and spot lights – clipping severely reduces your room to correct for this
+with a tone-mapping filter or deliberately exploit it with a bloom filter.
 :::
 
-`samples=` [ `0` | `1` | `2` | `4` | `8` ]
-: Controls the amount of Multi-sample Anti-Aliasing (MSAA) to do. The default
-is `0` (none). Generally `4` works well with most GPUs and is really good
-value-for-money.
+`samples=` [ `0` | `2` | `4` | `8` | … ]
+: Controls the amount of
+[multi-sampling](https://www.khronos.org/opengl/wiki/Multisampling) to do. The
+default is `0` (none). Generally `4` works well with most GPUs and is really
+good value-for-money – particularly if you have a lot of small/fine models.
 
 `fog_color=` *R*`;`*G*`;`*B*
 : The color to use for fog. Fog is only enabled if `fog_max` is greater than
@@ -309,3 +318,105 @@ The default color is black, `0;0;0`.
 `fog_max` in the range $[0,1]$ and raises it to this power before using that
 as the constant for mixing the fragment color with `fog_color`. The default is
 `1`, i.e., linear fog. You may find that `2` gives a more authentic result.
+
+## Lights
+
+Lights are all specified with the `!light` node, which supports the following
+attributes:
+
+`color=` *R*`;`*G*`;`*B*
+: Specifies the light color and brightness. These values may, and often will
+need to be, significantly greater than `1`. In fact, lights may also be
+negative as there's nothing in the maths that stops this. While not being
+physically realistic, this can be used for some interesting effects. A light
+with `color` equal to `0` will be completely ignored, and this is the default
+value if the attribute is missing.
+
+`position=` *X*`;`*Y*`;`*Z*
+: Specifies the location in space of the light, respecting any local
+transformation matrix.
+
+`direction=` *X*`;`*Y*`;`*Z* ( | `focus=` *X*`;`*Y*`;`*Z* )
+: Specifies the direction that this light shines, either as a direction vector
+or as an absolute position (`focus`). `focus` can **only** be used if `position`
+has also been specified.
+
+`outer=` *OUTER*
+: Specifies the angle of the *cone* of a spotlight beam, in *turns*. Defaults to
+`0.25`, i.e., 90°, which means the light will shine out 45° all around from
+the central direction line.
+
+`inner=` *INNER*
+: Specifies the portion of a spotlight beam angle that is at full brightness, in
+*turns*. Outside of this angle, the light will fall-off towards 0 at `outer`.
+Defaults to `0`.
+
+`falloff=` *A*`;`*B*`;`*C*`;`*D*
+: Supplies the coefficients for the light fall-off equation:
+  ```{math}
+  {light} = {\textbf{color} \over {A} + {B}\cdot{d} + {C}\cdot{d^2} + {D}\cdot{d^3}}
+  ```
+  Defaults to `0;0;1;0`, i.e., inverse-squared fall-off with distance. If
+  models can pass close to lights and the subsequent very bright spots need to
+  be avoided, then it can be useful to introduce a constant component to this
+  with something like `1;0;1;0`.
+
+### Light Types
+
+**Flitter** supports four kinds of lights, based on which of the above
+attributes have been specified:
+
+**Ambient**
+: If only `color` is given then this light is an ambient light that will fall
+equally on all models in the render group in all directions. As such this
+normally has only small values for `color`.
+
+**Directional**
+: If `direction` is given in addition to `color` this this light is a
+directional light that shines everywhere with equal brightness in one direction.
+As for ambient lights, the values of `color` will normally be smaller than `1`.
+This light type is typically used for large, very distant light sources, like
+sunlight.
+
+**Point**
+: If `position` is given in addition to `color` then this light is a point light
+that shines outwards in all directions from `position`. The light brightness
+will fall-off with distance according to `falloff`. Due to fall-off, it is
+common for the `color` values to be very large.
+
+**Spot**
+: If both `position` *and* `direction` (or `focus`) are specified then this
+light is a spotlight that shines from `position` in `direction`. The beam will
+spread outwards in a cone with angle `outer` and will fall-off according to
+`falloff`. As for point lights, it is common for the `color` values to be very
+large.
+
+While lights are specified as objects in the scene, they are **not** rendered
+themselves and only affect models in the scene. If a visible representation of
+a light is required then one would normally need to place a model at the same
+location as the light and give it an `emissive` [material](#materials) color.
+As long as this model is convex, and the light is positioned within it, the
+light will not affect the model.
+
+**Flitter** does **not** support shadow-casting and these lights will illuminate
+all models in the render group regardless of occlusion.
+
+## Materials
+
+(placeholder)
+
+## Models
+
+(placeholder)
+
+## Physically-Based Rendering
+
+(placeholder)
+
+## Instance Ordering
+
+(placeholder)
+
+## Texture Mapping
+
+(placeholder)
