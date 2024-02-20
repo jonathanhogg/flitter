@@ -4,9 +4,9 @@
 ## Overview
 
 3D rendering in **Flitter** uses a forward renderer with a [physically-based
-rendering](https://en.wikipedia.org/wiki/Physically_based_rendering) model.
-Shadow-casting is **not** supported. Transparency **is** supported using ordered
-rendering.
+rendering](https://en.wikipedia.org/wiki/Physically_based_rendering) (PBR)
+model. Shadow-casting is **not** supported. Transparency **is** supported using
+ordered rendering.
 
 ## 3D Canvases
 
@@ -149,13 +149,13 @@ an arbitrary order.
 : Supply an override vertex shader as a text string containing the GLSL code.
 Usually this would be read from a file with the [`read()` built-in
 function](builtins.md#file-functions). If unspecified, the standard internal
-[physically-based renderer](#physically-based-rendering) will be used.
+PBR shader will be used.
 
 `fragment=`*TEXT*
 : Supply an override fragment shader as a text string containing the GLSL code.
 Usually this would be read from a file with the [`read()` built-in
 function](builtins.md#file-functions). If unspecified, the standard internal
-[physically-based renderer](#physically-based-rendering) will be used.
+PBR shader will be used.
 
 :::{note}
 Supplying your own shader program is beyond the scope of this document, but
@@ -446,8 +446,8 @@ a `!transform` node inside `!material` node. This allows for significant
 flexibility in combining multiple models that share material or location
 properties.
 
-**Flitter** uses [physically-based rendering](#physically-based-rendering) and
-so the material properties are defined in terms of that standard workflow.
+**Flitter** uses physically-based rendering and so the material properties are
+defined in terms of that standard workflow.
 
 The supported material attributes are:
 
