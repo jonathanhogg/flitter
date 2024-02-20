@@ -395,8 +395,8 @@ cdef Model get_model(Node node, bint top):
         if top:
             if node.get_bool('flat', False):
                 model = model.flatten()
-            elif (snap_angle := node.get_float('snap_edges', DefaultSnapAngle if model.is_constructed() else 0)) > 0:
-                minimum_area = max(0, node.get_float('minimum_area', 0))
+            elif (snap_angle := min(max(0, node.get_float('snap_edges', DefaultSnapAngle if model.is_constructed() else 0.5)), 0.5)) < 0.5:
+                minimum_area = min(max(0, node.get_float('minimum_area', 0)), 1)
                 model = model.snap_edges(snap_angle, minimum_area)
             if node.get_bool('invert', False):
                 model = model.invert()
