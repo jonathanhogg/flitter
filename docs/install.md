@@ -132,7 +132,7 @@ $ rm **/*.c **/*.so
 If you want to lint the code and run the tests then you might also want to
 install `flake8`, `cython-lint` and `pytest`.
 
-## Flitter command-line options
+## Command-line options
 
 **Flitter** takes one or more program filenames as the main command-line
 arguments. If multiple programs are given then they are loaded into separate
