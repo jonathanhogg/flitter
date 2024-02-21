@@ -201,7 +201,104 @@ appropriate multiple of these sizes.
 
 ## `!image`
 
+An `!image` node loads the contents of an external image file into a texture
+for use in the window rendering tree. This might be as an input to a `!shader`,
+for displaying static slideshow images in a `!window`, or in an `!offscreen` to
+use as a referenced texture for [3D model texture
+mapping](canvas3d.md#texture-mapping).
+
+There are two supported attributes:
+
+`filename=` *PATH*
+: Specifies the path of the file to load with respect to the location of the
+running **Flitter** program.
+
+`size=` *WIDTH*`;`*HEIGHT*
+: If specified, then the image will be resized to this size with bilinear
+interpolation.
+
+Unlike the rest of the window rendering nodes, `!image` does not inherit its
+size from its parent. If `size` is not specified, then the output texture size
+will match the pixel dimensions of the loaded image.
+
+The `!image` output texture is only changed if the underlying file changes, or
+the `filename` or `size` attributes are changed. This makes it a very cheap
+node to render compared to, say, creating a `!canvas` node and drawing an image
+into it. `!image` can load all image file types [supported by the **Pillow**
+image library](https://pillow.readthedocs.io/en/stable/handbook/image-file-formats.html).
+
 ## `!video`
+
+A `!video` node loads and renders frames from an external video file into a
+texture. The following attributes are supported:
+
+`filename=` *PATH*
+: Specifies the path of the video to open with respect to the location of the
+running **Flitter** program.
+
+`position=` *TIMESTAMP*
+: Specifies the time-stamp, in seconds from the start of the video, of the
+frame to be output.
+
+`loop=` [ `true` | `false` ]
+: Specifies whether the time-stamps beyond the end of the video will loop around
+to the beginning. This also enables negative time-stamps, which will loop around
+to the end. If set to `false` (the default), time-stamps outside of the video
+range will be clamped to the first or last frames of the video.
+
+`interpolate=` [ `true` | `false` ]
+: Specifies whether to mix two successive frames if `position` references a
+value between the frame time-stamps. This can be useful for generating
+slow-motion output if the video does not contain too much fast movement. The
+default is `false`.
+
+`thread=` [ `true` | `false` ]
+: Specifies whether to use multi-threaded video decoding. This has higher
+overall performance, but introduces a small delay on the first frame. This delay
+may be unacceptable if the video needs to start immediately on load.
+
+Like `!image`, `!video` does not inherit its size from its parent. However,
+unlike `!image`, the `!video` output texture will *always* match the pixel
+dimensions of the video and any `size` attribute is ignored.
+
+A video is played by setting the `position` attribute to a time-varying value
+in code. There is no requirement for this value to vary at real-time, it can
+slow to a stop or run faster. `position` may skip forward or backwards by a
+large step, which will cause a frame seek to the new location.
+
+:::{warning}
+`position` may run *backwards*. However there is an important caveat: if the
+video makes use of P-frames or B-frames then this will cause a slight judder at
+each I-frame boundary. The video player will seek back to the next I-frame
+and then decode forwards to the desired frame. The in-between frames are cached,
+but the same seek and decode forwards will have to be done when each successive
+I-frame is hit.
+:::
+
+`!video` uses the [**PyAV** library](https://pyav.org), which is a wrapper
+around **ffmpeg**. It thus supports a very wide range of video file types.
+
+## `!record`
+
+Record composites its child nodes – like a standard `!shader` node – but does
+this to a texture which is then written to an image or video file.
+
+If the  `!record` node has only one child, then the output texture from
+`!record` into the rest of the window rendering tree will be the output texture
+of that child. This allows a `!record` node to be inserted into a tree without
+disturbing the normal rendering pipeline. This is particularly important if the
+output image is being written at a smaller size to the child node.
+
+:::{warning}
+If the `!record` node has multiple children, then its output texture will be the
+same texture that is written to the file, which may include not just resizing,
+but also a shallower color channel bit depth and transformation into sRGB
+logarithmic color space.
+
+If this is to be avoided, then the simplest approach is to move the `!record`
+node out of the rendering path and provide its input using a
+[`!reference`](#reference) node.
+:::
 
 ## `!reference`
 
