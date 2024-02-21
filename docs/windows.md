@@ -300,6 +300,57 @@ node out of the rendering path and provide its input using a
 [`!reference`](#reference) node.
 :::
 
+The `!record` node supports the following attributes:
+
+`filename=` *PATH*
+: Specifies the path of the image or video file to write to, with respect to the
+location of the running **Flitter** program. Whether the output is an image or
+a video depends on the extension of the filename. If `filename` is `null`, then
+the `!record` node will do nothing.
+
+`quality=` *Q*
+: Specifies a quality setting for image formats that support it (such as JPEG).
+
+`codec=`
+: For generic video container outputs, this specifies the video codec to use.
+Defaults to `h264`.
+
+`crf=`
+: For video codecs that support it, this provides a "constant rate factor" that
+defines how much the codec should prioritise size over quality. Smaller values
+mean better quality and larger values mean a smaller size. A value around `25`
+is generally an acceptable compromise for the `h264` codec. For `h265`, this
+can often be pushed up to a higher value for smaller files while still keeping
+a decent quality encoding.
+
+`preset=`
+: Specifies a video codec preset if supported. This bunches up a lot of
+different codec settings. Usual presets have names like `:fast` or `:slow`.
+
+`limit=`
+: Specifies a maximum number of seconds of video output to write before closing
+the file. Otherwise, the video output will continue for as long as `filename` is
+valid and the program is running.
+
+Filenames with an `.mp4`, `.mov`, `.m4v`, `.mkv`, `.webm` or `.ogg` extension
+are assumed to be video outputs with the appropriate container type. In
+addition, if the extension is `.gif` and `codec=:gif` is *also* supplied, then
+an animated GIF file will be written with the video output path. Otherwise a
+static GIF image will be written.
+
+A particular image file will be written once per run of a **Flitter** program,
+i.e., once an image has been written to a particular file, the `!record` node
+will do nothing. However, the `filename` attribute can be changed to record a
+new image. In this way, a constantly changing filename can be used to write
+individual animation frames as images. For example, this program will write a
+new JPEG snapshot into the `output` folder every beat:
+
+```flitter
+!window …
+    !record filename='output/frame';beat//1;'.jpg' quality=90
+        …
+```
+
 ## `!reference`
 
 The output texture of one node in a window rendering tree can be used in
