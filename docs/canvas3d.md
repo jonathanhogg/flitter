@@ -188,6 +188,14 @@ will generally work for the built-in [primitive models](#primitive-models), but
 may fail to correctly sort for [external models](#external-models) and so
 a mix of different models with transparency may draw in the wrong order.
 
+Depth-buffer *writing* is turned **off** when rendering instances with
+transparency. This means that all transparent objects will be rendered fully
+even if they intersect with one another, overlap in non-trivial ways or the
+depth-ordering calculation results in an incorrect order. However, the
+depth-buffer is still honoured for deciding whether a fragment is to be rendered
+and so instances with transparency occluded by a non-transparent instance will
+be hidden correctly.
+
 ## Cameras
 
 A default camera is created at the same time as the canvas and is configured
@@ -493,6 +501,47 @@ transparency value greater than `0` will affect the [model render
 order](#instance-ordering). Transparency applies only to diffuse light scattered
 from the surface, specular reflections will be calculated as normal.
 
+### Texture Mapping
+
+In addition to the above single value attributes, material nodes support
+specifying textures to be used for per-fragment material properties. Each
+of these attributes takes a string or symbol value identifying a node elsewhere
+in the [window rendering tree](windows.md) that will be used as the input
+texture (including the output of [secondary cameras](#cameras)).
+
+The simplest way to load a bunch of images to use as textures is to place
+`!image` nodes in an `!offscreen`. See the [textures
+example](https://github.com/jonathanhogg/flitter/blob/main/examples/textures.fl)
+in the main repo for how to do this.
+
+`texture_id=` *ID*
+: Specifies the *ID* of a node to use for the material `color` property.
+
+`metal_texture_id` *ID*
+: Specifies the *ID* of a node to use for the material `metal` property.
+
+`roughness_texture_id` *ID*
+: Specifies the *ID* of a node to use for the material `roughness` property.
+
+`occlusion_texture_id` *ID*
+: Specifies the *ID* of a node to use for the material `occlusion` property.
+
+`emissive_texture_id` *ID*
+: Specifies the *ID* of a node to use for the material `emissive` property.
+
+`transparency_texture_id` *ID*
+: Specifies the *ID* of a node to use for the material `transparency` property.
+
+For color properties, the color is read directly from the texture. For non-color
+properties, the texture color is converted into a luminance value in the range
+$[0,1]$ and this is used for the property value.
+
+All textures support an alpha channel. If this is less than $1$, the value read
+from the texture will be mixed with the respective single-value property from
+the `!material` node (or the default). This allows, for example, a generic
+"corrosion" or "dirt" texture with alpha transparency to be applied over
+multiple instances of a model with different base `color`s.
+
 ## Models
 
 Actual renderable objects are placed in the scene with model nodes. There are
@@ -650,10 +699,6 @@ equivalent to specifying `flat=true`).
 : This specifies a minimum area for a face below which it will be ignored by the
 algorithm. This is given as a ratio of face area to total model area. If not
 specified, then all faces will be considered.
-
-## Texture Mapping
-
-(placeholder)
 
 ## Constructive Solid Geometry
 
