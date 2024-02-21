@@ -6,6 +6,12 @@ module at the top-level of `flitter.render` to ensure that the auto-import
 and renderer searching logic works.
 """
 
-from .window import Offscreen
+from .window import Window
+
+
+def Offscreen(**kwargs):
+    kwargs['offscreen'] = True
+    return Window(**kwargs)
+
 
 RENDERER_CLASS = Offscreen

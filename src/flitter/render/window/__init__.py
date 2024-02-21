@@ -341,76 +341,10 @@ class Shader(ProgramNode):
         return self.glctx.texture((self.width, self.height), 4, dtype=COLOR_FORMATS[self._colorbits].moderngl_dtype)
 
 
-class Offscreen(ProgramNode):
-    def __init__(self, **kwargs):
-        super().__init__(None)
-        self._framebuffer = None
-        self._texture = None
-        self._colorbits = None
-
-    def release(self):
-        self._colorbits = None
-        self._framebuffer = None
-        self._texture = None
-        if self.glctx is not None:
-            self.glctx.finish()
-            self.glctx.extra.clear()
-            if count := self.glctx.gc():
-                logger.trace("Offscreen release collected {} OpenGL objects", count)
-            self.glctx.release()
-            self.glctx = None
-        super().release()
-
-    def purge(self):
-        self.glctx.finish()
-        super().purge()
-        if count := self.glctx.gc():
-            logger.trace("Offscreen purge collected {} OpenGL objects", count)
-
-    @property
-    def texture(self):
-        return self._texture
-
-    @property
-    def framebuffer(self):
-        return self._framebuffer
-
-    def create(self, engine, node, resized, **kwargs):
-        super().create(engine, node, resized, **kwargs)
-        if self.glctx is None:
-            self.glctx = moderngl.create_context(self.GL_VERSION[0] * 100 + self.GL_VERSION[1] * 10, standalone=True)
-            self.glctx.gc_mode = 'context_gc'
-            self.glctx.extra = {}
-            logger.debug("Created standalone OpenGL context for {}", self.name)
-            logger.debug("OpenGL info: {GL_RENDERER} {GL_VERSION}", **self.glctx.info)
-            logger.trace("{!r}", self.glctx.info)
-        self.glctx.extra['linear'] = node.get('linear', 1, bool, DEFAULT_LINEAR)
-        colorbits = node.get('colorbits', 1, int, DEFAULT_COLORBITS)
-        if colorbits not in COLOR_FORMATS:
-            colorbits = DEFAULT_COLORBITS
-        self.glctx.extra['colorbits'] = colorbits
-        self.glctx.extra['size'] = self.width, self.height
-        if not node.get('id', 1, str):
-            if self._framebuffer is not None:
-                self._texture = None
-                self._framebuffer = None
-        elif self._framebuffer is None or self._texture is None or resized or colorbits != self._colorbits:
-            depth = COLOR_FORMATS[colorbits]
-            self._texture = self.glctx.texture((self.width, self.height), 4, dtype=depth.moderngl_dtype)
-            self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
-            self._framebuffer.clear()
-            self._colorbits = colorbits
-            logger.debug("Created {}x{} {}-bit framebuffer for {}", self.width, self.height, self._colorbits, self.name)
-
-    def render(self, node, **kwargs):
-        if self._framebuffer is not None:
-            super().render(node, **kwargs)
-
-
 class Window(ProgramNode):
     Windows = []
 
-    def __init__(self, screen=0, fullscreen=False, vsync=False, **kwargs):
+    def __init__(self, screen=0, fullscreen=False, vsync=False, offscreen=False, **kwargs):
         super().__init__(None)
         self.engine = None
         self.window = None
@@ -418,6 +352,7 @@ class Window(ProgramNode):
         self.default_fullscreen = fullscreen
         self.default_vsync = vsync
         self._deferred_fullscreen = False
+        self._visible = not offscreen
         self._screen = None
         self._fullscreen = None
         self._resizable = None
@@ -461,8 +396,8 @@ class Window(ProgramNode):
         super().create(engine, node, resized)
         new_window = False
         screen = node.get('screen', 1, int, self.default_screen)
-        fullscreen = node.get('fullscreen', 1, bool, self.default_fullscreen)
-        resizable = node.get('resizable', 1, bool, True)
+        fullscreen = node.get('fullscreen', 1, bool, self.default_fullscreen) if self._visible else False
+        resizable = node.get('resizable', 1, bool, True) if self._visible else False
         if self.window is None:
             self.engine = engine
             title = node.get('title', 1, str, "flitter")
@@ -476,11 +411,13 @@ class Window(ProgramNode):
             glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, self.GL_VERSION[1])
             glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
             glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, glfw.TRUE)
-            glfw.window_hint(glfw.DOUBLEBUFFER, glfw.TRUE)
-            glfw.window_hint(glfw.SAMPLES, 0)
-            glfw.window_hint(glfw.AUTO_ICONIFY, glfw.FALSE)
-            glfw.window_hint(glfw.CENTER_CURSOR, glfw.FALSE)
-            glfw.window_hint(glfw.SCALE_TO_MONITOR, glfw.TRUE)
+            glfw.window_hint(glfw.VISIBLE, glfw.TRUE if self._visible else glfw.FALSE)
+            if self._visible:
+                glfw.window_hint(glfw.DOUBLEBUFFER, glfw.TRUE)
+                glfw.window_hint(glfw.SAMPLES, 0)
+                glfw.window_hint(glfw.AUTO_ICONIFY, glfw.FALSE)
+                glfw.window_hint(glfw.CENTER_CURSOR, glfw.FALSE)
+                glfw.window_hint(glfw.SCALE_TO_MONITOR, glfw.TRUE)
             glfw.window_hint(glfw.SRGB_CAPABLE, glfw.TRUE)
             self.window = glfw.create_window(self.width, self.height, title, None, Window.Windows[0].window if Window.Windows else None)
             Window.Windows.append(self)
@@ -488,7 +425,7 @@ class Window(ProgramNode):
         if resizable != self._resizable:
             glfw.set_window_attrib(self.window, glfw.RESIZABLE, glfw.TRUE if resizable else glfw.FALSE)
             self._resizable = resizable
-        if resized or screen != self._screen or fullscreen != self._fullscreen:
+        if self._visible and (resized or screen != self._screen or fullscreen != self._fullscreen):
             monitors = glfw.get_monitors()
             monitor = monitors[screen] if screen < len(monitors) else monitors[0]
             mx, my, mw, mh = glfw.get_monitor_workarea(monitor)
@@ -516,13 +453,18 @@ class Window(ProgramNode):
             self.glctx = moderngl.create_context(self.GL_VERSION[0] * 100 + self.GL_VERSION[1] * 10)
             self.glctx.gc_mode = 'context_gc'
             self.glctx.extra = {}
-            logger.debug("{} opened on screen {}", self.name, screen)
+            if self._visible:
+                logger.debug("{} opened on screen {}", self.name, screen)
+            else:
+                logger.debug("{} opened off-screen", self.name)
             logger.debug("OpenGL info: {GL_RENDERER} {GL_VERSION}", **self.glctx.info)
             logger.trace("{!r}", self.glctx.info)
-            glfw.set_key_callback(self.window, self.key_callback)
-            glfw.set_cursor_pos_callback(self.window, self.pointer_movement_callback)
-            glfw.set_mouse_button_callback(self.window, self.pointer_button_callback)
-        self.recalculate_viewport(new_window)
+            if self._visible:
+                glfw.set_key_callback(self.window, self.key_callback)
+                glfw.set_cursor_pos_callback(self.window, self.pointer_movement_callback)
+                glfw.set_mouse_button_callback(self.window, self.pointer_button_callback)
+        if self._visible:
+            self.recalculate_viewport(new_window)
         self.glctx.extra['linear'] = node.get('linear', 1, bool, DEFAULT_LINEAR)
         colorbits = node.get('colorbits', 1, int, DEFAULT_COLORBITS)
         if colorbits not in COLOR_FORMATS:
@@ -609,10 +551,10 @@ class Window(ProgramNode):
     def render(self, node, window_gamma=1, **kwargs):
         gamma = node.get('gamma', 1, float, window_gamma)
         super().render(node, gamma=gamma, **kwargs)
-        vsync = node.get('vsync', 1, bool, self.default_vsync)
-        glfw.swap_interval(1 if vsync else 0)
-        glfw.swap_buffers(self.window)
-        self._beat = kwargs['beat']
+        if self._visible:
+            vsync = node.get('vsync', 1, bool, self.default_vsync)
+            glfw.swap_interval(1 if vsync else 0)
+            glfw.swap_buffers(self.window)
         glfw.poll_events()
         if count := self.glctx.gc():
             logger.trace("Collected {} OpenGL objects", count)
@@ -622,11 +564,7 @@ class Window(ProgramNode):
         return self.glctx.texture((width, height), 4)
 
 
-def RENDERER_CLASS(offscreen=False, **kwargs):
-    if offscreen:
-        return Offscreen(**kwargs)
-    else:
-        return Window(**kwargs)
+RENDERER_CLASS = Window
 
 
 ClassCache = {

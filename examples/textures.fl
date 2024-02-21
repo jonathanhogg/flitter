@@ -21,15 +21,17 @@ import bloom_filter from 'common/filters.fl'
 let SIZE=1920;1080
     days=beat/60
 
+!offscreen
+    !image id=:stars filename='images/stars.jpg'
+    !image id=:earth filename='images/earth.jpg'
+    !image id=:earth_night filename='images/earth-night.jpg'
+    !image id=:earth_reflection filename='images/earth-reflection.jpg'
+    !image id=:earth_cloudmap filename='images/earth-cloudmap.jpg'
+    !image id=:earth_cloudmap_transparency filename='images/earth-cloudmap-transparency.jpg'
+    !image id=:moon filename='images/moon.jpg'
+
 !window size=SIZE
     @bloom_filter radius=hypot(SIZE)/100
-        !image id=:stars filename='images/stars.jpg' hidden=true
-        !image id=:earth filename='images/earth.jpg' hidden=true
-        !image id=:earth_night filename='images/earth-night.jpg' hidden=true
-        !image id=:earth_reflection filename='images/earth-reflection.jpg' hidden=true
-        !image id=:earth_cloudmap filename='images/earth-cloudmap.jpg' hidden=true
-        !image id=:earth_cloudmap_transparency filename='images/earth-cloudmap-transparency.jpg' hidden=true
-        !image id=:moon filename='images/moon.jpg' hidden=true
         !canvas3d samples=4 viewpoint=0;-25;0 up=0;0;1 near=1 far=150
             !group
                 !light color=1
