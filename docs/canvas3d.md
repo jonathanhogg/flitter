@@ -517,19 +517,19 @@ in the main repo for how to do this.
 `texture_id=` *ID*
 : Specifies the *ID* of a node to use for the material `color` property.
 
-`metal_texture_id` *ID*
+`metal_texture_id=` *ID*
 : Specifies the *ID* of a node to use for the material `metal` property.
 
-`roughness_texture_id` *ID*
+`roughness_texture_id=` *ID*
 : Specifies the *ID* of a node to use for the material `roughness` property.
 
-`occlusion_texture_id` *ID*
+`occlusion_texture_id=` *ID*
 : Specifies the *ID* of a node to use for the material `occlusion` property.
 
-`emissive_texture_id` *ID*
+`emissive_texture_id=` *ID*
 : Specifies the *ID* of a node to use for the material `emissive` property.
 
-`transparency_texture_id` *ID*
+`transparency_texture_id=` *ID*
 : Specifies the *ID* of a node to use for the material `transparency` property.
 
 For color properties, the color is read directly from the texture. For non-color
@@ -663,7 +663,7 @@ OBJ and STL files. No material properties are loaded, just the triangular mesh,
 so you will need to re-specify the material properties using a `!material`
 node or on the `!model` node itself.
 
-### Smooth and Flat Model Shading
+### Controlling Model Shading
 
 The primitive models are all designed with seams and vertex normals so that
 they render in a sane way: flat sides are uniformly flat and curved sides have
@@ -671,21 +671,20 @@ interpolated normals that ensure they render smoothly.
 
 You can *probably* assume that any external model you load is designed sensibly,
 but there are a couple of model shading controls that can be used to force
-specific shading behaviour. These are controlled with the following attributes
-on a model node:
+specific shading behaviour by generating a new, derived model.
 
 `flat=` [ `true` | `false` ]
-: Setting `flat=true` will cause all faces to be disconnected so that each face
-shades as a separate flat surface.
+: Setting `flat=true` will generate a new model with *all* faces disconnected so
+that each face shades as a separate flat surface.
 
 :::{note}
-Flat shading will create duplicate vertices at all edges. Basically, the model
+Flat shading will create a large number of duplicate vertices. The new model
 will have the same number of faces, but three distinct vertices per face.
 :::
 
 For finer-grained control over shading, there is an edge snapping algorithm
 that will take a smooth-shaded model, find sharp edges and split them into
-seams. This algorithm can be controlled with these attributes:
+seams. This algorithm can be controlled with the following attributes:
 
 `snap_edges=` `0`…`0.5`
 : This specifies the minimum edge angle (in *turns*) at which to snap. It
@@ -700,12 +699,26 @@ equivalent to specifying `flat=true`).
 algorithm. This is given as a ratio of face area to total model area. If not
 specified, then all faces will be considered.
 
+A model can also be *inverted*. This will flip all vertex normals and face
+windings.
+
+`invert=` [ `true` | `false` ]
+: Setting this attribute to `true` on a model node will invert the model.
+
+The result of inverting a model is that the insides of the back faces of the
+model will be rendered instead of the outside of the front faces. Other than
+producing some strange special effects, this is primarily useful for creating
+environments. For example, a large inverted sphere with a texture map can be
+used as a "sky box".
+
+As with all models, the results of these operations are cached.
+
 ## Constructive Solid Geometry
 
 **Flitter** supports [Constructive Solid
 Geometry](https://en.wikipedia.org/wiki/Constructive_solid_geometry) (CSG) using
 features of the **trimesh** and **manifold3d** packages (plus a handful of other
-utility libraries). This is managed by creating a tree of operation, transform
+utility libraries). This is managed by creating trees of operation, transform
 and model nodes.
 
 The basic CSG operation nodes are:
@@ -731,10 +744,10 @@ with the attributes:
 `normal=` *nX*`;`*nY*`;`*nZ*
 : The normal of the cutting plane (surface "up" direction).
 
-Everything on the up side of the cutting plane will be cut, and then the engine
-will attempt to fill the holes left in the mesh – this may not succeed for
-complex shapes. The `!slice` node may have multiple child nodes, in which case
-the result will be equivalent to a slice of the `!union` of the child nodes.
+Everything on the up side of the plane will be cut. The engine will attempt to
+fill holes left in the mesh – this may not succeed for complex shapes. The
+`!slice` node may have multiple child nodes, in which case the result will be
+equivalent to a slice of the `!union` of the child nodes.
 
 A model construction tree may contain `!transform` nodes at any point. These
 differ from normal transformations in that they apply the transforms to the
