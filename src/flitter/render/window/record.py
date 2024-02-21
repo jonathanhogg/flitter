@@ -19,7 +19,7 @@ class Record(ProgramNode):
 
     @property
     def texture(self):
-        return self.children[0].texture if self.children else None
+        return self.children[0].texture if len(self.children) == 1 else self._texture
 
     @property
     def framebuffer(self):
