@@ -39,6 +39,10 @@ COLOR_FORMATS = {
 
 DEFAULT_LINEAR = False
 DEFAULT_COLORBITS = 16
+PUSHED = Vector.symbol('pushed')
+RELEASED = Vector.symbol('released')
+PUSHED_BEAT = Vector.symbol('pushed').concat(Vector.symbol('beat'))
+RELEASED_BEAT = Vector.symbol('released').concat(Vector.symbol('beat'))
 
 
 def get_scene_node_class(kind):
@@ -356,6 +360,7 @@ class Window(ProgramNode):
         self._screen = None
         self._fullscreen = None
         self._resizable = None
+        self._beat = None
 
     def release(self):
         if self.window is not None:
@@ -477,14 +482,14 @@ class Window(ProgramNode):
             state = self._keys[key]
             if action == glfw.PRESS:
                 self.engine.state[state] = 1
-                self.engine.state[state.concat(Vector('pushed'))] = 1
-                self.engine.state[state.concat(Vector('released'))] = 0
-                self.engine.state[state.concat(Vector(['pushed', 'beat']))] = self._beat
+                self.engine.state[state.concat(PUSHED)] = 1
+                self.engine.state[state.concat(RELEASED)] = 0
+                self.engine.state[state.concat(PUSHED_BEAT)] = self._beat
             elif action == glfw.RELEASE:
                 self.engine.state[state] = 0
-                self.engine.state[state.concat(Vector('pushed'))] = 0
-                self.engine.state[state.concat(Vector('released'))] = 1
-                self.engine.state[state.concat(Vector(['released', 'beat']))] = self._beat
+                self.engine.state[state.concat(PUSHED)] = 0
+                self.engine.state[state.concat(RELEASED)] = 1
+                self.engine.state[state.concat(RELEASED_BEAT)] = self._beat
         elif key == glfw.KEY_LEFT:
             if action == glfw.RELEASE:
                 self.engine.previous_page()
@@ -497,6 +502,8 @@ class Window(ProgramNode):
             width, height = glfw.get_window_size(self.window)
             if 0 <= x <= width and 0 <= y <= height:
                 self.engine.state[self._pointer_state] = x/width, y/height
+            else:
+                self.engine.state[self._pointer_state] = None
 
     def pointer_button_callback(self, window, button, action, mods):
         if self._pointer_state is not None and self.window is not None:
@@ -518,12 +525,12 @@ class Window(ProgramNode):
                         if state not in engine.state:
                             if self.window is not None and glfw.get_key(self.window, key) == glfw.PRESS:
                                 engine.state[state] = 1
-                                engine.state[state.concat(Vector('pushed'))] = 1
-                                engine.state[state.concat(Vector('released'))] = 0
+                                engine.state[state.concat(PUSHED)] = 1
+                                engine.state[state.concat(RELEASED)] = 0
                             else:
                                 engine.state[state] = 0
-                                engine.state[state.concat(Vector('pushed'))] = 0
-                                engine.state[state.concat(Vector('released'))] = 1
+                                engine.state[state.concat(PUSHED)] = 0
+                                engine.state[state.concat(RELEASED)] = 1
             return True
         elif node.kind == 'pointer':
             if 'state' in node:
@@ -548,13 +555,14 @@ class Window(ProgramNode):
             else:
                 logger.debug("{} resized to {}x{}", self.name, width, height)
 
-    def render(self, node, window_gamma=1, **kwargs):
+    def render(self, node, window_gamma=1, beat=None, **kwargs):
         gamma = node.get('gamma', 1, float, window_gamma)
         super().render(node, gamma=gamma, **kwargs)
         if self._visible:
             vsync = node.get('vsync', 1, bool, self.default_vsync)
             glfw.swap_interval(1 if vsync else 0)
             glfw.swap_buffers(self.window)
+        self._beat = beat
         glfw.poll_events()
         if count := self.glctx.gc():
             logger.trace("Collected {} OpenGL objects", count)
