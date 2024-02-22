@@ -107,3 +107,33 @@ class TestRendering(unittest.TestCase):
         img = PIL.Image.open(self.output_path)
         self.assertEqual(img.size, self.SIZE)
         self.assertEqual(img.tobytes(), b'\x00\xff\x00' * self.SIZE[0] * self.SIZE[1])
+
+
+class TestDocumentationDiagrams(unittest.TestCase):
+    """
+    Recreate the documentation diagrams and check them against the pre-calculated ones.
+    Some amount of difference is expected here because the GitHub workflow tests run on
+    Ubuntu and the font availability is different. There also seems to be an issue with
+    Skia not doing anti-aliasing in Xvfb.
+    """
+
+    def test_diagrams(self):
+        scripts_dir = Path(__file__).parent.parent / 'docs/diagrams'
+        scripts = [path for path in scripts_dir.iterdir() if path.suffix == '.fl']
+        self.assertTrue(len(scripts) > 0)
+        for i, script in enumerate(scripts):
+            with self.subTest(script=script):
+                output_path = Path(tempfile.mktemp('.png'))
+                try:
+                    comparison = PIL.Image.open(script.with_suffix('.png'))
+                    controller = EngineController(realtime=False, target_fps=1, run_time=1, offscreen=True,
+                                                  defined_names={'OUTPUT': str(output_path)})
+                    controller.load_page(script)
+                    asyncio.run(controller.run())
+                    output = PIL.Image.open(output_path)
+                    self.assertEqual(comparison.size, output.size)
+                    diff = image_diff(output, comparison)
+                    self.assertTrue(all(x < y for (x, y) in zip(diff, [6, 6, 6, 25])))
+                finally:
+                    if output_path.exists():
+                        output_path.unlink()
