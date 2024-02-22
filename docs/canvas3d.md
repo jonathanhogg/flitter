@@ -374,10 +374,11 @@ value if the attribute is missing.
 : Specifies the location in space of the light, respecting any local
 transformation matrix.
 
-`direction=` *X*`;`*Y*`;`*Z* ( | `focus=` *X*`;`*Y*`;`*Z* )
+`direction=` *X*`;`*Y*`;`*Z* | `focus=` *X*`;`*Y*`;`*Z*
 : Specifies the direction that this light shines, either as a direction vector
-or as an absolute position (`focus`). `focus` can **only** be used if `position`
-has also been specified.
+or as an absolute position `focus`. `focus` can **only** be used if `position`
+has also been specified (i.e., for spotlights). `direction` respects any local
+rotations and `focus` respects the full local transformation matrix.
 
 `outer=` `0`…`0.5`
 : Specifies the angle of the *cone* of a spotlight beam, in *turns*. Defaults to
