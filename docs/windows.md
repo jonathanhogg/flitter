@@ -181,9 +181,9 @@ the pointer is not within the bounds of the window then this state key will be
 *PREFIX* `;` (`0` | `1` | … )
 : The status of the pointer button(s), numbered from `0` upwards – which of
 these is "left" or "right" is OS dependent. The state value will be `true` if
-the mouse button is currently pressed, `false` if it is released or `null` if
+the pointer button is currently pressed, `false` if it is released or `null` if
 the state is not currently known (for instance the window has just opened and
-no mouse events have been processed).
+no pointer events have been processed).
 
 ## `!shader`
 

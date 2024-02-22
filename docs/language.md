@@ -212,6 +212,18 @@ While a clash between a symbol's number and an actual number being used in a
 problems unless that number is converted into a string – in which case, the
 number will become the symbol name.
 
+:::{warning}
+While symbols and string values are interchangeable in situations where a string
+is accepted (such as the `composite` attribute in the example above), they are
+not interchangeable as [state mapping](#state) keys.
+
+If this documentation refers to a specific state key as using a symbol, then
+that symbol **must** be used when retrieving that state value. Similarly, if a
+state key or prefix given in the program as a `state` attribute contains a
+symbol, then that symbol must be used to retrieve the state value. If a string
+has been used, then a symbol *cannot* be used to retrieve the value.
+:::
+
 ### Nodes
 
 The purpose of any **Flitter** program is to construct a render tree.
