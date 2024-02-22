@@ -128,6 +128,63 @@ OS-defined.
 The default shader program behaviour for `!window` and `!offscreen` is the same
 as that for [`!shader` below](#shader).
 
+### `!key` and `!pointer`
+
+`!window` nodes support a basic input system similar to
+[controllers](controllers.md) that allows keyboard and pointer input to be
+connected to the [state system](language.md#state). This is controlled by
+adding one or more `!key` nodes as children of the `!window` node and/or a
+`!pointer` node.
+
+`!key` nodes support the following attributes:
+
+`state=` *PREFIX*
+: The prefix for state keys related to this key.
+
+`name=` *NAME*
+: The *name* of the key as a string or symbol. The key names are those defined
+by [GLFW](https://www.glfw.org/docs/latest/group__keys.html) (without the
+leading `GLFW_KEY_` prefix).
+
+A `!key` node must be given for each key that the program is interested in. The
+following entries will be created in the state mapping for each key:
+
+*PREFIX*
+: A value of `true` if the key is currently pressed, `false` if it is released
+or `null` if this is unknown.
+
+*PREFIX* `;pushed`
+: This is the same value as the *PREFIX* key.
+
+*PREFIX* `;pushed;:beat`
+: The beat counter value at the moment that the key was *last* pressed, or
+`null` if this event has not yet occurred.
+
+*PREFIX* `;released`
+: This is the logical negation of the the *PREFIX* key value, i.e., `true` if
+the key is currently *released*, `false` if it is *pressed* or `null` if this is
+unknown.
+
+*PREFIX* `;released;:beat`
+: The beat counter value at the moment that the key was *last* released, or
+`null` if this event has not yet occurred.
+
+A `!pointer` node supports just the `state` attribute and creates the following
+entries in the state mapping:
+
+*PREFIX*
+: The current pointer position as a 2-item vector normalized to the $[0,1]$
+range, where $0$ is the left/top of the window and $1$ is the right/bottom. If
+the pointer is not within the bounds of the window then this state key will be
+`null`.
+
+*PREFIX* `;` (`0` | `1` | … )
+: The status of the pointer button(s), numbered from `0` upwards – which of
+these is "left" or "right" is OS dependent. The state value will be `true` if
+the mouse button is currently pressed, `false` if it is released or `null` if
+the state is not currently known (for instance the window has just opened and
+no mouse events have been processed).
+
 ## `!shader`
 
 The `!shader` node allows insertion of an arbitrary OpenGL shader program into
