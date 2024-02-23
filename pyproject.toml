@@ -75,3 +75,6 @@ where = ["src"]
 [tool.cython-lint]
 max-line-length = 160
 # ignore = ['E503', 'E504']
+
+[tool.cibuildwheel]
+skip = "pp*"
