@@ -325,11 +325,12 @@ large step, which will cause a frame seek to the new location.
 
 :::{warning}
 `position` may run *backwards*. However there is an important caveat: if the
-video makes use of P-frames or B-frames then this will cause a slight judder at
-each I-frame boundary. The video player will seek back to the next I-frame
-and then decode forwards to the desired frame. The in-between frames are cached,
-but the same seek and decode forwards will have to be done when each successive
-I-frame is hit.
+video makes extensive use of
+[P-frames](https://en.wikipedia.org/wiki/Video_compression_picture_types) then
+this will cause a slight judder at each I-frame boundary. The video player will
+need to seek back to the previous I-frame and then decode forwards to the
+desired frame. The in-between frames are cached, but the same seek and decode
+forwards will have to be done each time an I-frame is hit.
 :::
 
 `!video` uses the [**PyAV** library](https://pyav.org), which is a wrapper
