@@ -119,7 +119,7 @@ class TestDocumentationDiagrams(unittest.TestCase):
 
     def test_diagrams(self):
         scripts_dir = Path(__file__).parent.parent / 'docs/diagrams'
-        scripts = [path for path in scripts_dir.iterdir() if path.suffix == '.fl']
+        scripts = sorted(path for path in scripts_dir.iterdir() if path.suffix == '.fl')
         self.assertTrue(len(scripts) > 0)
         for i, script in enumerate(scripts):
             with self.subTest(script=script):
@@ -145,7 +145,7 @@ class TestDocumentationTutorial(unittest.TestCase):
 
     def test_diagrams(self):
         scripts_dir = Path(__file__).parent.parent / 'docs/tutorial_images'
-        scripts = [path for path in scripts_dir.iterdir() if path.suffix == '.fl']
+        scripts = sorted(path for path in scripts_dir.iterdir() if path.suffix == '.fl')
         self.assertTrue(len(scripts) > 0)
         for i, script in enumerate(scripts):
             with self.subTest(script=script):
@@ -158,7 +158,7 @@ class TestDocumentationTutorial(unittest.TestCase):
                     asyncio.run(controller.run())
                     output = PIL.Image.open(output_path)
                     self.assertEqual(reference.size, output.size)
-                    self.assertLess(image_diff(reference, output), 0.01)
+                    self.assertLess(image_diff(reference, output), 0.003)
                 finally:
                     if output_path.exists():
                         output_path.unlink()

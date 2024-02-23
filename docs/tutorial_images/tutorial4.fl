@@ -8,7 +8,7 @@ let SIZE=1920;1080
 
 !window size=SIZE
     !record filename=(OUTPUT or 'tutorial4.jpg')
-        !canvas
+        !canvas font_family='FreeSans'
             !group font_size=100 translate=SIZE/2 color=1
                 text3d("Hello world!", 10, 1;0;0)
             !text text="Figure 1:" point=100;100 color=1
