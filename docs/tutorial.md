@@ -385,6 +385,10 @@ the `hsv()` function with a 3-item vector of hue, saturation and value. Hue is
 calculated by dividing the current beat counter by `10`. At 120bpm it will take
 5 seconds to cycle around the hue wheel.
 
+!["Hello World!" written in white with a 3D effect that animates changing
+color through a spectrum and "Figure 1" small in the top-left
+corner](tutorial_images/tutorial5.gif)
+
 Let's make our example a bit more trippy by animating the individual pieces of
 text that make up the 3D shadow:
 
@@ -436,8 +440,8 @@ Names can be introduced with `let` in any expression sequence. The name will
 only be bound within that sequence (and only for expressions following the
 `let`). Therefore, outside of the loop the name `k` is not defined.
 
-!["Hello World!" written in white with a long rainbow 3D shadow and "Figure 1"
-small in the top-left corner](tutorial_images/tutorial5.jpg)
+!["Hello World!" written in white with a long animated rainbow 3D shadow and
+"Figure 1" small in the top-left corner](tutorial_images/tutorial6.gif)
 
 ## Template Functions
 

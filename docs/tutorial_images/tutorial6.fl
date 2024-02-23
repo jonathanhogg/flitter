@@ -1,14 +1,15 @@
 
-func text3d(text, offset, shadow_color)
+func text3d(text, offset, start_hue)
     for i in offset..0|-1
-        !text text=text point=-i;i color=shadow_color
+        let k=i/offset
+        !text text=text point=-i;i color=hsv(start_hue-k;1;1-k)
     !text text=text
 
 let SIZE=1280;720
 
 !window size=SIZE
-    !record filename=OUTPUT
+    !record filename=OUTPUT codec=:gif
         !canvas font_family='FreeSans'
             !group font_size=100 translate=SIZE/2 color=1
-                text3d("Hello world!", 10, 1;0;0)
+                text3d("Hello world!", 100, beat/10)
             !text text="Figure 1:" point=100;100 color=1
