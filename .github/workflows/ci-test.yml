@@ -47,7 +47,7 @@ jobs:
       run: |
         pytest tests
     - name: Store the test generated images
-      if: failure()
+      if: ${{ failure() }}
       uses: actions/upload-artifact@v4
       with:
         name: test_images_${{ matrix.python-version }}
