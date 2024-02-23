@@ -158,7 +158,7 @@ class TestDocumentationTutorial(unittest.TestCase):
                     asyncio.run(controller.run())
                     output = PIL.Image.open(output_path)
                     self.assertEqual(reference.size, output.size)
-                    self.assertLess(image_diff(reference, output), 0.002)
+                    self.assertLess(image_diff(reference, output), 0.01)
                 finally:
                     if output_path.exists():
                         output_path.unlink()

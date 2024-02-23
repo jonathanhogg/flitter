@@ -10,6 +10,7 @@ on:
     - "setup.py"
     - "src/**/*"
     - "tests/**/*"
+    - "docs/**/*.fl"
   pull_request:
     branches: ["main"]
 
