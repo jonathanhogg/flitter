@@ -67,7 +67,7 @@ We should start actually drawing something. Change the file to read:
 You should see the words "Hello world!" appear in white in the middle of the
 window.
 
-![Simple "Hello World!" image](tutorial_images/tutorial1.jpg)
+![Simple "Hello World!" image](tutorial_images/tutorial1.png)
 
 Lets unpick what is happening here: Each line beginning `!` and followed
 by a name creates a *node* of that *kind*. These can be followed by any number
@@ -147,7 +147,7 @@ from this:
   values then the number represents an RGB triplet also in the range 0 to 1.
 
 !["Hello World!" written in white with a red
-shadow](tutorial_images/tutorial2.jpg)
+shadow](tutorial_images/tutorial2.png)
 
 We can pull out some of the duplicated values in these two text nodes so that
 the intention is more clear. Try changing the code to the following (be careful
@@ -200,7 +200,7 @@ drawing color is black. None of the drawing context introduced by the
 `!group` node is retained outside of it.
 
 !["Hello World!" written in white with a red shadow and "Figure 1" small in the
-top-left corner](tutorial_images/tutorial3.jpg)
+top-left corner](tutorial_images/tutorial3.png)
 
 An important lesson to learn from this tiny example is that both block structure
 (this is *in* that) and context (like origin and paint color) are managed
@@ -338,7 +338,7 @@ node so that the function returns a vector of 11 nodes. These 11 nodes are then
 appended to the group.
 
 !["Hello World!" written in white with a 3D solid effect and "Figure 1" small
-in the top-left corner](tutorial_images/tutorial4.jpg)
+in the top-left corner](tutorial_images/tutorial4.png)
 
 :::{note}
 **Flitter** is a *strict* functional programming language, and so ranges are

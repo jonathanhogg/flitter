@@ -143,15 +143,15 @@ class TestDocumentationTutorial(unittest.TestCase):
     Recreate the tutorial images and check them against the pre-calculated ones.
     """
 
-    def test_diagrams(self):
+    def test_tutorial(self):
         scripts_dir = Path(__file__).parent.parent / 'docs/tutorial_images'
         scripts = sorted(path for path in scripts_dir.iterdir() if path.suffix == '.fl')
         self.assertTrue(len(scripts) > 0)
         for i, script in enumerate(scripts):
             with self.subTest(script=script):
-                output_path = Path(tempfile.mktemp('.jpg'))
+                output_path = Path(tempfile.mktemp('.png'))
                 try:
-                    reference = PIL.Image.open(script.with_suffix('.jpg'))
+                    reference = PIL.Image.open(script.with_suffix('.png'))
                     controller = EngineController(realtime=False, target_fps=1, run_time=1, offscreen=True,
                                                   defined_names={'OUTPUT': str(output_path)})
                     controller.load_page(script)
