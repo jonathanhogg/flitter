@@ -41,7 +41,7 @@ jobs:
         python -m pip install dist/flitter_lang-*.whl
     - name: Install test dependencies
       run: |
-        sudo apt-get install mesa-utils xvfb
+        sudo apt-get install mesa-utils xvfb fonts-freefont-ttf
         python -m pip install pytest pytest-xvfb
     - name: Run all tests
       run: |
