@@ -46,3 +46,8 @@ jobs:
     - name: Run all tests
       run: |
         pytest tests
+    - name: Store the distribution
+      uses: actions/upload-artifact@v4
+      with:
+        name: test_images
+        path: build/test_images/

@@ -19,6 +19,14 @@ def image_diff(ref, img):
     return PIL.ImageStat.Stat(PIL.ImageChops.difference(ref, img).convert('L')).sum[0] / (img.width * img.height * 255)
 
 
+TEST_IMAGES_DIR = Path(__file__).parent.parent / 'build/test_images'
+TEST_IMAGES_DIR.mkdir(mode=0o775, parents=True, exist_ok=True)
+
+for path in TEST_IMAGES_DIR.iterdir():
+    if path.is_file():
+        path.unlink()
+
+
 class TestRendering(unittest.TestCase):
     """
     Some simple rendering functional tests
@@ -123,19 +131,15 @@ class TestDocumentationDiagrams(unittest.TestCase):
         self.assertTrue(len(scripts) > 0)
         for i, script in enumerate(scripts):
             with self.subTest(script=script):
-                output_path = Path(tempfile.mktemp('.png'))
-                try:
-                    reference = PIL.Image.open(script.with_suffix('.png'))
-                    controller = EngineController(realtime=False, target_fps=1, run_time=1, offscreen=True,
-                                                  defined_names={'OUTPUT': str(output_path)})
-                    controller.load_page(script)
-                    asyncio.run(controller.run())
-                    output = PIL.Image.open(output_path)
-                    self.assertEqual(reference.size, output.size)
-                    self.assertLess(image_diff(reference, output), 0.002)
-                finally:
-                    if output_path.exists():
-                        output_path.unlink()
+                output_path = TEST_IMAGES_DIR / script.with_suffix('.png').name
+                reference = PIL.Image.open(script.with_suffix('.png'))
+                controller = EngineController(realtime=False, target_fps=1, run_time=1, offscreen=True,
+                                              defined_names={'OUTPUT': str(output_path)})
+                controller.load_page(script)
+                asyncio.run(controller.run())
+                output = PIL.Image.open(output_path)
+                self.assertEqual(reference.size, output.size)
+                self.assertLess(image_diff(reference, output), 0.002)
 
 
 class TestDocumentationTutorial(unittest.TestCase):
@@ -149,19 +153,15 @@ class TestDocumentationTutorial(unittest.TestCase):
         self.assertTrue(len(scripts) > 0)
         for i, script in enumerate(scripts):
             with self.subTest(script=script):
-                output_path = Path(tempfile.mktemp('.png'))
-                try:
-                    reference = PIL.Image.open(script.with_suffix('.png'))
-                    controller = EngineController(realtime=False, target_fps=1, run_time=1, offscreen=True,
-                                                  defined_names={'OUTPUT': str(output_path)})
-                    controller.load_page(script)
-                    asyncio.run(controller.run())
-                    output = PIL.Image.open(output_path)
-                    self.assertEqual(reference.size, output.size)
-                    self.assertLess(image_diff(reference, output), 0.005)
-                finally:
-                    if output_path.exists():
-                        output_path.unlink()
+                output_path = TEST_IMAGES_DIR / script.with_suffix('.png').name
+                reference = PIL.Image.open(script.with_suffix('.png'))
+                controller = EngineController(realtime=False, target_fps=1, run_time=1, offscreen=True,
+                                              defined_names={'OUTPUT': str(output_path)})
+                controller.load_page(script)
+                asyncio.run(controller.run())
+                output = PIL.Image.open(output_path)
+                self.assertEqual(reference.size, output.size)
+                self.assertLess(image_diff(reference, output), 0.005)
 
 
 class TestExamples(unittest.TestCase):
@@ -177,35 +177,27 @@ class TestExamples(unittest.TestCase):
         scripts = [scripts_dir / name for name in self.SHORT]
         for i, script in enumerate(scripts):
             with self.subTest(script=script):
-                output_path = Path(tempfile.mktemp('.png'))
-                try:
-                    reference = PIL.Image.open(script.with_suffix('.png'))
-                    controller = EngineController(realtime=False, target_fps=1, run_time=1, offscreen=True,
-                                                  defined_names={'OUTPUT': str(output_path)})
-                    controller.load_page(script)
-                    asyncio.run(controller.run())
-                    output = PIL.Image.open(output_path)
-                    self.assertEqual(reference.size, output.size)
-                    self.assertLess(image_diff(reference, output), 0.001)
-                finally:
-                    if output_path.exists():
-                        output_path.unlink()
+                output_path = TEST_IMAGES_DIR / script.with_suffix('.png').name
+                reference = PIL.Image.open(script.with_suffix('.png'))
+                controller = EngineController(realtime=False, target_fps=1, run_time=1, offscreen=True,
+                                              defined_names={'OUTPUT': str(output_path)})
+                controller.load_page(script)
+                asyncio.run(controller.run())
+                output = PIL.Image.open(output_path)
+                self.assertEqual(reference.size, output.size)
+                self.assertLess(image_diff(reference, output), 0.001)
 
     def test_long_examples(self):
         scripts_dir = Path(__file__).parent.parent / 'examples'
         scripts = [scripts_dir / name for name in self.LONG]
         for i, script in enumerate(scripts):
             with self.subTest(script=script):
-                output_path = Path(tempfile.mktemp('.png'))
-                try:
-                    reference = PIL.Image.open(script.with_suffix('.png'))
-                    controller = EngineController(realtime=False, target_fps=10, run_time=1, offscreen=True,
-                                                  defined_names={'OUTPUT': str(output_path)})
-                    controller.load_page(script)
-                    asyncio.run(controller.run())
-                    output = PIL.Image.open(output_path)
-                    self.assertEqual(reference.size, output.size)
-                    self.assertLess(image_diff(reference, output), 0.02)
-                finally:
-                    if output_path.exists():
-                        output_path.unlink()
+                output_path = TEST_IMAGES_DIR / script.with_suffix('.png').name
+                reference = PIL.Image.open(script.with_suffix('.png'))
+                controller = EngineController(realtime=False, target_fps=10, run_time=1, offscreen=True,
+                                              defined_names={'OUTPUT': str(output_path)})
+                controller.load_page(script)
+                asyncio.run(controller.run())
+                output = PIL.Image.open(output_path)
+                self.assertEqual(reference.size, output.size)
+                self.assertLess(image_diff(reference, output), 0.02)
