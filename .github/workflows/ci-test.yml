@@ -11,6 +11,7 @@ on:
     - "src/**/*"
     - "tests/**/*"
     - "docs/**/*.fl"
+    - "examples/**/*"
   pull_request:
     branches: ["main"]
 
