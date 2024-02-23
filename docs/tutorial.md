@@ -128,25 +128,25 @@ Add the following line to the code:
 
 !window size=1920;1080
   !canvas
-    !text text="Hello world!" font_size=100 point=958;542 color=1;0;0
+    !text text="Hello world!" font_size=100 point=950;550 color=1;0;0
     !text text="Hello world!" font_size=100 point=960;540 color=1
 ```
 
 You should see the window now displays the original message in white, overlaid
-on top of the same text in red drawn with a slight offset. The result is a
-slight red 3D "shadow" to the original text. There are some immediately useful
-things to learn from this:
+on top of the same text in red drawn with an offset. The result is a red
+"shadow" to the original text. There are some immediately useful things to learn
+from this:
 
 - Drawing generally proceeds downwards through the file, with later elements
   drawn on top of earlier ones.
 - The drawing canvas follows the common document convention of the origin being
-  at the top left and the *y* axis pointing down. So `542` is lower down in the
-  window than `540` and `958` is further left than `960`.
+  at the top left and the *y* axis pointing down. So `550` is lower down in the
+  window than `540` and `950` is further left than `960`.
 - Colors can be specified as either 1 or 3 item vectors. If given as a single
   value then the number represents a gray level from 0 to 1, if given as three
   values then the number represents an RGB triplet also in the range 0 to 1.
 
-!["Hello World!" written in white with a slight red
+!["Hello World!" written in white with a red
 shadow](tutorial_images/tutorial2.jpg)
 
 We can pull out some of the duplicated values in these two text nodes so that
@@ -159,17 +159,17 @@ of the new indentation):
 !window size=1920;1080
   !canvas
     !group font_size=100 translate=960;540 color=1
-      !text text="Hello world!" point=-2;2 color=1;0;0
+      !text text="Hello world!" point=-10;10 color=1;0;0
       !text text="Hello world!"
 ```
 
 Here we place the two `!text` nodes inside a `!group` node that abstracts out
 the common `font_size`, changes the drawing origin with `translate` and sets
 a default `color`. The first `!text` node overrides this default color and,
-specifies a drawing point offset from this origin 2px to the left and 2px down.
-The second `!text` node doesn't specify a `point` at all, which causes it to be
-drawn at the group origin and, without a `color` attribute, it will be drawn
-with the group color.
+specifies a drawing point offset from this origin 10px to the left and 10px
+down. The second `!text` node doesn't specify a `point` at all, which causes it
+to be drawn at the group origin and, without a `color` attribute, it will be
+drawn with the group color.
 
 `!group` nodes alter the drawing context for the nodes that they contain. They
 are able to change the local transformation matrix that establishes the drawing
@@ -187,7 +187,7 @@ Try adding a final line to this program (again, note the indentation level):
 !window size=1920;1080
   !canvas
     !group font_size=100 translate=960;540 color=1
-      !text text="Hello world!" point=-2;2 color=1;0;0
+      !text text="Hello world!" point=-10;10 color=1;0;0
       !text text="Hello world!"
     !text text="Figure 1:" point=100;100 color=1
 ```
@@ -199,8 +199,8 @@ the default drawing origin of the top left. In fact, if we had left off the
 drawing color is black. None of the drawing context introduced by the
 `!group` node is retained outside of it.
 
-!["Hello World!" written in white with a slight red shadow and "Figure 1" small
-in the top-left corner](tutorial_images/tutorial3.jpg)
+!["Hello World!" written in white with a red shadow and "Figure 1" small in the
+top-left corner](tutorial_images/tutorial3.jpg)
 
 An important lesson to learn from this tiny example is that both block structure
 (this is *in* that) and context (like origin and paint color) are managed
@@ -231,7 +231,7 @@ let SIZE=1920;1080
 !window size=SIZE
   !canvas
     !group font_size=100 translate=SIZE/2 color=1
-      !text text="Hello world!" point=-2;2 color=1;0;0
+      !text text="Hello world!" point=-10;10 color=1;0;0
       !text text="Hello world!"
     !text text="Figure 1:" point=100;100 color=1
 ```
@@ -269,7 +269,7 @@ func text3d(text, offset, shadow_color)
 !window size=SIZE
   !canvas
     !group font_size=100 translate=SIZE/2 color=1
-      text3d("Hello world!", 2, 1;0;0)
+      text3d("Hello world!", 10, 1;0;0)
     !text text="Figure 1:" point=100;100 color=1
 ```
 
@@ -294,27 +294,11 @@ original code than it appeared.
 
 ## For Loops
 
-What if we change the program so that the `offset` value is larger? For example:
+It would be great if instead of this simple shadow we could fill in the gap
+between the shadow and the text to create a solid 3D effect. We could achieve
+this by drawing more pieces of text in the `shadow_color` at different offsets.
 
-```{code-block} flitter
-:emphasize-lines: 10
-
-let SIZE=1920;1080
-
-func text3d(text, offset, shadow_color)
-  !text text=text point=-offset;offset color=shadow_color
-  !text text=text
-
-!window size=SIZE
-  !canvas
-    !group font_size=100 translate=SIZE/2 color=1
-      text3d("Hello world!", 10, 1;0;0)
-    !text text="Figure 1:" point=100;100 color=1
-```
-
-The 3D effect of the text starts to break down and we end up with two separate
-pieces of text. What we want to do is fill in the gap. We can draw more pieces
-of text in the `shadow_color` using a [`for` loop](language.md#for-loops):
+We'll use a [`for` loop](language.md#for-loops) to do this:
 
 ```{code-block} flitter
 :emphasize-lines: 4,5
@@ -353,7 +337,7 @@ evaluation of the loop body. The result of this loop is a 10-item vector of
 node so that the function returns a vector of 11 nodes. These 11 nodes are then
 appended to the group.
 
-!["Hello World!" written in white with a long red 3D shadow and "Figure 1" small
+!["Hello World!" written in white with a 3D solid effect and "Figure 1" small
 in the top-left corner](tutorial_images/tutorial4.jpg)
 
 :::{note}
