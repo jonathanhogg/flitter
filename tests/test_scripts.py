@@ -14,9 +14,9 @@ import PIL.ImageStat
 from flitter.engine.control import EngineController
 
 
-def image_diff(reference_img, img):
-    """Return the RMS per-pixel difference of two images for each of the channels"""
-    return PIL.ImageStat.Stat(PIL.ImageChops.difference(reference_img, img)).rms
+def image_diff(ref, img):
+    """Return how dissimilar two images are as a score between 0 (identical) and 1 (completely different)"""
+    return PIL.ImageStat.Stat(PIL.ImageChops.difference(ref, img).convert('L')).sum[0] / (img.width * img.height * 255)
 
 
 class TestRendering(unittest.TestCase):
@@ -114,7 +114,7 @@ class TestDocumentationDiagrams(unittest.TestCase):
     Recreate the documentation diagrams and check them against the pre-calculated ones.
     Some amount of difference is expected here because the GitHub workflow tests run on
     Ubuntu and the font availability is different. There also seems to be an issue with
-    Skia not doing anti-aliasing in Xvfb.
+    Skia not doing anti-aliasing in Xvfb (Mesa).
     """
 
     def test_diagrams(self):
@@ -125,15 +125,14 @@ class TestDocumentationDiagrams(unittest.TestCase):
             with self.subTest(script=script):
                 output_path = Path(tempfile.mktemp('.png'))
                 try:
-                    comparison = PIL.Image.open(script.with_suffix('.png'))
+                    reference = PIL.Image.open(script.with_suffix('.png'))
                     controller = EngineController(realtime=False, target_fps=1, run_time=1, offscreen=True,
                                                   defined_names={'OUTPUT': str(output_path)})
                     controller.load_page(script)
                     asyncio.run(controller.run())
                     output = PIL.Image.open(output_path)
-                    self.assertEqual(comparison.size, output.size)
-                    diff = image_diff(output, comparison)
-                    self.assertTrue(all(x < y for (x, y) in zip(diff, [6, 6, 6, 25])))
+                    self.assertEqual(reference.size, output.size)
+                    self.assertLess(image_diff(reference, output), 0.002)
                 finally:
                     if output_path.exists():
                         output_path.unlink()
