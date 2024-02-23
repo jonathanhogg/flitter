@@ -22,13 +22,13 @@ let SIZE=1920;1080
     days=beat/60
 
 !offscreen
-    !image id=:stars filename='images/stars.jpg'
-    !image id=:earth filename='images/earth.jpg'
-    !image id=:earth_night filename='images/earth-night.jpg'
-    !image id=:earth_reflection filename='images/earth-reflection.jpg'
-    !image id=:earth_cloudmap filename='images/earth-cloudmap.jpg'
-    !image id=:earth_cloudmap_transparency filename='images/earth-cloudmap-transparency.jpg'
-    !image id=:moon filename='images/moon.jpg'
+    !image id=:stars filename='assets/stars.jpg'
+    !image id=:earth filename='assets/earth.jpg'
+    !image id=:earth_night filename='assets/earth-night.jpg'
+    !image id=:earth_reflection filename='assets/earth-reflection.jpg'
+    !image id=:earth_cloudmap filename='assets/earth-cloudmap.jpg'
+    !image id=:earth_cloudmap_transparency filename='assets/earth-cloudmap-transparency.jpg'
+    !image id=:moon filename='assets/moon.jpg'
 
 !window size=SIZE
     !record filename=OUTPUT

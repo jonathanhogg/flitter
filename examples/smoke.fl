@@ -1,7 +1,7 @@
 
 %pragma tempo 60
 
-let SIZE=(1920;1080)
+let SIZE=1920;1080
     N=2500
     R=hypot(SIZE)/7
     F=hypot(SIZE)/200
@@ -10,14 +10,15 @@ let SIZE=(1920;1080)
     START=uniform(:xy)[..N*2] * (SIZE+2*R) - R
 
 !window size=SIZE
-    !canvas composite=:add antialias=false linear=true
-        let current_speed=counter(:speed, beat)
-            accelleration=normal(:f;beat*100)[..N*2] * F - current_speed * DRAG
-            speed=counter(:speed, beat, accelleration)
-            position=(counter(:position, beat, speed) + START + R) % (SIZE + 2*R) - R
-        !group color=0.01;0.006;0.006
-            for i in ..N//2
-                !ellipse radius=RADII[i] fill=true point=position[i*2..(i+1)*2]
-        !group color=0.006;0.006;0.01
-            for i in N//2..N
-                !ellipse radius=RADII[i] fill=true point=position[i*2..(i+1)*2]
+    !record filename=(OUTPUT if 60*beat/tempo*fps > 8)
+        !canvas composite=:add antialias=false linear=true
+            let current_speed=counter(:speed, beat)
+                accelleration=normal(:f;beat*100)[..N*2] * F - current_speed * DRAG
+                speed=counter(:speed, beat, accelleration)
+                position=(counter(:position, beat, speed) + START + R) % (SIZE + 2*R) - R
+            !group color=0.01;0.006;0.006
+                for i in ..N//2
+                    !ellipse radius=RADII[i] fill=true point=position[i*2..(i+1)*2]
+            !group color=0.006;0.006;0.01
+                for i in N//2..N
+                    !ellipse radius=RADII[i] fill=true point=position[i*2..(i+1)*2]

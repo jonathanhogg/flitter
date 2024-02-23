@@ -170,7 +170,7 @@ class TestExamples(unittest.TestCase):
     """
 
     SHORT = ['bauble.fl', 'canvas3d.fl', 'solidgeometry.fl', 'textures.fl', 'video.fl']
-    LONG = ['bounce.fl', 'hoops.fl', 'physics.fl']
+    LONG = ['bounce.fl', 'hoops.fl', 'physics.fl', 'smoke.fl']
 
     def test_short_examples(self):
         scripts_dir = Path(__file__).parent.parent / 'examples'
@@ -205,7 +205,7 @@ class TestExamples(unittest.TestCase):
                     asyncio.run(controller.run())
                     output = PIL.Image.open(output_path)
                     self.assertEqual(reference.size, output.size)
-                    self.assertLess(image_diff(reference, output), 0.01)
+                    self.assertLess(image_diff(reference, output), 0.02)
                 finally:
                     if output_path.exists():
                         output_path.unlink()

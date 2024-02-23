@@ -6,8 +6,8 @@ let t=60*beat/tempo + (5 if OUTPUT else 0)
 !window size=SIZE
     !record filename=OUTPUT
         !shader
-            !video filename="badapple.m4v" position=-t loop=true interpolate=true
-            !video filename="badapple.m4v" position=t loop=true hidden=true id=:badapple
+            !video filename="assets/badapple.m4v" position=-t loop=true interpolate=true
+            !video filename="assets/badapple.m4v" position=t loop=true hidden=true id=:badapple
             !canvas antialias=false
                 !blend ratio=0.25
                     !pattern texture_id=:badapple scale=0.5 rotate=-1/8
