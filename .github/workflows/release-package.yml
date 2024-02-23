@@ -34,7 +34,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-13, macos-14]
+        # Do not build for macos-14 (Apple Silicon) yet. It is failing in an odd way.
+        os: [ubuntu-latest, macos-13]
     steps:
       - uses: actions/checkout@v4
       - name: Build wheels
