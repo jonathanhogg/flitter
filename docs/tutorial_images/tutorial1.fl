@@ -1,0 +1,5 @@
+
+!window size=1920;1080
+    !record filename=(OUTPUT or 'tutorial1.jpg')
+        !canvas
+            !text text="Hello world!" font_size=100 point=960;540 color=1

@@ -1,0 +1,14 @@
+
+func text3d(text, offset, shadow_color)
+    for i in offset..0|-1
+        !text text=text point=-i;i color=shadow_color
+    !text text=text
+
+let SIZE=1920;1080
+
+!window size=SIZE
+    !record filename=(OUTPUT or 'tutorial4.jpg')
+        !canvas
+            !group font_size=100 translate=SIZE/2 color=1
+                text3d("Hello world!", 10, 1;0;0)
+            !text text="Figure 1:" point=100;100 color=1

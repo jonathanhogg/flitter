@@ -65,7 +65,11 @@ We should start actually drawing something. Change the file to read:
 ```
 
 You should see the words "Hello world!" appear in white in the middle of the
-window. Lets unpick what is happening here: Each line beginning `!` and followed
+window.
+
+![Simple "Hello World!" image](tutorial_images/tutorial1.jpg)
+
+Lets unpick what is happening here: Each line beginning `!` and followed
 by a name creates a *node* of that *kind*. These can be followed by any number
 of *name*`=`*value* pairs, each of which adds an *attribute* to the preceding
 node. Values are *vectors* of any combination of numbers or Unicode strings
@@ -142,6 +146,9 @@ things to learn from this:
   value then the number represents a gray level from 0 to 1, if given as three
   values then the number represents an RGB triplet also in the range 0 to 1.
 
+!["Hello World!" written in white with a slight red
+shadow](tutorial_images/tutorial2.jpg)
+
 We can pull out some of the duplicated values in these two text nodes so that
 the intention is more clear. Try changing the code to the following (be careful
 of the new indentation):
@@ -191,6 +198,9 @@ the default drawing origin of the top left. In fact, if we had left off the
 `color=1` attribute then it wouldn't have appeared at all, as the default
 drawing color is black. None of the drawing context introduced by the
 `!group` node is retained outside of it.
+
+!["Hello World!" written in white with a slight red shadow and "Figure 1" small
+in the top-left corner](tutorial_images/tutorial3.jpg)
 
 An important lesson to learn from this tiny example is that both block structure
 (this is *in* that) and context (like origin and paint color) are managed
@@ -343,6 +353,9 @@ evaluation of the loop body. The result of this loop is a 10-item vector of
 node so that the function returns a vector of 11 nodes. These 11 nodes are then
 appended to the group.
 
+!["Hello World!" written in white with a long red 3D shadow and "Figure 1" small
+in the top-left corner](tutorial_images/tutorial4.jpg)
+
 :::{note}
 **Flitter** is a *strict* functional programming language, and so ranges are
 fully evaluated before use. For this reason, ranges **must** include a stop
@@ -438,6 +451,9 @@ Note that we've introduced a new name, `k`, inside the body of the `for` loop.
 Names can be introduced with `let` in any expression sequence. The name will
 only be bound within that sequence (and only for expressions following the
 `let`). Therefore, outside of the loop the name `k` is not defined.
+
+!["Hello World!" written in white with a long rainbow 3D shadow and "Figure 1"
+small in the top-left corner](tutorial_images/tutorial5.jpg)
 
 ## Template Functions
 

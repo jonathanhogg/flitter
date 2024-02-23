@@ -136,3 +136,29 @@ class TestDocumentationDiagrams(unittest.TestCase):
                 finally:
                     if output_path.exists():
                         output_path.unlink()
+
+
+class TestDocumentationTutorial(unittest.TestCase):
+    """
+    Recreate the tutorial images and check them against the pre-calculated ones.
+    """
+
+    def test_diagrams(self):
+        scripts_dir = Path(__file__).parent.parent / 'docs/tutorial_images'
+        scripts = [path for path in scripts_dir.iterdir() if path.suffix == '.fl']
+        self.assertTrue(len(scripts) > 0)
+        for i, script in enumerate(scripts):
+            with self.subTest(script=script):
+                output_path = Path(tempfile.mktemp('.jpg'))
+                try:
+                    reference = PIL.Image.open(script.with_suffix('.jpg'))
+                    controller = EngineController(realtime=False, target_fps=1, run_time=1, offscreen=True,
+                                                  defined_names={'OUTPUT': str(output_path)})
+                    controller.load_page(script)
+                    asyncio.run(controller.run())
+                    output = PIL.Image.open(output_path)
+                    self.assertEqual(reference.size, output.size)
+                    self.assertLess(image_diff(reference, output), 0.002)
+                finally:
+                    if output_path.exists():
+                        output_path.unlink()
