@@ -194,9 +194,9 @@ the window render tree. `!shader` nodes support the following attribute:
 : This overrides the default color channel bit depth for this node's output
 texture.
 
-The default shader program (and that also used for `!window`, `!offscreen` and
-`!record` nodes) composites together the output textures of all child nodes with
-a blend function that can be controlled with the following attribute:
+The default shader program (and that also used for `!window`, `!offscreen`
+nodes) composites together the output textures of all child nodes with a blend
+function that can be controlled with the following attribute:
 
 `composite=` [ `:over` | `:dest_over` | `:lighten` | `:darken` | `:add` | `:difference` | `:multiply` ]
 : Specifies the blend function to use in the standard compositing shader
@@ -334,58 +334,47 @@ forwards will have to be done each time an I-frame is hit.
 :::
 
 `!video` uses the [**PyAV** library](https://pyav.org), which is a wrapper
-around **ffmpeg**. It thus supports a very wide range of video file types.
+around [**ffmpeg**](https://ffmpeg.org). It thus supports a very wide range of
+video file types.
 
 ## `!record`
 
-Record composites its child nodes – like a standard `!shader` node – but does
-this to a texture which is then written to an image or video file.
+The `!record` node expects a single child node which will be written to an
+image or video file and then passed through untouched as the output texture
+of the `!record` node. If a number of children need to be composited together
+for output, then place a [`!shader`](#shader) node between them and `!record`.
 
-If the  `!record` node has only one child, then the output texture from
-`!record` into the rest of the window rendering tree will be the output texture
-of that child. This allows a `!record` node to be inserted into a tree without
-disturbing the normal rendering pipeline. This is particularly important if the
-output image is being written at a smaller size to the child node.
-
-:::{warning}
-If the `!record` node has multiple children, then its output texture will be the
-same texture that is written to the file, which may include not just resizing,
-but also a shallower color channel bit depth and transformation into sRGB
-logarithmic color space.
-
-If this is to be avoided, then the simplest approach is to move the `!record`
-node out of the rendering path and provide its input using a
-[`!reference`](#reference) node.
-:::
-
-The `!record` node supports the following attributes:
+`!record` supports the following attributes:
 
 `filename=` *PATH*
 : Specifies the path of the image or video file to write to, with respect to the
 location of the running **Flitter** program. Whether the output is an image or
 a video depends on the extension of the filename. If `filename` is `null`, then
-the `!record` node will do nothing.
+the `!record` node will do nothing – this is a simple way to delay output until
+when a particular condition holds.
 
 `quality=` *Q*
 : Specifies a quality setting for image formats that support it (such as JPEG).
 
-`codec=`
+`codec=` *CODEC*
 : For generic video container outputs, this specifies the video codec to use.
-Defaults to `h264`.
+Defaults to `:h264`.
 
-`crf=`
+`crf=` *CRF*
 : For video codecs that support it, this provides a "constant rate factor" that
 defines how much the codec should prioritise size over quality. Smaller values
 mean better quality and larger values mean a smaller size. A value around `25`
-is generally an acceptable compromise for the `h264` codec. For `h265`, this
+is generally an acceptable compromise for the `:h264` codec. For `:h265`, this
 can often be pushed up to a higher value for smaller files while still keeping
 a decent quality encoding.
 
-`preset=`
-: Specifies a video codec preset if supported. This bunches up a lot of
-different codec settings. Usual presets have names like `:fast` or `:slow`.
+`preset=` *PRESET*
+: Specifies a video codec preset if supported. This bunches up different codec
+settings. Common presets have names like `:fast` or `:slow` and the
+[**ffmpeg**](https://ffmpeg.org) documentation should be referred to for
+details.
 
-`limit=`
+`limit=` *SECONDS*
 : Specifies a maximum number of seconds of video output to write before closing
 the file. Otherwise, the video output will continue for as long as `filename` is
 valid and the program is running.
