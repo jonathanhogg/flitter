@@ -36,8 +36,8 @@ in the window rendering tree.
 anywhere in the window rendering tree.
 
 `!canvas`
-: A 2D drawing canvas. This may appear as a child node anywhere in the window
-rendering tree.
+: A [2D drawing canvas](canvas.md). This may appear as a child node anywhere in
+the window rendering tree.
 
 `!canvas3d`
 : A [3D drawing canvas](canvas3d.md). This may appear as a child node anywhere
@@ -65,8 +65,8 @@ and `!video` nodes, matched to the content.
 `id=` *ID*
 : Specifies a string or symbol identifier for this node that allows the output
 texture from it to be referenced from elsewhere – either a `!reference` node,
-a [texture map](canvas3d,md#texture-mapping) on a 3D model, or as an [image or
-pattern](canvas.md#using-external-textures) in a 2D drawing.
+a [texture map](canvas3d,md#texture-mapping) on a 3D model, or as an
+[image](canvas.md#images) or [pattern](canvas.md#pattern) in a 2D drawing.
 
 `hidden=` [ `true` | `false` ]
 : This is valid on any child node (i.e., not on `!window` or `!offscreen`).
@@ -116,8 +116,8 @@ or for saving output to files without opening a window.
 
 `linear=` [ `true` | `false` ]
 : This specifies the whether linear or logarithmic color-handling is desired.
-This only affects the behaviour of [`!canvas` 2D drawing](canvas.md) nodes.
-All other color processing in the pipeline assumes linear color-handling.
+This only affects the behaviour of [`!canvas` 2D drawing](canvas.md#canvases)
+nodes. All other color processing in the pipeline assumes linear color-handling.
 
 `colorbits=` [ `8` | `16` | `32` ]
 : This specifies the default bit depth of output texture color channels for the

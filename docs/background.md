@@ -1,6 +1,8 @@
 
 # Background
 
+## Where did Flitter come from?
+
 This is probably my third implementation of a variant of these ideas.
 Originally, I developed a simple visuals system as an embedding in Python
 (using a crazy system of `with` statements), which sent JSON graphs over a

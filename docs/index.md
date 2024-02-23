@@ -27,8 +27,10 @@ tutorial.md
 language.md
 builtins.md
 windows.md
+canvas.md
 canvas3d.md
 physics.md
+controllers.md
 ```
 
 ## Examples
