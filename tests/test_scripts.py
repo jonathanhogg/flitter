@@ -24,7 +24,7 @@ TEST_IMAGES_DIR.mkdir(mode=0o775, parents=True, exist_ok=True)
 
 for path in TEST_IMAGES_DIR.iterdir():
     if path.is_file():
-        path.unlink()
+        path.unlink(missing_ok=True)
 
 
 class TestRendering(unittest.TestCase):
@@ -200,4 +200,4 @@ class TestExamples(unittest.TestCase):
                 asyncio.run(controller.run())
                 output = PIL.Image.open(output_path)
                 self.assertEqual(reference.size, output.size)
-                self.assertLess(image_diff(reference, output), 0.02)
+                self.assertLess(image_diff(reference, output), 0.002)
