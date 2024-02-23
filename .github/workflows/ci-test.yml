@@ -46,8 +46,9 @@ jobs:
     - name: Run all tests
       run: |
         pytest tests
-    - name: Store the distribution
+    - name: Store the test generated images
+      if: failure()
       uses: actions/upload-artifact@v4
       with:
-        name: test_images
+        name: test_images_${{ matrix.python-version }}
         path: build/test_images/
