@@ -1,8 +1,8 @@
 
-!window size=1920;1080
+!window size=1280;720
     !record filename=(OUTPUT or 'tutorial3.jpg')
         !canvas font_family='FreeSans'
-            !group font_size=100 translate=960;540 color=1
+            !group font_size=100 translate=640;360 color=1
                 !text text="Hello world!" point=-10;10 color=1;0;0
                 !text text="Hello world!"
             !text text="Figure 1:" point=100;100 color=1

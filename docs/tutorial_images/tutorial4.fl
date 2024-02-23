@@ -4,7 +4,7 @@ func text3d(text, offset, shadow_color)
         !text text=text point=-i;i color=shadow_color
     !text text=text
 
-let SIZE=1920;1080
+let SIZE=1280;720
 
 !window size=SIZE
     !record filename=(OUTPUT or 'tutorial4.jpg')

@@ -17,7 +17,7 @@ being responsible for doing the work necessary to show those visuals.
 Let's start with the simplest example:
 
 ```flitter
-!window size=1920;1080
+!window size=1280;720
 ```
 
 Save this to a file, say `tutorial.fl`, and execute it with:
@@ -27,9 +27,9 @@ $ flitter tutorial.fl
 09:09:23.036 11632:.engine.control  | SUCCESS: Loaded page 0: tutorial.fl
 ```
 
-A 16:9 black window should open. The `size=1920;1080` declares that we want to
-draw 1920 x 1080 graphics inside this window. The window won't necessarily
-actually be 1920 x 1080, **Flitter** will resize it as necessary to fit on
+A 16:9 black window should open. The `size=1280;720` declares that we want to
+draw 1280 x 720 graphics inside this window. The window won't necessarily
+actually be 1280 x 720, **Flitter** will resize it as necessary to fit on
 screen neatly and the OS is responsible for the pixel dimensions of the
 framebuffer that backs the window. However, the size here is an important hint
 for things we will put inside this window.
@@ -40,7 +40,7 @@ code to read:
 ```{code-block} flitter
 :emphasize-lines: 2
 
-!window size=1920;1080
+!window size=1280;720
   !canvas
 ```
 
@@ -50,7 +50,7 @@ moment, but this new line instructs **Flitter** to place a drawing canvas
 inside the window.
 
 The drawing canvas that we have placed inside the window will be *exactly*
-1920 x 1080 pixels in size – the canvas inherits its size from the enclosing
+1280 x 720 pixels in size – the canvas inherits its size from the enclosing
 window `size` attribute. We could override this by putting a `size=` attribute
 after `!canvas`.
 
@@ -59,9 +59,9 @@ We should start actually drawing something. Change the file to read:
 ```{code-block} flitter
 :emphasize-lines: 3
 
-!window size=1920;1080
+!window size=1280;720
   !canvas
-    !text text="Hello world!" font_size=100 point=960;540 color=1
+    !text text="Hello world!" font_size=100 point=640;360 color=1
 ```
 
 You should see the words "Hello world!" appear in white in the middle of the
@@ -105,11 +105,11 @@ In this case the renderer is doing the following:
   `!window` node. The window can be resized and moved around, but will retain
   this 16:9 aspect and cannot be manually closed. The window has a black
   background.
-- Inside this window, a [Skia](https://skia.org) 1920 x 1080 pixel `!canvas` has
+- Inside this window, a [Skia](https://skia.org) 1280 x 720 pixel `!canvas` has
   been created. It is initially filled with transparent pixels.
 - The canvas renderer draws some text (`!text text="Hello world!"`), in
   Helvetica (the default typeface family) at 100px (`font_size=100`), centred
-  within the window (`point=960;540`), and in white (`color=1`).
+  within the window (`point=640;360`), and in white (`color=1`).
 
 The rendering roughly proceeds down through the tree drawing everything that
 needs to be drawn, and then works back up compositing the elements together. So
@@ -126,10 +126,10 @@ Add the following line to the code:
 ```{code-block} flitter
 :emphasize-lines: 3
 
-!window size=1920;1080
+!window size=1280;720
   !canvas
-    !text text="Hello world!" font_size=100 point=950;550 color=1;0;0
-    !text text="Hello world!" font_size=100 point=960;540 color=1
+    !text text="Hello world!" font_size=100 point=630;370 color=1;0;0
+    !text text="Hello world!" font_size=100 point=640;360 color=1
 ```
 
 You should see the window now displays the original message in white, overlaid
@@ -140,8 +140,8 @@ from this:
 - Drawing generally proceeds downwards through the file, with later elements
   drawn on top of earlier ones.
 - The drawing canvas follows the common document convention of the origin being
-  at the top left and the *y* axis pointing down. So `550` is lower down in the
-  window than `540` and `950` is further left than `960`.
+  at the top left and the *y* axis pointing down. So `370` is lower down in the
+  window than `360` and `630` is further left than `640`.
 - Colors can be specified as either 1 or 3 item vectors. If given as a single
   value then the number represents a gray level from 0 to 1, if given as three
   values then the number represents an RGB triplet also in the range 0 to 1.
@@ -156,9 +156,9 @@ of the new indentation):
 ```{code-block} flitter
 :emphasize-lines: 3,4,5
 
-!window size=1920;1080
+!window size=1280;720
   !canvas
-    !group font_size=100 translate=960;540 color=1
+    !group font_size=100 translate=640;360 color=1
       !text text="Hello world!" point=-10;10 color=1;0;0
       !text text="Hello world!"
 ```
@@ -184,9 +184,9 @@ Try adding a final line to this program (again, note the indentation level):
 ```{code-block} flitter
 :emphasize-lines: 6
 
-!window size=1920;1080
+!window size=1280;720
   !canvas
-    !group font_size=100 translate=960;540 color=1
+    !group font_size=100 translate=640;360 color=1
       !text text="Hello world!" point=-10;10 color=1;0;0
       !text text="Hello world!"
     !text text="Figure 1:" point=100;100 color=1
@@ -226,7 +226,7 @@ expressions](language.md#let-expressions):
 ```{code-block} flitter
 :emphasize-lines: 1,3,5
 
-let SIZE=1920;1080
+let SIZE=1280;720
 
 !window size=SIZE
   !canvas
@@ -244,12 +244,12 @@ and also to calculate the middle of the canvas when we move the origin in the
 group.
 
 Note that the calculation of `SIZE/2` divides *both* items of the `SIZE`
-vector by `2` at the same time, giving us `960;540` as the resulting value for
+vector by `2` at the same time, giving us `640;360` as the resulting value for
 the `translate` attribute. All mathematical operators and functions in
 **Flitter** operate on entire vectors at once. Generally, when one vector is
 smaller than another, the items of the smaller vector are repeated as
 necessary to complete the calculation. So, here, `SIZE/2` is equivalent to
-`(1920;1080)/(2;2)` and the division proceeds piecewise.
+`(1280;720)/(2;2)` and the division proceeds piecewise.
 
 ## Functions
 
@@ -260,7 +260,7 @@ abstract out the repeated `!text` nodes as well.
 ```{code-block} flitter
 :emphasize-lines: 3,4,5,10
 
-let SIZE=1920;1080
+let SIZE=1280;720
 
 func text3d(text, offset, shadow_color)
   !text text=text point=-offset;offset color=shadow_color
@@ -303,7 +303,7 @@ We'll use a [`for` loop](language.md#for-loops) to do this:
 ```{code-block} flitter
 :emphasize-lines: 4,5
 
-let SIZE=1920;1080
+let SIZE=1280;720
 
 func text3d(text, offset, shadow_color)
   for i in offset..0|-1
@@ -365,7 +365,7 @@ we incorporate time is with the use of the `beat` global name:
 ```{code-block} flitter
 :emphasize-lines: 11
 
-let SIZE=1920;1080
+let SIZE=1280;720
 
 func text3d(text, offset, shadow_color)
   for i in offset..0|-1
@@ -391,7 +391,7 @@ text that make up the 3D shadow:
 ```{code-block} flitter
 :emphasize-lines: 3,5,11
 
-let SIZE=1920;1080
+let SIZE=1280;720
 
 func text3d(text, offset, start_hue)
   for i in offset..0|-1
@@ -416,7 +416,7 @@ As a further flourish, let's make the 3D shadow fade into the distance:
 ```{code-block} flitter
 :emphasize-lines: 5,6
 
-let SIZE=1920;1080
+let SIZE=1280;720
 
 func text3d(text, offset, start_hue)
   for i in offset..0|-1
@@ -448,7 +448,7 @@ syntactic sugar to make the intention of the code easier to read:
 ```{code-block} flitter
 :emphasize-lines: 3,12
 
-let SIZE=1920;1080
+let SIZE=1280;720
 
 func text3d(_, text, offset, start_hue)
   for i in offset..0|-1
@@ -485,7 +485,7 @@ arguments in the call:
 ```{code-block} flitter
 :emphasize-lines: 3,12
 
-let SIZE=1920;1080
+let SIZE=1280;720
 
 func text3d(_, text, offset=100, start_hue=0)
   for i in offset..0|-1
@@ -513,7 +513,7 @@ behaviour with an `if` expression:
 ```{code-block} flitter
 :emphasize-lines: 3,6,7,8,9,15
 
-let SIZE=1920;1080
+let SIZE=1280;720
 
 func text3d(_, text, offset=100, start_hue, shadow_color)
   for i in offset..0|-1

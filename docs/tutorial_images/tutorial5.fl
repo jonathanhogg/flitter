@@ -5,7 +5,7 @@ func text3d(text, offset, start_hue)
         !text text=text point=-i;i color=hsv(start_hue-k;1;1-k)
     !text text=text
 
-let SIZE=1920;1080
+let SIZE=1280;720
 
 !window size=SIZE
     !record filename=(OUTPUT or 'tutorial5.jpg')

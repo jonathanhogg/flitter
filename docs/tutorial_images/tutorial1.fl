@@ -1,5 +1,5 @@
 
-!window size=1920;1080
+!window size=1280;720
     !record filename=(OUTPUT or 'tutorial1.jpg')
         !canvas font_family='FreeSans'
-            !text text="Hello world!" font_size=100 point=960;540 color=1
+            !text text="Hello world!" font_size=100 point=640;360 color=1
