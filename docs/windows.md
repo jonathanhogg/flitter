@@ -109,7 +109,7 @@ latter not opening on-screen. `!offscreen` nodes are primarily intended to
 collect window rendering nodes that are to be used as references rather than
 through direct rendering into a window. However, all `!window` nodes can be made
 to behave as `!offscreen` nodes with the `--offscreen` [command-line
-option](install,md#command-line-options). This can be useful for running tests
+option](install,md#running-flitter). This can be useful for running tests
 or for saving output to files without opening a window.
 
 `!window` and `!offscreen` nodes support the following specific attributes:

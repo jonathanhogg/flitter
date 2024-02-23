@@ -11,8 +11,6 @@ both of those platforms. There have been no reports of it having been tried
 on Windows yet, but there's no particular reason why it shouldn't work. If you
 have success or otherwise on another platform please get in touch.
 
-## Install precursors
-
 **Flitter** is a command-line tool. It is assumed that you are comfortable using
 the command line on your OS of choice. You will also obviously need to be able
 to ensure that you have a recent Python install. Sadly, even on macOS Sonoma
@@ -20,9 +18,28 @@ the system installed Python is only at version 3.9. You can normally download
 Python for your OS from the [Python website](https://www.python.org/downloads/).
 However, you may want to explore a package manager that can manage this sort of
 thing for you, like [Homebrew](https://brew.sh) or
-[MacPorts](https://www.macports.org/install.php). As **Flitter** uses Cython
-under-the-hood, you'll also need a working compiler environment. On macOS this
-means downloading [Xcode](https://developer.apple.com/xcode/).
+[MacPorts](https://www.macports.org/install.php).
+
+## Installing Flitter
+
+### Installing from the pre-built wheels
+
+If you are installing on macOS Intel, macOS Apple Silicon or Linux x64 then,
+good news! You can install from one of the pre-built wheels from the
+[`flitter-lang` PyPI package](https://pypi.org/project/flitter-lang/)
+with just:
+
+```console
+$ pip3 install flitter-lang
+```
+
+Otherwise you are going to need to install from the source distribution,
+
+### Installing from the source package
+
+As **Flitter** uses Cython under-the-hood, you'll need a working build
+environment. On macOS this means downloading
+[Xcode](https://developer.apple.com/xcode/).
 
 On a recent Linux box, all you should need to do is make sure that you have a
 Python3 development environment. On a Debian-variant, like Ubuntu, this would
@@ -45,23 +62,19 @@ $ python3 -m venv ~/.virtualenvs/flitter
 However, then ensuring that `~/.virtualenvs/flitter/bin` is in your `PATH` is
 left as an exercise for the reader.
 
-## Installing the `flitter-lang` package
-
 If you've safely navigated getting a working Python development environment, you
-can install you can install the latest [`flitter-lang` PyPI
-package](https://pypi.org/project/flitter-lang/) with:
+can do the build from source with the same command you'd use to install one of
+the pre-built wheels:
 
 ```console
 $ pip3 install flitter-lang
 ```
 
-and then run it with:
+Everything else will be pulled down and installed/built as needed.
 
-```console
-$ flitter path/to/some/flitter/script.fl
-```
+### Installing from the repo:
 
-If you want to live on the bleeding edge, then you can install from the current
+If you want to live on the bleeding edge, then you can build the current
 head of the `main` branch with:
 
 ```console
@@ -77,14 +90,30 @@ $ cd flitter
 $ pip3 install .
 ```
 
-keep up-to-date with developments and have direct access to the example
-programs:
+Then you can keep up-to-date with developments and have direct access to the
+example programs:
 
 ```console
 $ flitter examples/hoops.fl
 ```
 
-## Python package dependencies
+### Editable installations
+
+If you want to edit the code then ensure that `cython` and `setuptools` are
+installed in your runtime environment, do an editable package deployment, and
+then throw away the built code. The code automatically makes use of `pyximport`
+to (re)compile Cython code on-the-fly as **Flitter** runs:
+
+```console
+$ pip3 install cython setuptools
+$ pip3 install --editable .
+$ rm **/*.c **/*.so
+```
+
+If you want to lint the code and run the tests then you might also want to
+install `flake8`, `cython-lint` and `pytest`.
+
+### Python package dependencies
 
 The first-level runtime Python package dependencies are listed below. These will
 all be installed for you by `pip`, but it's useful to know what you're getting
@@ -116,23 +145,13 @@ During install, `pip` will also use:
 - `cython` - because half of **Flitter** is implemented in Cython for speed
 - `setuptools` - to run the build file
 
-## Editable installations
+## Running Flitter
 
-If you want to edit the code then ensure that `cython` and `setuptools` are
-installed in your runtime environment, do an editable package deployment, and
-then throw away the built code. The code automatically makes use of `pyximport`
-to (re)compile Cython code on-the-fly as **Flitter** runs:
+You can run **Flitter** with a command like:
 
 ```console
-$ pip3 install cython setuptools
-$ pip3 install --editable .
-$ rm **/*.c **/*.so
+$ flitter path/to/some/flitter/script.fl
 ```
-
-If you want to lint the code and run the tests then you might also want to
-install `flake8`, `cython-lint` and `pytest`.
-
-## Command-line options
 
 **Flitter** takes one or more program filenames as the main command-line
 arguments. If multiple programs are given then they are loaded into separate
