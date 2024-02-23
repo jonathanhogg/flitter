@@ -51,7 +51,7 @@ dependencies = [
     "rtree",
     "scipy",
     "shapely",
-    "skia-python",
+    "skia-python==121.0b6",
     "trimesh",
 ]
 
