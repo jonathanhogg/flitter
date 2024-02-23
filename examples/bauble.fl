@@ -9,7 +9,7 @@ let SIZE=1080;1080
     LOOPS=2
 
 !window size=SIZE colorbits=16
-    !record filename=('bauble.mp4' if RECORD) codec=:hevc crf=25 limit=BASE*LOOPS
+    !record filename=OUTPUT
         @bloom_filter radius=20
             !canvas3d samples=4 viewpoint=0;0;1000 near=1 far=2000 fov=30/360 max_lights=N \
                       fog_color=0 fog_min=500 fog_max=1500

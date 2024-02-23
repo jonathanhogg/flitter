@@ -162,3 +162,50 @@ class TestDocumentationTutorial(unittest.TestCase):
                 finally:
                     if output_path.exists():
                         output_path.unlink()
+
+
+class TestExamples(unittest.TestCase):
+    """
+    Recreate the examples and check them against the pre-calculated ones.
+    """
+
+    SHORT = ['bauble.fl', 'canvas3d.fl', 'solidgeometry.fl', 'textures.fl', 'video.fl']
+    LONG = ['bounce.fl', 'hoops.fl', 'physics.fl']
+
+    def test_short_examples(self):
+        scripts_dir = Path(__file__).parent.parent / 'examples'
+        scripts = [scripts_dir / name for name in self.SHORT]
+        for i, script in enumerate(scripts):
+            with self.subTest(script=script):
+                output_path = Path(tempfile.mktemp('.png'))
+                try:
+                    reference = PIL.Image.open(script.with_suffix('.png'))
+                    controller = EngineController(realtime=False, target_fps=1, run_time=1, offscreen=True,
+                                                  defined_names={'OUTPUT': str(output_path)})
+                    controller.load_page(script)
+                    asyncio.run(controller.run())
+                    output = PIL.Image.open(output_path)
+                    self.assertEqual(reference.size, output.size)
+                    self.assertLess(image_diff(reference, output), 0.001)
+                finally:
+                    if output_path.exists():
+                        output_path.unlink()
+
+    def test_long_examples(self):
+        scripts_dir = Path(__file__).parent.parent / 'examples'
+        scripts = [scripts_dir / name for name in self.LONG]
+        for i, script in enumerate(scripts):
+            with self.subTest(script=script):
+                output_path = Path(tempfile.mktemp('.png'))
+                try:
+                    reference = PIL.Image.open(script.with_suffix('.png'))
+                    controller = EngineController(realtime=False, target_fps=10, run_time=1, offscreen=True,
+                                                  defined_names={'OUTPUT': str(output_path)})
+                    controller.load_page(script)
+                    asyncio.run(controller.run())
+                    output = PIL.Image.open(output_path)
+                    self.assertEqual(reference.size, output.size)
+                    self.assertLess(image_diff(reference, output), 0.01)
+                finally:
+                    if output_path.exists():
+                        output_path.unlink()

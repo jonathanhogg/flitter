@@ -1,13 +1,17 @@
 
 let SIZE=1920;1440
 
+let t=60*beat/tempo + (5 if OUTPUT else 0)
+
 !window size=SIZE
-    !video filename="badapple.m4v" position=-60*beat/tempo loop=true interpolate=true
-    !video filename="badapple.m4v" position=60*beat/tempo loop=true hidden=true id=:badapple
-    !canvas antialias=false
-        !blend ratio=0.25
-            !pattern texture_id=:badapple scale=0.5 rotate=-1/8
-            !color color=0;0;0;0
-        !path
-            !ellipse radius=min(SIZE)/2 point=SIZE/2
-            !fill
+    !record filename=OUTPUT
+        !shader
+            !video filename="badapple.m4v" position=-t loop=true interpolate=true
+            !video filename="badapple.m4v" position=t loop=true hidden=true id=:badapple
+            !canvas antialias=false
+                !blend ratio=0.25
+                    !pattern texture_id=:badapple scale=0.5 rotate=-1/8
+                    !color color=0;0;0;0
+                !path
+                    !ellipse radius=min(SIZE)/2 point=SIZE/2
+                    !fill

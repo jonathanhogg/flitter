@@ -2,7 +2,6 @@ __pycache__
 /.pytest_cache
 /build
 /dist
-/examples/*.m4v
 /src/**/*.c
 /src/**/*.html
 /src/**/*.so
