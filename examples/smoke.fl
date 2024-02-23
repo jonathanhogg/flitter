@@ -10,7 +10,7 @@ let SIZE=1920;1080
     START=uniform(:xy)[..N*2] * (SIZE+2*R) - R
 
 !window size=SIZE
-    !record filename=(OUTPUT if 60*beat/tempo*fps > 8)
+    !record filename=(OUTPUT if round(60*beat/tempo*fps) == 9)
         !canvas composite=:add antialias=false linear=true
             let current_speed=counter(:speed, beat)
                 accelleration=normal(:f;beat*100)[..N*2] * F - current_speed * DRAG

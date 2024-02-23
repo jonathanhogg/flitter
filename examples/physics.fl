@@ -25,7 +25,7 @@ let bubble_radii=MIN_BUBBLE_RADIUS+(1+noise(:radii, i*NOISE_SCALE, NOISE_T))/2*(
     !collision strength=200 ease=15
 
 !window size=SIZE colorbits=16
-    !record filename=(OUTPUT if 60*beat/tempo*fps > 8)
+    !record filename=(OUTPUT if round(60*beat/tempo*fps) == 9)
         @bloom_filter radius=hypot(SIZE)/150
             !canvas3d viewpoint=0;0;-1200 focus=0 near=1 far=2000 fov=60/360 samples=4
                 !light color=2;0;0

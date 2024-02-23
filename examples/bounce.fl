@@ -31,7 +31,7 @@ let SIZE=1080;1080
     !collision strength=500 power=2
 
 !window size=SIZE colorbits=16
-    !record filename=(OUTPUT if 60*beat/tempo*fps > 8)
+    !record filename=(OUTPUT if round(60*beat/tempo*fps) == 9)
         @bloom_filter radius=hypot(SIZE[..2])/100
             !canvas3d samples=4 focus=0;0;50 camera_id=:cam far=1000 fog_color=0 fog_min=100 fog_max=1000 max_lights=NBALLS+5
                 !transform rotate_z=beat/20

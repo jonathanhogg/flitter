@@ -27,5 +27,3 @@ let SIZE=1920;1080
                                 else
                                     !ellipse radius=radius
                                 !stroke
-            !canvas
-                !text center=false point=50;1030 text=beat;" – ";delta font_family="FreeSans" color=1
