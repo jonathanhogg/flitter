@@ -46,25 +46,12 @@ values will be *floor*ed
 - `speed_of_light` is an optional attribute that, if set, specifies an upper
 limit to any particle's computed speed
 
-The simulation maintains an internal simulation clock which begins at zero and
-advances in steps equal to the minimum of `resolution` or the difference between
-successive values of `time`. This means that if the engine frame rate falls
-below that necessary to maintain `time` deltas greater than `resolution`, the
-simulation will advance in time steps of `resolution`. This allows `resolution`
-to be used to avoid numerical instability caused by slow frames. In this
-situation, the internal simulation clock will advance more slowly than `time`.
-The internal simulation clock can be read from the state and used to track the
-actual amount of simulation time that has passed (see **State interaction**
-below).
-
 If `time` and `resolution` are not specified then the system will default to
 **Flitter**'s internal frame clock and the target frame-rate interval
 respectively. This means that the simulation time units will be seconds and the
-simulation will advance in time steps equal to the frame interval.
-
-If `time` *is* specified then `resolution` should be set to a sensible matching
-value somewhere at or above the expected increment in `time` at the engine
-frame-rate.
+simulation will advance in time steps equal to the frame interval. If `time`
+*is* specified then `resolution` should be set to a sensible matching value
+somewhere at or above the expected increment in `time` at the engine frame-rate.
 
 If `run` changes then the current system state is abandoned and the simulation
 will begin again from the starting positions and velocities of each particle.
@@ -82,6 +69,45 @@ specifies an amount of simulation time to linearly ramp up the strength of the
 force applier, giving an amount of time for particles to settle into more stable
 positions.
 :::
+
+#### The Simulation Clock
+
+The simulation maintains an internal simulation clock that begins at zero and
+advances in simulation steps. When the simulation starts, the initial value of
+`time` is remembered. On each subsequent frame, a delta is calculated between
+the starting time plus the internal clock and the current value of `time`.
+The simulation step will be the minimum of this delta and `resolution`.
+
+If each delta is smaller than `resolution`, the internal clock will advance in
+lockstep with `time`. If not, then the simulation will advance at `resolution`
+intervals instead. This allows `resolution` to be used to avoid numerical
+instability being caused by computing forces with large time deltas.
+
+If the simulation clock has fallen behind `time` and the the engine subsequently
+has time to spare then the engine *may* compute an additional simulation step to
+try and bring the internal simulation clock back up to match `time`. This can
+stop the simulation from dropping behind because of the occasional missed frame,
+but will not be able to deal with a consistent failure to keep up.
+
+If the engine is consistently unable to keep up with the requested `resolution`,
+then the internal simulation clock will advance more slowly than `time` and the
+simulation will subjectively slow down (although all of the particles will
+actually be moving correctly with respect to the simulation clock). It is best
+to reduce program/simulation complexity if this is the case.
+
+If **Flitter** is run in non-realtime mode, with the [`--lockstep` command-line
+option](install.md#running-flitter), then the simulation behaviour is different.
+In non-realtime mode, the simulation will *always* insert *as many* additional
+simulation steps per frame as necessary to keep to the minimum resolution.
+
+For example, if `resolution` is set to `1/60` and the engine is run with
+`--lockstep --fps=30` – for instance, to record a clean output video – then
+the simulation will advance *two* steps at each frame instead of subjectively
+slowing down.
+
+The internal simulation clock can be read from the state and used to track the
+actual amount of simulation time that has passed (see [State
+interaction](#state-interaction) below).
 
 ### `!particle`
 
@@ -412,9 +438,8 @@ For a `!physics` system with `state` set to *prefix*, and a particle with `id`
 set to *id*, the following key/value pairs will be stored in the state
 dictionary:
 
-- *prefix* - the last simulation timestamp (either the last value of the `time`
-attribute or the internal engine frame time)
-- *prefix*`;:clock` - the internal simulation clock
+- *prefix* - the value of `time` when the simulation started
+- *prefix*`;:clock` - the (zero-based) internal simulation clock
 - *prefix*`;:run` - the last run number (as an integer value)
 - *prefix*`;`*id* - the last position of the particle
 - *prefix*`;`*id*`;:velocity` - the last velocity of the particle
@@ -482,22 +507,3 @@ Note that the `strength` coefficients for the `!electrostatic` and `!collision`
 force appliers are "eased in" by increasing them linearly over the first 10
 beats. This allows any particles with overlapping start positions to gently
 move apart at the beginning.
-
-## Non-realtime mode
-
-If the **Flitter** engine is run in non-realtime mode, with the `--lockstep`
-command-line option, then the simulation behaviour with regard to the
-`resolution` attribute is slightly different. In non-realtime mode,
-`resolution` still represents a minimum interval that the simulation will use,
-but instead of lagging if the frame-rate is slower than this additional
-simulation steps will be inserted to keep the simulation up to date.
-
-For example, if resolution is set to `1/60` and the engine is run with
-`--lockstep --fps=30` – for instance, to record a clean output video – then
-the simulation will advance *two* steps at each frame instead of subjectively
-slowing down.
-
-This behaviour is only supported in non-realtime mode as, when running realtime,
-if the engine is unable to keep up with the `resolution` interval then running
-additional frames of the simulation would make the problem worse and quickly
-result in the engine slowing to a halt.

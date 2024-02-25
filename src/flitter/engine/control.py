@@ -149,6 +149,7 @@ class EngineController:
             last = self.counter.beat_at_time(frame_time)
             dump_time = frame_time
             execution = render = housekeeping = 0
+            slow_frame = False
             performance = 1
             run_program = current_program = errors = logs = None
             gc.disable()
@@ -159,7 +160,7 @@ class EngineController:
                 delta = beat - last
                 last = beat
                 names = {'beat': beat, 'quantum': self.counter.quantum, 'tempo': self.counter.tempo,
-                         'delta': delta, 'clock': frame_time, 'performance': performance,
+                         'delta': delta, 'clock': frame_time, 'performance': performance, 'slow_frame': slow_frame,
                          'fps': self.target_fps, 'realtime': self.realtime, 'window_gamma': self.window_gamma,
                          'screen': self.screen, 'fullscreen': self.fullscreen, 'vsync': self.vsync, 'offscreen': self.offscreen}
 
@@ -264,8 +265,10 @@ class EngineController:
                     wait_time = 0.001
                     performance = 1
                 if wait_time > 0:
+                    slow_frame = False
                     await asyncio.sleep(wait_time)
                 else:
+                    slow_frame = True
                     logger.trace("Slow frame - {:.0f}ms", frame_period * 1000)
                     await asyncio.sleep(0)
                     frame_time = system_clock()

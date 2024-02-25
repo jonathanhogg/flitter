@@ -333,7 +333,7 @@ cdef class PhysicsSystem:
     def purge(self):
         pass
 
-    async def update(self, engine, Node node, double clock, **kwargs):
+    async def update(self, engine, Node node, double clock, double performance, bint slow_frame, **kwargs):
         cdef long run = node.get_int('run', 0)
         cdef long dimensions = node.get_int('dimensions', 0)
         if dimensions < 1:
@@ -434,23 +434,27 @@ cdef class PhysicsSystem:
         for specific_force in specific_forces:
             specific_force.from_index = particles_by_id.get(specific_force.from_particle_id, -1)
             specific_force.to_index = particles_by_id.get(specific_force.to_particle_id, -1)
-        cdef double last_time
+        cdef double start_time
         time_vector = state.get_item(state_prefix)
         if time_vector.length == 1 and time_vector.numbers != NULL:
-            last_time = min(time, time_vector.numbers[0])
+            start_time = time_vector.numbers[0]
         else:
             logger.debug("New {}D physics {!r} with {} particles and {} forces", dimensions, state_prefix, len(particles),
                          len(particle_forces) + len(matrix_forces) + len(specific_forces))
-            last_time = time
+            start_time = time
+            time_vector = Vector.__new__(Vector)
+            time_vector.allocate_numbers(1)
+            time_vector.numbers[0] = start_time
+            state.set_item(state_prefix, time_vector)
+        if time <= start_time + clock:
+            print("time stopped or running backwards")
+            return
+        cdef bint extra_frame = performance > 1 and not slow_frame
         clock = await asyncio.to_thread(self.calculate, particles, non_anchors, particle_forces, matrix_forces, specific_forces, barriers,
-                                        dimensions, engine.realtime, speed_of_light, time, last_time, resolution, clock)
+                                                      dimensions, engine.realtime, extra_frame, speed_of_light, time, start_time, resolution, clock)
         for particle in particles:
             state.set_item(particle.position_state_key, particle.position)
             state.set_item(particle.velocity_state_key, particle.velocity)
-        time_vector = Vector.__new__(Vector)
-        time_vector.allocate_numbers(1)
-        time_vector.numbers[0] = time
-        state.set_item(state_prefix, time_vector)
         time_vector = Vector.__new__(Vector)
         time_vector.allocate_numbers(1)
         time_vector.numbers[0] = clock
@@ -460,10 +464,10 @@ cdef class PhysicsSystem:
         self.state_keys = new_state_keys
 
     cdef double calculate(self, list particles, list non_anchors, list particle_forces, list matrix_forces, list specific_forces, list barriers,
-                          int dimensions, bint realtime, double speed_of_light,
-                          double time, double last_time, double resolution, double clock):
+                          int dimensions, bint realtime, bint extra_frame, double speed_of_light,
+                          double time, double start_time, double resolution, double clock):
         cdef long i, j, k, ii, m, n=len(particles), o=len(non_anchors)
-        cdef double delta
+        cdef double delta, last_time = start_time + clock
         cdef Vector direction = Vector.__new__(Vector)
         direction.allocate_numbers(dimensions)
         cdef double d, distance, distance_squared
@@ -525,8 +529,9 @@ cdef class PhysicsSystem:
                         (<Barrier>barrier).apply(<Particle>to_particle, delta)
                 last_time += delta
                 clock += delta
-                if realtime or last_time >= time:
+                if last_time >= time or (realtime and not extra_frame):
                     break
+                extra_frame = False
         return clock
 
 
