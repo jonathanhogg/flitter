@@ -451,7 +451,7 @@ cdef class PhysicsSystem:
             return
         cdef bint extra_frame = performance > 1 and not slow_frame
         clock = await asyncio.to_thread(self.calculate, particles, non_anchors, particle_forces, matrix_forces, specific_forces, barriers,
-                                                      dimensions, engine.realtime, extra_frame, speed_of_light, time, start_time, resolution, clock)
+                                        dimensions, engine.realtime, extra_frame, speed_of_light, time, start_time, resolution, clock)
         for particle in particles:
             state.set_item(particle.position_state_key, particle.position)
             state.set_item(particle.velocity_state_key, particle.velocity)
