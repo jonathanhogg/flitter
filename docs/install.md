@@ -217,7 +217,7 @@ they walk away.
 
 `--simplifystate` *SECONDS*
 : Calls the [language simplifier](language.md#simplification) after a period of
-state idleness.
+state idleness. The default is 10 seconds.
 
 `--lockstep`
 : Turns on *non-realtime mode*. In this mode, the engine will generate frames
@@ -235,15 +235,18 @@ clock.
 `--offscreen`
 : Requests that all `!window` nodes actually be silently interpreted as
 `!offscreen` nodes. This has the effect of running **Flitter** without any
-visual output. It assumes offscreen access to the GPU. On macOS this just works,
-on Linux you'll still need to provide a windowing environment even if it's
-a virtual one with something like `Xvfb`.
+visual output. You'll still need a windowed environment. You can conspire to run
+on Linux without a real windowed environment using `Xvfb` (and the CI tests are
+run just this way), but you should know that the Mesa software rasterizer is
+*very, very slow*. **Flitter** really wants a GPU.
 
 `--profile`
 : Runs the Python profiler around the main loop. This will slow down **Flitter**
 significantly. If you exit with an interrupt (ctrl-C) then a summary of the
 internal functions called will be shown. This won't be a great deal of use to
-you unless you are hacking on the **Flitter** code.
+you unless you are hacking on the **Flitter** code. A couple of the key (Cython)
+modules have profiling turned off for speed. You should also know that Cython
+and the Python 3.12 profiler aren't currently getting along.
 
 `--vmstats`
 : Turns on logging of **Flitter** virtual machine statistics. This will slow
