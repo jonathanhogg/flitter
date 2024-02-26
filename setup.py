@@ -8,6 +8,7 @@ setup(
         Extension("flitter.language.tree", ["src/flitter/language/tree.pyx"]),
         Extension("flitter.language.vm", ["src/flitter/language/vm.pyx"]),
         Extension("flitter.model", ["src/flitter/model.pyx"]),
+        Extension("flitter.render.counter", ["src/flitter/render/counter.pyx"]),
         Extension("flitter.render.dmx", ["src/flitter/render/dmx.pyx"]),
         Extension("flitter.render.laser", ["src/flitter/render/laser.pyx"]),
         Extension("flitter.render.physics", ["src/flitter/render/physics.pyx"]),

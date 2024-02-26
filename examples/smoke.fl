@@ -9,13 +9,15 @@ let SIZE=1920;1080
     RADII=(1+beta(:radii)[..N]*2)/3*R
     START=uniform(:xy)[..N*2] * (SIZE+2*R) - R
 
+-- This uses a couple of counters to create a hokey particle physics simulation:
+--
+!counter state=:speed time=beat rate=normal(:f;beat*100)[..N*2]*F - $(:speed)*DRAG
+!counter state=:position time=beat rate=$(:speed) initial=START
+
 !window size=SIZE
     !record filename=(OUTPUT if round(60*beat/tempo*fps) == 9)
         !canvas composite=:add antialias=false linear=true
-            let current_speed=counter(:speed, beat)
-                accelleration=normal(:f;beat*100)[..N*2] * F - current_speed * DRAG
-                speed=counter(:speed, beat, accelleration)
-                position=(counter(:position, beat, speed) + START + R) % (SIZE + 2*R) - R
+            let position=(($(:position) or START) + R) % (SIZE + 2*R) - R
             !group color=0.01;0.006;0.006
                 for i in ..N//2
                     !ellipse radius=RADII[i] fill=true point=position[i*2..(i+1)*2]

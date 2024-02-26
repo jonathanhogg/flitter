@@ -1005,6 +1005,21 @@ cdef class Vector:
         result_numbers[2] = self_numbers[0]*other_numbers[1] - self_numbers[1]*other_numbers[0]
         return result
 
+    cpdef Vector clamp(self, Vector minimum, Vector maximum):
+        if self.numbers == NULL or minimum is None or maximum is None:
+            return self
+        cdef int i, n=max(self.length, minimum.length, maximum.length)
+        cdef Vector result = Vector.__new__(Vector)
+        cdef double d
+        for i in range(result.allocate_numbers(n)):
+            d = self.numbers[i % self.length]
+            if minimum.numbers != NULL:
+                d = max(minimum.numbers[i % minimum.length], d)
+            if maximum.numbers != NULL:
+                d = min(d, maximum.numbers[i % maximum.length])
+            result.numbers[i] = d
+        return result
+
     cpdef Vector concat(self, Vector other):
         cdef int i, n = self.length, m = other.length
         if m == 0:
@@ -1735,7 +1750,7 @@ cdef class Node:
                 for i in range(result.allocate_numbers(n)):
                     result.numbers[i] = value.numbers[0]
                 return result
-            elif m == n:
+            elif m == n or n == 0:
                 return value
         return default
 

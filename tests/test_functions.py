@@ -5,8 +5,8 @@ Tests of the flitter language built-in functions
 import math
 import unittest
 
-from flitter.model import Vector, Context, StateDict, null
-from flitter.language.functions import (uniform, normal, beta, counter, hypot, angle, split, ordv, chrv)
+from flitter.model import Vector, null
+from flitter.language.functions import (uniform, normal, beta, hypot, angle, split, ordv, chrv)
 
 
 Tau = 2*math.pi
@@ -106,133 +106,6 @@ class TestNormal(TestUniform):
 
     def test_apparent_entropy(self):
         pass
-
-
-class TestCounter(unittest.TestCase):
-    def setUp(self):
-        self.state = StateDict()
-        self.context = Context(state=self.state)
-        self.counter_id = Vector('counter')
-
-    def test_simple(self):
-        clock = count = Vector(0)
-        while clock < 5:
-            self.assertEqual(counter(self.context, self.counter_id, clock), count)
-            clock += 0.5
-            count += 0.5
-
-    def test_offset(self):
-        clock = Vector(10)
-        count = Vector(0)
-        while clock < 5:
-            self.assertEqual(counter(self.context, self.counter_id, clock), count)
-            clock += 0.5
-            count += 0.5
-
-    def test_fast(self):
-        clock = count = Vector(0)
-        while clock < 5:
-            self.assertEqual(counter(self.context, self.counter_id, clock, Vector(2)), count)
-            clock += 0.5
-            count += 1.0
-
-    def test_slow(self):
-        clock = count = Vector(0)
-        while clock < 5:
-            self.assertEqual(counter(self.context, self.counter_id, clock, Vector(0.5)), count)
-            clock += 0.5
-            count += 0.25
-
-    def test_speed_up(self):
-        clock = count = Vector(0)
-        while clock < 5:
-            self.assertEqual(counter(self.context, self.counter_id, clock, Vector(0.5)), count)
-            clock += 0.5
-            count += 0.25
-        while clock < 10:
-            self.assertEqual(counter(self.context, self.counter_id, clock, Vector(2)), count)
-            clock += 0.5
-            count += 1.0
-
-    def test_slow_down(self):
-        clock = count = Vector(0)
-        while clock < 5:
-            self.assertEqual(counter(self.context, self.counter_id, clock, Vector(2)), count)
-            clock += 0.5
-            count += 1.0
-        while clock < 10:
-            self.assertEqual(counter(self.context, self.counter_id, clock, Vector(0.5)), count)
-            clock += 0.5
-            count += 0.25
-
-    def test_pause(self):
-        clock = count = Vector(0)
-        while clock < 5:
-            self.assertEqual(counter(self.context, self.counter_id, clock), count)
-            clock += 0.5
-            count += 0.5
-        while clock < 10:
-            self.assertEqual(counter(self.context, self.counter_id, clock, Vector(0)), count)
-            clock += 0.5
-
-    def test_reverse(self):
-        clock = count = Vector(0)
-        while clock < 5:
-            self.assertEqual(counter(self.context, self.counter_id, clock), count)
-            clock += 0.5
-            count += 0.5
-        while clock < 10:
-            self.assertEqual(counter(self.context, self.counter_id, clock, Vector(-2)), count)
-            clock += 0.5
-            count -= 1.0
-
-    def test_vector_speed(self):
-        clock = Vector(0)
-        count = Vector([0, 0])
-        while clock < 5:
-            self.assertEqual(counter(self.context, self.counter_id, clock, Vector([1, 2])), count)
-            clock += 0.5
-            count += [0.5, 1]
-
-    def test_vector_clock(self):
-        clock = Vector([0, 0])
-        count = Vector([0, 0])
-        while clock < 5:
-            self.assertEqual(counter(self.context, self.counter_id, clock, Vector(2)), count)
-            clock += [0.5, 1]
-            count += [1, 2]
-
-    def test_vector_clock_and_speed(self):
-        clock = Vector([0, 0])
-        count = Vector([0, 0])
-        while clock < 5:
-            self.assertEqual(counter(self.context, self.counter_id, clock, Vector([1, 2])), count)
-            clock += [1, 0.5]
-            count += [1, 1]
-
-    def test_state_changes(self):
-        clock = Vector([0, 0])
-        count = counter(self.context, self.counter_id, clock, Vector([1, 2]))
-        self.assertTrue(self.counter_id in self.state.changed_keys)
-        self.state.clear_changed()
-        while clock < 5:
-            self.assertEqual(counter(self.context, self.counter_id, clock, Vector([1, 2])), count)
-            self.assertFalse(self.counter_id in self.state.changed_keys)
-            clock += [1, 0.5]
-            count += [1, 1]
-        self.assertEqual(counter(self.context, self.counter_id, clock, Vector([1, -2])), count)
-        self.assertTrue(self.counter_id in self.state.changed_keys)
-
-    def test_read_without_update(self):
-        clock = count = Vector(0)
-        count = counter(self.context, self.counter_id, clock, Vector(2))
-        self.assertTrue(self.counter_id in self.state.changed_keys)
-        self.state.clear_changed()
-        clock += 0.5
-        count += 1.0
-        read_count = counter(self.context, self.counter_id, clock)
-        self.assertFalse(self.counter_id in self.state.changed_keys)
-        self.assertEqual(count, read_count)
 
 
 class TestTrig(unittest.TestCase):

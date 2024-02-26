@@ -8,6 +8,10 @@ let SIZE=1080;1080
     RUN=beat/20
     RADII=(beta(:radii;RUN)[..NBALLS]+0.5)*5
 
+-- Use a counter to provide a variable-rate time value:
+--
+!counter state=:time time=beat rate=sawtooth(RUN)**(1/3)
+
 -- We simulate a bunch of randomly size balls with masses proportional to their
 -- area rather than volume to make them feel a bit more like empty plastic balls.
 -- They start with random initial locations and velocities and are constrained
@@ -15,7 +19,7 @@ let SIZE=1080;1080
 -- accelleration simulates the effect of gravity and a drag and collision force
 -- round out the simulation.
 --
-!physics dimensions=3 state=:balls run=RUN time=counter(:foo, beat, bounce(RUN))
+!physics dimensions=3 state=:balls run=RUN time=$(:time) or 0
     for i in ..NBALLS
         let start=(uniform(:pos;RUN;i)[..3]-(0.5;0.5;0))*100
             velocity=normal(:xy;RUN;i)[..3]*50

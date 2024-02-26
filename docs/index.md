@@ -29,6 +29,7 @@ builtins.md
 windows.md
 canvas.md
 canvas3d.md
+counters.md
 physics.md
 controllers.md
 ```

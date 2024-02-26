@@ -310,39 +310,6 @@ let z = octnoise(:seed, 4, 0.5, x, y)
 
 Again, this function will accept *n*-vectors as inputs.
 
-## Counters
-
-`counter(` *counter_id* `,` *clock* [ `,` *rate* ] `)`
-: Create/update/read a counter object.
-
-Arbitrary counters can be managed with the `counter()` function. This takes
-either two or three arguments and **has state side-effects**.
-
-In the three-argument form the function will create or update a counter with a
-specific `clock` value and `rate`, storing the current state of the counter in
-the state mapping with the given `counter_id` key. The function returns the
-current count.
-
-Counters begin at zero and increment upwards by `rate` every unit increase of
-`clock`. The counter rate can be changed at any point and the counter will
-return the count at the previous rate before switching to counting with the
-new rate. The stored state only changes when the rate changes. `clock`
-*should* be a monotonically increasing number, such as `beat`. `rate` is
-allowed to be zero to stop the counter or negative to count downwards.
-
-Either `clock` or `rate` can be given as an n-vector to create a
-multi-dimensional counter. This can be useful, for instance, to move an object
-through space with a velocity vector:
-
-```flitter
-let velocity = 0.2;-1.5;3.0
-    position = counter(:thing_position, beat, velocity)
-```
-
-The two argument form of the function omits the rate and returns the count
-matching the value of `clock` at the last counter rate. If the counter has not
-already been initialised, then the rate will default to 1.
-
 ## Color functions
 
 `colortemp(` *t* `)`

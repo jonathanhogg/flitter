@@ -60,6 +60,7 @@ cdef class Vector:
     cpdef Vector normalize(self)
     cpdef Vector dot(self, Vector other)
     cpdef Vector cross(self, Vector other)
+    cpdef Vector clamp(self, Vector minimum, Vector maximum)
     cpdef Vector concat(self, Vector other)
 
 
