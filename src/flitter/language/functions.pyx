@@ -145,39 +145,6 @@ cdef class normal(uniform):
 
 
 @context_func
-def counter(Context context, Vector counter_id, Vector clockv, Vector speedv=null_):
-    if counter_id.length == 0 or clockv.numbers == NULL or speedv.objects is not None:
-        return null_
-    cdef Vector counter_state = context.state.get_item(counter_id)
-    if counter_state.numbers == NULL:
-        counter_state = null_
-    cdef int n = max(clockv.length, counter_state.length//2 if speedv.length == 0 else speedv.length), m = n * 2, i, j
-    cdef Vector countv = Vector.__new__(Vector)
-    countv.allocate_numbers(n)
-    cdef double offset, current_speed, clock, speed, count
-    cdef Vector new_state = Vector.__new__(Vector)
-    new_state.allocate_numbers(m)
-    for i in range(n):
-        j = i * 2
-        clock = clockv.numbers[i % clockv.length]
-        if j+1 < counter_state.length:
-            offset = counter_state.numbers[j]
-            current_speed = counter_state.numbers[j+1]
-            speed = speedv.numbers[i % speedv.length] if speedv.length else current_speed
-        else:
-            current_speed = speed = speedv.numbers[i % speedv.length] if speedv.length else 1
-            offset = clock * speed
-        count = clock * current_speed - offset
-        countv.numbers[i] = count
-        if speed != current_speed:
-            offset = clock * speed - count
-        new_state.numbers[j] = offset
-        new_state.numbers[j+1] = speed
-    context.state.set_item(counter_id, new_state)
-    return countv
-
-
-@context_func
 def read_text(Context context, Vector filename):
     cdef str path = filename.as_string()
     if path:
@@ -769,11 +736,7 @@ def mapv(Vector xs not None, Vector ys not None, Vector zs not None):
 def clamp(Vector xs not None, Vector ys not None, Vector zs not None):
     if xs.numbers == NULL or ys.numbers == NULL or zs.numbers == NULL:
         return null_
-    cdef int i, m=xs.length, n=ys.length, o=zs.length
-    cdef Vector ws = Vector.__new__(Vector)
-    for i in range(ws.allocate_numbers(max(m, n, o))):
-        ws.numbers[i] = min(max(ys.numbers[i % n], xs.numbers[i % m]), zs.numbers[i % o])
-    return ws
+    return xs.clamp(ys, zs)
 
 
 @cython.cdivision(True)
@@ -958,7 +921,6 @@ STATIC_FUNCTIONS = {
 DYNAMIC_FUNCTIONS = {
     'debug': Vector(debug),
     'sample': Vector(sample),
-    'counter': Vector(counter),
     'csv': Vector(read_csv),
     'read': Vector(read_text),
     'read_bytes': Vector(read_bytes),
