@@ -447,7 +447,6 @@ cdef class PhysicsSystem:
             time_vector.numbers[0] = start_time
             state.set_item(state_prefix, time_vector)
         if time <= start_time + clock:
-            print("time stopped or running backwards")
             return
         cdef bint extra_frame = performance > 1 and not slow_frame
         clock = await asyncio.to_thread(self.calculate, particles, non_anchors, particle_forces, matrix_forces, specific_forces, barriers,
