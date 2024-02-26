@@ -791,10 +791,9 @@ binds with very low precedence, a non-singleton key needs to be surrounded with
 brackets, e.g., `$(:circle;:radius)`.
 
 The state system is also used by the [physics engine](physics.md) to
-communicate particle properties back to the program and by counters (see
-[Counters](builtins.md#counters)) for storing a starting clock value and current
-counter rate. Be careful when choosing state keys to avoid collisions between
-these different uses.
+communicate particle properties back to the program and by
+[counters](counters.md). Be careful when choosing state keys to avoid collisions
+between these different uses.
 
 ## Pragmas
 
