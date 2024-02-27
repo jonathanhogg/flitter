@@ -471,6 +471,7 @@ cdef void collect(Node node, Matrix44 transform_matrix, Material material, Rende
                 light.direction = transform_matrix.inverse_transpose_matrix33().vmul(direction).normalize()
             elif position.length:
                 light.type = LightType.Point
+                light.outer_cone = node.get_float('radius', 0)
                 light.position = transform_matrix.vmul(position)
                 light.direction = None
             elif direction.as_bool():

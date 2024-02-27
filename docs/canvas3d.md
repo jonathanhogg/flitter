@@ -374,6 +374,10 @@ value if the attribute is missing.
 : Specifies the location in space of the light, respecting any local
 transformation matrix.
 
+`radius=` *R*
+: Specifies the radius of a *ball* light. This defaults to zero (i.e, a
+*point*).
+
 `direction=` *X*`;`*Y*`;`*Z* | `focus=` *X*`;`*Y*`;`*Z*
 : Specifies the direction that this light shines, either as a direction vector
 or as an absolute position `focus`. `focus` can **only** be used if `position`
@@ -422,6 +426,13 @@ sunlight.
 that shines outwards in all directions from `position`. The light brightness
 will fall-off with distance according to `falloff`. Due to fall-off, it is
 common for the `color` values to be very large.
+
+**Ball**
+: A ball light is a point light with a non-zero `radius` attribute. Ball light
+have a different behaviour with respect to specular reflections. The more shiny
+a [material](#materials) is, the narrower the specular reflection of a point
+light will become - eventually vanishing to nothing. A ball light retains a
+specular reflection size matching the size of the ball.
 
 **Spot**
 : If both `position` *and* `direction` (or `focus`) are specified then this

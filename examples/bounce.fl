@@ -59,14 +59,14 @@ let SIZE=1080;1080
                     for i in ..NBALLS
                         let color=hsv(uniform(:hue)[i];0.95;1)
                         !transform translate=$(:balls;i)
-                            !light position=0 color=color*20
+                            !light position=0 color=color/10 radius=RADII[i]
                     -- Two boxes, one larger and one inverted create the effect of a
                     -- glass box. The interior is less shiny than the exterior so that
                     -- the ball lights create some gentle glows on the interior walls
                     -- that suggest reflections.
                     !material transparency=0.99 color=0.5 roughness=0.2
                         !transform translate=0;0;50
-                            !box size=100 invert=true roughness=0.5
+                            !box size=100 invert=true --roughness=0.5
                             !box size=102
                     -- These additional directional lights are just here to create some
                     -- reflections on the glass box that lend it more presence

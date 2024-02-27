@@ -110,7 +110,15 @@ void main() {
             if (light_type == ${Point}) {
                 L = light_position - world_position;
                 light_distance = length(L);
-                L /= light_distance;
+                if (outer_cone > 0) {
+                    vec3 R = reflect(V, N);
+                    vec3 p = dot(L, R) * R + world_position;
+                    vec3 l = p - light_position;
+                    L += l * min(1, outer_cone/length(l));
+                    L = normalize(L);
+                } else {
+                    L /= light_distance;
+                }
             } else if (light_type == ${Spot}) {
                 L = light_position - world_position;
                 light_distance = length(L);
