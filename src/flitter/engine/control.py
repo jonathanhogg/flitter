@@ -29,7 +29,7 @@ class EngineController:
         self.offscreen = offscreen
         self.window_gamma = window_gamma
         self.autoreset = autoreset
-        self.state_simplify_wait = state_simplify_wait
+        self.state_simplify_wait = state_simplify_wait / 2
         if defined_names:
             self.defined_names = {key: Vector.coerce(value) for key, value in defined_names.items()}
         else:
@@ -46,6 +46,9 @@ class EngineController:
         self.global_state_dirty = False
         self.state = None
         self.state_timestamp = None
+        self.state_generation0 = None
+        self.state_generation1 = None
+        self.state_generation2 = None
         self.renderers = {}
         self.counter = BeatCounter()
         self.pages = []
@@ -67,6 +70,9 @@ class EngineController:
             path, state = self.pages[page_number]
             self.state = state
             self.state_timestamp = system_clock()
+            self.state_generation0 = set()
+            self.state_generation1 = set()
+            self.state_generation2 = set()
             self.current_path = path
             self.current_page = page_number
             SharedCache.set_root(self.current_path)
@@ -140,6 +146,9 @@ class EngineController:
     def reset_state(self):
         self.state.clear()
         self.state_timestamp = None
+        self.state_generation0 = set()
+        self.state_generation1 = set()
+        self.state_generation2 = set()
         self.global_state_dirty = True
 
     async def run(self):
@@ -152,6 +161,7 @@ class EngineController:
             slow_frame = False
             performance = 1
             run_program = current_program = errors = logs = None
+            simplify_state_time = system_clock() + self.state_simplify_wait
             gc.disable()
             while self.run_time is None or int(round((frame_time - start_time) * self.target_fps)) < int(round(self.run_time * self.target_fps)):
                 housekeeping -= system_clock()
@@ -172,27 +182,46 @@ class EngineController:
                     errors = set()
                     logs = set()
 
-                if current_program is not None and run_program is current_program and self.state_simplify_wait and self.state_timestamp is not None and \
-                        system_clock() > self.state_timestamp + self.state_simplify_wait:
-                    simplify_time = -system_clock()
-                    top = current_program.top.simplify(state=self.state, dynamic=names)
-                    now = system_clock()
-                    simplify_time += now
-                    compile_time = -now
-                    run_program = top.compile(initial_lnames=tuple(names))
-                    run_program.set_path(current_program.path)
-                    run_program.set_top(top)
-                    compile_time += system_clock()
-                    logger.debug("Simplified on state to {} instructions in -/{:.1f}/{:.1f}ms",
-                                 len(run_program), simplify_time*1000, compile_time*1000)
-
                 if self.state.changed:
+                    if self.state_simplify_wait:
+                        changed_keys = self.state.changed_keys - self.state_generation0
+                        self.state_generation0.update(changed_keys)
+                        if changed_keys:
+                            generation1to0 = self.state_generation1 & changed_keys
+                            changed_keys = changed_keys - generation1to0
+                            self.state_generation1.difference_update(generation1to0)
+                            generation2to0 = self.state_generation2 & changed_keys
+                            if generation2to0:
+                                if run_program is not current_program:
+                                    run_program = current_program
+                                    logger.debug("Undo simplification on state; original program with {} instructions", len(run_program))
+                                self.state_generation1.update(self.state_generation2 - generation2to0)
+                                self.state_generation2 = set()
+                                simplify_state_time = system_clock() + self.state_simplify_wait
                     self.global_state_dirty = True
                     self.state_timestamp = system_clock()
                     self.state.clear_changed()
-                    if run_program is not current_program:
-                        logger.debug("Undo simplification on state")
-                        run_program = current_program
+
+                if self.state_simplify_wait and system_clock() > simplify_state_time:
+                    if current_program is not None and self.state_generation1:
+                        simplify_time = -system_clock()
+                        simplify_state = self.state.with_keys(self.state_generation2 ^ self.state_generation1)
+                        generation2 = set(simplify_state)
+                        if generation2 != self.state_generation2:
+                            self.state_generation2 = generation2
+                            top = current_program.top.simplify(state=simplify_state, dynamic=names)
+                            now = system_clock()
+                            simplify_time += now
+                            compile_time = -now
+                            run_program = top.compile(initial_lnames=tuple(names))
+                            run_program.set_path(current_program.path)
+                            run_program.set_top(top)
+                            compile_time += system_clock()
+                            logger.debug("Simplified on {} static state keys to {} instructions in -/{:.1f}/{:.1f}ms",
+                                         len(self.state_generation2), len(run_program), simplify_time*1000, compile_time*1000)
+                    self.state_generation1 = self.state_generation0
+                    self.state_generation0 = set()
+                    simplify_state_time = system_clock() + self.state_simplify_wait
 
                 now = system_clock()
                 housekeeping += now

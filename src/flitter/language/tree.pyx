@@ -313,7 +313,7 @@ cdef class Lookup(Expression):
         cdef Expression key = self.key._simplify(context)
         cdef Vector value
         if isinstance(key, Literal):
-            if context.state is not None:
+            if context.state is not None and context.state.contains((<Literal>key).value):
                 value = context.state.get_item((<Literal>key).value)
                 return Literal(value)
             return LookupLiteral((<Literal>key).value)
@@ -334,7 +334,7 @@ cdef class LookupLiteral(Expression):
 
     cdef Expression _simplify(self, Context context):
         cdef Vector value
-        if context.state is not None:
+        if context.state is not None and context.state.contains(self.key):
             value = context.state.get_item(self.key)
             return Literal(value)
         return LookupLiteral(self.key)

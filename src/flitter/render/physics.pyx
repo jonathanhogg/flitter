@@ -446,14 +446,13 @@ cdef class PhysicsSystem:
             time_vector.allocate_numbers(1)
             time_vector.numbers[0] = start_time
             state.set_item(state_prefix, time_vector)
-        if time <= start_time + clock:
-            return
         cdef bint extra_frame = performance > 1 and not slow_frame
-        clock = await asyncio.to_thread(self.calculate, particles, non_anchors, particle_forces, matrix_forces, specific_forces, barriers,
-                                        dimensions, engine.realtime, extra_frame, speed_of_light, time, start_time, resolution, clock)
-        for particle in particles:
-            state.set_item(particle.position_state_key, particle.position)
-            state.set_item(particle.velocity_state_key, particle.velocity)
+        if time > start_time + clock:
+            clock = await asyncio.to_thread(self.calculate, particles, non_anchors, particle_forces, matrix_forces, specific_forces, barriers,
+                                            dimensions, engine.realtime, extra_frame, speed_of_light, time, start_time, resolution, clock)
+            for particle in particles:
+                state.set_item(particle.position_state_key, particle.position)
+                state.set_item(particle.velocity_state_key, particle.velocity)
         time_vector = Vector.__new__(Vector)
         time_vector.allocate_numbers(1)
         time_vector.numbers[0] = clock

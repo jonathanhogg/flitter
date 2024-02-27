@@ -1848,6 +1848,13 @@ cdef class StateDict:
     def clear_changed(self):
         self._changed_keys = set()
 
+    def with_keys(self, keys):
+        cdef StateDict state = StateDict.__new__(StateDict)
+        for key in keys:
+            if key in self._state:
+                state._state[key] = self._state[key]
+        return state
+
     cdef Vector get_item(self, Vector key):
         return <Vector>self._state.get(key, null_)
 
