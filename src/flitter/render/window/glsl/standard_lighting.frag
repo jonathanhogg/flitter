@@ -136,7 +136,7 @@ void main() {
                 L /= light_distance;
                 float spot_cosine = dot(L, -light_direction);
                 attenuation = 1 - clamp((inner_cone-spot_cosine) / (inner_cone-outer_cone), 0, 1);
-            } else if (light_type == ${Linear}) {
+            } else if (light_type == ${Line}) {
                 passes = 2;
                 vec3 light_position = light[1].xyz;
                 float light_length = length(light[2].xyz);

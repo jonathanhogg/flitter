@@ -169,7 +169,7 @@ class TestExamples(unittest.TestCase):
     Recreate the examples and check them against the pre-calculated ones.
     """
 
-    SHORT = ['bauble.fl', 'canvas3d.fl', 'linearlight.fl', 'solidgeometry.fl', 'textures.fl', 'video.fl']
+    SHORT = ['bauble.fl', 'canvas3d.fl', 'linelight.fl', 'solidgeometry.fl', 'textures.fl', 'video.fl']
     LONG = ['bounce.fl', 'hoops.fl', 'physics.fl', 'smoke.fl']
 
     def test_short_examples(self):

@@ -50,7 +50,7 @@ cdef enum LightType:
     Directional = 2
     Point = 3
     Spot = 4
-    Linear = 5
+    Line = 5
 
 
 cdef class Light:
@@ -465,7 +465,7 @@ cdef void collect(Node node, Matrix44 transform_matrix, Material material, Rende
             light.color = color
             light.falloff = node.get_fvec('falloff', 4, DefaultFalloff)
             if start.length and end.length:
-                light.type = LightType.Linear
+                light.type = LightType.Line
                 light.outer_cone = node.get_float('radius', 0)
                 light.position = transform_matrix.vmul(start)
                 light.direction = transform_matrix.vmul(end) - light.position
@@ -550,7 +550,7 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
     cdef dict shaders = objects.setdefault('canvas3d_shaders', {})
     cdef dict names = render_group.names.copy()
     names.update({'max_lights': render_group.max_lights, 'Ambient': LightType.Ambient, 'Directional': LightType.Directional,
-                  'Point': LightType.Point, 'Spot': LightType.Spot, 'Linear': LightType.Linear})
+                  'Point': LightType.Point, 'Spot': LightType.Spot, 'Line': LightType.Line})
     shader = None
     if render_group.vertex_shader_template is not None or render_group.fragment_shader_template is not None:
         shader = get_shader(glctx, shaders, names,

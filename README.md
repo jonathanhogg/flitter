@@ -31,8 +31,8 @@ The engine that runs the language is capable of:
   - texture mapping, including with the output of other visual units (e.g., a
     drawing canvas or a video)
   - planar slicing and union, difference and intersection of solid models
-  - ambient, directional, point/ball and spotlight sources (currently
-    shadowless)
+  - ambient, directional, point/sphere, line/capsule and spotlight sources
+    (currently shadowless)
   - Physically-based rendering material shading, emissive objects and
     transparency
   - multiple cameras with individual control over location, field-of-view, near

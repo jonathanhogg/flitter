@@ -428,7 +428,7 @@ As for ambient lights, the values of `color` will normally be smaller than `1`.
 This light type is typically used for large, very distant light sources, like
 sunlight.
 
-**Point**
+**Point** (/ **Sphere**)
 : If `position` is given in addition to `color` then this light is a point light
 that shines outwards in all directions from `position`. The light brightness
 will fall-off with distance according to `falloff`. Due to fall-off, it is
@@ -438,19 +438,19 @@ modelled as a sphere rather than a strict point. This will affect how light
 falls on objects close to the "surface" of the light and also affects the
 apparent size of specular reflections in shiny objects.
 
+**Line** (/ **Capsule**)
+: If `start` and `end` are both specified, then the light is a line that extends
+between these two points. Light spreads outwards from this line in all
+directions. Like point lights, line lights may also have a `radius` attribute
+specified. If this is non-zero then the light will be modelled as a capsule
+rather than a strict line.
+
 **Spot**
 : If both `position` *and* `direction` (or `focus`) are specified then this
 light is a spotlight that shines from `position` in `direction`. The beam will
 spread outwards in a cone with angle `outer` and will fall-off according to
 `falloff`. As for point lights, it is common for the `color` values to be very
 large.
-
-**Linear**
-: If `start` and `end` are both specified, then the light is a linear light
-that extends between these two points. Light spreads outwards from this line
-in all directions. Like point lights, linear lights may also have a `radius`
-attribute specified. If this is non-zero then the light will be modelled as a
-capsule rather than a strict line.
 
 While lights are specified as objects in the scene, they are **not** rendered
 themselves and only affect models in the scene. If a visible representation of
