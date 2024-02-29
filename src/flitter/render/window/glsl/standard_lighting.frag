@@ -103,10 +103,6 @@ void main() {
         mat4 light = lights[i];
         int light_type = int(light[0].w);
         vec3 light_color = light[0].xyz;
-        if (light_type == ${Ambient}) {
-            diffuse_color += (1 - F0) * (1 - metal) * albedo * light_color * occlusion;
-            continue;
-        }
         int passes = 1;
         for (int pass = 0; pass < passes; pass++) {
             vec3 L;
@@ -114,19 +110,19 @@ void main() {
             float light_distance = 1;
             if (light_type == ${Point}) {
                 vec3 light_position = light[1].xyz;
-                float radius = light[2].w;
+                float light_radius = light[2].w;
                 L = light_position - world_position;
                 light_distance = length(L);
-                if (radius > 0) {
+                if (light_radius > 0) {
                     passes = 2;
                     if (pass == 0) {
-                        attenuation = clamp(1 - (radius / light_distance), 0, 1);
-                        light_distance = max(0, light_distance - radius);
+                        attenuation = clamp(1 - (light_radius / light_distance), 0, 1);
+                        light_distance = max(0, light_distance - light_radius*0.99);
                     } else {
-                        attenuation = 1 / (1 + radius*radius);
+                        attenuation = 1 / (1 + light_radius*light_radius);
                         vec3 R = reflect(V, N);
                         vec3 l = dot(L, R) * R - L;
-                        L += l * min(1, radius/length(l));
+                        L += l * min(0.99, light_radius/length(l));
                     }
                 }
                 L = normalize(L);
@@ -140,9 +136,45 @@ void main() {
                 L /= light_distance;
                 float spot_cosine = dot(L, -light_direction);
                 attenuation = 1 - clamp((inner_cone-spot_cosine) / (inner_cone-outer_cone), 0, 1);
-            } else {
+            } else if (light_type == ${Linear}) {
+                passes = 2;
+                vec3 light_position = light[1].xyz;
+                float light_length = length(light[2].xyz);
+                vec3 light_direction = light[2].xyz / light_length;
+                float light_radius = light[2].w;
+                L = light_position - world_position;
+                if (pass == 0) {
+                    float LdotN = dot(L, N);
+                    float cp = clamp(dot(-L, light_direction), 0, light_length);
+                    float ip = clamp(-LdotN / dot(light_direction, N), 0, light_length);
+                    float m = light_length / 2;
+                    if (LdotN < 0) {
+                        m = (ip + light_length) / 2;
+                        cp = max(cp, ip);
+                    } else if (dot(L + light_direction*light_length, N) < 0) {
+                        m = ip / 2;
+                        cp = min(cp, ip);
+                    }
+                    L += light_direction * (cp*3 + m) / 4;
+                    light_distance = length(L);
+                    L /= light_distance;
+                    light_distance -= min(light_radius, light_distance*0.99);
+                } else {
+                    attenuation = 1 / (1 + light_radius);
+                    vec3 R = reflect(V, N);
+                    mat3 M = mat3(R, light_direction, cross(R, light_direction));
+                    L += clamp(-(inverse(M) * L).y, 0, light_length) * light_direction;
+                    vec3 l = dot(L, R) * R - L;
+                    L += l * min(0.99, light_radius/length(l));
+                    light_distance = length(L);
+                    L /= light_distance;
+                }
+            } else if (light_type == ${Directional}) {
                 vec3 light_direction = light[2].xyz;
                 L = -light_direction;
+            } else { // (light_type == ${Ambient})
+                diffuse_color += (1 - F0) * (1 - metal) * albedo * light_color * occlusion;
+                break;
             }
             vec4 light_falloff = light[3];
             float ld2 = light_distance * light_distance;

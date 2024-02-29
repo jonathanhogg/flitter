@@ -374,9 +374,16 @@ value if the attribute is missing.
 : Specifies the location in space of the light, respecting any local
 transformation matrix.
 
+`start=` *X*`;`*Y*`;`*Z*
+: Specifies the start point of a linear light, respecting any local
+transformation matrix.
+
+`end=` *X*`;`*Y*`;`*Z*
+: Specifies the end point of a linear light, respecting any local transformation
+matrix.
+
 `radius=` *R*
-: Specifies the radius of a *ball* light. This defaults to zero (i.e, a
-*point*).
+: Specifies the radius of a point or linear light. This defaults to zero.
 
 `direction=` *X*`;`*Y*`;`*Z* | `focus=` *X*`;`*Y*`;`*Z*
 : Specifies the direction that this light shines, either as a direction vector
@@ -425,14 +432,11 @@ sunlight.
 : If `position` is given in addition to `color` then this light is a point light
 that shines outwards in all directions from `position`. The light brightness
 will fall-off with distance according to `falloff`. Due to fall-off, it is
-common for the `color` values to be very large.
-
-**Ball**
-: A ball light is a point light with a non-zero `radius` attribute. Ball light
-have a different behaviour with respect to specular reflections. The more shiny
-a [material](#materials) is, the narrower the specular reflection of a point
-light will become - eventually vanishing to nothing. A ball light retains a
-specular reflection size matching the size of the ball.
+common for the `color` values to be very large. A point light may have a
+`radius` attribute specified. If this is non-zero, then the light will be
+modelled as a sphere rather than a strict point. This will affect how light
+falls on objects close to the "surface" of the light and also affects the
+apparent size of specular reflections in shiny objects.
 
 **Spot**
 : If both `position` *and* `direction` (or `focus`) are specified then this
@@ -440,6 +444,13 @@ light is a spotlight that shines from `position` in `direction`. The beam will
 spread outwards in a cone with angle `outer` and will fall-off according to
 `falloff`. As for point lights, it is common for the `color` values to be very
 large.
+
+**Linear**
+: If `start` and `end` are both specified, then the light is a linear light
+that extends between these two points. Light spreads outwards from this line
+in all directions. Like point lights, linear lights may also have a `radius`
+attribute specified. If this is non-zero then the light will be modelled as a
+capsule rather than a strict line.
 
 While lights are specified as objects in the scene, they are **not** rendered
 themselves and only affect models in the scene. If a visible representation of
@@ -450,6 +461,14 @@ light will not affect the model.
 
 **Flitter** does **not** support shadow-casting and lights will illuminate all
 models in the render group regardless of occlusion.
+
+:::{warning}
+Point lights with a radius and linear lights (with or without a radius) are
+loose approximations rather than accurate lighting models. The implementation is
+designed to be low effort to calculate in the shader, and involves a 2-pass
+calculation – for diffuse and specular lighting – using per-fragment dynamic
+positioning of a point light.
+:::
 
 ## Materials
 

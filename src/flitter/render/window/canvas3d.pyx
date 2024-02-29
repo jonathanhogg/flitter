@@ -50,6 +50,7 @@ cdef enum LightType:
     Directional = 2
     Point = 3
     Spot = 4
+    Linear = 5
 
 
 cdef class Light:
@@ -408,7 +409,7 @@ cdef Model get_model(Node node, bint top):
 cdef void collect(Node node, Matrix44 transform_matrix, Material material, RenderGroup render_group, list render_groups,
                   Camera default_camera, dict cameras, int max_samples):
     cdef Light light
-    cdef Vector color, position, direction, focus
+    cdef Vector color, position, direction, focus, start, end
     cdef double inner, outer
     cdef Node child
     cdef str camera_id, vertex_shader, fragment_shader
@@ -458,10 +459,17 @@ cdef void collect(Node node, Matrix44 transform_matrix, Material material, Rende
             position = node.get_fvec('position', 3, null_)
             focus = node.get_fvec('focus', 3, null_)
             direction = node.get_fvec('direction', 3, focus.sub(position) if position.length and focus.length else null_)
+            start = node.get_fvec('start', 3, null_)
+            end = node.get_fvec('end', 3, null_)
             light = Light.__new__(Light)
             light.color = color
             light.falloff = node.get_fvec('falloff', 4, DefaultFalloff)
-            if position.length and direction.as_bool():
+            if start.length and end.length:
+                light.type = LightType.Linear
+                light.outer_cone = node.get_float('radius', 0)
+                light.position = transform_matrix.vmul(start)
+                light.direction = transform_matrix.vmul(end) - light.position
+            elif position.length and direction.as_bool():
                 light.type = LightType.Spot
                 outer = min(max(0, node.get_float('outer', 0.25)), 0.5)
                 inner = min(max(0, node.get_float('inner', 0)), outer)
@@ -542,7 +550,7 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
     cdef dict shaders = objects.setdefault('canvas3d_shaders', {})
     cdef dict names = render_group.names.copy()
     names.update({'max_lights': render_group.max_lights, 'Ambient': LightType.Ambient, 'Directional': LightType.Directional,
-                  'Point': LightType.Point, 'Spot': LightType.Spot})
+                  'Point': LightType.Point, 'Spot': LightType.Spot, 'Linear': LightType.Linear})
     shader = None
     if render_group.vertex_shader_template is not None or render_group.fragment_shader_template is not None:
         shader = get_shader(glctx, shaders, names,
