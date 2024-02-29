@@ -371,19 +371,19 @@ with `color` equal to `0` will be completely ignored, and this is the default
 value if the attribute is missing.
 
 `position=` *X*`;`*Y*`;`*Z*
-: Specifies the location in space of the light, respecting any local
+: Specifies the location in space of a point or spot light, respecting any local
 transformation matrix.
 
 `start=` *X*`;`*Y*`;`*Z*
-: Specifies the start point of a linear light, respecting any local
-transformation matrix.
+: Specifies the start point of a line light, respecting any local transformation
+matrix.
 
 `end=` *X*`;`*Y*`;`*Z*
-: Specifies the end point of a linear light, respecting any local transformation
+: Specifies the end point of a line light, respecting any local transformation
 matrix.
 
 `radius=` *R*
-: Specifies the radius of a point or linear light. This defaults to zero.
+: Specifies the radius of a point or line light. This defaults to zero.
 
 `direction=` *X*`;`*Y*`;`*Z* | `focus=` *X*`;`*Y*`;`*Z*
 : Specifies the direction that this light shines, either as a direction vector
