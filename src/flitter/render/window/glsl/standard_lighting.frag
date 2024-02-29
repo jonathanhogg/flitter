@@ -14,7 +14,7 @@ out vec4 fragment_color;
 
 uniform int nlights;
 uniform lights_data {
-    vec4 lights[${max_lights * 4}];
+    mat4 lights[${max_lights}];
 };
 uniform vec3 view_position;
 uniform vec3 view_focus;
@@ -93,62 +93,76 @@ void main() {
     vec3 N = normalize(world_normal);
     float rf0 = (ior - 1) / (ior + 1);
     vec3 F0 = mix(vec3(rf0*rf0), albedo, metal);
-    for (int i = 0; i < nlights * 4; i += 4) {
-        int light_type = int(lights[i].w);
-        float inner_cone = lights[i+1].w;
-        float outer_cone = lights[i+2].w;
-        vec3 light_color = lights[i].xyz;
-        vec3 light_position = lights[i+1].xyz;
-        vec3 light_direction = lights[i+2].xyz;
-        vec4 light_falloff = lights[i+3];
+    float a = roughness * roughness;
+    float a2 = a * a;
+    float r = roughness + 1;
+    float k = (r*r) / 8;
+    float NdotV = clamp(dot(N, V), 0, 1);
+    float Gnom = (NdotV / (NdotV * (1 - k) + k));
+    for (int i = 0; i < nlights; i++) {
+        mat4 light = lights[i];
+        int light_type = int(light[0].w);
+        vec3 light_color = light[0].xyz;
         if (light_type == ${Ambient}) {
             diffuse_color += (1 - F0) * (1 - metal) * albedo * light_color * occlusion;
-        } else {
+            continue;
+        }
+        int passes = 1;
+        for (int pass = 0; pass < passes; pass++) {
             vec3 L;
             float attenuation = 1;
             float light_distance = 1;
             if (light_type == ${Point}) {
+                vec3 light_position = light[1].xyz;
+                float radius = light[2].w;
                 L = light_position - world_position;
                 light_distance = length(L);
-                if (outer_cone > 0) {
-                    vec3 R = reflect(V, N);
-                    vec3 p = dot(L, R) * R + world_position;
-                    vec3 l = p - light_position;
-                    L += l * min(1, outer_cone/length(l));
-                    L = normalize(L);
-                } else {
-                    L /= light_distance;
+                if (radius > 0) {
+                    passes = 2;
+                    if (pass == 0) {
+                        attenuation = clamp(1 - (radius / light_distance), 0, 1);
+                        light_distance = max(0, light_distance - radius);
+                    } else {
+                        attenuation = 1 / (1 + radius*radius);
+                        vec3 R = reflect(V, N);
+                        vec3 l = dot(L, R) * R - L;
+                        L += l * min(1, radius/length(l));
+                    }
                 }
+                L = normalize(L);
             } else if (light_type == ${Spot}) {
+                vec3 light_position = light[1].xyz;
+                vec3 light_direction = light[2].xyz;
+                float inner_cone = light[1].w;
+                float outer_cone = light[2].w;
                 L = light_position - world_position;
                 light_distance = length(L);
                 L /= light_distance;
                 float spot_cosine = dot(L, -light_direction);
                 attenuation = 1 - clamp((inner_cone-spot_cosine) / (inner_cone-outer_cone), 0, 1);
             } else {
+                vec3 light_direction = light[2].xyz;
                 L = -light_direction;
             }
+            vec4 light_falloff = light[3];
             float ld2 = light_distance * light_distance;
             vec4 ds = vec4(1, light_distance, ld2, light_distance * ld2);
             attenuation /= dot(ds, light_falloff);
             vec3 H = normalize(V + L);
             float NdotL = clamp(dot(N, L), 0, 1);
-            float NdotV = clamp(dot(N, V), 0, 1);
             float NdotH = clamp(dot(N, H), 0, 1);
             float HdotV = clamp(dot(H, V), 0, 1);
-            float a = roughness * roughness;
-            float a2 = a * a;
             float denom = NdotH * NdotH * (a2-1) + 1;
             float NDF = a2 / (denom * denom);
-            float r = roughness + 1;
-            float k = (r*r) / 8;
-            float G = (NdotV / (NdotV * (1 - k) + k)) * (NdotL / (NdotL * (1 - k) + k));
+            float G = Gnom * (NdotL / (NdotL * (1 - k) + k));
             vec3 F = F0 + (1 - F0) * pow(1 - HdotV, 5);
-            vec3 diffuse = (1 - F) * (1 - metal) * albedo;
-            vec3 specular = (NDF * G * F) / (4 * NdotV * NdotL + 1e-6);
             vec3 radiance = light_color * attenuation * NdotL;
-            diffuse_color += diffuse * radiance;
-            specular_color += specular * radiance;
+            if (pass == 0) {
+                diffuse_color += radiance * (1 - F) * (1 - metal) * albedo;
+            }
+            if (pass == passes-1) {
+                specular_color += radiance * (NDF * G * F) / (4 * NdotV * NdotL + 1e-6);
+            }
         }
     }
     float opacity = 1 - transparency;
