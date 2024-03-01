@@ -7,8 +7,7 @@ import bloom_filter from 'common/filters.fl'
 !window size=SIZE
     !record filename=OUTPUT
         @bloom_filter radius=hypot(SIZE[..2])/100
-            !canvas3d samples=4 viewpoint=0;-30;20 focus=0 up=0;0;1 fov_ref=:narrow \
-                      fragment=read('../src/flitter/render/window/glsl/standard_lighting.frag')
+            !canvas3d samples=4 viewpoint=0;-30;20 focus=0 up=0;0;1 fov_ref=:narrow
                 !transform rotate_z=beat/30+0.125
                     !material color=0.5 roughness=0.25
                         !cylinder size=100;100;0.1
