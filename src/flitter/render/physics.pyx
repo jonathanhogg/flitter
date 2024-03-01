@@ -9,7 +9,7 @@ from loguru import logger
 
 from .. import name_patch
 from ..model cimport Vector, Node, StateDict, null_
-from ..language.functions cimport normal
+from ..language.functions cimport normal, uniform
 
 from libc.math cimport sqrt, isinf, isnan, abs, floor
 from cpython cimport PyObject
@@ -28,8 +28,25 @@ cdef Vector VELOCITY = Vector._symbol('velocity')
 cdef Vector CLOCK = Vector._symbol('clock')
 cdef Vector RUN = Vector._symbol('run')
 
-cdef normal RandomSource = normal('_physics')
-cdef unsigned long long RandomIndex = 0
+cdef normal NormalRandomSource = normal(Vector.symbol('_physics_normal'))
+cdef unsigned long long NormalRandomIndex = 0
+
+cdef uniform UniformRandomSource = uniform(Vector.symbol('_physics_uniform'))
+cdef unsigned long long UniformRandomIndex = 0
+
+
+cdef inline double random_normal() nogil:
+    global NormalRandomSource, NormalRandomIndex
+    cdef double d = NormalRandomSource._item(NormalRandomIndex)
+    NormalRandomIndex += 1
+    return d
+
+
+cdef inline double random_uniform() nogil:
+    global UniformRandomSource, UniformRandomIndex
+    cdef double d = UniformRandomSource._item(UniformRandomIndex)
+    UniformRandomIndex += 1
+    return d
 
 
 cdef class Particle:
@@ -252,8 +269,7 @@ cdef class RandomForceApplier(ParticleForceApplier):
         global RandomIndex
         cdef long i
         for i in range(particle.force.length):
-            particle.force.numbers[i] = particle.force.numbers[i] + self.strength * RandomSource._item(RandomIndex)
-            RandomIndex += 1
+            particle.force.numbers[i] = particle.force.numbers[i] + self.strength * random_normal()
 
 
 cdef class CollisionForceApplier(MatrixPairForceApplier):
@@ -446,7 +462,8 @@ cdef class PhysicsSystem:
             time_vector.allocate_numbers(1)
             time_vector.numbers[0] = start_time
             state.set_item(state_prefix, time_vector)
-        cdef bint extra_frame = performance > 1 and not slow_frame
+        cdef double behind = (time - start_time - clock) / resolution
+        cdef bint extra_frame = performance > 1 and not slow_frame and random_uniform() > min(100 / behind, 0.9)
         if time > start_time + clock:
             clock = await asyncio.to_thread(self.calculate, particles, non_anchors, particle_forces, matrix_forces, specific_forces, barriers,
                                             dimensions, engine.realtime, extra_frame, speed_of_light, time, start_time, resolution, clock)
