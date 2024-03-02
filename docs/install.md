@@ -5,11 +5,8 @@
 3.3 or above. At least Python 3.10 is *required* as the code uses `match`/`case`
 syntax.
 
-It is developed exclusively on macOS Intel. Some limited testing has been done
-on an Ubuntu Intel VM and on Apple Silicon and it seems to run fine on
-both of those platforms. There have been no reports of it having been tried
-on Windows yet, but there's no particular reason why it shouldn't work. If you
-have success or otherwise on another platform please get in touch.
+It is developed exclusively on Intel macOS, but is tested on Apple Silicon
+macOS, x86_64 Linux and x86_64 Windows.
 
 **Flitter** is a command-line tool. It is assumed that you are comfortable using
 the command line on your OS of choice. You will also obviously need to be able
@@ -24,30 +21,17 @@ thing for you, like [Homebrew](https://brew.sh) or
 
 ### Installing from the pre-built wheels
 
-If you are installing on macOS Intel, macOS Apple Silicon or Linux x64 then,
-good news! You can install from one of the pre-built wheels from the
-[`flitter-lang` PyPI package](https://pypi.org/project/flitter-lang/)
+If you are installing on one of the pre-built wheel platforms (Intel macOS,
+Apple Silicon macOS, x86_64 Linux, x84_64 Windows) then, good news!, you can
+install from the [`flitter-lang` PyPI package](https://pypi.org/project/flitter-lang/)
 with just:
 
 ```console
 $ pip3 install flitter-lang
 ```
 
-Otherwise you are going to need to install from the source distribution,
-
-### Installing from the source package
-
-As **Flitter** uses Cython under-the-hood, you'll need a working build
-environment. On macOS this means downloading
-[Xcode](https://developer.apple.com/xcode/).
-
-On a recent Linux box, all you should need to do is make sure that you have a
-Python3 development environment. On a Debian-variant, like Ubuntu, this would
-just be:
-
-```console
-$ sudo apt install python3-dev
-```
+Otherwise you are going to need to [install from the source
+distribution](#installing-from-the-source-package).
 
 It is recommended to do the install into a Python [virtual
 environment](https://docs.python.org/3/library/venv.html) as **Flitter** draws
@@ -61,6 +45,18 @@ $ python3 -m venv ~/.virtualenvs/flitter
 
 However, then ensuring that `~/.virtualenvs/flitter/bin` is in your `PATH` is
 left as an exercise for the reader.
+
+### Installing from the source package
+
+As **Flitter** uses Cython under-the-hood, you'll need a working build
+environment with a C compiler. On macOS this means downloading
+[Xcode](https://developer.apple.com/xcode/). On Windows you'll need [Visual
+Studio](https://visualstudio.microsoft.com). On a Debian-variant Linux box, all
+you should need to do is install the `python3-dev` package:
+
+```console
+$ sudo apt install python3-dev
+```
 
 If you've safely navigated getting a working Python development environment, you
 can do the build from source with the same command you'd use to install one of
@@ -81,7 +77,7 @@ head of the `main` branch with:
 $ pip3 install https://github.com/jonathanhogg/flitter/archive/main.zip
 ```
 
-However, if you clone the repo instead, then you can install from the top
+However, if you clone the repo instead, then you can just install from the top
 level directory:
 
 ```console
