@@ -12,6 +12,7 @@ from ..model cimport Vector, Node, StateDict, null_
 from ..language.functions cimport normal, uniform
 
 from libc.math cimport sqrt, isinf, isnan, abs, floor
+from libc.stdint cimport uint64_t, int64_t
 from cpython cimport PyObject
 
 cdef extern from "Python.h":
@@ -29,10 +30,10 @@ cdef Vector CLOCK = Vector._symbol('clock')
 cdef Vector RUN = Vector._symbol('run')
 
 cdef normal NormalRandomSource = normal(Vector.symbol('_physics_normal'))
-cdef unsigned long long NormalRandomIndex = 0
+cdef uint64_t NormalRandomIndex = 0
 
 cdef uniform UniformRandomSource = uniform(Vector.symbol('_physics_uniform'))
-cdef unsigned long long UniformRandomIndex = 0
+cdef uint64_t UniformRandomIndex = 0
 
 
 cdef inline double random_normal() nogil:
@@ -85,7 +86,7 @@ cdef class Particle:
 
     cdef void update(self, double speed_of_light, double clock, double delta) noexcept nogil:
         cdef double speed, d, k
-        cdef long i, n=self.force.length
+        cdef int64_t i, n=self.force.length
         if self.mass:
             for i in range(n):
                 if isinf(self.force.numbers[i]) or isnan(self.force.numbers[i]):
@@ -122,7 +123,7 @@ cdef class Anchor(Particle):
 cdef class Barrier:
     cdef Vector position
     cdef Vector normal
-    cdef float restitution
+    cdef double restitution
 
     def __cinit__(self, Node node, Vector zero):
         self.position = node.get_fvec('position', zero.length, zero)
@@ -175,8 +176,8 @@ cdef class MatrixPairForceApplier(PairForceApplier):
 cdef class SpecificPairForceApplier(PairForceApplier):
     cdef Vector from_particle_id
     cdef Vector to_particle_id
-    cdef long from_index
-    cdef long to_index
+    cdef int64_t from_index
+    cdef int64_t to_index
 
     def __cinit__(self, Node node, double strength, Vector zero):
         self.from_particle_id = <Vector>node._attributes.get('from') if node._attributes else None
@@ -200,7 +201,7 @@ cdef class DistanceForceApplier(SpecificPairForceApplier):
 
     cdef void apply(self, Particle from_particle, Particle to_particle, Vector direction, double distance, double distance_squared) noexcept nogil:
         cdef double f, k
-        cdef long i
+        cdef int64_t i
         if self.minimum and distance < self.minimum:
             k = self.strength * (self.minimum - distance) ** self.power
             for i in range(direction.length):
@@ -218,7 +219,7 @@ cdef class DistanceForceApplier(SpecificPairForceApplier):
 cdef class DragForceApplier(ParticleForceApplier):
     cdef void apply(self, Particle particle, double delta) noexcept nogil:
         cdef double speed_squared=0, v, k
-        cdef long i
+        cdef int64_t i
         if particle.radius:
             for i in range(particle.velocity.length):
                 v = particle.velocity.numbers[i]
@@ -241,7 +242,7 @@ cdef class BuoyancyForceApplier(ParticleForceApplier):
 
     cdef void apply(self, Particle particle, double delta) noexcept nogil:
         cdef double displaced_mass, k
-        cdef long i
+        cdef int64_t i
         if particle.radius and particle.mass:
             displaced_mass = particle.radius**particle.force.length * self.density
             k = self.strength * (particle.mass - displaced_mass)
@@ -258,7 +259,7 @@ cdef class ConstantForceApplier(ParticleForceApplier):
         self.acceleration = node.get_fvec('acceleration', zero.length, zero)
 
     cdef void apply(self, Particle particle, double delta) noexcept nogil:
-        cdef long i
+        cdef int64_t i
         for i in range(self.force.length):
             particle.force.numbers[i] = particle.force.numbers[i] + self.force.numbers[i]*self.strength
             particle.velocity.numbers[i] = particle.velocity.numbers[i] + self.acceleration.numbers[i]*self.strength*delta
@@ -267,7 +268,7 @@ cdef class ConstantForceApplier(ParticleForceApplier):
 cdef class RandomForceApplier(ParticleForceApplier):
     cdef void apply(self, Particle particle, double delta) noexcept nogil:
         global RandomIndex
-        cdef long i
+        cdef int64_t i
         for i in range(particle.force.length):
             particle.force.numbers[i] = particle.force.numbers[i] + self.strength * random_normal()
 
@@ -280,7 +281,7 @@ cdef class CollisionForceApplier(MatrixPairForceApplier):
 
     cdef void apply(self, Particle from_particle, Particle to_particle, Vector direction, double distance, double distance_squared) noexcept nogil:
         cdef double min_distance, f, k
-        cdef long i
+        cdef int64_t i
         if from_particle.radius and to_particle.radius:
             min_distance = from_particle.radius + to_particle.radius
             if distance < min_distance:
@@ -294,7 +295,7 @@ cdef class CollisionForceApplier(MatrixPairForceApplier):
 cdef class GravityForceApplier(MatrixPairForceApplier):
     cdef void apply(self, Particle from_particle, Particle to_particle, Vector direction, double distance, double distance_squared) noexcept nogil:
         cdef double f, k
-        cdef long i
+        cdef int64_t i
         if from_particle.mass and to_particle.mass and distance > max(from_particle.radius, to_particle.radius):
             k = self.strength * from_particle.mass * to_particle.mass / distance_squared
             for i in range(direction.length):
@@ -306,7 +307,7 @@ cdef class GravityForceApplier(MatrixPairForceApplier):
 cdef class ElectrostaticForceApplier(MatrixPairForceApplier):
     cdef void apply(self, Particle from_particle, Particle to_particle, Vector direction, double distance, double distance_squared) noexcept nogil:
         cdef double f, k
-        cdef long i
+        cdef int64_t i
         if from_particle.charge and to_particle.charge and distance > max(from_particle.radius, to_particle.radius):
             k = self.strength * -from_particle.charge * to_particle.charge / distance_squared
             for i in range(direction.length):
@@ -323,7 +324,7 @@ cdef class AdhesionForceApplier(MatrixPairForceApplier):
 
     cdef void apply(self, Particle from_particle, Particle to_particle, Vector direction, double distance, double distance_squared) noexcept nogil:
         cdef double min_distance, max_distance, overlap_distance, adhesion_distance, f, k
-        cdef long i
+        cdef int64_t i
         if from_particle.radius and to_particle.radius:
             max_distance = from_particle.radius + to_particle.radius
             if distance < max_distance:
@@ -339,6 +340,9 @@ cdef class AdhesionForceApplier(MatrixPairForceApplier):
 
 cdef class PhysicsSystem:
     cdef set state_keys
+    cdef int64_t dimensions
+    cdef double start_time
+    cdef double resolution
 
     def __init__(self, **kwargs):
         self.state_keys = set()
@@ -350,16 +354,16 @@ cdef class PhysicsSystem:
         pass
 
     async def update(self, engine, Node node, double clock, double performance, bint slow_frame, **kwargs):
-        cdef long run = node.get_int('run', 0)
-        cdef long dimensions = node.get_int('dimensions', 0)
-        if dimensions < 1:
+        cdef int64_t run = node.get_int('run', 0)
+        self.dimensions = node.get_int('dimensions', 0)
+        if self.dimensions < 1:
             return
         cdef Vector state_prefix = <Vector>node._attributes.get('state') if node._attributes else None
         if state_prefix is None:
             return
         cdef double time = node.get_float('time', clock)
-        cdef double resolution = node.get_float('resolution', 1/engine.target_fps)
-        if resolution <= 0:
+        self.resolution = node.get_float('resolution', 1/engine.target_fps)
+        if self.resolution <= 0:
             return
         cdef double speed_of_light = max(0, node.get_float('speed_of_light', 0))
         cdef StateDict state = engine.state
@@ -369,9 +373,9 @@ cdef class PhysicsSystem:
         else:
             clock = 0
         cdef Vector last_run_vector = state.get_item(state_prefix.concat(RUN))
-        cdef long last_run
+        cdef int64_t last_run
         if last_run_vector.length == 1 and last_run_vector.numbers != NULL:
-            last_run = <long>floor(last_run_vector.numbers[0])
+            last_run = <int64_t>floor(last_run_vector.numbers[0])
         else:
             last_run = run
         cdef Vector state_key
@@ -385,9 +389,9 @@ cdef class PhysicsSystem:
         run_vector.numbers[0] = run
         state.set_item(state_prefix.concat(RUN), run_vector)
         cdef Vector zero = Vector.__new__(Vector)
-        zero.allocate_numbers(dimensions)
-        cdef long i
-        for i in range(dimensions):
+        zero.allocate_numbers(self.dimensions)
+        cdef int64_t i
+        for i in range(self.dimensions):
             zero.numbers[i] = 0
         cdef list particles=[], non_anchors=[], particle_forces=[], matrix_forces=[], specific_forces=[], barriers=[]
         cdef Node child
@@ -450,23 +454,23 @@ cdef class PhysicsSystem:
         for specific_force in specific_forces:
             specific_force.from_index = particles_by_id.get(specific_force.from_particle_id, -1)
             specific_force.to_index = particles_by_id.get(specific_force.to_particle_id, -1)
-        cdef double start_time
         time_vector = state.get_item(state_prefix)
         if time_vector.length == 1 and time_vector.numbers != NULL:
-            start_time = time_vector.numbers[0]
+            self.start_time = time_vector.numbers[0]
         else:
-            logger.debug("New {}D physics {!r} with {} particles and {} forces", dimensions, state_prefix, len(particles),
+            logger.debug("New {}D physics {!r} with {} particles and {} forces", self.dimensions, state_prefix, len(particles),
                          len(particle_forces) + len(matrix_forces) + len(specific_forces))
-            start_time = time
+            self.start_time = time
             time_vector = Vector.__new__(Vector)
             time_vector.allocate_numbers(1)
-            time_vector.numbers[0] = start_time
+            time_vector.numbers[0] = self.start_time
             state.set_item(state_prefix, time_vector)
-        cdef double behind = (time - start_time - clock) / resolution
+        cdef double behind = (time - self.start_time - clock) / self.resolution
         cdef bint extra_frame = performance > 1 and not slow_frame and random_uniform() > min(100 / behind, 0.9)
-        if time > start_time + clock:
-            clock = await asyncio.to_thread(self.calculate, particles, non_anchors, particle_forces, matrix_forces, specific_forces, barriers,
-                                            dimensions, engine.realtime, extra_frame, speed_of_light, time, start_time, resolution, clock)
+        cdef tuple objects
+        if time > self.start_time + clock:
+            objects = particles, non_anchors, particle_forces, matrix_forces, specific_forces, barriers
+            clock = await asyncio.to_thread(self.calculate, objects, engine.realtime, extra_frame, speed_of_light, time, clock)
             for particle in particles:
                 state.set_item(particle.position_state_key, particle.position)
                 state.set_item(particle.velocity_state_key, particle.velocity)
@@ -478,13 +482,13 @@ cdef class PhysicsSystem:
             state.set_item(state_key, null_)
         self.state_keys = new_state_keys
 
-    cdef double calculate(self, list particles, list non_anchors, list particle_forces, list matrix_forces, list specific_forces, list barriers,
-                          int dimensions, bint realtime, bint extra_frame, double speed_of_light,
-                          double time, double start_time, double resolution, double clock):
-        cdef long i, j, k, ii, m, n=len(particles), o=len(non_anchors)
-        cdef double delta, last_time = start_time + clock
+    cdef double calculate(self, tuple objects, bint realtime, bint extra_frame, double speed_of_light, double time, double clock):
+        cdef list particles, non_anchors, particle_forces, matrix_forces, specific_forces, barriers
+        particles, non_anchors, particle_forces, matrix_forces, specific_forces, barriers = objects
+        cdef int64_t i, j, k, ii, m, n=len(particles), o=len(non_anchors)
+        cdef double delta, last_time = self.start_time + clock
         cdef Vector direction = Vector.__new__(Vector)
-        direction.allocate_numbers(dimensions)
+        direction.allocate_numbers(self.dimensions)
         cdef double d, distance, distance_squared
         cdef PyObject* from_particle
         cdef PyObject* to_particle
@@ -492,7 +496,7 @@ cdef class PhysicsSystem:
         cdef PyObject* barrier
         with nogil:
             while True:
-                delta = min(resolution, time-last_time)
+                delta = min(self.resolution, time-last_time)
                 m = PyList_GET_SIZE(particle_forces)
                 for i in range(m):
                     for j in range(o):
@@ -504,12 +508,12 @@ cdef class PhysicsSystem:
                         from_particle = PyList_GET_ITEM(particles, (<SpecificPairForceApplier>force).from_index)
                         to_particle = PyList_GET_ITEM(particles, (<SpecificPairForceApplier>force).to_index)
                         distance_squared = 0
-                        for k in range(dimensions):
+                        for k in range(self.dimensions):
                             d = (<Particle>to_particle).position.numbers[k] - (<Particle>from_particle).position.numbers[k]
                             direction.numbers[k] = d
                             distance_squared += d * d
                         distance = sqrt(distance_squared)
-                        for k in range(dimensions):
+                        for k in range(self.dimensions):
                             direction.numbers[k] /= distance
                         (<SpecificPairForceApplier>force).apply(<Particle>from_particle, <Particle>to_particle, direction, distance, distance_squared)
                 m = PyList_GET_SIZE(matrix_forces)
@@ -519,7 +523,7 @@ cdef class PhysicsSystem:
                         for j in range(i):
                             to_particle = PyList_GET_ITEM(particles, j)
                             distance_squared = 0
-                            for k in range(dimensions):
+                            for k in range(self.dimensions):
                                 d = (<Particle>to_particle).position.numbers[k] - (<Particle>from_particle).position.numbers[k]
                                 direction.numbers[k] = d
                                 distance_squared += d * d
@@ -530,7 +534,7 @@ cdef class PhysicsSystem:
                                         distance_squared < (<MatrixPairForceApplier>force).max_distance_squared:
                                     if distance == -1:
                                         distance = sqrt(distance_squared)
-                                        for ii in range(dimensions):
+                                        for ii in range(self.dimensions):
                                             direction.numbers[ii] /= distance
                                     (<MatrixPairForceApplier>force).apply(<Particle>from_particle, <Particle>to_particle,
                                                                           direction, distance, distance_squared)

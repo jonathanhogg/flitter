@@ -6,6 +6,7 @@ import numpy as np
 import trimesh
 
 from libc.math cimport cos, sin, sqrt
+from libc.stdint cimport int32_t
 
 from ... import name_patch
 from ...cache import SharedCache
@@ -462,7 +463,7 @@ cdef class Sphere(PrimitiveModel):
         cdef object vertex_uv_array = np.empty((nvertices, 2), dtype='f4')
         cdef float[:, :] vertex_uv = vertex_uv_array
         cdef object faces_array = np.empty((nfaces, 3), dtype='i4')
-        cdef int[:, :] faces = faces_array
+        cdef int32_t[:, :] faces = faces_array
         cdef float x, y, z, r, th, u, v
         cdef int row, col, i=0, j=0
         for row in range(nrows + 1):
@@ -525,7 +526,7 @@ cdef class Cylinder(PrimitiveModel):
         cdef object vertex_uv_array = np.empty((m, 2), dtype='f4')
         cdef float[:, :] vertex_uv = vertex_uv_array
         cdef object faces_array = np.empty((n*4, 3), dtype='i4')
-        cdef int[:, :] faces = faces_array
+        cdef int32_t[:, :] faces = faces_array
         cdef float x, y, th, u, u_
         for i in range(n+1):
             j = k = i * 6
@@ -610,7 +611,7 @@ cdef class Cone(PrimitiveModel):
         cdef object vertex_uv_array = np.empty((m, 2), dtype='f4')
         cdef float[:, :] vertex_uv = vertex_uv_array
         cdef object faces_array = np.empty((n*2, 3), dtype='i4')
-        cdef int[:, :] faces = faces_array
+        cdef int32_t[:, :] faces = faces_array
         cdef float x, y, th, u, u_
         for i in range(n+1):
             j = k = i * 4

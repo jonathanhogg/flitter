@@ -1,3 +1,4 @@
+/.venv*
 __pycache__
 /.pytest_cache
 /build
@@ -5,4 +6,5 @@ __pycache__
 /src/**/*.c
 /src/**/*.html
 /src/**/*.so
+/src/**/*.pyd
 /src/flitter_lang.egg-info

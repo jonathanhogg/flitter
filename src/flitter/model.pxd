@@ -2,13 +2,15 @@
 
 import cython
 
+from libc.stdint cimport int64_t, uint64_t
+
 
 cdef class Vector:
-    cdef int length
+    cdef int64_t length
     cdef tuple objects
     cdef double* numbers
     cdef double[16] _numbers
-    cdef unsigned long long _hash
+    cdef uint64_t _hash
 
     @staticmethod
     cdef Vector _coerce(object other)
@@ -22,7 +24,7 @@ cdef class Vector:
     @staticmethod
     cdef Vector _symbol(str symbol)
 
-    cdef int allocate_numbers(self, int n) except -1
+    cdef int64_t allocate_numbers(self, int64_t n) except -1
     cdef void deallocate_numbers(self) noexcept
     cpdef Vector intern(self)
     cdef void fill_range(self, Vector startv, Vector stopv, Vector stepv)
@@ -30,8 +32,8 @@ cdef class Vector:
     cdef bint as_bool(self)
     cdef double as_double(self) noexcept
     cdef str as_string(self)
-    cdef unsigned long long hash(self, bint floor_floats)
-    cpdef object match(self, int n=?, type t=?, default=?)
+    cdef uint64_t hash(self, bint floor_floats)
+    cpdef object match(self, int64_t n=?, type t=?, default=?)
     cdef str repr(self)
     cdef Vector neg(self)
     cdef Vector pos(self) noexcept
@@ -53,9 +55,9 @@ cdef class Vector:
     cdef Vector ge(self, Vector other)
     cdef Vector lt(self, Vector other)
     cdef Vector le(self, Vector other)
-    cdef int compare(self, Vector other) except -2
+    cdef int64_t compare(self, Vector other) except -2
     cdef Vector slice(self, Vector index)
-    cdef Vector item(self, int i)
+    cdef Vector item(self, int64_t i)
     cpdef double squared_sum(self) noexcept
     cpdef Vector normalize(self)
     cpdef Vector dot(self, Vector other)
@@ -138,7 +140,7 @@ cdef class Node:
     cdef bint _attributes_shared
     cdef tuple _children
 
-    cdef unsigned long long hash(self)
+    cdef uint64_t hash(self)
     cpdef Node copy(self)
     cpdef void add_tag(self, str tag)
     cpdef void set_attribute(self, str name, Vector value)
@@ -147,7 +149,7 @@ cdef class Node:
     cpdef object get(self, str name, int n=?, type t=?, object default=?)
     cdef Vector get_fvec(self, str name, int n, Vector default)
     cdef double get_float(self, str name, double default)
-    cdef long get_int(self, str name, long default)
+    cdef int64_t get_int(self, str name, int64_t default)
     cdef bint get_bool(self, str name, bint default)
     cdef str get_str(self, str name, str default)
     cdef void repr(self, list lines, int indent)

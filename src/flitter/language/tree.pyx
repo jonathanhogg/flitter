@@ -10,6 +10,8 @@ in unrolling loops, simpler does not necessarily mean "smaller."
 
 from loguru import logger
 
+from libc.stdint cimport int64_t
+
 from .. import name_patch
 from ..model cimport Vector, Node, Context, StateDict, null_, true_, false_, minusone_
 from .vm cimport Program, static_builtins, dynamic_builtins
@@ -103,7 +105,7 @@ cdef class Top(Expression):
 
     cdef void _compile(self, Program program, list lnames):
         cdef Expression expr
-        cdef int m = 0
+        cdef int64_t m = 0
         for expr in self.expressions:
             expr._compile(program, lnames)
             if not isinstance(expr, (Let, Import, Function, Pragma, StoreGlobal)):
@@ -112,7 +114,7 @@ cdef class Top(Expression):
             program.append(m)
         cdef str name
         m = len(program.initial_lnames)
-        cdef int i, n=len(lnames)
+        cdef int64_t i, n=len(lnames)
         if n > m:
             for i in range(n-m):
                 name = lnames[n-1-i]
@@ -191,7 +193,7 @@ cdef class Sequence(Expression):
 
     cdef void _compile(self, Program program, list lnames):
         cdef Expression expr
-        cdef int n=len(lnames), m=0
+        cdef int64_t n=len(lnames), m=0
         for expr in self.expressions:
             expr._compile(program, lnames)
             if not isinstance(expr, (Let, Import, Function, Pragma)):
@@ -257,7 +259,7 @@ cdef class Name(Expression):
         self.name = name
 
     cdef void _compile(self, Program program, list lnames):
-        cdef int i, n=len(lnames)-1
+        cdef int64_t i, n=len(lnames)-1
         for i in range(len(lnames)):
             if self.name == <str>lnames[n-i]:
                 program.local_load(i)
@@ -855,7 +857,7 @@ cdef class Call(Expression):
         cdef list bindings
         cdef Function func_expr
         cdef dict kwargs
-        cdef int i
+        cdef int64_t i
         if isinstance(function, FunctionName):
             func_expr = context.names[(<FunctionName>function).name]
             assert not func_expr.captures, "Cannot inline functions with captured names"
@@ -924,7 +926,7 @@ cdef class Tag(NodeModifier):
         cdef Vector nodes
         cdef list objects
         cdef Node n
-        cdef int i
+        cdef int64_t i
         if isinstance(node, Literal):
             nodes = (<Literal>node).value
             if nodes.isinstance(Node):
@@ -966,7 +968,7 @@ cdef class Attributes(NodeModifier):
             node = attrs.node
         node = node._simplify(context)
         cdef Vector nodes
-        cdef int i
+        cdef int64_t i
         cdef list objects
         if isinstance(node, Literal):
             nodes = (<Literal>node).value
@@ -1005,7 +1007,7 @@ cdef class Append(NodeModifier):
         cdef Expression children = self.children._simplify(context)
         cdef Vector nodes, childs
         cdef Node c, n
-        cdef int i
+        cdef int64_t i
         cdef list modifiers
         cdef Expression expr
         cdef NodeModifier modifier
@@ -1092,7 +1094,7 @@ cdef class Let(Expression):
         cdef Expression expr
         cdef Vector value
         cdef str name
-        cdef int i, n
+        cdef int64_t i, n
         for binding in self.bindings:
             expr = binding.expr._simplify(context)
             if isinstance(expr, Literal):
@@ -1149,7 +1151,7 @@ cdef class InlineLet(Expression):
 
     cdef void _compile(self, Program program, list lnames):
         cdef PolyBinding binding
-        cdef int n=len(lnames)
+        cdef int64_t n=len(lnames)
         for binding in self.bindings:
             binding.expr._compile(program, lnames)
             program.local_push(len(binding.names))
@@ -1167,7 +1169,7 @@ cdef class InlineLet(Expression):
         cdef Expression expr
         cdef Vector value
         cdef str name
-        cdef int i, n
+        cdef int64_t i, n
         for binding in self.bindings:
             expr = binding.expr._simplify(context)
             if isinstance(expr, Literal):
@@ -1215,7 +1217,7 @@ cdef class For(Expression):
         program.begin_for()
         START = program.new_label()
         END = program.new_label()
-        cdef int i, n=len(self.names)
+        cdef int64_t i, n=len(self.names)
         lnames.extend(self.names)
         program.literal(null_)
         program.local_push(n)
@@ -1243,7 +1245,7 @@ cdef class For(Expression):
             context.names = saved
             return For(self.names, source, body)
         values = (<Literal>source).value
-        cdef int i=0, n=values.length
+        cdef int64_t i=0, n=values.length
         while i < n:
             for name in self.names:
                 context.names[name] = values.item(i)
@@ -1335,7 +1337,7 @@ cdef class Function(Expression):
         cdef str name
         cdef list function_lnames = []
         assert self.captures is not None, "Simplifier must be run to correctly compile functions"
-        cdef int i, n=len(lnames)-1
+        cdef int64_t i, n=len(lnames)-1
         for name in self.captures:
             for i in range(len(lnames)):
                 if name == <str>lnames[n-i]:

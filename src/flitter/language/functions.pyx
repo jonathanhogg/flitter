@@ -8,6 +8,7 @@ Flitter language functions
 import cython
 
 from libc.math cimport floor, round, sin, cos, tan, asin, acos, sqrt, exp, atan2, log, log2, log10
+from libc.stdint cimport int64_t, uint64_t
 from cpython.object cimport PyObject
 from cpython.ref cimport Py_INCREF
 from cpython.tuple cimport PyTuple_New, PyTuple_GET_ITEM, PyTuple_SET_ITEM
@@ -39,7 +40,7 @@ def sample(Context context, Vector texture_id, Vector coord, Vector default=null
             or (scene_node := context.references.get(texture_id.as_string())) is None \
             or not hasattr(scene_node, 'texture_data') or (data := scene_node.texture_data) is None:
         return default
-    cdef int height=data.shape[0], width=data.shape[1], x=int(coord.numbers[0] * width), y=int(coord.numbers[1] * height)
+    cdef int64_t height=data.shape[0], width=data.shape[1], x=int(coord.numbers[0] * width), y=int(coord.numbers[1] * height)
     if x < 0 or x >= width or y < 0 or y >= height:
         return default
     cdef const double[:] color = data[y, x]
@@ -69,15 +70,15 @@ cdef class uniform(Vector):
             return true_
         return false_
 
-    cdef Vector item(self, int i):
+    cdef Vector item(self, int64_t i):
         cdef Vector value = Vector.__new__(Vector)
         value.allocate_numbers(1)
         value.numbers[0] = self._item(i)
         return value
 
     @cython.cdivision(True)
-    cdef double _item(self, unsigned long long i) noexcept nogil:
-        cdef unsigned long long x, y, z
+    cdef double _item(self, uint64_t i) noexcept nogil:
+        cdef uint64_t x, y, z
         # Compute a 32bit float PRN using the Squares algorithm [https://arxiv.org/abs/2004.06278]
         x = y = i * self._hash
         z = y + self._hash
@@ -94,10 +95,10 @@ cdef class uniform(Vector):
         if index.numbers == NULL:
             return null_
         cdef Vector result = Vector.__new__(Vector)
-        cdef int i
-        cdef unsigned long long j
+        cdef int64_t i
+        cdef uint64_t j
         for i in range(result.allocate_numbers(index.length)):
-            j = <unsigned long long>(<long long>floor(index.numbers[i]))
+            j = <uint64_t>(<long long>floor(index.numbers[i]))
             result.numbers[i] = self._item(j)
         return result
 
@@ -109,7 +110,7 @@ cdef class uniform(Vector):
 
 
 cdef class beta(uniform):
-    cdef double _item(self, unsigned long long i) noexcept nogil:
+    cdef double _item(self, uint64_t i) noexcept nogil:
         i <<= 2
         cdef double u1 = uniform._item(self, i)
         cdef double u2 = uniform._item(self, i + 1)
@@ -123,7 +124,7 @@ cdef class beta(uniform):
 
 cdef class normal(uniform):
     @cython.cdivision(True)
-    cdef double _item(self, unsigned long long i) noexcept nogil:
+    cdef double _item(self, uint64_t i) noexcept nogil:
         # Use the Box-Muller transform to approximate the normal distribution
         # [https://en.wikipedia.org/wiki/Box–Muller_transform]
         cdef double u1, u2
@@ -169,7 +170,7 @@ def chrv(Vector ordinals):
     if ordinals.numbers == NULL:
         return null_
     cdef str text = ""
-    cdef int i
+    cdef int64_t i
     for i in range(ordinals.length):
         text += chr(<int>ordinals.numbers[i])
     cdef Vector result = Vector.__new__(Vector)
@@ -204,7 +205,7 @@ def sinv(Vector theta not None):
     if theta.numbers == NULL:
         return null_
     cdef Vector ys = Vector.__new__(Vector)
-    cdef int i, n = theta.length
+    cdef int64_t i, n = theta.length
     for i in range(ys.allocate_numbers(n)):
         ys.numbers[i] = sin(theta.numbers[i] * Tau)
     return ys
@@ -214,7 +215,7 @@ def cosv(Vector theta not None):
     if theta.numbers == NULL:
         return null_
     cdef Vector ys = Vector.__new__(Vector)
-    cdef int i, n = theta.length
+    cdef int64_t i, n = theta.length
     for i in range(ys.allocate_numbers(n)):
         ys.numbers[i] = cos(theta.numbers[i] * Tau)
     return ys
@@ -224,7 +225,7 @@ def tanv(Vector theta not None):
     if theta.numbers == NULL:
         return null_
     cdef Vector ys = Vector.__new__(Vector)
-    cdef int i, n = theta.length
+    cdef int64_t i, n = theta.length
     for i in range(ys.allocate_numbers(n)):
         ys.numbers[i] = tan(theta.numbers[i] * Tau)
     return ys
@@ -234,7 +235,7 @@ def asinv(Vector ys not None):
     if ys.numbers == NULL:
         return null_
     cdef Vector theta = Vector.__new__(Vector)
-    cdef int i, n = ys.length
+    cdef int64_t i, n = ys.length
     for i in range(theta.allocate_numbers(n)):
         theta.numbers[i] = asin(ys.numbers[i]) / Tau
     return theta
@@ -244,7 +245,7 @@ def acosv(Vector ys not None):
     if ys.numbers == NULL:
         return null_
     cdef Vector theta = Vector.__new__(Vector)
-    cdef int i, n = ys.length
+    cdef int64_t i, n = ys.length
     for i in range(theta.allocate_numbers(n)):
         theta.numbers[i] = acos(ys.numbers[i]) / Tau
     return theta
@@ -254,7 +255,7 @@ def polar(Vector theta not None):
     if theta.numbers == NULL:
         return null_
     cdef Vector ys = Vector.__new__(Vector)
-    cdef int i, n = theta.length
+    cdef int64_t i, n = theta.length
     ys.allocate_numbers(n*2)
     for i in range(0, n):
         ys.numbers[i*2] = cos(theta.numbers[i] * Tau)
@@ -265,7 +266,7 @@ def polar(Vector theta not None):
 def angle(Vector xy not None, Vector ys=None):
     if xy.numbers == NULL or (ys is not None and ys.numbers == NULL):
         return null_
-    cdef int i, n = xy.length // 2 if ys is None else max(xy.length, ys.length)
+    cdef int64_t i, n = xy.length // 2 if ys is None else max(xy.length, ys.length)
     cdef double x, y
     cdef Vector theta = Vector.__new__(Vector)
     theta.allocate_numbers(n)
@@ -313,7 +314,7 @@ def logv(Vector xs not None):
     if xs.numbers == NULL:
         return null_
     cdef Vector ys = Vector.__new__(Vector)
-    cdef int i, n = xs.length
+    cdef int64_t i, n = xs.length
     for i in range(ys.allocate_numbers(n)):
         ys.numbers[i] = log(xs.numbers[i])
     return ys
@@ -323,7 +324,7 @@ def log2v(Vector xs not None):
     if xs.numbers == NULL:
         return null_
     cdef Vector ys = Vector.__new__(Vector)
-    cdef int i, n = xs.length
+    cdef int64_t i, n = xs.length
     for i in range(ys.allocate_numbers(n)):
         ys.numbers[i] = log2(xs.numbers[i])
     return ys
@@ -333,7 +334,7 @@ def log10v(Vector xs not None):
     if xs.numbers == NULL:
         return null_
     cdef Vector ys = Vector.__new__(Vector)
-    cdef int i, n = xs.length
+    cdef int64_t i, n = xs.length
     for i in range(ys.allocate_numbers(n)):
         ys.numbers[i] = log10(xs.numbers[i])
     return ys
@@ -363,7 +364,7 @@ def impulse(Vector xs not None, Vector cs=None):
     if xs.numbers == NULL or (cs is not None and cs.numbers == NULL):
         return null_
     cdef Vector ys = Vector.__new__(Vector)
-    cdef int n=cs.length
+    cdef int64_t n=cs.length
     cdef double x, c, y, yy
     for i in range(ys.allocate_numbers(xs.length)):
         x = xs.numbers[i]
@@ -481,7 +482,7 @@ def snap(Vector xs not None):
 cpdef shuffle(uniform source, Vector xs):
     if xs.length == 0:
         return null_
-    cdef int i, j, n = xs.length
+    cdef int64_t i, j, n = xs.length
     cdef PyObject* a
     cdef PyObject* b
     xs = Vector._copy(xs)
@@ -527,11 +528,11 @@ def fract(Vector xs not None):
 
 
 def sumv(Vector xs not None, Vector w=true_):
-    cdef int i, j, n = xs.length
+    cdef int64_t i, j, n = xs.length
     if n == 0 or xs.objects is not None or w.length != 1 or w.objects is not None:
         return null_
     cdef Vector ys = Vector.__new__(Vector)
-    cdef int m = <int>(w.numbers[0])
+    cdef int64_t m = <int>(w.numbers[0])
     if m < 1:
         return null_
     ys.allocate_numbers(m)
@@ -544,11 +545,11 @@ def sumv(Vector xs not None, Vector w=true_):
 
 
 def accumulate(Vector xs not None, Vector zs=true_):
-    cdef int i, j, k, n = xs.length
+    cdef int64_t i, j, k, n = xs.length
     if n == 0 or xs.objects is not None or zs.length != 1 or zs.objects is not None:
         return null_
     cdef Vector ys = Vector.__new__(Vector)
-    cdef int m = <int>(zs.numbers[0])
+    cdef int64_t m = <int>(zs.numbers[0])
     if m < 1:
         return null_
     ys.allocate_numbers(n)
@@ -564,7 +565,7 @@ def accumulate(Vector xs not None, Vector zs=true_):
 def minv(Vector xs not None, *args):
     cdef Vector ys = null_
     cdef double f
-    cdef int i, n = xs.length
+    cdef int64_t i, n = xs.length
     if not args:
         if n:
             if xs.objects is None:
@@ -595,7 +596,7 @@ def minv(Vector xs not None, *args):
 def minindex(Vector xs not None, *args):
     cdef Vector ys
     cdef double f
-    cdef int i, j = 0, n = xs.length
+    cdef int64_t i, j = 0, n = xs.length
     if not args:
         if n:
             if xs.objects is None:
@@ -625,7 +626,7 @@ def minindex(Vector xs not None, *args):
 def maxv(Vector xs not None, *args):
     cdef Vector ys = null_
     cdef double f
-    cdef int i, n = xs.length
+    cdef int64_t i, n = xs.length
     if not args:
         if n:
             if xs.objects is None:
@@ -656,7 +657,7 @@ def maxv(Vector xs not None, *args):
 def maxindex(Vector xs not None, *args):
     cdef Vector ys
     cdef double f
-    cdef int i, j = 0, n = xs.length
+    cdef int64_t i, j = 0, n = xs.length
     if not args:
         if n:
             if xs.objects is None:
@@ -684,7 +685,7 @@ def maxindex(Vector xs not None, *args):
 
 
 def hypot(*args):
-    cdef int i, n = 0
+    cdef int64_t i, n = 0
     cdef double x, y = 0
     cdef Vector xs, ys = null_
     if len(args) == 1:
@@ -723,7 +724,7 @@ def normalize(Vector xs not None):
 def mapv(Vector xs not None, Vector ys not None, Vector zs not None):
     if xs.numbers == NULL or ys.numbers == NULL or zs.numbers == NULL:
         return null_
-    cdef int i, m=xs.length, n=ys.length, o=zs.length
+    cdef int64_t i, m=xs.length, n=ys.length, o=zs.length
     cdef Vector ws = Vector.__new__(Vector)
     cdef double x
     for i in range(ws.allocate_numbers(max(m, n, o))):
@@ -744,14 +745,14 @@ def zipv(*vectors):
     cdef bint numeric = True
     cdef list vs = []
     cdef Vector v
-    cdef int n = 0
+    cdef int64_t n = 0
     for v in vectors:
         if v.length:
             vs.append(v)
             if v.length > n:
                 n = v.length
             numeric = numeric and v.objects is None
-    cdef int i, j, p, m = len(vs)
+    cdef int64_t i, j, p, m = len(vs)
     if m == 0:
         return null_
     if m == 1:
@@ -831,7 +832,7 @@ def hsv(Vector color):
 def colortemp(Vector t):
     if t.numbers == NULL:
         return null_
-    cdef int i, n = t.length
+    cdef int64_t i, n = t.length
     cdef double T, T2, x, x2, y, X, Y, Z
     cdef Vector rgb = Vector.__new__(Vector)
     rgb.allocate_numbers(3*n)

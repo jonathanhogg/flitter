@@ -21,7 +21,7 @@ from cpython.unicode cimport PyUnicode_DATA, PyUnicode_GET_LENGTH, PyUnicode_KIN
 cdef double Pi = 3.141592653589793
 cdef double Tau = 6.283185307179586
 cdef double NaN = float("nan")
-cdef unsigned long long SymbolPrefix = <unsigned long long>(0xffe0_0000_0000_0000)
+cdef uint64_t SymbolPrefix = <uint64_t>(0xffe0_0000_0000_0000)
 cdef frozenset EmptySet = frozenset()
 cdef tuple AstypeArgs = (np.float64, 'K', 'unsafe', True, False)
 cdef type ndarray = np.ndarray
@@ -31,40 +31,40 @@ cdef dict SymbolTable = {}
 
 cdef union double_long:
     double f
-    unsigned long long l
+    uint64_t l
 
 
 # SplitMix64 algorithm [http://xoshiro.di.unimi.it/splitmix64.c]
 #
-cdef unsigned long long HASH_START = 0xe220a8397b1dcdaf
+cdef uint64_t HASH_START = 0xe220a8397b1dcdaf
 
-cdef inline unsigned long long HASH_UPDATE(unsigned long long _hash, unsigned long long y) noexcept:
+cdef inline uint64_t HASH_UPDATE(uint64_t _hash, uint64_t y) noexcept:
     _hash ^= y
-    _hash += <unsigned long long>(0x9e3779b97f4a7c15)
+    _hash += <uint64_t>(0x9e3779b97f4a7c15)
     _hash ^= _hash >> 30
-    _hash *= <unsigned long long>(0xbf58476d1ce4e5b9)
+    _hash *= <uint64_t>(0xbf58476d1ce4e5b9)
     _hash ^= _hash >> 27
-    _hash *= <unsigned long long>(0x94d049bb133111eb)
+    _hash *= <uint64_t>(0x94d049bb133111eb)
     _hash ^= _hash >> 31
     return _hash
 
 
 # FNV-1a hash algorithm [https://en.wikipedia.org/wiki/Fowler–Noll–Vo_hash_function#FNV-1a_hash]
-cdef inline unsigned long long HASH_STRING(str value):
+cdef inline uint64_t HASH_STRING(str value):
     cdef void* data = PyUnicode_DATA(value)
-    cdef unsigned int i, n=PyUnicode_GET_LENGTH(value), kind=PyUnicode_KIND(value)
+    cdef uint64_t i, n=PyUnicode_GET_LENGTH(value), kind=PyUnicode_KIND(value)
     cdef Py_UCS4 c
-    cdef unsigned long long y = <unsigned long long>(0xcbf29ce484222325)
+    cdef uint64_t y = <uint64_t>(0xcbf29ce484222325)
     for i in range(n):
         c = PyUnicode_READ(kind, data, i)
-        y = (y ^ <unsigned long long>c) * <unsigned long long>(0x100000001b3)
+        y = (y ^ <uint64_t>c) * <uint64_t>(0x100000001b3)
     return y
 
 
 cdef inline int vector_compare(Vector left, Vector right) except -2:
     if left is right:
         return 0
-    cdef int i, n = left.length, m = right.length
+    cdef int64_t i, n = left.length, m = right.length
     if n == 0 and m == 0:
         return 0
     cdef double x, y
@@ -101,12 +101,12 @@ cdef inline int vector_compare(Vector left, Vector right) except -2:
     return 1
 
 
-cdef int NumbersCacheSize = 0
+cdef int64_t NumbersCacheSize = 0
 cdef void** NumbersCache = NULL
 
 cpdef void initialize_numbers_cache(int max_size):
     global NumbersCache, NumbersCacheSize
-    cdef int i, n = max_size >> 4
+    cdef int64_t i, n = max_size >> 4
     if max_size & 0xf == 0:
         n -= 1
     if NumbersCacheSize:
@@ -121,7 +121,7 @@ cpdef void initialize_numbers_cache(int max_size):
         NumbersCacheSize = n
 
 cpdef void empty_numbers_cache():
-    cdef int i
+    cdef int64_t i
     for i in range(NumbersCacheSize):
         ptr = NumbersCache[i]
         while ptr != NULL:
@@ -132,7 +132,7 @@ cpdef void empty_numbers_cache():
 
 cpdef dict numbers_cache_counts():
     cdef dict sizes = {}
-    cdef int i, n
+    cdef int64_t i, n
     cdef void* ptr
     for i in range(NumbersCacheSize):
         n = 0
@@ -147,7 +147,7 @@ cpdef dict numbers_cache_counts():
 cdef inline double* malloc_numbers(int n) except NULL:
     global NumbersCache, NumbersCacheSize
     cdef double* numbers
-    cdef int i = (n >> 4) - 1
+    cdef int64_t i = (n >> 4) - 1
     if n & 0xf == 0:
         i -= 1
     if i < NumbersCacheSize and NumbersCache[i] != NULL:
@@ -162,7 +162,7 @@ cdef inline double* malloc_numbers(int n) except NULL:
 cdef inline void free_numbers(int n, double* numbers) noexcept:
     global NumbersCache, NumbersCacheSize
     cdef void* ptr
-    cdef int i = (n >> 4) - 1
+    cdef int64_t i = (n >> 4) - 1
     if n & 0xf == 0:
         i -= 1
     if i < NumbersCacheSize:
@@ -208,7 +208,7 @@ cdef class Vector:
 
     @staticmethod
     cdef Vector _copy(Vector other):
-        cdef int i, n=other.length
+        cdef int64_t i, n=other.length
         if n == 0:
             return null_
         cdef Vector result = Vector.__new__(Vector)
@@ -235,12 +235,12 @@ cdef class Vector:
 
     @staticmethod
     cdef Vector _compose(list vectors):
-        cdef int m = len(vectors)
+        cdef int64_t m = len(vectors)
         if m == 1:
             return <Vector>PyList_GET_ITEM(vectors, 0)
         if m == 0:
             return null_
-        cdef int i, j, k, n = 0
+        cdef int64_t i, j, k, n = 0
         cdef bint numeric = True
         cdef Vector v, result = Vector.__new__(Vector)
         for i in range(m):
@@ -287,7 +287,7 @@ cdef class Vector:
     @staticmethod
     cdef Vector _symbol(str symbol):
         # Symbols are the top 52 bits of the FNV-1a string hash multiplied by -0x1p1023
-        cdef unsigned long long code = HASH_STRING(symbol)
+        cdef uint64_t code = HASH_STRING(symbol)
         cdef double number = double_long(l=SymbolPrefix | (code >> 12)).f
         assert number not in SymbolTable or SymbolTable[number] == symbol, "Symbol table hash collision"
         SymbolTable[number] = symbol
@@ -312,7 +312,7 @@ cdef class Vector:
     def __cinit__(self, value=None):
         if value is None:
             return
-        cdef int i, n
+        cdef int64_t i, n
         cdef const double[:] arr
         if type(value) is ndarray:
             arr = value.astype(*AstypeArgs)
@@ -345,7 +345,7 @@ cdef class Vector:
     def non_numeric(self):
         return self.objects is not None
 
-    cdef int allocate_numbers(self, int n) except -1:
+    cdef int64_t allocate_numbers(self, int64_t n) except -1:
         if n > 16:
             self.numbers = malloc_numbers(n)
         elif n:
@@ -362,7 +362,7 @@ cdef class Vector:
         if self.objects is not None:
             return Vector, (self.objects,)
         cdef list values = PyList_New(self.length)
-        cdef int i
+        cdef int64_t i
         for i in range(self.length):
             value = PyFloat_FromDouble(self.numbers[i])
             Py_INCREF(value)
@@ -393,7 +393,7 @@ cdef class Vector:
                 return
         else:
             return
-        cdef int i, n = <int>c_ceil((stop - start) / step)
+        cdef int64_t i, n = <int64_t>c_ceil((stop - start) / step)
         if n > 0:
             for i in range(self.allocate_numbers(n)):
                 self.numbers[i] = start + step * i
@@ -409,7 +409,7 @@ cdef class Vector:
         return self.length
 
     cpdef bint isinstance(self, t) noexcept:
-        cdef int i, n=self.length
+        cdef int64_t i, n=self.length
         if n == 0:
             return False
         cdef PyObject* objptr
@@ -428,7 +428,7 @@ cdef class Vector:
 
     cdef bint as_bool(self):
         cdef PyObject* objptr
-        cdef int i
+        cdef int64_t i
         cdef tuple objects
         if self.numbers != NULL:
             for i in range(self.length):
@@ -444,7 +444,7 @@ cdef class Vector:
                     if PyUnicode_GET_LENGTH(<object>objptr) != 0:
                         return True
                 elif type(<object>objptr) is int or type(<object>objptr) is bool:
-                    if PyLong_AsLongLong(<object>objptr) != <long long>0:
+                    if PyLong_AsLongLong(<object>objptr) != <int64_t>0:
                         return True
                 else:
                     return True
@@ -463,7 +463,7 @@ cdef class Vector:
 
     cdef str as_string(self):
         cdef PyObject* objptr
-        cdef int i, n = self.length
+        cdef int64_t i, n = self.length
         if self.numbers != NULL and n == 1 and (objptr := PyDict_GetItem(SymbolTable, self.numbers[0])) != NULL:
             return <str>objptr
         cdef str text = ""
@@ -489,7 +489,7 @@ cdef class Vector:
         return text
 
     def __iter__(self):
-        cdef int i
+        cdef int64_t i
         if self.length:
             if self.objects:
                 yield from self.objects
@@ -500,12 +500,12 @@ cdef class Vector:
     def __hash__(self):
         return self.hash(False)
 
-    cdef unsigned long long hash(self, bint floor_floats):
+    cdef uint64_t hash(self, bint floor_floats):
         if not floor_floats and self._hash:
             return self._hash
-        cdef unsigned long long y, _hash = HASH_START
+        cdef uint64_t y, _hash = HASH_START
         cdef tuple objects
-        cdef unsigned int i
+        cdef int64_t i
         if self.length == 0:
             pass
         elif (objects := self.objects) is not None:
@@ -520,7 +520,7 @@ cdef class Vector:
                         y = double_long(f=PyFloat_AS_DOUBLE(<object>value)).l
                 elif type(<object>value) is int:
                     if floor_floats:
-                        y = <unsigned long long>(PyLong_AsLongLong(<object>value))
+                        y = <uint64_t>(PyLong_AsLongLong(<object>value))
                     else:
                         y = double_long(f=PyLong_AsDouble(<object>value)).l
                 else:
@@ -537,8 +537,8 @@ cdef class Vector:
             self._hash = _hash
         return _hash
 
-    cpdef object match(self, int n=0, type t=None, default=None):
-        cdef int i, m = self.length
+    cpdef object match(self, int64_t n=0, type t=None, default=None):
+        cdef int64_t i, m = self.length
         cdef list values
         cdef double f
         cdef object obj
@@ -553,7 +553,7 @@ cdef class Vector:
                         if t is str:
                             return SymbolTable.get(self.numbers[0], default)
                         if t is int:
-                            return <long long>c_floor(f)
+                            return <int64_t>c_floor(f)
                         elif t is bool:
                             return f != 0
                         return f
@@ -631,7 +631,7 @@ cdef class Vector:
         return self.repr()
 
     cdef str repr(self):
-        cdef int i, n = self.length
+        cdef int64_t i, n = self.length
         if n == 0:
             return "null"
         cdef list parts = []
@@ -655,7 +655,7 @@ cdef class Vector:
         return self.neg()
 
     cdef Vector neg(self):
-        cdef int i, n = self.length
+        cdef int64_t i, n = self.length
         cdef Vector result = Vector.__new__(Vector)
         if self.numbers != NULL:
             for i in range(result.allocate_numbers(n)):
@@ -674,7 +674,7 @@ cdef class Vector:
         return self.abs()
 
     cdef Vector abs(self):
-        cdef int i, n = self.length
+        cdef int64_t i, n = self.length
         cdef Vector result = Vector.__new__(Vector)
         if self.numbers != NULL:
             for i in range(result.allocate_numbers(n)):
@@ -685,7 +685,7 @@ cdef class Vector:
         return self.ceil()
 
     cdef Vector ceil(self):
-        cdef int i, n = self.length
+        cdef int64_t i, n = self.length
         cdef Vector result = Vector.__new__(Vector)
         if self.numbers != NULL:
             for i in range(result.allocate_numbers(n)):
@@ -696,7 +696,7 @@ cdef class Vector:
         return self.floor()
 
     cdef Vector floor(self):
-        cdef int i, n = self.length
+        cdef int64_t i, n = self.length
         cdef Vector result = Vector.__new__(Vector)
         if self.numbers != NULL:
             for i in range(result.allocate_numbers(n)):
@@ -704,7 +704,7 @@ cdef class Vector:
         return result
 
     cpdef Vector fract(self):
-        cdef int i, n = self.length
+        cdef int64_t i, n = self.length
         cdef Vector result = Vector.__new__(Vector)
         if self.numbers != NULL:
             for i in range(result.allocate_numbers(n)):
@@ -719,7 +719,7 @@ cdef class Vector:
 
     @cython.cdivision(True)
     cdef Vector add(self, Vector other):
-        cdef int i, n = self.length, m = other.length
+        cdef int64_t i, n = self.length, m = other.length
         cdef Vector result = Vector.__new__(Vector)
         if self.numbers != NULL and other.numbers != NULL:
             for i in range(result.allocate_numbers(max(n, m))):
@@ -728,7 +728,7 @@ cdef class Vector:
 
     @cython.cdivision(True)
     cpdef Vector mul_add(self, Vector left, Vector right):
-        cdef int i, n = self.length, m = left.length, o = right.length
+        cdef int64_t i, n = self.length, m = left.length, o = right.length
         cdef Vector result = Vector.__new__(Vector)
         if self.numbers != NULL and left.numbers != NULL and right.numbers != NULL:
             for i in range(result.allocate_numbers(max(n, m, o))):
@@ -743,7 +743,7 @@ cdef class Vector:
 
     @cython.cdivision(True)
     cdef Vector sub(self, Vector other):
-        cdef int i, n = self.length, m = other.length
+        cdef int64_t i, n = self.length, m = other.length
         cdef Vector result = Vector.__new__(Vector)
         if self.numbers != NULL and other.numbers != NULL:
             for i in range(result.allocate_numbers(max(n, m))):
@@ -758,7 +758,7 @@ cdef class Vector:
 
     @cython.cdivision(True)
     cdef Vector mul(self, Vector other):
-        cdef int i, n = self.length, m = other.length
+        cdef int64_t i, n = self.length, m = other.length
         cdef Vector result = Vector.__new__(Vector)
         if self.numbers != NULL and other.numbers != NULL:
             for i in range(result.allocate_numbers(max(n, m))):
@@ -773,7 +773,7 @@ cdef class Vector:
 
     @cython.cdivision(True)
     cdef Vector truediv(self, Vector other):
-        cdef int i, n = self.length, m = other.length
+        cdef int64_t i, n = self.length, m = other.length
         cdef Vector result = Vector.__new__(Vector)
         if self.numbers != NULL and other.numbers != NULL:
             for i in range(result.allocate_numbers(max(n, m))):
@@ -788,7 +788,7 @@ cdef class Vector:
 
     @cython.cdivision(True)
     cdef Vector floordiv(self, Vector other):
-        cdef int i, n = self.length, m = other.length
+        cdef int64_t i, n = self.length, m = other.length
         cdef Vector result = Vector.__new__(Vector)
         if self.numbers != NULL and other.numbers != NULL:
             for i in range(result.allocate_numbers(max(n, m))):
@@ -803,7 +803,7 @@ cdef class Vector:
 
     @cython.cdivision(True)
     cdef Vector mod(self, Vector other):
-        cdef int i, n = self.length, m = other.length
+        cdef int64_t i, n = self.length, m = other.length
         cdef Vector result = Vector.__new__(Vector)
         cdef double x, y
         if self.numbers != NULL and other.numbers != NULL:
@@ -826,7 +826,7 @@ cdef class Vector:
 
     @cython.cdivision(True)
     cdef Vector pow(self, Vector other):
-        cdef int i, n = self.length, m = other.length
+        cdef int64_t i, n = self.length, m = other.length
         cdef Vector result = Vector.__new__(Vector)
         if self.numbers != NULL and other.numbers != NULL:
             for i in range(result.allocate_numbers(max(n, m))):
@@ -839,7 +839,7 @@ cdef class Vector:
     cdef Vector eq(self, Vector other):
         if self is other:
             return true_
-        cdef int i, n = self.length, m = other.length
+        cdef int64_t i, n = self.length, m = other.length
         cdef tuple left = self.objects, right = other.objects
         if n != m or (left is None) != (right is None):
             return false_
@@ -859,7 +859,7 @@ cdef class Vector:
     cdef Vector ne(self, Vector other):
         if self is other:
             return false_
-        cdef int i, n = self.length, m = other.length
+        cdef int64_t i, n = self.length, m = other.length
         cdef tuple left = self.objects, right = other.objects
         if n != m or (left is None) != (right is None):
             return true_
@@ -873,7 +873,7 @@ cdef class Vector:
                     return true_
         return false_
 
-    cdef int compare(self, Vector other) except -2:
+    cdef int64_t compare(self, Vector other) except -2:
         return vector_compare(self, other)
 
     def __gt__(self, other):
@@ -907,7 +907,7 @@ cdef class Vector:
         return result
 
     cdef Vector slice(self, Vector index):
-        cdef int i, j, m = index.length, n = self.length
+        cdef int64_t i, j, m = index.length, n = self.length
         if index.numbers == NULL or n == 0:
             return null_
         cdef Vector result = Vector.__new__(Vector)
@@ -928,8 +928,8 @@ cdef class Vector:
                 result.numbers[i] = self.numbers[j]
         return result
 
-    cdef Vector item(self, int i):
-        cdef int n = self.length
+    cdef Vector item(self, int64_t i):
+        cdef int64_t n = self.length
         if n == 0:
             return null_
         cdef Vector result = Vector.__new__(Vector)
@@ -953,7 +953,7 @@ cdef class Vector:
 
     @cython.cdivision(True)
     cpdef double squared_sum(self) noexcept:
-        cdef int i, n = self.length
+        cdef int64_t i, n = self.length
         if self.numbers == NULL:
             return NaN
         cdef double x, y = 0
@@ -964,7 +964,7 @@ cdef class Vector:
 
     @cython.cdivision(True)
     cpdef Vector normalize(self):
-        cdef int i, n = self.length
+        cdef int64_t i, n = self.length
         if self.numbers == NULL:
             return null_
         cdef double x, y = 0
@@ -982,7 +982,7 @@ cdef class Vector:
 
     @cython.cdivision(True)
     cpdef Vector dot(self, Vector other):
-        cdef int i, n = self.length, m = other.length
+        cdef int64_t i, n = self.length, m = other.length
         cdef Vector result = Vector.__new__(Vector)
         cdef double sum = 0
         if self.numbers != NULL and other.numbers != NULL:
@@ -1008,7 +1008,7 @@ cdef class Vector:
     cpdef Vector clamp(self, Vector minimum, Vector maximum):
         if self.numbers == NULL or minimum is None or maximum is None:
             return self
-        cdef int i, n=max(self.length, minimum.length, maximum.length)
+        cdef int64_t i, n=max(self.length, minimum.length, maximum.length)
         cdef Vector result = Vector.__new__(Vector)
         cdef double d
         for i in range(result.allocate_numbers(n)):
@@ -1021,7 +1021,7 @@ cdef class Vector:
         return result
 
     cpdef Vector concat(self, Vector other):
-        cdef int i, n = self.length, m = other.length
+        cdef int64_t i, n = self.length, m = other.length
         if m == 0:
             return self
         if n == 0:
@@ -1145,7 +1145,7 @@ cdef class Matrix33(Vector):
             k = self.numbers[0]
         else:
             raise ValueError("Argument must be a float or a sequence of 9 floats")
-        cdef int i
+        cdef int64_t i
         for i in range(9):
             self.numbers[i] = k if i % 4 == 0 else 0
         self.length = 9
@@ -1155,7 +1155,7 @@ cdef class Matrix33(Vector):
         cdef double* numbers = result.numbers
         cdef double* a_numbers = self.numbers
         cdef double* b_numbers = b.numbers
-        cdef int i, j
+        cdef int64_t i, j
         for i in range(0, 9, 3):
             for j in range(3):
                 numbers[i+j] = a_numbers[j]*b_numbers[i] + a_numbers[j+3]*b_numbers[i+1] + a_numbers[j+6]*b_numbers[i+2]
@@ -1210,7 +1210,7 @@ cdef class Matrix33(Vector):
         cdef double* numbers = self.numbers
         cdef Matrix33 result = Matrix33.__new__(Matrix33)
         cdef double* result_numbers = result.numbers
-        cdef int i, j
+        cdef int64_t i, j
         for i in range(3):
             for j in range(3):
                 result_numbers[i*3+j] = numbers[j*3+i]
@@ -1219,7 +1219,7 @@ cdef class Matrix33(Vector):
     def __repr__(self):
         cdef list rows = []
         cdef double* numbers = self.numbers
-        cdef int i
+        cdef int64_t i
         for i in range(3):
             rows.append(f"| {numbers[i]:7.3f} {numbers[i+3]:7.3f} {numbers[i+6]:7.3f} |")
         return '\n'.join(rows)
@@ -1465,7 +1465,7 @@ cdef class Matrix44(Vector):
             k = self.numbers[0]
         else:
             raise ValueError("Argument must be a float or a sequence of 16 floats")
-        cdef int i
+        cdef int64_t i
         for i in range(16):
             self.numbers[i] = k if i % 5 == 0 else 0
         self.length = 16
@@ -1475,7 +1475,7 @@ cdef class Matrix44(Vector):
         cdef double* numbers = result.numbers
         cdef double* a_numbers = self.numbers
         cdef double* b_numbers = b.numbers
-        cdef int i, j
+        cdef int64_t i, j
         for i in range(0, 16, 4):
             for j in range(4):
                 numbers[i+j] = a_numbers[j]*b_numbers[i] + \
@@ -1491,7 +1491,7 @@ cdef class Matrix44(Vector):
         cdef double* numbers
         cdef double* a_numbers = self.numbers
         cdef double* b_numbers = b.numbers
-        cdef int j
+        cdef int64_t j
         if b.length == 3:
             result.allocate_numbers(3)
             numbers = result.numbers
@@ -1555,7 +1555,7 @@ cdef class Matrix44(Vector):
         cdef double* numbers = self.numbers
         cdef Matrix44 result = Matrix44.__new__(Matrix44)
         cdef double* result_numbers = result.numbers
-        cdef int i, j
+        cdef int64_t i, j
         for i in range(4):
             for j in range(4):
                 result_numbers[i*4+j] = numbers[j*4+i]
@@ -1565,7 +1565,7 @@ cdef class Matrix44(Vector):
         cdef double* numbers = self.numbers
         cdef Matrix33 result = Matrix33.__new__(Matrix33)
         cdef double* result_numbers = result.numbers
-        cdef int i, j
+        cdef int64_t i, j
         for i in range(3):
             for j in range(3):
                 result_numbers[3*i+j] = numbers[4*i+j]
@@ -1603,7 +1603,7 @@ cdef class Matrix44(Vector):
     def __repr__(self):
         cdef list rows = []
         cdef double* numbers = self.numbers
-        cdef int i
+        cdef int64_t i
         for i in range(4):
             rows.append(f"| {numbers[i]:7.3f} {numbers[i+4]:7.3f} {numbers[i+8]:7.3f} {numbers[i+12]:7.3f} |")
         return '\n'.join(rows)
@@ -1620,8 +1620,8 @@ cdef class Node:
     def __hash__(self):
         return self.hash()
 
-    cdef unsigned long long hash(self):
-        cdef unsigned long long _hash = HASH_START
+    cdef uint64_t hash(self):
+        cdef uint64_t _hash = HASH_START
         _hash = HASH_UPDATE(_hash, HASH_STRING(self.kind))
         if self._tags is not None:
             for tag in sorted(self._tags):
@@ -1742,7 +1742,7 @@ cdef class Node:
         if objptr == NULL:
             return default
         cdef Vector result, value = <Vector>objptr
-        cdef int m, i
+        cdef int64_t m, i
         if value.numbers != NULL:
             m = value.length
             if m == 1 and n > 1:
@@ -1765,7 +1765,7 @@ cdef class Node:
             return value.numbers[0]
         return default
 
-    cdef long get_int(self, str name, long default):
+    cdef int64_t get_int(self, str name, int64_t default):
         if self._attributes is None:
             return default
         cdef PyObject* objptr = PyDict_GetItem(self._attributes, name)
@@ -1773,7 +1773,7 @@ cdef class Node:
             return default
         cdef Vector value = <Vector>objptr
         if value.numbers != NULL and value.length == 1:
-            return <long>c_floor(value.numbers[0])
+            return <int64_t>c_floor(value.numbers[0])
         return default
 
     cdef bint get_bool(self, str name, bint default):
@@ -1796,7 +1796,7 @@ cdef class Node:
         return iter(self._attributes)
 
     cdef void repr(self, list lines, int indent):
-        cdef int i
+        cdef int64_t i
         cdef str tag, key
         cdef Vector value
         cdef list parts

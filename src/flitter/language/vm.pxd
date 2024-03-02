@@ -2,6 +2,8 @@
 
 from cpython cimport PyObject
 
+from libc.stdint cimport int64_t
+
 from ..model cimport Vector, Context
 
 
@@ -12,7 +14,7 @@ cdef dict builtins
 
 cdef class VectorStack:
     cdef PyObject** vectors
-    cdef int top
+    cdef int64_t top
     cdef readonly int size
 
     cpdef VectorStack copy(self)
@@ -37,7 +39,7 @@ cdef class Program:
     cdef readonly tuple initial_lnames
     cdef readonly VectorStack stack
     cdef readonly VectorStack lnames
-    cdef int next_label
+    cdef int64_t next_label
 
     cpdef void link(self)
     cpdef void optimize(self)

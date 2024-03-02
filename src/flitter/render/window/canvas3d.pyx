@@ -12,6 +12,7 @@ import moderngl
 import numpy as np
 
 from libc.math cimport cos, log2, sqrt, tan
+from libc.stdint cimport int64_t
 
 from . import SceneNode, COLOR_FORMATS, set_uniform_vector
 from ... import name_patch
@@ -55,8 +56,8 @@ cdef enum LightType:
 
 cdef class Light:
     cdef LightType type
-    cdef float inner_cone
-    cdef float outer_cone
+    cdef double inner_cone
+    cdef double outer_cone
     cdef Vector color
     cdef Vector position
     cdef Vector direction
@@ -546,7 +547,7 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
     cdef tuple transparent_object
     cdef list transparent_objects = []
     cdef double[:] zs
-    cdef long[:] indices
+    cdef int64_t[:] indices
     cdef dict shaders = objects.setdefault('canvas3d_shaders', {})
     cdef dict names = render_group.names.copy()
     names.update({'max_lights': render_group.max_lights, 'Ambient': LightType.Ambient, 'Directional': LightType.Directional,
@@ -667,9 +668,9 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
                     z += matrix.numbers[10]
                     w += matrix.numbers[11]
                 zs[i] = z / w if w != 0 else -1
-            indices = zs_array.argsort()
+            indices = zs_array.argsort().astype('int64')
         else:
-            indices = np.arange(n, dtype='long')
+            indices = np.arange(n, dtype='int64')
         for i in indices:
             instance = instances[i]
             material = instance.material

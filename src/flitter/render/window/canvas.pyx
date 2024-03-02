@@ -11,7 +11,7 @@ import cython
 from cpython cimport array, PyObject
 from cpython.dict cimport PyDict_GetItem, PyDict_SetItem
 from libc.math cimport acos, sqrt
-from libc.stdint cimport int64_t
+from libc.stdint cimport int64_t, uint32_t
 from loguru import logger
 import skia
 
@@ -145,7 +145,7 @@ cdef double turn_angle(double x0, double y0, double x1, double y1, double x2, do
 @cython.wraparound(False)
 cdef object line_path(object path, Vector points, double curve, bint closed):
     cdef bint sharp = curve <= 0
-    cdef int nverbs = 0, npoints = 0, n = points.length // 2
+    cdef uint32_t nverbs = 0, npoints = 0, n = points.length // 2
     if n == 0:
         return
     cdef array.array points_array = array.array('f')
@@ -155,7 +155,7 @@ cdef object line_path(object path, Vector points, double curve, bint closed):
     array.resize(verbs_array, n * 2 + 2)
     cdef unsigned char[:] pverbs = verbs_array
     cdef double last_mid_x, last_mid_y, last_x, last_y, x, y
-    cdef int i = 0, m = n, j
+    cdef uint32_t i = 0, m = n, j
     if closed and not sharp:
         m += 2
     while i < m:
@@ -233,7 +233,7 @@ cdef object line_path(object path, Vector points, double curve, bint closed):
     cdef bytearray data = bytearray()
     cdef array.array header_array = array.array('I')
     array.resize(header_array, 4)
-    cdef unsigned int[:] header = header_array
+    cdef uint32_t[:] header = header_array
     header[0] = 5
     header[1] = npoints / 2
     header[2] = 0

@@ -52,10 +52,10 @@ cdef dict all_builtins = {}
 all_builtins.update(dynamic_builtins)
 all_builtins.update(static_builtins)
 
-cdef int* StatsCount = NULL
+cdef int64_t* StatsCount = NULL
 cdef double* StatsDuration = NULL
 cdef double CallOutDuration = 0
-cdef int CallOutCount = 0
+cdef int64_t CallOutCount = 0
 
 cdef enum OpCode:
     Add
@@ -172,10 +172,10 @@ cdef dict OpCodeNames = {
 
 cdef initialize_stats():
     global StatsCount, StatsDuration
-    cdef int n = OpCode.MAX + 1
-    StatsCount = <int*>PyMem_Malloc(n * sizeof(int))
+    cdef int64_t n = OpCode.MAX + 1
+    StatsCount = <int64_t*>PyMem_Malloc(n * sizeof(int64_t))
     StatsDuration = <double*>PyMem_Malloc(n * sizeof(double))
-    cdef unsigned int i
+    cdef int64_t i
     for i in range(n):
         StatsCount[i] = 0
         StatsDuration[i] = 0
@@ -336,7 +336,7 @@ cdef class VectorStack:
         self.top = -1
 
     def __dealloc__(self):
-        cdef int i
+        cdef int64_t i
         for i in range(self.top+1):
             Py_DECREF(<Vector>self.vectors[i])
             self.vectors[i] = NULL
@@ -347,7 +347,7 @@ cdef class VectorStack:
 
     cpdef VectorStack copy(self):
         cdef VectorStack new_stack = VectorStack.__new__(VectorStack, self.size)
-        cdef int i
+        cdef int64_t i
         cdef Vector value
         for i in range(self.top+1):
             value = Vector._copy(<Vector>self.vectors[i])
@@ -409,8 +409,8 @@ cdef class VectorStack:
             raise TypeError("Insufficient items")
         poke_at(self, offset, vector)
 
-cdef int increase(VectorStack stack) except 0:
-    cdef int new_size = stack.size * 2
+cdef int64_t increase(VectorStack stack) except 0:
+    cdef int64_t new_size = stack.size * 2
     stack.vectors = <PyObject**>PyMem_Realloc(stack.vectors, sizeof(PyObject*) * new_size)
     if stack.vectors == NULL:
         raise MemoryError()
@@ -420,7 +420,7 @@ cdef int increase(VectorStack stack) except 0:
 cdef inline void drop(VectorStack stack, int n) noexcept:
     assert stack.top - n >= -1, "Stack empty"
     stack.top -= n
-    cdef int i
+    cdef int64_t i
     for i in range(1, n+1):
         Py_DECREF(<Vector>stack.vectors[stack.top+i])
         stack.vectors[stack.top+i] = NULL
@@ -449,7 +449,7 @@ cdef inline tuple pop_tuple(VectorStack stack, int n):
     cdef tuple t = PyTuple_New(n)
     stack.top -= n
     cdef PyObject* ptr
-    cdef int i, base=stack.top+1
+    cdef int64_t i, base=stack.top+1
     for i in range(n):
         ptr = stack.vectors[base+i]
         PyTuple_SET_ITEM(t, i, <Vector>ptr)
@@ -461,7 +461,7 @@ cdef inline list pop_list(VectorStack stack, int n):
     cdef list t = PyList_New(n)
     stack.top -= n
     cdef PyObject* ptr
-    cdef int i, base=stack.top+1
+    cdef int64_t i, base=stack.top+1
     for i in range(n):
         ptr = stack.vectors[base+i]
         PyList_SET_ITEM(t, i, <Vector>ptr)
@@ -469,12 +469,12 @@ cdef inline list pop_list(VectorStack stack, int n):
     return t
 
 cdef inline dict pop_dict(VectorStack stack, tuple keys):
-    cdef int n = len(keys)
+    cdef int64_t n = len(keys)
     assert stack.top - n >= -1, "Stack empty"
     cdef dict t = {}
     stack.top -= n
     cdef PyObject* ptr
-    cdef int i, base=stack.top+1
+    cdef int64_t i, base=stack.top+1
     for i in range(n):
         ptr = stack.vectors[base+i]
         PyDict_SetItem(t, <object>PyTuple_GET_ITEM(keys, i), <Vector>ptr)
@@ -489,7 +489,7 @@ cdef inline Vector pop_composed(VectorStack stack, int m):
     if m == 0:
         return null_
     stack.top -= m
-    cdef int i, j=0, k, n=0, base=stack.top+1
+    cdef int64_t i, j=0, k, n=0, base=stack.top+1
     cdef bint numeric = True
     cdef PyObject* ptr
     for i in range(base, base+m):
@@ -572,7 +572,7 @@ cdef class Function:
     cdef readonly tuple captures
 
     def __call__(self, Context context, *args, **kwargs):
-        cdef int i, lnames_top, stack_top, k=PyTuple_GET_SIZE(self.captures), m=PyTuple_GET_SIZE(self.parameters), n=PyTuple_GET_SIZE(args)
+        cdef int64_t i, lnames_top, stack_top, k=PyTuple_GET_SIZE(self.captures), m=PyTuple_GET_SIZE(self.parameters), n=PyTuple_GET_SIZE(args)
         cdef PyObject* objptr
         cdef object saved_path
         cdef VectorStack lnames = context.lnames
@@ -602,14 +602,14 @@ cdef class Function:
 
 cdef class LoopSource:
     cdef Vector source
-    cdef int position
-    cdef int iterations
+    cdef int64_t position
+    cdef int64_t iterations
 
 
 def log_vm_stats():
     cdef list stats = []
     cdef double duration, total=0
-    cdef int count
+    cdef int64_t count
     cdef unsigned int i
     cdef double start, end, overhead, per_execution
     start = perf_counter()
@@ -642,7 +642,7 @@ def log_vm_stats():
 
 cdef inline void call_helper(Context context, VectorStack stack, object function, tuple args, dict kwargs, bint record_stats, double* duration):
     global CallOutDuration, CallOutCount
-    cdef int i, n=PyTuple_GET_SIZE(args)
+    cdef int64_t i, n=PyTuple_GET_SIZE(args)
     cdef double call_duration
     cdef tuple context_args
     cdef bint is_func = type(function) is Function
@@ -684,7 +684,7 @@ cdef inline dict import_module(Context context, str filename, bint record_stats,
             return None
         import_context = import_context.parent
     cdef VectorStack stack=context.stack, lnames=context.lnames
-    cdef int stack_top=stack.top, lnames_top=lnames.top
+    cdef int64_t stack_top=stack.top, lnames_top=lnames.top
     import_context = Context.__new__(Context)
     import_context.parent = context
     import_context.errors = context.errors
@@ -710,7 +710,7 @@ cdef inline dict import_module(Context context, str filename, bint record_stats,
 cdef inline void execute_append(VectorStack stack, int count):
     cdef Vector nodes_vec = peek_at(stack, count)
     cdef Vector children
-    cdef int i, j, k, m=nodes_vec.length, n, o
+    cdef int64_t i, j, k, m=nodes_vec.length, n, o
     cdef tuple nodes = nodes_vec.objects
     cdef tuple src
     cdef PyObject* objptr
@@ -768,7 +768,7 @@ cdef inline execute_attribute(VectorStack stack, str name):
     cdef PyObject* objptr
     cdef Node node
     cdef dict attributes
-    cdef int i,  m=nodes_vec.length, n=value.length
+    cdef int64_t i,  m=nodes_vec.length, n=value.length
     for i in range(m):
         objptr = PyTuple_GET_ITEM(nodes, i)
         if type(<object>objptr) is not Node:
@@ -794,7 +794,7 @@ cdef inline execute_attribute(VectorStack stack, str name):
 
 cdef inline execute_tag(VectorStack stack, str name):
     cdef Vector nodes_vec = peek(stack)
-    cdef int i, m=nodes_vec.length
+    cdef int64_t i, m=nodes_vec.length
     cdef tuple nodes = nodes_vec.objects
     cdef PyObject* objptr
     cdef Node node
@@ -864,7 +864,7 @@ cdef class Program:
             self.lnames = VectorStack.__new__(VectorStack)
         context.lnames = self.lnames
         context.path = self.path
-        cdef int i, n=PyTuple_GET_SIZE(self.initial_lnames)
+        cdef int64_t i, n=PyTuple_GET_SIZE(self.initial_lnames)
         cdef PyObject* objptr
         for i in range(n):
             objptr = PyDict_GetItem(context.names, <object>PyTuple_GET_ITEM(self.initial_lnames, i))
@@ -883,7 +883,7 @@ cdef class Program:
 
     cpdef void link(self):
         cdef Instruction instruction
-        cdef int label, address, target
+        cdef int64_t label, address, target
         cdef list addresses
         cdef InstructionJump jump
         cdef dict jumps={}, labels={}
@@ -902,7 +902,7 @@ cdef class Program:
     cpdef void optimize(self):
         cdef Instruction instruction, last=None
         cdef list instructions=[]
-        cdef int n
+        cdef int64_t n
         assert not self.linked, "Cannot optimize a linked program"
         for instruction in self.instructions:
             if instructions:
@@ -1101,7 +1101,7 @@ cdef class Program:
     cdef void _execute(self, Context context, int pc, bint record_stats):
         global CallOutCount, CallOutDuration
         cdef VectorStack stack=context.stack, lnames=context.lnames
-        cdef int i, n, program_end=len(self.instructions)
+        cdef int64_t i, n, program_end=len(self.instructions)
         cdef dict global_names=context.names, state=context.state._state
         cdef list loop_sources=[]
         cdef LoopSource loop_source = None
