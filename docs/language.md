@@ -869,13 +869,10 @@ loop unrolling, "simpler" doesn't necessarily mean "smaller"), the tree is
 compiled into instructions for a stack-based virtual machine. These instructions
 are interpreted to run the program.
 
-The simplifier and compiler can run again incorporating state if that has been
+The simplifier and compiler can run again incorporating any state that has been
 stable for a period of time (configurable with the `--evalstate` command-line
-option). If the state then changes (i.e., a pad or encoder is touched) the
-engine will return to the original compiled program.
-[Counters](functions.md#counters) update the state whenever their rate changes,
-and so doing this often will defeat state-based partial-evaluation. The physics
-engine updates state on every iteration and so does the same.
+option). If any of these state keys then changes (i.e., a pad or encoder is
+touched) the engine will immediately return to the original compiled program.
 
 ## Run-time Error Behaviour
 

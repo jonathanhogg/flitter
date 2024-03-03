@@ -5,8 +5,8 @@
 3.3 or above. At least Python 3.10 is *required* as the code uses `match`/`case`
 syntax.
 
-It is developed exclusively on Intel macOS, but is tested on Apple Silicon
-macOS, x86_64 Linux and x86_64 Windows.
+It is developed exclusively on Intel macOS, but is tested and supported on Apple
+Silicon macOS, x86_64 Linux and x86_64 Windows.
 
 **Flitter** is a command-line tool. It is assumed that you are comfortable using
 the command line on your OS of choice. You will also obviously need to be able
@@ -21,10 +21,9 @@ thing for you, like [Homebrew](https://brew.sh) or
 
 ### Installing from the pre-built wheels
 
-If you are installing on one of the pre-built wheel platforms (Intel macOS,
-Apple Silicon macOS, x86_64 Linux, x84_64 Windows) then, good news!, you can
-install from the [`flitter-lang` PyPI package](https://pypi.org/project/flitter-lang/)
-with just:
+If you are installing on one of the supported platforms then, good news!, you
+can install one of the pre-built wheels in the [`flitter-lang` PyPI
+package](https://pypi.org/project/flitter-lang/) with just:
 
 ```console
 $ pip3 install flitter-lang
@@ -35,16 +34,19 @@ distribution](#installing-from-the-source-package).
 
 It is recommended to do the install into a Python [virtual
 environment](https://docs.python.org/3/library/venv.html) as **Flitter** draws
-on quite a few dependencies (see below). This is especially important if you are
-using the latest Python 3.12 as it will simply refuse to install packages into
-the system environment. This is generally something as simple as:
+on quite a few dependencies (see [below](#python-package-dependencies)). This is
+especially important if you are using the latest Python 3.12 as it will simply
+refuse to install packages into the system environment. This is generally
+something as simple as:
 
 ```console
 $ python3 -m venv ~/.virtualenvs/flitter
+$ ~/.virtualenvs/flitter/bin/pip3 install flitter-lang
 ```
 
-However, then ensuring that `~/.virtualenvs/flitter/bin` is in your `PATH` is
-left as an exercise for the reader.
+However, then ensuring that `~/.virtualenvs/flitter/bin` is in your `PATH` (or
+creating an alias for `~/.virtualenvs/flitter/bin/flitter`) is left as an
+exercise for the reader.
 
 ### Installing from the source package
 
@@ -59,14 +61,7 @@ $ sudo apt install python3-dev
 ```
 
 If you've safely navigated getting a working Python development environment, you
-can do the build from source with the same command you'd use to install one of
-the pre-built wheels:
-
-```console
-$ pip3 install flitter-lang
-```
-
-Everything else will be pulled down and installed/built as needed.
+can do the build from source with exactly the same command(s) as above.
 
 ### Installing from the repo:
 
@@ -95,10 +90,10 @@ $ flitter examples/hoops.fl
 
 ### Editable installations
 
-If you want to edit the code then ensure that `cython` and `setuptools` are
-installed in your runtime environment, do an editable package deployment, and
-then throw away the built code. The code automatically makes use of `pyximport`
-to (re)compile Cython code on-the-fly as **Flitter** runs:
+If you want to edit the code, then ensure that `cython` and `setuptools` are
+installed in your runtime environment, do an *editable* package deployment, and
+then **throw away the built code**. **Flitter** automatically makes use of
+`pyximport` to (re)compile Cython code on-the-fly as it runs:
 
 ```console
 $ pip3 install cython setuptools
