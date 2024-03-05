@@ -74,7 +74,7 @@ jobs:
         curl.exe -L --output mesa.7z --url https://github.com/pal1000/mesa-dist-win/releases/download/24.0.2/mesa3d-24.0.2-release-msvc.7z
         "C:\Program Files\7-Zip\7z.exe" x mesa.7z
         systemwidedeploy.cmd 2
-      working-directory: build/wgl/
+      working-directory: build
     - name: Run all tests
       run: |
         pytest tests
