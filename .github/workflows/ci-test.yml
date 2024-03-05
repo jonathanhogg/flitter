@@ -71,11 +71,9 @@ jobs:
     - name: Install test dependencies
       run: |
         python -m pip install pytest
-        Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -Scope CurrentUser
-        Install-Module -Name 7Zip4PowerShell -Force -Scope CurrentUser
-        Invoke-WebRequest -OutFile mesa.7z -Uri https://github.com/pal1000/mesa-dist-win/releases/download/24.0.2/mesa3d-24.0.2-release-msvc.7z
-        Expand-7Zip -ArchiveFileName mesa.7z -TargetPath mesa
-        .\mesa\systemwidedeploy.cmd 2
+        curl -L --output mesa.7z --url https://github.com/pal1000/mesa-dist-win/releases/download/24.0.2/mesa3d-24.0.2-release-msvc.7z
+        "C:\Program Files\7-Zip\7z.exe" x mesa.7z
+        .\systemwidedeploy.cmd 2
       working-directory: build
     - name: Run all tests
       run: |
