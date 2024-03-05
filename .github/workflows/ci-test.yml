@@ -31,15 +31,11 @@ jobs:
     - name: Install build dependencies
       run: |
         python -m pip install --upgrade pip
-        python -m pip install build
         sudo apt-get update
         sudo apt-get install libasound2-dev libjack-jackd2-dev
-    - name: Build wheel
+    - name: Build and install package
       run: |
-        python -m build --wheel
-    - name: Install package
-      run: |
-        python -m pip install dist/flitter_lang-*.whl
+        python -m pip install .
     - name: Install test dependencies
       run: |
         sudo apt-get install mesa-utils xvfb libfontconfig1 fonts-freefont-ttf
@@ -66,10 +62,19 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
-    - name: Install package
+    - name: Install build dependencies
       run: |
-        python -m pip install --upgrade pip pytest
+        python -m pip install --upgrade pip
+    - name: Build and install package
+      run: |
         python -m pip install .
+    - name: Install test dependencies
+      run: |
+        python -m pip install pytest
+        curl.exe -L --output mesa.7z --url https://github.com/pal1000/mesa-dist-win/releases/download/24.0.2/mesa3d-24.0.2-release-msvc.7z
+        "C:\Program Files\7-Zip\7z.exe" x mesa.7z
+        systemwidedeploy.cmd 2
+      working-directory: build/wgl/
     - name: Run all tests
       run: |
         pytest tests
