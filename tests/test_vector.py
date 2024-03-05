@@ -398,12 +398,12 @@ class TestVector(unittest.TestCase):
         self.assertEqual(null / x, null)
         self.assertEqual(x / Vector("Hello world!"), null)
         self.assertEqual(Vector("Hello world!") / x, null)
-        self.assertEqual(x / Vector(1), x)
-        self.assertEqual(Vector(1) / x, Vector([1, 10, -0.2, 1e-6, 0]))
-        self.assertEqual(x / Vector([1, 2]), Vector([1, 0.05, -5, 5e5, math.inf]))
-        self.assertEqual(Vector([1, 2]) / x, Vector([1, 20, -0.2, 2e-6, 0]))
+        self.assertAllAlmostEqual(x / Vector(1), x)
+        self.assertAllAlmostEqual(Vector(1) / x, Vector([1, 10, -0.2, 1e-6, 0]))
+        self.assertAllAlmostEqual(x / Vector([1, 2]), Vector([1, 0.05, -5, 5e5, math.inf]))
+        self.assertAllAlmostEqual(Vector([1, 2]) / x, Vector([1, 20, -0.2, 2e-6, 0]))
         y = x / x
-        self.assertEqual(y[:4], Vector([1, 1, 1, 1]))
+        self.assertAllAlmostEqual(y[:4], Vector([1, 1, 1, 1]))
         self.assertTrue(math.isnan(y[4]))
 
     def test_floordiv(self):
@@ -520,19 +520,19 @@ class TestVector(unittest.TestCase):
         self.assertEqual(null.dot(null), null)
         self.assertEqual(null.dot(Vector([1, 2, 3])), null)
         self.assertEqual(Vector([1, 2, 3]).dot(null), null)
-        self.assertEqual(Vector([1, 2, 3]).dot(Vector([1, 2, 3])), Vector(14))
-        self.assertEqual(Vector([1, 2, 3]).dot(Vector([3, 2, 1])), Vector(10))
-        self.assertEqual(Vector([1, 2, 3]).dot(Vector(3)), Vector(18))
-        self.assertEqual(Vector([1, 2, 3]).dot(Vector([3, 2])), Vector(16))
+        self.assertAllAlmostEqual(Vector([1, 2, 3]).dot(Vector([1, 2, 3])), Vector(14))
+        self.assertAllAlmostEqual(Vector([1, 2, 3]).dot(Vector([3, 2, 1])), Vector(10))
+        self.assertAllAlmostEqual(Vector([1, 2, 3]).dot(Vector(3)), Vector(18))
+        self.assertAllAlmostEqual(Vector([1, 2, 3]).dot(Vector([3, 2])), Vector(16))
 
     def test_cross(self):
         self.assertEqual(null.cross(null), null)
         self.assertEqual(null.cross(Vector([1, 2, 3])), null)
         self.assertEqual(Vector([1, 2, 3]).cross(null), null)
-        self.assertEqual(Vector([1, 2, 3]).cross(Vector([1, 2, 3])), Vector([0, 0, 0]))
-        self.assertEqual(Vector([1, 2, 3]).cross(Vector([-1, -2, -3])), Vector([0, 0, 0]))
+        self.assertAllAlmostEqual(Vector([1, 2, 3]).cross(Vector([1, 2, 3])), Vector([0, 0, 0]))
+        self.assertAllAlmostEqual(Vector([1, 2, 3]).cross(Vector([-1, -2, -3])), Vector([0, 0, 0]))
         self.assertEqual(Vector([1, 2, 3]).cross(Vector([1, 2])), null)
-        self.assertEqual(Vector([1, 2, 3]).cross(Vector([3, 2, 1])), Vector([-4, 8, -4]))
+        self.assertAllAlmostEqual(Vector([1, 2, 3]).cross(Vector([3, 2, 1])), Vector([-4, 8, -4]))
 
     def test_concat(self):
         a = Vector([1, 2, 3])

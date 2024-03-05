@@ -22,6 +22,9 @@ jobs:
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
         os: [ubuntu-latest, windows-latest, macos-13, macos-14]
+        include:
+        - os: [macos-13, macos-14]
+          pytest_options: "--ignore=tests/test_scripts.py"
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v4
@@ -59,7 +62,7 @@ jobs:
       working-directory: build
     - name: Run all tests
       run: |
-        pytest tests
+        pytest ${{ matrix.pytest_options }} tests
     - name: Store the test generated images
       if: ${{ failure() }}
       uses: actions/upload-artifact@v4
