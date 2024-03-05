@@ -380,10 +380,11 @@ class Window(ProgramNode):
         super().release()
 
     def purge(self):
-        self.glctx.finish()
         super().purge()
-        if count := self.glctx.gc():
-            logger.trace("Window purge collected {} OpenGL objects", count)
+        if self.window is not None:
+            self.glctx.finish()
+            if count := self.glctx.gc():
+                logger.trace("Window purge collected {} OpenGL objects", count)
 
     @property
     def texture(self):
@@ -427,7 +428,7 @@ class Window(ProgramNode):
             self.window = glfw.create_window(self.width, self.height, title, None, Window.Windows[0].window if Window.Windows else None)
             Window.Windows.append(self)
             new_window = True
-        if resizable != self._resizable:
+        if self._visible and resizable != self._resizable:
             glfw.set_window_attrib(self.window, glfw.RESIZABLE, glfw.TRUE if resizable else glfw.FALSE)
             self._resizable = resizable
         if self._visible and (resized or screen != self._screen or fullscreen != self._fullscreen):
