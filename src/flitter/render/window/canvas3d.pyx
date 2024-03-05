@@ -949,7 +949,9 @@ class Canvas3D(SceneNode):
         return (<RenderTarget>self._primary_render_target).texture if self._primary_render_target is not None else None
 
     def release(self):
-        self._render_target = None
+        if self._primary_render_target is not None:
+            self._primary_render_target.release()
+            self._primary_render_target = None
         cdef RenderTarget render_target
         for render_target in self._secondary_render_targets.values():
             render_target.release()
@@ -1013,6 +1015,7 @@ class Canvas3D(SceneNode):
         primary_render_target.finalize(self.glctx)
         cdef Camera camera
         cdef RenderTarget secondary_render_target
+        cdef set unused_targets = set(self._secondary_render_targets)
         if references is not None:
             for camera in cameras.values():
                 if camera.secondary and camera.id:
@@ -1021,6 +1024,8 @@ class Canvas3D(SceneNode):
                         if secondary_render_target is None:
                             secondary_render_target = RenderTarget.__new__(RenderTarget)
                             self._secondary_render_targets[camera.id] = secondary_render_target
+                        else:
+                            unused_targets.remove(camera.id)
                         secondary_render_target.prepare(self.glctx, camera)
                         for render_group in render_groups:
                             if render_group.instances:
@@ -1029,6 +1034,10 @@ class Canvas3D(SceneNode):
                         references[camera.id] = secondary_render_target
                     else:
                         references[camera.id] = primary_render_target
+        for camera_id in unused_targets:
+            secondary_render_target = self._secondary_render_targets[camera_id]
+            secondary_render_target.release()
+            del self._secondary_render_targets[camera_id]
         self._total_duration += system_clock()
         self._total_count += 1
 
