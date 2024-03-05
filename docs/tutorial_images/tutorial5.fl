@@ -8,7 +8,7 @@ let SIZE=1280;720
 
 !window size=SIZE
     !record filename=OUTPUT codec=:gif
-        !canvas font_family='FreeSans'
+        !canvas font_family='Arial'
             !group font_size=100 translate=SIZE/2 color=1
                 text3d("Hello world!", 10, hsv(beat/10;1;1))
             !text text="Figure 1:" point=100;100 color=1

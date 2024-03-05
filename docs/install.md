@@ -44,9 +44,20 @@ $ python3 -m venv ~/.virtualenvs/flitter
 $ ~/.virtualenvs/flitter/bin/pip3 install flitter-lang
 ```
 
-However, then ensuring that `~/.virtualenvs/flitter/bin` is in your `PATH` (or
-creating an alias for `~/.virtualenvs/flitter/bin/flitter`) is left as an
-exercise for the reader.
+Alternatively, do a *user* install with:
+
+```console
+$ pip3 install --user flitter-lang
+```
+
+Assuming your Python install is set up well for your operating system, this
+should just put the `flitter` script into your path for you. However, if this
+isn't working (on Windows, for example, you may need to have checked a box
+during install) then you can also run **Flitter** as a Python package with:
+
+```console
+$ pip3 install --user flitter-lang
+```
 
 ### Installing from the source package
 
@@ -138,10 +149,20 @@ During install, `pip` will also use:
 
 ## Running Flitter
 
-You can run **Flitter** with a command like:
+If you've installed **Flitter** in a virtual environment, then you'll need to
+ensure that the scripts/bin folder for that environment is in your system path.
+You can then run **Flitter** with a command like:
 
 ```console
 $ flitter path/to/some/flitter/script.fl
+```
+
+If you've done a local `pip` install instead then – with a little luck – the
+scripts folder is already in your path. Otherwise, you might want to try running
+**Flitter** as a Python package:
+
+```console
+$ python3 -m flitter.engine path/to/some/flitter/script.fl
 ```
 
 **Flitter** takes one or more program filenames as the main command-line
