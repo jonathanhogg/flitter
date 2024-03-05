@@ -23,7 +23,9 @@ jobs:
         python-version: ["3.10", "3.11", "3.12"]
         os: [ubuntu-latest, windows-latest, macos-13, macos-14]
         include:
-        - os: [macos-13, macos-14]
+        - os: macos-13
+          pytest_options: "--ignore=tests/test_scripts.py"
+        - os: macos-14
           pytest_options: "--ignore=tests/test_scripts.py"
     runs-on: ${{ matrix.os }}
     steps:
