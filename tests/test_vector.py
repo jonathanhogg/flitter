@@ -20,17 +20,16 @@ class test_class:
         return 0
 
 
-def all_isclose(xs, ys):
-    for x, y in zip(xs, ys):
-        if not (math.isclose(x, y) or math.isnan(x) and math.isnan(y)):
-            return False
-    return True
-
-
 class TestVector(unittest.TestCase):
     """
     Tests of the Vector class
     """
+
+    def assertAllAlmostEqual(self, xs, ys):
+        for x, y in zip(xs, ys):
+            self.assertEqual(math.isnan(x), math.isnan(y), "nan mismatch")
+            if not (math.isnan(x) or math.isnan(y)):
+                self.assertAlmostEqual(x, y)
 
     def test_construct(self):
         """Test constructor and coerce method"""
@@ -337,8 +336,8 @@ class TestVector(unittest.TestCase):
     def test_fract(self):
         self.assertEqual(null.fract(), null)
         self.assertEqual(Vector("Hello world!").fract(), null)
-        self.assertEqual(Vector(-3.5).fract(), Vector(0.5))
-        self.assertTrue(all_isclose(Vector([0, 0.1, 3.5, -99.5, 1e-99, math.inf]).fract(), Vector([0, 0.1, 0.5, 0.5, 1e-99, math.nan])))
+        self.assertAllAlmostEqual(Vector(-3.5).fract(), Vector(0.5))
+        self.assertAllAlmostEqual(Vector([0, 0.1, 3.5, -99.5, 1e-99, math.inf]).fract(), Vector([0, 0.1, 0.5, 0.5, 1e-99, math.nan]))
 
     def test_add(self):
         x = Vector([1, 0.1, -5, 1e6, math.inf])
@@ -346,11 +345,11 @@ class TestVector(unittest.TestCase):
         self.assertEqual(null + x, null)
         self.assertEqual(x + Vector("Hello world!"), null)
         self.assertEqual(Vector("Hello world!") + x, null)
-        self.assertEqual(x + Vector(1), Vector([2, 1.1, -4, 1000001, math.inf]))
-        self.assertEqual(Vector(1) + x, Vector([2, 1.1, -4, 1000001, math.inf]))
-        self.assertEqual(x + Vector([1, 2]), Vector([2, 2.1, -4, 1000002, math.inf]))
-        self.assertEqual(Vector([1, 2]) + x, Vector([2, 2.1, -4, 1000002, math.inf]))
-        self.assertEqual(x + x, Vector([2, 0.2, -10, 2e6, math.inf]))
+        self.assertAllAlmostEqual(x + Vector(1), Vector([2, 1.1, -4, 1000001, math.inf]))
+        self.assertAllAlmostEqual(Vector(1) + x, Vector([2, 1.1, -4, 1000001, math.inf]))
+        self.assertAllAlmostEqual(x + Vector([1, 2]), Vector([2, 2.1, -4, 1000002, math.inf]))
+        self.assertAllAlmostEqual(Vector([1, 2]) + x, Vector([2, 2.1, -4, 1000002, math.inf]))
+        self.assertAllAlmostEqual(x + x, Vector([2, 0.2, -10, 2e6, math.inf]))
 
     def test_mul_add(self):
         x = Vector([1, 0.1, -5, 1e6, math.inf])
@@ -359,13 +358,13 @@ class TestVector(unittest.TestCase):
         self.assertEqual(null.mul_add(x, Vector(1)), null)
         self.assertEqual(x.mul_add(Vector(1), Vector("Hello world!")), null)
         self.assertEqual(Vector("Hello world!").mul_add(x, Vector(1)), null)
-        self.assertEqual(x.mul_add(Vector(0), Vector(1)), x)
-        self.assertEqual(x.mul_add(Vector(1), Vector(1)), x + 1)
-        self.assertEqual(x.mul_add(x, Vector(1)), x + x)
-        self.assertEqual(Vector(0).mul_add(x, Vector(1)), x)
-        self.assertEqual(Vector(1).mul_add(x, Vector(1)), x + 1)
-        self.assertEqual(Vector(0).mul_add(x, x), x * x)
-        self.assertEqual(Vector(x).mul_add(x, x), x * x + x)
+        self.assertAllAlmostEqual(x.mul_add(Vector(0), Vector(1)), x)
+        self.assertAllAlmostEqual(x.mul_add(Vector(1), Vector(1)), x + 1)
+        self.assertAllAlmostEqual(x.mul_add(x, Vector(1)), x + x)
+        self.assertAllAlmostEqual(Vector(0).mul_add(x, Vector(1)), x)
+        self.assertAllAlmostEqual(Vector(1).mul_add(x, Vector(1)), x + 1)
+        self.assertAllAlmostEqual(Vector(0).mul_add(x, x), x * x)
+        self.assertAllAlmostEqual(Vector(x).mul_add(x, x), x * x + x)
 
     def test_sub(self):
         x = Vector([1, 0.1, -5, 1e6, math.inf])
@@ -373,12 +372,12 @@ class TestVector(unittest.TestCase):
         self.assertEqual(null - x, null)
         self.assertEqual(x - Vector("Hello world!"), null)
         self.assertEqual(Vector("Hello world!") - x, null)
-        self.assertEqual(x - Vector(1), Vector([0, -0.9, -6, 999999, math.inf]))
-        self.assertEqual(Vector(1) - x, Vector([0, 0.9, 6, -999999, -math.inf]))
-        self.assertEqual(x - Vector([1, 2]), Vector([0, -1.9, -6, 999998, math.inf]))
-        self.assertEqual(Vector([1, 2]) - x, Vector([0, 1.9, 6, -999998, -math.inf]))
+        self.assertAllAlmostEqual(x - Vector(1), Vector([0, -0.9, -6, 999999, math.inf]))
+        self.assertAllAlmostEqual(Vector(1) - x, Vector([0, 0.9, 6, -999999, -math.inf]))
+        self.assertAllAlmostEqual(x - Vector([1, 2]), Vector([0, -1.9, -6, 999998, math.inf]))
+        self.assertAllAlmostEqual(Vector([1, 2]) - x, Vector([0, 1.9, 6, -999998, -math.inf]))
         y = x - x
-        self.assertEqual(y[:4], Vector([0, 0, 0, 0]))
+        self.assertAllAlmostEqual(y[:4], Vector([0, 0, 0, 0]))
         self.assertTrue(math.isnan(y[4]))
 
     def test_mul(self):
@@ -387,11 +386,11 @@ class TestVector(unittest.TestCase):
         self.assertEqual(null * x, null)
         self.assertEqual(x * Vector("Hello world!"), null)
         self.assertEqual(Vector("Hello world!") * x, null)
-        self.assertEqual(x * Vector(1), x)
-        self.assertEqual(Vector(1) * x, x)
-        self.assertEqual(x * Vector([1, 2]), Vector([1, 0.2, -5, 2e6, math.inf]))
-        self.assertEqual(Vector([1, 2]) * x, Vector([1, 0.2, -5, 2e6, math.inf]))
-        self.assertTrue(all_isclose(x * x, Vector([1, 0.01, 25, 1e12, math.inf])))
+        self.assertAllAlmostEqual(x * Vector(1), x)
+        self.assertAllAlmostEqual(Vector(1) * x, x)
+        self.assertAllAlmostEqual(x * Vector([1, 2]), Vector([1, 0.2, -5, 2e6, math.inf]))
+        self.assertAllAlmostEqual(Vector([1, 2]) * x, Vector([1, 0.2, -5, 2e6, math.inf]))
+        self.assertAllAlmostEqual(x * x, Vector([1, 0.01, 25, 1e12, math.inf]))
 
     def test_truediv(self):
         x = Vector([1, 0.1, -5, 1e6, math.inf])
@@ -427,11 +426,11 @@ class TestVector(unittest.TestCase):
         self.assertEqual(null % x, null)
         self.assertEqual(x % Vector("Hello world!"), null)
         self.assertEqual(Vector("Hello world!") % x, null)
-        self.assertEqual(x % Vector(2), Vector([1, 0.1, 1, 0]))
-        self.assertEqual(Vector(2) % x, Vector([0, 0, -3, 2]))
-        self.assertEqual(x % Vector([2, 3]), Vector([1, 0.1, 1, 1]))
-        self.assertEqual(Vector([2, 3]) % x, Vector([0, 0, -3, 3]))
-        self.assertEqual(x % x, Vector([0, 0, 0, 0]))
+        self.assertAllAlmostEqual(x % Vector(2), Vector([1, 0.1, 1, 0]))
+        self.assertAllAlmostEqual(Vector(2) % x, Vector([0, 0, -3, 2]))
+        self.assertAllAlmostEqual(x % Vector([2, 3]), Vector([1, 0.1, 1, 1]))
+        self.assertAllAlmostEqual(Vector([2, 3]) % x, Vector([0, 0, -3, 3]))
+        self.assertAllAlmostEqual(x % x, Vector([0, 0, 0, 0]))
 
     def test_pow(self):
         x = Vector([1, 0.1, -5, 1e6, math.inf])
@@ -439,11 +438,11 @@ class TestVector(unittest.TestCase):
         self.assertEqual(null ** x, null)
         self.assertEqual(x ** Vector("Hello world!"), null)
         self.assertEqual(Vector("Hello world!") ** x, null)
-        self.assertTrue(all_isclose(x ** Vector(2), Vector([1, 0.01, 25, 1e12, math.inf])))
-        self.assertTrue(all_isclose(Vector(2) ** x, Vector([2, 1.0717734625362931, 0.03125, math.inf, math.inf])))
-        self.assertTrue(all_isclose(x ** Vector([1, 2]), Vector([1, 0.01, -5, 1e12, math.inf])))
-        self.assertTrue(all_isclose(Vector([1, 2]) ** x, Vector([1, 1.0717734625362931, 1, math.inf, 1])))
-        self.assertTrue(all_isclose(x * x, Vector([1, 0.01, 25, 1e12, math.inf])))
+        self.assertAllAlmostEqual(x ** Vector(2), Vector([1, 0.01, 25, 1e12, math.inf]))
+        self.assertAllAlmostEqual(Vector(2) ** x, Vector([2, 1.0717734625362931, 0.03125, math.inf, math.inf]))
+        self.assertAllAlmostEqual(x ** Vector([1, 2]), Vector([1, 0.01, -5, 1e12, math.inf]))
+        self.assertAllAlmostEqual(Vector([1, 2]) ** x, Vector([1, 1.0717734625362931, 1, math.inf, 1]))
+        self.assertAllAlmostEqual(x * x, Vector([1, 0.01, 25, 1e12, math.inf]))
 
     def test_eq(self):
         self.assertTrue(null == Vector())
@@ -514,8 +513,8 @@ class TestVector(unittest.TestCase):
         self.assertEqual(Vector(["Hello world!"]).normalize(), null)
         self.assertEqual(Vector(1).normalize(), Vector(1))
         self.assertEqual(Vector([0, 1]).normalize(), Vector([0, 1]))
-        self.assertTrue(all_isclose(Vector([1, 1]).normalize(), Vector([0.707106781, 0.707106781])))
-        self.assertTrue(all_isclose(Vector([1, -2, 3]).normalize(), Vector([0.267261242, -0.534522484, 0.801783726])))
+        self.assertAllAlmostEqual(Vector([1, 1]).normalize(), Vector([0.707106781, 0.707106781]))
+        self.assertAllAlmostEqual(Vector([1, -2, 3]).normalize(), Vector([0.267261242, -0.534522484, 0.801783726]))
 
     def test_dot(self):
         self.assertEqual(null.dot(null), null)

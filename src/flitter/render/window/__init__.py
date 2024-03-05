@@ -363,28 +363,22 @@ class Window(ProgramNode):
         self._beat = None
 
     def release(self):
-        if self.window is not None:
+        if self.glctx is not None:
             self.glctx.finish()
             self.glctx.extra.clear()
             if count := self.glctx.gc():
                 logger.trace("Window release collected {} OpenGL objects", count)
             self.glctx.release()
             self.glctx = None
+        if self.window is not None:
             glfw.destroy_window(self.window)
-            self.window = None
             Window.Windows.remove(self)
             if not Window.Windows:
                 glfw.terminate()
-            self.engine = None
             logger.debug("{} closed", self.name)
+            self.window = None
+        self.engine = None
         super().release()
-
-    def purge(self):
-        super().purge()
-        if self.window is not None:
-            self.glctx.finish()
-            if count := self.glctx.gc():
-                logger.trace("Window purge collected {} OpenGL objects", count)
 
     @property
     def texture(self):
