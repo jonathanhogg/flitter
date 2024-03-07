@@ -449,7 +449,7 @@ cdef void collect(Node node, Matrix44 transform_matrix, Material material, Rende
         if 'cull_face' in node:
             new_render_group.cull_front_face = node.get_str('cull_face', 'back') == 'front'
         else:
-            new_render_group.cull_front_face = render_group.cull_front_face
+            new_render_group.cull_front_face = False if render_group is None else render_group.cull_front_face
         new_render_group.composite = node.get_str('composite', 'over' if render_group is None else render_group.composite).lower()
         vertex_shader = node.get_str('vertex', None)
         fragment_shader = node.get_str('fragment', None)
