@@ -1,13 +1,15 @@
 #version 330
 
 const vec3 greyscale = vec3(0.299, 0.587, 0.114);
+const float Tau = 6.283185307179586;
 
 in vec3 world_position;
 in vec3 world_normal;
 in vec2 texture_uv;
+noperspective in vec2 coord;
 
 flat in vec4 fragment_albedo;
-flat in vec3 fragment_emissive;
+flat in vec4 fragment_emissive;
 flat in vec4 fragment_properties;
 
 out vec4 fragment_color;
@@ -25,6 +27,8 @@ uniform float fog_max;
 uniform float fog_min;
 uniform vec3 fog_color;
 uniform float fog_curve;
+uniform mat4 pv_matrix;
+uniform sampler2D backface_data;
 
 uniform bool use_albedo_texture;
 uniform bool use_metal_texture;
@@ -39,6 +43,23 @@ uniform sampler2D roughness_texture;
 uniform sampler2D occlusion_texture;
 uniform sampler2D emissive_texture;
 uniform sampler2D transparency_texture;
+
+
+const vec4 RANDOM_SCALE = vec4(443.897, 441.423, .0973, .1099);
+
+vec3 random3(vec3 p) {
+    p = fract(p * RANDOM_SCALE.xyz);
+    p += dot(p, p.yxz + 19.19);
+    return fract((p.xxy + p.yzz) * p.zyx);
+}
+
+vec3 normal3(vec2 c, int i) {
+    vec3 u1 = random3(vec3(c, i*2));
+    vec3 u2 = random3(vec3(c, i*2+1));
+    vec3 R = sqrt(-2 * log(u1));
+    vec3 th = Tau * u2;
+    return sin(th) * R;
+}
 
 
 void main() {
@@ -64,11 +85,12 @@ void main() {
         float mono = clamp(dot(texture_color.rgb, greyscale), 0, 1);
         transparency = transparency * (1 - clamp(texture_color.a, 0, 1)) + mono;
     }
-    vec3 emissive = fragment_emissive;
+    vec3 emissive = fragment_emissive.rgb;
     if (use_emissive_texture) {
         vec4 emissive_texture_color = texture(emissive_texture, texture_uv);
         emissive = emissive * (1 - clamp(emissive_texture_color.a, 0, 1)) + emissive_texture_color.rgb;
     }
+    float translucency = fragment_emissive.a;
     float ior = fragment_properties.x;
     float metal = fragment_properties.y;
     if (use_metal_texture) {
@@ -82,7 +104,7 @@ void main() {
         float mono = clamp(dot(texture_color.rgb, greyscale), 0, 1);
         roughness = roughness * (1 - clamp(texture_color.a, 0, 1)) + mono;
     }
-    float occlusion = fragment_properties.z;
+    float occlusion = fragment_properties.w;
     if (use_occlusion_texture) {
         vec4 texture_color = texture(occlusion_texture, texture_uv);
         float mono = clamp(dot(texture_color.rgb, greyscale), 0, 1);
@@ -90,6 +112,33 @@ void main() {
     }
     vec3 diffuse_color = vec3(0);
     vec3 specular_color = emissive;
+    vec3 transmission_color = vec3(0);
+    vec4 backface;
+    vec3 backface_normal;
+    float backface_distance;
+    float thickness;
+    if (translucency > 0) {
+        vec4 backface = texture(backface_data, coord);
+        backface_distance = backface.w;
+        vec3 backface_position = view_position + V*backface_distance;
+        float k = backface_distance / translucency;
+        thickness = backface_distance - view_distance;
+        int count = 1;
+        for (int i = 0; i < 50; i++) {
+            vec3 offset = normal3(coord, i) / 10;
+            vec4 pos = pv_matrix * vec4(backface_position + offset*thickness*k, 1);
+            vec2 c = (pos.xy / pos.w + 1) / 2;
+            vec4 backface_sample = texture(backface_data, c);
+            if (backface_sample.w > view_distance) {
+                backface += backface_sample;
+                count += 1;
+            }
+        }
+        backface /= count;
+        backface_distance = backface.w;
+        backface_normal = backface.xyz;
+        thickness = backface_distance - view_distance;
+    }
     vec3 N = normalize(world_normal);
     float rf0 = (ior - 1) / (ior + 1);
     vec3 F0 = mix(vec3(rf0*rf0), albedo, metal);
@@ -191,6 +240,11 @@ void main() {
             vec3 radiance = light_color * attenuation * NdotL;
             if (pass == 0) {
                 diffuse_color += radiance * (1 - F) * (1 - metal) * albedo;
+                if (translucency > 0 && backface_distance > view_distance) {
+                    float k = thickness / translucency;
+                    vec3 radiance = light_color * attenuation * dot(backface_normal, L);
+                    transmission_color += radiance * (1 - F0) * (1 - metal) * (1 + albedo)/2;
+                }
             }
             if (pass == passes-1) {
                 specular_color += radiance * (NDF * G * F) / (4 * NdotV * NdotL + 1e-6);
@@ -198,6 +252,11 @@ void main() {
         }
     }
     float opacity = 1 - transparency;
+    if (translucency > 0) {
+        float absorption = clamp(pow(0.5, thickness / translucency), 0, 1);
+        specular_color += transmission_color * albedo * absorption * (1 - absorption);
+        opacity *= 1 - absorption;
+    }
     vec3 final_color = mix(diffuse_color, fog_color, fog_alpha) * opacity + specular_color * (1 - fog_alpha);
     if (monochrome) {
         float grey = dot(final_color, greyscale);
