@@ -343,6 +343,7 @@ cdef class PhysicsSystem:
     cdef int64_t dimensions
     cdef double start_time
     cdef double resolution
+    cdef double speed_of_light
 
     def __init__(self, **kwargs):
         self.state_keys = set()
@@ -365,7 +366,7 @@ cdef class PhysicsSystem:
         self.resolution = node.get_float('resolution', 1/engine.target_fps)
         if self.resolution <= 0:
             return
-        cdef double speed_of_light = max(0, node.get_float('speed_of_light', 0))
+        self.speed_of_light = max(0, node.get_float('speed_of_light', 0))
         cdef StateDict state = engine.state
         cdef Vector time_vector = state.get_item(state_prefix.concat(CLOCK))
         if time_vector.length == 1 and time_vector.numbers != NULL:
@@ -466,11 +467,11 @@ cdef class PhysicsSystem:
             time_vector.numbers[0] = self.start_time
             state.set_item(state_prefix, time_vector)
         cdef double behind = (time - self.start_time - clock) / self.resolution
-        cdef bint extra_frame = performance > 1 and not slow_frame and random_uniform() > min(100 / behind, 0.9)
+        cdef bint extra = performance > 1 and not slow_frame and random_uniform() > min(100 / behind, 0.9)
         cdef tuple objects
         if time > self.start_time + clock:
             objects = particles, non_anchors, particle_forces, matrix_forces, specific_forces, barriers
-            clock = await asyncio.to_thread(self.calculate, objects, engine.realtime, extra_frame, speed_of_light, time, clock)
+            clock = await asyncio.to_thread(self.calculate, objects, engine.realtime, extra, time, clock)
             for particle in particles:
                 state.set_item(particle.position_state_key, particle.position)
                 state.set_item(particle.velocity_state_key, particle.velocity)
@@ -482,7 +483,7 @@ cdef class PhysicsSystem:
             state.set_item(state_key, null_)
         self.state_keys = new_state_keys
 
-    cdef double calculate(self, tuple objects, bint realtime, bint extra_frame, double speed_of_light, double time, double clock):
+    cdef double calculate(self, tuple objects, bint realtime, bint extra, double time, double clock):
         cdef list particles, non_anchors, particle_forces, matrix_forces, specific_forces, barriers
         particles, non_anchors, particle_forces, matrix_forces, specific_forces, barriers = objects
         cdef int64_t i, j, k, ii, m, n=len(particles), o=len(non_anchors)
@@ -539,7 +540,7 @@ cdef class PhysicsSystem:
                                     (<MatrixPairForceApplier>force).apply(<Particle>from_particle, <Particle>to_particle,
                                                                           direction, distance, distance_squared)
                 for i in range(n):
-                    (<Particle>PyList_GET_ITEM(particles, i)).update(speed_of_light, clock, delta)
+                    (<Particle>PyList_GET_ITEM(particles, i)).update(self.speed_of_light, clock, delta)
                 m = PyList_GET_SIZE(barriers)
                 for i in range(m):
                     barrier = PyList_GET_ITEM(barriers, i)
@@ -548,9 +549,9 @@ cdef class PhysicsSystem:
                         (<Barrier>barrier).apply(<Particle>to_particle, delta)
                 last_time += delta
                 clock += delta
-                if last_time >= time or (realtime and not extra_frame):
+                if last_time >= time or (realtime and not extra):
                     break
-                extra_frame = False
+                extra = False
         return clock
 
 
