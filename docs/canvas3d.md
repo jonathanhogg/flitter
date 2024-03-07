@@ -682,17 +682,24 @@ engine to dispatch them simultaneously.
 ### External Models
 
 External mesh models are loaded with the `!model` node, which takes the
-single additional attribute:
+additional attributes:
 
 `filename=` *FILENAME*
 : Specifies the model file to load, relative to the program path. The model
 will be automatically reloaded if this file changes.
 
+`repair=` ( `true` | `false` )
+: If set to `true`, attempts to *repair* the mesh by merging vertices and
+removing duplicate or degenerate faces, fixing normal directions and face
+windows, and capping holes. This can be useful if a mesh is rendering
+incorrectly or is failing with [constructive solid
+geometry](#contructive-solid-geometry) operations. Default is `false`.
+
 Meshes are loaded using the [**trimesh**](https://trimesh.org) library and so
 **Flitter** supports all of the file-types supported by that, which includes
 OBJ and STL files. No material properties are loaded, just the triangular mesh,
 so you will need to re-specify the material properties using a `!material`
-node or on the `!model` node itself.
+node or with material attributes on the `!model` node itself.
 
 ### Controlling Model Shading
 

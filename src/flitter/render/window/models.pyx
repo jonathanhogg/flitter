@@ -76,6 +76,9 @@ cdef class Model:
     cdef Model invert(self):
         return InvertedModel.get(self)
 
+    cdef Model repair(self):
+        return RepairedModel.get(self)
+
     cdef Model snap_edges(self, double snap_angle, double minimum_area):
         return SnappedEdgesModel.get(self, snap_angle, minimum_area)
 
@@ -120,6 +123,9 @@ cdef class Model:
 
 cdef class ModelTransformer(Model):
     cdef Model original
+
+    cdef bint is_constructed(self):
+        return self.original.is_constructed()
 
     cdef bint check_valid(self):
         if not self.valid:
@@ -205,6 +211,37 @@ cdef class SnappedEdgesModel(ModelTransformer):
         self.valid = True
 
 
+cdef class RepairedModel(ModelTransformer):
+    @staticmethod
+    cdef RepairedModel get(Model original):
+        cdef str name = f'repair({original.name})'
+        cdef RepairedModel model = ModelCache.pop(name, None)
+        if model is None:
+            model = RepairedModel.__new__(RepairedModel)
+            model.name = name
+            model.original = original
+        ModelCache[name] = model
+        return model
+
+    cdef bint is_constructed(self):
+        return True
+
+    cdef void build_trimesh_model(self):
+        if not self.original.check_valid():
+            self.original.build_trimesh_model()
+        trimesh_model = self.original.trimesh_model
+        if trimesh_model is not None:
+            trimesh_model = trimesh_model.copy()
+            trimesh_model.process(validate=True, merge_tex=True, merge_norm=True)
+            trimesh_model.remove_unreferenced_vertices()
+            trimesh_model.fix_normals()
+            trimesh_model.fill_holes()
+            self.trimesh_model = trimesh_model
+        else:
+            self.trimesh_model = None
+        self.valid = True
+
+
 cdef class TransformedModel(ModelTransformer):
     cdef Matrix44 transform_matrix
 
@@ -228,10 +265,23 @@ cdef class TransformedModel(ModelTransformer):
     cdef Model transform(self, Matrix44 transform_matrix):
         return TransformedModel.get(self.original, transform_matrix.mmul(self.transform_matrix))
 
+    cdef Model flatten(self):
+        return FlattenedModel.get(self.original).transform(self.transform_matrix)
+
+    cdef Model invert(self):
+        return InvertedModel.get(self.original).transform(self.transform_matrix)
+
+    cdef Model repair(self):
+        return RepairedModel.get(self.original).transform(self.transform_matrix)
+
+    cdef Model snap_edges(self, double snap_angle, double minimum_area):
+        return SnappedEdgesModel.get(self.original, snap_angle, minimum_area).transform(self.transform_matrix)
+
     cdef void build_trimesh_model(self):
         if not self.original.check_valid():
             self.original.build_trimesh_model()
         if self.original.trimesh_model is not None:
+            logger.trace("Transform model {}", self.original.name)
             transform_array = np.array(self.transform_matrix, dtype='float64').reshape((4, 4)).transpose()
             trimesh_model = self.original.trimesh_model.copy().apply_transform(transform_array)
             self.trimesh_model = trimesh_model if len(trimesh_model.vertices) and len(trimesh_model.faces) else None
@@ -266,7 +316,8 @@ cdef class SlicedModel(ModelTransformer):
         if not self.original.check_valid():
             self.original.build_trimesh_model()
         if self.original.trimesh_model is not None:
-            trimesh_model = self.original.trimesh_model.copy().slice_plane(tuple(self.origin), tuple(self.normal.neg()), True)
+            logger.trace("Slice model {}", self.original.name)
+            trimesh_model = self.original.trimesh_model.slice_plane(tuple(self.origin), tuple(self.normal.neg()), True)
             self.trimesh_model = trimesh_model if len(trimesh_model.vertices) and len(trimesh_model.faces) else None
         else:
             self.trimesh_model = None
@@ -357,27 +408,32 @@ cdef class BooleanOperationModel(Model):
     cdef void build_trimesh_model(self):
         cdef list trimesh_models = []
         cdef Model model
+        self.trimesh_model = None
         for model in self.models:
             if not model.check_valid():
                 model.build_trimesh_model()
-            if model.trimesh_model is None:
+            trimesh_model = model.trimesh_model
+            if trimesh_model is None:
                 continue
-            trimesh_model = model.trimesh_model.copy()
             if not trimesh_model.is_watertight:
-                trimesh_model.process(validate=True, merge_tex=True, merge_norm=True)
-                if not trimesh_model.is_watertight and not trimesh_model.fill_holes():
-                    logger.warning("Computing convex hull of: {}", model.name)
-                    trimesh_model = trimesh_model.convex_hull
+                trimesh_model = trimesh_model.copy().process(validate=True, merge_tex=True, merge_norm=True)
+                if not trimesh_model.is_watertight:
+                    if trimesh_model.fill_holes():
+                        logger.debug("Filled holes in non-watertight mesh: {}", model.name)
+                    else:
+                        logger.warning("Computing convex hull of: {}", model.name)
+                        trimesh_model = trimesh_model.convex_hull
             trimesh_models.append(trimesh_model)
-        if not trimesh_models:
-            self.trimesh_model = None
-        else:
+        if trimesh_models:
             if self.operation == 'difference' and len(trimesh_models) > 2:
                 union_models = trimesh.boolean.boolean_manifold(trimesh_models[1:], 'union')
                 trimesh_model = trimesh.boolean.boolean_manifold([trimesh_models[0], union_models], 'difference')
             else:
                 trimesh_model = trimesh.boolean.boolean_manifold(trimesh_models, self.operation)
-            self.trimesh_model = trimesh_model if len(trimesh_model.vertices) and len(trimesh_model.faces) else None
+            if len(trimesh_model.vertices) and len(trimesh_model.faces):
+                self.trimesh_model = trimesh_model
+        if self.trimesh_model is None:
+            logger.warning("Result of operation was empty mesh: {}", self.operation, self.name)
         self.valid = True
 
 

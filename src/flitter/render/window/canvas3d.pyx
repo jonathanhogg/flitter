@@ -393,6 +393,8 @@ cdef Model get_model(Node node, bint top):
             model = Model.get_cone(node)
         elif node.kind == 'model':
             model = Model.get_external(node)
+            if model is not None and node.get_bool('repair', False):
+                model = model.repair()
     if model is not None:
         if top:
             if node.get_bool('flat', False):
