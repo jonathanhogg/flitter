@@ -82,7 +82,7 @@ void main() {
         float mono = clamp(dot(texture_color.rgb, greyscale), 0, 1);
         roughness = roughness * (1 - clamp(texture_color.a, 0, 1)) + mono;
     }
-    float occlusion = fragment_properties.z;
+    float occlusion = fragment_properties.w;
     if (use_occlusion_texture) {
         vec4 texture_color = texture(occlusion_texture, texture_uv);
         float mono = clamp(dot(texture_color.rgb, greyscale), 0, 1);
