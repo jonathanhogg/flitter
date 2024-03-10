@@ -265,10 +265,12 @@ cdef class Name(Expression):
                 program.local_load(i)
                 break
         else:
-            if self.name in dynamic_builtins:
+            if self.name in static_builtins:
+                program.literal(static_builtins[self.name])
+            elif self.name in dynamic_builtins:
                 program.literal(dynamic_builtins[self.name])
             else:
-                logger.warning("Name should have been removed by simplifier: {}", self.name)
+                logger.warning("Unbound name '{}'", self.name)
                 program.literal(null_)
 
     cdef Expression _simplify(self, Context context):
@@ -1336,9 +1338,9 @@ cdef class Function(Expression):
     cdef void _compile(self, Program program, list lnames):
         cdef str name
         cdef list function_lnames = []
-        assert self.captures is not None, "Simplifier must be run to correctly compile functions"
+        cdef tuple captures = self.captures if self.captures is not None else tuple(lnames)
         cdef int64_t i, n=len(lnames)-1
-        for name in self.captures:
+        for name in captures:
             for i in range(len(lnames)):
                 if name == <str>lnames[n-i]:
                     program.local_load(i)
@@ -1364,7 +1366,7 @@ cdef class Function(Expression):
         self.expr._compile(program, function_lnames)
         program.exit()
         program.label(END)
-        program.func(START, self.name, tuple(parameters), len(self.captures))
+        program.func(START, self.name, tuple(parameters), len(captures))
         program.local_push(1)
         lnames.append(self.name)
 
