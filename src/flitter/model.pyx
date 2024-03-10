@@ -665,7 +665,7 @@ cdef class Vector:
     def __pos__(self):
         return self.pos()
 
-    cdef Vector pos(self) noexcept:
+    cdef Vector pos(self):
         if self.objects is None:
             return self
         return null_

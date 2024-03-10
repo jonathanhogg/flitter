@@ -36,7 +36,7 @@ cdef class Vector:
     cpdef object match(self, int64_t n=?, type t=?, default=?)
     cdef str repr(self)
     cdef Vector neg(self)
-    cdef Vector pos(self) noexcept
+    cdef Vector pos(self)
     cdef Vector abs(self)
     cdef Vector ceil(self)
     cdef Vector floor(self)
