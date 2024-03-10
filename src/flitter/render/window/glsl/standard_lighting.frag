@@ -6,7 +6,7 @@ const float Tau = 6.283185307179586;
 in vec3 world_position;
 in vec3 world_normal;
 in vec2 texture_uv;
-noperspective in vec2 coord;
+noperspective in vec2 screen_coord;
 
 flat in vec4 fragment_albedo;
 flat in vec4 fragment_emissive;
@@ -118,14 +118,14 @@ void main() {
     float backface_distance;
     float thickness;
     if (translucency > 0) {
-        vec4 backface = texture(backface_data, coord);
+        vec4 backface = texture(backface_data, screen_coord);
         backface_distance = backface.w;
         vec3 backface_position = view_position + V*backface_distance;
         float k = backface_distance / translucency;
         thickness = backface_distance - view_distance;
         int count = 1;
         for (int i = 0; i < 50; i++) {
-            vec3 offset = normal3(coord, i) / 10;
+            vec3 offset = normal3(screen_coord, i) / 10;
             vec4 pos = pv_matrix * vec4(backface_position + offset*thickness*k, 1);
             vec2 c = (pos.xy / pos.w + 1) / 2;
             vec4 backface_sample = texture(backface_data, c);
