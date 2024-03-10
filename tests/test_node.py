@@ -57,6 +57,26 @@ class TestNode(unittest.TestCase):
         self.assertIs(node2c, self.node2)
         self.assertIs(node3c, self.node3)
 
+    def test_copy_update(self):
+        node1c = self.node1.copy()
+        size = Vector([1, 2, 3])
+        node1c.set_attribute('size', size)
+        self.assertEqual(list(self.node1.items()), [])
+        self.assertEqual(list(node1c.items()), [('size', size)])
+        node1c.add_tag('foo')
+        self.assertEqual(self.node1.tags, set())
+        self.assertEqual(node1c.tags, {'foo'})
+        node1c.append(self.node2)
+        children = list(self.node1.children)
+        self.assertEqual(len(children), 0)
+        children = list(node1c.children)
+        self.assertEqual(len(children), 1)
+        self.assertIs(children[0], self.node2)
+        node3c = self.node3.copy()
+        node3c.set_attribute('size', size)
+        self.assertEqual(list(self.node3.items()), [('color', Vector(1))])
+        self.assertEqual(list(node3c.items()), [('color', Vector(1)), ('size', size)])
+
     def test_add_tag(self):
         self.node1.add_tag('test')
         self.assertEqual(self.node1.tags, {'test'})
