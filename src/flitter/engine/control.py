@@ -19,7 +19,7 @@ from ..render import get_renderer
 class EngineController:
     def __init__(self, target_fps=60, screen=0, fullscreen=False, vsync=False, state_file=None,
                  autoreset=None, state_simplify_wait=0, realtime=True, defined_names=None, vm_stats=False,
-                 run_time=None, offscreen=False, window_gamma=1):
+                 run_time=None, offscreen=False, window_gamma=1, disable_simplifier=False):
         self.default_fps = target_fps
         self.target_fps = target_fps
         self.realtime = realtime
@@ -29,7 +29,8 @@ class EngineController:
         self.offscreen = offscreen
         self.window_gamma = window_gamma
         self.autoreset = autoreset
-        self.state_simplify_wait = state_simplify_wait / 2
+        self.disable_simplifier = disable_simplifier
+        self.state_simplify_wait = 0 if self.disable_simplifier else state_simplify_wait / 2
         if defined_names:
             self.defined_names = {key: Vector.coerce(value) for key, value in defined_names.items()}
         else:
@@ -174,7 +175,7 @@ class EngineController:
                          'fps': self.target_fps, 'realtime': self.realtime, 'window_gamma': self.window_gamma,
                          'screen': self.screen, 'fullscreen': self.fullscreen, 'vsync': self.vsync, 'offscreen': self.offscreen}
 
-                program = self.current_path.read_flitter_program(static=self.defined_names, dynamic=names)
+                program = self.current_path.read_flitter_program(static=self.defined_names, dynamic=names, simplify=not self.disable_simplifier)
                 if program is not current_program:
                     level = 'SUCCESS' if current_program is None else 'INFO'
                     logger.log(level, "Loaded page {}: {}", self.current_page, self.current_path)

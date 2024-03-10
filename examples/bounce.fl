@@ -65,7 +65,7 @@ let SIZE=1080;1080
                     for i in ..NBALLS
                         let color=hsv(uniform(:hue)[i];0.95;1)
                         !transform translate=$(:balls;i)
-                            !light position=0 falloff=1;0;1;0 color=color*2 radius=RADII[i]
+                            !light position=0 falloff=1;0;1;0 color=color radius=RADII[i]
                     -- These additional directional lights are just here to create some
                     -- reflections on the glass box that lend it more presence
                     for x in (-1;1)

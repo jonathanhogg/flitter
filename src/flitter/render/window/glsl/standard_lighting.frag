@@ -164,11 +164,10 @@ void main() {
                 light_distance = length(L);
                 if (light_radius > 0) {
                     passes = 2;
+                    attenuation = clamp(1 - (light_radius / light_distance), 0, 1);
                     if (pass == 0) {
-                        attenuation = clamp(1 - (light_radius / light_distance), 0, 1);
                         light_distance = max(0, light_distance - light_radius*0.99);
                     } else {
-                        attenuation = 1 / (1 + light_radius*light_radius);
                         vec3 R = reflect(V, N);
                         vec3 l = dot(L, R) * R - L;
                         L += l * min(0.99, light_radius/length(l));
@@ -207,14 +206,16 @@ void main() {
                     L += light_direction * (cp*3 + m) / 4;
                     light_distance = length(L);
                     L /= light_distance;
+                    attenuation = clamp(1 - (light_radius / light_distance), 0, 1);
                     light_distance -= min(light_radius, light_distance*0.99);
                 } else {
-                    attenuation = 1 / (1 + light_radius);
                     vec3 R = reflect(V, N);
                     mat3 M = mat3(R, light_direction, cross(R, light_direction));
                     L += clamp(-(inverse(M) * L).y, 0, light_length) * light_direction;
                     vec3 l = dot(L, R) * R - L;
-                    L += l * min(0.99, light_radius/length(l));
+                    light_distance = length(L);
+                    L += l * min(0.99, light_radius/light_distance);
+                    attenuation = clamp(1 - (light_radius / light_distance), 0, 1);
                     light_distance = length(L);
                     L /= light_distance;
                 }

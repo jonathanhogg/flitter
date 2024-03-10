@@ -40,9 +40,11 @@ cdef class Program:
     cdef readonly VectorStack stack
     cdef readonly VectorStack lnames
     cdef int64_t next_label
+    cdef bint simplify
 
     cpdef void link(self)
     cpdef void optimize(self)
+    cpdef void use_simplifier(self, bint simplify)
     cpdef int new_label(self)
     cpdef void dup(self)
     cpdef void drop(self, int count=?)

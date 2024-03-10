@@ -665,7 +665,7 @@ cdef class Vector:
     def __pos__(self):
         return self.pos()
 
-    cdef Vector pos(self) noexcept:
+    cdef Vector pos(self):
         if self.objects is None:
             return self
         return null_
@@ -1679,7 +1679,7 @@ cdef class Node:
         if attributes is None:
             self._attributes = attributes = {}
         elif self._attributes_shared:
-            self._attributes = PyDict_Copy(self._attributes)
+            self._attributes = attributes = PyDict_Copy(self._attributes)
             self._attributes_shared = False
         if value.length:
             PyDict_SetItem(attributes, name, value)

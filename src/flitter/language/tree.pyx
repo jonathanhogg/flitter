@@ -265,10 +265,12 @@ cdef class Name(Expression):
                 program.local_load(i)
                 break
         else:
-            if self.name in dynamic_builtins:
+            if self.name in static_builtins:
+                program.literal(static_builtins[self.name])
+            elif self.name in dynamic_builtins:
                 program.literal(dynamic_builtins[self.name])
             else:
-                logger.warning("Name should have been removed by simplifier: {}", self.name)
+                logger.warning("Unbound name '{}'", self.name)
                 program.literal(null_)
 
     cdef Expression _simplify(self, Context context):
@@ -967,24 +969,25 @@ cdef class Attributes(NodeModifier):
                 bindings.append(Binding(binding.name, binding.expr._simplify(context)))
             node = attrs.node
         node = node._simplify(context)
-        cdef Vector nodes
-        cdef int64_t i
+        cdef Vector nodes, value
         cdef list objects
-        if isinstance(node, Literal):
+        cdef Node nodeobj
+        if isinstance(node, Literal) and bindings and isinstance((<Binding>bindings[-1]).expr, Literal):
             nodes = (<Literal>node).value
             if nodes.isinstance(Node):
                 objects = []
-                for i in range(nodes.length):
-                    objects.append(nodes.objects[i].copy())
+                for nodeobj in nodes.objects:
+                    objects.append(nodeobj.copy())
                 while bindings and isinstance((<Binding>bindings[-1]).expr, Literal):
                     binding = bindings.pop()
-                    for i in range(nodes.length):
-                        (<Node>objects[i]).set_attribute(binding.name, (<Literal>binding.expr).value)
+                    value = (<Literal>binding.expr).value
+                    for nodeobj in objects:
+                        nodeobj.set_attribute(binding.name, value)
                 node = Literal(Vector(objects))
-        if not bindings:
-            return node
-        bindings.reverse()
-        return Attributes(node, tuple(bindings))
+        if bindings:
+            bindings.reverse()
+            node = Attributes(node, tuple(bindings))
+        return node
 
     def __repr__(self):
         return f'{self.__class__.__name__}({self.node!r}, {self.bindings!r})'
@@ -1336,15 +1339,15 @@ cdef class Function(Expression):
     cdef void _compile(self, Program program, list lnames):
         cdef str name
         cdef list function_lnames = []
-        assert self.captures is not None, "Simplifier must be run to correctly compile functions"
+        cdef tuple captures = self.captures if self.captures is not None else tuple(lnames)
         cdef int64_t i, n=len(lnames)-1
-        for name in self.captures:
+        for name in captures:
             for i in range(len(lnames)):
                 if name == <str>lnames[n-i]:
                     program.local_load(i)
                     break
             else:
-                logger.warning("Name should have been removed by simplifier: {}", name)
+                logger.warning("Unbound name '{}'", name)
                 program.literal(null_)
             function_lnames.append(name)
         function_lnames.append(self.name)
@@ -1364,7 +1367,7 @@ cdef class Function(Expression):
         self.expr._compile(program, function_lnames)
         program.exit()
         program.label(END)
-        program.func(START, self.name, tuple(parameters), len(self.captures))
+        program.func(START, self.name, tuple(parameters), len(captures))
         program.local_push(1)
         lnames.append(self.name)
 
