@@ -673,8 +673,8 @@ cdef inline void call_helper(Context context, VectorStack stack, object function
             CallOutCount += 1
 
 
-cdef inline dict import_module(Context context, str filename, bint record_stats, double* duration):
-    cdef Program program = SharedCache.get_with_root(filename, context.path).read_flitter_program()
+cdef inline dict import_module(Context context, str filename, bint record_stats, double* duration, bint simplify):
+    cdef Program program = SharedCache.get_with_root(filename, context.path).read_flitter_program(simplify=simplify)
     if program is None:
         return None
     cdef Context import_context = context
@@ -821,6 +821,7 @@ cdef class Program:
         self.initial_lnames = ()
         self.linked = False
         self.next_label = 1
+        self.simplify = True
 
     def __len__(self):
         return len(self.instructions)
@@ -926,6 +927,9 @@ cdef class Program:
                         continue
             instructions.append(instruction)
         self.instructions = instructions
+
+    cpdef void use_simplifier(self, bint simplify):
+        self.simplify = simplify
 
     cpdef int new_label(self):
         cdef object label = self.next_label
@@ -1155,7 +1159,7 @@ cdef class Program:
                     filename = pop(stack).as_string()
                     names = (<InstructionTuple>instruction).value
                     n = PyTuple_GET_SIZE(names)
-                    import_names = import_module(context, filename, record_stats, &duration)
+                    import_names = import_module(context, filename, record_stats, &duration, self.simplify)
                     if import_names is not None:
                         for i in range(n):
                             objptr = PyDict_GetItem(import_names, <object>PyTuple_GET_ITEM(names, i))

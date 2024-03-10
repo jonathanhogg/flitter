@@ -41,6 +41,7 @@ def main():
     parser.add_argument('--vsync', action='store_true', default=False, help="Default to window vsync")
     parser.add_argument('--state', type=str, help="State save/restore file")
     parser.add_argument('--autoreset', type=float, help="Auto-reset state on idle")
+    parser.add_argument('--nosimplify', action='store_true', default=False, help="Disable the language simplifier")
     parser.add_argument('--simplifystate', type=float, default=10, help="Simplify on state after stable period")
     parser.add_argument('--lockstep', action='store_true', default=False, help="Run clock in non-realtime mode")
     parser.add_argument('--define', '-D', action='append', default=[], type=keyvalue, dest='defines', help="Define name for evaluation")
@@ -55,7 +56,7 @@ def main():
     controller = EngineController(target_fps=args.fps, screen=args.screen, fullscreen=args.fullscreen, vsync=args.vsync,
                                   state_file=args.state, autoreset=args.autoreset, state_simplify_wait=args.simplifystate,
                                   realtime=not args.lockstep, defined_names=dict(args.defines), vm_stats=args.vmstats,
-                                  run_time=args.runtime, offscreen=args.offscreen, window_gamma=args.gamma)
+                                  run_time=args.runtime, offscreen=args.offscreen, window_gamma=args.gamma, disable_simplifier=args.nosimplify)
     for program in args.program:
         controller.load_page(program)
 
