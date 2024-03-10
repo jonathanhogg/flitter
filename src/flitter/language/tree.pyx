@@ -1346,7 +1346,7 @@ cdef class Function(Expression):
                     program.local_load(i)
                     break
             else:
-                logger.warning("Name should have been removed by simplifier: {}", name)
+                logger.warning("Unbound name '{}'", name)
                 program.literal(null_)
             function_lnames.append(name)
         function_lnames.append(self.name)
