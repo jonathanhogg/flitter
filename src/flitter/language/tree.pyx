@@ -969,24 +969,25 @@ cdef class Attributes(NodeModifier):
                 bindings.append(Binding(binding.name, binding.expr._simplify(context)))
             node = attrs.node
         node = node._simplify(context)
-        cdef Vector nodes
-        cdef int64_t i
+        cdef Vector nodes, value
         cdef list objects
-        if isinstance(node, Literal):
+        cdef Node nodeobj
+        if isinstance(node, Literal) and bindings and isinstance((<Binding>bindings[-1]).expr, Literal):
             nodes = (<Literal>node).value
             if nodes.isinstance(Node):
                 objects = []
-                for i in range(nodes.length):
-                    objects.append(nodes.objects[i].copy())
+                for nodeobj in nodes.objects:
+                    objects.append(nodeobj.copy())
                 while bindings and isinstance((<Binding>bindings[-1]).expr, Literal):
                     binding = bindings.pop()
-                    for i in range(nodes.length):
-                        (<Node>objects[i]).set_attribute(binding.name, (<Literal>binding.expr).value)
+                    value = (<Literal>binding.expr).value
+                    for nodeobj in objects:
+                        nodeobj.set_attribute(binding.name, value)
                 node = Literal(Vector(objects))
-        if not bindings:
-            return node
-        bindings.reverse()
-        return Attributes(node, tuple(bindings))
+        if bindings:
+            bindings.reverse()
+            node = Attributes(node, tuple(bindings))
+        return node
 
     def __repr__(self):
         return f'{self.__class__.__name__}({self.node!r}, {self.bindings!r})'
