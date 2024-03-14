@@ -714,8 +714,8 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
         backface_shader['orthographic'] = camera.orthographic
         backface_shader['view_position'] = camera.position
         backface_shader['view_focus'] = camera.focus
-        # backface_shader['nlights'] = nlights
-        # backface_shader['lights_data'].binding = 1
+        backface_shader['nlights'] = nlights
+        backface_shader['lights_data'].binding = 1
         glctx.disable(flags)
         glctx.enable(moderngl.BLEND | moderngl.DEPTH_TEST | moderngl.CULL_FACE)
         glctx.cull_face = 'front'
