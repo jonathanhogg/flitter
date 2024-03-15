@@ -434,7 +434,7 @@ cdef inline int push(VectorStack stack, Vector vector) except 0:
     stack.vectors[stack.top] = <PyObject*>vector
     return stack.size
 
-cdef inline Vector pop(VectorStack stack) noexcept:
+cdef inline Vector pop(VectorStack stack):
     assert stack.top > -1, "Stack empty"
     cdef Vector vector = <Vector>stack.vectors[stack.top]
     stack.vectors[stack.top] = NULL
@@ -538,11 +538,11 @@ cdef inline Vector pop_composed(VectorStack stack, int m):
     result.length = n
     return result
 
-cdef inline Vector peek(VectorStack stack) noexcept:
+cdef inline Vector peek(VectorStack stack):
     assert stack.top > -1, "Stack empty"
     return <Vector>stack.vectors[stack.top]
 
-cdef inline Vector peek_at(VectorStack stack, int offset) noexcept:
+cdef inline Vector peek_at(VectorStack stack, int offset):
     assert stack.top-offset > -1, "Stack empty"
     return <Vector>stack.vectors[stack.top-offset]
 
@@ -643,7 +643,7 @@ def log_vm_stats():
 cdef inline void call_helper(Context context, VectorStack stack, object function, tuple args, dict kwargs, bint record_stats, double* duration):
     global CallOutDuration, CallOutCount
     cdef int64_t i, n=PyTuple_GET_SIZE(args)
-    cdef double call_duration
+    cdef double call_duration = 0
     cdef tuple context_args
     cdef bint is_func = type(function) is Function
     if is_func or PyObject_HasAttrString(function, ContextFunc):
