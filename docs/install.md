@@ -2,9 +2,8 @@
 # Installing and Running
 
 **Flitter** is implemented in a mix of Python and Cython and requires at least
-OpenGL 3.3 (Core Profile) or OpenGL ES 3.0 with the
-`GL_NV_shader_noperspective_interpolation` extension. At least Python 3.10 is
-also required as the code uses `match`/`case` syntax.
+OpenGL 3.3 (Core Profile) or OpenGL ES 3.0. At least Python 3.10 is also
+required as the code uses `match`/`case` syntax.
 
 It is developed exclusively on Intel macOS, but is tested and supported on Apple
 Silicon macOS, x86_64 Linux and x86_64 Windows.

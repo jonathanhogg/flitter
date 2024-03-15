@@ -478,14 +478,8 @@ class Window(ProgramNode):
             colorbits = DEFAULT_COLORBITS
         self.glctx.extra['colorbits'] = colorbits
         self.glctx.extra['size'] = self.width, self.height
-        if opengl_es:
-            self.glctx.extra['HEADER'] = """#version {} es
-#extension GL_NV_shader_noperspective_interpolation : require
-precision highp float;
-""".format(opengl_version[0]*100 + opengl_version[1]*10)
-        else:
-            self.glctx.extra['HEADER'] = """#version {}
-""".format(opengl_version[0]*100 + opengl_version[1]*10)
+        self.glctx.extra['HEADER'] = """#version {}{}
+""".format(opengl_version[0]*100 + opengl_version[1]*10, " es" if opengl_es else "")
 
     def key_callback(self, window, key, scancode, action, mods):
         if key in self._keys:

@@ -19,9 +19,8 @@ supporting live-coding. It also has support for interacting with running
 programs via MIDI surfaces.
 
 **Flitter** is implemented in a mix of Python and Cython and requires at least
-OpenGL 3.3 (Core Profile) or OpenGL ES 3.0 with the
-`GL_NV_shader_noperspective_interpolation` extension. At least Python 3.10 is
-also required as the code uses `match`/`case` syntax.
+OpenGL 3.3 (Core Profile) or OpenGL ES 3.0. At least Python 3.10 is also
+required as the code uses `match`/`case` syntax.
 
 **Flitter** is designed for expressivity and ease of engine development over
 raw performance, but is fast enough to be able to do interesting things.
