@@ -479,6 +479,7 @@ class Window(ProgramNode):
         self.glctx.extra['colorbits'] = colorbits
         self.glctx.extra['size'] = self.width, self.height
         self.glctx.extra['HEADER'] = """#version {}{}
+precision highp float;
 """.format(opengl_version[0]*100 + opengl_version[1]*10, " es" if opengl_es else "")
 
     def key_callback(self, window, key, scancode, action, mods):
