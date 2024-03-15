@@ -8,6 +8,7 @@ import importlib
 
 import glfw
 from loguru import logger
+from mako.template import Template
 import moderngl
 import numpy as np
 
@@ -183,7 +184,6 @@ class Reference(SceneNode):
 
 
 class ProgramNode(SceneNode):
-    GL_VERSION = (3, 3)
     DEFAULT_VERTEX_SOURCE = TemplateLoader.get_template('default.vert')
     DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('default.frag')
 
@@ -216,15 +216,19 @@ class ProgramNode(SceneNode):
             self._last = None
 
     def get_vertex_source(self, node):
-        if vertex := node.get('vertex', 1, str):
-            return vertex
-        return self.DEFAULT_VERTEX_SOURCE.render(child_textures=list(self.child_textures))
+        if 'vertex' in node:
+            vertex = Template(node.get('vertex', 1, str))
+        else:
+            vertex = self.DEFAULT_VERTEX_SOURCE
+        return vertex.render(HEADER=self.glctx.extra['HEADER'], child_textures=list(self.child_textures))
 
     def get_fragment_source(self, node):
-        if fragment := node.get('fragment', 1, str):
-            return fragment
+        if 'fragment' in node:
+            fragment = Template(node.get('fragment', 1, str))
+        else:
+            fragment = self.DEFAULT_FRAGMENT_SOURCE
         composite = node.get('composite', 1, str, node.get('blend', 1, str, 'over'))
-        return self.DEFAULT_FRAGMENT_SOURCE.render(child_textures=list(self.child_textures), composite=composite)
+        return fragment.render(HEADER=self.glctx.extra['HEADER'], child_textures=list(self.child_textures), composite=composite)
 
     def make_last(self):
         raise NotImplementedError()
@@ -264,7 +268,6 @@ class ProgramNode(SceneNode):
                 if repeat[1]:
                     del sampler_args['repeat_y']
             child_textures = self.child_textures
-            self.framebuffer.use()
             samplers = []
             unit = 1
             for name in self._program:
@@ -293,11 +296,14 @@ class ProgramNode(SceneNode):
                         unit += 1
                     elif name == 'size':
                         member.value = self.size
-                    elif name in kwargs:
-                        member.value = kwargs[name]
                     elif name in node:
                         set_uniform_vector(member, node[name])
+                    elif name in kwargs:
+                        member.value = kwargs[name]
+                    elif name in ('alpha', 'gamma'):
+                        member.value = 1
             self.glctx.enable_direct(GL_FRAMEBUFFER_SRGB)
+            self.framebuffer.use()
             self.framebuffer.clear()
             self._rectangle.render()
             for sampler in samplers:
@@ -392,12 +398,13 @@ class Window(ProgramNode):
     def size(self):
         return self.glctx.screen.viewport[2:]
 
-    def create(self, engine, node, resized, **kwargs):
+    def create(self, engine, node, resized, opengl_es, **kwargs):
         super().create(engine, node, resized)
         new_window = False
         screen = node.get('screen', 1, int, self.default_screen)
         fullscreen = node.get('fullscreen', 1, bool, self.default_fullscreen) if self._visible else False
         resizable = node.get('resizable', 1, bool, True) if self._visible else False
+        opengl_version = (3, 0) if opengl_es else (3, 3)
         if self.window is None:
             self.engine = engine
             title = node.get('title', 1, str, "flitter")
@@ -406,10 +413,10 @@ class Window(ProgramNode):
                 if not ok:
                     raise RuntimeError("Unable to initialize GLFW")
             glfw.window_hint(glfw.CONTEXT_CREATION_API, glfw.NATIVE_CONTEXT_API)
-            glfw.window_hint(glfw.CLIENT_API, glfw.OPENGL_API)
-            glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, self.GL_VERSION[0])
-            glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, self.GL_VERSION[1])
-            glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
+            glfw.window_hint(glfw.CLIENT_API, glfw.OPENGL_ES_API if opengl_es else glfw.OPENGL_API)
+            glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, opengl_version[0])
+            glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, opengl_version[1])
+            glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_ANY_PROFILE if opengl_es else glfw.OPENGL_CORE_PROFILE)
             glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, glfw.TRUE)
             glfw.window_hint(glfw.VISIBLE, glfw.TRUE if self._visible else glfw.FALSE)
             if self._visible:
@@ -450,7 +457,7 @@ class Window(ProgramNode):
         self._keys = {}
         self._pointer_state = None
         if new_window:
-            self.glctx = moderngl.create_context(self.GL_VERSION[0] * 100 + self.GL_VERSION[1] * 10)
+            self.glctx = moderngl.create_context(opengl_version[0] * 100 + opengl_version[1] * 10)
             self.glctx.gc_mode = 'context_gc'
             self.glctx.extra = {}
             if self._visible:
@@ -471,6 +478,14 @@ class Window(ProgramNode):
             colorbits = DEFAULT_COLORBITS
         self.glctx.extra['colorbits'] = colorbits
         self.glctx.extra['size'] = self.width, self.height
+        if opengl_es:
+            self.glctx.extra['HEADER'] = """#version {} es
+#extension GL_NV_shader_noperspective_interpolation : require
+precision highp float;
+""".format(opengl_version[0]*100 + opengl_version[1]*10)
+        else:
+            self.glctx.extra['HEADER'] = """#version {}
+""".format(opengl_version[0]*100 + opengl_version[1]*10)
 
     def key_callback(self, window, key, scancode, action, mods):
         if key in self._keys:

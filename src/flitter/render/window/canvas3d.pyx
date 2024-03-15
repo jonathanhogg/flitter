@@ -553,7 +553,7 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
     cdef dict shaders = objects.setdefault('canvas3d_shaders', {})
     cdef dict names = render_group.names.copy()
     names.update({'max_lights': render_group.max_lights, 'Ambient': LightType.Ambient, 'Directional': LightType.Directional,
-                  'Point': LightType.Point, 'Spot': LightType.Spot, 'Line': LightType.Line})
+                  'Point': LightType.Point, 'Spot': LightType.Spot, 'Line': LightType.Line, 'HEADER': glctx.extra['HEADER']})
     shader = None
     if render_group.vertex_shader_template is not None or render_group.fragment_shader_template is not None:
         shader = get_shader(glctx, shaders, names,

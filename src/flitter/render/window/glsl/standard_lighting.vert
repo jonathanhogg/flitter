@@ -1,4 +1,4 @@
-#version 330
+${HEADER}
 
 in vec3 model_position;
 in vec3 model_normal;
