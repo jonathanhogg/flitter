@@ -7,7 +7,7 @@ import PIL.Image
 
 from . import SceneNode
 from ...cache import SharedCache
-from .glconstants import GL_SRGB8
+from .glconstants import GL_SRGB8_ALPHA8
 
 
 class Image(SceneNode):
@@ -52,13 +52,8 @@ class Image(SceneNode):
                     logger.debug("Resized {} to {}x{}", self._filename, *size)
                 self.width = image.width
                 self.height = image.height
-                flipped = image.transpose(PIL.Image.FLIP_TOP_BOTTOM)
-                if self._image.has_transparency_data:
-                    self._texture = self.glctx.texture((self.width, self.height), 4, internal_format=GL_SRGB8)
-                    self._texture.write(flipped.convert('RGBA').convert('RGBa').tobytes())
-                else:
-                    self._texture = self.glctx.texture((self.width, self.height), 3, internal_format=GL_SRGB8)
-                    self._texture.write(flipped.convert('RGB').tobytes())
+                self._texture = self.glctx.texture((self.width, self.height), 4, internal_format=GL_SRGB8_ALPHA8)
+                self._texture.write(image.transpose(PIL.Image.FLIP_TOP_BOTTOM).convert('RGBA').convert('RGBa').tobytes())
 
     def similar_to(self, node):
         return super().similar_to(node) and node.get('filename', 1, str) == self._filename

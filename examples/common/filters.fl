@@ -6,7 +6,7 @@ func bloom_filter(nodes, radius=0, sigma=0.6, contrast=1, exposure=-1, blursize=
     let rx;ry=radius*(1;1)
     !shader#lighten id=id colorbits=colorbits composite=:lighten
         if len(nodes) == 1
-            nodes id=:bloom_source composite=composite
+            nodes id=:bloom_source
         else
             !shader#compose id=:bloom_source composite=composite
                 nodes
@@ -23,7 +23,7 @@ func edge_detect(nodes, radius=0, blursize=null, colorbits=null, composite=null,
     let rx;ry=radius*(1;1)
     !shader#difference id=id colorbits=colorbits composite=:difference
         if len(nodes) == 1
-            nodes id=:edge_source composite=composite
+            nodes id=:edge_source
         else
             !shader#compose id=:edge_source composite=composite
                 nodes
@@ -42,9 +42,10 @@ func edge_detect(nodes, radius=0, blursize=null, colorbits=null, composite=null,
 -- of an amount of transformation per `decay` beats and canvas coordinate system.
 
 func feedback_filter(nodes, mixer=0, timebase=1, glow=0, translate=0, scale=1, rotate=0, colorbits=null, composite=null, id=null)
-    !shader#feedback id=id colorbits=colorbits mixer=mixer timebase=timebase translate=translate scale=scale rotate=rotate fragment=read("../glsl/feedback.frag")
+    !shader#feedback id=id colorbits=colorbits fragment=read("../glsl/feedback.frag") \
+                     mixer=mixer glow=glow timebase=timebase translate=translate scale=scale rotate=rotate
         if len(nodes) == 1
-            nodes composite=composite
+            nodes
         else
             !shader#compose composite=composite
                 nodes

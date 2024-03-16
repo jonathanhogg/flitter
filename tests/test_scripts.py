@@ -4,6 +4,7 @@ Flitter functional testing
 
 import asyncio
 from pathlib import Path
+import sys
 import tempfile
 import unittest
 
@@ -117,7 +118,21 @@ class TestRendering(unittest.TestCase):
         self.assertEqual(img.tobytes(), b'\x00\xff\x00' * self.SIZE[0] * self.SIZE[1])
 
 
-class TestDocumentationDiagrams(unittest.TestCase):
+class FunctionalTest(unittest.TestCase):
+    def run_scripts(self, scripts, suffix='.png', **kwargs):
+        for i, script in enumerate(scripts):
+            with self.subTest(script=script, **kwargs):
+                output_path = TEST_IMAGES_DIR / script.with_suffix(suffix).name
+                reference = PIL.Image.open(script.with_suffix('.png'))
+                controller = EngineController(realtime=False, offscreen=True, defined_names={'OUTPUT': str(output_path)}, **kwargs)
+                controller.load_page(script)
+                asyncio.run(controller.run())
+                output = PIL.Image.open(output_path)
+                self.assertEqual(reference.size, output.size)
+                self.assertLess(image_diff(reference, output), 0.005)
+
+
+class TestDocumentationDiagrams(FunctionalTest):
     """
     Recreate the documentation diagrams and check them against the pre-calculated ones.
     Some amount of difference is expected here because the GitHub workflow tests run on
@@ -129,20 +144,17 @@ class TestDocumentationDiagrams(unittest.TestCase):
         scripts_dir = Path(__file__).parent.parent / 'docs/diagrams'
         scripts = sorted(path for path in scripts_dir.iterdir() if path.suffix == '.fl')
         self.assertTrue(len(scripts) > 0)
-        for i, script in enumerate(scripts):
-            with self.subTest(script=script):
-                output_path = TEST_IMAGES_DIR / script.with_suffix('.png').name
-                reference = PIL.Image.open(script.with_suffix('.png'))
-                controller = EngineController(realtime=False, target_fps=1, run_time=1, offscreen=True,
-                                              defined_names={'OUTPUT': str(output_path)})
-                controller.load_page(script)
-                asyncio.run(controller.run())
-                output = PIL.Image.open(output_path)
-                self.assertEqual(reference.size, output.size)
-                self.assertLess(image_diff(reference, output), 0.002)
+        self.run_scripts(scripts, target_fps=1, run_time=1)
+
+    @unittest.skipIf(sys.platform != 'linux', 'OpenGL ES only available on Linux')
+    def test_diagrams_opengl_es(self):
+        scripts_dir = Path(__file__).parent.parent / 'docs/diagrams'
+        scripts = sorted(path for path in scripts_dir.iterdir() if path.suffix == '.fl')
+        self.assertTrue(len(scripts) > 0)
+        self.run_scripts(scripts, target_fps=1, run_time=1, opengl_es=True, suffix='.es.png')
 
 
-class TestDocumentationTutorial(unittest.TestCase):
+class TestDocumentationTutorial(FunctionalTest):
     """
     Recreate the tutorial images and check them against the pre-calculated ones.
     """
@@ -151,20 +163,17 @@ class TestDocumentationTutorial(unittest.TestCase):
         scripts_dir = Path(__file__).parent.parent / 'docs/tutorial_images'
         scripts = sorted(path for path in scripts_dir.iterdir() if path.suffix == '.fl')
         self.assertTrue(len(scripts) > 0)
-        for i, script in enumerate(scripts):
-            with self.subTest(script=script):
-                output_path = TEST_IMAGES_DIR / script.with_suffix('.png').name
-                reference = PIL.Image.open(script.with_suffix('.png'))
-                controller = EngineController(realtime=False, target_fps=1, run_time=1, offscreen=True,
-                                              defined_names={'OUTPUT': str(output_path)})
-                controller.load_page(script)
-                asyncio.run(controller.run())
-                output = PIL.Image.open(output_path)
-                self.assertEqual(reference.size, output.size)
-                self.assertLess(image_diff(reference, output), 0.005)
+        self.run_scripts(scripts, target_fps=1, run_time=1)
+
+    @unittest.skipIf(sys.platform != 'linux', 'OpenGL ES only available on Linux')
+    def test_tutorial_opengl_es(self):
+        scripts_dir = Path(__file__).parent.parent / 'docs/tutorial_images'
+        scripts = sorted(path for path in scripts_dir.iterdir() if path.suffix == '.fl')
+        self.assertTrue(len(scripts) > 0)
+        self.run_scripts(scripts, target_fps=1, run_time=1, opengl_es=True, suffix='.es.png')
 
 
-class TestExamples(unittest.TestCase):
+class TestExamples(FunctionalTest):
     """
     Recreate the examples and check them against the pre-calculated ones.
     """
@@ -175,29 +184,21 @@ class TestExamples(unittest.TestCase):
     def test_short_examples(self):
         scripts_dir = Path(__file__).parent.parent / 'examples'
         scripts = [scripts_dir / name for name in self.SHORT]
-        for i, script in enumerate(scripts):
-            with self.subTest(script=script):
-                output_path = TEST_IMAGES_DIR / script.with_suffix('.png').name
-                reference = PIL.Image.open(script.with_suffix('.png'))
-                controller = EngineController(realtime=False, target_fps=1, run_time=1, offscreen=True,
-                                              defined_names={'OUTPUT': str(output_path)})
-                controller.load_page(script)
-                asyncio.run(controller.run())
-                output = PIL.Image.open(output_path)
-                self.assertEqual(reference.size, output.size)
-                self.assertLess(image_diff(reference, output), 0.001)
+        self.run_scripts(scripts, target_fps=1, run_time=1)
 
     def test_long_examples(self):
         scripts_dir = Path(__file__).parent.parent / 'examples'
         scripts = [scripts_dir / name for name in self.LONG]
-        for i, script in enumerate(scripts):
-            with self.subTest(script=script):
-                output_path = TEST_IMAGES_DIR / script.with_suffix('.png').name
-                reference = PIL.Image.open(script.with_suffix('.png'))
-                controller = EngineController(realtime=False, target_fps=10, run_time=1, offscreen=True,
-                                              defined_names={'OUTPUT': str(output_path)})
-                controller.load_page(script)
-                asyncio.run(controller.run())
-                output = PIL.Image.open(output_path)
-                self.assertEqual(reference.size, output.size)
-                self.assertLess(image_diff(reference, output), 0.004)
+        self.run_scripts(scripts, target_fps=10, run_time=1)
+
+    @unittest.skipIf(sys.platform != 'linux', 'OpenGL ES only available on Linux')
+    def test_short_examples_opengl_es(self):
+        scripts_dir = Path(__file__).parent.parent / 'examples'
+        scripts = [scripts_dir / name for name in self.SHORT]
+        self.run_scripts(scripts, target_fps=1, run_time=1, opengl_es=True, suffix='.es.png')
+
+    @unittest.skipIf(sys.platform != 'linux', 'OpenGL ES only available on Linux')
+    def test_long_examples_opengl_es(self):
+        scripts_dir = Path(__file__).parent.parent / 'examples'
+        scripts = [scripts_dir / name for name in self.LONG]
+        self.run_scripts(scripts, target_fps=10, run_time=1, opengl_es=True, suffix='.es.png')

@@ -48,12 +48,12 @@ class Record(ProgramNode):
                 crf = node.get('crf', 1, int)
                 preset = node.get('preset', 1, str)
                 limit = node.get('limit', 1, float)
-                path.write_video_frame(self._texture, kwargs['clock'],
+                path.write_video_frame(self._framebuffer, kwargs['clock'],
                                        fps=int(kwargs['fps']), realtime=kwargs['realtime'], codec=codec,
                                        pixfmt=pixfmt, crf=crf, preset=preset, limit=limit, alpha=keep_alpha)
             else:
                 quality = node.get('quality', 1, int)
-                path.write_image(self._texture, quality=quality, alpha=keep_alpha)
+                path.write_image(self._framebuffer, quality=quality, alpha=keep_alpha)
 
 
 SCENE_NODE_CLASS = Record
