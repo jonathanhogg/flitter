@@ -323,7 +323,7 @@ class CachePath:
         self._cache['trimesh'] = trimesh_model
         return trimesh_model
 
-    def write_image(self, texture, quality=None):
+    def write_image(self, framebuffer, quality=None, alpha=False):
         import PIL.Image
         import PIL.ImageCms
         self._touched = system_clock()
@@ -337,9 +337,9 @@ class CachePath:
             self.cleanup()
             if self._path.exists():
                 logger.warning("Existing image file will be overwritten: {}", self._path)
-            image = PIL.Image.frombytes('RGBA' if texture.components == 4 else 'RGB', (texture.width, texture.height), texture.read())
+            image = PIL.Image.frombytes('RGBA', (framebuffer.width, framebuffer.height), framebuffer.read(components=4))
             encoder = registered_extensions[suffix]
-            if image.mode != 'RGB' and encoder not in ('PNG', 'TIFF', 'GIF', 'JPEG2000', 'WEBP'):
+            if not alpha or encoder not in ('PNG', 'TIFF', 'GIF', 'JPEG2000', 'WEBP'):
                 image = image.convert('RGB')
             options = {'icc_profile': PIL.ImageCms.ImageCmsProfile(PIL.ImageCms.createProfile('sRGB')).tobytes()}
             if quality:
@@ -352,14 +352,13 @@ class CachePath:
                 logger.success("Saved image to file: {}", self._path)
         self._cache['write_image'] = True
 
-    def write_video_frame(self, texture, timestamp, codec='h264', pixfmt='yuv420p', fps=60, realtime=False,
-                          crf=None, preset=None, limit=None):
+    def write_video_frame(self, framebuffer, timestamp, codec='h264', pixfmt='yuv420p', fps=60, realtime=False,
+                          crf=None, preset=None, limit=None, alpha=False):
         import av
         self._touched = system_clock()
         writer = queue = start = None
-        width, height = texture.width, texture.height
-        has_alpha = texture.components == 4
-        config = [width, height, has_alpha, codec, pixfmt, fps, crf, preset, limit]
+        width, height = framebuffer.width, framebuffer.height
+        config = [width, height, alpha, codec, pixfmt, fps, crf, preset, limit]
         if 'video_output' in self._cache:
             writer, queue, start, *cached_config = self._cache['video_output']
             if cached_config != config:
@@ -387,7 +386,7 @@ class CachePath:
                 av_codec = av.codec.Codec(codec, mode='w')
                 if av_codec.type != 'video':
                     raise ValueError(f"'{codec}' not a video codec")
-                if av_codec.name == 'hevc_videotoolbox' and has_alpha:
+                if av_codec.name == 'hevc_videotoolbox' and alpha:
                     options['alpha_quality'] = '1'
                 container = av.open(str(self._path), mode='w')
                 stream = container.add_stream(av_codec, rate=fps, options=options)
@@ -406,7 +405,7 @@ class CachePath:
             writer.start()
             start = timestamp
             self._cache['video_output'] = writer, queue, start, *config
-            logger.debug("Beginning {} {} video output{}: {}", av_codec.name, stream.pix_fmt, " (with alpha)" if has_alpha else "", self._path)
+            logger.debug("Beginning {} {} video output{}: {}", av_codec.name, stream.pix_fmt, " (with alpha)" if alpha else "", self._path)
         if queue is not None and (not realtime or not queue.full()):
             frame_time = int(round((timestamp - start) * fps))
             if limit is not None and frame_time >= int(round(limit * fps)):
@@ -414,17 +413,16 @@ class CachePath:
                 writer.join()
                 self._cache['video_output'] = None, None, start, *config
                 return
-            frame = av.VideoFrame(width, height, 'rgba' if has_alpha else 'rgb24')
+            frame = av.VideoFrame(width, height, 'rgba')
             line_size = frame.planes[0].line_size
             if line_size != width:
                 import numpy as np
-                components = 4 if has_alpha else 3
-                data = np.ndarray((height, width*components), dtype='uint8', buffer=texture.read())
+                data = np.ndarray((height, width*4), dtype='uint8', buffer=framebuffer.read(components=4))
                 array = np.empty((height, line_size), dtype='uint8')
-                array[:, :width*components] = data
+                array[:, :width*4] = data
                 frame.planes[0].update(array.data)
             else:
-                frame.planes[0].update(texture.read())
+                frame.planes[0].update(framebuffer.read(components=4))
             frame.pts = frame_time
             try:
                 queue.put(frame, block=not realtime)

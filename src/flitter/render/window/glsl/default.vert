@@ -1,4 +1,4 @@
-#version 330
+${HEADER}
 
 in vec2 position;
 out vec2 coord;

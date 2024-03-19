@@ -1,6 +1,8 @@
 
 %pragma tempo 120
 
+import feedback_filter from 'common/filters.fl'
+
 let SIZE=1920;1080
     RADIUS=hypot(SIZE)*0.25
     THICKNESS=hypot(SIZE)*0.25
@@ -8,22 +10,21 @@ let SIZE=1920;1080
 
 !window size=SIZE
     !record filename=(OUTPUT if round(60*beat/tempo*fps) == 9)
-        !shader
-            !shader fragment=read("glsl/feedback.frag") mixer=0.01 glow=0.5 scale=1.3
-                !canvas composite=:add antialias=N<25
-                    !group#arcs translate=SIZE/2
-                        for i in ..N
-                            let period=2*beta(:period)[i]*quantum phase=uniform(:phase)[i] cycle=beat/period+phase c=quad(cycle%1)
-                                offset=OFFSET*((map(c, beta(:x;i)[cycle], beta(:x;i)[cycle+1]);map(c, beta(:y;i)[cycle], beta(:y;i)[cycle+1]))-0.5)
-                                thickness=THICKNESS*map(c, beta(:thickness;i)[cycle], beta(:thickness;i)[cycle+1])
-                                eccentricity=0.25*(map(c, beta(:eccentricity;i)[cycle], beta(:eccentricity;i)[cycle+1])-0.5)*2
-                                radius=(thickness/2+RADIUS*map(c, beta(:radius;i)[cycle], beta(:radius;i)[cycle+1]))*(min(1+eccentricity;1);min(1-eccentricity;1))
-                                start=map(c, uniform(:start;i)[cycle], uniform(:start;i)[cycle+1])
-                                sweep=0.5+0.5*map(c, beta(:sweep;i)[cycle], beta(:sweep;i)[cycle+1])
-                                hue=map(c, uniform(:hue;i)[cycle], uniform(:hue;i)[cycle+1])
-                            !group#arc stroke_width=thickness color=hsv(hue;1;1/(N**0.5)) translate=offset rotate=cycle
-                                if sweep < 1
-                                    !arc radius=radius start=start sweep=sweep
-                                else
-                                    !ellipse radius=radius
-                                !stroke
+        @feedback_filter mixer=0.01 glow=0.5 scale=1.3
+            !canvas composite=:add antialias=N<25
+                !group#arcs translate=SIZE/2
+                    for i in ..N
+                        let period=2*beta(:period)[i]*quantum phase=uniform(:phase)[i] cycle=beat/period+phase c=quad(cycle%1)
+                            offset=OFFSET*((map(c, beta(:x;i)[cycle], beta(:x;i)[cycle+1]);map(c, beta(:y;i)[cycle], beta(:y;i)[cycle+1]))-0.5)
+                            thickness=THICKNESS*map(c, beta(:thickness;i)[cycle], beta(:thickness;i)[cycle+1])
+                            eccentricity=0.25*(map(c, beta(:eccentricity;i)[cycle], beta(:eccentricity;i)[cycle+1])-0.5)*2
+                            radius=(thickness/2+RADIUS*map(c, beta(:radius;i)[cycle], beta(:radius;i)[cycle+1]))*(min(1+eccentricity;1);min(1-eccentricity;1))
+                            start=map(c, uniform(:start;i)[cycle], uniform(:start;i)[cycle+1])
+                            sweep=0.5+0.5*map(c, beta(:sweep;i)[cycle], beta(:sweep;i)[cycle+1])
+                            hue=map(c, uniform(:hue;i)[cycle], uniform(:hue;i)[cycle+1])
+                        !group#arc stroke_width=thickness color=hsv(hue;1;1/(N**0.5)) translate=offset rotate=cycle
+                            if sweep < 1
+                                !arc radius=radius start=start sweep=sweep
+                            else
+                                !ellipse radius=radius
+                            !stroke

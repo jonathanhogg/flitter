@@ -49,6 +49,7 @@ def main():
     parser.add_argument('--runtime', type=float, help="Seconds to run for before exiting")
     parser.add_argument('--offscreen', action='store_true', default=False, help="Swap windows for offscreens")
     parser.add_argument('--gamma', type=float, default=1, help="Default window gamma correction")
+    parser.add_argument('--opengles', action='store_true', default=False, help="Use OpenGL ES")
     parser.add_argument('program', nargs='+', help="Program(s) to load")
     args = parser.parse_args()
     logger = configure_logger(args.level)
@@ -56,7 +57,8 @@ def main():
     controller = EngineController(target_fps=args.fps, screen=args.screen, fullscreen=args.fullscreen, vsync=args.vsync,
                                   state_file=args.state, autoreset=args.autoreset, state_simplify_wait=args.simplifystate,
                                   realtime=not args.lockstep, defined_names=dict(args.defines), vm_stats=args.vmstats,
-                                  run_time=args.runtime, offscreen=args.offscreen, window_gamma=args.gamma, disable_simplifier=args.nosimplify)
+                                  run_time=args.runtime, offscreen=args.offscreen, window_gamma=args.gamma, disable_simplifier=args.nosimplify,
+                                  opengl_es=args.opengles)
     for program in args.program:
         controller.load_page(program)
 

@@ -888,10 +888,10 @@ class Canvas(SceneNode):
         self._texture = None
 
     def create(self, engine, node, resized, **kwargs):
-        colorbits = node.get('colorbits', 1, int, self.glctx.extra['colorbits'])
-        if colorbits not in COLOR_FORMATS:
-            colorbits = self.glctx.extra['colorbits']
+        colorbits = node.get('colorbits', 1, int, 8)
         linear = node.get('linear', 1, bool, self.glctx.extra['linear'])
+        if not linear or colorbits not in COLOR_FORMATS:
+            colorbits = 8
         if resized or colorbits != self._colorbits or linear != self._linear:
             depth = COLOR_FORMATS[colorbits]
             skia_colortype = TextureFormatColorType[depth.moderngl_dtype][1]
@@ -905,7 +905,8 @@ class Canvas(SceneNode):
             self._canvas = self._surface.getCanvas()
             self._colorbits = colorbits
             self._linear = linear
-            logger.debug("Created {:d}x{:d} canvas; skia version {}", self.width, self.height, skia.__version__)
+            logger.debug("Created {:d}x{:d} {}-bit {}sRGB canvas; skia version {}", self.width, self.height, colorbits,
+                         "linear " if linear else "", skia.__version__)
 
     async def descend(self, engine, node, **kwargs):
         # A canvas is a leaf node from the perspective of the OpenGL world

@@ -562,7 +562,7 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
     cdef dict shaders = objects.setdefault('canvas3d_shaders', {})
     cdef dict names = render_group.names.copy()
     names.update({'max_lights': render_group.max_lights, 'Ambient': LightType.Ambient, 'Directional': LightType.Directional,
-                  'Point': LightType.Point, 'Spot': LightType.Spot, 'Line': LightType.Line})
+                  'Point': LightType.Point, 'Spot': LightType.Spot, 'Line': LightType.Line, 'HEADER': glctx.extra['HEADER']})
     shader = None
     if render_group.vertex_shader_template is not None or render_group.fragment_shader_template is not None:
         shader = get_shader(glctx, shaders, names,
@@ -721,7 +721,7 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
         glctx.cull_face = 'front'
         glctx.blend_equation = moderngl.FUNC_ADD
         glctx.blend_func = moderngl.ONE, moderngl.ZERO
-        render_target.use_auxillary_buffer(glctx)
+        render_target.use_auxilary_buffer(glctx)
         n = len(translucent_objects)
         translucent_objects.sort(key=fst)
         instances_data = view.array((n, 37), 4, 'f')
@@ -758,7 +758,7 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
         glctx.cull_face = 'front' if render_group.cull_front_face else 'back'
         render_group.set_blend(glctx)
         render_target.use_main_buffer()
-        sampler = glctx.sampler(texture=render_target.auxillary_image_texture, filter=(moderngl.NEAREST, moderngl.NEAREST))
+        sampler = glctx.sampler(texture=render_target.auxilary_image_texture, filter=(moderngl.NEAREST, moderngl.NEAREST))
         sampler.use(base_unit_id)
         shader['backface_data'] = base_unit_id
         base_unit_id += 1
@@ -990,9 +990,9 @@ cdef class RenderTarget:
     cdef object color_renderbuffer
     cdef object depth_renderbuffer
     cdef object render_framebuffer
-    cdef object auxillary_image_texture
-    cdef object auxillary_depth_texture
-    cdef object auxillary_framebuffer
+    cdef object auxilary_image_texture
+    cdef object auxilary_depth_renderbuffer
+    cdef object auxilary_framebuffer
 
     @property
     def texture(self):
@@ -1008,9 +1008,9 @@ cdef class RenderTarget:
         self.color_renderbuffer = None
         self.depth_renderbuffer = None
         self.render_framebuffer = None
-        self.auxillary_image_texture = None
-        self.auxillary_depth_texture = None
-        self.auxillary_framebuffer = None
+        self.auxilary_image_texture = None
+        self.auxilary_depth_renderbuffer = None
+        self.auxilary_framebuffer = None
 
     cdef void prepare(self, glctx, Camera camera):
         if self.render_framebuffer is None or self.width != camera.width or self.height != camera.height \
@@ -1030,9 +1030,9 @@ cdef class RenderTarget:
             else:
                 self.render_framebuffer = glctx.framebuffer(color_attachments=(self.image_texture,), depth_attachment=self.depth_renderbuffer)
                 logger.debug("Created canvas3d {}x{} {}-bit render targets", self.width, self.height, self.colorbits)
-            self.auxillary_image_texture = None
-            self.auxillary_depth_texture = None
-            self.auxillary_framebuffer = None
+            self.auxilary_image_texture = None
+            self.auxilary_depth_renderbuffer = None
+            self.auxilary_framebuffer = None
         cdef Vector clear_color
         if camera.fog_max > camera.fog_min:
             clear_color = camera.fog_color
@@ -1046,14 +1046,14 @@ cdef class RenderTarget:
     cdef void use_main_buffer(self):
         self.render_framebuffer.use()
 
-    cdef void use_auxillary_buffer(self, glctx):
-        if self.auxillary_framebuffer is None:
-            self.auxillary_image_texture = glctx.texture((self.width, self.height), 4, dtype='f2')
-            self.auxillary_depth_texture = glctx.depth_texture((self.width, self.height))
-            self.auxillary_framebuffer = glctx.framebuffer(color_attachments=(self.auxillary_image_texture,), depth_attachment=self.auxillary_depth_texture)
-            logger.debug("Created canvas3d {}x{} auxillary render target", self.width, self.height)
-        self.auxillary_framebuffer.clear()
-        self.auxillary_framebuffer.use()
+    cdef void use_auxilary_buffer(self, glctx):
+        if self.auxilary_framebuffer is None:
+            self.auxilary_image_texture = glctx.texture((self.width, self.height), 4, dtype='f2')
+            self.auxilary_depth_renderbuffer = glctx.depth_renderbuffer((self.width, self.height))
+            self.auxilary_framebuffer = glctx.framebuffer(color_attachments=(self.auxilary_image_texture,), depth_attachment=self.auxilary_depth_renderbuffer)
+            logger.debug("Created canvas3d {}x{} auxilary render target", self.width, self.height)
+        self.auxilary_framebuffer.clear()
+        self.auxilary_framebuffer.use()
 
     cdef void finalize(self, glctx):
         if self.image_framebuffer is not None:

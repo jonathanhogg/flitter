@@ -1,9 +1,9 @@
 
 # Installing and Running
 
-**Flitter** is implemented in a mix of Python and Cython and requires OpenGL
-3.3 or above. At least Python 3.10 is *required* as the code uses `match`/`case`
-syntax.
+**Flitter** is implemented in a mix of Python and Cython and requires at least
+OpenGL 3.3 (Core Profile) or OpenGL ES 3.0. At least Python 3.10 is also
+required as the code uses `match`/`case` syntax.
 
 It is developed exclusively on Intel macOS, but is tested and supported on Apple
 Silicon macOS, x86_64 Linux and x86_64 Windows.
@@ -251,6 +251,11 @@ visual output. You'll still need a windowed environment. You can conspire to run
 on Linux without a real windowed environment using `Xvfb` (and the CI tests are
 run just this way), but you should know that the Mesa software rasterizer is
 *very, very slow*. **Flitter** really wants a GPU.
+
+`--opengles`
+: This tells *Flitter* to request the OpenGL ES API instead of OpenGL Core. You
+can use this on devices that do not support the full OpenGL API, or that are
+using a compatibility layer like ANGLE.
 
 `--profile`
 : Runs the Python profiler around the main loop. This will slow down **Flitter**
