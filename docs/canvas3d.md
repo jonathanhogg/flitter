@@ -140,10 +140,22 @@ ordering](#instance-ordering) and will result in instances being dispatched for
 rendering in arbitrary order. Generally this is only useful when combined with a
 blending function like `:add` or `:lighten`.
 
-`cull_face=` [ `true` | `false` ]
-: Turn off OpenGL backface-culling for this render group if set to `true`, the
+`face_cull=` [ `true` | `false` ]
+: Turn off OpenGL face-culling for this render group if set to `true`, the
 default is `false`. All faces of models will be fed into the shader program in
 an arbitrary order.
+
+`cull_face=` [ `:back` | `:front` ]
+: Assuming face-culling is enabled with the attribute above, this specifies
+which faces of the models to cull. The default is `:back`, but specifying
+`:front` can be useful for special effects or for use with custom shaders.
+
+:::{note}
+Setting `cull_face=:front` is similar to, but **not** the same as inverting all
+of the models in a render group. Inverting a model reverses the face winding
+*and* the normal direction of each vertex, and thus makes all of the back-faces
+into front-faces and vice versa.
+:::
 
 `vertex=`*TEXT*
 : Supply an override vertex shader as a text string containing the GLSL code.
@@ -173,14 +185,15 @@ supported is 4.1.
 Within a render group, all instances of specific models are dispatched to the
 GPU in one call, with per-instance data providing the specific transformation
 matrix and [material properties](#materials). Instances that have no
-transparency are sorted from front-to-back before being dispatched so that early
-depth-testing can discard fragments of occluded instances. This is done for each
-model in turn.
+transparency or translucency are sorted from front-to-back before being
+dispatched so that early depth-testing can discard fragments of occluded
+instances. This is done for each model in turn.
 
 After non-transparent instances have been dispatched, all instances with
-transparency of all models are collected together and rendered in back-to-front
-depth order. If a sequence of successive instances are of the same model, then
-they will be dispatched in a single call.
+translucency are collected together and rendered in back-to-front
+depth order, followed by all instances with transparency in back-to-front
+depth order. Using translucency forces an additional render pass for the
+translucent objects to build up a backface depth/normal buffer.
 
 Instance ordering is based on the model transformation matrix and assumes that
 models have their centre placed at the model origin and are unit-sized. This
@@ -531,6 +544,16 @@ support refraction, so objects will not appear realistically "glassy". Any
 transparency value greater than `0` will affect the [model render
 order](#instance-ordering). Transparency applies only to diffuse light scattered
 from the surface, specular reflections will be calculated as normal.
+
+`translucency=` *TRANSLUCENCY*
+: Specifies how translucent this material is as a distance over which half of
+the light falling on the backfaces of the object will pass through the object.
+The default is `0`, meaning no translucency. At low levels of translucency,
+light will be scattered and will glow through the edges/thin-parts of objects.
+At higher levels of translucency light will be scattered less and the object
+will become more transparent. Setting this to non-zero both affects the [model
+render order](#instance-ordering) and also forces an additional render pass to
+determine the thickness of the object and the directions of the back faces.
 
 ### Texture Mapping
 
