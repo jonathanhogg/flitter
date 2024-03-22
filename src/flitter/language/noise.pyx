@@ -10,6 +10,7 @@ https://gist.github.com/KdotJPG/b1270127455a94ac5d19
 import cython
 
 from libc.math cimport floor
+from libc.stdint cimport int64_t
 
 from .functions cimport uniform, shuffle
 from ..model cimport Vector, null_
@@ -36,28 +37,28 @@ cdef double STRETCH_CONSTANT3 = -1.0 / 6
 cdef double SQUISH_CONSTANT3 = 1.0 / 3
 cdef double NORM_CONSTANT3 = 103
 
-cdef int MAX_PERM_CACHE_ITEMS = 1000
+cdef int64_t MAX_PERM_CACHE_ITEMS = 1000
 cdef dict PermCache = {}
 
 
-cdef inline double extrapolate2(Vector perm, long xsb, long ysb, double dx, double dy) noexcept nogil:
-    cdef long index = <long>(perm.numbers[(<long>(perm.numbers[xsb % 256]) + ysb) % 256]) % 8 * 2
+cdef inline double extrapolate2(Vector perm, int64_t xsb, int64_t ysb, double dx, double dy) noexcept nogil:
+    cdef int64_t index = <int64_t>(perm.numbers[(<int64_t>(perm.numbers[xsb % 256]) + ysb) % 256]) % 8 * 2
     return GRADIENTS2.numbers[index] * dx + GRADIENTS2.numbers[index+1] * dy
 
 
-cdef inline double extrapolate3(Vector perm, long xsb, long ysb, long zsb, double dx, double dy, double dz) noexcept nogil:
-    cdef long index = <long>(perm.numbers[(<long>(perm.numbers[(<long>(perm.numbers[xsb % 256]) + ysb) % 256]) + zsb) % 256]) % 24 * 3
+cdef inline double extrapolate3(Vector perm, int64_t xsb, int64_t ysb, int64_t zsb, double dx, double dy, double dz) noexcept nogil:
+    cdef int64_t index = <int64_t>(perm.numbers[(<int64_t>(perm.numbers[(<int64_t>(perm.numbers[xsb % 256]) + ysb) % 256]) + zsb) % 256]) % 24 * 3
     return GRADIENTS3.numbers[index] * dx + GRADIENTS3.numbers[index+1] * dy + GRADIENTS3.numbers[index+2] * dz
 
 
 @cython.cdivision(True)
 cdef double noise2(Vector perm, double x, double y) noexcept nogil:
-    cdef long xsb, ysb, xsv_ext, ysv_ext
+    cdef int64_t xsb, ysb, xsv_ext, ysv_ext
     stretch_offset = (x + y) * STRETCH_CONSTANT2
     xs = x + stretch_offset
     ys = y + stretch_offset
-    xsb = <long>floor(xs)
-    ysb = <long>floor(ys)
+    xsb = <int64_t>floor(xs)
+    ysb = <int64_t>floor(ys)
     squish_offset = (xsb + ysb) * SQUISH_CONSTANT2
     xb = xsb + squish_offset
     yb = ysb + squish_offset
@@ -132,14 +133,14 @@ cdef double noise2(Vector perm, double x, double y) noexcept nogil:
 
 @cython.cdivision(True)
 cdef double noise3(Vector perm, double x, double y, double z) noexcept nogil:
-    cdef long xsb, ysb, zsb, xsv_ext0, xsv_ext1, ysv_ext0, ysv_ext1, zsv_ext0, zsv_ext1
+    cdef int64_t xsb, ysb, zsb, xsv_ext0, xsv_ext1, ysv_ext0, ysv_ext1, zsv_ext0, zsv_ext1
     stretch_offset = (x + y + z) * STRETCH_CONSTANT3
     xs = x + stretch_offset
     ys = y + stretch_offset
     zs = z + stretch_offset
-    xsb = <long>floor(xs)
-    ysb = <long>floor(ys)
-    zsb = <long>floor(zs)
+    xsb = <int64_t>floor(xs)
+    ysb = <int64_t>floor(ys)
+    zsb = <int64_t>floor(zs)
     squish_offset = (xsb + ysb + zsb) * SQUISH_CONSTANT3
     xb = xsb + squish_offset
     yb = ysb + squish_offset
@@ -539,7 +540,7 @@ cdef double noise3(Vector perm, double x, double y, double z) noexcept nogil:
 
 
 cdef Vector _noise(Vector perm, list args):
-    cdef int i, j, k, count = 0, n = len(args)
+    cdef int64_t i, j, k, count = 0, n = len(args)
     cdef Vector xx, yy, zz
     cdef double x, y
     cdef Vector result = Vector.__new__(Vector)
@@ -578,8 +579,8 @@ cdef Vector _noise(Vector perm, list args):
     return result
 
 
-cdef Vector get_perm(Vector seed, int i):
-    cdef unsigned long long seed_hash = seed.hash(True) ^ <unsigned long long>i
+cdef Vector get_perm(Vector seed, int64_t i):
+    cdef int64_t seed_hash = seed.hash(True) ^ <int64_t>i
     cdef uniform prng
     cdef Vector perm = <Vector>PermCache.get(seed_hash)
     if perm is None:
@@ -606,7 +607,7 @@ def octnoise(Vector seed, Vector octaves, Vector roughness, *args):
         if arg.numbers == NULL:
             return null_
         coords.append(Vector._copy(arg))
-    cdef int i, j, n = <int>octaves.numbers[0]
+    cdef int64_t i, j, n = <int64_t>octaves.numbers[0]
     cdef double weight_sum = 0, weight = 1, k = roughness.numbers[0]
     cdef Vector single, result = null_
     for i in range(n):
