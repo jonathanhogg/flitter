@@ -1160,7 +1160,7 @@ cdef class InlineLet(Expression):
             program.local_push(len(binding.names))
             lnames.extend(binding.names)
         self.body._compile(program, lnames)
-        program.local_drop(len(self.bindings))
+        program.local_drop(len(lnames) - n)
         while len(lnames) > n:
             lnames.pop()
 
