@@ -91,8 +91,10 @@ The engine-supplied global values are:
 All **Flitter** source files must be UTF-8 encoded. All names, including
 [symbols](#symbols) and [node](#nodes) kinds and attributes, must begin with a
 Unicode alphabetic character or an underscore and then may contain any number
-and combination of underscores and Unicode alphanumeric characters. Therefore
-names may contain the full range of non-Latin characters including diacritics.
+and combination of underscores and Unicode alphanumeric characters, suffixed by
+zero or more single quote [primes](https://en.wikipedia.org/wiki/Prime_(symbol))
+(`'`). Therefore names may contain the full range of non-Latin characters
+including diacritics.
 
 All **Flitter** language keywords and supported render nodes and attributes use
 only Latin characters and are generally English words or abbreviations (using US
@@ -488,6 +490,18 @@ names will be bound to `null`.
 
 Names introduced with a `let` can redefine engine-supplied values, like `beat`,
 and built-ins, like `sin`.
+
+:::{note}
+**Flitter** supports [primes](https://en.wikipedia.org/wiki/Prime_(symbol)) in
+names. This is a common mathematical convenience for a new unique name that
+references another. For example:
+
+```flitter
+let x' = x + 1
+```
+
+All identifiers may contain any number of single quote characters at the end.
+:::
 
 ## Where
 
