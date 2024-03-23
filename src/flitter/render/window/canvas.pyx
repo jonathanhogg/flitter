@@ -893,13 +893,14 @@ class Canvas(SceneNode):
         if not linear or colorbits not in COLOR_FORMATS:
             colorbits = 8
         if resized or colorbits != self._colorbits or linear != self._linear:
-            depth = COLOR_FORMATS[colorbits]
-            skia_colortype = TextureFormatColorType[depth.moderngl_dtype][1]
-            internal_format = None if linear else GL_SRGB8_ALPHA8
+            color_format = COLOR_FORMATS[colorbits]
+            skia_colortype = TextureFormatColorType[color_format.moderngl_dtype][1]
+            internal_format = color_format.gl_format if linear else GL_SRGB8_ALPHA8
             self._colorspace = skia.ColorSpace.MakeSRGBLinear() if linear else skia.ColorSpace.MakeSRGB()
-            self._texture = self.glctx.texture((self.width, self.height), 4, dtype=depth.moderngl_dtype, internal_format=internal_format)
+            self._texture = self.glctx.texture((self.width, self.height), 4, dtype=color_format.moderngl_dtype, internal_format=internal_format)
             self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
-            backend_render_target = skia.GrBackendRenderTarget(self.width, self.height, 0, 0, skia.GrGLFramebufferInfo(self._framebuffer.glo, depth.gl_format))
+            backend_render_target = skia.GrBackendRenderTarget(self.width, self.height, 0, 0,
+                                                               skia.GrGLFramebufferInfo(self._framebuffer.glo, color_format.gl_format))
             self._surface = skia.Surface.MakeFromBackendRenderTarget(self._graphics_context, backend_render_target, skia.kBottomLeft_GrSurfaceOrigin,
                                                                      skia_colortype, self._colorspace)
             self._canvas = self._surface.getCanvas()
