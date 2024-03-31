@@ -16,7 +16,7 @@ patterns: [
         name: 'constant.numeric.flitter'
     }
     {
-        match: ":[_a-zA-Z][_a-zA-Z0-9]*\\b"
+        match: ":[_\\p{alpha}][_\\p{alnum}]*'*\\b"
         name: "constant.symbol.flitter"
     }
     {
@@ -32,10 +32,6 @@ patterns: [
         name: "keyword.operator.lookup.flitter"
     }
     {
-        match: "\\^"
-        name: "keyword.operator.insert.flitter"
-    }
-    {
         match: ";"
         name: "keyword.operator.sequence.flitter"
     }
@@ -46,6 +42,118 @@ patterns: [
     {
         match: "\\+|\\-|\\*|\\*\\*|/|//|%"
         name: "keyword.operator.arithmetic.flitter"
+    }
+    {
+        match: "\\b(pragma)\\s+([_\\p{alpha}][_\\p{alnum}]*'*)"
+        captures:
+            '1':
+                name: "keyword.control.flow.flitter"
+            '2':
+                name: "constant.pragma.flitter"
+    }
+    {
+        match: "\\b(import)\\s+([_\\p{alpha}][_\\p{alnum}]*'*\\s*(?:\\s*;\\s*[_\\p{alpha}][_\\p{alnum}]*'*)*)\\s+(from)"
+        captures:
+            '1':
+                name: "keyword.control.flow.flitter"
+            '2':
+                patterns: [
+                    {
+                        match: "[_\\p{alpha}][_\\p{alnum}]*'*"
+                        name: "variable.name.flitter"
+                    }
+                    {
+                        match: ";"
+                        name: "keyword.operator.sequence.flitter"
+                    }
+                ]
+            '3':
+                name: "keyword.control.flow.flitter"
+    }
+    {
+        match: "\\b(if|elif|else|let|where)\\b"
+        name: "keyword.control.flow.flitter"
+    }
+    {
+        match: "\\b(and|not|or|xor)\\b"
+        name: "keyword.operator.logical.flitter"
+    }
+    {
+        match: "![_\\p{alpha}][_\\p{alnum}]*'*"
+        name: "constant.node.flitter"
+    }
+    {
+        match: "@\\s*[_\\p{alpha}][_\\p{alnum}]*'*"
+        name: "entity.name.function.flitter"
+    }
+    {
+        match: "\\#[_\\p{alpha}][_\\p{alnum}]*'*"
+        name: "constant.tag.flitter"
+    }
+    {
+        match: "\\b([_\\p{alpha}][_\\p{alnum}]*'*\\s*(?:\\s*;\\s*[_\\p{alpha}][_\\p{alnum}]*'*)*)\\s*(=)(?=[^=])"
+        captures:
+            '1':
+                patterns: [
+                    {
+                        match: "[_\\p{alpha}][_\\p{alnum}]*'*"
+                        name: "variable.name.flitter"
+                    }
+                    {
+                        match: ";"
+                        name: "keyword.operator.sequence.flitter"
+                    }
+                ]
+            '2':
+                name: "keyword.operator.assignment.flitter"
+    }
+    {
+        match: "(for)\\s+([_\\p{alpha}][_\\p{alnum}]*'*\\s*(?:;\\s*[_\\p{alpha}][_\\p{alnum}]*'*)*)\\s+(in)"
+        captures:
+            '1':
+                name: "keyword.control.flow.flitter"
+            '2':
+                patterns: [
+                    {
+                        match: "[_\\p{alpha}][_\\p{alnum}]*'*"
+                        name: "variable.name.flitter"
+                    }
+                    {
+                        match: ";"
+                        name: "keyword.operator.sequence.flitter"
+                    }
+                ]
+            '3':
+                name: "keyword.control.flow.flitter"
+    }
+    {
+        match: "\\b(func)\\s+([_\\p{alpha}][_\\p{alnum}]*'*)"
+        captures:
+            '1':
+                name: "keyword.control.flow.flitter"
+            '2':
+                name: "entity.name.function.flitter"
+    }
+    {
+        begin: "([_\\p{alpha}][_\\p{alnum}]*'*)\\s*(\\()"
+        beginCaptures:
+            '1':
+                name: 'entity.name.function.flitter'
+            '2':
+                name: 'punctuation.definition.arguments.begin.flitter'
+        end: '\\)'
+        endCaptures:
+            '0':
+                name: 'punctuation.definition.arguments.end.flitter'
+        patterns: [
+            {
+                include: '$self'
+            }
+        ]
+    }
+    {
+        match: "[_\\p{alpha}][_\\p{alnum}]*'*"
+        name: "variable.name.flitter"
     }
     {
         begin: "(\"\"\")"
@@ -108,118 +216,6 @@ patterns: [
             {
                 match: "\\\\'"
                 name: 'constant.character.escape.flitter'
-            }
-        ]
-    }
-    {
-        match: "\\b(pragma)\\s+([_a-zA-Z][_a-zA-Z0-9]*)"
-        captures:
-            '1':
-                name: "keyword.control.flow.flitter"
-            '2':
-                name: "constant.pragma.flitter"
-    }
-    {
-        match: "\\b(import)\\s+([_a-zA-Z][_a-zA-Z0-9]*\\s*(?:\\s*;\\s*[_a-zA-Z][_a-zA-Z0-9]*)*)\\s+(from)"
-        captures:
-            '1':
-                name: "keyword.control.flow.flitter"
-            '2':
-                patterns: [
-                    {
-                        match: "[_a-zA-Z][_a-zA-Z0-9]*"
-                        name: "variable.name.flitter"
-                    }
-                    {
-                        match: ";"
-                        name: "keyword.operator.sequence.flitter"
-                    }
-                ]
-            '3':
-                name: "keyword.control.flow.flitter"
-    }
-    {
-        match: "\\b(if|elif|else|let|where)\\b"
-        name: "keyword.control.flow.flitter"
-    }
-    {
-        match: "\\b(and|not|or|xor)\\b"
-        name: "keyword.operator.logical.flitter"
-    }
-    {
-        match: "![_a-zA-Z][_a-zA-Z0-9]*"
-        name: "constant.node.flitter"
-    }
-    {
-        match: "@\\s*[_a-zA-Z][_a-zA-Z0-9]*"
-        name: "entity.name.function.flitter"
-    }
-    {
-        match: "{([^}]*)}"
-        name: "keyword.operator.query.flitter"
-    }
-    {
-        match: "\\#[_a-zA-Z][_a-zA-Z0-9]*"
-        name: "constant.tag.flitter"
-    }
-    {
-        match: "\\b([_a-zA-Z][_a-zA-Z0-9]*\\s*(?:\\s*;\\s*[_a-zA-Z][_a-zA-Z0-9]*)*)\\s*(=)(?=[^=])"
-        captures:
-            '1':
-                patterns: [
-                    {
-                        match: "[_a-zA-Z][_a-zA-Z0-9]*"
-                        name: "variable.name.flitter"
-                    }
-                    {
-                        match: ";"
-                        name: "keyword.operator.sequence.flitter"
-                    }
-                ]
-            '2':
-                name: "keyword.operator.assignment.flitter"
-    }
-    {
-        match: "(for)\\s+([_a-zA-Z][_a-zA-Z0-9]*\\s*(?:;\\s*[_a-zA-Z][_a-zA-Z0-9]*)*)\\s+(in)"
-        captures:
-            '1':
-                name: "keyword.control.flow.flitter"
-            '2':
-                patterns: [
-                    {
-                        match: "[_a-zA-Z][_a-zA-Z0-9]*"
-                        name: "variable.name.flitter"
-                    }
-                    {
-                        match: ";"
-                        name: "keyword.operator.sequence.flitter"
-                    }
-                ]
-            '3':
-                name: "keyword.control.flow.flitter"
-    }
-    {
-        match: "\\b(func)\\s+([_a-zA-Z][_a-zA-Z0-9]*)"
-        captures:
-            '1':
-                name: "keyword.control.flow.flitter"
-            '2':
-                name: "entity.name.function.flitter"
-    }
-    {
-        begin: '([_a-zA-Z][_a-zA-Z0-9]*)\\s*(\\()'
-        beginCaptures:
-            '1':
-                name: 'entity.name.function.flitter'
-            '2':
-                name: 'punctuation.definition.arguments.begin.flitter'
-        end: '\\)'
-        endCaptures:
-            '0':
-                name: 'punctuation.definition.arguments.end.flitter'
-        patterns: [
-            {
-                include: '$self'
             }
         ]
     }

@@ -238,9 +238,9 @@ cdef class InstructionTuple(Instruction):
 
 
 cdef class InstructionInt(Instruction):
-    cdef readonly int value
+    cdef readonly int64_t value
 
-    def __init__(self, OpCode code, int value):
+    def __init__(self, OpCode code, int64_t value):
         super().__init__(code)
         self.value = value
 
@@ -249,10 +249,10 @@ cdef class InstructionInt(Instruction):
 
 
 cdef class InstructionIntTuple(Instruction):
-    cdef readonly int ivalue
+    cdef readonly int64_t ivalue
     cdef readonly tuple tvalue
 
-    def __init__(self, OpCode code, int ivalue, tuple tvalue):
+    def __init__(self, OpCode code, int64_t ivalue, tuple tvalue):
         super().__init__(code)
         self.ivalue = ivalue
         self.tvalue = tvalue
@@ -262,9 +262,9 @@ cdef class InstructionIntTuple(Instruction):
 
 
 cdef class InstructionLabel(Instruction):
-    cdef readonly int label
+    cdef readonly int64_t label
 
-    def __init__(self, int label):
+    def __init__(self, int64_t label):
         super().__init__(OpCode.Label)
         self.label = label
 
@@ -273,10 +273,10 @@ cdef class InstructionLabel(Instruction):
 
 
 cdef class InstructionJump(Instruction):
-    cdef readonly int label
-    cdef readonly int offset
+    cdef readonly int64_t label
+    cdef readonly int64_t offset
 
-    def __init__(self, OpCode code, int label):
+    def __init__(self, OpCode code, int64_t label):
         super().__init__(code)
         self.label = label
 
@@ -287,9 +287,9 @@ cdef class InstructionJump(Instruction):
 
 
 cdef class InstructionJumpInt(InstructionJump):
-    cdef readonly int value
+    cdef readonly int64_t value
 
-    def __init__(self, OpCode code, int label, int value):
+    def __init__(self, OpCode code, int64_t label, int64_t value):
         super().__init__(code, label)
         self.value = value
 
@@ -302,9 +302,9 @@ cdef class InstructionJumpInt(InstructionJump):
 cdef class InstructionFunc(InstructionJump):
     cdef readonly str name
     cdef readonly tuple parameters
-    cdef readonly int ncaptures
+    cdef readonly int64_t ncaptures
 
-    def __init__(self, OpCode code, int label, str name, tuple parameters, int ncaptures):
+    def __init__(self, OpCode code, int64_t label, str name, tuple parameters, int64_t ncaptures):
         super().__init__(code, label)
         self.name = name
         self.parameters = parameters
@@ -316,9 +316,9 @@ cdef class InstructionFunc(InstructionJump):
 
 cdef class InstructionObjectInt(Instruction):
     cdef readonly object obj
-    cdef readonly int value
+    cdef readonly int64_t value
 
-    def __init__(self, OpCode code, object obj, int value):
+    def __init__(self, OpCode code, object obj, int64_t value):
         super().__init__(code)
         self.obj = obj
         self.value = value
@@ -328,11 +328,12 @@ cdef class InstructionObjectInt(Instruction):
 
 
 cdef class VectorStack:
-    def __cinit__(self, int size=32):
+    def __cinit__(self, int64_t size=32, int64_t max_size=1<<20):
         self.vectors = <PyObject**>PyMem_Malloc(sizeof(PyObject*) * size)
         if self.vectors == NULL:
             raise MemoryError()
         self.size = size
+        self.max_size = max_size
         self.top = -1
 
     def __dealloc__(self):
@@ -356,7 +357,7 @@ cdef class VectorStack:
         new_stack.top = self.top
         return new_stack
 
-    cpdef void drop(self, int count=1):
+    cpdef void drop(self, int64_t count=1):
         if self.top+1 < count:
             raise TypeError("Insufficient items")
         drop(self, count)
@@ -369,12 +370,12 @@ cdef class VectorStack:
             raise TypeError("Stack empty")
         return pop(self)
 
-    cpdef tuple pop_tuple(self, int count):
+    cpdef tuple pop_tuple(self, int64_t count):
         if self.top+1 < count:
             raise TypeError("Insufficient items")
         return pop_tuple(self, count)
 
-    cpdef list pop_list(self, int count):
+    cpdef list pop_list(self, int64_t count):
         if self.top+1 < count:
             raise TypeError("Insufficient items")
         return pop_list(self, count)
@@ -384,7 +385,7 @@ cdef class VectorStack:
             raise TypeError("Insufficient items")
         return pop_dict(self, keys)
 
-    cpdef Vector pop_composed(self, int count):
+    cpdef Vector pop_composed(self, int64_t count):
         if self.top+1 < count:
             raise TypeError("Insufficient items")
         return pop_composed(self, count)
@@ -394,7 +395,7 @@ cdef class VectorStack:
             raise TypeError("Stack empty")
         return peek(self)
 
-    cpdef Vector peek_at(self, int offset):
+    cpdef Vector peek_at(self, int64_t offset):
         if self.top - offset <= -1:
             raise TypeError("Insufficient items")
         return peek_at(self, offset)
@@ -404,20 +405,21 @@ cdef class VectorStack:
             raise TypeError("Stack empty")
         poke(self, vector)
 
-    cpdef void poke_at(self, int offset, Vector vector):
+    cpdef void poke_at(self, int64_t offset, Vector vector):
         if self.top - offset <= -1:
             raise TypeError("Insufficient items")
         poke_at(self, offset, vector)
 
 cdef int64_t increase(VectorStack stack) except 0:
-    cdef int64_t new_size = stack.size * 2
+    cdef int64_t new_size = min(stack.size * 2, stack.max_size)
+    assert new_size > stack.size, "Stack overflow"
     stack.vectors = <PyObject**>PyMem_Realloc(stack.vectors, sizeof(PyObject*) * new_size)
     if stack.vectors == NULL:
         raise MemoryError()
     stack.size = new_size
     return new_size
 
-cdef inline void drop(VectorStack stack, int n) noexcept:
+cdef inline void drop(VectorStack stack, int64_t n) noexcept:
     assert stack.top - n >= -1, "Stack empty"
     stack.top -= n
     cdef int64_t i
@@ -425,7 +427,7 @@ cdef inline void drop(VectorStack stack, int n) noexcept:
         Py_DECREF(<Vector>stack.vectors[stack.top+i])
         stack.vectors[stack.top+i] = NULL
 
-cdef inline int push(VectorStack stack, Vector vector) except 0:
+cdef inline int64_t push(VectorStack stack, Vector vector) except 0:
     assert vector is not None
     stack.top += 1
     if stack.top == stack.size:
@@ -442,7 +444,7 @@ cdef inline Vector pop(VectorStack stack):
     Py_DECREF(vector)
     return vector
 
-cdef inline tuple pop_tuple(VectorStack stack, int n):
+cdef inline tuple pop_tuple(VectorStack stack, int64_t n):
     if n == 0:
         return ()
     assert stack.top - n >= -1, "Stack empty"
@@ -456,7 +458,7 @@ cdef inline tuple pop_tuple(VectorStack stack, int n):
         stack.vectors[base+i] = NULL
     return t
 
-cdef inline list pop_list(VectorStack stack, int n):
+cdef inline list pop_list(VectorStack stack, int64_t n):
     assert stack.top - n >= -1, "Stack empty"
     cdef list t = PyList_New(n)
     stack.top -= n
@@ -482,7 +484,7 @@ cdef inline dict pop_dict(VectorStack stack, tuple keys):
         Py_DECREF(<Vector>ptr)
     return t
 
-cdef inline Vector pop_composed(VectorStack stack, int m):
+cdef inline Vector pop_composed(VectorStack stack, int64_t m):
     assert stack.top - m >= -1, "Stack empty"
     if m == 1:
         return pop(stack)
@@ -542,7 +544,7 @@ cdef inline Vector peek(VectorStack stack):
     assert stack.top > -1, "Stack empty"
     return <Vector>stack.vectors[stack.top]
 
-cdef inline Vector peek_at(VectorStack stack, int offset):
+cdef inline Vector peek_at(VectorStack stack, int64_t offset):
     assert stack.top-offset > -1, "Stack empty"
     return <Vector>stack.vectors[stack.top-offset]
 
@@ -553,7 +555,7 @@ cdef inline void poke(VectorStack stack, Vector vector) noexcept:
     Py_INCREF(vector)
     stack.vectors[stack.top] = <PyObject*>vector
 
-cdef inline void poke_at(VectorStack stack, int offset, Vector vector) noexcept:
+cdef inline void poke_at(VectorStack stack, int64_t offset, Vector vector) noexcept:
     assert vector is not None
     assert stack.top-offset > -1, "Stack empty"
     Py_DECREF(<Vector>stack.vectors[stack.top-offset])
@@ -563,10 +565,11 @@ cdef inline void poke_at(VectorStack stack, int offset, Vector vector) noexcept:
 
 cdef class Function:
     cdef readonly str __name__
+    cdef readonly Vector vself
     cdef readonly tuple parameters
     cdef readonly tuple defaults
     cdef readonly Program program
-    cdef readonly int address
+    cdef readonly int64_t address
     cdef readonly object root_path
     cdef readonly bint record_stats
     cdef readonly tuple captures
@@ -581,7 +584,7 @@ cdef class Function:
         stack_top = stack.top
         for i in range(k):
             push(lnames, <Vector>PyTuple_GET_ITEM(self.captures, i))
-        push(lnames, Vector.__new__(Vector, self))
+        push(lnames, self.vself)
         for i in range(m):
             if i < n:
                 push(lnames, <Vector>PyTuple_GET_ITEM(args, i))
@@ -610,13 +613,13 @@ def log_vm_stats():
     cdef list stats = []
     cdef double duration, total=0
     cdef int64_t count
-    cdef unsigned int i
+    cdef int64_t i
     cdef double start, end, overhead, per_execution
     start = perf_counter()
     for count in range(10000):
         end = perf_counter()
-        StatsCount[<int>OpCode.MAX] += 1
-        StatsDuration[<int>OpCode.MAX] += end
+        StatsCount[<int64_t>OpCode.MAX] += 1
+        StatsDuration[<int64_t>OpCode.MAX] += end
     overhead = (end - start) / 10000
     if CallOutCount:
         duration = max(0, CallOutDuration - CallOutCount*overhead)
@@ -662,6 +665,8 @@ cdef inline void call_helper(Context context, VectorStack stack, object function
             push(stack, PyObject_CallObject(function, args))
         else:
             push(stack, PyObject_Call(function, args, kwargs))
+    except (RecursionError, AssertionError):
+        raise
     except Exception as exc:
         PySet_Add(context.errors, f"Error calling {function!r}\n{str(exc)}")
         push(stack, null_)
@@ -707,7 +712,7 @@ cdef inline dict import_module(Context context, str filename, bint record_stats,
     return import_context.names
 
 
-cdef inline void execute_append(VectorStack stack, int count):
+cdef inline void execute_append(VectorStack stack, int64_t count):
     cdef Vector nodes_vec = peek_at(stack, count)
     cdef Vector children
     cdef int64_t i, j, k, m=nodes_vec.length, n, o
@@ -931,7 +936,7 @@ cdef class Program:
     cpdef void use_simplifier(self, bint simplify):
         self.simplify = simplify
 
-    cpdef int new_label(self):
+    cpdef int64_t new_label(self):
         cdef object label = self.next_label
         self.next_label += 1
         return label
@@ -939,19 +944,19 @@ cdef class Program:
     cpdef void dup(self):
         self.instructions.append(Instruction(OpCode.Dup))
 
-    cpdef void drop(self, int count=1):
+    cpdef void drop(self, int64_t count=1):
         self.instructions.append(InstructionInt(OpCode.Drop, count))
 
-    cpdef void label(self, int label):
+    cpdef void label(self, int64_t label):
         self.instructions.append(InstructionLabel(label))
 
-    cpdef void jump(self, int label):
+    cpdef void jump(self, int64_t label):
         self.instructions.append(InstructionJump(OpCode.Jump, label))
 
-    cpdef void branch_true(self, int label):
+    cpdef void branch_true(self, int64_t label):
         self.instructions.append(InstructionJump(OpCode.BranchTrue, label))
 
-    cpdef void branch_false(self, int label):
+    cpdef void branch_false(self, int64_t label):
         self.instructions.append(InstructionJump(OpCode.BranchFalse, label))
 
     cpdef void pragma(self, str name):
@@ -976,13 +981,13 @@ cdef class Program:
                         return
         self.instructions.append(InstructionVector(OpCode.Literal, vector))
 
-    cpdef void local_push(self, int count):
+    cpdef void local_push(self, int64_t count):
         self.instructions.append(InstructionInt(OpCode.LocalPush, count))
 
-    cpdef void local_load(self, int offset):
+    cpdef void local_load(self, int64_t offset):
         self.instructions.append(InstructionInt(OpCode.LocalLoad, offset))
 
-    cpdef void local_drop(self, int count):
+    cpdef void local_drop(self, int64_t count):
         self.instructions.append(InstructionInt(OpCode.LocalDrop, count))
 
     cpdef void lookup(self):
@@ -1062,14 +1067,14 @@ cdef class Program:
 
     cpdef void slice_literal(self, Vector value):
         if value.length == 1 and value.numbers != NULL:
-            self.instructions.append(InstructionInt(OpCode.IndexLiteral, <int>c_floor(value.numbers[0])))
+            self.instructions.append(InstructionInt(OpCode.IndexLiteral, <int64_t>c_floor(value.numbers[0])))
         else:
             self.instructions.append(InstructionVector(OpCode.SliceLiteral, value))
 
-    cpdef void call(self, int count, tuple names=None):
+    cpdef void call(self, int64_t count, tuple names=None):
         self.instructions.append(InstructionIntTuple(OpCode.Call, count, names))
 
-    cpdef void call_fast(self, function, int count):
+    cpdef void call_fast(self, function, int64_t count):
         self.instructions.append(InstructionObjectInt(OpCode.CallFast, function, count))
 
     cpdef void tag(self, str name):
@@ -1078,16 +1083,16 @@ cdef class Program:
     cpdef void attribute(self, str name):
         self.instructions.append(InstructionStr(OpCode.Attribute, name))
 
-    cpdef void append(self, int count=1):
+    cpdef void append(self, int64_t count=1):
         self.instructions.append(InstructionInt(OpCode.Append, count))
 
-    cpdef void compose(self, int count):
+    cpdef void compose(self, int64_t count):
         self.instructions.append(InstructionInt(OpCode.Compose, count))
 
     cpdef void begin_for(self):
         self.instructions.append(Instruction(OpCode.BeginFor))
 
-    cpdef void next(self, int count, int label):
+    cpdef void next(self, int64_t count, int64_t label):
         self.instructions.append(InstructionJumpInt(OpCode.Next, label, count))
 
     cpdef void end_for_compose(self):
@@ -1096,13 +1101,13 @@ cdef class Program:
     cpdef void store_global(self, str name):
         self.instructions.append(InstructionStr(OpCode.StoreGlobal, name))
 
-    cpdef void func(self, int label, str name, tuple parameters, int ncaptures=0):
+    cpdef void func(self, int64_t label, str name, tuple parameters, int64_t ncaptures=0):
         self.instructions.append(InstructionFunc(OpCode.Func, label, name, parameters, ncaptures))
 
     cpdef void exit(self):
         self.instructions.append(Instruction(OpCode.Exit))
 
-    cdef void _execute(self, Context context, int pc, bint record_stats):
+    cdef void _execute(self, Context context, int64_t pc, bint record_stats):
         global CallOutCount, CallOutDuration
         cdef VectorStack stack=context.stack, lnames=context.lnames
         cdef int64_t i, n, program_end=len(self.instructions)
@@ -1403,11 +1408,9 @@ cdef class Program:
                     n = PyTuple_GET_SIZE(function.parameters)
                     function.defaults = pop_tuple(stack, n)
                     function.captures = pop_tuple(stack, (<InstructionFunc>instruction).ncaptures)
-                    r1 = <Vector>Vector.__new__(Vector)
-                    r1.objects = (function,)
-                    r1.length = 1
-                    push(stack, r1)
-                    function = r1 = None
+                    function.vself = Vector.__new__(Vector, function)
+                    push(stack, function.vself)
+                    function = None
 
                 elif instruction.code == OpCode.Tag:
                     execute_tag(stack, (<InstructionStr>instruction).value)
@@ -1457,8 +1460,11 @@ cdef class Program:
 
                 if record_stats:
                     duration += perf_counter()
-                    StatsCount[<int>instruction.code] += 1
-                    StatsDuration[<int>instruction.code] += duration
+                    StatsCount[<int64_t>instruction.code] += 1
+                    StatsDuration[<int64_t>instruction.code] += duration
+
+        except (AssertionError, RecursionError):
+            raise
 
         except Exception:
             if instruction is not None:

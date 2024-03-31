@@ -483,7 +483,7 @@ cdef class PhysicsSystem:
             state.set_item(state_key, null_)
         self.state_keys = new_state_keys
 
-    cdef double calculate(self, tuple objects, bint realtime, bint extra, double time, double clock):
+    cpdef double calculate(self, tuple objects, bint realtime, bint extra, double time, double clock):
         cdef list particles, non_anchors, particle_forces, matrix_forces, specific_forces, barriers
         particles, non_anchors, particle_forces, matrix_forces, specific_forces, barriers = objects
         cdef int64_t i, j, k, ii, m, n=len(particles), o=len(non_anchors)
