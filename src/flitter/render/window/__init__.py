@@ -421,7 +421,7 @@ class Window(ProgramNode):
                 ok = glfw.init()
                 if not ok:
                     raise RuntimeError("Unable to initialize GLFW")
-            glfw.window_hint(glfw.CONTEXT_CREATION_API, glfw.NATIVE_CONTEXT_API)
+            glfw.window_hint(glfw.CONTEXT_CREATION_API, glfw.EGL_CONTEXT_API if opengl_es else glfw.NATIVE_CONTEXT_API)
             glfw.window_hint(glfw.CLIENT_API, glfw.OPENGL_ES_API if opengl_es else glfw.OPENGL_API)
             glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, opengl_version[0])
             glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, opengl_version[1])
