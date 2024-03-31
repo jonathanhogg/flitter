@@ -146,13 +146,6 @@ class TestDocumentationDiagrams(FunctionalTest):
         self.assertTrue(len(scripts) > 0)
         self.run_scripts(scripts, target_fps=1, run_time=1)
 
-    @unittest.skipIf(sys.platform != 'linux', 'OpenGL ES only available on Linux')
-    def test_diagrams_opengl_es(self):
-        scripts_dir = Path(__file__).parent.parent / 'docs/diagrams'
-        scripts = sorted(path for path in scripts_dir.iterdir() if path.suffix == '.fl')
-        self.assertTrue(len(scripts) > 0)
-        self.run_scripts(scripts, target_fps=1, run_time=1, opengl_es=True, suffix='.es.png')
-
 
 class TestDocumentationTutorial(FunctionalTest):
     """
@@ -165,13 +158,6 @@ class TestDocumentationTutorial(FunctionalTest):
         self.assertTrue(len(scripts) > 0)
         self.run_scripts(scripts, target_fps=1, run_time=1)
 
-    @unittest.skipIf(sys.platform != 'linux', 'OpenGL ES only available on Linux')
-    def test_tutorial_opengl_es(self):
-        scripts_dir = Path(__file__).parent.parent / 'docs/tutorial_images'
-        scripts = sorted(path for path in scripts_dir.iterdir() if path.suffix == '.fl')
-        self.assertTrue(len(scripts) > 0)
-        self.run_scripts(scripts, target_fps=1, run_time=1, opengl_es=True, suffix='.es.png')
-
 
 class TestExamples(FunctionalTest):
     """
@@ -180,6 +166,8 @@ class TestExamples(FunctionalTest):
 
     SHORT = ['bauble.fl', 'canvas3d.fl', 'linelight.fl', 'solidgeometry.fl', 'textures.fl', 'video.fl']
     LONG = ['bounce.fl', 'hoops.fl', 'physics.fl', 'smoke.fl']
+    SHORT_ES = ['bauble.fl', 'canvas3d.fl', 'linelight.fl', 'solidgeometry.fl', 'textures.fl']
+    LONG_ES = ['bounce.fl', 'physics.fl']
 
     def test_short_examples(self):
         scripts_dir = Path(__file__).parent.parent / 'examples'
@@ -194,11 +182,11 @@ class TestExamples(FunctionalTest):
     @unittest.skipIf(sys.platform != 'linux', 'OpenGL ES only available on Linux')
     def test_short_examples_opengl_es(self):
         scripts_dir = Path(__file__).parent.parent / 'examples'
-        scripts = [scripts_dir / name for name in self.SHORT]
+        scripts = [scripts_dir / name for name in self.SHORT_ES]
         self.run_scripts(scripts, target_fps=1, run_time=1, opengl_es=True, suffix='.es.png')
 
     @unittest.skipIf(sys.platform != 'linux', 'OpenGL ES only available on Linux')
     def test_long_examples_opengl_es(self):
         scripts_dir = Path(__file__).parent.parent / 'examples'
-        scripts = [scripts_dir / name for name in self.LONG]
+        scripts = [scripts_dir / name for name in self.LONG_ES]
         self.run_scripts(scripts, target_fps=10, run_time=1, opengl_es=True, suffix='.es.png')
