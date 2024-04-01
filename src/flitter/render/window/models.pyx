@@ -6,7 +6,7 @@ import numpy as np
 import trimesh
 
 from libc.math cimport cos, sin, sqrt
-from libc.stdint cimport int32_t
+from libc.stdint cimport int32_t, int64_t
 
 from ... import name_patch
 from ...cache import SharedCache
@@ -15,11 +15,11 @@ from ...cache import SharedCache
 logger = name_patch(logger, __name__)
 
 cdef dict ModelCache = {}
-cdef int MaxModelCacheEntries = 4096
+cdef int64_t MaxModelCacheEntries = 4096
 cdef double Tau = 6.283185307179586
 cdef double RootHalf = sqrt(0.5)
 cdef double DefaultSnapAngle = 0.05
-cdef int DefaultSegments = 64
+cdef int64_t DefaultSegments = 64
 cdef Matrix44 IdentityTransform = Matrix44.__new__(Matrix44)
 
 
@@ -38,6 +38,21 @@ cdef class Model:
 
     cdef void build_trimesh_model(self):
         raise NotImplementedError()
+
+    cdef Vector get_bounds(self):
+        if self.check_valid() and self.bounds is not None:
+            return self.bounds
+        self.build_trimesh_model()
+        self.bounds = Vector.__new__(Vector)
+        cdef const double[:, :] bounds
+        cdef int64_t i, j
+        if self.trimesh_model is not None:
+            bounds = self.trimesh_model.bounds
+            self.bounds.allocate_numbers(6)
+            for i in range(2):
+                for j in range(3):
+                    self.bounds.numbers[i*3 + j] = bounds[i, j]
+        return self.bounds
 
     cdef tuple get_buffers(self, object glctx, dict objects):
         cdef str name = self.name
@@ -360,7 +375,7 @@ cdef class BooleanOperationModel(Model):
         if len(models) == 1:
             return models[0]
         cdef str name = operation + '('
-        cdef int i
+        cdef int64_t i
         for i, child_model in enumerate(models):
             if i:
                 name += ', '
@@ -385,7 +400,7 @@ cdef class BooleanOperationModel(Model):
     cdef Model slice(self, Vector origin, Vector normal):
         cdef Model model
         cdef list models = []
-        cdef int i
+        cdef int64_t i
         for i, model in enumerate(self.models):
             if i == 0 or self.operation == 'union':
                 models.append(model.slice(origin, normal))
@@ -494,11 +509,11 @@ cdef class Box(PrimitiveModel):
 
 
 cdef class Sphere(PrimitiveModel):
-    cdef int segments
+    cdef int64_t segments
 
     @staticmethod
     cdef Sphere get(Node node):
-        cdef int segments = max(4, node.get_int('segments', DefaultSegments))
+        cdef int64_t segments = max(4, node.get_int('segments', DefaultSegments))
         cdef str name = f'!sphere-{segments}' if segments != DefaultSegments else '!sphere'
         cdef Sphere model = ModelCache.pop(name, None)
         if model is None:
@@ -511,7 +526,7 @@ cdef class Sphere(PrimitiveModel):
 
     @cython.cdivision(True)
     cdef void build_trimesh_model(self):
-        cdef int ncols = self.segments, nrows = ncols//2, nvertices = (nrows+1)*(ncols+1), nfaces = (2+(nrows-2)*2)*ncols
+        cdef int64_t ncols = self.segments, nrows = ncols//2, nvertices = (nrows+1)*(ncols+1), nfaces = (2+(nrows-2)*2)*ncols
         cdef object vertices_array = np.empty((nvertices, 3), dtype='f4')
         cdef float[:, :] vertices = vertices_array
         cdef object vertex_normals_array = np.empty((nvertices, 3), dtype='f4')
@@ -521,7 +536,7 @@ cdef class Sphere(PrimitiveModel):
         cdef object faces_array = np.empty((nfaces, 3), dtype='i4')
         cdef int32_t[:, :] faces = faces_array
         cdef float x, y, z, r, th, u, v
-        cdef int row, col, i=0, j=0
+        cdef int64_t row, col, i=0, j=0
         for row in range(nrows + 1):
             v = <float>row/nrows
             if row == 0:
@@ -556,11 +571,11 @@ cdef class Sphere(PrimitiveModel):
 
 
 cdef class Cylinder(PrimitiveModel):
-    cdef int segments
+    cdef int64_t segments
 
     @staticmethod
     cdef Cylinder get(Node node):
-        cdef int segments = max(2, node.get_int('segments', DefaultSegments))
+        cdef int64_t segments = max(2, node.get_int('segments', DefaultSegments))
         cdef str name = f'!cylinder-{segments}' if segments != DefaultSegments else '!cylinder'
         cdef Cylinder model = ModelCache.pop(name, None)
         if model is None:
@@ -574,7 +589,7 @@ cdef class Cylinder(PrimitiveModel):
     @cython.cdivision(True)
     @cython.boundscheck(False)
     cdef void build_trimesh_model(self):
-        cdef int i, j, k, n = self.segments, m = (n+1)*6
+        cdef int64_t i, j, k, n = self.segments, m = (n+1)*6
         cdef object vertices_array = np.empty((m, 3), dtype='f4')
         cdef float[:, :] vertices = vertices_array
         cdef object vertex_normals_array = np.empty((m, 3), dtype='f4')
@@ -641,11 +656,11 @@ cdef class Cylinder(PrimitiveModel):
 
 
 cdef class Cone(PrimitiveModel):
-    cdef int segments
+    cdef int64_t segments
 
     @staticmethod
     cdef Cone get(Node node):
-        cdef int segments = max(2, node.get_int('segments', DefaultSegments))
+        cdef int64_t segments = max(2, node.get_int('segments', DefaultSegments))
         cdef str name = f'!cone-{segments}' if segments != DefaultSegments else '!cone'
         cdef Cone model = ModelCache.pop(name, None)
         if model is None:
@@ -659,7 +674,7 @@ cdef class Cone(PrimitiveModel):
     @cython.cdivision(True)
     @cython.boundscheck(False)
     cdef void build_trimesh_model(self):
-        cdef int i, j, k, n = self.segments, m = (n+1)*4
+        cdef int64_t i, j, k, n = self.segments, m = (n+1)*4
         cdef object vertices_array = np.empty((m, 3), dtype='f4')
         cdef float[:, :] vertices = vertices_array
         cdef object vertex_normals_array = np.empty((m, 3), dtype='f4')

@@ -9,11 +9,13 @@ cdef double DefaultSnapAngle
 cdef class Model:
     cdef str name
     cdef object trimesh_model
+    cdef Vector bounds
     cdef bint valid
 
     cdef bint is_constructed(self)
     cdef bint check_valid(self)
     cdef void build_trimesh_model(self)
+    cdef Vector get_bounds(self)
     cdef tuple get_buffers(self, object glctx, dict objects)
     cdef tuple instance(self, Matrix44 model_matrix)
 
