@@ -1,6 +1,6 @@
 
-let SIZE=1500;500
-    DIAGRAM=SIZE/(3;1)
+let SIZE=2000;500
+    DIAGRAM=SIZE/(4;1)
     SIDE=min(DIAGRAM)*0.6
 
 !window size=SIZE
@@ -10,7 +10,7 @@ let SIZE=1500;500
             !fill color=1
     !record filename=(OUTPUT or 'easings.png') keep_alpha=true
         !canvas color=0
-            for i;easing in zip(..3, linear;quad;snap)
+            for i;easing in zip(..4, linear;quad;cubic;snap)
                 let x=i%4 y=0
                 !group translate=(x;y)*DIAGRAM+(DIAGRAM-SIDE)/2 scale=SIDE/100
                     !transform translate=0;-10

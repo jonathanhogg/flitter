@@ -463,6 +463,22 @@ def quad(Vector xs not None):
     return ys
 
 
+def cubic(Vector xs not None):
+    if xs.numbers == NULL:
+        return null_
+    cdef Vector ys = Vector.__new__(Vector)
+    cdef double x, y
+    for i in range(ys.allocate_numbers(xs.length)):
+        x = xs.numbers[i]
+        if x < 0:
+            x = 0
+        elif x > 1:
+            x = 1
+        y = (x * 2)**3 / 2 if x < 0.5 else 1 - ((1 - x) * 2)**3 / 2
+        ys.numbers[i] = y
+    return ys
+
+
 def snap(Vector xs not None):
     if xs.numbers == NULL:
         return null_
@@ -783,6 +799,21 @@ def zipv(*vectors):
     return zs
 
 
+def count(Vector xs not None, Vector ys not None):
+    if xs.numbers == NULL or ys.objects is not None:
+        return null_
+    cdef Vector zs = Vector.__new__(Vector)
+    cdef int64_t i, j, k, n=xs.length, m=ys.length
+    zs.allocate_numbers(n)
+    for i in range(n):
+        k = 0
+        for j in range(m):
+            if ys.numbers[j] == xs.numbers[i]:
+                k += 1
+        zs.numbers[i] = k
+    return zs
+
+
 cdef double hue_to_rgb(double m1, double m2, double h):
     h = h % 6
     if h < 1:
@@ -879,6 +910,8 @@ STATIC_FUNCTIONS = {
     'clamp': Vector(clamp),
     'colortemp': Vector(colortemp),
     'cos': Vector(cosv),
+    'count': Vector(count),
+    'cubic': Vector(cubic),
     'exp': Vector(expv),
     'floor': Vector(floorv),
     'fract': Vector(fract),
