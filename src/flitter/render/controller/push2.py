@@ -21,20 +21,24 @@ from ...model import Vector, Node
 from ..window.canvas import draw
 
 
+RESET_ROTARY = Vector.symbol('reset').concat(Vector.symbol('rotary'))
+
 DEFAULT_CONFIG = [
-    Node('rotary', attributes={'id': Vector('tempo'), 'style': Vector('continuous'), 'action': Vector('tempo')}),
-    Node('button', attributes={'id': Vector('page_left'), 'action': Vector('previous')}),
-    Node('button', attributes={'id': Vector('page_right'), 'action': Vector('next')}),
-    Node('button', attributes={'id': Vector('tap_tempo'), 'action': Vector(['tap_tempo', 'rotary', 'tempo'])}),
-    Node('button', attributes={'id': Vector('metronome'), 'action': Vector(['reset', 'rotary', 'metronome'])}),
-    Node('button', attributes={'id': Vector('menu_1_0'), 'action': Vector(['reset', 'rotary', 1])}),
-    Node('button', attributes={'id': Vector('menu_1_1'), 'action': Vector(['reset', 'rotary', 2])}),
-    Node('button', attributes={'id': Vector('menu_1_2'), 'action': Vector(['reset', 'rotary', 3])}),
-    Node('button', attributes={'id': Vector('menu_1_3'), 'action': Vector(['reset', 'rotary', 4])}),
-    Node('button', attributes={'id': Vector('menu_1_4'), 'action': Vector(['reset', 'rotary', 5])}),
-    Node('button', attributes={'id': Vector('menu_1_5'), 'action': Vector(['reset', 'rotary', 6])}),
-    Node('button', attributes={'id': Vector('menu_1_6'), 'action': Vector(['reset', 'rotary', 7])}),
-    Node('button', attributes={'id': Vector('menu_1_7'), 'action': Vector(['reset', 'rotary', 8])}),
+    Node('rotary', attributes={'id': Vector.symbol('tempo'), 'style': Vector.symbol('continuous'), 'action': Vector.symbol('tempo')}),
+    Node('button', attributes={'id': Vector.symbol('page_left'), 'action': Vector.symbol('previous')}),
+    Node('button', attributes={'id': Vector.symbol('page_right'), 'action': Vector.symbol('next')}),
+    Node('button', attributes={'id': Vector.symbol('tap_tempo'),
+                               'action': Vector.symbol('tap_tempo').concat(Vector.symbol('rotary')).concat(Vector.symbol('tempo'))}),
+    Node('button', attributes={'id': Vector.symbol('metronome'),
+                               'action': Vector.symbol('reset').concat(Vector.symbol('rotary')).concat(Vector.symbol('metronome'))}),
+    Node('button', attributes={'id': Vector.symbol('menu_1_0'), 'action': RESET_ROTARY.concat(Vector(1))}),
+    Node('button', attributes={'id': Vector.symbol('menu_1_1'), 'action': RESET_ROTARY.concat(Vector(2))}),
+    Node('button', attributes={'id': Vector.symbol('menu_1_2'), 'action': RESET_ROTARY.concat(Vector(3))}),
+    Node('button', attributes={'id': Vector.symbol('menu_1_3'), 'action': RESET_ROTARY.concat(Vector(4))}),
+    Node('button', attributes={'id': Vector.symbol('menu_1_4'), 'action': RESET_ROTARY.concat(Vector(5))}),
+    Node('button', attributes={'id': Vector.symbol('menu_1_5'), 'action': RESET_ROTARY.concat(Vector(6))}),
+    Node('button', attributes={'id': Vector.symbol('menu_1_6'), 'action': RESET_ROTARY.concat(Vector(7))}),
+    Node('button', attributes={'id': Vector.symbol('menu_1_7'), 'action': RESET_ROTARY.concat(Vector(8))}),
 ]
 
 PALETTES = {
@@ -46,8 +50,8 @@ PALETTES = {
 PAD_NUMBER_ID_MAPPING = {number: Vector([8 - number // 8, number % 8 + 1]) for number in range(64)}
 
 ROTARY_ID_MAPPING = {
-    Encoder.TEMPO: Vector('tempo'),
-    Encoder.METRONOME: Vector('metronome'),
+    Encoder.TEMPO: Vector.symbol('tempo'),
+    Encoder.METRONOME: Vector.symbol('metronome'),
     Encoder.ZERO: Vector(1),
     Encoder.ONE: Vector(2),
     Encoder.TWO: Vector(3),
@@ -56,7 +60,7 @@ ROTARY_ID_MAPPING = {
     Encoder.FIVE: Vector(6),
     Encoder.SIX: Vector(7),
     Encoder.SEVEN: Vector(8),
-    Encoder.SETUP: Vector('setup'),
+    Encoder.SETUP: Vector.symbol('setup'),
 }
 
 SCREEN_ROTARIES = {
@@ -93,7 +97,7 @@ class Push2RotaryControl(driver.TouchControl, driver.EncoderControl):
 
     @property
     def raw_divisor(self):
-        steps = 18 if self.control_id == Vector('tempo') else 210
+        steps = 18 if self.control_id == Vector.symbol('tempo') else 210
         if self._turns is not None:
             steps = int(steps * self._turns)
         return steps
@@ -249,7 +253,7 @@ class Push2Driver(driver.ControllerDriver):
         self._pads = {}
         for number, control_id in PAD_NUMBER_ID_MAPPING.items():
             self._pads[control_id] = Push2PadControl(self, control_id, number)
-        self._slider = Push2SliderControl(self, Vector('main'))
+        self._slider = Push2SliderControl(self, Vector.symbol('main'))
         self._run_task = None
         self._screen_update_requested = True
         self._screen_canvas_node = None
@@ -284,7 +288,7 @@ class Push2Driver(driver.ControllerDriver):
             return self._rotaries.get(control_id)
         if kind == 'button':
             return self._buttons.get(control_id)
-        if kind == 'slider' and control_id == Vector('main'):
+        if kind == 'slider' and control_id == Vector.symbol('main'):
             return self._slider
         if kind == 'pad':
             return self._pads.get(control_id)

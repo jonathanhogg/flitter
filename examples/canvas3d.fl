@@ -49,4 +49,4 @@ let SIZE=1920;1080
                             !material emissive=c*2
                                 !sphere size=15
                             -- Place a point light source inside each sphere:
-                            !light color=c*5k position=0
+                            !light color=c*5k position=0 radius=15

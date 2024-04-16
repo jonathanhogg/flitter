@@ -8,6 +8,10 @@
 : Return a vector with the same length as *xs* formed by adding each value to an
 accumulator starting at *0*.
 
+`count(` *xs* `,` *ys* `)`
+: Return a vector with the same length as *xs* containing the number of times
+each of the elements in *xs* occurs in *ys*.
+
 `len(` *xs* `)`
 : Return the length of vector *xs*.
 
@@ -155,6 +159,9 @@ than *1* returning *1*.
 
 `quad(` *x* `)`
 : A quadratic easing function.
+
+`cubic(` *x* `)`
+: A cubic easing function.
 
 `snap(` *x* `)`
 : A square-root easing function (conceptually a quadratic easing function with

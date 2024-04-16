@@ -208,6 +208,7 @@ cdef class Camera:
     cdef double fog_max
     cdef Vector fog_color
     cdef double fog_curve
+    cdef Matrix44 view_matrix
     cdef Matrix44 pv_matrix
     cdef int width
     cdef int height
@@ -276,7 +277,8 @@ cdef class Camera:
                     projection_matrix = Matrix44._project(gradient, gradient/aspect_ratio, camera.near, camera.far)  # horizontal
             else:
                 projection_matrix = Matrix44._project(gradient, gradient/aspect_ratio, camera.near, camera.far)  # horizontal
-        camera.pv_matrix = projection_matrix.mmul(Matrix44._look(camera.position, camera.focus, camera.up))
+        camera.view_matrix = Matrix44._look(camera.position, camera.focus, camera.up)
+        camera.pv_matrix = projection_matrix.mmul(camera.view_matrix)
         return camera
 
 
@@ -539,6 +541,19 @@ cdef object get_shader(object glctx, dict shaders, dict names, object vertex_sha
     return shader
 
 
+cdef double nearest_corner(Vector bounds, Matrix44 view_model_matrix):
+    cdef int64_t i, j, k
+    cdef double d, min_d
+    for i in range(8):
+        d = -view_model_matrix.numbers[14]
+        for j in range(3):
+            k = (i >> j) & 1
+            d -= view_model_matrix.numbers[4*j + 2] * bounds.numbers[k*3 + j]
+        if i == 0 or d < min_d:
+            min_d = d
+    return min_d
+
+
 cdef void render(RenderTarget render_target, RenderGroup render_group, Camera camera, glctx, dict objects, dict references):
     cdef list instances
     cdef cython.float[:, :] instances_data, lights_data
@@ -547,12 +562,12 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
     cdef Model model
     cdef Textures textures
     cdef int i, j, k, n, nlights
-    cdef double z, w
     cdef double* src
     cdef float* dest
     cdef Instance instance
     cdef Matrix44 matrix
     cdef Matrix33 normal_matrix
+    cdef Vector bounds
     cdef bint has_transparency_texture
     cdef tuple transparent_object, translucent_object
     cdef list transparent_objects = []
@@ -649,32 +664,13 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
         n = len(instances)
         instances_data = view.array((n, 37), 4, 'f')
         k = 0
-        if render_group.depth_test:
+        bounds = model.get_bounds()
+        if render_group.depth_test and bounds.length == 6:
             zs_array = np.empty(n)
             zs = zs_array
             for i, instance in enumerate(instances):
-                matrix = camera.pv_matrix.mmul(instance.model_matrix)
-                z = matrix.numbers[14]
-                w = matrix.numbers[15]
-                if matrix.numbers[2] > 0:
-                    z -= matrix.numbers[2]
-                    w -= matrix.numbers[3]
-                else:
-                    z += matrix.numbers[2]
-                    w += matrix.numbers[3]
-                if matrix.numbers[6] > 0:
-                    z -= matrix.numbers[6]
-                    w -= matrix.numbers[7]
-                else:
-                    z += matrix.numbers[6]
-                    w += matrix.numbers[7]
-                if matrix.numbers[10] > 0:
-                    z -= matrix.numbers[10]
-                    w -= matrix.numbers[11]
-                else:
-                    z += matrix.numbers[10]
-                    w += matrix.numbers[11]
-                zs[i] = z / w if w != 0 else -1
+                matrix = camera.view_matrix.mmul(instance.model_matrix)
+                zs[i] = nearest_corner(bounds, matrix)
             indices = zs_array.argsort().astype('int64')
         else:
             indices = np.arange(n, dtype='int64')
