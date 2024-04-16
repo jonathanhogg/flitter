@@ -533,16 +533,14 @@ cdef object get_shader(object glctx, dict shaders, dict names, object vertex_sha
     return shader
 
 
-cdef double nearest_corner(Model model, Matrix44 model_matrix):
-    cdef Vector bounds = model.get_bounds()
-    assert bounds.length == 6
+cdef double nearest_corner(Vector bounds, Matrix44 view_model_matrix):
     cdef int64_t i, j, k
     cdef double d, min_d
     for i in range(8):
-        d = -model_matrix.numbers[14]
+        d = -view_model_matrix.numbers[14]
         for j in range(3):
             k = (i >> j) & 1
-            d -= model_matrix.numbers[4*j + 2] * bounds.numbers[k*3 + j]
+            d -= view_model_matrix.numbers[4*j + 2] * bounds.numbers[k*3 + j]
         if i == 0 or d < min_d:
             min_d = d
     return min_d
@@ -561,6 +559,7 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
     cdef Instance instance
     cdef Matrix44 matrix
     cdef Matrix33 normal_matrix
+    cdef Vector bounds
     cdef bint has_transparency_texture
     cdef tuple transparent_object
     cdef list transparent_objects = []
@@ -656,16 +655,17 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
         shader['use_emissive_texture'] = False
         shader['use_transparency_texture'] = False
     for (model, textures), instances in render_group.instances.items():
-        has_transparency_texture = textures is not None and textures.transparency_id is not None
+        has_transparency_texture = shader_supports_textures and textures is not None and textures.transparency_id is not None
         n = len(instances)
         instances_data = view.array((n, 36), 4, 'f')
         k = 0
-        if render_group.depth_test:
+        bounds = model.get_bounds()
+        if render_group.depth_test and bounds.length == 6:
             zs_array = np.empty(n)
             zs = zs_array
             for i, instance in enumerate(instances):
                 matrix = camera.view_matrix.mmul(instance.model_matrix)
-                zs[i] = nearest_corner(model, matrix)
+                zs[i] = nearest_corner(bounds, matrix)
             indices = zs_array.argsort().astype('int64')
         else:
             indices = np.arange(n, dtype='int64')

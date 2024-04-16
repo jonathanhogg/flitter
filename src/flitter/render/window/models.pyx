@@ -726,26 +726,25 @@ cdef class Cone(PrimitiveModel):
 
 
 cdef class ExternalModel(Model):
-    cdef str filename
+    cdef object cache_path
 
     @staticmethod
     cdef ExternalModel get(Node node):
-        cdef str filename = node.get_str('filename', None)
-        if not filename:
+        cdef str name = node.get_str('filename', None)
+        if not name:
             return None
-        cdef str name = filename
         cdef ExternalModel model = ModelCache.pop(name, None)
         if model is None:
             model = ExternalModel.__new__(ExternalModel)
             model.name = name
-            model.filename = filename
+            model.cache_path = SharedCache[name]
             model.trimesh_model = None
         ModelCache[name] = model
         return model
 
     cdef bint check_valid(self):
-        return self.trimesh_model is SharedCache[self.filename].read_trimesh_model()
+        return self.trimesh_model is self.cache_path.read_trimesh_model()
 
     cdef void build_trimesh_model(self):
-        self.trimesh_model = SharedCache[self.filename].read_trimesh_model()
+        self.trimesh_model = self.cache_path.read_trimesh_model()
         self.valid = True
