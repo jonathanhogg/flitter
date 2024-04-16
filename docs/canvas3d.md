@@ -182,11 +182,11 @@ transparency of all models are collected together and rendered in back-to-front
 depth order. If a sequence of successive instances are of the same model, then
 they will be dispatched in a single call.
 
-Instance ordering is based on the model transformation matrix and assumes that
-models have their centre placed at the model origin and are unit-sized. This
-will generally work for the built-in [primitive models](#primitive-models), but
-may fail to correctly sort for [external models](#external-models) and so
-a mix of different models with transparency may draw in the wrong order.
+Instance depth ordering is done by computing a bounding box for the model
+(aligned on the model axes) and then finding the corner nearest to the camera
+for each instance. This will generally work for well-spaced models but may fail
+to derive a correct ordering for close/overlapping models causing transparency
+to render incorrectly.
 
 Depth-buffer *writing* is turned **off** when rendering instances with
 transparency. This means that all transparent objects will be rendered fully
