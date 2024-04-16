@@ -660,7 +660,7 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
     render_group.set_blend(glctx)
     render_target.use_main_buffer()
     for (model, textures), instances in render_group.instances.items():
-        has_transparency_texture = textures is not None and textures.transparency_id is not None
+        has_transparency_texture = shader_supports_textures and textures is not None and textures.transparency_id is not None
         n = len(instances)
         instances_data = view.array((n, 37), 4, 'f')
         k = 0
