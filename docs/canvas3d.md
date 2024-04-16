@@ -624,15 +624,15 @@ In addition to these transformation attributes, all models may have
 [material](#materials) attributes that provide material properties specific to
 the model.
 
-All model date is aggressively cached but automatically rebuilt if required.
-This includes automatically reloading external models if the file modification
-time-stamp changes. Multiple instances of the *same* model are actually collated
-and [dispatched simultaneously](#instance-ordering) to the GPU.
+Model data is aggressively cached but automatically rebuilt if required. This
+includes automatically reloading external models if the file modification
+time-stamp changes. Multiple instances of the *same* model are collated and
+[dispatched simultaneously](#instance-ordering) to the GPU.
 
 ### Primitive Models
 
 These models are all generated on-the-fly and all of them have their origin at
-their centre of mass.
+the centre of their bounding box.
 
 `!box`
 : This model represents a unit-edge cube, i.e, the corners are at
@@ -642,8 +642,11 @@ UV space.
 
 `!sphere`
 : This model represents a unit-radius sphere (strictly speaking, the surface is
-made up of triangular faces with corners at `1`). UV coordinates use the
-Equirectangular projection.
+made up of triangular faces with vertices on this sphere). UV coordinates use
+the [Equirectangular
+projection](https://en.wikipedia.org/wiki/Equirectangular_projection) with the
+model positive $z$ direction being "North" and the 0 longitude arc aligned
+to the model $x$ axis.
 
 `!cylinder`
 : This is a unit-radius and unit-height cylinder with its axis of rotational
@@ -656,7 +659,6 @@ cylinder.
 : This is a unit-radius and unit-height cone with its axis of rotational
 symmetry in the $z$ direction. UV coordinates are similar to `!cylinder` except
 that the upper $3/4$ of the UV space are wrapped around the sides of the cone.
-``
 
 The nodes `!sphere`, `!cylinder` and `!cone` all support an additional
 attribute:
@@ -667,7 +669,10 @@ cylinder this will be the number of rectangles making up the sides and the
 number of triangles making up the top and bottom circles. Cones are very
 similar except that the sides are made up of triangles as well. For spheres,
 the value gives the number of stripes of longitude and the number of stripes of
-latitude will be half this. The default in all primitives is `64`.
+latitude will be half this (rounded down). The default in all primitives is
+`64`. The minimum number of segments for a `!cylinder` or `!cone` is `2`
+(resulting in a flat double-sided rectangle or triangle respectively) and the
+minimum for a `!sphere` is `4` (resulting in an octahedron).
 
 :::{warning}
 The number of model vertices and faces scales linearly or quadratically (in the
@@ -691,7 +696,7 @@ will be automatically reloaded if this file changes.
 `repair=` ( `true` | `false` )
 : If set to `true`, attempts to *repair* the mesh by merging vertices and
 removing duplicate or degenerate faces, fixing normal directions and face
-windows, and capping holes. This can be useful if a mesh is rendering
+windings, and capping holes. This can be useful if a mesh is rendering
 incorrectly or is failing with [constructive solid
 geometry](#contructive-solid-geometry) operations. Default is `false`.
 
@@ -780,12 +785,12 @@ with the attributes:
 : The origin of the cutting plane.
 
 `normal=` *nX*`;`*nY*`;`*nZ*
-: The normal of the cutting plane (surface "up" direction).
+: The normal of the cutting plane (plane "up" direction).
 
-Everything on the up side of the plane will be cut. The engine will attempt to
-fill holes left in the mesh – this may not succeed for complex shapes. The
-`!slice` node may have multiple child nodes, in which case the result will be
-equivalent to a slice of the `!union` of the child nodes.
+Everything on the "up" side of the plane will be discarded. The engine will
+attempt to fill holes left in the mesh – though this may not succeed for complex
+shapes. The `!slice` node may have multiple child nodes, in which case the
+result will be equivalent to a slice of the `!union` of the child nodes.
 
 A model construction tree may contain `!transform` nodes at any point. These
 differ from normal transformations in that they apply the transforms to the
@@ -804,7 +809,7 @@ It therefore supports all of the standard [model](#models) and
 [material](#materials) attributes. The model will be cached so that each
 unique sequence of operations is only carried out once. Using the same tree in
 multiple places will result in multiple instances of this model as normal. Any
-change to the tree, including changes to slice planes or any transforms will
+change to the tree, including changes to slice planes or *any* transforms will
 result in a new model being generated.
 
 :::{warning}
@@ -852,7 +857,7 @@ instead.
 
 Note that the last step, computing a convex hull, effectively shrink-wraps the
 model. This will work fine if the original model was already convex, but if not
-this will paper over any concave sections. A warning will be written to the
+this will "paper over" any concave sections. A warning will be written to the
 console if this step is taken.
 
 The result of any CSG operation will also be a watertight mesh, this means that
@@ -860,6 +865,6 @@ all adjacent faces will have shared vertices with normals computed as an average
 of the face normals. For a smooth object, this will render correctly. However,
 a model with any sharp edges will show strange shading distortions at these
 edges. For this reason, constructed models automatically have [edge
-snapping](#model-shading) applied with the snap angle set to 0.05 turns (about
-18°). This can be controlled by adding an explicit `snap_edges` attribute to the
-top node in the model construction tree.
+snapping](#model-shading) applied with the snap angle set to 0.05 turns (18°).
+This can be controlled by adding an explicit `snap_edges` attribute to the top
+node in the model construction tree.
