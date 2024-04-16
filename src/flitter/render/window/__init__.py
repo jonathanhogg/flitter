@@ -259,6 +259,7 @@ class ProgramNode(SceneNode):
     def render(self, node, **kwargs):
         self.compile(node)
         if self._rectangle is not None:
+            passes = max(1, node.get('passes', 1, int, 1))
             sampler_args = {'repeat_x': False, 'repeat_y': False}
             if (border := node.get('border', 4, float)) is not None:
                 sampler_args['border_color'] = tuple(border)
@@ -270,6 +271,7 @@ class ProgramNode(SceneNode):
             child_textures = self.child_textures
             samplers = []
             unit = 1
+            pass_member = None
             for name in self._program:
                 member = self._program[name]
                 if isinstance(member, moderngl.Uniform):
@@ -296,6 +298,8 @@ class ProgramNode(SceneNode):
                         unit += 1
                     elif name == 'size':
                         member.value = self.size
+                    elif name == 'pass':
+                        pass_member = member
                     elif name in node:
                         set_uniform_vector(member, node[name])
                     elif name in kwargs:
@@ -304,8 +308,13 @@ class ProgramNode(SceneNode):
                         member.value = 1
             self.glctx.enable_direct(GL_FRAMEBUFFER_SRGB)
             self.framebuffer.use()
-            self.framebuffer.clear()
-            self._rectangle.render()
+            for pass_number in range(passes):
+                if pass_number and self._last is not None:
+                    self.glctx.copy_framebuffer(self._last, self.framebuffer)
+                if pass_member is not None:
+                    pass_member.value = pass_number
+                self.framebuffer.clear()
+                self._rectangle.render()
             for sampler in samplers:
                 sampler.clear()
             self.glctx.disable_direct(GL_FRAMEBUFFER_SRGB)
@@ -314,9 +323,9 @@ class ProgramNode(SceneNode):
 class Shader(ProgramNode):
     def __init__(self, glctx):
         super().__init__(glctx)
+        self._colorbits = None
         self._framebuffer = None
         self._texture = None
-        self._colorbits = None
 
     @property
     def texture(self):
@@ -569,6 +578,7 @@ precision highp float;
                 logger.debug("{0} resized to {1}x{2} (viewport {5}x{6} x={3} y={4})", self.name, width, height, *viewport)
             else:
                 logger.debug("{} resized to {}x{}", self.name, width, height)
+            self._last = None
 
     def render(self, node, window_gamma=1, beat=None, **kwargs):
         gamma = node.get('gamma', 1, float, window_gamma)

@@ -3,33 +3,29 @@
 -- a 'lighten' composite of the result with the original
 
 func bloom_filter(nodes, radius=0, sigma=0.6, contrast=1, exposure=-1, blursize=null, colorbits=null, composite=null, id=null)
-    let rx;ry=radius*(1;1)
     !shader#lighten id=id colorbits=colorbits composite=:lighten
         if len(nodes) == 1
             nodes id=:bloom_source
         else
             !shader#compose id=:bloom_source composite=composite
                 nodes
-        !shader#hblur size=blursize horizontal=false radius=ry sigma=sigma fragment=read("../glsl/blur.frag")
-            !shader#vblur horizontal=true radius=rx sigma=sigma fragment=read("../glsl/blur.frag")
-                !shader#contrast contrast=contrast brightness=(1-contrast)/2 exposure=exposure fragment=read("../glsl/color_adjust.frag")
-                    !reference id=:bloom_source
+        !shader#blur passes=2 size=blursize radius=radius sigma=sigma fragment=read("../glsl/blur.frag")
+            !shader#contrast contrast=contrast brightness=(1-contrast)/2 exposure=exposure fragment=read("../glsl/color_adjust.frag")
+                !reference id=:bloom_source
 
 
 -- Simple edge-detection filter that subtracts a gaussian blurred version of the
 -- input from the input
 
-func edge_detect(nodes, radius=0, blursize=null, colorbits=null, composite=null, id=null)
-    let rx;ry=radius*(1;1)
+func edge_detect(nodes, radius=0, sigma=0.6, blursize=null, colorbits=null, composite=null, id=null)
     !shader#difference id=id colorbits=colorbits composite=:difference
         if len(nodes) == 1
             nodes id=:edge_source
         else
             !shader#compose id=:edge_source composite=composite
                 nodes
-        !shader#hblur size=blursize horizontal=false radius=ry fragment=read("../glsl/blur.frag")
-            !shader#vblur horizontal=true radius=rx fragment=read("../glsl/blur.frag")
-                !reference id=:edge_source
+        !shader#blur passes=2 size=blursize radius=radius sigma=sigma fragment=read("../glsl/blur.frag")
+            !reference id=:edge_source
 
 
 -- Feedback filter that simulates old-school analogue feedback involving pointing

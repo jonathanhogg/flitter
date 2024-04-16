@@ -188,15 +188,22 @@ no pointer events have been processed).
 ## `!shader`
 
 The `!shader` node allows insertion of an arbitrary OpenGL shader program into
-the window render tree. `!shader` nodes support the following attribute:
+the window render tree. `!shader` nodes support the following attributes:
+
+`passes=` *PASSES*
+: This specifies how many times the shader should be executed in succession for
+each frame. Defaults to `1` if not specified. Specifying a number greater than
+`1` should be accompanied with use of the `pass` and `last` uniforms described
+below.
 
 `colorbits=` [ `8` | `16` | `32` ]
 : This overrides the default color channel bit depth for this node's output
 texture.
 
 The default shader program (and that also used for `!window`, `!offscreen`
-nodes) composites together the output textures of all child nodes with a blend
-function that can be controlled with the following attribute:
+nodes) is a single-pass shader that composites together the output textures of
+all child nodes with a blend function that can be controlled with the following
+attribute:
 
 `composite=` [ `:over` | `:dest_over` | `:lighten` | `:darken` | `:add` | `:difference` | `:multiply` ]
 : Specifies the blend function to use in the standard compositing shader
@@ -213,6 +220,9 @@ will be written to the node's texture
 
 The vertex and fragment shaders have a number of available uniforms that
 will be populated if declared:
+
+`uniform int pass`
+: Will be set to the pass number of this execution, counting from `0`.
 
 `uniform vec2 size`
 : Will be set to the the pixel-size of the node's output frame-buffer, the
@@ -246,9 +256,9 @@ to hit the target frame-rate.
 : These will be bound to the texture of each child node in turn.
 
 `uniform sampler2D last`
-: If specified, this will cause an additional texture to be created that will
-retain the node texture output at the last frame. This can be used to implement
-feedback-style effects.
+: If specified, this sampler allows access to the final output of the shader
+from the previous frame if this is the first (or only) pass, or the output of
+the previous pass otherwise.
 
 In addition to these, the shader program may declare arbitrary numeric uniforms
 that can be set using attributes with matching names on the shader node.
