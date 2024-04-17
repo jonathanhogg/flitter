@@ -184,6 +184,10 @@ class EngineController:
                     run_program = current_program = program
                     errors = set()
                     logs = set()
+                    self.state_generation0 ^= self.state_generation1
+                    self.state_generation1 = self.state_generation2
+                    self.state_generation2 = set()
+                    simplify_state_time = system_clock() + self.state_simplify_wait
 
                 if self.state.changed:
                     if self.state_simplify_wait:
@@ -207,11 +211,10 @@ class EngineController:
 
                 if self.state_simplify_wait and system_clock() > simplify_state_time:
                     if current_program is not None and self.state_generation1:
-                        simplify_time = -system_clock()
-                        simplify_state = self.state.with_keys(self.state_generation2 ^ self.state_generation1)
-                        generation2 = set(simplify_state)
-                        if generation2 != self.state_generation2:
-                            self.state_generation2 = generation2
+                        if self.state_generation1:
+                            self.state_generation2 ^= self.state_generation1
+                            simplify_state = self.state.with_keys(self.state_generation2)
+                            simplify_time = -system_clock()
                             top = current_program.top.simplify(state=simplify_state, dynamic=names)
                             now = system_clock()
                             simplify_time += now
