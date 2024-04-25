@@ -3,8 +3,10 @@ Flitter window management
 """
 
 import array
+import ctypes
 from collections import namedtuple
 import importlib
+import sys
 
 import glfw
 from loguru import logger
@@ -44,6 +46,8 @@ PUSHED = Vector.symbol('pushed')
 RELEASED = Vector.symbol('released')
 PUSHED_BEAT = Vector.symbol('pushed').concat(Vector.symbol('beat'))
 RELEASED_BEAT = Vector.symbol('released').concat(Vector.symbol('beat'))
+
+GLFUNCTYPE = ctypes.WINFUNCTYPE if sys.platform == 'win32' else ctypes.CFUNCTYPE
 
 
 def get_scene_node_class(kind):
@@ -363,7 +367,25 @@ class Shader(ProgramNode):
 class GLFWLoader:
     def load_opengl_function(self, name):
         address = glfw.get_proc_address(name)
-        return 0 if address is None else address
+        if address is None:
+            if name == 'glClearDepth':
+                if not hasattr(self, '_glClearDepth'):
+                    glClearDepthf = ctypes.cast(glfw.get_proc_address('glClearDepthf'), GLFUNCTYPE(None, ctypes.c_float))
+
+                    def glClearDepth(depth):
+                        glClearDepthf(depth)
+                    self._glClearDepth = GLFUNCTYPE(None, ctypes.c_double)(glClearDepth)
+                return ctypes.cast(self._glClearDepth, ctypes.c_void_p).value
+            elif name in ('glReadBuffer', 'glDrawBuffer'):
+                if not hasattr(self, '_glIgnore'):
+                    def glIgnore(i):
+                        pass
+                    self._glIgnore = GLFUNCTYPE(None, ctypes.c_double)(glIgnore)
+                return ctypes.cast(self._glIgnore, ctypes.c_void_p).value
+            else:
+                logger.trace("Unresolved GL function: {}", name)
+                return 0
+        return address
 
     def release(self):
         pass
