@@ -13,6 +13,12 @@ try:
 except ImportError:
     pass
 
+try:
+    from setproctitle import setproctitle
+except ImportError:
+    def setproctitle(title):
+        pass
+
 
 __version__ = "1.0.0b11"
 

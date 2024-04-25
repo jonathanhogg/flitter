@@ -5,7 +5,7 @@ Flitter main entry point
 import argparse
 import asyncio
 
-from flitter import configure_logger, __version__
+from flitter import configure_logger, __version__, setproctitle
 from .control import EngineController
 
 
@@ -21,12 +21,7 @@ def keyvalue(text):
 
 
 def main():
-    try:
-        import setproctitle
-    except ImportError:
-        pass
-    else:
-        setproctitle.setproctitle('flitter')
+    setproctitle('flitter')
     parser = argparse.ArgumentParser(description=f"Flitter language interpreter, version {__version__}")
     parser.set_defaults(level=None)
     levels = parser.add_mutually_exclusive_group()

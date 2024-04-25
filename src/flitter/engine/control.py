@@ -9,6 +9,7 @@ import pickle
 
 from loguru import logger
 
+from .. import setproctitle
 from ..cache import SharedCache
 from ..clock import BeatCounter, system_clock
 from ..language.vm import log_vm_stats
@@ -88,6 +89,7 @@ class EngineController:
             for renderers in self.renderers.values():
                 for renderer in renderers:
                     renderer.purge()
+            setproctitle(f'flitter {self.current_path}')
 
     def has_next_page(self):
         return self.current_page < len(self.pages) - 1
