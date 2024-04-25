@@ -444,7 +444,6 @@ class Window(ProgramNode):
         screen = node.get('screen', 1, int, self.default_screen)
         fullscreen = node.get('fullscreen', 1, bool, self.default_fullscreen) if self._visible else False
         resizable = node.get('resizable', 1, bool, True) if self._visible else False
-        opengl_version = (3, 0) if opengl_es else (3, 3)
         if self.window is None:
             self.engine = engine
             title = node.get('title', 1, str, "flitter")
@@ -454,8 +453,8 @@ class Window(ProgramNode):
                     raise RuntimeError("Unable to initialize GLFW")
             glfw.window_hint(glfw.CONTEXT_CREATION_API, glfw.EGL_CONTEXT_API if opengl_es else glfw.NATIVE_CONTEXT_API)
             glfw.window_hint(glfw.CLIENT_API, glfw.OPENGL_ES_API if opengl_es else glfw.OPENGL_API)
-            glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, opengl_version[0])
-            glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, opengl_version[1])
+            glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
+            glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 0 if opengl_es else 3)
             glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_ANY_PROFILE if opengl_es else glfw.OPENGL_CORE_PROFILE)
             glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, glfw.TRUE)
             glfw.window_hint(glfw.VISIBLE, glfw.TRUE if self._visible else glfw.FALSE)
@@ -519,9 +518,10 @@ class Window(ProgramNode):
             colorbits = DEFAULT_COLORBITS
         self.glctx.extra['colorbits'] = colorbits
         self.glctx.extra['size'] = self.width, self.height
-        self.glctx.extra['HEADER'] = """#version {}{}
-precision highp float;
-""".format(opengl_version[0]*100 + opengl_version[1]*10, " es" if opengl_es else "")
+        if opengl_es:
+            self.glctx.extra['HEADER'] = "#version 300 es\nprecision highp float;\n"
+        else:
+            self.glctx.extra['HEADER'] = "#version 330\n"
 
     def key_callback(self, window, key, scancode, action, mods):
         if key in self._keys:
