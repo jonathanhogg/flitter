@@ -190,6 +190,7 @@ class Reference(SceneNode):
 class ProgramNode(SceneNode):
     DEFAULT_VERTEX_SOURCE = TemplateLoader.get_template('default.vert')
     DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('default.frag')
+    CLEAR_COLOR = (0, 0, 0, 0)
 
     def __init__(self, glctx):
         super().__init__(glctx)
@@ -282,7 +283,6 @@ class ProgramNode(SceneNode):
                     if name == 'last':
                         if self._last is None:
                             self._last = self.make_last()
-                        self.glctx.copy_framebuffer(self._last, self.framebuffer)
                         if sampler_args:
                             sampler = self.glctx.sampler(texture=self._last, **sampler_args)
                             sampler.use(location=unit)
@@ -311,13 +311,15 @@ class ProgramNode(SceneNode):
                     elif name in ('alpha', 'gamma'):
                         member.value = 1
             self.glctx.enable_direct(GL_FRAMEBUFFER_SRGB)
+            self.glctx.enable(moderngl.BLEND)
+            self.glctx.blend_func = moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA
             self.framebuffer.use()
             for pass_number in range(passes):
-                if pass_number and self._last is not None:
+                if self._last is not None:
                     self.glctx.copy_framebuffer(self._last, self.framebuffer)
                 if pass_member is not None:
                     pass_member.value = pass_number
-                self.framebuffer.clear()
+                self.framebuffer.clear(*self.CLEAR_COLOR)
                 self._rectangle.render()
             for sampler in samplers:
                 sampler.clear()
@@ -392,6 +394,7 @@ class GLFWLoader:
 
 
 class Window(ProgramNode):
+    CLEAR_COLOR = (0, 0, 0, 1)
     Windows = []
 
     def __init__(self, screen=0, fullscreen=False, vsync=False, offscreen=False, **kwargs):
@@ -446,7 +449,7 @@ class Window(ProgramNode):
         resizable = node.get('resizable', 1, bool, True) if self._visible else False
         if self.window is None:
             self.engine = engine
-            title = node.get('title', 1, str, "flitter")
+            title = node.get('title', 1, str, "Flitter")
             if not Window.Windows:
                 ok = glfw.init()
                 if not ok:
@@ -457,14 +460,14 @@ class Window(ProgramNode):
             glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 0 if opengl_es else 3)
             glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_ANY_PROFILE if opengl_es else glfw.OPENGL_CORE_PROFILE)
             glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, glfw.TRUE)
+            glfw.window_hint(glfw.SRGB_CAPABLE, glfw.TRUE)
+            glfw.window_hint(glfw.SAMPLES, 0)
             glfw.window_hint(glfw.VISIBLE, glfw.TRUE if self._visible else glfw.FALSE)
             if self._visible:
                 glfw.window_hint(glfw.DOUBLEBUFFER, glfw.TRUE)
-                glfw.window_hint(glfw.SAMPLES, 0)
                 glfw.window_hint(glfw.AUTO_ICONIFY, glfw.FALSE)
                 glfw.window_hint(glfw.CENTER_CURSOR, glfw.FALSE)
                 glfw.window_hint(glfw.SCALE_TO_MONITOR, glfw.TRUE)
-            glfw.window_hint(glfw.SRGB_CAPABLE, glfw.TRUE)
             self.window = glfw.create_window(self.width, self.height, title, None, Window.Windows[0].window if Window.Windows else None)
             Window.Windows.append(self)
             new_window = True
