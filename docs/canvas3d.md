@@ -546,14 +546,15 @@ order](#instance-ordering). Transparency applies only to diffuse light scattered
 from the surface, specular reflections will be calculated as normal.
 
 `translucency=` *TRANSLUCENCY*
-: Specifies how translucent this material is as a distance over which half of
-the light falling on the backfaces of the object will pass through the object.
-The default is `0`, meaning no translucency. At low levels of translucency,
-light will be scattered and will glow through the edges/thin-parts of objects.
-At higher levels of translucency light will be scattered less and the object
-will become more transparent. Setting this to non-zero both affects the [model
-render order](#instance-ordering) and also forces an additional render pass to
-determine the thickness of the object and the directions of the back faces.
+: Specifies how translucent this material is as a distance (in the world
+coordinate system) over which half of the light falling on the backfaces of the
+object will pass through it. The default is `0`, meaning no translucency. At low
+levels of translucency, light will be scattered and will glow through the
+edges/thin-parts of objects. At higher levels of translucency light will be
+scattered less and the object will become more transparent. Setting this to
+non-zero both affects the [model render order](#instance-ordering) and also
+forces an additional render pass to determine the thickness of the object and
+the light falling on the back faces.
 
 ### Texture Mapping
 
