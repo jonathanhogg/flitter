@@ -13,6 +13,12 @@ try:
 except ImportError:
     pass
 
+try:
+    from setproctitle import setproctitle
+except ImportError:
+    def setproctitle(title):
+        pass
+
 
 __version__ = "1.0.0b11"
 
@@ -48,7 +54,7 @@ def configure_logger(level=None):
         level = LOGGING_LEVEL
     else:
         LOGGING_LEVEL = level
-    logger.configure(handlers=[dict(sink=sys.stderr, format=LOGGING_FORMAT, level=level, enqueue=True)],
+    logger.configure(handlers=[dict(sink=sys.stderr, format=LOGGING_FORMAT, level=level)],
                      patcher=lambda record: record['extra'].update(shortname=record['name'].removeprefix('flitter')))
     LoguruInterceptHandler.install()
     return logger

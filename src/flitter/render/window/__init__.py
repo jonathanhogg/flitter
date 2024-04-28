@@ -3,8 +3,10 @@ Flitter window management
 """
 
 import array
+import ctypes
 from collections import namedtuple
 import importlib
+import sys
 
 import glfw
 from loguru import logger
@@ -44,6 +46,8 @@ PUSHED = Vector.symbol('pushed')
 RELEASED = Vector.symbol('released')
 PUSHED_BEAT = Vector.symbol('pushed').concat(Vector.symbol('beat'))
 RELEASED_BEAT = Vector.symbol('released').concat(Vector.symbol('beat'))
+
+GLFUNCTYPE = ctypes.WINFUNCTYPE if sys.platform == 'win32' else ctypes.CFUNCTYPE
 
 
 def get_scene_node_class(kind):
@@ -186,6 +190,7 @@ class Reference(SceneNode):
 class ProgramNode(SceneNode):
     DEFAULT_VERTEX_SOURCE = TemplateLoader.get_template('default.vert')
     DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('default.frag')
+    CLEAR_COLOR = (0, 0, 0, 0)
 
     def __init__(self, glctx):
         super().__init__(glctx)
@@ -259,6 +264,7 @@ class ProgramNode(SceneNode):
     def render(self, node, **kwargs):
         self.compile(node)
         if self._rectangle is not None:
+            passes = max(1, node.get('passes', 1, int, 1))
             sampler_args = {'repeat_x': False, 'repeat_y': False}
             if (border := node.get('border', 4, float)) is not None:
                 sampler_args['border_color'] = tuple(border)
@@ -270,13 +276,13 @@ class ProgramNode(SceneNode):
             child_textures = self.child_textures
             samplers = []
             unit = 1
+            pass_member = None
             for name in self._program:
                 member = self._program[name]
                 if isinstance(member, moderngl.Uniform):
                     if name == 'last':
                         if self._last is None:
                             self._last = self.make_last()
-                        self.glctx.copy_framebuffer(self._last, self.framebuffer)
                         if sampler_args:
                             sampler = self.glctx.sampler(texture=self._last, **sampler_args)
                             sampler.use(location=unit)
@@ -296,6 +302,8 @@ class ProgramNode(SceneNode):
                         unit += 1
                     elif name == 'size':
                         member.value = self.size
+                    elif name == 'pass':
+                        pass_member = member
                     elif name in node:
                         set_uniform_vector(member, node[name])
                     elif name in kwargs:
@@ -303,9 +311,16 @@ class ProgramNode(SceneNode):
                     elif name in ('alpha', 'gamma'):
                         member.value = 1
             self.glctx.enable_direct(GL_FRAMEBUFFER_SRGB)
+            self.glctx.enable(moderngl.BLEND)
+            self.glctx.blend_func = moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA
             self.framebuffer.use()
-            self.framebuffer.clear()
-            self._rectangle.render()
+            for pass_number in range(passes):
+                if self._last is not None:
+                    self.glctx.copy_framebuffer(self._last, self.framebuffer)
+                if pass_member is not None:
+                    pass_member.value = pass_number
+                self.framebuffer.clear(*self.CLEAR_COLOR)
+                self._rectangle.render()
             for sampler in samplers:
                 sampler.clear()
             self.glctx.disable_direct(GL_FRAMEBUFFER_SRGB)
@@ -314,9 +329,9 @@ class ProgramNode(SceneNode):
 class Shader(ProgramNode):
     def __init__(self, glctx):
         super().__init__(glctx)
+        self._colorbits = None
         self._framebuffer = None
         self._texture = None
-        self._colorbits = None
 
     @property
     def texture(self):
@@ -354,13 +369,32 @@ class Shader(ProgramNode):
 class GLFWLoader:
     def load_opengl_function(self, name):
         address = glfw.get_proc_address(name)
-        return 0 if address is None else address
+        if address is None:
+            if name == 'glClearDepth':
+                if not hasattr(self, '_glClearDepth'):
+                    glClearDepthf = ctypes.cast(glfw.get_proc_address('glClearDepthf'), GLFUNCTYPE(None, ctypes.c_float))
+
+                    def glClearDepth(depth):
+                        glClearDepthf(depth)
+                    self._glClearDepth = GLFUNCTYPE(None, ctypes.c_double)(glClearDepth)
+                return ctypes.cast(self._glClearDepth, ctypes.c_void_p).value
+            elif name in ('glReadBuffer', 'glDrawBuffer'):
+                if not hasattr(self, '_glIgnore'):
+                    def glIgnore(i):
+                        pass
+                    self._glIgnore = GLFUNCTYPE(None, ctypes.c_double)(glIgnore)
+                return ctypes.cast(self._glIgnore, ctypes.c_void_p).value
+            else:
+                logger.trace("Unresolved GL function: {}", name)
+                return 0
+        return address
 
     def release(self):
         pass
 
 
 class Window(ProgramNode):
+    CLEAR_COLOR = (0, 0, 0, 1)
     Windows = []
 
     def __init__(self, screen=0, fullscreen=False, vsync=False, offscreen=False, **kwargs):
@@ -413,28 +447,27 @@ class Window(ProgramNode):
         screen = node.get('screen', 1, int, self.default_screen)
         fullscreen = node.get('fullscreen', 1, bool, self.default_fullscreen) if self._visible else False
         resizable = node.get('resizable', 1, bool, True) if self._visible else False
-        opengl_version = (3, 0) if opengl_es else (3, 3)
         if self.window is None:
             self.engine = engine
-            title = node.get('title', 1, str, "flitter")
+            title = node.get('title', 1, str, "Flitter")
             if not Window.Windows:
                 ok = glfw.init()
                 if not ok:
                     raise RuntimeError("Unable to initialize GLFW")
             glfw.window_hint(glfw.CONTEXT_CREATION_API, glfw.EGL_CONTEXT_API if opengl_es else glfw.NATIVE_CONTEXT_API)
             glfw.window_hint(glfw.CLIENT_API, glfw.OPENGL_ES_API if opengl_es else glfw.OPENGL_API)
-            glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, opengl_version[0])
-            glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, opengl_version[1])
+            glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
+            glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 0 if opengl_es else 3)
             glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_ANY_PROFILE if opengl_es else glfw.OPENGL_CORE_PROFILE)
             glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, glfw.TRUE)
+            glfw.window_hint(glfw.SRGB_CAPABLE, glfw.TRUE)
+            glfw.window_hint(glfw.SAMPLES, 0)
             glfw.window_hint(glfw.VISIBLE, glfw.TRUE if self._visible else glfw.FALSE)
             if self._visible:
                 glfw.window_hint(glfw.DOUBLEBUFFER, glfw.TRUE)
-                glfw.window_hint(glfw.SAMPLES, 0)
                 glfw.window_hint(glfw.AUTO_ICONIFY, glfw.FALSE)
                 glfw.window_hint(glfw.CENTER_CURSOR, glfw.FALSE)
                 glfw.window_hint(glfw.SCALE_TO_MONITOR, glfw.TRUE)
-            glfw.window_hint(glfw.SRGB_CAPABLE, glfw.TRUE)
             self.window = glfw.create_window(self.width, self.height, title, None, Window.Windows[0].window if Window.Windows else None)
             Window.Windows.append(self)
             new_window = True
@@ -488,9 +521,10 @@ class Window(ProgramNode):
             colorbits = DEFAULT_COLORBITS
         self.glctx.extra['colorbits'] = colorbits
         self.glctx.extra['size'] = self.width, self.height
-        self.glctx.extra['HEADER'] = """#version {}{}
-precision highp float;
-""".format(opengl_version[0]*100 + opengl_version[1]*10, " es" if opengl_es else "")
+        if opengl_es:
+            self.glctx.extra['HEADER'] = "#version 300 es\nprecision highp float;\n"
+        else:
+            self.glctx.extra['HEADER'] = "#version 330\n"
 
     def key_callback(self, window, key, scancode, action, mods):
         if key in self._keys:
@@ -569,6 +603,7 @@ precision highp float;
                 logger.debug("{0} resized to {1}x{2} (viewport {5}x{6} x={3} y={4})", self.name, width, height, *viewport)
             else:
                 logger.debug("{} resized to {}x{}", self.name, width, height)
+            self._last = None
 
     def render(self, node, window_gamma=1, beat=None, **kwargs):
         gamma = node.get('gamma', 1, float, window_gamma)

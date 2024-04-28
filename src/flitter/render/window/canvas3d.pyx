@@ -278,6 +278,8 @@ cdef class Camera:
             else:
                 projection_matrix = Matrix44._project(gradient, gradient/aspect_ratio, camera.near, camera.far)  # horizontal
         camera.view_matrix = Matrix44._look(camera.position, camera.focus, camera.up)
+        if camera.view_matrix is None:
+            camera.view_matrix = Matrix44.__new__(Matrix44)
         camera.pv_matrix = projection_matrix.mmul(camera.view_matrix)
         return camera
 
@@ -541,7 +543,7 @@ cdef object get_shader(object glctx, dict shaders, dict names, object vertex_sha
     return shader
 
 
-cdef double nearest_corner(Vector bounds, Matrix44 view_model_matrix):
+cdef inline double nearest_corner(Vector bounds, Matrix44 view_model_matrix):
     cdef int64_t i, j, k
     cdef double d, min_d
     for i in range(8):
@@ -565,7 +567,6 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
     cdef double* src
     cdef float* dest
     cdef Instance instance
-    cdef Matrix44 matrix
     cdef Matrix33 normal_matrix
     cdef Vector bounds
     cdef bint has_transparency_texture
@@ -669,8 +670,7 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
             zs_array = np.empty(n)
             zs = zs_array
             for i, instance in enumerate(instances):
-                matrix = camera.view_matrix.mmul(instance.model_matrix)
-                zs[i] = nearest_corner(bounds, matrix)
+                zs[i] = nearest_corner(bounds, camera.view_matrix.mmul(instance.model_matrix))
             indices = zs_array.argsort().astype('int64')
         else:
             indices = np.arange(n, dtype='int64')

@@ -25,29 +25,28 @@
 
 %pragma tempo 60
 
-let COLORBARS="""
-#version 330
+let COLORBARS="""${HEADER}
 
 in vec2 coord;
 out vec4 fragment_color;
 
 void main() {
     float c = coord.x;
-    float cinv = 1 - c;
+    float cinv = 1.0 - c;
     float s = pow(c, 2.2);
     float sinv = pow(cinv, 2.2);
     if (coord.y < 0.25) {
         // (bottom quarter) 2.2 gamma yellow gradient:
-        fragment_color = vec4(s, s, 0, 1);
+        fragment_color = vec4(s, s, 0.0, 1.0);
     } else if (coord.y < 0.5) {
         // (lower middle) linear yellow gradient:
-        fragment_color = vec4(c, c, 0, 1);
+        fragment_color = vec4(c, c, 0.0, 1.0);
     } else if (coord.y < 0.75) {
         // (upper middle) 2.2 gamma green/red gradient
-        fragment_color = vec4(s, sinv, 0, 1);
+        fragment_color = vec4(s, sinv, 0.0, 1.0);
     } else {
         // (top quarter) a linear green/red gradient
-        fragment_color = vec4(c, cinv, 0, 1);
+        fragment_color = vec4(c, cinv, 0.0, 1.0);
     }
 }
 """

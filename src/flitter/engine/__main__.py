@@ -4,8 +4,11 @@ Flitter main entry point
 
 import argparse
 import asyncio
+import os
+from pathlib import Path
+import sys
 
-from flitter import configure_logger, __version__
+from flitter import configure_logger, __version__, setproctitle
 from .control import EngineController
 
 
@@ -21,12 +24,7 @@ def keyvalue(text):
 
 
 def main():
-    try:
-        import setproctitle
-    except ImportError:
-        pass
-    else:
-        setproctitle.setproctitle('flitter')
+    setproctitle('flitter')
     parser = argparse.ArgumentParser(description=f"Flitter language interpreter, version {__version__}")
     parser.set_defaults(level=None)
     levels = parser.add_mutually_exclusive_group()
@@ -53,6 +51,12 @@ def main():
     parser.add_argument('program', nargs='+', help="Program(s) to load")
     args = parser.parse_args()
     logger = configure_logger(args.level)
+    if args.opengles and sys.platform == 'darwin':
+        chrome_path = Path('/Applications/Google Chrome.app/Contents/Frameworks/Google Chrome Framework.framework/Libraries')
+        if chrome_path.exists() and 'DYLD_FALLBACK_LIBRARY_PATH' not in os.environ:
+            os.environ['DYLD_FALLBACK_LIBRARY_PATH'] = str(chrome_path)
+            logger.debug("Re-exec with Chrome ANGLE libraries...")
+            return os.execlp(sys.argv[0], *sys.argv)
     logger.info("Flitter version {}", __version__)
     controller = EngineController(target_fps=args.fps, screen=args.screen, fullscreen=args.fullscreen, vsync=args.vsync,
                                   state_file=args.state, autoreset=args.autoreset, state_simplify_wait=args.simplifystate,

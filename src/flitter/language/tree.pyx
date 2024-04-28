@@ -282,8 +282,10 @@ cdef class Name(Expression):
                 return FunctionName(self.name)
             elif isinstance(value, Name):
                 return (<Name>value)._simplify(context)
+            elif type(value) is Vector:
+                return Literal(Vector.copy(<Vector>value))
             else:
-                return Literal(Vector.copy((<Vector>value)))
+                return Literal(value)
         elif (value := static_builtins.get(self.name)) is not None:
             return Literal(value)
         elif self.name not in dynamic_builtins:
@@ -800,6 +802,9 @@ cdef class FastSlice(Expression):
 
     cdef Expression _simplify(self, Context context):
         cdef Expression expr = self.expr._simplify(context)
+        if isinstance(expr, Literal):
+            expr_value = (<Literal>expr).value
+            return Literal(expr_value.slice(self.index))
         return FastSlice(expr, self.index)
 
     def __repr__(self):

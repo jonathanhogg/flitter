@@ -10,6 +10,14 @@ from ...clock import TapTempo
 from ...model import Vector, Node
 
 
+BEAT = Vector.symbol('beat')[0]
+TOGGLED = Vector.symbol('toggled')[0]
+PUSHED = Vector.symbol('pushed')[0]
+RELEASED = Vector.symbol('released')[0]
+TOUCHED = Vector.symbol('touched')[0]
+UNTOUCHED = Vector.symbol('untouched')[0]
+
+
 class Control:
     def __init__(self, driver, control_id):
         self._initialised = False
@@ -129,7 +137,7 @@ class PositionControl(Control):
         if self._raw_position is not None:
             position_range = self._upper - self._lower
             position = self._raw_position / self.raw_divisor * position_range + self._lower
-            if self._position is not None and abs(position - self._position) > position_range / 1000:
+            if self._position is not None and abs(position - self._position) > position_range / 1000 and self._position_time is not None:
                 delta = self.driver.engine.counter.beat_at_time(now) - self.driver.engine.counter.beat_at_time(self._position_time)
                 alpha = math.exp(-delta / self._lag) if self._lag > 0 else 0
                 self._position = self._position * alpha + position * (1 - alpha)
@@ -349,10 +357,10 @@ class ButtonControl(Control):
             self._toggled_changed = None
             changed = True
         if self._toggle and self._toggled is None:
-            key = self._state_prefix + ['toggled'] if self._state_prefix else None
+            key = self._state_prefix + [TOGGLED] if self._state_prefix else None
             if key and key in self.driver.engine.state:
                 self._toggled = bool(self.driver.engine.state[key])
-                toggled_beat = float(self.driver.engine.state[key + ['beat']])
+                toggled_beat = float(self.driver.engine.state[key + [BEAT]])
                 self._toggle_time = self.driver.engine.counter.time_at_beat(toggled_beat)
             else:
                 self._toggled = node.get('initial', 1, bool, False)
@@ -376,14 +384,14 @@ class ButtonControl(Control):
         super().update_state()
         if self._state_prefix:
             engine = self.driver.engine
-            engine.state[self._state_prefix + ['pushed']] = self._pushed
-            engine.state[self._state_prefix + ['released']] = not self._pushed if self._pushed is not None else None
-            engine.state[self._state_prefix + ['pushed', 'beat']] = \
+            engine.state[self._state_prefix + [PUSHED]] = self._pushed
+            engine.state[self._state_prefix + [RELEASED]] = not self._pushed if self._pushed is not None else None
+            engine.state[self._state_prefix + [PUSHED, BEAT]] = \
                 engine.counter.beat_at_time(self._push_time) if self._push_time is not None else None
-            engine.state[self._state_prefix + ['released', 'beat']] = \
+            engine.state[self._state_prefix + [RELEASED, BEAT]] = \
                 engine.counter.beat_at_time(self._release_time) if self._release_time is not None else None
-            engine.state[self._state_prefix + ['toggled']] = self._toggled if self._toggle else None
-            engine.state[self._state_prefix + ['toggled', 'beat']] = \
+            engine.state[self._state_prefix + [TOGGLED]] = self._toggled if self._toggle else None
+            engine.state[self._state_prefix + [TOGGLED, BEAT]] = \
                 engine.counter.beat_at_time(self._toggle_time) if self._toggle_time is not None else None
 
     def handle_push(self, pushed, timestamp):
@@ -419,11 +427,11 @@ class TouchControl(Control):
         super().update_state()
         if self._state_prefix:
             engine = self.driver.engine
-            engine.state[self._state_prefix + ['touched']] = self._touched
-            engine.state[self._state_prefix + ['untouched']] = not self._touched
-            engine.state[self._state_prefix + ['touched', 'beat']] = \
+            engine.state[self._state_prefix + [TOUCHED]] = self._touched
+            engine.state[self._state_prefix + [UNTOUCHED]] = not self._touched
+            engine.state[self._state_prefix + [TOUCHED, BEAT]] = \
                 engine.counter.beat_at_time(self._touched_time) if self._touched_time is not None else None
-            engine.state[self._state_prefix + ['untouched', 'beat']] = \
+            engine.state[self._state_prefix + [UNTOUCHED, BEAT]] = \
                 engine.counter.beat_at_time(self._untouched_time) if self._untouched_time is not None else None
 
     def handle_touch(self, touched, timestamp):
