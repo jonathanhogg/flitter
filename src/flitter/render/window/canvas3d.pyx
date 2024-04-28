@@ -274,6 +274,8 @@ cdef class Camera:
             else:
                 projection_matrix = Matrix44._project(gradient, gradient/aspect_ratio, camera.near, camera.far)  # horizontal
         camera.view_matrix = Matrix44._look(camera.position, camera.focus, camera.up)
+        if camera.view_matrix is None:
+            camera.view_matrix = Matrix44.__new__(Matrix44)
         camera.pv_matrix = projection_matrix.mmul(camera.view_matrix)
         return camera
 
