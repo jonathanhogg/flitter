@@ -139,12 +139,13 @@ class EngineController:
         return references
 
     def handle_pragmas(self, pragmas, timestamp):
-        tempo = pragmas.get('tempo', null).match(1, float, 120)
-        if tempo != self.counter.tempo:
-            self.counter.set_tempo(tempo, timestamp)
-        quantum = pragmas.get('quantum', null).match(1, float, 4)
-        if quantum != self.counter.quantum:
-            self.counter.set_quantum(quantum, timestamp)
+        if '_counter' not in self.state:
+            tempo = pragmas.get('tempo', null).match(1, float, 120)
+            if tempo != self.counter.tempo:
+                self.counter.set_tempo(tempo, timestamp)
+            quantum = pragmas.get('quantum', null).match(1, float, 4)
+            if quantum != self.counter.quantum:
+                self.counter.set_quantum(quantum, timestamp)
         self.target_fps = pragmas.get('fps', null).match(1, float, self.default_fps)
 
     def reset_state(self):
