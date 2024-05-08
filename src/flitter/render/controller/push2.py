@@ -3,12 +3,12 @@ Ableton Push 2 controller driver
 """
 
 import asyncio
+import math
 
 from loguru import logger
-import math
 import skia
 
-from . import driver
+from .driver import EncoderControl, ButtonControl, TouchControl, PressureControl, SettablePositionControl, ControllerDriver, ROTARY, RESET_ROTARY, MAIN
 from ...ableton.constants import Encoder, BUTTONS
 from ...ableton.events import (ButtonPressed, ButtonReleased,
                                PadPressed, PadHeld, PadReleased,
@@ -21,16 +21,13 @@ from ...model import Vector, Node
 from ..window.canvas import draw
 
 
-RESET_ROTARY = Vector.symbol('reset').concat(Vector.symbol('rotary'))
-
 DEFAULT_CONFIG = [
     Node('rotary', attributes={'id': Vector.symbol('tempo'), 'style': Vector.symbol('continuous'), 'action': Vector.symbol('tempo')}),
     Node('button', attributes={'id': Vector.symbol('page_left'), 'action': Vector.symbol('previous')}),
     Node('button', attributes={'id': Vector.symbol('page_right'), 'action': Vector.symbol('next')}),
     Node('button', attributes={'id': Vector.symbol('tap_tempo'),
-                               'action': Vector.symbol('tap_tempo').concat(Vector.symbol('rotary')).concat(Vector.symbol('tempo'))}),
-    Node('button', attributes={'id': Vector.symbol('metronome'),
-                               'action': Vector.symbol('reset').concat(Vector.symbol('rotary')).concat(Vector.symbol('metronome'))}),
+                               'action': Vector.symbol('tap_tempo').concat(ROTARY).concat(Vector.symbol('tempo'))}),
+    Node('button', attributes={'id': Vector.symbol('metronome'), 'action': RESET_ROTARY.concat(Vector.symbol('metronome'))}),
     Node('button', attributes={'id': Vector.symbol('menu_1_0'), 'action': RESET_ROTARY.concat(Vector(1))}),
     Node('button', attributes={'id': Vector.symbol('menu_1_1'), 'action': RESET_ROTARY.concat(Vector(2))}),
     Node('button', attributes={'id': Vector.symbol('menu_1_2'), 'action': RESET_ROTARY.concat(Vector(3))}),
@@ -74,14 +71,14 @@ SCREEN_ROTARIES = {
     Encoder.SEVEN: 7,
 }
 
-BUTTON_ID_MAPPING = {button: Vector(button.name.lower()) for button in BUTTONS}
+BUTTON_ID_MAPPING = {button: Vector.symbol(button.name.lower()) for button in BUTTONS}
 
 
 def get_driver_class():
     return Push2Driver
 
 
-class Push2RotaryControl(driver.TouchControl, driver.EncoderControl):
+class Push2RotaryControl(TouchControl, EncoderControl):
     DEFAULT_DECIMALS = 1
 
     def __init__(self, driver, control_id, number):
@@ -139,14 +136,14 @@ class Push2RotaryControl(driver.TouchControl, driver.EncoderControl):
             self.driver._screen_update_requested = self._action == 'tempo'
 
 
-class Push2ButtonControl(driver.ButtonControl):
+class Push2ButtonControl(ButtonControl):
     def __init__(self, driver, control_id, number):
         super().__init__(driver, control_id)
         self._number = number
 
     @property
     def color(self):
-        if not self._initialised or (self._action is not None and self._action_control is None):
+        if not self._initialised:
             return 0, 0, 0
         color = self._color or self._action_control_color
         if color is None:
@@ -169,7 +166,7 @@ class Push2ButtonControl(driver.ButtonControl):
         self.driver._push2.set_button_rgb(self._number, *self.color)
 
 
-class Push2PadControl(driver.PressureControl):
+class Push2PadControl(PressureControl):
     def __init__(self, driver, control_id, number):
         super().__init__(driver, control_id)
         self._number = number
@@ -207,7 +204,7 @@ class Push2PadControl(driver.PressureControl):
         self.driver._push2.set_pad_rgb(self._number, *self.color)
 
 
-class Push2SliderControl(driver.TouchControl, driver.SettablePositionControl):
+class Push2SliderControl(TouchControl, SettablePositionControl):
     def reset(self):
         super().reset()
         self._return = None
@@ -238,7 +235,7 @@ class Push2SliderControl(driver.TouchControl, driver.SettablePositionControl):
         return super().handle_touch(touched, timestamp) or changed
 
 
-class Push2Driver(driver.ControllerDriver):
+class Push2Driver(ControllerDriver):
     MAX_SCREEN_REFRESH_PERIOD = 1/30
 
     def __init__(self, engine):
@@ -253,7 +250,7 @@ class Push2Driver(driver.ControllerDriver):
         self._pads = {}
         for number, control_id in PAD_NUMBER_ID_MAPPING.items():
             self._pads[control_id] = Push2PadControl(self, control_id, number)
-        self._slider = Push2SliderControl(self, Vector.symbol('main'))
+        self._slider = Push2SliderControl(self, MAIN)
         self._run_task = None
         self._screen_update_requested = True
         self._screen_canvas_node = None
@@ -288,7 +285,7 @@ class Push2Driver(driver.ControllerDriver):
             return self._rotaries.get(control_id)
         if kind == 'button':
             return self._buttons.get(control_id)
-        if kind == 'slider' and control_id == Vector.symbol('main'):
+        if kind == 'slider' and control_id == MAIN:
             return self._slider
         if kind == 'pad':
             return self._pads.get(control_id)
@@ -401,7 +398,7 @@ class Push2Driver(driver.ControllerDriver):
             except Push2CommunicationError:
                 logger.warning("Lost contact with Ableton Push2 device")
                 try:
-                    self._push2.stop()
+                    await self._push2.stop()
                 except Exception:
                     pass
                 self._push2 = None
@@ -409,7 +406,7 @@ class Push2Driver(driver.ControllerDriver):
                 logger.exception("Unexpected error in Ableton Push2 driver")
                 if self._push2 is not None:
                     try:
-                        self._push2.stop()
+                        await self._push2.stop()
                     except Exception:
                         pass
                     self._push2 = None

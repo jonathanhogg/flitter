@@ -10,12 +10,20 @@ from ...clock import TapTempo
 from ...model import Vector, Node
 
 
-BEAT = Vector.symbol('beat')[0]
-TOGGLED = Vector.symbol('toggled')[0]
-PUSHED = Vector.symbol('pushed')[0]
-RELEASED = Vector.symbol('released')[0]
-TOUCHED = Vector.symbol('touched')[0]
-UNTOUCHED = Vector.symbol('untouched')[0]
+BEAT = Vector.symbol('beat')
+MAIN = Vector.symbol('main')
+PUSHED = Vector.symbol('pushed')
+PUSHED_BEAT = Vector.symbol('pushed').concat(BEAT)
+RELEASED = Vector.symbol('released')
+RELEASED_BEAT = Vector.symbol('released').concat(BEAT)
+ROTARY = Vector.symbol('rotary')
+RESET_ROTARY = Vector.symbol('reset').concat(ROTARY)
+TOGGLED = Vector.symbol('toggled')
+TOGGLED_BEAT = Vector.symbol('toggled').concat(BEAT)
+TOUCHED = Vector.symbol('touched')
+TOUCHED_BEAT = Vector.symbol('touched').concat(BEAT)
+UNTOUCHED = Vector.symbol('untouched')
+UNTOUCHED_BEAT = Vector.symbol('untouched').concat(BEAT)
 
 
 class Control:
@@ -48,7 +56,8 @@ class Control:
             self._state_prefix = None
             self._action = action
             changed = True
-        elif (state_prefix := node.get('state')) != self._state_prefix:
+        state_prefix = node['state'] if self._action is None and 'state' in node else None
+        if state_prefix != self._state_prefix:
             self._state_prefix = state_prefix
             changed = True
         if (label := node.get('label', 1, str)) != self._label:
@@ -294,13 +303,13 @@ class ButtonControl(Control):
                 case 'next':
                     if triggered:
                         self.driver.engine.next_page()
-                    return self.driver.engine.has_next_page()
+                    action_can_trigger = self.driver.engine.has_next_page()
                 case 'previous':
                     if triggered:
                         self.driver.engine.previous_page()
-                    return self.driver.engine.has_previous_page()
+                    action_can_trigger = self.driver.engine.has_previous_page()
                 case 'reset', kind, *control_id:
-                    control = self.driver.get_control(kind, Vector(control_id))
+                    control = self.driver.get_control(kind, Vector.with_symbols(control_id))
                     if control is not None and control._initialised and isinstance(control, SettablePositionControl):
                         action_control = control
                         if triggered:
@@ -309,7 +318,7 @@ class ButtonControl(Control):
                         action_control_color = control._color
                         action_can_trigger = control._raw_position != control.initial_raw_position
                 case 'tap_tempo', kind, *control_id:
-                    control = self.driver.get_control(kind, Vector(control_id))
+                    control = self.driver.get_control(kind, Vector.with_symbols(control_id))
                     if control is not None and control._initialised and isinstance(control, TouchControl):
                         action_control = control
                         if triggered:
@@ -357,7 +366,7 @@ class ButtonControl(Control):
             self._toggled_changed = None
             changed = True
         if self._toggle and self._toggled is None:
-            key = self._state_prefix + [TOGGLED] if self._state_prefix else None
+            key = self._state_prefix.concat(TOGGLED) if self._state_prefix else None
             if key and key in self.driver.engine.state:
                 self._toggled = bool(self.driver.engine.state[key])
                 toggled_beat = float(self.driver.engine.state[key + [BEAT]])
@@ -384,14 +393,14 @@ class ButtonControl(Control):
         super().update_state()
         if self._state_prefix:
             engine = self.driver.engine
-            engine.state[self._state_prefix + [PUSHED]] = self._pushed
-            engine.state[self._state_prefix + [RELEASED]] = not self._pushed if self._pushed is not None else None
-            engine.state[self._state_prefix + [PUSHED, BEAT]] = \
+            engine.state[self._state_prefix.concat(PUSHED)] = self._pushed
+            engine.state[self._state_prefix.concat(RELEASED)] = not self._pushed if self._pushed is not None else None
+            engine.state[self._state_prefix.concat(PUSHED_BEAT)] = \
                 engine.counter.beat_at_time(self._push_time) if self._push_time is not None else None
-            engine.state[self._state_prefix + [RELEASED, BEAT]] = \
+            engine.state[self._state_prefix.concat(RELEASED_BEAT)] = \
                 engine.counter.beat_at_time(self._release_time) if self._release_time is not None else None
-            engine.state[self._state_prefix + [TOGGLED]] = self._toggled if self._toggle else None
-            engine.state[self._state_prefix + [TOGGLED, BEAT]] = \
+            engine.state[self._state_prefix.concat(TOGGLED)] = self._toggled if self._toggle else None
+            engine.state[self._state_prefix.concat(TOGGLED_BEAT)] = \
                 engine.counter.beat_at_time(self._toggle_time) if self._toggle_time is not None else None
 
     def handle_push(self, pushed, timestamp):
@@ -427,11 +436,11 @@ class TouchControl(Control):
         super().update_state()
         if self._state_prefix:
             engine = self.driver.engine
-            engine.state[self._state_prefix + [TOUCHED]] = self._touched
-            engine.state[self._state_prefix + [UNTOUCHED]] = not self._touched
-            engine.state[self._state_prefix + [TOUCHED, BEAT]] = \
+            engine.state[self._state_prefix.concat(TOUCHED)] = self._touched
+            engine.state[self._state_prefix.concat(UNTOUCHED)] = not self._touched
+            engine.state[self._state_prefix.concat(TOUCHED_BEAT)] = \
                 engine.counter.beat_at_time(self._touched_time) if self._touched_time is not None else None
-            engine.state[self._state_prefix + [UNTOUCHED, BEAT]] = \
+            engine.state[self._state_prefix.concat(UNTOUCHED_BEAT)] = \
                 engine.counter.beat_at_time(self._untouched_time) if self._untouched_time is not None else None
 
     def handle_touch(self, touched, timestamp):

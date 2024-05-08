@@ -85,7 +85,7 @@ class Controller:
             if not self.driver.handle_node(child):
                 unknown.add(child.kind)
         for kind in unknown.difference(self.unknown):
-            logger.warning("Unexpected '{}' node in controller", kind)
+            logger.warning("Unhandled node in controller: {!r}", child)
         self.purge()
         self.unknown = unknown
         self.controls = controls
