@@ -101,6 +101,14 @@ class TestVector(unittest.TestCase):
         self.assertNotEqual(foo, Vector.symbol('bar'))
         self.assertIs(str(foo), 'foo')
 
+    def test_with_symbols(self):
+        foo_1 = Vector.with_symbols(('foo', 1))
+        self.assertIsInstance(foo_1, Vector)
+        self.assertEqual(len(foo_1), 2)
+        self.assertTrue(foo_1.numeric)
+        self.assertEqual(foo_1[0], FOO_SYMBOL_NUMBER)
+        self.assertEqual(foo_1[1], 1)
+
     def test_copy(self):
         for x in (Vector(["Hello ", "world!"]), Vector.range(10)):
             y = Vector.copy(x)
@@ -282,10 +290,14 @@ class TestVector(unittest.TestCase):
         self.assertIs(true.match(1, bool), True)
         self.assertEqual(true.match(2, bool), [True, True])
         self.assertEqual(Vector([0, 1]).match(2, bool), [False, True])
+        self.assertEqual(Vector.symbol('foo').match(), ['foo'])
         self.assertEqual(Vector.symbol('foo').match(1, float), FOO_SYMBOL_NUMBER)
         self.assertEqual(Vector.symbol('foo').match(1, str), 'foo')
         self.assertEqual(Vector.symbol('foo').match(2, str), ['foo', 'foo'])
         self.assertEqual(Vector.symbol('foo').concat(Vector.symbol('bar')).match(2, str), ['foo', 'bar'])
+        self.assertEqual(Vector.symbol('foo').concat(Vector(1)).match(2), ['foo', 1])
+        self.assertEqual(Vector.symbol('foo').concat(Vector(1)).match(2, str), None)
+        self.assertEqual(Vector.symbol('foo').concat(Vector(1)).match(2, float), [FOO_SYMBOL_NUMBER, 1])
 
     def test_repr(self):
         self.assertEqual(repr(null), "null")

@@ -27,6 +27,7 @@ cdef tuple AstypeArgs = (np.float64, 'K', 'unsafe', True, False)
 cdef type ndarray = np.ndarray
 
 cdef dict SymbolTable = {}
+cdef dict ReverseSymbolTable = {}
 
 
 cdef union double_long:
@@ -285,12 +286,30 @@ cdef class Vector:
         return Vector._symbol(symbol)
 
     @staticmethod
+    def with_symbols(value):
+        assert isinstance(value, (list, tuple, set, dict))
+        cdef Vector vector = Vector.__new__(Vector)
+        n = len(value)
+        if n:
+            vector.allocate_numbers(n)
+            try:
+                for i, v in enumerate(value):
+                    if isinstance(v, str) and v in ReverseSymbolTable:
+                        v = ReverseSymbolTable[v]
+                    vector.numbers[i] = v
+            except TypeError:
+                vector.deallocate_numbers()
+                vector.objects = tuple(value)
+        return vector
+
+    @staticmethod
     cdef Vector _symbol(str symbol):
         # Symbols are the top 52 bits of the FNV-1a string hash multiplied by -0x1p1023
         cdef uint64_t code = HASH_STRING(symbol)
         cdef double number = double_long(l=SymbolPrefix | (code >> 12)).f
         assert number not in SymbolTable or SymbolTable[number] == symbol, "Symbol table hash collision"
         SymbolTable[number] = symbol
+        ReverseSymbolTable[symbol] = number
         cdef Vector result = Vector.__new__(Vector)
         result.allocate_numbers(1)
         result.numbers[0] = number
@@ -544,25 +563,23 @@ cdef class Vector:
         cdef object obj
         cdef PyObject* objptr
         if self.objects is None:
-            if t is float:
-                t = None
-            if t is None or t is int or t is bool or t is str:
+            if t is None or t is float or t is int or t is bool or t is str:
                 if n == 0 or n == m:
                     if n == 1:
                         f = self.numbers[0]
-                        if t is str:
-                            return SymbolTable.get(self.numbers[0], default)
+                        if t is str or (t is None and f in SymbolTable):
+                            return SymbolTable.get(f, default)
                         if t is int:
                             return <int64_t>c_floor(f)
-                        elif t is bool:
+                        if t is bool:
                             return f != 0
                         return f
                     else:
                         values = PyList_New(m)
                         for i in range(m):
                             f = self.numbers[i]
-                            if t is str:
-                                objptr = PyDict_GetItem(SymbolTable, PyFloat_FromDouble(f))
+                            objptr = PyDict_GetItem(SymbolTable, PyFloat_FromDouble(f))
+                            if t is str or (t is None and objptr != NULL):
                                 if objptr == NULL:
                                     return default
                                 obj = <object>objptr
@@ -578,8 +595,8 @@ cdef class Vector:
                 elif m == 1:
                     values = PyList_New(n)
                     f = self.numbers[0]
-                    if t is str:
-                        objptr = PyDict_GetItem(SymbolTable, PyFloat_FromDouble(f))
+                    objptr = PyDict_GetItem(SymbolTable, PyFloat_FromDouble(f))
+                    if t is str or (t is None and objptr != NULL):
                         if objptr == NULL:
                             return default
                         obj = <object>objptr
@@ -594,12 +611,10 @@ cdef class Vector:
                         PyList_SET_ITEM(values, i, obj)
                     return values
             return default
-        if n == 0 and t is None:
-            return list(self.objects)
         try:
             if m == 1:
                 obj = <object>PyTuple_GET_ITEM(self.objects, 0)
-                if t is str and type(obj) is float and (symbol := SymbolTable.get(obj)) is not None:
+                if (t is str or t is None) and type(obj) is float and (symbol := SymbolTable.get(obj)) is not None:
                     obj = symbol
                 if t is not None:
                     obj = t(obj)
@@ -616,7 +631,7 @@ cdef class Vector:
                 values = PyList_New(m)
                 for i in range(m):
                     obj = <object>PyTuple_GET_ITEM(self.objects, i)
-                    if t is str and type(obj) is float and (symbol := SymbolTable.get(obj)) is not None:
+                    if (t is str or t is None) and type(obj) is float and (symbol := SymbolTable.get(obj)) is not None:
                         obj = symbol
                     if t is not None:
                         obj = t(obj)
