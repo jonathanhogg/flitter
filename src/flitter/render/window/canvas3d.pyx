@@ -40,10 +40,11 @@ cdef tuple MaterialAttributes = ('color', 'metal', 'roughness', 'shininess', 'oc
 cdef tuple TransformAttributes = ('translate', 'scale', 'rotate', 'rotate_x', 'rotate_y', 'rotate_z', 'shear_x', 'shear_y', 'shear_z')
 cdef set GroupAttributes = set(MaterialAttributes)
 GroupAttributes.update(TransformAttributes)
-GroupAttributes.update(('max_lights', 'depth_test', 'cull_face', 'composite', 'vertex', 'fragment'))
+GroupAttributes.update(('max_lights', 'depth_test', 'face_cull', 'cull_face', 'composite', 'vertex', 'fragment'))
 
 cdef object StandardVertexTemplate = TemplateLoader.get_template("standard_lighting.vert")
 cdef object StandardFragmentTemplate = TemplateLoader.get_template("standard_lighting.frag")
+cdef object BackfaceFragmentTemplate = TemplateLoader.get_template("backface_lighting.frag")
 
 
 cdef enum LightType:
@@ -93,6 +94,7 @@ cdef class Material:
     cdef double occlusion
     cdef Vector emissive
     cdef double transparency
+    cdef double translucency
     cdef Textures textures
 
     cdef Material update(Material self, Node node):
@@ -118,6 +120,7 @@ cdef class Material:
         material.occlusion = min(max(0, node.get_float('occlusion', self.occlusion)), 1)
         material.emissive = node.get_fvec('emissive', 3, self.emissive)
         material.transparency = min(max(0, node.get_float('transparency', self.transparency)), 1)
+        material.translucency = max(0, node.get_float('translucency', self.translucency))
         if self.textures is not None:
             albedo_id = node.get_str('texture_id', self.textures.albedo_id)
             metal_id = node.get_str('metal_texture_id', self.textures.metal_id)
@@ -157,7 +160,8 @@ cdef class RenderGroup:
     cdef list lights
     cdef dict instances
     cdef bint depth_test
-    cdef bint cull_face
+    cdef bint face_cull
+    cdef bint cull_front_face
     cdef str composite
     cdef object vertex_shader_template
     cdef object fragment_shader_template
@@ -445,7 +449,11 @@ cdef void collect(Node node, Matrix44 transform_matrix, Material material, Rende
         new_render_group.lights = []
         new_render_group.instances = {}
         new_render_group.depth_test = node.get_bool('depth_test', True if render_group is None else render_group.depth_test)
-        new_render_group.cull_face = node.get_bool('cull_face', True if render_group is None else render_group.cull_face)
+        new_render_group.face_cull = node.get_bool('face_cull', True if render_group is None else render_group.face_cull)
+        if 'cull_face' in node:
+            new_render_group.cull_front_face = node.get_str('cull_face', 'back') == 'front'
+        else:
+            new_render_group.cull_front_face = False if render_group is None else render_group.cull_front_face
         new_render_group.composite = node.get_str('composite', 'over' if render_group is None else render_group.composite).lower()
         vertex_shader = node.get_str('vertex', None)
         fragment_shader = node.get_str('fragment', None)
@@ -530,7 +538,7 @@ cdef object get_shader(object glctx, dict shaders, dict names, object vertex_sha
         logger.error("Group shader compile failed:\n{}", '\n'.join(str(exc).strip().split('\n')[4:]))
         shader = None
     else:
-        logger.debug("Compiled group shader program")
+        logger.debug("Compiled shader program")
     shaders[source] = shader
     return shader
 
@@ -555,15 +563,16 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
     cdef Light light
     cdef Model model
     cdef Textures textures
-    cdef int i, j, k, n
+    cdef int i, j, k, n, nlights
     cdef double* src
     cdef float* dest
     cdef Instance instance
     cdef Matrix33 normal_matrix
     cdef Vector bounds
     cdef bint has_transparency_texture
-    cdef tuple transparent_object
+    cdef tuple transparent_object, translucent_object
     cdef list transparent_objects = []
+    cdef list translucent_objects = []
     cdef double[:] zs
     cdef int64_t[:] indices
     cdef dict shaders = objects.setdefault('canvas3d_shaders', {})
@@ -580,16 +589,18 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
     cdef str name
     cdef Vector value
     cdef int base_unit_id = 1
+    cdef list samplers = []
     for name, value in render_group.names.items():
         if name in shader:
             member = shader[name]
             if isinstance(member, moderngl.Uniform):
-                if member.fmt == '1i' and (scene_node := references.get(value.as_string())) is not None \
-                        and hasattr(scene_node, 'texture') and scene_node.texture is not None:
-                    sampler = glctx.sampler(texture=scene_node.texture, filter=(moderngl.NEAREST, moderngl.NEAREST))
+                if member.fmt == '1i' and (ref := references.get(value.as_string())) is not None \
+                        and hasattr(ref, 'texture') and ref.texture is not None:
+                    sampler = glctx.sampler(texture=ref.texture, filter=(moderngl.NEAREST, moderngl.NEAREST))
                     sampler.use(base_unit_id)
                     member.value = base_unit_id
                     base_unit_id += 1
+                    samplers.append(sampler)
                 elif value.numbers != NULL:
                     set_uniform_vector(member, value)
     shader['pv_matrix'] = camera.pv_matrix
@@ -608,13 +619,13 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
     cdef RenderGroup group
     if 'nlights' in shader:
         lights_data = view.array((render_group.max_lights, 16), 4, 'f')
-        i = 0
+        nlights = 0
         group = render_group
         while group is not None:
             for light in group.lights:
-                if i == render_group.max_lights:
+                if nlights == render_group.max_lights:
                     break
-                dest = &lights_data[i, 0]
+                dest = &lights_data[nlights, 0]
                 dest[3] = <cython.float>(<int>light.type)
                 dest[7] = light.inner_cone
                 dest[11] = light.outer_cone
@@ -628,9 +639,9 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
                         dest[j+8] = light.direction.numbers[j]
                 for j in range(4):
                     dest[j+12] = light.falloff.numbers[j]
-                i += 1
+                nlights += 1
             group = group.parent_group
-        shader['nlights'] = i
+        shader['nlights'] = nlights
         shader['lights_data'].binding = 1
         name = f'canvas3d_lights-{render_group.max_lights}'
         lights_buffer = objects.get(name)
@@ -643,22 +654,16 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
     cdef int flags = moderngl.BLEND
     if render_group.depth_test:
         flags |= moderngl.DEPTH_TEST
-    if render_group.cull_face:
+    if render_group.face_cull:
         flags |= moderngl.CULL_FACE
+        glctx.cull_face = 'front' if render_group.cull_front_face else 'back'
     glctx.enable(flags)
     render_group.set_blend(glctx)
-    cdef bint shader_supports_textures = 'use_albedo_texture' in shader
-    if shader_supports_textures:
-        shader['use_albedo_texture'] = False
-        shader['use_metal_texture'] = False
-        shader['use_roughness_texture'] = False
-        shader['use_occlusion_texture'] = False
-        shader['use_emissive_texture'] = False
-        shader['use_transparency_texture'] = False
+    render_target.use_main_buffer()
     for (model, textures), instances in render_group.instances.items():
-        has_transparency_texture = shader_supports_textures and textures is not None and textures.transparency_id is not None
+        has_transparency_texture = textures is not None and textures.transparency_id is not None
         n = len(instances)
-        instances_data = view.array((n, 36), 4, 'f')
+        instances_data = view.array((n, 37), 4, 'f')
         k = 0
         bounds = model.get_bounds()
         if render_group.depth_test and bounds.length == 6:
@@ -672,7 +677,9 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
         for i in indices:
             instance = instances[i]
             material = instance.material
-            if (material.transparency > 0 or has_transparency_texture) and render_group.depth_test:
+            if material.translucency > 0:
+                translucent_objects.append((-zs[i], model, instance))
+            elif (material.transparency > 0 or has_transparency_texture) and render_group.depth_test:
                 transparent_objects.append((-zs[i], model, instance))
             else:
                 src = instance.model_matrix.numbers
@@ -689,18 +696,103 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
                     dest[j] = material.albedo.numbers[j]
                     dest[j+4] = material.emissive.numbers[j]
                 dest[3] = material.transparency
-                dest[7] = material.ior
-                dest[8] = material.metal
-                dest[9] = material.roughness
-                dest[10] = material.occlusion
+                dest[7] = material.translucency
+                dest[8] = material.ior
+                dest[9] = material.metal
+                dest[10] = material.roughness
+                dest[11] = material.occlusion
                 k += 1
-        dispatch_instances(glctx, objects, shader, model, k, instances_data,
-                           textures if shader_supports_textures else None, references, base_unit_id)
+        dispatch_instances(glctx, objects, shader, model, k, instances_data, textures, references, base_unit_id)
+
+    if translucent_objects and 'backface_data' in shader:
+        backface_shader = get_shader(glctx, shaders, names, StandardVertexTemplate, BackfaceFragmentTemplate)
+        backface_shader['pv_matrix'] = camera.pv_matrix
+        backface_shader['orthographic'] = camera.orthographic
+        backface_shader['view_position'] = camera.position
+        backface_shader['view_focus'] = camera.focus
+        backface_shader['nlights'] = nlights
+        backface_shader['lights_data'].binding = 1
+        glctx.disable(flags)
+        glctx.enable(moderngl.BLEND | moderngl.DEPTH_TEST | moderngl.CULL_FACE)
+        glctx.cull_face = 'front'
+        glctx.blend_equation = moderngl.FUNC_ADD
+        glctx.blend_func = moderngl.ONE, moderngl.ZERO
+        render_target.use_auxilary_buffer(glctx)
+        n = len(translucent_objects)
+        translucent_objects.sort(key=fst)
+        instances_data = view.array((n, 37), 4, 'f')
+        k = 0
+        for i, translucent_object in enumerate(translucent_objects):
+            model = translucent_object[1]
+            instance = translucent_object[2]
+            material = instance.material
+            src = instance.model_matrix.numbers
+            dest = &instances_data[k, 0]
+            for j in range(16):
+                dest[j] = src[j]
+            normal_matrix = instance.model_matrix.inverse_transpose_matrix33()
+            src = normal_matrix.numbers
+            dest = &instances_data[k, 16]
+            for j in range(9):
+                dest[j] = src[j]
+            dest = &instances_data[k, 25]
+            for j in range(3):
+                dest[j] = material.albedo.numbers[j]
+                dest[j+4] = material.emissive.numbers[j]
+            dest[3] = material.transparency
+            dest[7] = material.translucency
+            dest[8] = material.ior
+            dest[9] = material.metal
+            dest[10] = material.roughness
+            dest[11] = material.occlusion
+            k += 1
+            if i == n-1 or (<tuple>translucent_objects[i+1])[1] is not model:
+                dispatch_instances(glctx, objects, backface_shader, model, k, instances_data, material.textures, references, base_unit_id)
+                k = 0
+        glctx.disable(moderngl.BLEND | moderngl.DEPTH_TEST | moderngl.CULL_FACE)
+        glctx.enable(flags)
+        glctx.cull_face = 'front' if render_group.cull_front_face else 'back'
+        render_group.set_blend(glctx)
+        render_target.use_main_buffer()
+        sampler = glctx.sampler(texture=render_target.auxilary_image_texture, filter=(moderngl.NEAREST, moderngl.NEAREST))
+        sampler.use(base_unit_id)
+        shader['backface_data'] = base_unit_id
+        base_unit_id += 1
+        samplers.append(sampler)
+        k = 0
+        for i, translucent_object in enumerate(translucent_objects):
+            model = translucent_object[1]
+            instance = translucent_object[2]
+            material = instance.material
+            src = instance.model_matrix.numbers
+            dest = &instances_data[k, 0]
+            for j in range(16):
+                dest[j] = src[j]
+            normal_matrix = instance.model_matrix.inverse_transpose_matrix33()
+            src = normal_matrix.numbers
+            dest = &instances_data[k, 16]
+            for j in range(9):
+                dest[j] = src[j]
+            dest = &instances_data[k, 25]
+            for j in range(3):
+                dest[j] = material.albedo.numbers[j]
+                dest[j+4] = material.emissive.numbers[j]
+            dest[3] = material.transparency
+            dest[7] = material.translucency
+            dest[8] = material.ior
+            dest[9] = material.metal
+            dest[10] = material.roughness
+            dest[11] = material.occlusion
+            k += 1
+            if i == n-1 or (<tuple>translucent_objects[i+1])[1] is not model:
+                dispatch_instances(glctx, objects, shader, model, k, instances_data, material.textures, references, base_unit_id)
+                k = 0
+
     if transparent_objects:
         render_target.depth_write(False)
         n = len(transparent_objects)
         transparent_objects.sort(key=fst)
-        instances_data = view.array((n, 36), 4, 'f')
+        instances_data = view.array((n, 37), 4, 'f')
         k = 0
         for i, transparent_object in enumerate(transparent_objects):
             model = transparent_object[1]
@@ -720,20 +812,117 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
                 dest[j] = material.albedo.numbers[j]
                 dest[j+4] = material.emissive.numbers[j]
             dest[3] = material.transparency
-            dest[7] = material.ior
-            dest[8] = material.metal
-            dest[9] = material.roughness
-            dest[10] = material.occlusion
+            dest[7] = material.translucency
+            dest[8] = material.ior
+            dest[9] = material.metal
+            dest[10] = material.roughness
+            dest[11] = material.occlusion
             k += 1
             if i == n-1 or (<tuple>transparent_objects[i+1])[1] is not model:
-                dispatch_instances(glctx, objects, shader, model, k, instances_data,
-                                   material.textures if shader_supports_textures else None, references, base_unit_id)
+                dispatch_instances(glctx, objects, shader, model, k, instances_data, material.textures, references, base_unit_id)
                 k = 0
-        if k:
-            dispatch_instances(glctx, objects, shader, model, k, instances_data,
-                               material.textures if shader_supports_textures else None, references, base_unit_id)
         render_target.depth_write(True)
     glctx.disable(flags)
+    for sampler in samplers:
+        sampler.clear()
+
+
+cdef list configure_textures(glctx, shader, Textures textures, dict references, int base_unit_id):
+    cdef dict unit_ids = {}
+    cdef int unit_id
+    cdef list samplers = []
+    cdef bint have_textures = references is not None and textures is not None
+    if 'use_albedo_texture' in shader:
+        if have_textures and (ref := references.get(textures.albedo_id)) is not None and hasattr(ref, 'texture') and ref.texture is not None:
+            if textures.albedo_id in unit_ids:
+                unit_id = unit_ids[textures.albedo_id]
+            else:
+                unit_id = base_unit_id
+                unit_ids[textures.albedo_id] = unit_id
+                sampler = glctx.sampler(texture=ref.texture, filter=(moderngl.LINEAR, moderngl.LINEAR))
+                sampler.use(unit_id)
+                samplers.append(sampler)
+                base_unit_id += 1
+            shader['use_albedo_texture'] = True
+            shader['albedo_texture'] = unit_id
+        else:
+            shader['use_albedo_texture'] = False
+    if 'use_metal_texture' in shader:
+        if have_textures and (ref := references.get(textures.metal_id)) is not None and hasattr(ref, 'texture') and ref.texture is not None:
+            if textures.metal_id in unit_ids:
+                unit_id = unit_ids[textures.metal_id]
+            else:
+                unit_id = base_unit_id
+                unit_ids[textures.metal_id] = unit_id
+                sampler = glctx.sampler(texture=ref.texture, filter=(moderngl.LINEAR, moderngl.LINEAR))
+                sampler.use(unit_id)
+                samplers.append(sampler)
+                base_unit_id += 1
+            shader['use_metal_texture'] = True
+            shader['metal_texture'] = unit_id
+        else:
+            shader['use_metal_texture'] = False
+    if 'use_roughness_texture' in shader:
+        if have_textures and (ref := references.get(textures.roughness_id)) is not None and hasattr(ref, 'texture') and ref.texture is not None:
+            if textures.roughness_id in unit_ids:
+                unit_id = unit_ids[textures.roughness_id]
+            else:
+                unit_id = base_unit_id
+                unit_ids[textures.roughness_id] = unit_id
+                sampler = glctx.sampler(texture=ref.texture, filter=(moderngl.LINEAR, moderngl.LINEAR))
+                sampler.use(unit_id)
+                samplers.append(sampler)
+                base_unit_id += 1
+            shader['use_roughness_texture'] = True
+            shader['roughness_texture'] = unit_id
+        else:
+            shader['use_roughness_texture'] = False
+    if 'use_occlusion_texture' in shader:
+        if have_textures and (ref := references.get(textures.occlusion_id)) is not None and hasattr(ref, 'texture') and ref.texture is not None:
+            if textures.occlusion_id in unit_ids:
+                unit_id = unit_ids[textures.occlusion_id]
+            else:
+                unit_id = base_unit_id
+                unit_ids[textures.occlusion_id] = unit_id
+                sampler = glctx.sampler(texture=ref.texture, filter=(moderngl.LINEAR, moderngl.LINEAR))
+                sampler.use(unit_id)
+                samplers.append(sampler)
+                base_unit_id += 1
+            shader['use_occlusion_texture'] = True
+            shader['occlusion_texture'] = unit_id
+        else:
+            shader['use_occlusion_texture'] = False
+    if 'use_emissive_texture' in shader:
+        if have_textures and (ref := references.get(textures.emissive_id)) is not None and hasattr(ref, 'texture') and ref.texture is not None:
+            if textures.emissive_id in unit_ids:
+                unit_id = unit_ids[textures.emissive_id]
+            else:
+                unit_id = base_unit_id
+                unit_ids[textures.emissive_id] = unit_id
+                sampler = glctx.sampler(texture=ref.texture, filter=(moderngl.LINEAR, moderngl.LINEAR))
+                sampler.use(unit_id)
+                samplers.append(sampler)
+                base_unit_id += 1
+            shader['use_emissive_texture'] = True
+            shader['emissive_texture'] = unit_id
+        else:
+            shader['use_emissive_texture'] = False
+    if 'use_transparency_texture' in shader:
+        if have_textures and (ref := references.get(textures.transparency_id)) is not None and hasattr(ref, 'texture') and ref.texture is not None:
+            if textures.transparency_id in unit_ids:
+                unit_id = unit_ids[textures.transparency_id]
+            else:
+                unit_id = base_unit_id
+                unit_ids[textures.transparency_id] = unit_id
+                sampler = glctx.sampler(texture=ref.texture, filter=(moderngl.LINEAR, moderngl.LINEAR))
+                sampler.use(unit_id)
+                samplers.append(sampler)
+                base_unit_id += 1
+            shader['use_transparency_texture'] = True
+            shader['transparency_texture'] = unit_id
+        else:
+            shader['use_transparency_texture'] = False
+    return samplers
 
 
 cdef void dispatch_instances(glctx, dict objects, shader, Model model, int count, cython.float[:, :] instances_data,
@@ -741,84 +930,7 @@ cdef void dispatch_instances(glctx, dict objects, shader, Model model, int count
     vertex_buffer, index_buffer = model.get_buffers(glctx, objects)
     if vertex_buffer is None:
         return
-    cdef dict unit_ids
-    cdef list samplers = None
-    cdef int unit_id
-    if references is not None and textures is not None:
-        unit_ids = {}
-        samplers = []
-        if (scene_node := references.get(textures.albedo_id)) is not None and hasattr(scene_node, 'texture') and scene_node.texture is not None:
-            if textures.albedo_id in unit_ids:
-                unit_id = unit_ids[textures.albedo_id]
-            else:
-                unit_id = base_unit_id
-                unit_ids[textures.albedo_id] = unit_id
-                sampler = glctx.sampler(texture=scene_node.texture, filter=(moderngl.LINEAR, moderngl.LINEAR))
-                sampler.use(unit_id)
-                samplers.append(sampler)
-                base_unit_id += 1
-            shader['use_albedo_texture'] = True
-            shader['albedo_texture'] = unit_id
-        if (scene_node := references.get(textures.metal_id)) is not None and hasattr(scene_node, 'texture') and scene_node.texture is not None:
-            if textures.metal_id in unit_ids:
-                unit_id = unit_ids[textures.metal_id]
-            else:
-                unit_id = base_unit_id
-                unit_ids[textures.metal_id] = unit_id
-                sampler = glctx.sampler(texture=scene_node.texture, filter=(moderngl.LINEAR, moderngl.LINEAR))
-                sampler.use(unit_id)
-                samplers.append(sampler)
-                base_unit_id += 1
-            shader['use_metal_texture'] = True
-            shader['metal_texture'] = unit_id
-        if (scene_node := references.get(textures.roughness_id)) is not None and hasattr(scene_node, 'texture') and scene_node.texture is not None:
-            if textures.roughness_id in unit_ids:
-                unit_id = unit_ids[textures.roughness_id]
-            else:
-                unit_id = base_unit_id
-                unit_ids[textures.roughness_id] = unit_id
-                sampler = glctx.sampler(texture=scene_node.texture, filter=(moderngl.LINEAR, moderngl.LINEAR))
-                sampler.use(unit_id)
-                samplers.append(sampler)
-                base_unit_id += 1
-            shader['use_roughness_texture'] = True
-            shader['roughness_texture'] = unit_id
-        if (scene_node := references.get(textures.occlusion_id)) is not None and hasattr(scene_node, 'texture') and scene_node.texture is not None:
-            if textures.occlusion_id in unit_ids:
-                unit_id = unit_ids[textures.occlusion_id]
-            else:
-                unit_id = base_unit_id
-                unit_ids[textures.occlusion_id] = unit_id
-                sampler = glctx.sampler(texture=scene_node.texture, filter=(moderngl.LINEAR, moderngl.LINEAR))
-                sampler.use(unit_id)
-                samplers.append(sampler)
-                base_unit_id += 1
-            shader['use_occlusion_texture'] = True
-            shader['occlusion_texture'] = unit_id
-        if (scene_node := references.get(textures.emissive_id)) is not None and hasattr(scene_node, 'texture') and scene_node.texture is not None:
-            if textures.emissive_id in unit_ids:
-                unit_id = unit_ids[textures.emissive_id]
-            else:
-                unit_id = base_unit_id
-                unit_ids[textures.emissive_id] = unit_id
-                sampler = glctx.sampler(texture=scene_node.texture, filter=(moderngl.LINEAR, moderngl.LINEAR))
-                sampler.use(unit_id)
-                samplers.append(sampler)
-                base_unit_id += 1
-            shader['use_emissive_texture'] = True
-            shader['emissive_texture'] = unit_id
-        if (scene_node := references.get(textures.transparency_id)) is not None and hasattr(scene_node, 'texture') and scene_node.texture is not None:
-            if textures.transparency_id in unit_ids:
-                unit_id = unit_ids[textures.transparency_id]
-            else:
-                unit_id = base_unit_id
-                unit_ids[textures.transparency_id] = unit_id
-                sampler = glctx.sampler(texture=scene_node.texture, filter=(moderngl.LINEAR, moderngl.LINEAR))
-                sampler.use(unit_id)
-                samplers.append(sampler)
-                base_unit_id += 1
-            shader['use_transparency_texture'] = True
-            shader['transparency_texture'] = unit_id
+    cdef list samplers = configure_textures(glctx, shader, textures, references, base_unit_id)
     instances_buffer = glctx.buffer(instances_data)
     cdef list buffers = []
     cdef str format = '3f'
@@ -847,10 +959,10 @@ cdef void dispatch_instances(glctx, dict objects, shader, Model model, int count
     else:
         format += ' 4x4'
     if 'material_emissive' in shader:
-        format += ' 3f'
+        format += ' 4f'
         names.append('material_emissive')
     else:
-        format += ' 3x4'
+        format += ' 4x4'
     if 'material_properties' in shader:
         format += ' 4f'
         names.append('material_properties')
@@ -860,15 +972,8 @@ cdef void dispatch_instances(glctx, dict objects, shader, Model model, int count
     buffers.append((instances_buffer, format) + tuple(names))
     render_array = glctx.vertex_array(shader, buffers, index_buffer=index_buffer, mode=moderngl.TRIANGLES)
     render_array.render(instances=count)
-    if samplers is not None:
-        for sampler in samplers:
-            sampler.clear()
-        shader['use_albedo_texture'] = False
-        shader['use_metal_texture'] = False
-        shader['use_roughness_texture'] = False
-        shader['use_occlusion_texture'] = False
-        shader['use_emissive_texture'] = False
-        shader['use_transparency_texture'] = False
+    for sampler in samplers:
+        sampler.clear()
 
 
 cdef class RenderTarget:
@@ -881,12 +986,15 @@ cdef class RenderTarget:
     cdef object color_renderbuffer
     cdef object depth_renderbuffer
     cdef object render_framebuffer
+    cdef object auxilary_image_texture
+    cdef object auxilary_depth_renderbuffer
+    cdef object auxilary_framebuffer
 
     @property
     def texture(self):
         return self.image_texture
 
-    def release(self):
+    cpdef void release(self):
         self.width = 0
         self.height = 0
         self.colorbits = 0
@@ -896,8 +1004,11 @@ cdef class RenderTarget:
         self.color_renderbuffer = None
         self.depth_renderbuffer = None
         self.render_framebuffer = None
+        self.auxilary_image_texture = None
+        self.auxilary_depth_renderbuffer = None
+        self.auxilary_framebuffer = None
 
-    def prepare(self, glctx, Camera camera):
+    cdef void prepare(self, glctx, Camera camera):
         if self.render_framebuffer is None or self.width != camera.width or self.height != camera.height \
                 or self.colorbits != camera.colorbits or self.samples != camera.samples:
             self.width = camera.width
@@ -915,6 +1026,9 @@ cdef class RenderTarget:
             else:
                 self.render_framebuffer = glctx.framebuffer(color_attachments=(self.image_texture,), depth_attachment=self.depth_renderbuffer)
                 logger.debug("Created canvas3d {}x{} {}-bit render targets", self.width, self.height, self.colorbits)
+            self.auxilary_image_texture = None
+            self.auxilary_depth_renderbuffer = None
+            self.auxilary_framebuffer = None
         cdef Vector clear_color
         if camera.fog_max > camera.fog_min:
             clear_color = camera.fog_color
@@ -923,14 +1037,25 @@ cdef class RenderTarget:
             clear_color = clear_color.mul(camera.tint).concat(true_)
         else:
             clear_color = Zero4
-        self.render_framebuffer.use()
         self.render_framebuffer.clear(*tuple(clear_color))
 
-    def finalize(self, glctx):
+    cdef void use_main_buffer(self):
+        self.render_framebuffer.use()
+
+    cdef void use_auxilary_buffer(self, glctx):
+        if self.auxilary_framebuffer is None:
+            self.auxilary_image_texture = glctx.texture((self.width, self.height), 4, dtype='f2')
+            self.auxilary_depth_renderbuffer = glctx.depth_renderbuffer((self.width, self.height))
+            self.auxilary_framebuffer = glctx.framebuffer(color_attachments=(self.auxilary_image_texture,), depth_attachment=self.auxilary_depth_renderbuffer)
+            logger.debug("Created canvas3d {}x{} auxilary render target", self.width, self.height)
+        self.auxilary_framebuffer.clear()
+        self.auxilary_framebuffer.use()
+
+    cdef void finalize(self, glctx):
         if self.image_framebuffer is not None:
             glctx.copy_framebuffer(self.image_framebuffer, self.render_framebuffer)
 
-    def depth_write(self, bint enabled):
+    cdef void depth_write(self, bint enabled):
         self.render_framebuffer.depth_mask = enabled
 
 

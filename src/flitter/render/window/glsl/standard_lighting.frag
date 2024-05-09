@@ -1,13 +1,14 @@
 ${HEADER}
 
 const vec3 greyscale = vec3(0.299, 0.587, 0.114);
+const float Tau = 6.283185307179586;
 
 in vec3 world_position;
 in vec3 world_normal;
 in vec2 texture_uv;
 
 flat in vec4 fragment_albedo;
-flat in vec3 fragment_emissive;
+flat in vec4 fragment_emissive;
 flat in vec4 fragment_properties;
 
 out vec4 fragment_color;
@@ -25,6 +26,8 @@ uniform float fog_max;
 uniform float fog_min;
 uniform vec3 fog_color;
 uniform float fog_curve;
+uniform mat4 pv_matrix;
+uniform sampler2D backface_data;
 
 uniform bool use_albedo_texture;
 uniform bool use_metal_texture;
@@ -39,6 +42,15 @@ uniform sampler2D roughness_texture;
 uniform sampler2D occlusion_texture;
 uniform sampler2D emissive_texture;
 uniform sampler2D transparency_texture;
+
+
+const vec3 RANDOM_SCALE = vec3(443.897, 441.423, 0.0973);
+
+vec3 random3(vec3 p) {
+    p = fract(p * RANDOM_SCALE);
+    p += dot(p, p.yxz + 19.19);
+    return fract((p.xxy + p.yzz) * p.zyx);
+}
 
 
 void main() {
@@ -64,11 +76,12 @@ void main() {
         float mono = clamp(dot(texture_color.rgb, greyscale), 0.0, 1.0);
         transparency = transparency * (1.0 - clamp(texture_color.a, 0.0, 1.0)) + mono;
     }
-    vec3 emissive = fragment_emissive;
+    vec3 emissive = fragment_emissive.rgb;
     if (use_emissive_texture) {
         vec4 emissive_texture_color = texture(emissive_texture, texture_uv);
         emissive = emissive * (1.0 - clamp(emissive_texture_color.a, 0.0, 1.0)) + emissive_texture_color.rgb;
     }
+    float translucency = fragment_emissive.a;
     float ior = fragment_properties.x;
     float metal = fragment_properties.y;
     if (use_metal_texture) {
@@ -199,6 +212,48 @@ void main() {
         }
     }
     float opacity = 1.0 - transparency;
+    if (translucency > 0.0) {
+        vec4 position = pv_matrix * vec4(world_position, 1);
+        vec2 screen_coord = (position.xy / position.w + 1.0) / 2.0;
+        vec4 backface = texture(backface_data, screen_coord);
+        float backface_distance = backface.w;
+        if (backface_distance > view_distance) {
+            vec3 backface_position = view_position + V*backface_distance;
+            float thickness = backface_distance - view_distance;
+            float s = min(thickness / translucency, 2.0);
+            float k = thickness * s / 6.0;
+            int n = int(25.0 * s);
+            int count = 1;
+            vec3 p = vec3(screen_coord, 0.0);
+            for (int i = 0; i < n; i++) {
+                vec3 radius = sqrt(-2.0 * log(random3(p))) * k;
+                p.z += 1.1079;
+                vec3 theta = Tau * random3(p);
+                p.y += 1.1079;
+                vec4 pos = pv_matrix * vec4(backface_position + sin(theta) * radius, 1.0);
+                vec4 backface_sample = texture(backface_data, (pos.xy / pos.w + 1.0) / 2.0);
+                if (backface_sample.w > view_distance) {
+                    backface += backface_sample;
+                    count += 1;
+                }
+                pos = pv_matrix * vec4(backface_position + cos(theta) * radius, 1.0);
+                backface_sample = texture(backface_data, (pos.xy / pos.w + 1.0) / 2.0);
+                if (backface_sample.w > view_distance) {
+                    backface += backface_sample;
+                    count += 1;
+                }
+            }
+            backface /= float(count);
+            thickness = backface.w - view_distance;
+            k = thickness / translucency;
+            float transmission = clamp(pow(0.5, k), 0.0, 1.0);
+            vec3 transmission_color = pow(albedo / 2.0, vec3(k));
+            specular_color += backface.rgb * transmission_color * (1.0 - transmission);
+            opacity *= 1.0 - transmission*transmission;
+        } else {
+            opacity = 0.0;
+        }
+    }
     vec3 final_color = mix(diffuse_color, fog_color, fog_alpha) * opacity + specular_color * (1.0 - fog_alpha);
     if (monochrome) {
         float grey = dot(final_color, greyscale);

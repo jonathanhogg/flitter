@@ -164,9 +164,9 @@ class TestExamples(FunctionalTest):
     Recreate the examples and check them against the pre-calculated ones.
     """
 
-    SHORT = ['bauble.fl', 'canvas3d.fl', 'linelight.fl', 'solidgeometry.fl', 'textures.fl', 'video.fl']
+    SHORT = ['bauble.fl', 'canvas3d.fl', 'linelight.fl', 'solidgeometry.fl', 'textures.fl', 'translucency.fl', 'video.fl']
     LONG = ['bounce.fl', 'hoops.fl', 'physics.fl', 'smoke.fl']
-    SHORT_ES = ['bauble.fl', 'canvas3d.fl', 'linelight.fl', 'solidgeometry.fl', 'textures.fl']
+    SHORT_ES = ['bauble.fl', 'canvas3d.fl', 'linelight.fl', 'solidgeometry.fl', 'textures.fl', 'translucency.fl']
     LONG_ES = ['bounce.fl', 'physics.fl']
 
     def test_short_examples(self):
