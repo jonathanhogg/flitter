@@ -187,9 +187,11 @@ cdef class InvertedModel(ModelTransformer):
     cdef void build_trimesh_model(self):
         if not self.original.check_valid():
             self.original.build_trimesh_model()
-        trimesh_model = self.original.trimesh_model.copy()
-        trimesh_model.invert()
-        self.trimesh_model = trimesh_model
+        trimesh_model = self.original.trimesh_model
+        self.trimesh_model = trimesh.base.Trimesh(vertices=trimesh_model.vertices,
+                                                  vertex_normals=-trimesh_model.vertex_normals,
+                                                  faces=trimesh_model.faces[:, ::-1],
+                                                  visual=trimesh_model.visual)
         self.valid = True
 
 
