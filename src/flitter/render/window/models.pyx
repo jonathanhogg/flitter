@@ -39,6 +39,22 @@ cdef class Model:
     cdef void build_trimesh_model(self):
         raise NotImplementedError()
 
+    cdef object get_watertight_trimesh_model(self):
+        if not self.check_valid():
+            self.build_trimesh_model()
+        if self.trimesh_model is None:
+            return None
+        trimesh_model = self.trimesh_model.copy()
+        if not trimesh_model.is_watertight:
+            trimesh_model = trimesh_model.process(validate=True, merge_tex=True, merge_norm=True)
+            if not trimesh_model.is_watertight:
+                if trimesh_model.fill_holes():
+                    logger.debug("Filled holes in non-watertight mesh: {}", self.name)
+                else:
+                    logger.warning("Computing convex hull of: {}", self.name)
+                    trimesh_model = trimesh_model.convex_hull
+        return trimesh_model
+
     cdef Vector get_bounds(self):
         if self.check_valid() and self.bounds is not None:
             return self.bounds
@@ -427,20 +443,8 @@ cdef class BooleanOperationModel(Model):
         cdef Model model
         self.trimesh_model = None
         for model in self.models:
-            if not model.check_valid():
-                model.build_trimesh_model()
-            trimesh_model = model.trimesh_model
-            if trimesh_model is None:
-                continue
-            if not trimesh_model.is_watertight:
-                trimesh_model = trimesh_model.copy().process(validate=True, merge_tex=True, merge_norm=True)
-                if not trimesh_model.is_watertight:
-                    if trimesh_model.fill_holes():
-                        logger.debug("Filled holes in non-watertight mesh: {}", model.name)
-                    else:
-                        logger.warning("Computing convex hull of: {}", model.name)
-                        trimesh_model = trimesh_model.convex_hull
-            trimesh_models.append(trimesh_model)
+            if (trimesh_model := model.get_watertight_trimesh_model()) is not None:
+                trimesh_models.append(trimesh_model)
         if trimesh_models:
             if self.operation == 'difference' and len(trimesh_models) > 2:
                 union_models = trimesh.boolean.boolean_manifold(trimesh_models[1:], 'union')
