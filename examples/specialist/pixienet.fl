@@ -1,0 +1,9 @@
+
+%pragma fps 30
+
+let NLEDS=50
+
+!pixienet format=:GRB
+    !device id='30aea425aab4'
+        for i in ..NLEDS
+            !segment length=1 color=hsv(i/NLEDS+beat/60;1;1)
