@@ -42,7 +42,7 @@ dependencies = [
     "mapbox_earcut",
     "moderngl",
     "networkx",
-    "numpy<2",
+    "numpy",
     "pillow>=10.1.0",
     "pyserial",
     "pyusb",
@@ -51,7 +51,7 @@ dependencies = [
     "rtree",
     "scipy",
     "shapely",
-    "skia-python==126.0b8",
+    "skia-python>=117.0b3",
     "trimesh",
 ]
 
