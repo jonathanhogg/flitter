@@ -166,6 +166,10 @@ cdef class LaserDriver:
 
 
 cdef class LaserCubeDriver(LaserDriver):
+    """
+    LaserDock driver reference code:
+    https://github.com/Wickedlasers/libLaserdockCore/tree/master/3rdparty/laserdocklib/src
+    """
     DEFAULT_SAMPLE_RATE = 50000  # samples/second
     DEFAULT_ACCELLERATION = 20   # sweeps/second^2
     DEFAULT_DAC_LAG = 2e-4       # seconds
