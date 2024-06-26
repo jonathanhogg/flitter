@@ -195,17 +195,18 @@ class EngineController:
                 if self.state.changed:
                     if self.state_simplify_wait:
                         changed_keys = self.state.changed_keys - self.state_generation0
-                        self.state_generation0.update(changed_keys)
+                        self.state_generation0 ^= changed_keys
+                        self.state_generation0 &= self.state.keys()
                         if changed_keys:
                             generation1to0 = self.state_generation1 & changed_keys
-                            changed_keys = changed_keys - generation1to0
-                            self.state_generation1.difference_update(generation1to0)
+                            changed_keys -= generation1to0
+                            self.state_generation1 -= generation1to0
                             generation2to0 = self.state_generation2 & changed_keys
                             if generation2to0:
                                 if run_program is not current_program:
                                     run_program = current_program
                                     logger.debug("Undo simplification on state; original program with {} instructions", len(run_program))
-                                self.state_generation1.update(self.state_generation2 - generation2to0)
+                                self.state_generation1 ^= self.state_generation2 - generation2to0
                                 self.state_generation2 = set()
                                 simplify_state_time = system_clock() + self.state_simplify_wait
                     self.global_state_dirty = True
