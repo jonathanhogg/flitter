@@ -59,6 +59,7 @@ class EngineController:
         self.current_page = None
         self.current_path = None
         self._references = {}
+        self._modules = {}
 
     def load_page(self, filename):
         page_number = len(self.pages)
@@ -238,7 +239,7 @@ class EngineController:
                 execution -= now
                 if run_program is not None:
                     context = Context(names={key: Vector.coerce(value) for key, value in names.items()},
-                                      state=self.state, references=self._references)
+                                      state=self.state, references=self._references, modules=self._modules)
                     run_program.run(context, record_stats=self.vm_stats)
                 else:
                     context = Context()

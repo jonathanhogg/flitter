@@ -172,6 +172,7 @@ cdef class Context:
     cdef readonly Node root
     cdef readonly object path
     cdef readonly Context parent
+    cdef readonly dict modules
     cdef readonly set errors
     cdef readonly set logs
     cdef readonly dict references

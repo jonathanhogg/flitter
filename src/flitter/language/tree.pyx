@@ -26,7 +26,6 @@ cdef Expression sequence_pack(list expressions):
     cdef Expression expr
     cdef Vector value
     cdef list vectors, remaining = []
-    cdef bint has_let = False
     while expressions:
         expr = <Expression>expressions.pop(0)
         if isinstance(expr, Literal) and type((<Literal>expr).value) == Vector:
@@ -42,22 +41,15 @@ cdef Expression sequence_pack(list expressions):
             if vectors:
                 remaining.append(Literal(Vector._compose(vectors)))
         if expr is not None:
-            if isinstance(expr, InlineSequence):
-                expressions[:0] = (<InlineSequence>expr).expressions
+            if isinstance(expr, Sequence):
+                expressions[:0] = (<Sequence>expr).expressions
                 continue
-            if isinstance(expr, (Let, Import, Function)):
-                has_let = True
             remaining.append(expr)
     if len(remaining) == 0:
         return NoOp
-    if has_let:
-        for expr in remaining:
-            if not isinstance(expr, Let):
-                return Sequence(tuple(remaining))
-        return NoOp
     if len(remaining) == 1:
         return remaining[0]
-    return InlineSequence(tuple(remaining))
+    return Sequence(tuple(remaining))
 
 
 cdef class Expression:
@@ -185,43 +177,31 @@ cdef class Import(Expression):
         return f'Import({self.names!r}, {self.filename!r})'
 
 
+cdef class StoreGlobal(Expression):
+    cdef readonly tuple bindings
+
+    def __init__(self, tuple bindings):
+        self.bindings = bindings
+
+    cdef void _compile(self, Program program, list lnames):
+        cdef Binding binding
+        for binding in self.bindings:
+            binding.expr._compile(program, lnames)
+            program.store_global(binding.name)
+
+    cdef Expression _simplify(self, Context context):
+        return self
+
+    def __repr__(self):
+        return f'StoreGlobal({self.bindings!r})'
+
+
 cdef class Sequence(Expression):
     cdef readonly tuple expressions
 
     def __init__(self, tuple expressions):
         self.expressions = expressions
 
-    cdef void _compile(self, Program program, list lnames):
-        cdef Expression expr
-        cdef int64_t n=len(lnames), m=0
-        for expr in self.expressions:
-            expr._compile(program, lnames)
-            if not isinstance(expr, (Let, Import, Function, Pragma)):
-                m += 1
-        if len(lnames) > n:
-            program.local_drop(len(lnames)-n)
-            while len(lnames) > n:
-                lnames.pop()
-        if m > 1:
-            program.compose(m)
-        elif m == 0:
-            program.literal(null_)
-
-    cdef Expression _simplify(self, Context context):
-        cdef list expressions = []
-        cdef Expression expr
-        cdef dict saved = context.names
-        context.names = saved.copy()
-        for expr in self.expressions:
-            expressions.append(expr._simplify(context))
-        context.names = saved
-        return sequence_pack(expressions)
-
-    def __repr__(self):
-        return f'{self.__class__.__name__}({self.expressions!r})'
-
-
-cdef class InlineSequence(Sequence):
     cdef void _compile(self, Program program, list lnames):
         cdef Expression expr
         for expr in self.expressions:
@@ -1138,25 +1118,6 @@ cdef class Let(Expression):
 
     def __repr__(self):
         return f'{self.__class__.__name__}({self.bindings!r})'
-
-
-cdef class StoreGlobal(Expression):
-    cdef readonly tuple bindings
-
-    def __init__(self, tuple bindings):
-        self.bindings = bindings
-
-    cdef void _compile(self, Program program, list lnames):
-        cdef Binding binding
-        for binding in self.bindings:
-            binding.expr._compile(program, lnames)
-            program.store_global(binding.name)
-
-    cdef Expression _simplify(self, Context context):
-        return self
-
-    def __repr__(self):
-        return f'StoreGlobal({self.bindings!r})'
 
 
 cdef class InlineLet(Expression):

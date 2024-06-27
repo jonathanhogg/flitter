@@ -9,7 +9,7 @@ from loguru import logger
 from .. import name_patch
 from ..cache import SharedCache
 from .functions import STATIC_FUNCTIONS, DYNAMIC_FUNCTIONS
-from ..model cimport Vector, Node, Context, null_, true_, false_
+from ..model cimport Vector, Node, Context, StateDict, null_, true_, false_
 from .noise import NOISE_FUNCTIONS
 
 from libc.math cimport floor as c_floor
@@ -682,6 +682,8 @@ cdef inline dict import_module(Context context, str filename, bint record_stats,
     cdef Program program = SharedCache.get_with_root(filename, context.path).read_flitter_program(simplify=simplify)
     if program is None:
         return None
+    if program in context.modules:
+        return context.modules[program]
     cdef Context import_context = context
     while import_context is not None:
         if import_context.path is program.path:
@@ -692,10 +694,10 @@ cdef inline dict import_module(Context context, str filename, bint record_stats,
     cdef int64_t stack_top=stack.top, lnames_top=lnames.top
     import_context = Context.__new__(Context)
     import_context.parent = context
+    import_context.modules = context.modules
     import_context.errors = context.errors
     import_context.logs = context.logs
-    import_context.pragmas = context.pragmas
-    import_context.state = context.state
+    import_context.state = StateDict()
     import_context.names = {}
     import_context.path = program.path
     import_context.stack = stack
@@ -709,6 +711,7 @@ cdef inline dict import_module(Context context, str filename, bint record_stats,
     drop(stack, 1)
     assert stack.top == stack_top, "Bad stack"
     assert lnames.top == lnames_top, "Bad lnames"
+    context.modules[program] = import_context.names
     return import_context.names
 
 

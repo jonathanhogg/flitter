@@ -16,9 +16,19 @@ _HASHBANG : /#!.*\r?\n/
 _LPAREN : "("
 _RPAREN : ")"
 
-top : _HASHBANG? _NL? expressions
+top : _HASHBANG? _NL? top_expressions
 
-sequence : expressions
+top_expressions : top_expression* -> tuple
+
+?top_expression : expression
+                | "let" multiline_bindings -> let
+                | "%pragma" NAME node _NL -> pragma
+                | "import" name_list "from" composition _NL ->  file_import
+                | "func" NAME _LPAREN parameters _RPAREN _NL _INDENT sequence _DEDENT -> function
+
+sequence : expressions [let_sequence]
+
+let_sequence : "let" multiline_bindings sequence
 
 expressions : expression* -> tuple
 
@@ -26,11 +36,7 @@ expressions : expression* -> tuple
             | node _NL _INDENT sequence _DEDENT -> append
             | "@" atom [attribute_bindings] _NL [_INDENT sequence _DEDENT] -> template_call
             | "for" name_list "in" range _NL _INDENT sequence _DEDENT -> loop
-            | "let" multiline_bindings -> let
             | "if" tests ["else" _NL _INDENT sequence _DEDENT] -> if_else
-            | "%pragma" NAME node _NL -> pragma
-            | "import" name_list "from" composition _NL ->  file_import
-            | "func" NAME _LPAREN parameters _RPAREN _NL _INDENT sequence _DEDENT -> function
 
 parameters : (parameter ("," parameter)*)? -> tuple
 
@@ -55,7 +61,7 @@ bindings : binding+ -> tuple
 binding : name_list "=" composition -> poly_binding
 
 ?composition : comprehension
-             | compositions -> inline_sequence
+             | compositions -> sequence
 
 compositions : comprehension (";" comprehension)+ -> tuple
 

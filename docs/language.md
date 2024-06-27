@@ -692,9 +692,11 @@ an insufficient number of matching arguments, otherwise any parameters lacking
 matching arguments will be bound to `null`. The result of evaluating all
 body expressions will be returned as a single vector to the caller.
 
-Functions may refer to names bound in the enclosing scope(s) to the definition.
-These will be captured at definition time. Thus rebinding a name later in
-the same scope will be ignored, e.g.:
+Functions may only be declared at the top-level of a program and so cannot be
+nested within another function definition. Functions may refer to names defined
+above the function definition at the top level. These will be captured at
+definition time. Thus rebinding a name later in the same scope will be ignored.
+For example:
 
 ```flitter
 let x=10
@@ -824,6 +826,41 @@ These respectively set the initial tempo and/or quantum of the main clock (the
 defaults are 120 and 4, respectively), and the *current* target frame rate of
 the engine (default is 60 or the value specified with the `--fps` command-line
 option).
+
+## Imports
+
+Top-level definitions (`let`s and `func`s) may be imported from one **Flitter**
+program file into the top level of another. This allows common definitions to
+be collected into *modules* that can be used elsewhere. For example:
+
+```flitter
+import SIZE;thing from 'common.fl'
+
+!window size=SIZE
+    @thing
+```
+
+The `import` `from` expression will execute the module with the supplied file
+name (interpreted as a string file name relative to the current program's
+source file) and include one or more names, separated with semicolons, into the
+current program as if they had been defined with a `let` or `func` at this
+point. Names not defined in the module will be bound to `null`.
+
+The module is executed in a new context and so top-level node expressions
+will not be added to the current tree, any [pragmas](#pragmas) will be ignored
+and all [state](#state) look-ups will evaluate to `null`. All [built-in
+names](builtins.md) will be defined in a module, but not runtime names (such as
+`beat`) or command-line names (supplied with `--define`). To use any of these
+values in an imported function they must be passed in as arguments. However,
+called functions *do* have access to the current [state](#state).
+
+If a function in a module is called from the main program, and this function
+makes use of any file built-ins – such as `read()` – then these will load files
+relative to the *module* file.
+
+Modules may import from other modules, provided that a cycle is not created.
+As module execution has no access to any dynamic values, the result of executing
+a module is cached until that file changes.
 
 ## Parsing
 

@@ -68,6 +68,14 @@ class FlitterTransformer(Transformer):
     def inline_loop(self, body, names, source):
         return tree.For(names, source, body)
 
+    def sequence(self, expressions, let_sequence=None):
+        if let_sequence is not None:
+            expressions = expressions + (let_sequence,)
+        return tree.Sequence(expressions)
+
+    def let_sequence(self, bindings, expressions):
+        return tree.InlineLet(expressions, bindings)
+
     def call(self, function, args):
         args = list(args)
         bindings = []
@@ -99,7 +107,6 @@ class FlitterTransformer(Transformer):
     gt = tree.GreaterThan
     if_else = tree.IfElse
     inline_let = tree.InlineLet
-    inline_sequence = tree.InlineSequence
     le = tree.LessThanOrEqualTo
     let = tree.Let
     literal = tree.Literal
@@ -119,7 +126,6 @@ class FlitterTransformer(Transformer):
     pos = tree.Positive
     power = tree.Power
     pragma = tree.Pragma
-    sequence = tree.Sequence
     slice = tree.Slice
     subtract = tree.Subtract
     tag = tree.Tag
