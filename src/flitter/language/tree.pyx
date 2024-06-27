@@ -215,6 +215,9 @@ cdef class Sequence(Expression):
             expressions.append(expr._simplify(context))
         return sequence_pack(expressions)
 
+    def __repr__(self):
+        return f'Sequence({self.expressions!r})'
+
 
 cdef class Literal(Expression):
     cdef readonly Vector value
