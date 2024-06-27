@@ -239,8 +239,8 @@ cdef class InlineSequence(Sequence):
 cdef class Literal(Expression):
     cdef readonly Vector value
 
-    def __init__(self, Vector value):
-        self.value = value
+    def __init__(self, value):
+        self.value = Vector._coerce(value)
 
     cdef void _compile(self, Program program, list lnames):
         program.literal(self.value.intern())
@@ -416,6 +416,16 @@ cdef class Negative(UnaryOperation):
                 return expr._simplify(context)
             if isinstance(maths.right, Literal):
                 expr = type(expr)(maths.left, Negative(maths.right))
+                return expr._simplify(context)
+        elif isinstance(expr, Add):
+            maths = expr
+            if isinstance(maths.left, Literal) or isinstance(maths.right, Literal):
+                expr = Add(Negative(maths.left), Negative(maths.right))
+                return expr._simplify(context)
+        elif isinstance(expr, Subtract):
+            maths = expr
+            if isinstance(maths.left, Literal) or isinstance(maths.right, Literal):
+                expr = Add(Negative(maths.left), maths.right)
                 return expr._simplify(context)
         return Negative(expr)
 
@@ -942,7 +952,7 @@ cdef class Tag(NodeModifier):
                     n = nodes.objects[i].copy()
                     n.add_tag(self.tag)
                     objects.append(n)
-                return Literal(Vector(objects))
+                return Literal(objects)
         return Tag(node, self.tag)
 
     def __repr__(self):
@@ -988,7 +998,7 @@ cdef class Attributes(NodeModifier):
                     value = (<Literal>binding.expr).value
                     for nodeobj in objects:
                         nodeobj.set_attribute(binding.name, value)
-                node = Literal(Vector(objects))
+                node = Literal(objects)
         if bindings:
             bindings.reverse()
             node = Attributes(node, tuple(bindings))
@@ -1031,7 +1041,7 @@ cdef class Append(NodeModifier):
                         for c in childs.objects:
                             n.append(c)
                         objects.append(n)
-                    return Literal(Vector(objects))
+                    return Literal(objects)
             else:
                 modifiers = []
                 expr = node
