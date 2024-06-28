@@ -287,6 +287,9 @@ cdef class FunctionName(Name):
     def __repr__(self):
         return f'FunctionName({self.name!r})'
 
+    cdef Expression _simplify(self, Context context):
+        return self
+
 
 cdef class Lookup(Expression):
     cdef readonly Expression key
