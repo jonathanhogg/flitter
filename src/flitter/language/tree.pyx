@@ -66,7 +66,7 @@ cdef class Expression:
         cdef str key
         if static is not None:
             for key, value in static.items():
-                context_vars[key] = Vector._coerce(value)
+                context_vars[key] = value if isinstance(value, Expression) else Vector._coerce(value)
         if dynamic is not None:
             for key in dynamic:
                 context_vars[key] = None
