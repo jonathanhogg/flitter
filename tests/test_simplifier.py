@@ -5,7 +5,7 @@ Tests of the simplifier, which is part of the language AST
 import unittest
 
 from flitter.model import null
-from flitter.language.tree import (Literal, Name, FunctionName, Pragma, Import, Sequence, Function,
+from flitter.language.tree import (Literal, Name, Pragma, Import, Sequence, Function,
                                    Negative, Positive, Add, Subtract, Multiply, Divide,
                                    PolyBinding, InlineLet)
 
@@ -51,14 +51,8 @@ class TestName(SimplifierTestCase):
         self.assertSimplifiesTo(Name('x'), Name('y'), static={'x': Name('y')}, dynamic={'y'})
 
     def test_function_name(self):
-        """Static Functions simplify to a FunctionName (inlining hack)"""
-        self.assertSimplifiesTo(Name('f'), FunctionName('f'), static={'f': Function('f', (), Literal(null))})
-
-
-class TestFunctionName(SimplifierTestCase):
-    def test_unmodified(self):
-        """FunctionNames don't simplify further"""
-        self.assertSimplifiesTo(FunctionName('f'), FunctionName('f'))
+        """Static Functions are left alone (inlining hack)"""
+        self.assertSimplifiesTo(Name('f'), Name('f'), static={'f': Function('f', (), Literal(null))})
 
 
 class TestPragma(SimplifierTestCase):

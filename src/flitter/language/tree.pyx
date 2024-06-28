@@ -260,10 +260,8 @@ cdef class Name(Expression):
     cdef Expression _simplify(self, Context context):
         if self.name in context.names:
             value = context.names[self.name]
-            if value is None:
+            if value is None or isinstance(value, Function):
                 return self
-            elif isinstance(value, Function):
-                return FunctionName(self.name)
             elif isinstance(value, Name):
                 return (<Name>value)._simplify(context)
             elif type(value) is Vector:
@@ -282,14 +280,6 @@ cdef class Name(Expression):
 
     def __repr__(self):
         return f'Name({self.name!r})'
-
-
-cdef class FunctionName(Name):
-    def __repr__(self):
-        return f'FunctionName({self.name!r})'
-
-    cdef Expression _simplify(self, Context context):
-        return self
 
 
 cdef class Lookup(Expression):
@@ -840,8 +830,12 @@ cdef class Call(Expression):
 
     cdef Expression _simplify(self, Context context):
         cdef Expression function = self.function._simplify(context)
-        cdef bint literal = isinstance(function, FunctionName) or \
-            (isinstance(function, Literal) and (<Literal>function).value.objects is not None)
+        cdef Function func_expr = None
+        if isinstance(function, Name) and (<Name>function).name in context.names:
+            value = context.names[(<Name>function).name]
+            if isinstance(value, Function):
+                func_expr = <Function>value
+        cdef bint literal = func_expr is not None or (isinstance(function, Literal) and (<Literal>function).value.objects is not None)
         cdef Expression arg, expr
         cdef list args = []
         if self.args:
@@ -859,15 +853,13 @@ cdef class Call(Expression):
                 if not isinstance(arg, Literal):
                     literal = False
         cdef list bindings
-        cdef Function func_expr
         cdef dict kwargs
         cdef int64_t i
-        if isinstance(function, FunctionName):
-            func_expr = context.names[(<FunctionName>function).name]
+        if func_expr is not None:
             assert not func_expr.captures, "Cannot inline functions with captured names"
             if not func_expr.recursive or literal:
                 kwargs = {binding.name: binding.expr for binding in keyword_args}
-                bindings = [PolyBinding(((<FunctionName>function).name,), func_expr)]
+                bindings = []
                 for i, binding in enumerate(func_expr.parameters):
                     if i < len(args):
                         bindings.append(PolyBinding((binding.name,), <Expression>args[i]))
