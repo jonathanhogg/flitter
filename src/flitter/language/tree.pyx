@@ -61,7 +61,7 @@ cdef class Expression:
         program.link()
         return program
 
-    def simplify(self, StateDict state=None, dict static=None, dynamic=None):
+    def simplify(self, StateDict state=None, dict static=None, dynamic=None, set errors=None):
         cdef dict context_vars = {}
         cdef str key
         if static is not None:
@@ -70,7 +70,7 @@ cdef class Expression:
         if dynamic is not None:
             for key in dynamic:
                 context_vars[key] = None
-        cdef Context context = Context(state=state, names=context_vars)
+        cdef Context context = Context(state=state, names=context_vars, errors=errors)
         cdef Expression expr
         try:
             expr = self._simplify(context)
@@ -78,8 +78,9 @@ cdef class Expression:
             logger.opt(exception=exc).warning("Unable to simplify program")
             return self
         cdef str error
-        for error in context.errors:
-            logger.warning("Simplification error: {}", error)
+        if errors is None:
+            for error in context.errors:
+                logger.warning("Simplification error: {}", error)
         return expr
 
     cdef void _compile(self, Program program, list lnames):
