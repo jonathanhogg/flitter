@@ -1153,9 +1153,19 @@ cdef class InlineLet(Expression):
         cdef PolyBinding binding
         cdef Expression expr
         cdef Vector value
-        cdef str name
+        cdef str name, existing_name
         cdef int64_t i, n
+        cdef bint maybe_resimplify, resimplify = False
         for binding in self.bindings:
+            maybe_resimplify = False
+            for existing_name in list(context.names):
+                existing_value = context.names[existing_name]
+                if existing_value is not None and isinstance(existing_value, Name):
+                    for name in binding.names:
+                        if name == (<Name>existing_value).name:
+                            context.names[existing_name] = None
+                            remaining.append(PolyBinding((existing_name,), Name(name)))
+                            maybe_resimplify = True
             expr = binding.expr._simplify(context)
             if isinstance(expr, Literal):
                 value = (<Literal>expr).value
@@ -1177,10 +1187,14 @@ cdef class InlineLet(Expression):
                 for name in binding.names:
                     context.names[name] = None
                 remaining.append(PolyBinding(binding.names, expr))
+                maybe_resimplify = False
+            resimplify ^= maybe_resimplify
         body = self.body._simplify(context)
         context.names = saved
         if remaining:
-            return InlineLet(body, tuple(remaining))
+            body = InlineLet(body, tuple(remaining))
+        if resimplify:
+            return body._simplify(context)
         return body
 
     def __repr__(self):
