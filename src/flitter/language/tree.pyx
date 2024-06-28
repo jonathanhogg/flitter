@@ -1176,9 +1176,6 @@ cdef class InlineLet(Expression):
                 else:
                     for i, name in enumerate(binding.names):
                         context.names[name] = value.item(i)
-            elif isinstance(expr, Function) and len(binding.names) == 1:
-                name = binding.names[0]
-                context.names[name] = expr
             elif isinstance(expr, Name) and len(binding.names) == 1:
                 name = binding.names[0]
                 if (<Name>expr).name != name:
