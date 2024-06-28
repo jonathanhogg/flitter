@@ -4,108 +4,191 @@ Tests of the simplifier, which is part of the language AST
 
 import unittest
 
-from flitter.model import Vector, null
-from flitter.language.tree import (Literal, Name, Negative, Positive, Multiply, Divide)
+from flitter.model import null
+from flitter.language.tree import (Literal, Name, FunctionName, Pragma, Import, Sequence, Function,
+                                   Negative, Positive, Add, Subtract, Multiply, Divide,
+                                   PolyBinding, InlineLet)
 
 
 # AST classes still to test:
 #
-# Top, Pragma, Import, Sequence, InlineSequence, FunctionName, Lookup, LookupLiteral,
-# Range, Positive, Not, Add, Subtract, Multiply, Divide, FloorDivide, Modulo, Power,
+# Top, Function, Lookup, LookupLiteral,
+# Range, Not, Ceil, Floor, Fract, Add, Subtract, Multiply, Divide, FloorDivide, Modulo, Power,
 # EqualTo, NotEqualTo, LessThan, GreaterThan, LessThanOrEqualTo, GreaterThanOrEqualTo, And, Or, Xor,
 # Slice, FastSlice, Call, NodeModifier, Tag, Attributes,
-# Append, Let, StoreGlobal, InlineLet, For, IfCondition, IfElse, Function
+# Append, Let, StoreGlobal, For, IfCondition, IfElse
 
 
-class TestLiteral(unittest.TestCase):
+class SimplifierTestCase(unittest.TestCase):
+    def assertSimplifiesTo(self, x, y, state=None, dynamic=None, static=None, with_errors=None):
+        errors = set()
+        self.assertEqual(repr(x.simplify(state=state, dynamic=dynamic, static=static, errors=errors)), repr(y))
+        self.assertEqual(errors, set() if with_errors is None else with_errors)
+
+
+class TestLiteral(SimplifierTestCase):
     def test_unchanged(self):
-        """Literals should be unaffected by simplification."""
-        expression = Literal(Vector([1, 2, 3]))
-        simplified = expression.simplify()
-        self.assertIsInstance(simplified, Literal)
-        self.assertEqual(simplified.value, Vector([1, 2, 3]))
+        """Literals are unaffected by simplification."""
+        self.assertSimplifiesTo(Literal([1, 2, 3]), Literal([1, 2, 3]))
+        self.assertSimplifiesTo(Literal('foo'), Literal('foo'))
 
 
-class TestName(unittest.TestCase):
-    def test_static(self):
-        """Names with static values should be replaced with their literal value."""
-        expression = Name('x')
-        simplified = expression.simplify(static={'x': Vector(5)})
-        self.assertIsInstance(simplified, Literal)
-        self.assertEqual(simplified.value, Vector(5))
-
+class TestName(SimplifierTestCase):
     def test_undefined(self):
-        """Undefined names should be replaced with literal nulls."""
-        expression = Name('x')
-        simplified = expression.simplify()
-        self.assertIsInstance(simplified, Literal)
-        self.assertEqual(simplified.value, null)
+        """Undefined names are replaced with literal nulls"""
+        self.assertSimplifiesTo(Name('x'), Literal(null), with_errors={"Unbound name 'x'"})
 
     def test_dynamic(self):
-        """Names that are defined, but with unknown values - i.e., dynamic locals - should be unchanged."""
-        expression = Name('x')
-        simplified = expression.simplify(dynamic={'x'})
-        self.assertIsInstance(simplified, Name)
-        self.assertEqual(simplified.name, 'x')
+        """Dynamic names are unchanged"""
+        self.assertSimplifiesTo(Name('x'), Name('x'), dynamic={'x'})
+
+    def test_static(self):
+        """Static Vectors simplify to a Literal"""
+        self.assertSimplifiesTo(Name('x'), Literal(5), static={'x': 5})
+
+    def test_rename(self):
+        """Static Names simplify to the result of simplifying that name"""
+        self.assertSimplifiesTo(Name('x'), Name('y'), static={'x': Name('y')}, dynamic={'y'})
+
+    def test_function_name(self):
+        """Static Functions simplify to a FunctionName (inlining hack)"""
+        self.assertSimplifiesTo(Name('f'), FunctionName('f'), static={'f': Function('f', (), Literal(null))})
 
 
-class TestNegative(unittest.TestCase):
+class TestFunctionName(SimplifierTestCase):
+    def test_unmodified(self):
+        """FunctionNames don't simplify further"""
+        self.assertSimplifiesTo(FunctionName('f'), FunctionName('f'))
+
+
+class TestPragma(SimplifierTestCase):
+    def test_recursive(self):
+        """Pragmas are left alone except for the sub-expression being simplified"""
+        self.assertSimplifiesTo(Pragma('foo', Name('x')), Pragma('foo', Literal(5)), static={'x': 5})
+
+
+class TestImport(SimplifierTestCase):
+    def test_recursive(self):
+        """Imports are left alone except for the sub-expression being simplified"""
+        self.assertSimplifiesTo(Import(('x', 'y'), Name('m')), Import(('x', 'y'), Literal('module.fl')), static={'m': 'module.fl'})
+
+
+class TestSequence(SimplifierTestCase):
+    def test_single(self):
+        """Single-item sequences simplify to the single expression"""
+        self.assertSimplifiesTo(Sequence((Name('x'),)), Name('x'), dynamic={'x'})
+
+    def test_literal_composition(self):
+        """Sequential literal vectors are composed"""
+        self.assertSimplifiesTo(Sequence((Name('x'), Literal([1, 2, 3]), Literal([4, 5]), Name('y'))),
+                                Sequence((Name('x'), Literal([1, 2, 3, 4, 5]), Name('y'))), dynamic={'x', 'y'})
+
+    def test_recursive(self):
+        """Each item in a sequence is simplified"""
+        self.assertSimplifiesTo(Sequence((Name('x'), Name('y'))), Literal([1, 2, 3, 4, 5]), static={'x': [1, 2, 3], 'y': [4, 5]})
+
+
+class TestPositive(SimplifierTestCase):
     def test_numeric_literal(self):
-        """Numeric literals get negated"""
-        expression = Negative(Literal(Vector(5)))
-        simplified = expression.simplify()
-        self.assertIsInstance(simplified, Literal)
-        self.assertEqual(simplified.value, Vector(-5))
+        """Numeric literals are left alone"""
+        self.assertSimplifiesTo(Positive(Literal(5)), Literal(5))
 
     def test_non_numeric_literal(self):
         """Non-numeric literals become nulls"""
-        expression = Negative(Literal(Vector('foo')))
-        simplified = expression.simplify()
-        self.assertIsInstance(simplified, Literal)
-        self.assertEqual(simplified.value, null)
+        self.assertSimplifiesTo(Positive(Literal('foo')), Literal(null))
+
+    def test_double_positive(self):
+        """Double-positives become positive"""
+        self.assertSimplifiesTo(Positive(Positive(Name('x'))), Positive(Name('x')), dynamic={'x'})
+
+    def test_positive_negative(self):
+        """Positive of a negative becomes the negative"""
+        self.assertSimplifiesTo(Positive(Negative(Name('x'))), Negative(Name('x')), dynamic={'x'})
+
+    def test_positive_binary_maths(self):
+        """Positive of a binary mathematical operation becomes that operation"""
+        self.assertSimplifiesTo(Positive(Add(Name('x'), Name('y'))), Add(Name('x'), Name('y')), dynamic={'x', 'y'})
+
+
+class TestNegative(SimplifierTestCase):
+    def test_numeric_literal(self):
+        """Numeric literal gets negated"""
+        self.assertSimplifiesTo(Negative(Literal(5)), Literal(-5))
+
+    def test_non_numeric_literal(self):
+        """Non-numeric literal becomes null"""
+        self.assertSimplifiesTo(Negative(Literal('foo')), Literal(null))
 
     def test_double_negative(self):
-        """Double-negatives become positive"""
-        expression = Negative(Negative(Name('x')))
-        simplified = expression.simplify(dynamic={'x'})
-        self.assertIsInstance(simplified, Positive)
-        self.assertIsInstance(simplified.expr, Name)
-        self.assertEqual(simplified.expr.name, 'x')
+        """Double-negative becomes positive"""
+        self.assertSimplifiesTo(Negative(Negative(Name('x'))), Positive(Name('x')), dynamic={'x'})
 
     def test_multiplication(self):
         """Half-literal multiplication has negative pushed into literal"""
-        expression = Negative(Multiply(Literal(Vector(5)), Name('x')))
-        simplified = expression.simplify(dynamic={'x'})
-        self.assertIsInstance(simplified, Multiply)
-        self.assertIsInstance(simplified.left, Literal)
-        self.assertEqual(simplified.left.value, Vector(-5))
-        self.assertIsInstance(simplified.right, Name)
-        self.assertEqual(simplified.right.name, 'x')
+        self.assertSimplifiesTo(Negative(Multiply(Literal(5), Name('x'))), Multiply(Literal(-5), Name('x')), dynamic={'x'})
         # And the other way round:
-        expression = Negative(Multiply(Name('x'), Literal(Vector(5))))
-        simplified = expression.simplify(dynamic={'x'})
-        self.assertIsInstance(simplified, Multiply)
-        self.assertIsInstance(simplified.left, Name)
-        self.assertEqual(simplified.left.name, 'x')
-        self.assertIsInstance(simplified.right, Literal)
-        self.assertEqual(simplified.right.value, Vector(-5))
+        self.assertSimplifiesTo(Negative(Multiply(Name('x'), Literal(5))), Multiply(Name('x'), Literal(-5)), dynamic={'x'})
 
     def test_division(self):
         """Half-literal division has negative pushed into literal"""
-        expression = Negative(Divide(Literal(Vector(5)), Name('x')))
-        simplified = expression.simplify(dynamic={'x'})
-        self.assertIsInstance(simplified, Divide)
-        self.assertIsInstance(simplified.left, Literal)
-        self.assertEqual(simplified.left.value, Vector(-5))
-        self.assertIsInstance(simplified.right, Name)
-        self.assertEqual(simplified.right.name, 'x')
-        # Note that round the other way, a second simplification rule comes into
-        # play and the division is turned into a multiplication by the inverse of
-        # the literal!
-        expression = Negative(Divide(Name('x'), Literal(Vector(5))))
-        simplified = expression.simplify(dynamic={'x'})
-        self.assertIsInstance(simplified, Multiply)
-        self.assertIsInstance(simplified.left, Name)
-        self.assertEqual(simplified.left.name, 'x')
-        self.assertIsInstance(simplified.right, Literal)
-        self.assertEqual(simplified.right.value, Vector(-0.2))
+        self.assertSimplifiesTo(Negative(Divide(Literal(5), Name('x'))), Divide(Literal(-5), Name('x')), dynamic={'x'})
+        # The other way round the division is turned into a multiplication by the inverse of the literal:
+        self.assertSimplifiesTo(Negative(Divide(Name('x'), Literal(5))), Multiply(Name('x'), Literal(-0.2)), dynamic={'x'})
+
+    def test_addition(self):
+        """Half-literal addition becomes a subtraction"""
+        # Either way round - this is because of the rule for adding a negative
+        self.assertSimplifiesTo(Negative(Add(Literal(5), Name('x'))), Subtract(Literal(-5), Name('x')), dynamic={'x'})
+        self.assertSimplifiesTo(Negative(Add(Name('x'), Literal(5))), Subtract(Literal(-5), Name('x')), dynamic={'x'})
+
+    def test_subtraction(self):
+        """Half-literal subtraction becomes an addition"""
+        self.assertSimplifiesTo(Negative(Subtract(Literal(5), Name('x'))), Add(Literal(-5), Name('x')), dynamic={'x'})
+        # However, rule for adding a negative results in a subtraction again the other way round
+        self.assertSimplifiesTo(Negative(Subtract(Name('x'), Literal(5))), Subtract(Literal(5), Name('x')), dynamic={'x'})
+
+
+class TestInlineLet(SimplifierTestCase):
+    def test_all_dynamic(self):
+        """Binding to a dynamic expression is left alone"""
+        self.assertSimplifiesTo(InlineLet(Add(Name('x'), Name('y')), (PolyBinding(('x',), Add(Name('y'), Literal(5))),)),
+                                InlineLet(Add(Name('x'), Name('y')), (PolyBinding(('x',), Add(Name('y'), Literal(5))),)),
+                                dynamic={'y'})
+
+    def test_literal_binding(self):
+        """Simple binding of a name to a literal"""
+        self.assertSimplifiesTo(InlineLet(Add(Name('x'), Name('y')), (PolyBinding(('x',), Literal(5)),)),
+                                Add(Literal(5), Name('y')),
+                                dynamic={'y'})
+
+    def test_rename(self):
+        """Simple rename of a local"""
+        self.assertSimplifiesTo(InlineLet(Add(Name('x'), Name('y')), (PolyBinding(('x',), Name('y')),)),
+                                Add(Name('y'), Name('y')),
+                                dynamic={'y'})
+
+    def test_expr_shadowed_rename(self):
+        """Rename of a local that is shadowed by a later binding to an expression"""
+        self.assertSimplifiesTo(InlineLet(Add(Name('x'), Name('y')), (PolyBinding(('x',), Name('y')), PolyBinding(('y',), Add(Name('y'), Literal(5))))),
+                                InlineLet(Add(Name('x'), Name('y')), (PolyBinding(('x',), Name('y')), PolyBinding(('y',), Add(Name('y'), Literal(5))))),
+                                dynamic={'y'})
+
+    def test_expr_shadowed_rename_subexpr(self):
+        """Rename of a local that is shadowed by a binding to an expression in a sub-expression"""
+        self.assertSimplifiesTo(InlineLet(Add(Literal(5), InlineLet(Add(Name('x'), Name('y')), (PolyBinding(('y',), Add(Name('y'), Literal(5))),))),
+                                          (PolyBinding(('x',), Name('y')),)),
+                                Add(Literal(5), InlineLet(Add(Name('x'), Name('y')), (PolyBinding(('x',), Name('y')),
+                                                                                      PolyBinding(('y',), Add(Name('y'), Literal(5))),))),
+                                dynamic={'y'})
+
+    def test_literal_shadowed_rename(self):
+        """Rename of a local that is shadowed by a later binding to a literal"""
+        self.assertSimplifiesTo(InlineLet(Add(Name('x'), Name('y')), (PolyBinding(('x',), Name('y')), PolyBinding(('y',), Literal(5)))),
+                                Add(Name('y'), Literal(5)),
+                                dynamic={'y'})
+
+    def test_rename_shadowed_rename(self):
+        """Rename of a local that is shadowed by a later binding to a rename"""
+        self.assertSimplifiesTo(InlineLet(Add(Name('x'), Name('y')), (PolyBinding(('x',), Name('y')), PolyBinding(('y',), Name('z')))),
+                                Add(Name('y'), Name('z')),
+                                dynamic={'y', 'z'})
