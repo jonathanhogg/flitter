@@ -6,17 +6,22 @@ import unittest
 
 from flitter.model import null
 from flitter.language.tree import (Literal, Name, Pragma, Import, Sequence, Function,
-                                   Negative, Positive, Add, Subtract, Multiply, Divide,
+                                   Positive, Negative, Ceil, Floor, Fract, Power,
+                                   Add, Subtract, Multiply, Divide, FloorDivide, Modulo,
                                    PolyBinding, InlineLet)
 
 
 # AST classes still to test:
 #
-# Top, Function, Lookup, LookupLiteral,
-# Range, Not, Ceil, Floor, Fract, Add, Subtract, Multiply, Divide, FloorDivide, Modulo, Power,
-# EqualTo, NotEqualTo, LessThan, GreaterThan, LessThanOrEqualTo, GreaterThanOrEqualTo, And, Or, Xor,
-# Slice, FastSlice, Call, NodeModifier, Tag, Attributes,
-# Append, Let, StoreGlobal, For, IfCondition, IfElse
+# Lookup, LookupLiteral
+# Range, Not
+# EqualTo, NotEqualTo, LessThan, GreaterThan, LessThanOrEqualTo, GreaterThanOrEqualTo
+# And, Or, Xor
+# Slice
+# Function, Call
+# Tag, Attributes, Append
+# Let, StoreGlobal, For, IfElse
+# Top
 
 
 class SimplifierTestCase(unittest.TestCase):
@@ -47,7 +52,7 @@ class TestName(SimplifierTestCase):
         self.assertSimplifiesTo(Name('x'), Literal(5), static={'x': 5})
 
     def test_rename(self):
-        """Static Names simplify to the result of simplifying that name"""
+        """Static Names simplify to the result of simplifying that name (renaming hack)"""
         self.assertSimplifiesTo(Name('x'), Name('y'), static={'x': Name('y')}, dynamic={'y'})
 
     def test_function_name(self):
@@ -55,22 +60,16 @@ class TestName(SimplifierTestCase):
         self.assertSimplifiesTo(Name('f'), Name('f'), static={'f': Function('f', (), Literal(null))})
 
 
-class TestPragma(SimplifierTestCase):
-    def test_recursive(self):
-        """Pragmas are left alone except for the sub-expression being simplified"""
-        self.assertSimplifiesTo(Pragma('foo', Name('x')), Pragma('foo', Literal(5)), static={'x': 5})
-
-
-class TestImport(SimplifierTestCase):
-    def test_recursive(self):
-        """Imports are left alone except for the sub-expression being simplified"""
-        self.assertSimplifiesTo(Import(('x', 'y'), Name('m')), Import(('x', 'y'), Literal('module.fl')), static={'m': 'module.fl'})
-
-
 class TestSequence(SimplifierTestCase):
     def test_single(self):
         """Single-item sequences simplify to the single expression"""
         self.assertSimplifiesTo(Sequence((Name('x'),)), Name('x'), dynamic={'x'})
+
+    def test_sequence_packing(self):
+        """Sequences within a Sequence are packed together"""
+        self.assertSimplifiesTo(Sequence((Name('x'), Sequence((Name('y'), Sequence((Name('y'), Name('y'))))), Sequence((Name('z'),)))),
+                                Sequence((Name('x'), Name('y'), Name('y'), Name('y'), Name('z'))),
+                                dynamic={'x', 'y', 'z'})
 
     def test_literal_composition(self):
         """Sequential literal vectors are composed"""
@@ -127,7 +126,7 @@ class TestNegative(SimplifierTestCase):
         """Half-literal division has negative pushed into literal"""
         self.assertSimplifiesTo(Negative(Divide(Literal(5), Name('x'))), Divide(Literal(-5), Name('x')), dynamic={'x'})
         # The other way round the division is turned into a multiplication by the inverse of the literal:
-        self.assertSimplifiesTo(Negative(Divide(Name('x'), Literal(5))), Multiply(Name('x'), Literal(-0.2)), dynamic={'x'})
+        self.assertSimplifiesTo(Negative(Divide(Name('x'), Literal(5))), Multiply(Literal(-0.2), Name('x')), dynamic={'x'})
 
     def test_addition(self):
         """Half-literal addition becomes a subtraction"""
@@ -140,6 +139,223 @@ class TestNegative(SimplifierTestCase):
         self.assertSimplifiesTo(Negative(Subtract(Literal(5), Name('x'))), Add(Literal(-5), Name('x')), dynamic={'x'})
         # However, rule for adding a negative results in a subtraction again the other way round
         self.assertSimplifiesTo(Negative(Subtract(Name('x'), Literal(5))), Subtract(Literal(5), Name('x')), dynamic={'x'})
+
+
+class TestCeil(SimplifierTestCase):
+    def test_dynamic(self):
+        """Dynamic ceiling is left alone"""
+        self.assertSimplifiesTo(Ceil(Name('x')), Ceil(Name('x')), dynamic={'x'})
+
+    def test_literal(self):
+        """Literal ceiling is evaluated to a literal"""
+        self.assertSimplifiesTo(Ceil(Literal(4.3)), Literal(5))
+
+
+class TestFloor(SimplifierTestCase):
+    def test_dynamic(self):
+        """Dynamic floor is left alone"""
+        self.assertSimplifiesTo(Floor(Name('x')), Floor(Name('x')), dynamic={'x'})
+
+    def test_literal(self):
+        """Literal floor is evaluated to a literal"""
+        self.assertSimplifiesTo(Floor(Literal(4.3)), Literal(4))
+
+
+class TestFract(SimplifierTestCase):
+    def test_dynamic(self):
+        """Dynamic floor is left alone"""
+        self.assertSimplifiesTo(Fract(Name('x')), Fract(Name('x')), dynamic={'x'})
+
+    def test_literal(self):
+        """Literal fract is evaluated to a literal"""
+        self.assertSimplifiesTo(Fract(Literal(4.3)), Literal(0.3))
+
+
+class TestAdd(SimplifierTestCase):
+    def test_dynamic(self):
+        """Dynamic is left alone"""
+        self.assertSimplifiesTo(Add(Name('x'), Name('y')), Add(Name('x'), Name('y')), dynamic={'x', 'y'})
+
+    def test_recursive(self):
+        """Left and right are simplified"""
+        self.assertSimplifiesTo(Add(Name('x'), Name('y')), Add(Name('x'), Name('z')), dynamic={'x', 'z'}, static={'y': Name('z')})
+        self.assertSimplifiesTo(Add(Name('x'), Name('y')), Add(Name('z'), Name('y')), dynamic={'y', 'z'}, static={'x': Name('z')})
+
+    def test_literal(self):
+        """Literal left and right is evaluated"""
+        self.assertSimplifiesTo(Add(Literal(5), Literal(10)), Literal(15))
+
+    def test_zero(self):
+        """Adding literal zero becomes Positive"""
+        self.assertSimplifiesTo(Add(Literal(0), Name('x')), Positive(Name('x')), dynamic={'x'})
+        self.assertSimplifiesTo(Add(Name('x'), Literal(0)), Positive(Name('x')), dynamic={'x'})
+
+    def test_negative(self):
+        """Adding a Negative becomes a Subtract"""
+        self.assertSimplifiesTo(Add(Name('x'), Negative(Name('y'))), Subtract(Name('x'), Name('y')), dynamic={'x', 'y'})
+        self.assertSimplifiesTo(Add(Negative(Name('x')), Name('y')), Subtract(Name('y'), Name('x')), dynamic={'x', 'y'})
+
+
+class TestSubtract(SimplifierTestCase):
+    def test_dynamic(self):
+        """Dynamic is left alone"""
+        self.assertSimplifiesTo(Subtract(Name('x'), Name('y')), Subtract(Name('x'), Name('y')), dynamic={'x', 'y'})
+
+    def test_recursive(self):
+        """Left and right are simplified"""
+        self.assertSimplifiesTo(Subtract(Name('x'), Name('y')), Subtract(Name('x'), Name('z')), dynamic={'x', 'z'}, static={'y': Name('z')})
+        self.assertSimplifiesTo(Subtract(Name('x'), Name('y')), Subtract(Name('z'), Name('y')), dynamic={'y', 'z'}, static={'x': Name('z')})
+
+    def test_literal(self):
+        """Literal left and right is evaluated"""
+        self.assertSimplifiesTo(Subtract(Literal(5), Literal(10)), Literal(-5))
+
+    def test_subtract_zero(self):
+        """Subtracting literal zero becomes Positive"""
+        self.assertSimplifiesTo(Subtract(Name('x'), Literal(0)), Positive(Name('x')), dynamic={'x'})
+
+    def test_subtract_from_zero(self):
+        """Subtracting from literal zero becomes Negative"""
+        self.assertSimplifiesTo(Subtract(Literal(0), Name('x')), Negative(Name('x')), dynamic={'x'})
+
+    def test_negative(self):
+        """Subtracting a Negative becomes an Add"""
+        self.assertSimplifiesTo(Subtract(Name('x'), Negative(Name('y'))), Add(Name('x'), Name('y')), dynamic={'x', 'y'})
+
+
+class TestMultiply(SimplifierTestCase):
+    def test_dynamic(self):
+        """Dynamic is left alone"""
+        self.assertSimplifiesTo(Multiply(Name('x'), Name('y')), Multiply(Name('x'), Name('y')), dynamic={'x', 'y'})
+
+    def test_recursive(self):
+        """Left and right are simplified"""
+        self.assertSimplifiesTo(Multiply(Name('x'), Name('y')), Multiply(Name('x'), Name('z')), dynamic={'x', 'z'}, static={'y': Name('z')})
+        self.assertSimplifiesTo(Multiply(Name('x'), Name('y')), Multiply(Name('z'), Name('y')), dynamic={'y', 'z'}, static={'x': Name('z')})
+
+    def test_literal(self):
+        """Literal left and right is evaluated"""
+        self.assertSimplifiesTo(Multiply(Literal(5), Literal(10)), Literal(50))
+
+    def test_multiply_one(self):
+        """Multiplying by literal 1 becomes Positive"""
+        self.assertSimplifiesTo(Multiply(Name('x'), Literal(1)), Positive(Name('x')), dynamic={'x'})
+        self.assertSimplifiesTo(Multiply(Literal(1), Name('x')), Positive(Name('x')), dynamic={'x'})
+
+    def test_multiply_minus_one(self):
+        """Multiplying by literal -1 becomes Negative"""
+        self.assertSimplifiesTo(Multiply(Name('x'), Literal(-1)), Negative(Name('x')), dynamic={'x'})
+        self.assertSimplifiesTo(Multiply(Literal(-1), Name('x')), Negative(Name('x')), dynamic={'x'})
+
+    def test_add_propogation(self):
+        """Multiplying a half-literal Add by a literal propogates constant"""
+        self.assertSimplifiesTo(Multiply(Add(Name('x'), Literal(5)), Literal(10)), Add(Multiply(Literal(10), Name('x')), Literal(50)), dynamic={'x'})
+        self.assertSimplifiesTo(Multiply(Literal(10), Add(Name('x'), Literal(5))), Add(Multiply(Literal(10), Name('x')), Literal(50)), dynamic={'x'})
+
+    def test_subtract_propogation(self):
+        """Multiplying a half-literal Subtract by a literal propogates constant"""
+        self.assertSimplifiesTo(Multiply(Subtract(Literal(5), Name('x')), Literal(10)), Subtract(Literal(50), Multiply(Literal(10), Name('x'))), dynamic={'x'})
+        self.assertSimplifiesTo(Multiply(Literal(10), Subtract(Literal(5), Name('x'))), Subtract(Literal(50), Multiply(Literal(10), Name('x'))), dynamic={'x'})
+
+    def test_multiply_propogation(self):
+        """Multiplying a half-literal Multiply by a literal propogates constant"""
+        self.assertSimplifiesTo(Multiply(Multiply(Literal(5), Name('x')), Literal(10)), Multiply(Literal(50), Name('x')), dynamic={'x'})
+        self.assertSimplifiesTo(Multiply(Literal(10), Multiply(Literal(5), Name('x'))), Multiply(Literal(50), Name('x')), dynamic={'x'})
+        self.assertSimplifiesTo(Multiply(Multiply(Name('x'), Literal(5)), Literal(10)), Multiply(Literal(50), Name('x')), dynamic={'x'})
+        self.assertSimplifiesTo(Multiply(Literal(10), Multiply(Name('x'), Literal(5))), Multiply(Literal(50), Name('x')), dynamic={'x'})
+
+    def test_divide_propogation(self):
+        """Multiplying a half-literal Divide by a literal propogates constant"""
+        self.assertSimplifiesTo(Multiply(Divide(Literal(5), Name('x')), Literal(10)), Divide(Literal(50), Name('x')), dynamic={'x'})
+        self.assertSimplifiesTo(Multiply(Literal(10), Divide(Literal(5), Name('x'))), Divide(Literal(50), Name('x')), dynamic={'x'})
+        # When the Divide denominator is the literal, it is propogated into the Multiply literal
+        self.assertSimplifiesTo(Multiply(Divide(Name('x'), Literal(5)), Literal(10)), Multiply(Literal(2), Name('x')), dynamic={'x'})
+        self.assertSimplifiesTo(Multiply(Literal(10), Divide(Name('x'), Literal(5))), Multiply(Literal(2), Name('x')), dynamic={'x'})
+
+    def test_negative_fold(self):
+        """Multiplying a Negative by a literal folds negation into literal"""
+        self.assertSimplifiesTo(Multiply(Negative(Name('x')), Literal(10)), Multiply(Literal(-10), Name('x')), dynamic={'x'})
+        self.assertSimplifiesTo(Multiply(Literal(10), Negative(Name('x'))), Multiply(Literal(-10), Name('x')), dynamic={'x'})
+
+
+class TestDivide(SimplifierTestCase):
+    def test_dynamic(self):
+        """Dynamic is left alone"""
+        self.assertSimplifiesTo(Divide(Name('x'), Name('y')), Divide(Name('x'), Name('y')), dynamic={'x', 'y'})
+
+    def test_recursive(self):
+        """Left and right are simplified"""
+        self.assertSimplifiesTo(Divide(Name('x'), Name('y')), Divide(Name('x'), Name('z')), dynamic={'x', 'z'}, static={'y': Name('z')})
+        self.assertSimplifiesTo(Divide(Name('x'), Name('y')), Divide(Name('z'), Name('y')), dynamic={'y', 'z'}, static={'x': Name('z')})
+
+    def test_literal(self):
+        """Literal left and right is evaluated"""
+        self.assertSimplifiesTo(Divide(Literal(5), Literal(10)), Literal(0.5))
+
+    def test_divide_by_one(self):
+        """Dividing by literal 1 becomes Positive"""
+        self.assertSimplifiesTo(Divide(Name('x'), Literal(1)), Positive(Name('x')), dynamic={'x'})
+
+    def test_divide_by_literal(self):
+        """Dividing by literal becomes Multiply of inverse"""
+        self.assertSimplifiesTo(Divide(Name('x'), Literal(10)), Multiply(Literal(0.1), Name('x')), dynamic={'x'})
+
+
+class TestFloorDivide(SimplifierTestCase):
+    def test_dynamic(self):
+        """Dynamic is left alone"""
+        self.assertSimplifiesTo(FloorDivide(Name('x'), Name('y')), FloorDivide(Name('x'), Name('y')), dynamic={'x', 'y'})
+
+    def test_recursive(self):
+        """Left and right are simplified"""
+        self.assertSimplifiesTo(FloorDivide(Name('x'), Name('y')), FloorDivide(Name('x'), Name('z')), dynamic={'x', 'z'}, static={'y': Name('z')})
+        self.assertSimplifiesTo(FloorDivide(Name('x'), Name('y')), FloorDivide(Name('z'), Name('y')), dynamic={'y', 'z'}, static={'x': Name('z')})
+
+    def test_literal(self):
+        """Literal left and right is evaluated"""
+        self.assertSimplifiesTo(FloorDivide(Literal(5), Literal(10)), Literal(0))
+
+    def test_divide_by_one(self):
+        """Dividing by literal 1 becomes Floor"""
+        self.assertSimplifiesTo(FloorDivide(Name('x'), Literal(1)), Floor(Name('x')), dynamic={'x'})
+
+
+class TestModulo(SimplifierTestCase):
+    def test_dynamic(self):
+        """Dynamic is left alone"""
+        self.assertSimplifiesTo(Modulo(Name('x'), Name('y')), Modulo(Name('x'), Name('y')), dynamic={'x', 'y'})
+
+    def test_recursive(self):
+        """Left and right are simplified"""
+        self.assertSimplifiesTo(Modulo(Name('x'), Name('y')), Modulo(Name('x'), Name('z')), dynamic={'x', 'z'}, static={'y': Name('z')})
+        self.assertSimplifiesTo(Modulo(Name('x'), Name('y')), Modulo(Name('z'), Name('y')), dynamic={'y', 'z'}, static={'x': Name('z')})
+
+    def test_literal(self):
+        """Literal left and right is evaluated"""
+        self.assertSimplifiesTo(Modulo(Literal(5), Literal(10)), Literal(5))
+
+    def test_modulo_one(self):
+        """Modulo literal 1 becomes Fract"""
+        self.assertSimplifiesTo(Modulo(Name('x'), Literal(1)), Fract(Name('x')), dynamic={'x'})
+
+
+class TestPower(SimplifierTestCase):
+    def test_dynamic(self):
+        """Dynamic is left alone"""
+        self.assertSimplifiesTo(Power(Name('x'), Name('y')), Power(Name('x'), Name('y')), dynamic={'x', 'y'})
+
+    def test_recursive(self):
+        """Left and right are simplified"""
+        self.assertSimplifiesTo(Power(Name('x'), Name('y')), Power(Name('x'), Name('z')), dynamic={'x', 'z'}, static={'y': Name('z')})
+        self.assertSimplifiesTo(Power(Name('x'), Name('y')), Power(Name('z'), Name('y')), dynamic={'y', 'z'}, static={'x': Name('z')})
+
+    def test_literal(self):
+        """Literal left and right is evaluated"""
+        self.assertSimplifiesTo(Power(Literal(5), Literal(2)), Literal(25))
+
+    def test_raise_to_power_of_one(self):
+        """Power to literal 1 becomes Positive"""
+        self.assertSimplifiesTo(Power(Name('x'), Literal(1)), Positive(Name('x')), dynamic={'x'})
 
 
 class TestInlineLet(SimplifierTestCase):
@@ -186,3 +402,15 @@ class TestInlineLet(SimplifierTestCase):
         self.assertSimplifiesTo(InlineLet(Add(Name('x'), Name('y')), (PolyBinding(('x',), Name('y')), PolyBinding(('y',), Name('z')))),
                                 Add(Name('y'), Name('z')),
                                 dynamic={'y', 'z'})
+
+
+class TestPragma(SimplifierTestCase):
+    def test_recursive(self):
+        """Pragmas are left alone except for the sub-expression being simplified"""
+        self.assertSimplifiesTo(Pragma('foo', Name('x')), Pragma('foo', Literal(5)), static={'x': 5})
+
+
+class TestImport(SimplifierTestCase):
+    def test_recursive(self):
+        """Imports are left alone except for the sub-expression being simplified"""
+        self.assertSimplifiesTo(Import(('x', 'y'), Name('m')), Import(('x', 'y'), Literal('module.fl')), static={'m': 'module.fl'})

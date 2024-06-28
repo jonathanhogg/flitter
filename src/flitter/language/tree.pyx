@@ -485,6 +485,7 @@ cdef class BinaryOperation(Expression):
         cdef Expression right = self.right._simplify(context)
         cdef bint literal_left = isinstance(left, Literal)
         cdef bint literal_right = isinstance(right, Literal)
+        cdef Expression expr
         if literal_left and literal_right:
             return Literal(self.op((<Literal>left).value, (<Literal>right).value))
         elif literal_left:
@@ -493,6 +494,8 @@ cdef class BinaryOperation(Expression):
         elif literal_right:
             if (expr := self.constant_right(left, (<Literal>right).value)) is not None:
                 return expr._simplify(context)
+        if (expr := self.additional_rules(left, right)) is not None:
+            return expr._simplify(context)
         return type(self)(left, right)
 
     cdef Vector op(self, Vector left, Vector right):
@@ -502,6 +505,9 @@ cdef class BinaryOperation(Expression):
         return None
 
     cdef Expression constant_right(self, Expression left, Vector right):
+        return None
+
+    cdef Expression additional_rules(self, Expression left, Expression right):
         return None
 
     def __repr__(self):
@@ -529,11 +535,15 @@ cdef class Add(MathsBinaryOperation):
     cdef Expression constant_left(self, Vector left, Expression right):
         if left.eq(false_):
             return Positive(right)
-        if isinstance(right, Negative):
-            return Subtract(Literal(left), right.expr)
 
     cdef Expression constant_right(self, Expression left, Vector right):
         return self.constant_left(right, left)
+
+    cdef Expression additional_rules(self, Expression left, Expression right):
+        if isinstance(right, Negative):
+            return Subtract(left, (<Negative>right).expr)
+        if isinstance(left, Negative):
+            return Subtract(right, (<Negative>left).expr)
 
 
 cdef class Subtract(MathsBinaryOperation):
@@ -551,6 +561,10 @@ cdef class Subtract(MathsBinaryOperation):
         if right.eq(false_):
             return Positive(left)
         return Add(left, Literal(right.neg()))
+
+    cdef Expression additional_rules(self, Expression left, Expression right):
+        if isinstance(right, Negative):
+            return Add(left, (<Negative>right).expr)
 
 
 cdef class Multiply(MathsBinaryOperation):
@@ -575,11 +589,13 @@ cdef class Multiply(MathsBinaryOperation):
             if isinstance(maths.left, Literal):
                 return Multiply(Multiply(Literal(left), maths.left), maths.right)
             if isinstance(maths.right, Literal):
-                return Multiply(maths.left, Multiply(Literal(left), maths.right))
+                return Multiply(Multiply(Literal(left), maths.right), maths.left)
         elif isinstance(right, Divide):
             maths = right
             if isinstance(maths.left, Literal):
                 return Divide(Multiply(Literal(left), maths.left), maths.right)
+            if isinstance(maths.right, Literal):
+                return Multiply(Divide(Literal(left), maths.right), maths.left)
         elif isinstance(right, Negative):
             return Multiply(Literal(left.neg()), (<Negative>right).expr)
 
@@ -597,7 +613,7 @@ cdef class Divide(MathsBinaryOperation):
     cdef Expression constant_right(self, Expression left, Vector right):
         if right.eq(true_):
             return Positive(left)
-        return Multiply(left, Literal(true_.truediv(right)))
+        return Multiply(Literal(true_.truediv(right)), left)
 
 
 cdef class FloorDivide(MathsBinaryOperation):
