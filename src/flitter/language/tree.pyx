@@ -754,8 +754,11 @@ cdef class Slice(Expression):
 
     cdef void _compile(self, Program program, list lnames):
         self.expr._compile(program, lnames)
-        self.index._compile(program, lnames)
-        program.slice()
+        if isinstance(self.index, Literal):
+            program.slice_literal((<Literal>self.index).value)
+        else:
+            self.index._compile(program, lnames)
+            program.slice()
 
     cdef Expression _simplify(self, Context context):
         cdef Expression expr = self.expr._simplify(context)
@@ -766,36 +769,10 @@ cdef class Slice(Expression):
             expr_value = (<Literal>expr).value
             index_value = (<Literal>index).value
             return Literal(expr_value.slice(index_value))
-        elif isinstance(index, Literal):
-            index_value = (<Literal>index).value
-            return FastSlice(expr, index_value)
         return Slice(expr, index)
 
     def __repr__(self):
         return f'Slice({self.expr!r}, {self.index!r})'
-
-
-cdef class FastSlice(Expression):
-    cdef readonly Expression expr
-    cdef readonly Vector index
-
-    def __init__(self, Expression expr, Vector index):
-        self.expr = expr
-        self.index = index
-
-    cdef void _compile(self, Program program, list lnames):
-        self.expr._compile(program, lnames)
-        program.slice_literal(self.index.intern())
-
-    cdef Expression _simplify(self, Context context):
-        cdef Expression expr = self.expr._simplify(context)
-        if isinstance(expr, Literal):
-            expr_value = (<Literal>expr).value
-            return Literal(expr_value.slice(self.index))
-        return FastSlice(expr, self.index)
-
-    def __repr__(self):
-        return f'FastSlice({self.expr!r}, {self.index!r})'
 
 
 cdef class Call(Expression):
