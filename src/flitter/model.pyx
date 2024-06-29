@@ -1626,11 +1626,11 @@ cdef class Matrix44(Vector):
 
 @cython.final
 cdef class Node:
-    def __init__(self, str kind, set tags=None, dict attributes=None):
+    def __init__(self, str kind, set tags=None, dict attributes=None, tuple children=()):
         self.kind = kind
         self._tags = None if tags is None else tags.copy()
         self._attributes = None if attributes is None else attributes.copy()
-        self._children = ()
+        self._children = children
 
     def __hash__(self):
         return self.hash()
