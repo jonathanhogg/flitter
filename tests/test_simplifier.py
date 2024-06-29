@@ -12,13 +12,13 @@ from flitter.language.tree import (Binding, PolyBinding,
                                    Add, Subtract, Multiply, Divide, FloorDivide, Modulo,
                                    EqualTo, NotEqualTo, LessThan, GreaterThan, LessThanOrEqualTo, GreaterThanOrEqualTo,
                                    Not, And, Or, Xor, Range, Slice, Lookup,
-                                   InlineLet, Call,
+                                   InlineLet, Call, For,
                                    Pragma, Import)
 
 
 # AST classes still to test:
 #
-# For, IfElse
+# IfElse
 # Tag, Attributes, Append
 # Let, Function, StoreGlobal
 # Top
@@ -717,6 +717,24 @@ class TestCall(SimplifierTestCase):
         self.assertSimplifiesTo(Call(Name('func'), (Add(Literal(1), Name('y')),), ()),
                                 InlineLet(Add(Name('x'), Literal(5)), (PolyBinding(('x',), Add(Literal(1), Name('y'))),)),
                                 static={'func': func}, dynamic={'y'})
+
+
+class TestFor(SimplifierTestCase):
+    def test_dynamic(self):
+        """Dynamic loop source left alone"""
+        self.assertSimplifiesTo(For(('x',), Name('y'), Name('x')), For(('x',), Name('y'), Name('x')), dynamic={'y'})
+
+    def test_single_name_unroll(self):
+        """Simple iteration of a single name over a literal vector"""
+        self.assertSimplifiesTo(For(('x',), Literal([1, 2]), Add(Name('x'), Name('z'))),
+                                Sequence((Add(Literal(1), Name('z')), Add(Literal(2), Name('z')))),
+                                dynamic={'z'})
+
+    def test_multiple_name_unroll(self):
+        """Iteration of multiple names over a literal vector"""
+        self.assertSimplifiesTo(For(('x', 'y'), Literal([1, 2, 3]), Call(Name('f'), (Name('x'), Name('y')), ())),
+                                Sequence((Call(Name('f'), (Literal(1), Literal(2)), ()), Call(Name('f'), (Literal(3), Literal(null)), ()))),
+                                dynamic={'f'})
 
 
 class TestPragma(SimplifierTestCase):

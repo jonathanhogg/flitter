@@ -1212,7 +1212,7 @@ cdef class For(Expression):
         cdef int64_t i=0, n=values.length
         while i < n:
             for name in self.names:
-                context.names[name] = values.item(i)
+                context.names[name] = values.item(i) if i < n else null_
                 i += 1
             remaining.append(self.body._simplify(context))
         context.names = saved
