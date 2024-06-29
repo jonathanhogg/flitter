@@ -4,24 +4,22 @@ Tests of the simplifier, which is part of the language AST
 
 import unittest
 
-from flitter.model import Vector, StateDict, null, true, false
+from flitter.model import Vector, Node, StateDict, null, true, false
 from flitter.language import functions
-from flitter.language.tree import (Binding, PolyBinding,
+from flitter.language.tree import (Binding, PolyBinding, IfCondition,
                                    Literal, Name, Sequence, Function,
                                    Positive, Negative, Ceil, Floor, Fract, Power,
                                    Add, Subtract, Multiply, Divide, FloorDivide, Modulo,
                                    EqualTo, NotEqualTo, LessThan, GreaterThan, LessThanOrEqualTo, GreaterThanOrEqualTo,
                                    Not, And, Or, Xor, Range, Slice, Lookup,
-                                   InlineLet, Call, For,
+                                   Tag, Attributes, Append,
+                                   InlineLet, Call, For, IfElse,
                                    Pragma, Import)
 
 
 # AST classes still to test:
 #
-# IfElse
-# Tag, Attributes, Append
-# Let, Function, StoreGlobal
-# Top
+# Let, Function, StoreGlobal, Top
 
 
 class SimplifierTestCase(unittest.TestCase):
@@ -652,6 +650,56 @@ class TestLookup(SimplifierTestCase):
         self.assertSimplifiesTo(Lookup(Literal(Vector.symbol('foo'))), Literal(5), state=StateDict({Vector.symbol('foo'): 5}))
 
 
+class TestTag(SimplifierTestCase):
+    def test_dynamic(self):
+        """Dynamic node expression is left alone"""
+        self.assertSimplifiesTo(Tag(Name('node'), 'tag'), Tag(Name('node'), 'tag'), dynamic={'node'})
+
+    def test_literal_node(self):
+        """Literal node is tagged"""
+        self.assertSimplifiesTo(Tag(Literal(Node('node')), 'tag'), Literal(Node('node', {'tag'})))
+
+    def test_literal_nodes(self):
+        """Literal nodes are tagged"""
+        self.assertSimplifiesTo(Tag(Literal([Node('node1'), Node('node2', {'tag1'})]), 'tag2'),
+                                Literal([Node('node1', {'tag2'}), Node('node2', {'tag1', 'tag2'})]))
+
+
+class TestAttributes(SimplifierTestCase):
+    def test_dynamic(self):
+        """Dynamic node or value expressions are left alone"""
+        self.assertSimplifiesTo(Attributes(Name('x'), (Binding('y', Literal(5)),)), Attributes(Name('x'), (Binding('y', Literal(5)),)), dynamic={'x'})
+        self.assertSimplifiesTo(Attributes(Literal(Node('node')), (Binding('y', Name('y')),)),
+                                Attributes(Literal(Node('node')), (Binding('y', Name('y')),)), dynamic={'y'})
+
+    def test_literal_node(self):
+        """Literal node has attributes updated"""
+        self.assertSimplifiesTo(Attributes(Literal(Node('node')), (Binding('y', Literal(5)),)),
+                                Literal(Node('node', attributes={'y': Vector(5)})))
+
+    def test_literal_nodes(self):
+        """Literal nodes have attributes updated"""
+        self.assertSimplifiesTo(Attributes(Literal([Node('node1'), Node('node2', attributes={'x': Vector(1)})]), (Binding('y', Literal(5)),)),
+                                Literal([Node('node1', attributes={'y': Vector(5)}), Node('node2', attributes={'x': Vector(1), 'y': Vector(5)})]))
+
+
+class TestAppend(SimplifierTestCase):
+    def test_dynamic(self):
+        """Dynamic node expressions are left alone"""
+        self.assertSimplifiesTo(Append(Name('x'), Literal(Node('y'))), Append(Name('x'), Literal(Node('y'))), dynamic={'x'})
+        self.assertSimplifiesTo(Append(Literal(Node('x')), Name('y')), Append(Literal(Node('x')), Name('y')), dynamic={'y'})
+
+    def test_literal_node(self):
+        """Literal node has sub-node appended"""
+        self.assertSimplifiesTo(Append(Literal(Node('x')), Literal(Node('y'))),
+                                Literal(Node('x', children=(Node('y'),))))
+
+    def test_literal_nodes(self):
+        """Literal nodes have attributes updated"""
+        self.assertSimplifiesTo(Append(Literal([Node('x1'), Node('x2', children=(Node('y1'),))]), Literal(Node('y'))),
+                                Literal([Node('x1', children=(Node('y'),)), Node('x2', children=(Node('y1'), Node('y')))]))
+
+
 class TestInlineLet(SimplifierTestCase):
     def test_dynamic(self):
         """Binding to a dynamic expression is left alone"""
@@ -724,6 +772,15 @@ class TestFor(SimplifierTestCase):
         """Dynamic loop source left alone"""
         self.assertSimplifiesTo(For(('x',), Name('y'), Name('x')), For(('x',), Name('y'), Name('x')), dynamic={'y'})
 
+    def test_recursive(self):
+        """Source and body simplified"""
+        self.assertSimplifiesTo(For(('x',), Name('y'), Add(Name('x'), Name('z'))),
+                                For(('x',), Name('z'), Add(Name('x'), Name('z'))),
+                                static={'y': Name('z')}, dynamic={'z'})
+        self.assertSimplifiesTo(For(('x',), Name('y'), Add(Name('x'), Name('z'))),
+                                For(('x',), Name('y'), Add(Name('x'), Name('w'))),
+                                static={'z': Name('w')}, dynamic={'y', 'w'})
+
     def test_single_name_unroll(self):
         """Simple iteration of a single name over a literal vector"""
         self.assertSimplifiesTo(For(('x',), Literal([1, 2]), Add(Name('x'), Name('z'))),
@@ -735,6 +792,42 @@ class TestFor(SimplifierTestCase):
         self.assertSimplifiesTo(For(('x', 'y'), Literal([1, 2, 3]), Call(Name('f'), (Name('x'), Name('y')), ())),
                                 Sequence((Call(Name('f'), (Literal(1), Literal(2)), ()), Call(Name('f'), (Literal(3), Literal(null)), ()))),
                                 dynamic={'f'})
+
+
+class TestIfElse(SimplifierTestCase):
+    def test_dynamic(self):
+        """Dynamic condition left alone"""
+        self.assertSimplifiesTo(IfElse((IfCondition(Name('x'), Literal(5)),), None), IfElse((IfCondition(Name('x'), Literal(5)),), None), dynamic={'x'})
+
+    def test_recursive(self):
+        """Sub expressions are all simplified"""
+        self.assertSimplifiesTo(IfElse((IfCondition(Name('x'), Name('y')),), Name('z')),
+                                IfElse((IfCondition(Name('w'), Name('y')),), Name('z')),
+                                static={'x': Name('w')}, dynamic={'w', 'y', 'z'})
+        self.assertSimplifiesTo(IfElse((IfCondition(Name('x'), Name('y')),), Name('z')),
+                                IfElse((IfCondition(Name('x'), Name('w')),), Name('z')),
+                                static={'y': Name('w')}, dynamic={'x', 'w', 'z'})
+        self.assertSimplifiesTo(IfElse((IfCondition(Name('x'), Name('y')),), Name('z')),
+                                IfElse((IfCondition(Name('x'), Name('y')),), Name('w')),
+                                static={'z': Name('w')}, dynamic={'x', 'y', 'w'})
+
+    def test_true_condition(self):
+        """A true condition simplifies to the then expression"""
+        self.assertSimplifiesTo(IfElse((IfCondition(Literal(true), Name('y')),), Name('z')), Name('y'), dynamic={'y', 'z'})
+
+    def test_false_condition(self):
+        """A false condition simplifies to the else expression"""
+        self.assertSimplifiesTo(IfElse((IfCondition(Literal(false), Name('y')),), Name('z')), Name('z'), dynamic={'y', 'z'})
+
+    def test_true_second_condition(self):
+        """A true 2nd condition simplifies to an if with the 2nd then as the else"""
+        self.assertSimplifiesTo(IfElse((IfCondition(Name('w'), Name('x')), IfCondition(Literal(true), Name('y')),), Name('z')),
+                                IfElse((IfCondition(Name('w'), Name('x')),), Name('y')), dynamic={'w', 'x', 'y', 'z'})
+
+    def test_false_second_condition(self):
+        """A false 2nd condition simplifies to an if with the 2nd then as the else"""
+        self.assertSimplifiesTo(IfElse((IfCondition(Name('w'), Name('x')), IfCondition(Literal(true), Name('y')),), Name('z')),
+                                IfElse((IfCondition(Name('w'), Name('x')),), Name('y')), dynamic={'w', 'x', 'y', 'z'})
 
 
 class TestPragma(SimplifierTestCase):
