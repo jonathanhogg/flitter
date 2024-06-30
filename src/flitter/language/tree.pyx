@@ -980,9 +980,6 @@ cdef class Append(NodeModifier):
         cdef Vector nodes, childs
         cdef Node c, n
         cdef int64_t i
-        cdef list modifiers
-        cdef Expression expr
-        cdef NodeModifier modifier
         cdef list objects
         if isinstance(children, Literal):
             if isinstance(node, Literal):
@@ -996,23 +993,8 @@ cdef class Append(NodeModifier):
                             n.append(c)
                         objects.append(n)
                     return Literal(objects)
-            else:
-                modifiers = []
-                expr = node
-                while isinstance(expr, NodeModifier):
-                    modifiers.append(expr)
-                    expr = (<NodeModifier>expr).node
-                if isinstance(expr, Literal):
-                    expr = Append(expr, children)._simplify(context)
-                    while modifiers:
-                        modifier = modifiers.pop()
-                        if isinstance(modifier, Attributes):
-                            expr = Attributes(expr, (<Attributes>modifier).bindings)
-                        elif isinstance(modifier, Tag):
-                            expr = Tag(expr, (<Tag>modifier).tag)
-                        elif isinstance(modifier, Append):
-                            expr = Append(expr, (<Append>modifier).children)
-                    return expr
+            elif isinstance(node, Attributes) and isinstance((<Attributes>node).node, Literal):
+                return Attributes(Append((<Attributes>node).node, children), (<Attributes>node).bindings)._simplify(context)
         elif isinstance(children, Sequence) and isinstance((<Sequence>children).expressions[0], Literal):
             node = Append(node, (<Sequence>children).expressions[0])
             children = Sequence((<Sequence>children).expressions[1:])

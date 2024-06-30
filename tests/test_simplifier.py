@@ -682,6 +682,12 @@ class TestAttributes(SimplifierTestCase):
         self.assertSimplifiesTo(Attributes(Literal([Node('node1'), Node('node2', attributes={'x': Vector(1)})]), (Binding('y', Literal(5)),)),
                                 Literal([Node('node1', attributes={'y': Vector(5)}), Node('node2', attributes={'x': Vector(1), 'y': Vector(5)})]))
 
+    def test_combining(self):
+        """Nested attributes are combined"""
+        self.assertSimplifiesTo(Attributes(Attributes(Name('node'), (Binding('x', Name('x')),)), (Binding('y', Name('y')), Binding('z', Name('z')))),
+                                Attributes(Name('node'), (Binding('x', Name('x')), Binding('y', Name('y')), Binding('z', Name('z')))),
+                                dynamic={'node', 'x', 'y', 'z'})
+
 
 class TestAppend(SimplifierTestCase):
     def test_dynamic(self):
@@ -698,6 +704,18 @@ class TestAppend(SimplifierTestCase):
         """Literal nodes have attributes updated"""
         self.assertSimplifiesTo(Append(Literal([Node('x1'), Node('x2', children=(Node('y1'),))]), Literal(Node('y'))),
                                 Literal([Node('x1', children=(Node('y'),)), Node('x2', children=(Node('y1'), Node('y')))]))
+
+    def test_push_through_attributes_to_literal(self):
+        """Literal appends are pushed through intermediate attribute operation to a literal root"""
+        self.assertSimplifiesTo(Append(Attributes(Literal(Node('node1')), (Binding('x', Name('x')),)), Literal(Node('node2'))),
+                                Attributes(Literal(Node('node1', children=(Node('node2'),))), (Binding('x', Name('x')),)),
+                                dynamic={'x'})
+
+    def test_pull_literal_from_sequence(self):
+        """A literal at the start of an appended sequence is pulled out and appended to a literal node"""
+        self.assertSimplifiesTo(Append(Literal(Node('node1')), Sequence((Literal(Node('node2')), Name('x'), Name('y')))),
+                                Append(Literal(Node('node1', children=(Node('node2'),))), Sequence((Name('x'), Name('y')))),
+                                dynamic={'x', 'y'})
 
 
 class TestInlineLet(SimplifierTestCase):
