@@ -975,12 +975,12 @@ cdef class Program:
                 obj = vector.objects[0]
                 if type(obj) is Node:
                     self.instructions.append(InstructionNode(OpCode.LiteralNode, <Node>obj))
-                    return
+                    return self
             else:
                 for obj in vector.objects:
                     if type(obj) is Node:
                         self.instructions.append(InstructionTuple(OpCode.LiteralNodes, vector.objects))
-                        return
+                        return self
         self.instructions.append(InstructionVector(OpCode.Literal, vector))
         return self
 
