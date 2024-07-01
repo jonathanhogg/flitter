@@ -70,7 +70,7 @@ cdef enum OpCode:
     Compose
     Drop
     Dup
-    EndForCompose
+    EndFor
     Eq
     Floor
     FloorDiv
@@ -126,7 +126,7 @@ cdef dict OpCodeNames = {
     OpCode.Compose: 'Compose',
     OpCode.Drop: 'Drop',
     OpCode.Dup: 'Dup',
-    OpCode.EndForCompose: 'EndForCompose',
+    OpCode.EndFor: 'EndFor',
     OpCode.Eq: 'Eq',
     OpCode.Floor: 'Floor',
     OpCode.FloorDiv: 'FloorDiv',
@@ -284,19 +284,6 @@ cdef class InstructionJump(Instruction):
         if self.offset:
             return f'{OpCodeNames[self.code]} .L{self.label} ({self.offset:+d})'
         return f'{OpCodeNames[self.code]} .L{self.label}'
-
-
-cdef class InstructionJumpInt(InstructionJump):
-    cdef readonly int64_t value
-
-    def __init__(self, OpCode code, int64_t label, int64_t value):
-        super().__init__(code, label)
-        self.value = value
-
-    def __str__(self):
-        if self.offset:
-            return f'{OpCodeNames[self.code]} {self.value!r} .L{self.label} ({self.offset:+d})'
-        return f'{OpCodeNames[self.code]} {self.value!r} .L{self.label}'
 
 
 cdef class InstructionFunc(InstructionJump):
@@ -605,6 +592,7 @@ cdef class Function:
 
 cdef class LoopSource:
     cdef Vector source
+    cdef int64_t stride
     cdef int64_t position
     cdef int64_t iterations
 
@@ -824,12 +812,13 @@ cdef inline execute_tag(VectorStack stack, str name):
 
 
 cdef class Program:
-    def __cinit__(self):
+    def __cinit__(self, lnames=()):
         self.instructions = []
-        self.initial_lnames = ()
+        self.initial_lnames = lnames
         self.linked = False
         self.next_label = 1
         self.simplify = True
+        self.compiler_errors = set()
 
     def __len__(self):
         return len(self.instructions)
@@ -890,7 +879,7 @@ cdef class Program:
         assert result.length == 1 and result.objects is not None and isinstance(result.objects[0], Node), "Bad root node"
         context.root = result.objects[0]
 
-    cpdef void link(self):
+    cpdef Program link(self):
         cdef Instruction instruction
         cdef int64_t label, address, target
         cdef list addresses
@@ -907,8 +896,9 @@ cdef class Program:
                 jump = self.instructions[address]
                 jump.offset = target - address
         self.linked = True
+        return self
 
-    cpdef void optimize(self):
+    cpdef Program optimize(self):
         cdef Instruction instruction, last=None
         cdef list instructions=[]
         cdef int64_t n
@@ -935,6 +925,7 @@ cdef class Program:
                         continue
             instructions.append(instruction)
         self.instructions = instructions
+        return self
 
     cpdef void use_simplifier(self, bint simplify):
         self.simplify = simplify
@@ -944,31 +935,39 @@ cdef class Program:
         self.next_label += 1
         return label
 
-    cpdef void dup(self):
+    cpdef Program dup(self):
         self.instructions.append(Instruction(OpCode.Dup))
+        return self
 
-    cpdef void drop(self, int64_t count=1):
+    cpdef Program drop(self, int64_t count=1):
         self.instructions.append(InstructionInt(OpCode.Drop, count))
+        return self
 
-    cpdef void label(self, int64_t label):
+    cpdef Program label(self, int64_t label):
         self.instructions.append(InstructionLabel(label))
+        return self
 
-    cpdef void jump(self, int64_t label):
+    cpdef Program jump(self, int64_t label):
         self.instructions.append(InstructionJump(OpCode.Jump, label))
+        return self
 
-    cpdef void branch_true(self, int64_t label):
+    cpdef Program branch_true(self, int64_t label):
         self.instructions.append(InstructionJump(OpCode.BranchTrue, label))
+        return self
 
-    cpdef void branch_false(self, int64_t label):
+    cpdef Program branch_false(self, int64_t label):
         self.instructions.append(InstructionJump(OpCode.BranchFalse, label))
+        return self
 
-    cpdef void pragma(self, str name):
+    cpdef Program pragma(self, str name):
         self.instructions.append(InstructionStr(OpCode.Pragma, name))
+        return self
 
-    cpdef void import_(self, tuple names):
+    cpdef Program import_(self, tuple names):
         self.instructions.append(InstructionTuple(OpCode.Import, names))
+        return self
 
-    cpdef void literal(self, value):
+    cpdef Program literal(self, value):
         cdef Vector vector = Vector._coerce(value)
         cdef object obj
         if vector.objects is not None:
@@ -983,132 +982,174 @@ cdef class Program:
                         self.instructions.append(InstructionTuple(OpCode.LiteralNodes, vector.objects))
                         return
         self.instructions.append(InstructionVector(OpCode.Literal, vector))
+        return self
 
-    cpdef void local_push(self, int64_t count):
+    cpdef Program local_push(self, int64_t count):
         self.instructions.append(InstructionInt(OpCode.LocalPush, count))
+        return self
 
-    cpdef void local_load(self, int64_t offset):
+    cpdef Program local_load(self, int64_t offset):
         self.instructions.append(InstructionInt(OpCode.LocalLoad, offset))
+        return self
 
-    cpdef void local_drop(self, int64_t count):
+    cpdef Program local_drop(self, int64_t count):
         self.instructions.append(InstructionInt(OpCode.LocalDrop, count))
+        return self
 
-    cpdef void lookup(self):
+    cpdef Program lookup(self):
         self.instructions.append(Instruction(OpCode.Lookup))
+        return self
 
-    cpdef void lookup_literal(self, Vector value):
+    cpdef Program lookup_literal(self, Vector value):
         self.instructions.append(InstructionVector(OpCode.LookupLiteral, value))
+        return self
 
-    cpdef void range(self):
+    cpdef Program range(self):
         self.instructions.append(Instruction(OpCode.Range))
+        return self
 
-    cpdef void neg(self):
+    cpdef Program neg(self):
         self.instructions.append(Instruction(OpCode.Neg))
+        return self
 
-    cpdef void pos(self):
+    cpdef Program pos(self):
         self.instructions.append(Instruction(OpCode.Pos))
+        return self
 
-    cpdef void ceil(self):
+    cpdef Program ceil(self):
         self.instructions.append(Instruction(OpCode.Ceil))
+        return self
 
-    cpdef void floor(self):
+    cpdef Program floor(self):
         self.instructions.append(Instruction(OpCode.Floor))
+        return self
 
-    cpdef void fract(self):
+    cpdef Program fract(self):
         self.instructions.append(Instruction(OpCode.Fract))
+        return self
 
-    cpdef void not_(self):
+    cpdef Program not_(self):
         self.instructions.append(Instruction(OpCode.Not))
+        return self
 
-    cpdef void add(self):
+    cpdef Program add(self):
         self.instructions.append(Instruction(OpCode.Add))
+        return self
 
-    cpdef void sub(self):
+    cpdef Program sub(self):
         self.instructions.append(Instruction(OpCode.Sub))
+        return self
 
-    cpdef void mul(self):
+    cpdef Program mul(self):
         self.instructions.append(Instruction(OpCode.Mul))
+        return self
 
-    cpdef void mul_add(self):
+    cpdef Program mul_add(self):
         self.instructions.append(Instruction(OpCode.MulAdd))
+        return self
 
-    cpdef void truediv(self):
+    cpdef Program truediv(self):
         self.instructions.append(Instruction(OpCode.TrueDiv))
+        return self
 
-    cpdef void floordiv(self):
+    cpdef Program floordiv(self):
         self.instructions.append(Instruction(OpCode.FloorDiv))
+        return self
 
-    cpdef void mod(self):
+    cpdef Program mod(self):
         self.instructions.append(Instruction(OpCode.Mod))
+        return self
 
-    cpdef void pow(self):
+    cpdef Program pow(self):
         self.instructions.append(Instruction(OpCode.Pow))
+        return self
 
-    cpdef void eq(self):
+    cpdef Program eq(self):
         self.instructions.append(Instruction(OpCode.Eq))
+        return self
 
-    cpdef void ne(self):
+    cpdef Program ne(self):
         self.instructions.append(Instruction(OpCode.Ne))
+        return self
 
-    cpdef void gt(self):
+    cpdef Program gt(self):
         self.instructions.append(Instruction(OpCode.Gt))
+        return self
 
-    cpdef void lt(self):
+    cpdef Program lt(self):
         self.instructions.append(Instruction(OpCode.Lt))
+        return self
 
-    cpdef void ge(self):
+    cpdef Program ge(self):
         self.instructions.append(Instruction(OpCode.Ge))
+        return self
 
-    cpdef void le(self):
+    cpdef Program le(self):
         self.instructions.append(Instruction(OpCode.Le))
+        return self
 
-    cpdef void xor(self):
+    cpdef Program xor(self):
         self.instructions.append(Instruction(OpCode.Xor))
+        return self
 
-    cpdef void slice(self):
+    cpdef Program slice(self):
         self.instructions.append(Instruction(OpCode.Slice))
+        return self
 
-    cpdef void slice_literal(self, Vector value):
+    cpdef Program slice_literal(self, Vector value):
         if value.length == 1 and value.numbers != NULL:
             self.instructions.append(InstructionInt(OpCode.IndexLiteral, <int64_t>c_floor(value.numbers[0])))
         else:
             self.instructions.append(InstructionVector(OpCode.SliceLiteral, value))
+        return self
 
-    cpdef void call(self, int64_t count, tuple names=None):
+    cpdef Program call(self, int64_t count, tuple names=None):
         self.instructions.append(InstructionIntTuple(OpCode.Call, count, names))
+        return self
 
-    cpdef void call_fast(self, function, int64_t count):
+    cpdef Program call_fast(self, function, int64_t count):
         self.instructions.append(InstructionObjectInt(OpCode.CallFast, function, count))
+        return self
 
-    cpdef void tag(self, str name):
+    cpdef Program tag(self, str name):
         self.instructions.append(InstructionStr(OpCode.Tag, name))
+        return self
 
-    cpdef void attribute(self, str name):
+    cpdef Program attribute(self, str name):
         self.instructions.append(InstructionStr(OpCode.Attribute, name))
+        return self
 
-    cpdef void append(self, int64_t count=1):
+    cpdef Program append(self, int64_t count=1):
         self.instructions.append(InstructionInt(OpCode.Append, count))
+        return self
 
-    cpdef void compose(self, int64_t count):
+    cpdef Program compose(self, int64_t count):
         self.instructions.append(InstructionInt(OpCode.Compose, count))
+        return self
 
-    cpdef void begin_for(self):
-        self.instructions.append(Instruction(OpCode.BeginFor))
+    cpdef Program begin_for(self, int64_t count):
+        self.instructions.append(InstructionInt(OpCode.BeginFor, count))
+        return self
 
-    cpdef void next(self, int64_t count, int64_t label):
-        self.instructions.append(InstructionJumpInt(OpCode.Next, label, count))
+    cpdef Program next(self, int64_t label):
+        self.instructions.append(InstructionJump(OpCode.Next, label))
+        return self
 
-    cpdef void end_for_compose(self):
-        self.instructions.append(Instruction(OpCode.EndForCompose))
+    cpdef Program end_for(self):
+        self.instructions.append(Instruction(OpCode.EndFor))
+        return self
 
-    cpdef void store_global(self, str name):
+    cpdef Program store_global(self, str name):
         self.instructions.append(InstructionStr(OpCode.StoreGlobal, name))
+        return self
 
-    cpdef void func(self, int64_t label, str name, tuple parameters, int64_t ncaptures=0):
+    cpdef Program func(self, int64_t label, str name, tuple parameters, int64_t ncaptures=0):
         self.instructions.append(InstructionFunc(OpCode.Func, label, name, parameters, ncaptures))
+        return self
 
-    cpdef void exit(self):
+    cpdef Program exit(self):
         self.instructions.append(Instruction(OpCode.Exit))
+        return self
 
     cdef void _execute(self, Context context, int64_t pc, bint record_stats):
         global CallOutCount, CallOutDuration
@@ -1428,18 +1469,22 @@ cdef class Program:
                     push(stack, pop_composed(stack, (<InstructionInt>instruction).value))
 
                 elif instruction.code == OpCode.BeginFor:
+                    n = (<InstructionInt>instruction).value
                     if loop_source is not None:
                         loop_sources.append(loop_source)
                     loop_source = LoopSource.__new__(LoopSource)
                     loop_source.source = pop(stack)
+                    loop_source.stride = n
                     loop_source.position = 0
                     loop_source.iterations = 0
+                    for i in range(n):
+                        push(lnames, null_)
 
                 elif instruction.code == OpCode.Next:
                     if loop_source.position >= loop_source.source.length:
                         pc += (<InstructionJump>instruction).offset
                     else:
-                        n = (<InstructionJumpInt>instruction).value
+                        n = loop_source.stride
                         for i in range(n-1, -1, -1):
                             if loop_source.position >= loop_source.source.length:
                                 poke_at(lnames, i, null_)
@@ -1448,7 +1493,8 @@ cdef class Program:
                             loop_source.position += 1
                         loop_source.iterations += 1
 
-                elif instruction.code == OpCode.EndForCompose:
+                elif instruction.code == OpCode.EndFor:
+                    drop(lnames, loop_source.stride)
                     push(stack, pop_composed(stack, loop_source.iterations))
                     if loop_sources:
                         loop_source = <LoopSource>loop_sources.pop()

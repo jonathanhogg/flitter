@@ -53,12 +53,14 @@ cdef Expression sequence_pack(list expressions):
 
 
 cdef class Expression:
-    def compile(self, tuple initial_lnames=()):
-        cdef Program program = Program.__new__(Program)
-        program.initial_lnames = initial_lnames
+    def compile(self, tuple initial_lnames=(), bint log_errors=True):
+        cdef Program program = Program.__new__(Program, initial_lnames)
         self._compile(program, list(initial_lnames))
         program.optimize()
         program.link()
+        if log_errors:
+            for error in program.compiler_errors:
+                logger.warning("Compiler error: {}", error)
         return program
 
     def simplify(self, StateDict state=None, dict static=None, dynamic=None, bint return_context=False):
@@ -206,9 +208,12 @@ cdef class Sequence(Expression):
 
     cdef void _compile(self, Program program, list lnames):
         cdef Expression expr
-        for expr in self.expressions:
-            expr._compile(program, lnames)
-        program.compose(len(self.expressions))
+        cdef int64_t n=len(self.expressions)
+        if n:
+            for expr in self.expressions:
+                expr._compile(program, lnames)
+            if n > 1:
+                program.compose(n)
 
     cdef Expression _simplify(self, Context context):
         cdef list expressions = []
@@ -255,7 +260,7 @@ cdef class Name(Expression):
             elif self.name in dynamic_builtins:
                 program.literal(dynamic_builtins[self.name])
             else:
-                logger.warning("Unbound name '{}'", self.name)
+                program.compiler_errors.add(f"Unbound name '{self.name}'")
                 program.literal(null_)
 
     cdef Expression _simplify(self, Context context):
@@ -1168,20 +1173,17 @@ cdef class For(Expression):
 
     cdef void _compile(self, Program program, list lnames):
         self.source._compile(program, lnames)
-        program.begin_for()
+        cdef int64_t i, n=len(self.names)
+        program.begin_for(n)
         START = program.new_label()
         END = program.new_label()
-        cdef int64_t i, n=len(self.names)
-        lnames.extend(self.names)
-        program.literal(null_)
-        program.local_push(n)
         program.label(START)
-        program.next(n, END)
+        program.next(END)
+        lnames.extend(self.names)
         self.body._compile(program, lnames)
         program.jump(START)
         program.label(END)
-        program.local_drop(n)
-        program.end_for_compose()
+        program.end_for()
         for i in range(n):
             lnames.pop()
 
