@@ -61,7 +61,7 @@ cdef class Expression:
         program.link()
         return program
 
-    def simplify(self, StateDict state=None, dict static=None, dynamic=None, set errors=None):
+    def simplify(self, StateDict state=None, dict static=None, dynamic=None, bint return_context=False):
         cdef dict context_vars = {}
         cdef str key
         if static is not None:
@@ -70,15 +70,16 @@ cdef class Expression:
         if dynamic is not None:
             for key in dynamic:
                 context_vars[key] = None
-        cdef Context context = Context(state=state, names=context_vars, errors=errors)
+        cdef Context context = Context(state=state, names=context_vars)
         cdef Expression expr
         try:
             expr = self._simplify(context)
         except Exception as exc:
             logger.opt(exception=exc).warning("Unable to simplify program")
             return self
-        cdef str error
-        if errors is None:
+        if return_context:
+            return expr, context
+        else:
             for error in context.errors:
                 logger.warning("Simplification error: {}", error)
         return expr
@@ -870,7 +871,7 @@ cdef class Call(Expression):
                 return Floor(args[0])
             if (<Literal>function).value == static_builtins['fract']:
                 return Fract(args[0])
-        cdef Call call = Call(function, tuple(args), tuple(keyword_args))
+        cdef Call call = Call(function, tuple(args), tuple(keyword_args) if keyword_args else None)
         return call
 
     def __repr__(self):
@@ -1050,6 +1051,13 @@ cdef class Let(Expression):
         cdef str name
         cdef int64_t i, n
         for binding in self.bindings:
+            for existing_name in list(context.names):
+                existing_value = context.names[existing_name]
+                if existing_value is not None and isinstance(existing_value, Name):
+                    for name in binding.names:
+                        if name == (<Name>existing_value).name:
+                            context.names[existing_name] = None
+                            remaining.append(PolyBinding((existing_name,), Name(name)))
             expr = binding.expr._simplify(context)
             if isinstance(expr, Literal):
                 value = (<Literal>expr).value
