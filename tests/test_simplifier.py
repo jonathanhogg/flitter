@@ -677,6 +677,18 @@ class TestTag(SimplifierTestCase):
         self.assertSimplifiesTo(Tag(Literal([Node('node1'), Node('node2', {'tag1'})]), 'tag2'),
                                 Literal([Node('node1', {'tag2'}), Node('node2', {'tag1', 'tag2'})]))
 
+    def test_literal_null(self):
+        """Tag of null becomes null"""
+        self.assertSimplifiesTo(Tag(Literal(null), 'tag'), Literal(null))
+
+    def test_literal_numeric(self):
+        """Tag of numeric is discarded"""
+        self.assertSimplifiesTo(Tag(Literal(5), 'tag'), Literal(5))
+
+    def test_literal_mixed(self):
+        """Tag of mixed literal has all nodes updated"""
+        self.assertSimplifiesTo(Tag(Literal([5, "hello", Node('node')]), 'tag'), Literal([5, "hello", Node('node', {'tag'})]))
+
 
 class TestAttributes(SimplifierTestCase):
     def test_dynamic(self):
@@ -695,11 +707,29 @@ class TestAttributes(SimplifierTestCase):
         self.assertSimplifiesTo(Attributes(Literal([Node('node1'), Node('node2', attributes={'x': Vector(1)})]), (Binding('y', Literal(5)),)),
                                 Literal([Node('node1', attributes={'y': Vector(5)}), Node('node2', attributes={'x': Vector(1), 'y': Vector(5)})]))
 
+    def test_partial_application(self):
+        """Literal bindings are applied until first dynamic binding"""
+        self.assertSimplifiesTo(Attributes(Literal(Node('node')), (Binding('y', Literal(5)), Binding('z', Name('z')))),
+                                Attributes(Literal(Node('node', attributes={'y': Vector(5)})), (Binding('z', Name('z')),)), dynamic={'z'})
+
     def test_combining(self):
         """Nested attributes are combined"""
         self.assertSimplifiesTo(Attributes(Attributes(Name('node'), (Binding('x', Name('x')),)), (Binding('y', Name('y')), Binding('z', Name('z')))),
                                 Attributes(Name('node'), (Binding('x', Name('x')), Binding('y', Name('y')), Binding('z', Name('z')))),
                                 dynamic={'node', 'x', 'y', 'z'})
+
+    def test_literal_null(self):
+        """Attribute set of null becomes null whether dynamic or not"""
+        self.assertSimplifiesTo(Attributes(Literal(null), (Binding('x', Name('x')),)), Literal(null), dynamic={'x'})
+
+    def test_literal_numeric(self):
+        """Attribute set of numeric is discarded whether dynamic or not"""
+        self.assertSimplifiesTo(Attributes(Literal(5), (Binding('x', Name('x')),)), Literal(5), dynamic={'x'})
+
+    def test_literal_mixed(self):
+        """Literal attribute set of mixed literal has all nodes updated"""
+        self.assertSimplifiesTo(Attributes(Literal([5, "hello", Node('node')]), (Binding('x', Literal(5)),)),
+                                Literal([5, "hello", Node('node', attributes={'x': Vector(5)})]))
 
 
 class TestAppend(SimplifierTestCase):
@@ -729,6 +759,27 @@ class TestAppend(SimplifierTestCase):
         self.assertSimplifiesTo(Append(Literal(Node('node1')), Sequence((Literal(Node('node2')), Name('x'), Name('y')))),
                                 Append(Literal(Node('node1', children=(Node('node2'),))), Sequence((Name('x'), Name('y')))),
                                 dynamic={'x', 'y'})
+
+    def test_append_to_literal_null(self):
+        """Append to null is discarded"""
+        self.assertSimplifiesTo(Append(Literal(null), Name('x')), Literal(null), dynamic={'x'})
+
+    def test_append_of_literal_null(self):
+        """Append of null is discarded"""
+        self.assertSimplifiesTo(Append(Name('x'), Literal(null)), Name('x'), dynamic={'x'})
+
+    def test_append_to_literal_numeric(self):
+        """Append to numeric is discarded"""
+        self.assertSimplifiesTo(Append(Literal(5), Name('x')), Literal(5), dynamic={'x'})
+
+    def test_append_of_literal_numeric(self):
+        """Append of numeric is discarded"""
+        self.assertSimplifiesTo(Append(Name('x'), Literal(5)), Name('x'), dynamic={'x'})
+
+    def test_literal_mixed(self):
+        """Mixed literal append to mixed literal has all nodes updated"""
+        self.assertSimplifiesTo(Append(Literal([5, "hello", Node('node')]), Literal([Node('node2'), 7])),
+                                Literal([5, "hello", Node('node', children=(Node('node2'),))]))
 
 
 class TestInlineLet(SimplifierTestCase):

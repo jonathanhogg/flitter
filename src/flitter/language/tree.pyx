@@ -909,13 +909,18 @@ cdef class Tag(NodeModifier):
         cdef int64_t i
         if isinstance(node, Literal):
             nodes = (<Literal>node).value
-            if nodes.isinstance(Node):
-                objects = []
-                for i in range(nodes.length):
-                    n = nodes.objects[i].copy()
+            if nodes.objects is None:
+                return node
+            objects = []
+            for i in range(nodes.length):
+                obj = nodes.objects[i]
+                if isinstance(obj, Node):
+                    n = (<Node>obj).copy()
                     n.add_tag(self.tag)
                     objects.append(n)
-                return Literal(objects)
+                else:
+                    objects.append(obj)
+            return Literal(objects)
         return Tag(node, self.tag)
 
     def __repr__(self):
@@ -949,18 +954,20 @@ cdef class Attributes(NodeModifier):
         node = node._simplify(context)
         cdef Vector nodes, value
         cdef list objects
-        cdef Node nodeobj
-        if isinstance(node, Literal) and bindings and isinstance((<Binding>bindings[-1]).expr, Literal):
+        if isinstance(node, Literal):
             nodes = (<Literal>node).value
-            if nodes.isinstance(Node):
+            if nodes.objects is None:
+                return node
+            if bindings and isinstance((<Binding>bindings[-1]).expr, Literal):
                 objects = []
-                for nodeobj in nodes.objects:
-                    objects.append(nodeobj.copy())
+                for obj in nodes.objects:
+                    objects.append((<Node>obj).copy() if isinstance(obj, Node) else obj)
                 while bindings and isinstance((<Binding>bindings[-1]).expr, Literal):
                     binding = bindings.pop()
                     value = (<Literal>binding.expr).value
-                    for nodeobj in objects:
-                        nodeobj.set_attribute(binding.name, value)
+                    for obj in objects:
+                        if isinstance(obj, Node):
+                            (<Node>obj).set_attribute(binding.name, value)
                 node = Literal(objects)
         if bindings:
             bindings.reverse()
@@ -987,31 +994,34 @@ cdef class Append(NodeModifier):
         cdef Expression node = self.node._simplify(context)
         cdef Expression children = self.children._simplify(context)
         cdef Vector nodes, childs
-        cdef Node c, n
+        cdef Node n
         cdef int64_t i
         cdef list objects
-        if isinstance(children, Literal):
-            childs = (<Literal>children).value
-            if childs.length == 0:
-                return node
-            if isinstance(node, Literal):
-                nodes = (<Literal>node).value
-                if nodes.length == 0:
-                    return NoOp
-                if nodes.isinstance(Node) and childs.isinstance(Node):
-                    objects = []
-                    for i in range(nodes.length):
-                        n = <Node>nodes.objects[i].copy()
-                        for c in childs.objects:
-                            n.append(c)
+        if (isinstance(node, Literal) and (<Literal>node).value.objects is None) or \
+                (isinstance(children, Literal) and (<Literal>children).value.objects is None):
+            return node
+        if isinstance(node, Literal):
+            nodes = (<Literal>node).value
+            if isinstance(children, Literal):
+                childs = (<Literal>children).value
+                objects = []
+                for i in range(nodes.length):
+                    obj = nodes.objects[i]
+                    if isinstance(obj, Node):
+                        n = (<Node>obj).copy()
+                        for child in childs.objects:
+                            if isinstance(child, Node):
+                                n.append(<Node>child)
                         objects.append(n)
-                    return Literal(objects)
-            elif isinstance(node, Attributes) and isinstance((<Attributes>node).node, Literal):
-                return Attributes(Append((<Attributes>node).node, children), (<Attributes>node).bindings)._simplify(context)
-        elif isinstance(children, Sequence) and isinstance((<Sequence>children).expressions[0], Literal):
-            node = Append(node, (<Sequence>children).expressions[0])
-            children = Sequence((<Sequence>children).expressions[1:])
-            return Append(node, children)._simplify(context)
+                    else:
+                        objects.append(obj)
+                return Literal(objects)
+            elif isinstance(children, Sequence) and isinstance((<Sequence>children).expressions[0], Literal):
+                node = Append(node, (<Sequence>children).expressions[0])
+                children = Sequence((<Sequence>children).expressions[1:])
+                return Append(node, children)._simplify(context)
+        elif isinstance(node, Attributes) and isinstance((<Attributes>node).node, Literal):
+            return Attributes(Append((<Attributes>node).node, children), (<Attributes>node).bindings)._simplify(context)
         return Append(node, children)
 
     def __repr__(self):
