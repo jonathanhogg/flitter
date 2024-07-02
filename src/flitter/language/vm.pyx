@@ -876,6 +876,7 @@ cdef class Program:
         cdef Vector result = pop(self.stack)
         assert result.length == 1 and result.objects is not None and isinstance(result.objects[0], Node), "Bad root node"
         context.root = result.objects[0]
+        return context
 
     cpdef Program link(self):
         cdef Instruction instruction
