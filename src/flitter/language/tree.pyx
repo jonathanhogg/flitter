@@ -988,9 +988,13 @@ cdef class Append(NodeModifier):
         cdef int64_t i
         cdef list objects
         if isinstance(children, Literal):
+            childs = (<Literal>children).value
+            if childs.length == 0:
+                return node
             if isinstance(node, Literal):
                 nodes = (<Literal>node).value
-                childs = (<Literal>children).value
+                if nodes.length == 0:
+                    return NoOp
                 if nodes.isinstance(Node) and childs.isinstance(Node):
                     objects = []
                     for i in range(nodes.length):
