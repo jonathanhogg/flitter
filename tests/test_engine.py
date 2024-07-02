@@ -1,5 +1,5 @@
 """
-Flitter functional testing
+Flitter engine functional tests
 """
 
 import asyncio
