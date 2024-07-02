@@ -1,5 +1,5 @@
 """
-Tests of the compiler, which is part of the language AST
+Flitter language compiler unit tests
 """
 
 import unittest

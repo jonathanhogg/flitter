@@ -1,5 +1,5 @@
 """
-Tests of the simplifier, which is part of the language AST
+Flitter language simplifier unit tests
 """
 
 import unittest
