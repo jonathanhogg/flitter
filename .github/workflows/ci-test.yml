@@ -24,9 +24,9 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-13, macos-14]
         include:
         - os: macos-13
-          pytest_options: "--ignore=tests/test_scripts.py"
+          pytest_options: "--ignore=tests/test_engine.py"
         - os: macos-14
-          pytest_options: "--ignore=tests/test_scripts.py"
+          pytest_options: "--ignore=tests/test_engine.py"
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v4
