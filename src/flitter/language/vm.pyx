@@ -866,10 +866,8 @@ cdef class Program:
         cdef PyObject* objptr
         for i in range(n):
             objptr = PyDict_GetItem(context.names, <object>PyTuple_GET_ITEM(self.initial_lnames, i))
-            if objptr != NULL:
-                push(self.lnames, <Vector>objptr)
-            else:
-                push(self.lnames, null_)
+            assert objptr != NULL, "Missing lname"
+            push(self.lnames, <Vector>objptr)
         push(self.stack, Vector(context.root))
         self._execute(context, 0, record_stats)
         assert (<VectorStack>self.lnames).top == n-1, "Bad lnames"
