@@ -119,11 +119,14 @@ cdef class Top(Expression):
             program.local_drop(n-m)
 
     cdef Expression _simplify(self, Context context):
-        cdef list expressions = []
+        cdef list expressions=[], source=list(self.expressions)
         cdef Expression expr
         cdef dict names = dict(context.names)
-        for expr in self.expressions:
-            expr = expr._simplify(context)
+        while source:
+            expr = (<Expression>source.pop(0))._simplify(context)
+            if isinstance(expr, Sequence):
+                source[:0] = (<Sequence>expr).expressions
+                continue
             if not isinstance(expr, Literal) or (<Literal>expr).value.length:
                 expressions.append(expr)
         cdef str name
