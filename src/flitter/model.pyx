@@ -1929,6 +1929,17 @@ cdef class StateDict:
         return f"StateDict({self._state!r})"
 
 
+cdef class DummyStateDict(StateDict):
+    cdef Vector get_item(self, Vector key):
+        return null_
+
+    cdef void set_item(self, Vector key, Vector value):
+        pass
+
+    cdef bint contains(self, Vector key):
+        return True
+
+
 cdef class Context:
     def __init__(self, dict names=None, StateDict state=None, Node root=None, dict pragmas=None,
                  object path=None, Context parent=None, dict references=None, dict modules=None,
