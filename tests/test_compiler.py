@@ -324,7 +324,7 @@ class TestImport(CompilerTestCase):
 
 class TestFunction(CompilerTestCase):
     def test_single_parameter_no_captures(self):
-        func = Function('func', (Binding('x', Literal(null)),), Add(Name('x'), Literal(5)))
+        func = Function('func', (Binding('x', Literal(null)),), Add(Name('x'), Literal(5)), captures=())
         program = Program()
         START = program.new_label()
         END = program.new_label()
@@ -339,8 +339,27 @@ class TestFunction(CompilerTestCase):
         program.func(START, 'func', ('x',), 0)
         self.assertCompilesTo(func, program)
 
+    def test_unknown_captures(self):
+        """If `captures` is `None` then *all* lnames are captured in case"""
+        func = Function('func', (Binding('x', Literal(null)),), Add(Name('x'), Literal(5)))
+        program = Program()
+        START = program.new_label()
+        END = program.new_label()
+        program.local_load(1)
+        program.local_load(0)
+        program.literal(null)
+        program.jump(END)
+        program.label(START)
+        program.local_load(0)
+        program.literal(5)
+        program.add()
+        program.exit()
+        program.label(END)
+        program.func(START, 'func', ('x',), 2)
+        self.assertCompilesTo(func, program, lnames=('a', 'b'))
+
     def test_two_parameters_no_captures(self):
-        func = Function('func', (Binding('x', Literal(null)), Binding('y', Literal(5))), Add(Name('x'), Name('y')))
+        func = Function('func', (Binding('x', Literal(null)), Binding('y', Literal(5))), Add(Name('x'), Name('y')), captures=())
         program = Program()
         START = program.new_label()
         END = program.new_label()
@@ -357,7 +376,7 @@ class TestFunction(CompilerTestCase):
         self.assertCompilesTo(func, program)
 
     def test_two_parameters_one_capture(self):
-        func = Function('func', (Binding('x', Literal(null)), Binding('y', Literal(5))), Multiply(Add(Name('x'), Name('y')), Name('z')))
+        func = Function('func', (Binding('x', Literal(null)), Binding('y', Literal(5))), Multiply(Add(Name('x'), Name('y')), Name('z')), captures=('z',))
         program = Program()
         START = program.new_label()
         END = program.new_label()
@@ -380,7 +399,8 @@ class TestFunction(CompilerTestCase):
         func = Function('func',
                         (Binding('x', Literal(null)),),
                         IfElse((IfCondition(GreaterThan(Name('x'), Literal(0)), Add(Name('x'), Call(Name('func'), (Subtract(Name('x'), Literal(1)),)))),),
-                               Literal(0)))
+                               Literal(0)),
+                        captures=())
         program = Program()
         START = program.new_label()
         END = program.new_label()

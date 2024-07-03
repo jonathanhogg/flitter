@@ -876,27 +876,29 @@ class TestCall(SimplifierTestCase):
 
     def test_simple_inlining(self):
         """Calls to names that resolve to Function objects are inlined as let expressions"""
-        func = Function('func', (Binding('x', Literal(null)),), Add(Name('x'), Literal(5))).simplify()
+        func = Function('func', (Binding('x', Literal(null)),), Add(Name('x'), Literal(5)), captures=(), inlineable=True)
         self.assertSimplifiesTo(Call(Name('func'), (Add(Literal(1), Name('y')),), ()),
                                 Let((PolyBinding(('x',), Add(Literal(1), Name('y'))),), Add(Name('x'), Literal(5))),
                                 static={'func': func}, dynamic={'y'})
 
-    def test_recursive_non_literal(self):
-        """Calls to names that resolve to recursive Function objects are not inlined if arguments are not all literal"""
+    def test_inlineable_recursive_non_literal(self):
+        """Calls to inlineable, recursive functions are *not* inlined if arguments are not all literal"""
         func = Function(
             'func',
             (Binding('x', Literal(null)),),
-            IfElse((IfCondition(GreaterThan(Name('x'), Literal(0)), Add(Name('x'), Call(Name('func'), (Subtract(Name('x'), Literal(1)),)))),), Literal(0))
-        ).simplify()
+            IfElse((IfCondition(GreaterThan(Name('x'), Literal(0)), Add(Name('x'), Call(Name('func'), (Subtract(Name('x'), Literal(1)),)))),), Literal(0)),
+            captures=(), inlineable=True, recursive=True
+        )
         self.assertSimplifiesTo(Call(Name('func'), (Name('y'),)), Call(Name('func'), (Name('y'),)), static={'func': func}, dynamic={'y'})
 
-    def test_recursive_literal_inlining(self):
-        """Calls to names that resolve to recursive Function objects are inlined if arguments are all literal"""
+    def test_inlineable_recursive_literal(self):
+        """Calls to inlineable, recursive functions *are* inlined if arguments are all literal"""
         func = Function(
             'func',
             (Binding('x', Literal(null)),),
-            IfElse((IfCondition(GreaterThan(Name('x'), Literal(0)), Add(Name('x'), Call(Name('func'), (Subtract(Name('x'), Literal(1)),)))),), Literal(0))
-        ).simplify()
+            IfElse((IfCondition(GreaterThan(Name('x'), Literal(0)), Add(Name('x'), Call(Name('func'), (Subtract(Name('x'), Literal(1)),)))),), Literal(0)),
+            captures=(), inlineable=True, recursive=True
+        )
         self.assertSimplifiesTo(Call(Name('func'), (Literal(5),)), Literal(15), static={'func': func})
 
 
