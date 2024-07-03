@@ -69,6 +69,7 @@ compositions : comprehension (";" comprehension)+ -> tuple
 ?comprehension : conditional
                | comprehension "for" name_list "in" conditional -> inline_loop
                | comprehension "where" inline_bindings -> inline_let
+               | "func" _LPAREN parameters _RPAREN conditional -> anonymous_function
 
 inline_bindings: binding+ -> tuple
 

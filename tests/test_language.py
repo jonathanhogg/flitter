@@ -228,6 +228,21 @@ func fib(n)
 !fib x=55
             """)
 
+    def test_anonymous_functions(self):
+        """Note that this is only statically reducible because `map` is inlined and so the
+           anonymous function is bound to `f` and therefore becomes a name"""
+        self.assertCodeOutput(
+            """
+func map(f, xs)
+    for x in xs
+        f(x)
+
+!doubled x=map(func(x, y=2) x*y, ..10)
+            """,
+            """
+!doubled x=0;2;4;6;8;10;12;14;16;18
+            """)
+
 
 class TestExampleScripts(unittest.TestCase):
     """

@@ -91,6 +91,9 @@ class FlitterTransformer(Transformer):
     def let_function(self, function, sequence):
         return tree.Let((tree.PolyBinding((function.name,), function),), sequence)
 
+    def anonymous_function(self, parameters, body):
+        return tree.Function('<anon>', parameters, body)
+
     tuple = v_args(inline=False)(tuple)
 
     add = tree.Add

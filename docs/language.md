@@ -739,6 +739,34 @@ that basis. Therefore, it is often more efficient to pass dynamic values (such
 as `beat`) into the function as parameters than allow them to be captured from
 the environment.
 
+## Anonymous functions
+
+**Flitter** also allows anonymous functions to be defined and used as values
+with the syntax:
+
+```flitter
+func (parameter《=default》《, parameter…》) body
+```
+
+In the grammar rules, anonymous functions sit above inline `if`/`else`
+expressions, but below inline `for` and `where` expressions. Therefore, the
+following creates a vector of 10 anonymous functions, each of which multiplies
+by a different value, not a single function that does 10 multiplications in
+a loop:
+
+```flitter
+let f = func(x) x*y for y in ..10
+```
+
+Note that as function calls are allowed to accept a vector of functions, it is
+valid to call `f`. So `f(3)` will still evaluate to `0;3;6;9;12;15;18;21;24;27`.
+
+It is wise to use parentheses to make the precedence explicit.
+
+As with regular functions, any captured names are bound at the point of
+definition. An anonymous function cannot be recursive as it has no function
+name to use within the body.
+
 ## Template function calls
 
 The special `@` operator provides syntactic sugar for calling a function using
