@@ -1941,16 +1941,16 @@ cdef class DummyStateDict(StateDict):
 
 
 cdef class Context:
-    def __init__(self, dict names=None, StateDict state=None, Node root=None, dict pragmas=None,
+    def __init__(self, dict names=None, StateDict state=None, Node root=None,
                  object path=None, Context parent=None, dict references=None, dict modules=None,
-                 set errors=None, set logs=None):
+                 dict exports=None, set errors=None, set logs=None):
         self.names = names if names is not None else {}
         self.state = state
         self.root = root if root is not None else Node('root')
-        self.pragmas = pragmas if pragmas is not None else {}
         self.path = path
         self.parent = parent
         self.modules = modules if modules is not None else {}
+        self.exports = exports if exports is not None else {}
         self.errors = errors if errors is not None else set()
         self.logs = logs if logs is not None else set()
         self.references = references

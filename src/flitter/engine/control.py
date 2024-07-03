@@ -186,6 +186,7 @@ class EngineController:
                     level = 'SUCCESS' if current_program is None else 'INFO'
                     logger.log(level, "Loaded page {}: {}", self.current_page, self.current_path)
                     run_program = current_program = program
+                    self.handle_pragmas(program.pragmas, frame_time)
                     errors = set()
                     logs = set()
                     self.state_generation0 ^= self.state_generation1
@@ -243,7 +244,6 @@ class EngineController:
                     run_program.run(context, record_stats=self.vm_stats)
                 else:
                     context = Context()
-                self.handle_pragmas(context.pragmas, frame_time)
 
                 new_errors = context.errors.difference(errors) if errors is not None else context.errors
                 errors = context.errors

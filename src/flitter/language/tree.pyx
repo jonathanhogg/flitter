@@ -94,113 +94,90 @@ cdef class Expression:
 
 
 cdef class Top(Expression):
-    cdef readonly tuple expressions
+    cdef readonly tuple pragmas
+    cdef readonly Expression body
 
-    def __init__(self, tuple expressions):
-        self.expressions = expressions
+    def __init__(self, tuple pragmas, Expression body):
+        self.pragmas = pragmas
+        self.body = body
 
     cdef void _compile(self, Program program, list lnames):
-        cdef Expression expr
-        cdef int64_t m = 0
-        for expr in self.expressions:
-            expr._compile(program, lnames)
-            if not isinstance(expr, (Let, Import, Function, Pragma, StoreGlobal)):
-                m += 1
-        if m:
-            program.append(m)
+        cdef Binding binding
+        for binding in self.pragmas:
+            program.set_pragma(binding.name, (<Literal>binding.expr).value)
+        self.body._compile(program, lnames)
+        program.append(1)
+
+    cdef Expression _simplify(self, Context context):
+        return Top(self.pragmas, self.body._simplify(context))
+
+    def __repr__(self):
+        return f'Top({self.pragmas!r}, {self.body!r})'
+
+
+cdef class Export(Expression):
+    cdef readonly dict explicits
+
+    def __init__(self, dict explicits=None):
+        self.explicits = explicits
+
+    cdef void _compile(self, Program program, list lnames):
         cdef str name
+        cdef Vector value
+        if self.explicits:
+            for name, value in self.explicits.items():
+                program.literal(value)
+                program.export(name)
         m = len(program.initial_lnames)
         cdef int64_t i, n=len(lnames)
         if n > m:
             for i in range(n-m):
                 name = lnames[n-1-i]
                 program.local_load(i)
-                program.store_global(name)
-            program.local_drop(n-m)
+                program.export(name)
+        program.literal(null_)
 
     cdef Expression _simplify(self, Context context):
-        cdef list expressions=[], source=list(self.expressions)
-        cdef Expression expr
-        cdef dict names = dict(context.names)
-        while source:
-            expr = (<Expression>source.pop(0))._simplify(context)
-            if isinstance(expr, Sequence):
-                source[:0] = (<Sequence>expr).expressions
-                continue
-            if not isinstance(expr, Literal) or (<Literal>expr).value.length:
-                expressions.append(expr)
         cdef str name
-        cdef list bindings = []
+        cdef dict explicits = dict(self.explicits) if self.explicits else {}
         for name, value in context.names.items():
-            if name not in names and value is not None and isinstance(value, Vector):
-                bindings.append(Binding(name, Literal(value)))
-        if bindings:
-            expressions.append(StoreGlobal(tuple(bindings)))
-        return Top(tuple(expressions))
+            if isinstance(value, Vector):
+                explicits[name] = value
+        if explicits:
+            return Export(explicits)
+        return self
 
     def __repr__(self):
-        return f'Top({self.expressions!r})'
-
-
-cdef class Pragma(Expression):
-    cdef readonly str name
-    cdef readonly Expression expr
-
-    def __init__(self, str name, Expression expr):
-        self.name = name
-        self.expr = expr
-
-    cdef void _compile(self, Program program, list lnames):
-        self.expr._compile(program, lnames)
-        program.pragma(self.name)
-
-    cdef Expression _simplify(self, Context context):
-        return Pragma(self.name, self.expr._simplify(context))
-
-    def __repr__(self):
-        return f'Pragma({self.name!r}, {self.expr!r})'
+        return f'Export({self.explicits!r})'
 
 
 cdef class Import(Expression):
     cdef readonly tuple names
     cdef readonly Expression filename
+    cdef readonly Expression expr
 
-    def __init__(self, tuple names, Expression filename):
+    def __init__(self, tuple names, Expression filename, Expression expr):
         self.names = names
         self.filename = filename
+        self.expr = expr
 
     cdef void _compile(self, Program program, list lnames):
         self.filename._compile(program, lnames)
         program.import_(self.names)
-        lnames.extend(self.names)
+        self.expr._compile(program, lnames + list(self.names))
+        program.local_drop(len(self.names))
 
     cdef Expression _simplify(self, Context context):
         cdef str name
+        cdef dict saved = dict(context.names)
         for name in self.names:
             context.names[name] = None
-        return Import(self.names, self.filename._simplify(context))
+        expr = self.expr._simplify(context)
+        context.names = saved
+        return Import(self.names, self.filename._simplify(context), expr)
 
     def __repr__(self):
-        return f'Import({self.names!r}, {self.filename!r})'
-
-
-cdef class StoreGlobal(Expression):
-    cdef readonly tuple bindings
-
-    def __init__(self, tuple bindings):
-        self.bindings = bindings
-
-    cdef void _compile(self, Program program, list lnames):
-        cdef Binding binding
-        for binding in self.bindings:
-            binding.expr._compile(program, lnames)
-            program.store_global(binding.name)
-
-    cdef Expression _simplify(self, Context context):
-        return self
-
-    def __repr__(self):
-        return f'StoreGlobal({self.bindings!r})'
+        return f'Import({self.names!r}, {self.filename!r}, {self.expr!r})'
 
 
 cdef class Sequence(Expression):
@@ -217,6 +194,8 @@ cdef class Sequence(Expression):
                 expr._compile(program, lnames)
             if n > 1:
                 program.compose(n)
+        else:
+            program.literal(null_)
 
     cdef Expression _simplify(self, Context context):
         cdef list expressions = []
@@ -853,7 +832,7 @@ cdef class Call(Expression):
                         bindings.append(PolyBinding((binding.name,), binding.expr))
                     else:
                         bindings.append(PolyBinding((binding.name,), Literal(null_)))
-                expr = InlineLet(func_expr.expr, tuple(bindings))._simplify(context)
+                expr = Let(tuple(bindings), func_expr.body)._simplify(context)
                 return expr
         cdef list vector_args, results
         cdef Literal literal_arg
@@ -1054,65 +1033,11 @@ cdef class PolyBinding:
 
 cdef class Let(Expression):
     cdef readonly tuple bindings
-
-    def __init__(self, tuple bindings):
-        self.bindings = bindings
-
-    cdef void _compile(self, Program program, list lnames):
-        cdef PolyBinding binding
-        for binding in self.bindings:
-            binding.expr._compile(program, lnames)
-            program.local_push(len(binding.names))
-            lnames.extend(binding.names)
-
-    cdef Expression _simplify(self, Context context):
-        cdef list remaining = []
-        cdef PolyBinding binding
-        cdef Expression expr
-        cdef Vector value
-        cdef str name
-        cdef int64_t i, n
-        for binding in self.bindings:
-            for existing_name in list(context.names):
-                existing_value = context.names[existing_name]
-                if existing_value is not None and isinstance(existing_value, Name):
-                    for name in binding.names:
-                        if name == (<Name>existing_value).name:
-                            context.names[existing_name] = None
-                            remaining.append(PolyBinding((existing_name,), Name(name)))
-            expr = binding.expr._simplify(context)
-            if isinstance(expr, Literal):
-                value = (<Literal>expr).value
-                n = len(binding.names)
-                if n == 1:
-                    name = binding.names[0]
-                    context.names[name] = value
-                else:
-                    for i, name in enumerate(binding.names):
-                        context.names[name] = value.item(i)
-            elif isinstance(expr, Name) and len(binding.names) == 1:
-                name = binding.names[0]
-                if (<Name>expr).name != name:
-                    context.names[name] = expr
-            else:
-                for name in binding.names:
-                    context.names[name] = None
-                remaining.append(PolyBinding(binding.names, expr))
-        if remaining:
-            return Let(tuple(remaining))
-        return NoOp
-
-    def __repr__(self):
-        return f'{self.__class__.__name__}({self.bindings!r})'
-
-
-cdef class InlineLet(Expression):
     cdef readonly Expression body
-    cdef readonly tuple bindings
 
-    def __init__(self, Expression body, tuple bindings):
-        self.body = body
+    def __init__(self, tuple bindings, Expression body):
         self.bindings = bindings
+        self.body = body
 
     cdef void _compile(self, Program program, list lnames):
         cdef PolyBinding binding
@@ -1146,10 +1071,13 @@ cdef class InlineLet(Expression):
                             context.names[existing_name] = None
                             remaining.append(PolyBinding((existing_name,), Name(name)))
                             maybe_resimplify = True
+            n = len(binding.names)
             expr = binding.expr._simplify(context)
-            if isinstance(expr, Literal):
+            if n == 1 and isinstance(expr, Function) and (<Function>expr).inlineable:
+                context.names[binding.names[0]] = expr
+                remaining.append(PolyBinding(binding.names, expr))
+            elif isinstance(expr, Literal):
                 value = (<Literal>expr).value
-                n = len(binding.names)
                 if n == 1:
                     name = binding.names[0]
                     context.names[name] = value
@@ -1168,14 +1096,16 @@ cdef class InlineLet(Expression):
             resimplify ^= maybe_resimplify
         body = self.body._simplify(context)
         context.names = saved
+        if isinstance(body, Literal):
+            return body
         if remaining:
-            body = InlineLet(body, tuple(remaining))
+            body = Let(tuple(remaining), body)
         if resimplify:
             return body._simplify(context)
         return body
 
     def __repr__(self):
-        return f'InlineLet({self.body!r}, {self.bindings!r})'
+        return f'Let({self.bindings!r}, {self.body!r})'
 
 
 cdef class For(Expression):
@@ -1295,15 +1225,17 @@ cdef class IfElse(Expression):
 cdef class Function(Expression):
     cdef readonly str name
     cdef readonly tuple parameters
-    cdef readonly Expression expr
+    cdef readonly Expression body
     cdef readonly tuple captures
+    cdef readonly bint inlineable
     cdef readonly bint recursive
 
-    def __init__(self, str name, tuple parameters, Expression expr, tuple captures=None, bint recursive=False):
+    def __init__(self, str name, tuple parameters, Expression body, tuple captures=None, bint inlineable=False, bint recursive=False):
         self.name = name
         self.parameters = parameters
-        self.expr = expr
+        self.body = body
         self.captures = captures
+        self.inlineable = inlineable
         self.recursive = recursive
 
     cdef void _compile(self, Program program, list lnames):
@@ -1334,18 +1266,16 @@ cdef class Function(Expression):
         END = program.new_label()
         program.jump(END)
         program.label(START)
-        self.expr._compile(program, function_lnames)
+        self.body._compile(program, function_lnames)
         program.exit()
         program.label(END)
         program.func(START, self.name, tuple(parameters), len(captures))
-        program.local_push(1)
-        lnames.append(self.name)
 
     cdef Expression _simplify(self, Context context):
         cdef list parameters = []
         cdef Binding parameter
-        cdef Expression expr
         cdef bint literal = True
+        cdef Expression body
         for parameter in self.parameters:
             expr = parameter.expr._simplify(context) if parameter.expr is not None else None
             if expr is not None and not isinstance(expr, Literal):
@@ -1361,13 +1291,12 @@ cdef class Function(Expression):
                 context.names[key] = value
         for parameter in parameters:
             context.names[parameter.name] = None
-        expr = self.expr._simplify(context)
+        body = self.body._simplify(context)
         cdef recursive = self.name in context.captures
         if recursive:
             context.captures.discard(self.name)
-        cdef Function function = Function(self.name, tuple(parameters), expr, tuple(context.captures), recursive)
-        context.names = saved
-        context.names[self.name] = function if literal and not context.captures else None
+        cdef Function function = Function(self.name, tuple(parameters), body, tuple(context.captures), literal and not context.captures, recursive)
+        context.names = dict(saved)
         if captures is not None:
             context.captures.difference_update(saved)
             captures.update(context.captures)
@@ -1375,4 +1304,4 @@ cdef class Function(Expression):
         return function
 
     def __repr__(self):
-        return f'Function({self.name!r}, {self.parameters!r}, {self.expr!r}, {self.captures!r}, {self.recursive!r})'
+        return f'Function({self.name!r}, {self.parameters!r}, {self.body!r}, {self.captures!r}, {self.inlineable!r}, {self.recursive!r})'

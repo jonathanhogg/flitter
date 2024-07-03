@@ -12,8 +12,8 @@ from flitter.language.tree import (Literal, Name, Sequence,
                                    EqualTo, NotEqualTo, LessThan, GreaterThan, LessThanOrEqualTo, GreaterThanOrEqualTo,
                                    Not, And, Or, Xor, Range, Slice, Lookup,
                                    Tag, Attributes, Append,
-                                   InlineLet, Call, For, IfElse,
-                                   Pragma, Import, Let, Function, StoreGlobal, Top,
+                                   Let, Call, For, IfElse,
+                                   Import, Function, Top, Export,
                                    Binding, PolyBinding, IfCondition)
 
 
@@ -81,6 +81,10 @@ class TestName(SimplifierTestCase):
 
 
 class TestSequence(SimplifierTestCase):
+    def test_empty(self):
+        """Empty sequences simplify to literal null"""
+        self.assertSimplifiesTo(Sequence(()), Literal(null))
+
     def test_single(self):
         """Single-item sequences simplify to the single expression"""
         self.assertSimplifiesTo(Sequence((Name('x'),)), Name('x'), dynamic={'x'})
@@ -782,56 +786,77 @@ class TestAppend(SimplifierTestCase):
                                 Literal([5, "hello", Node('node', children=(Node('node2'),))]))
 
 
-class TestInlineLet(SimplifierTestCase):
+class TestLet(SimplifierTestCase):
     def test_dynamic(self):
         """Binding to a dynamic expression is left alone"""
-        self.assertSimplifiesTo(InlineLet(Add(Name('x'), Name('y')), (PolyBinding(('x',), Add(Name('y'), Literal(5))),)),
-                                InlineLet(Add(Name('x'), Name('y')), (PolyBinding(('x',), Add(Name('y'), Literal(5))),)),
+        self.assertSimplifiesTo(Let((PolyBinding(('x',), Add(Name('y'), Literal(5))),), Add(Name('x'), Name('y'))),
+                                Let((PolyBinding(('x',), Add(Name('y'), Literal(5))),), Add(Name('x'), Name('y'))),
                                 dynamic={'y'})
+
+    def test_let_in_literal(self):
+        """A let over a literal is always just the literal"""
+        self.assertSimplifiesTo(Let((PolyBinding(('x',), Add(Name('y'), Literal(5))),), Literal(10)), Literal(10), dynamic={'y'})
 
     def test_literal_binding(self):
         """Simple binding of a name to a literal"""
-        self.assertSimplifiesTo(InlineLet(Add(Name('x'), Name('y')), (PolyBinding(('x',), Literal(5)),)),
+        self.assertSimplifiesTo(Let((PolyBinding(('x',), Literal(5)),), Add(Name('x'), Name('y'))),
                                 Add(Literal(5), Name('y')),
                                 dynamic={'y'})
 
     def test_literal_multi_binding(self):
         """Binding of a name sequence to a literal"""
-        self.assertSimplifiesTo(InlineLet(Add(Name('x'), Name('y')), (PolyBinding(('x', 'y'), Literal([5, 10])),)), Literal(15))
+        self.assertSimplifiesTo(Let((PolyBinding(('x', 'y'), Literal([5, 10])),), Add(Name('x'), Name('y'))), Literal(15))
 
     def test_literal_short_multi_binding(self):
         """Binding of a name sequence to a short literal wraps"""
-        self.assertSimplifiesTo(InlineLet(Name('z'), (PolyBinding(('x', 'y', 'z'), Literal([5, 10])),)), Literal(5))
+        self.assertSimplifiesTo(Let((PolyBinding(('x', 'y', 'z'), Literal([5, 10])),), Name('z')), Literal(5))
+
+    def test_function_inlining(self):
+        """Binding a name to a Function expression places Function into names for inlining"""
+        self.assertSimplifiesTo(Let((PolyBinding(('f',), Function('f', (Binding('x', Literal(null)),), Name('x'))),), Call(Name('f'), (Literal(5),))),
+                                Literal(5))
+
+    def test_non_literal_function_parameters(self):
+        """A function with non-literal default parameter values is not inlined"""
+        self.assertSimplifiesTo(Let((PolyBinding(('f',), Function('f', (Binding('x', Name('y')),), Name('x'))),), Call(Name('f'), (Literal(5),))),
+                                Let((PolyBinding(('f',), Function('f', (Binding('x', Name('y')),), Name('x'), ())),), Call(Name('f'), (Literal(5),))),
+                                dynamic={'y'})
+
+    def test_function_with_captures(self):
+        """A function with non-literal default parameter values is not inlined"""
+        self.assertSimplifiesTo(Let((PolyBinding(('f',), Function('f', (Binding('x', Literal(null)),), Name('y'))),), Call(Name('f'), (Literal(5),))),
+                                Let((PolyBinding(('f',), Function('f', (Binding('x', Literal(null)),), Name('y'), ('y',))),), Call(Name('f'), (Literal(5),))),
+                                dynamic={'y'})
 
     def test_rename(self):
         """Simple rename of a local"""
-        self.assertSimplifiesTo(InlineLet(Add(Name('x'), Name('y')), (PolyBinding(('x',), Name('y')),)),
+        self.assertSimplifiesTo(Let((PolyBinding(('x',), Name('y')),), Add(Name('x'), Name('y'))),
                                 Add(Name('y'), Name('y')),
                                 dynamic={'y'})
 
     def test_expr_shadowed_rename(self):
         """Rename of a local that is shadowed by a later binding to an expression"""
-        self.assertSimplifiesTo(InlineLet(Add(Name('x'), Name('y')), (PolyBinding(('y',), Add(Name('y'), Literal(5))),)),
-                                InlineLet(Add(Name('x'), Name('y')), (PolyBinding(('x',), Name('y')), PolyBinding(('y',), Add(Name('y'), Literal(5))))),
+        self.assertSimplifiesTo(Let((PolyBinding(('y',), Add(Name('y'), Literal(5))),), Add(Name('x'), Name('y'))),
+                                Let((PolyBinding(('x',), Name('y')), PolyBinding(('y',), Add(Name('y'), Literal(5)))), Add(Name('x'), Name('y'))),
                                 static={'x': Name('y')}, dynamic={'y'})
 
     def test_expr_shadowed_rename_subexpr(self):
         """Rename of a local that is shadowed by a binding to an expression in a sub-expression"""
-        self.assertSimplifiesTo(InlineLet(Add(Literal(5), InlineLet(Add(Name('x'), Name('y')), (PolyBinding(('y',), Add(Name('y'), Literal(5))),))),
-                                          (PolyBinding(('x',), Name('y')),)),
-                                Add(Literal(5), InlineLet(Add(Name('x'), Name('y')), (PolyBinding(('x',), Name('y')),
-                                                                                      PolyBinding(('y',), Add(Name('y'), Literal(5))),))),
+        self.assertSimplifiesTo(Let((PolyBinding(('x',), Name('y')),),
+                                    Add(Literal(5), Let((PolyBinding(('y',), Add(Name('y'), Literal(5))),), Add(Name('x'), Name('y'))))),
+                                Add(Literal(5), Let((PolyBinding(('x',), Name('y')),
+                                                     PolyBinding(('y',), Add(Name('y'), Literal(5))),), Add(Name('x'), Name('y')))),
                                 dynamic={'y'})
 
     def test_literal_shadowed_rename(self):
         """Rename of a local that is shadowed by a later binding to a literal"""
-        self.assertSimplifiesTo(InlineLet(Add(Name('x'), Name('y')), (PolyBinding(('x',), Name('y')), PolyBinding(('y',), Literal(5)))),
+        self.assertSimplifiesTo(Let((PolyBinding(('x',), Name('y')), PolyBinding(('y',), Literal(5))), Add(Name('x'), Name('y'))),
                                 Add(Name('y'), Literal(5)),
                                 dynamic={'y'})
 
     def test_rename_shadowed_rename(self):
         """Rename of a local that is shadowed by a later binding to a rename"""
-        self.assertSimplifiesTo(InlineLet(Add(Name('x'), Name('y')), (PolyBinding(('x',), Name('y')), PolyBinding(('y',), Name('z')))),
+        self.assertSimplifiesTo(Let((PolyBinding(('x',), Name('y')), PolyBinding(('y',), Name('z'))), Add(Name('x'), Name('y'))),
                                 Add(Name('y'), Name('z')),
                                 dynamic={'y', 'z'})
 
@@ -853,7 +878,7 @@ class TestCall(SimplifierTestCase):
         """Calls to names that resolve to Function objects are inlined as let expressions"""
         func = Function('func', (Binding('x', Literal(null)),), Add(Name('x'), Literal(5))).simplify()
         self.assertSimplifiesTo(Call(Name('func'), (Add(Literal(1), Name('y')),), ()),
-                                InlineLet(Add(Name('x'), Literal(5)), (PolyBinding(('x',), Add(Literal(1), Name('y'))),)),
+                                Let((PolyBinding(('x',), Add(Literal(1), Name('y'))),), Add(Name('x'), Literal(5))),
                                 static={'func': func}, dynamic={'y'})
 
     def test_recursive_non_literal(self):
@@ -954,113 +979,58 @@ class TestIfElse(SimplifierTestCase):
                                 IfElse((IfCondition(Name('w'), Name('x')),), Name('y')), dynamic={'w', 'x', 'y', 'z', 'a', 'b'})
 
 
-class TestPragma(SimplifierTestCase):
-    def test_recursive(self):
-        """Pragmas are left alone except for the sub-expression being simplified"""
-        self.assertSimplifiesTo(Pragma('foo', Name('x')), Pragma('foo', Literal(5)), static={'x': 5})
-
-
 class TestImport(SimplifierTestCase):
     def test_recursive(self):
         """Imports are left alone except for the sub-expression being simplified"""
-        self.assertSimplifiesTo(Import(('x', 'y'), Name('m')), Import(('x', 'y'), Literal('module.fl')),
-                                static={'m': 'module.fl'}, with_names={'x': None, 'y': None})
-
-
-class TestLet(SimplifierTestCase):
-    def test_dynamic(self):
-        """Binding to a dynamic expression is left alone"""
-        self.assertSimplifiesTo(Let((PolyBinding(('x',), Add(Name('y'), Literal(5))),)), Let((PolyBinding(('x',), Add(Name('y'), Literal(5))),)),
-                                dynamic={'y'}, with_names={'x': None})
-
-    def test_literal_binding(self):
-        """Simple binding of a name to a literal"""
-        self.assertSimplifiesTo(Let((PolyBinding(('x',), Literal(5)),)), Literal(null), with_names={'x': Vector(5)})
-
-    def test_literal_multi_binding(self):
-        """Binding of a name sequence to a literal"""
-        self.assertSimplifiesTo(Let((PolyBinding(('x', 'y'), Literal([5, 10])),)), Literal(null), with_names={'x': Vector(5), 'y': Vector(10)})
-
-    def test_literal_short_multi_binding(self):
-        """Binding of a name sequence to a short literal wraps"""
-        self.assertSimplifiesTo(Let((PolyBinding(('x', 'y', 'z'), Literal([5, 10])),)), Literal(null),
-                                with_names={'x': Vector(5), 'y': Vector(10), 'z': Vector(5)})
-
-    def test_rename(self):
-        """Simple rename of a local"""
-        self.assertSimplifiesTo(Let((PolyBinding(('x',), Name('y')),)), Literal(null), dynamic={'y'}, with_names={'x': Name('y')})
-
-    def test_expr_shadowed_rename(self):
-        """Binding to a name that shadows a renamed local"""
-        self.assertSimplifiesTo(Let((PolyBinding(('y',), Add(Name('y'), Literal(5))),)),
-                                Let((PolyBinding(('x',), Name('y')), PolyBinding(('y',), Add(Name('y'), Literal(5))))),
-                                dynamic={'y'}, static={'x': Name('y')}, with_names={'x': None})
-
-    def test_literal_shadowed_rename(self):
-        """Rename of a local that is shadowed by a later binding to a literal"""
-        self.assertSimplifiesTo(Let((PolyBinding(('y',), Literal(5)),)),
-                                Let((PolyBinding(('x',), Name('y')),)),
-                                static={'x': Name('y')}, dynamic={'y'}, with_names={'x': None, 'y': Vector(5)})
-
-    def test_rename_shadowed_rename(self):
-        """Rename of a local that is shadowed by a later binding to a rename"""
-        self.assertSimplifiesTo(Let((PolyBinding(('y',), Name('z')),)),
-                                Let((PolyBinding(('x',), Name('y')),)),
-                                static={'x': Name('y')}, dynamic={'y', 'z'}, with_names={'x': None, 'y': Name('z')})
+        self.assertSimplifiesTo(Import(('x', 'y'), Name('m'), Name('z')), Import(('x', 'y'), Literal('module.fl'), Literal(5)),
+                                static={'m': 'module.fl', 'z': 5})
 
 
 class TestFunction(SimplifierTestCase):
     def test_simple_inlineable(self):
-        """A simple, unsimplifiable function with no external references will have empty captures and will be defined for inlining"""
+        """A simple, unsimplifiable function with no external references will have empty captures and will be inlineable"""
         start_func = Function('func', (Binding('x', Literal(null)),), Add(Name('x'), Literal(5)))
-        simpl_func = Function('func', (Binding('x', Literal(null)),), Add(Name('x'), Literal(5)), captures=())
-        self.assertSimplifiesTo(start_func, simpl_func, with_names={'func': simpl_func})
+        simpl_func = Function('func', (Binding('x', Literal(null)),), Add(Name('x'), Literal(5)), captures=(), inlineable=True)
+        self.assertSimplifiesTo(start_func, simpl_func)
 
     def test_recursive(self):
         """Parameter defaults and the body of the function are simplified (again, this is an inlineable function)"""
         start_func = Function('func', (Binding('x', Name('y')),), Add(Name('x'), Name('z')))
-        simpl_func = Function('func', (Binding('x', Literal(null)),), Add(Name('x'), Literal(5)), captures=())
-        self.assertSimplifiesTo(start_func, simpl_func, static={'y': null, 'z': 5}, with_names={'func': simpl_func})
+        simpl_func = Function('func', (Binding('x', Literal(null)),), Add(Name('x'), Literal(5)), captures=(), inlineable=True)
+        self.assertSimplifiesTo(start_func, simpl_func, static={'y': null, 'z': 5})
+
+    def test_non_literal_default(self):
+        """A function that has a dynamic parameter default won't be inlineable"""
+        start_func = Function('func', (Binding('x', Name('y')),), Add(Name('x'), Literal(5)))
+        simpl_func = Function('func', (Binding('x', Name('y')),), Add(Name('x'), Literal(5)), captures=(), inlineable=False)
+        self.assertSimplifiesTo(start_func, simpl_func, dynamic={'y'})
 
     def test_simple_capture(self):
-        """A function that references an external name will have that noted in its captures and won't be defined for inlining"""
+        """A function that references an external name will have that noted in its captures and won't be inlineable"""
         start_func = Function('func', (Binding('x', Literal(null)),), Add(Name('x'), Name('y')))
         simpl_func = Function('func', (Binding('x', Literal(null)),), Add(Name('x'), Name('y')), captures=('y',))
-        self.assertSimplifiesTo(start_func, simpl_func, with_names={'func': None})
+        self.assertSimplifiesTo(start_func, simpl_func)
 
     def test_simple_recursive(self):
-        """A function that references only itself will be marked as recursive and will be defined for inlining"""
+        """A function that references only itself will be marked as recursive and will be inlineable"""
         start_func = Function('func', (Binding('x', Literal(null)),), Add(Name('x'), Call(Name('func'), (Name('x'),))))
-        simpl_func = Function('func', (Binding('x', Literal(null)),), Add(Name('x'), Call(Name('func'), (Name('x'),))), captures=(), recursive=True)
-        self.assertSimplifiesTo(start_func, simpl_func, with_names={'func': simpl_func})
+        simpl_func = Function('func', (Binding('x', Literal(null)),), Add(Name('x'), Call(Name('func'), (Name('x'),))),
+                              captures=(), inlineable=True, recursive=True)
+        self.assertSimplifiesTo(start_func, simpl_func)
 
 
-class TestStoreGlobal(SimplifierTestCase):
-    def test_unchanged(self):
-        """StoreGlobals are unaffected by simplification."""
-        self.assertSimplifiesTo(StoreGlobal((Binding('x', Literal(10)),)), StoreGlobal((Binding('x', Literal(10)),)))
-        self.assertSimplifiesTo(StoreGlobal((Binding('x', Name('y')),)), StoreGlobal((Binding('x', Name('y')),)))
+class TestExport(SimplifierTestCase):
+    def test_empty(self):
+        self.assertSimplifiesTo(Export(), Export())
+
+    def test_explicit(self):
+        self.assertSimplifiesTo(Export(), Export({'x': Vector(5)}), static={'x': 5})
+
+    def test_let_explicit(self):
+        self.assertSimplifiesTo(Let((PolyBinding(('x',), Literal(5)),), Export()), Export({'x': Vector(5)}))
 
 
 class TestTop(SimplifierTestCase):
     def test_recursive(self):
-        """Items in top sequence are simplified"""
-        self.assertSimplifiesTo(Top((Name('w'), Name('x'))), Top((Name('y'), Name('z'))), static={'w': Name('y'), 'x': Name('z')}, dynamic={'y', 'z'})
-
-    def test_null_literal(self):
-        """Literal nulls are removed"""
-        self.assertSimplifiesTo(Top((Literal(null), Name('x'))), Top((Name('y'),)), static={'x': Name('y')}, dynamic={'y'})
-
-    def test_non_null_literal(self):
-        """Other literals are ignored"""
-        self.assertSimplifiesTo(Top((Literal(5), Name('x'))), Top((Literal(5), Name('y'))), static={'x': Name('y')}, dynamic={'y'})
-
-    def test_literal_let(self):
-        """Constant Let expressions add StoreGlobals on end of sequence"""
-        self.assertSimplifiesTo(Top((Let((PolyBinding(('x', 'y'), Literal(5)),)), Name('z'))),
-                                Top((Name('z'), StoreGlobal((Binding('x', Literal(5)), Binding('y', Literal(5)))))),
-                                dynamic={'z'}, with_names={'x': 5, 'y': 5})
-        # Subsequent simplification of this Top will do nothing:
-        self.assertSimplifiesTo(Top((Name('z'), StoreGlobal((Binding('x', Literal(5)), Binding('y', Literal(5)))))),
-                                Top((Name('z'), StoreGlobal((Binding('x', Literal(5)), Binding('y', Literal(5)))))),
-                                dynamic={'z'})
+        """Top expression is simplified"""
+        self.assertSimplifiesTo(Top((), Name('x')), Top((), Name('y')), static={'x': Name('y')}, dynamic={'y'})

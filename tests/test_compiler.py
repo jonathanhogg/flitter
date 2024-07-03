@@ -12,14 +12,15 @@ from flitter.language.tree import (Literal, Name, Sequence,
                                    EqualTo, NotEqualTo, LessThan, GreaterThan, LessThanOrEqualTo, GreaterThanOrEqualTo,
                                    Not, And, Or, Xor, Range, Slice, Lookup,
                                    Tag, Attributes, Append,
-                                   InlineLet, Call, For, IfElse,
-                                   Pragma, Import, Let, Function, StoreGlobal, Top,
+                                   Let, Call, For, IfElse,
+                                   Import, Function, Export, Top,
                                    Binding, PolyBinding, IfCondition)
 from flitter.language.vm import Program
 
 
 class CompilerTestCase(unittest.TestCase):
     def assertCompilesTo(self, expr, program, lnames=(), with_errors=None):
+        program.optimize()
         program.link()
         compiled = expr.compile(initial_lnames=lnames, log_errors=False)
         self.assertEqual(str(compiled), str(program))
@@ -55,7 +56,7 @@ class TestName(CompilerTestCase):
 
 class TestSequence(CompilerTestCase):
     def test_empty(self):
-        self.assertCompilesTo(Sequence(()), Program())
+        self.assertCompilesTo(Sequence(()), Program().literal(null))
 
     def test_single(self):
         self.assertCompilesTo(Sequence((Name('x'),)), Program().local_load(0), lnames=('x',))
@@ -188,17 +189,17 @@ class TestNodeOperations(CompilerTestCase):
         self.assertCompilesTo(Append(Name('x'), Name('y')), Program().local_load(1).local_load(0).append(), lnames=('x', 'y'))
 
 
-class TestInlineLet(CompilerTestCase):
+class TestLet(CompilerTestCase):
     def test_single(self):
-        self.assertCompilesTo(InlineLet(Name('x'), (PolyBinding(('x',), Literal(5)),)),
+        self.assertCompilesTo(Let((PolyBinding(('x',), Literal(5)),), Name('x')),
                               Program().literal(5).local_push(1).local_load(0).local_drop(1))
 
     def test_multiple(self):
-        self.assertCompilesTo(InlineLet(Add(Name('x'), Name('y')), (PolyBinding(('x',), Literal(5)), PolyBinding(('y',), Literal(10)))),
+        self.assertCompilesTo(Let((PolyBinding(('x',), Literal(5)), PolyBinding(('y',), Literal(10))), Add(Name('x'), Name('y'))),
                               Program().literal(5).local_push(1).literal(10).local_push(1).local_load(1).local_load(0).add().local_drop(2))
 
     def test_multi_binding(self):
-        self.assertCompilesTo(InlineLet(Add(Name('x'), Name('y')), (PolyBinding(('x', 'y'), Literal([5, 10])),)),
+        self.assertCompilesTo(Let((PolyBinding(('x', 'y'), Literal([5, 10])),), Add(Name('x'), Name('y'))),
                               Program().literal([5, 10]).local_push(2).local_load(1).local_load(0).add().local_drop(2))
 
 
@@ -315,28 +316,10 @@ class TestIfElse(CompilerTestCase):
                               lnames=('a', 'b', 'x', 'y', 'z'))
 
 
-class TestPragma(CompilerTestCase):
-    def test_pragma(self):
-        self.assertCompilesTo(Pragma('fps', Literal(25)), Program().literal(25).pragma('fps'))
-
-
 class TestImport(CompilerTestCase):
     def test_import(self):
-        self.assertCompilesTo(Import(('x', 'y'), Literal('module.fl')),
-                              Program().literal('module.fl').import_(('x', 'y')))
-
-
-class TestLet(CompilerTestCase):
-    def test_single_let(self):
-        self.assertCompilesTo(Let((PolyBinding(('x',), Literal(5)),)), Program().literal(5).local_push(1))
-
-    def test_multiple_lets(self):
-        self.assertCompilesTo(Let((PolyBinding(('x',), Literal(5)), PolyBinding(('y',), Literal(10)))),
-                              Program().literal(5).local_push(1).literal(10).local_push(1))
-
-    def test_multibind_let(self):
-        self.assertCompilesTo(Let((PolyBinding(('x', 'y'), Literal([5, 10])),)),
-                              Program().literal([5, 10]).local_push(2))
+        self.assertCompilesTo(Import(('x', 'y'), Literal('module.fl'), Literal(null)),
+                              Program().literal('module.fl').import_(('x', 'y')).literal(null).local_drop(2))
 
 
 class TestFunction(CompilerTestCase):
@@ -354,7 +337,6 @@ class TestFunction(CompilerTestCase):
         program.exit()
         program.label(END)
         program.func(START, 'func', ('x',), 0)
-        program.local_push(1)
         self.assertCompilesTo(func, program)
 
     def test_two_parameters_no_captures(self):
@@ -372,7 +354,6 @@ class TestFunction(CompilerTestCase):
         program.exit()
         program.label(END)
         program.func(START, 'func', ('x', 'y'), 0)
-        program.local_push(1)
         self.assertCompilesTo(func, program)
 
     def test_two_parameters_one_capture(self):
@@ -393,7 +374,6 @@ class TestFunction(CompilerTestCase):
         program.exit()
         program.label(END)
         program.func(START, 'func', ('x', 'y'), 1)
-        program.local_push(1)
         self.assertCompilesTo(func, program, lnames=('z',))
 
     def test_recursive_no_captures(self):
@@ -427,60 +407,37 @@ class TestFunction(CompilerTestCase):
         program.exit()
         program.label(END)
         program.func(START, 'func', ('x',), 0)
-        program.local_push(1)
         self.assertCompilesTo(func, program)
 
 
-class TestStoreGlobal(CompilerTestCase):
-    def test_store_one(self):
-        self.assertCompilesTo(StoreGlobal((Binding('x', Literal(5)),)), Program().literal(5).store_global('x'))
+class TestExport(CompilerTestCase):
+    def test_empty(self):
+        self.assertCompilesTo(Export(), Program().literal(null))
 
-    def test_store_multiple(self):
-        self.assertCompilesTo(StoreGlobal((Binding('x', Literal(5)), Binding('y', Literal(10)))),
-                              Program().literal(5).store_global('x').literal(10).store_global('y'))
+    def test_explicit(self):
+        self.assertCompilesTo(Export({'x': Vector(5)}), Program().literal(5).export('x').literal(null))
+
+    def test_initial_lnames_ignored(self):
+        self.assertCompilesTo(Export(), Program().literal(null), lnames=('x', 'y'))
+
+    def test_single(self):
+        self.assertCompilesTo(Let((PolyBinding(('x',), Literal(5)),), Export()),
+                              Program().literal(5).local_push(1).local_load(0).export('x').literal(null).local_drop(1))
+
+    def test_multiple(self):
+        self.assertCompilesTo(Let((PolyBinding(('x',), Literal(5)), PolyBinding(('y',), Literal(10))), Export({'z': Vector(15)})),
+                              Program().literal(5).local_push(1)
+                                       .literal(10).local_push(1)
+                                       .literal(15).export('z')
+                                       .local_load(0).export('y')
+                                       .local_load(1).export('x')
+                                       .literal(null)
+                                       .local_drop(2))
 
 
 class TestTop(CompilerTestCase):
     def test_empty(self):
-        self.assertCompilesTo(Top(()), Program())
+        self.assertCompilesTo(Top((), Sequence(())), Program().literal(null).append())
 
     def test_literal_node(self):
-        self.assertCompilesTo(Top((Literal(Node('window')),)), Program().literal(Node('window')).append())
-
-    def test_single_let(self):
-        self.assertCompilesTo(Top((Let((PolyBinding(('x',), Literal(5)),)),)),
-                              Program().literal(5).local_push(1).local_load(0).store_global('x').local_drop(1))
-
-    def test_multiple_lets(self):
-        self.assertCompilesTo(Top((Let((PolyBinding(('x',), Literal(5)),)), Let((PolyBinding(('y',), Literal(10)),)))),
-                              Program().literal(5).local_push(1).literal(10).local_push(1)
-                                       .local_load(0).store_global('y')
-                                       .local_load(1).store_global('x')
-                                       .local_drop(2))
-
-    def test_import(self):
-        self.assertCompilesTo(Top((Import(('x', 'y'), Literal('module.fl')),)),
-                              Program().literal('module.fl').import_(('x', 'y'))
-                                       .local_load(0).store_global('y')
-                                       .local_load(1).store_global('x')
-                                       .local_drop(2))
-
-    def test_function(self):
-        func = Function('func', (Binding('x', Literal(null)),), Add(Name('x'), Literal(5)))
-        program = Program()
-        START = program.new_label()
-        END = program.new_label()
-        program.literal(null)
-        program.jump(END)
-        program.label(START)
-        program.local_load(0)
-        program.literal(5)
-        program.add()
-        program.exit()
-        program.label(END)
-        program.func(START, 'func', ('x',), 0)
-        program.local_push(1)
-        program.local_load(0)
-        program.store_global('func')
-        program.local_drop(1)
-        self.assertCompilesTo(Top((func,)), program)
+        self.assertCompilesTo(Top((), Literal(Node('window'))), Program().literal(Node('window')).append())

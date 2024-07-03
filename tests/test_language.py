@@ -6,7 +6,7 @@ from pathlib import Path
 import unittest
 
 from flitter import configure_logger
-from flitter.language.tree import Literal, StoreGlobal, Function
+from flitter.language.tree import Literal, Let, Sequence, Export
 from flitter.language.parser import parse
 from flitter.model import Vector, Context, StateDict, DummyStateDict, null
 
@@ -25,17 +25,17 @@ class TestLanguageFeatures(unittest.TestCase):
         run_context = Context(names={name: Vector(value) for name, value in names.items()}, state=StateDict())
         vm_output = '\n'.join(repr(node) for node in top.compile(initial_lnames=tuple(names)).run(run_context).root.children)
         self.assertEqual(vm_output, output, msg="VM output is incorrect")
-        simplifier_output = []
-        unknown = []
-        for expr in top.simplify(static=names).expressions:
-            if isinstance(expr, Literal):
-                simplifier_output.extend(repr(value) for value in expr.value)
-            elif isinstance(expr, (StoreGlobal, Function)):
-                continue
+        expr = top.simplify(static=names).body
+        while not isinstance(expr, Literal):
+            if isinstance(expr, Let):
+                expr = expr.body
+            elif isinstance(expr, Sequence) and len(expr.expressions) == 2 and isinstance(expr.expressions[1], Export):
+                expr = expr.expressions[0]
             else:
-                unknown.append(expr)
-        self.assertEqual(unknown, [])
-        self.assertEqual('\n'.join(simplifier_output), output, msg="Simplifier output is incorrect")
+                break
+        self.assertIsInstance(expr, Literal, msg="Unexpected simplification output")
+        simplifier_output = '\n'.join(repr(node) for node in expr.value)
+        self.assertEqual(simplifier_output, output, msg="Simplifier output is incorrect")
 
     def test_literal_node(self):
         self.assertCodeOutput(
@@ -149,6 +149,20 @@ func foo(nodes, x=10, y, z='world')
 !foo x=10 z='hello';'world'
  !foo #test x=99 z='hello';'me' y=5
   !baz #test
+            """)
+
+    def test_nested_functions(self):
+        self.assertCodeOutput(
+            """
+func fib(n)
+    func fib'(n, x, y)
+        fib'(n-1, y=y+x, x=y) if n > 0 else x
+    fib'(n, 0, 1)
+
+!fib x=fib(10)
+            """,
+            """
+!fib x=55
             """)
 
 
