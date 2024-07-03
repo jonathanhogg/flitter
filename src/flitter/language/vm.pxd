@@ -33,6 +33,7 @@ cdef class VectorStack:
 
 
 cdef class Program:
+    cdef readonly dict pragmas
     cdef readonly list instructions
     cdef bint linked
     cdef readonly object path
@@ -54,7 +55,6 @@ cdef class Program:
     cpdef Program jump(self, int64_t label)
     cpdef Program branch_true(self, int64_t label)
     cpdef Program branch_false(self, int64_t label)
-    cpdef Program pragma(self, str name)
     cpdef Program import_(self, tuple names)
     cpdef Program literal(self, value)
     cpdef Program local_push(self, int64_t count)
@@ -95,7 +95,7 @@ cdef class Program:
     cpdef Program begin_for(self, int64_t count)
     cpdef Program next(self, int64_t label)
     cpdef Program end_for(self)
-    cpdef Program store_global(self, str name)
+    cpdef Program export(self, str name)
     cpdef Program func(self, int64_t label, str name, tuple parameters, int64_t ncaptures=?)
     cpdef Program exit(self)
     cdef void _execute(self, Context context, int64_t pc, bint record_stats)

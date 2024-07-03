@@ -692,11 +692,11 @@ an insufficient number of matching arguments, otherwise any parameters lacking
 matching arguments will be bound to `null`. The result of evaluating all
 body expressions will be returned as a single vector to the caller.
 
-Functions may only be declared at the top-level of a program and so cannot be
-nested within another function definition. Functions may refer to names defined
-above the function definition at the top level. These will be captured at
-definition time. Thus rebinding a name later in the same scope will be ignored.
-For example:
+Functions may be declared anywhere in a program including within another
+function definition. Functions may refer to names defined outside of the
+function definition at the top level. The values of these names will be
+captured at definition time and so rebinding a name later in the same scope
+will be ignored. For example:
 
 ```flitter
 let x=10
@@ -732,12 +732,40 @@ the value `1` and `z` taking the value `3`. Named arguments should be given
 *after* any positional arguments and should not repeat positional arguments.
 
 Functions that have all literal (or unspecified) default parameter values, and
-that do not reference any non-local names within the body, will be in-lined by
+that do not reference any non-local names within the body, will be inlined by
 the simplifier at each call site. The simplifier is then able to bind the
 parameters to the argument expressions and continue simplifying the body on
 that basis. Therefore, it is often more efficient to pass dynamic values (such
 as `beat`) into the function as parameters than allow them to be captured from
 the environment.
+
+## Anonymous functions
+
+**Flitter** also allows anonymous functions to be defined and used as values
+with the syntax:
+
+```flitter
+func (parameter《=default》《, parameter…》) body
+```
+
+In the grammar rules, anonymous functions sit above inline `if`/`else`
+expressions, but below inline `for` and `where` expressions. Therefore, the
+following creates a vector of 10 anonymous functions, each of which multiplies
+by a different value, not a single function that does 10 multiplications in
+a loop:
+
+```flitter
+let f = func(x) x*y for y in ..10
+```
+
+Note that as function calls are allowed to accept a vector of functions, it is
+valid to call `f`. So `f(3)` will still evaluate to `0;3;6;9;12;15;18;21;24;27`.
+
+It is wise to use parentheses to make the precedence explicit.
+
+As with regular functions, any captured names are bound at the point of
+definition. An anonymous function cannot be recursive as it has no function
+name to use within the body.
 
 ## Template function calls
 
@@ -813,8 +841,11 @@ between these different uses.
 
 ## Pragmas
 
-There are three supported pragmas that may be placed at the top-level of a
-source file:
+One or more pragmas may be placed at the top of a source file before any other
+expressions. Pragmas take a name and a value, which must be a literal number
+or string.
+
+There are three currently supported pragmas:
 
 ```flitter
 %pragma tempo 110
@@ -830,8 +861,8 @@ option).
 ## Imports
 
 Top-level definitions (`let`s and `func`s) may be imported from one **Flitter**
-program file into the top level of another. This allows common definitions to
-be collected into *modules* that can be used elsewhere. For example:
+program file into another. This allows common definitions to be collected into
+*modules* that can be used elsewhere. For example:
 
 ```flitter
 import SIZE;thing from 'common.fl'

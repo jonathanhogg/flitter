@@ -18,7 +18,8 @@ class TestBasicInstructions(unittest.TestCase):
         self.program = Program()
         self.state = StateDict()
         self.names = {}
-        self.context = Context(state=self.state, names=self.names)
+        self.exports = {}
+        self.context = Context(state=self.state, names=self.names, exports=self.exports)
 
     def test_Add(self):
         self.program.literal(3)
@@ -171,16 +172,16 @@ class TestBasicInstructions(unittest.TestCase):
         stack = self.program.execute(self.context)
         self.assertEqual(stack, [true, false])
 
-    def test_StoreGlobal(self):
+    def test_Export(self):
         self.program.literal((1, 2))
-        self.program.store_global('x')
+        self.program.export('x')
         self.program.literal(3)
-        self.program.store_global('y')
+        self.program.export('y')
         self.program.literal("Hello world!")
-        self.program.store_global('z')
+        self.program.export('z')
         stack = self.program.execute(self.context)
         self.assertEqual(len(stack), 0)
-        self.assertEqual(self.names, {'x': Vector([1, 2]), 'y': Vector(3), 'z': Vector("Hello world!")})
+        self.assertEqual(self.exports, {'x': Vector([1, 2]), 'y': Vector(3), 'z': Vector("Hello world!")})
 
     def test_Lookup(self):
         self.state['y'] = 12
@@ -260,13 +261,6 @@ class TestBasicInstructions(unittest.TestCase):
         self.program.pow()
         stack = self.program.execute(self.context)
         self.assertEqual(stack, [81])
-
-    def test_Pragma(self):
-        self.program.literal(3)
-        self.program.pragma('x')
-        stack = self.program.execute(self.context)
-        self.assertEqual(len(stack), 0)
-        self.assertEqual(self.context.pragmas, {'x': Vector(3)})
 
     def test_Range(self):
         self.program.literal(0)

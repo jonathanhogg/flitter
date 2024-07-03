@@ -102,11 +102,10 @@ cdef enum OpCode:
     Not
     Pos
     Pow
-    Pragma
     Range
     Slice
     SliceLiteral
-    StoreGlobal
+    Export
     Sub
     Tag
     TrueDiv
@@ -158,11 +157,10 @@ cdef dict OpCodeNames = {
     OpCode.Not: 'Not',
     OpCode.Pos: 'Pos',
     OpCode.Pow: 'Pow',
-    OpCode.Pragma: 'Pragma',
     OpCode.Range: 'Range',
     OpCode.Slice: 'Slice',
     OpCode.SliceLiteral: 'SliceLiteral',
-    OpCode.StoreGlobal: 'StoreGlobal',
+    OpCode.Export: 'Export',
     OpCode.Sub: 'Sub',
     OpCode.Tag: 'Tag',
     OpCode.TrueDiv: 'TrueDiv',
@@ -687,6 +685,7 @@ cdef inline dict import_module(Context context, str filename, bint record_stats,
     import_context.logs = context.logs
     import_context.state = StateDict()
     import_context.names = {}
+    import_context.exports = {}
     import_context.path = program.path
     import_context.stack = stack
     import_context.lnames = lnames
@@ -699,8 +698,8 @@ cdef inline dict import_module(Context context, str filename, bint record_stats,
     drop(stack, 1)
     assert stack.top == stack_top, "Bad stack"
     assert lnames.top == lnames_top, "Bad lnames"
-    context.modules[program] = import_context.names
-    return import_context.names
+    context.modules[program] = import_context.exports
+    return import_context.exports
 
 
 cdef inline void execute_append(VectorStack stack, int64_t count):
@@ -813,6 +812,7 @@ cdef inline execute_tag(VectorStack stack, str name):
 
 cdef class Program:
     def __cinit__(self, lnames=()):
+        self.pragmas = {}
         self.instructions = []
         self.initial_lnames = lnames
         self.linked = False
@@ -831,6 +831,9 @@ cdef class Program:
 
     def set_top(self, object top):
         self.top = top
+
+    def set_pragma(self, str name, Vector value):
+        self.pragmas[name] = value
 
     def execute(self, Context context, list initial_stack=None, list lnames=None, bint record_stats=False):
         """This is a test-harness function. Do not use."""
@@ -956,10 +959,6 @@ cdef class Program:
 
     cpdef Program branch_false(self, int64_t label):
         self.instructions.append(InstructionJump(OpCode.BranchFalse, label))
-        return self
-
-    cpdef Program pragma(self, str name):
-        self.instructions.append(InstructionStr(OpCode.Pragma, name))
         return self
 
     cpdef Program import_(self, tuple names):
@@ -1138,8 +1137,8 @@ cdef class Program:
         self.instructions.append(Instruction(OpCode.EndFor))
         return self
 
-    cpdef Program store_global(self, str name):
-        self.instructions.append(InstructionStr(OpCode.StoreGlobal, name))
+    cpdef Program export(self, str name):
+        self.instructions.append(InstructionStr(OpCode.Export, name))
         return self
 
     cpdef Program func(self, int64_t label, str name, tuple parameters, int64_t ncaptures=0):
@@ -1154,7 +1153,7 @@ cdef class Program:
         global CallOutCount, CallOutDuration
         cdef VectorStack stack=context.stack, lnames=context.lnames
         cdef int64_t i, n, program_end=len(self.instructions)
-        cdef dict global_names=context.names, state=context.state._state
+        cdef dict exports=context.exports, state=context.state._state
         cdef list loop_sources=[]
         cdef LoopSource loop_source = None
         cdef double duration, call_duration
@@ -1199,9 +1198,6 @@ cdef class Program:
                 elif instruction.code == OpCode.BranchFalse:
                     if not pop(stack).as_bool():
                         pc += (<InstructionJump>instruction).offset
-
-                elif instruction.code == OpCode.Pragma:
-                    PyDict_SetItem(context.pragmas, (<InstructionStr>instruction).value, pop(stack))
 
                 elif instruction.code == OpCode.Import:
                     filename = pop(stack).as_string()
@@ -1500,8 +1496,8 @@ cdef class Program:
                     else:
                         loop_source = None
 
-                elif instruction.code == OpCode.StoreGlobal:
-                    PyDict_SetItem(global_names, (<InstructionStr>instruction).value, pop(stack))
+                elif instruction.code == OpCode.Export:
+                    PyDict_SetItem(exports, (<InstructionStr>instruction).value, pop(stack))
 
                 else:
                     raise ValueError(f"Unrecognised instruction: {instruction}")

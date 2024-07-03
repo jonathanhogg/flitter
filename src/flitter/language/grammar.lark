@@ -2,7 +2,7 @@
 %import common.WS_INLINE
 %ignore WS_INLINE
 %ignore /\\$\n/m
-%declare _INDENT _DEDENT
+%declare _INDENT _DEDENT _EOF
 
 _NL: /((--[^\r\n]*)?\r?\n[\t ]*)+/
 
@@ -16,35 +16,36 @@ _HASHBANG : /#!.*\r?\n/
 _LPAREN : "("
 _RPAREN : ")"
 
-top : _HASHBANG? _NL? top_expressions
+top : _HASHBANG? _NL? pragmas _NL? sequence
 
-top_expressions : top_expression* -> tuple
+pragmas : pragma* -> tuple
 
-?top_expression : expression
-                | "let" multiline_bindings -> let
-                | "%pragma" NAME node _NL -> pragma
-                | "import" name_list "from" composition _NL ->  file_import
-                | "func" NAME _LPAREN parameters _RPAREN _NL _INDENT sequence _DEDENT -> function
+pragma : "%pragma" NAME literal _NL -> binding
 
-sequence : expressions [let_sequence]
+sequence : expressions
 
-let_sequence : "let" multiline_bindings sequence
+expressions : expression* let_expression? -> tuple
 
-expressions : expression* -> tuple
+let_expression : "let" multiline_bindings sequence -> let
+               | function sequence -> let_function
+               | "import" name_list "from" composition _NL sequence ->  let_import
 
 ?expression : node _NL
             | node _NL _INDENT sequence _DEDENT -> append
             | "@" atom [attribute_bindings] _NL [_INDENT sequence _DEDENT] -> template_call
             | "for" name_list "in" range _NL _INDENT sequence _DEDENT -> loop
-            | "if" tests ["else" _NL _INDENT sequence _DEDENT] -> if_else
+            | "if" conditions ["else" _NL _INDENT sequence _DEDENT] -> if_else
+            | _EOF -> export
+
+function : "func" NAME _LPAREN parameters _RPAREN _NL _INDENT sequence _DEDENT
 
 parameters : (parameter ("," parameter)*)? -> tuple
 
 parameter : NAME ["=" node] -> binding
 
-tests : test ("elif" test)* -> tuple
+conditions : condition ("elif" condition)* -> tuple
 
-test : composition _NL _INDENT sequence _DEDENT
+condition : composition _NL _INDENT sequence _DEDENT
 
 ?node : composition
       | node TAG -> tag
@@ -68,6 +69,7 @@ compositions : comprehension (";" comprehension)+ -> tuple
 ?comprehension : conditional
                | comprehension "for" name_list "in" conditional -> inline_loop
                | comprehension "where" inline_bindings -> inline_let
+               | "func" _LPAREN parameters _RPAREN conditional -> anonymous_function
 
 inline_bindings: binding+ -> tuple
 

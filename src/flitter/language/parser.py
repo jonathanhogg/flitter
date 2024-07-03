@@ -9,6 +9,7 @@ from sys import intern
 from lark import Lark, Transformer
 from lark.exceptions import UnexpectedInput
 from lark.indenter import Indenter
+from lark.lexer import Token
 from lark.visitors import v_args
 
 from .. import model
@@ -25,6 +26,10 @@ class FlitterIndenter(Indenter):
     INDENT_type = '_INDENT'
     DEDENT_type = '_DEDENT'
     tab_len = 8
+
+    def _process(self, stream):
+        yield from super()._process(stream)
+        yield Token('_EOF', '')
 
 
 class ParseError(Exception):
@@ -68,14 +73,6 @@ class FlitterTransformer(Transformer):
     def inline_loop(self, body, names, source):
         return tree.For(names, source, body)
 
-    def sequence(self, expressions, let_sequence=None):
-        if let_sequence is not None:
-            expressions = expressions + (let_sequence,)
-        return tree.Sequence(expressions)
-
-    def let_sequence(self, bindings, expressions):
-        return tree.InlineLet(expressions, bindings)
-
     def call(self, function, args):
         args = list(args)
         bindings = []
@@ -91,6 +88,12 @@ class FlitterTransformer(Transformer):
             return tree.Call(function, (sequence,), bindings)
         return tree.Call(function, (tree.Literal(model.null),), bindings or None)
 
+    def let_function(self, function, sequence):
+        return tree.Let((tree.PolyBinding((function.name,), function),), sequence)
+
+    def anonymous_function(self, parameters, body):
+        return tree.Function('<anon>', parameters, body)
+
     tuple = v_args(inline=False)(tuple)
 
     add = tree.Add
@@ -98,17 +101,18 @@ class FlitterTransformer(Transformer):
     attributes = tree.Attributes
     binding = tree.Binding
     bool = tree.Literal
+    condition = tree.IfCondition
     divide = tree.Divide
+    export = tree.Export
     eq = tree.EqualTo
-    file_import = tree.Import
-    floor_divide = tree.FloorDivide
     function = tree.Function
+    floor_divide = tree.FloorDivide
     ge = tree.GreaterThanOrEqualTo
     gt = tree.GreaterThan
     if_else = tree.IfElse
-    inline_let = tree.InlineLet
     le = tree.LessThanOrEqualTo
     let = tree.Let
+    let_import = tree.Import
     literal = tree.Literal
     logical_and = tree.And
     logical_not = tree.Not
@@ -125,11 +129,10 @@ class FlitterTransformer(Transformer):
     poly_binding = tree.PolyBinding
     pos = tree.Positive
     power = tree.Power
-    pragma = tree.Pragma
+    sequence = tree.Sequence
     slice = tree.Slice
     subtract = tree.Subtract
     tag = tree.Tag
-    test = tree.IfCondition
     top = tree.Top
 
 
