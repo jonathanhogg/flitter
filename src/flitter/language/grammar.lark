@@ -27,23 +27,25 @@ sequence : expressions
 expressions : expression* let_expression? -> tuple
 
 let_expression : "let" multiline_bindings sequence -> let
-               | "func" NAME _LPAREN parameters _RPAREN _NL _INDENT sequence _DEDENT sequence -> function
-               | "import" name_list "from" composition _NL sequence ->  file_import
+               | function sequence -> let_function
+               | "import" name_list "from" composition _NL sequence ->  let_import
 
 ?expression : node _NL
             | node _NL _INDENT sequence _DEDENT -> append
             | "@" atom [attribute_bindings] _NL [_INDENT sequence _DEDENT] -> template_call
             | "for" name_list "in" range _NL _INDENT sequence _DEDENT -> loop
-            | "if" tests ["else" _NL _INDENT sequence _DEDENT] -> if_else
+            | "if" conditions ["else" _NL _INDENT sequence _DEDENT] -> if_else
             | _EOF -> export
+
+function : "func" NAME _LPAREN parameters _RPAREN _NL _INDENT sequence _DEDENT
 
 parameters : (parameter ("," parameter)*)? -> tuple
 
 parameter : NAME ["=" node] -> binding
 
-tests : test ("elif" test)* -> tuple
+conditions : condition ("elif" condition)* -> tuple
 
-test : composition _NL _INDENT sequence _DEDENT
+condition : composition _NL _INDENT sequence _DEDENT
 
 ?node : composition
       | node TAG -> tag

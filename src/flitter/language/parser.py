@@ -88,8 +88,8 @@ class FlitterTransformer(Transformer):
             return tree.Call(function, (sequence,), bindings)
         return tree.Call(function, (tree.Literal(model.null),), bindings or None)
 
-    def function(self, name, parameters, body, expression):
-        return tree.Let((tree.PolyBinding((name,), tree.Function(name, parameters, body)),), expression)
+    def let_function(self, function, sequence):
+        return tree.Let((tree.PolyBinding((function.name,), function),), sequence)
 
     tuple = v_args(inline=False)(tuple)
 
@@ -98,16 +98,18 @@ class FlitterTransformer(Transformer):
     attributes = tree.Attributes
     binding = tree.Binding
     bool = tree.Literal
+    condition = tree.IfCondition
     divide = tree.Divide
     export = tree.Export
     eq = tree.EqualTo
-    file_import = tree.Import
+    function = tree.Function
     floor_divide = tree.FloorDivide
     ge = tree.GreaterThanOrEqualTo
     gt = tree.GreaterThan
     if_else = tree.IfElse
     le = tree.LessThanOrEqualTo
     let = tree.Let
+    let_import = tree.Import
     literal = tree.Literal
     logical_and = tree.And
     logical_not = tree.Not
@@ -128,7 +130,6 @@ class FlitterTransformer(Transformer):
     slice = tree.Slice
     subtract = tree.Subtract
     tag = tree.Tag
-    test = tree.IfCondition
     top = tree.Top
 
 
