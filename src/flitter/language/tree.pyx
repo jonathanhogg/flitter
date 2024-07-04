@@ -797,7 +797,10 @@ cdef class Call(Expression):
             value = context.names[(<Name>function).name]
             if isinstance(value, Function):
                 func_expr = <Function>value
-        cdef bint literal = func_expr is not None or (isinstance(function, Literal) and (<Literal>function).value.objects is not None)
+        cdef bint literal_func = isinstance(function, Literal)
+        if literal_func and not (<Literal>function).value.objects:
+            return NoOp
+        cdef bint literal_args = True
         cdef Expression arg, expr
         cdef list args = []
         if self.args:
@@ -805,7 +808,7 @@ cdef class Call(Expression):
                 arg = arg._simplify(context)
                 args.append(arg)
                 if not isinstance(arg, Literal):
-                    literal = False
+                    literal_args = False
         cdef list keyword_args = []
         cdef Binding binding
         if self.keyword_args:
@@ -813,39 +816,35 @@ cdef class Call(Expression):
                 arg = binding.expr._simplify(context)
                 keyword_args.append(Binding(binding.name, arg))
                 if not isinstance(arg, Literal):
-                    literal = False
+                    literal_args = False
         cdef list bindings
         cdef dict kwargs
         cdef int64_t i
-        if func_expr is not None:
-            assert not func_expr.captures, "Cannot inline functions with captured names"
-            if not func_expr.recursive or literal:
-                kwargs = {binding.name: binding.expr for binding in keyword_args}
-                bindings = []
-                for i, binding in enumerate(func_expr.parameters):
-                    if i < len(args):
-                        bindings.append(PolyBinding((binding.name,), <Expression>args[i]))
-                    elif binding.name in kwargs:
-                        bindings.append(PolyBinding((binding.name,), <Expression>kwargs[binding.name]))
-                    elif binding.expr is not None:
-                        bindings.append(PolyBinding((binding.name,), binding.expr))
-                    else:
-                        bindings.append(PolyBinding((binding.name,), Literal(null_)))
-                expr = Let(tuple(bindings), func_expr.body)._simplify(context)
-                return expr
+        if func_expr is not None and not func_expr.captures and (not func_expr.recursive or literal_args):
+            kwargs = {binding.name: binding.expr for binding in keyword_args}
+            bindings = []
+            for i, binding in enumerate(func_expr.parameters):
+                if i < len(args):
+                    bindings.append(PolyBinding((binding.name,), <Expression>args[i]))
+                elif binding.name in kwargs:
+                    bindings.append(PolyBinding((binding.name,), <Expression>kwargs[binding.name]))
+                elif binding.expr is not None:
+                    bindings.append(PolyBinding((binding.name,), binding.expr))
+                else:
+                    bindings.append(PolyBinding((binding.name,), Literal(null_)))
+            expr = Let(tuple(bindings), func_expr.body)._simplify(context)
+            return expr
         cdef list vector_args, results
         cdef Literal literal_arg
-        if literal:
+        if literal_func and literal_args:
             vector_args = [literal_arg.value for literal_arg in args]
             kwargs = {binding.name: (<Literal>binding.expr).value for binding in keyword_args}
             results = []
             for func in (<Literal>function).value.objects:
                 if callable(func):
                     try:
-                        if hasattr(func, 'context_func'):
-                            results.append(Literal(func(context, *vector_args, **kwargs)))
-                        else:
-                            results.append(Literal(func(*vector_args, **kwargs)))
+                        assert not hasattr(func, 'context_func')
+                        results.append(Literal(func(*vector_args, **kwargs)))
                     except Exception as exc:
                         context.errors.add(f"Error calling {func.__name__}: {str(exc)}")
             return sequence_pack(results)
@@ -1247,7 +1246,7 @@ cdef class Function(Expression):
                     program.local_load(i)
                     break
             else:
-                logger.warning("Unbound name '{}'", name)
+                program.compiler_errors.add(f"Unbound name '{name}'")
                 program.literal(null_)
             function_lnames.append(name)
         function_lnames.append(self.name)
