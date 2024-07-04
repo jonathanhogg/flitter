@@ -77,3 +77,11 @@ max-line-length = 160
 
 [tool.cibuildwheel]
 skip = ["pp*", "*_i686", "*-win32"]
+
+[tool.coverage.run]
+plugins = ["Cython.Coverage"]
+source = ["src"]
+
+[tool.coverage.report]
+ignore_errors = true
+exclude_also = ["raise NotImplementedError", "raise MemoryError", "raise AssertionError"]

@@ -1,4 +1,3 @@
-# cython: language_level=3, profile=True
 
 from ...model cimport Node, Vector, Matrix44
 

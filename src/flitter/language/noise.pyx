@@ -1,4 +1,3 @@
-# cython: language_level=3, profile=False
 
 """
 OpenSimplex 2(s) noise generation

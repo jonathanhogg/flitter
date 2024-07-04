@@ -1,4 +1,4 @@
-# cython: language_level=3, profile=False, boundscheck=False, wraparound=False
+# cython: boundscheck=False, wraparound=False
 
 import cython
 import numpy as np

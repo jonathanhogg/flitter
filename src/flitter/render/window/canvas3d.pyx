@@ -1,4 +1,3 @@
-# cython: language_level=3, profile=True
 
 """
 Flitter OpenGL 3D drawing canvas

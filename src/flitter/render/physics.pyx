@@ -1,4 +1,4 @@
-# cython: language_level=3, profile=False, boundscheck=False, wraparound=False, cdivision=True
+# cython: boundscheck=False, wraparound=False, cdivision=True
 
 """
 Flitter physics engine

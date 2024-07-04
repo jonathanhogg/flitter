@@ -1,4 +1,3 @@
-# cython: language_level=3, profile=True
 
 """
 Flitter drawing canvas based on Skia

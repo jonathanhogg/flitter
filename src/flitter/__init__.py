@@ -9,7 +9,7 @@ from loguru import logger
 
 try:
     import pyximport
-    pyximport.install()
+    pyximport.install(inplace=True, language_level=3)
 except ImportError:
     pass
 

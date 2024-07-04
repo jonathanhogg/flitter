@@ -1,4 +1,4 @@
-# cython: language_level=3, profile=False, wraparound=False, boundscheck=False
+# cython: wraparound=False, boundscheck=False
 
 """
 Flitter language stack-based virtual machine
