@@ -1659,9 +1659,8 @@ cdef class Node:
     @property
     def children(self):
         cdef object child
-        if self._children is not None:
-            for child in self._children:
-                yield child
+        for child in self._children:
+            yield child
 
     @property
     def tags(self):
@@ -1827,9 +1826,8 @@ cdef class Node:
                 parts.append(key + "=" + value.repr())
         lines.append(" ".join(parts))
         cdef Node child
-        if self._children is not None:
-            for child in self._children:
-                child.repr(lines, indent+1)
+        for child in self._children:
+            child.repr(lines, indent+1)
         return
 
     def __repr__(self):

@@ -748,7 +748,7 @@ cdef inline void execute_append(VectorStack stack, int64_t count):
                 if o:
                     node._children = PyTuple_GetSlice(dest, 0, o)
                 else:
-                    node._children = None
+                    node._children = ()
             else:
                 node._children = dest
     drop(stack, count)
