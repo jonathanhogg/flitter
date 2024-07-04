@@ -27,9 +27,10 @@ class FlitterIndenter(Indenter):
     DEDENT_type = '_DEDENT'
     tab_len = 8
 
-    def _process(self, stream):
-        yield from super()._process(stream)
-        yield Token('_EOF', '')
+    def process(self, stream):
+        for token in super().process(stream):
+            yield token
+        yield Token('_EOF', '', start_pos=token.end_pos, end_pos=token.end_pos)
 
 
 class ParseError(Exception):
@@ -143,6 +144,8 @@ PARSER = Lark(GRAMMAR, postlex=FlitterIndenter(), regex=True, start='top', maybe
 
 def parse(source):
     try:
+        if not source.endswith('\n'):
+            source += '\n'
         return PARSER.parse(source)
     except UnexpectedInput as exc:
         raise ParseError(f"Parse error in source at line {exc.line} column {exc.column}",
