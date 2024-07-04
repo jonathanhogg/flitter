@@ -563,8 +563,6 @@ cdef class Multiply(MathsBinaryOperation):
             maths = right
             if isinstance(maths.left, Literal):
                 return Divide(Multiply(Literal(left), maths.left), maths.right)
-            if isinstance(maths.right, Literal):
-                return Multiply(Divide(Literal(left), maths.right), maths.left)
         elif isinstance(right, Negative):
             return Multiply(Literal(left.neg()), (<Negative>right).expr)
 
