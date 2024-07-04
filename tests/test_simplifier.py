@@ -59,8 +59,22 @@ class TestName(SimplifierTestCase):
         self.assertSimplifiesTo(Name('x'), Name('x'), dynamic={'x'})
 
     def test_static(self):
-        """Static Vectors simplify to a Literal"""
-        self.assertSimplifiesTo(Name('x'), Literal(5), static={'x': 5})
+        """Static Vectors simplify to a Literal of a copy of the vector"""
+        value = Vector(5)
+        original = Name('x')
+        simplified = original.simplify(static={'x': value})
+        self.assertIsInstance(simplified, Literal)
+        self.assertEqual(simplified.value, value)
+        self.assertIsNot(simplified.value, value)
+
+    def test_static_vector_like(self):
+        """Static vector-likes simplify to a Literal of the original object"""
+        value = functions.uniform(null)
+        original = Name('x')
+        simplified = original.simplify(static={'x': value})
+        self.assertIsInstance(simplified, Literal)
+        self.assertEqual(simplified.value, value)
+        self.assertIs(simplified.value, value)
 
     def test_rename(self):
         """Static Names simplify to the result of simplifying that name (renaming hack)"""
@@ -125,6 +139,13 @@ class TestPositive(SimplifierTestCase):
     def test_positive_binary_maths(self):
         """Positive of a binary mathematical operation becomes that operation"""
         self.assertSimplifiesTo(Positive(Add(Name('x'), Name('y'))), Add(Name('x'), Name('y')), dynamic={'x', 'y'})
+
+    def test_binary_maths_positive(self):
+        """All binary maths operators will eat a Positive left or right"""
+        for cls in [Add, Subtract, Multiply, Divide, FloorDivide, Power, Modulo]:
+            with self.subTest(cls=cls):
+                self.assertSimplifiesTo(cls(Positive(Name('x')), Name('y')), cls(Name('x'), Name('y')), dynamic={'x', 'y'})
+                self.assertSimplifiesTo(cls(Name('x'), Positive(Name('y'))), cls(Name('x'), Name('y')), dynamic={'x', 'y'})
 
 
 class TestNegative(SimplifierTestCase):
@@ -292,7 +313,7 @@ class TestMultiply(SimplifierTestCase):
         """Multiplying a half-literal Divide by a literal propogates constant"""
         self.assertSimplifiesTo(Multiply(Divide(Literal(5), Name('x')), Literal(10)), Divide(Literal(50), Name('x')), dynamic={'x'})
         self.assertSimplifiesTo(Multiply(Literal(10), Divide(Literal(5), Name('x'))), Divide(Literal(50), Name('x')), dynamic={'x'})
-        # When the Divide denominator is the literal, it is propogated into the Multiply literal
+        # When the Divide denominator is the literal, it simplified into a multiply by the reciprocal and then the multiplies are merged
         self.assertSimplifiesTo(Multiply(Divide(Name('x'), Literal(5)), Literal(10)), Multiply(Literal(2), Name('x')), dynamic={'x'})
         self.assertSimplifiesTo(Multiply(Literal(10), Divide(Name('x'), Literal(5))), Multiply(Literal(2), Name('x')), dynamic={'x'})
 
@@ -874,12 +895,50 @@ class TestCall(SimplifierTestCase):
         self.assertSimplifiesTo(Call(Literal(functions.sqrtv), (Literal(25),), ()), Literal(5))
         self.assertSimplifiesTo(Call(Literal(functions.sqrtv), (), (Binding('xs', Literal(25)),)), Literal(5))
 
-    def test_simple_inlining(self):
+    def test_static_failure(self):
+        """Static calls to built-in functions that raise an exception are replaced with null and the error is recorded"""
+        self.assertSimplifiesTo(Call(Literal(functions.sqrtv), (), ()), Literal(null),
+                                with_errors={'Error calling sqrtv: sqrtv() takes exactly 1 positional argument (0 given)'})
+
+    def test_non_callable_literal(self):
+        """Calls to literals that are definitely not callable (i.e., empty or numeric) are replaced with null"""
+        self.assertSimplifiesTo(Call(Literal(null), (Name('x'),), ()), Literal(null), dynamic={'x'})
+        self.assertSimplifiesTo(Call(Literal(5), (Name('x'),), ()), Literal(null), dynamic={'x'})
+
+    def test_simple_named_inlining(self):
         """Calls to names that resolve to Function objects are inlined as let expressions"""
         func = Function('func', (Binding('x', Literal(null)),), Add(Name('x'), Literal(5)), captures=(), inlineable=True)
         self.assertSimplifiesTo(Call(Name('func'), (Add(Literal(1), Name('y')),), ()),
                                 Let((PolyBinding(('x',), Add(Literal(1), Name('y'))),), Add(Name('x'), Literal(5))),
                                 static={'func': func}, dynamic={'y'})
+
+    def test_simple_anonymous_inlining(self):
+        """Direct calls to anonymous functions are inlined as let expressions"""
+        func = Function('<anon>', (Binding('x', Literal(null)),), Add(Name('x'), Literal(5)), captures=(), inlineable=True)
+        self.assertSimplifiesTo(Call(func, (Add(Literal(1), Name('y')),), ()),
+                                Let((PolyBinding(('x',), Add(Literal(1), Name('y'))),), Add(Name('x'), Literal(5))),
+                                dynamic={'y'})
+
+    def test_simple_inlined_missing_parameter_default(self):
+        """An inlined function with a default parameter value used"""
+        func = Function('func', (Binding('x', None), Binding('y', Literal(1))), Add(Name('x'), Name('y')), captures=(), inlineable=True)
+        self.assertSimplifiesTo(Call(Name('func'), (Literal(5),), ()),
+                                Literal(6),
+                                static={'func': func})
+
+    def test_simple_inlined_keyword_argument(self):
+        """An inlined function with a keyword argument given"""
+        func = Function('func', (Binding('x', None), Binding('y', Literal(1))), Add(Name('x'), Name('y')), captures=(), inlineable=True)
+        self.assertSimplifiesTo(Call(Name('func'), (Literal(1),), (Binding('y', Literal(2)),)),
+                                Literal(3),
+                                static={'func': func})
+
+    def test_simple_inlined_missing_default_parameter_used(self):
+        """An inlined function with a keyword argument given"""
+        func = Function('func', (Binding('x', None), Binding('y', Literal(1))), Add(Name('x'), Name('y')), captures=(), inlineable=True)
+        self.assertSimplifiesTo(Call(Name('func'), (), ()),
+                                Literal(null),
+                                static={'func': func})
 
     def test_inlineable_recursive_non_literal(self):
         """Calls to inlineable, recursive functions are *not* inlined if arguments are not all literal"""
@@ -900,6 +959,12 @@ class TestCall(SimplifierTestCase):
             captures=(), inlineable=True, recursive=True
         )
         self.assertSimplifiesTo(Call(Name('func'), (Literal(5),)), Literal(15), static={'func': func})
+
+    def test_fast_functions(self):
+        """Calls to ceil/floor/fract are replaced with the matching unary operation node"""
+        self.assertSimplifiesTo(Call(Name('ceil'), (Name('x'),), ()), Ceil(Name('x')), dynamic={'x'})
+        self.assertSimplifiesTo(Call(Name('floor'), (Name('x'),), ()), Floor(Name('x')), dynamic={'x'})
+        self.assertSimplifiesTo(Call(Name('fract'), (Name('x'),), ()), Fract(Name('x')), dynamic={'x'})
 
 
 class TestFor(SimplifierTestCase):
@@ -1018,6 +1083,14 @@ class TestFunction(SimplifierTestCase):
         start_func = Function('func', (Binding('x', Literal(null)),), Add(Name('x'), Call(Name('func'), (Name('x'),))))
         simpl_func = Function('func', (Binding('x', Literal(null)),), Add(Name('x'), Call(Name('func'), (Name('x'),))),
                               captures=(), inlineable=True, recursive=True)
+        self.assertSimplifiesTo(start_func, simpl_func)
+
+    def test_nested_captures(self):
+        """A function containing another function that captures a name from the surrounding function"""
+        start_func = Function('func', (Binding('x', Literal(null)),), Function('add', (Binding('y', Literal(null)),), Add(Name('x'), Name('y'))))
+        simpl_func = Function('func', (Binding('x', Literal(null)),), Function('add', (Binding('y', Literal(null)),), Add(Name('x'), Name('y')),
+                                                                               captures=('x',), inlineable=False, recursive=False),
+                              captures=(), inlineable=True, recursive=False)
         self.assertSimplifiesTo(start_func, simpl_func)
 
 

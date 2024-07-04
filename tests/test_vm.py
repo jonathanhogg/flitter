@@ -5,12 +5,63 @@ Note that `Import` is currently not tested.
 """
 
 import gc
+import tempfile
 import tracemalloc
+from pathlib import Path
 import unittest
 import unittest.mock
 
+from flitter import configure_logger
 from flitter.model import Vector, Node, Context, StateDict, null, true, false
+from flitter.language.tree import Top, Literal
 from flitter.language.vm import Program, Function, VectorStack
+
+
+configure_logger('ERROR')
+
+
+class TestProgramMethods(unittest.TestCase):
+    def test_run(self):
+        program = Program(lnames=('a',))
+        program.literal(Node('foo'))
+        program.local_load(0)
+        program.attribute('a')
+        program.append()
+        program.optimize()
+        program.link()
+        context = program.run(Context(state=StateDict(), names={'a': Vector(5)}))
+        self.assertEqual(context.root, Node('root', children=(Node('foo', attributes={'a': Vector(5)}),)))
+
+    def test_new_label(self):
+        program = Program()
+        self.assertEqual(program.new_label(), 1)
+        self.assertEqual(program.new_label(), 2)
+        self.assertEqual(program.new_label(), 3)
+
+    def test_set_path(self):
+        program = Program()
+        self.assertIsNone(program.path)
+        program.set_path(Path('a/b/c'))
+        self.assertEqual(program.path, Path('a/b/c'))
+
+    def test_set_top(self):
+        program = Program()
+        self.assertIsNone(program.top)
+        top = Top((), Literal(null))
+        program.set_top(top)
+        self.assertIs(program.top, top)
+
+    def test_set_pragma(self):
+        program = Program()
+        self.assertEqual(program.pragmas, {})
+        program.set_pragma('tempo', Vector(60))
+        self.assertEqual(program.pragmas, {'tempo': Vector(60)})
+
+    def test_use_simplifier(self):
+        program = Program()
+        self.assertTrue(program.simplify)
+        program.use_simplifier(False)
+        self.assertFalse(program.simplify)
 
 
 class TestBasicInstructions(unittest.TestCase):
@@ -36,9 +87,17 @@ class TestBasicInstructions(unittest.TestCase):
         self.program.literal(Vector([Node('baz1', None, {'a': Vector(1)}), Node('baz2', None, {'b': Vector(2)})]))
         self.program.literal(Vector(Node('baz3', None, {'c': Vector(3)})))
         self.program.append(2)
+        self.program.literal([1, Node('foo')])
+        self.program.literal([Node('bar'), 2])
+        self.program.append()
+        self.program.literal(Node('baz'))
+        self.program.literal(['a', 'b'])
+        self.program.append()
         stack = self.program.execute(self.context)
-        self.assertEqual(len(stack), 1)
+        self.assertEqual(len(stack), 3)
         self.assertEqual(repr(stack[0]), "(!foo #test x=1\n !bar\n !baz1 a=1\n !baz2 b=2\n !baz3 c=3)")
+        self.assertEqual(stack[1], [1, Node('foo', children=(Node('bar'),))])
+        self.assertEqual(stack[2], [Node('baz')])
 
     def test_Attribute(self):
         foo = Node('foo', {'test'}, {'x': Vector(1)})
@@ -56,13 +115,21 @@ class TestBasicInstructions(unittest.TestCase):
         self.program.local_load(0)
         self.program.literal(7)
         self.program.attribute('y')
+        self.program.literal([0, 1, 2])
+        self.program.literal(5)
+        self.program.attribute('x')
+        self.program.literal(['a', 'b', 'c'])
+        self.program.literal(10)
+        self.program.attribute('x')
         stack = self.program.execute(self.context)
-        self.assertEqual(len(stack), 2)
+        self.assertEqual(len(stack), 4)
         self.assertEqual(repr(stack[0]), "(!foo #test x=5)")
         self.assertFalse(stack[0][0] is foo)
         self.assertEqual(repr(stack[1]), "(!bar x=2 y=7)")
         self.assertFalse(stack[1][0] is bar)
         self.assertEqual(foo['x'], Vector(1))
+        self.assertEqual(stack[2], [0, 1, 2])
+        self.assertEqual(stack[3], ['a', 'b', 'c'])
 
     def test_Compose(self):
         self.program.literal(3)
@@ -223,6 +290,14 @@ class TestBasicInstructions(unittest.TestCase):
         stack = self.program.execute(self.context)
         self.assertEqual(stack, [12])
 
+    def test_MulAdd(self):
+        self.program.literal(3)
+        self.program.literal(4)
+        self.program.literal(5)
+        self.program.mul_add()
+        stack = self.program.execute(self.context)
+        self.assertEqual(stack, [23])
+
     def test_Ne(self):
         self.program.literal(3)
         self.program.literal(4)
@@ -292,12 +367,20 @@ class TestBasicInstructions(unittest.TestCase):
         self.assertEqual(stack, [-1])
 
     def test_Tag(self):
-        node = Node('foo', None, {'x': Vector(1)})
-        self.program.literal(node)
+        self.program.literal(Node('foo'))
+        self.program.tag('bar')
+        self.program.literal(5)
+        self.program.attribute('x')
+        self.program.tag('baz')
+        self.program.literal([0, 1, 2])
+        self.program.tag('test')
+        self.program.literal(['a', 'b', 'c'])
         self.program.tag('test')
         stack = self.program.execute(self.context)
-        self.assertEqual(len(stack), 1)
-        self.assertEqual(repr(stack[0]), "(!foo #test x=1)")
+        self.assertEqual(len(stack), 3)
+        self.assertEqual(repr(stack[0]), "(!foo #bar #baz x=5)")
+        self.assertEqual(stack[1], [0, 1, 2])
+        self.assertEqual(stack[2], ['a', 'b', 'c'])
 
     def test_TrueDiv(self):
         self.program.literal(3)
@@ -450,6 +533,31 @@ class TestForLoops(unittest.TestCase):
         stack = self.program.execute(self.context)
         self.assertEqual(stack, [null])
 
+    def test_nested(self):
+        NEXT_OUTER = self.program.new_label()
+        END_OUTER = self.program.new_label()
+        NEXT_INNER = self.program.new_label()
+        END_INNER = self.program.new_label()
+        self.program.literal(Vector.range(0, 10, 5))
+        self.program.begin_for(1)
+        self.program.label(NEXT_OUTER)
+        self.program.next(END_OUTER)
+        self.program.literal(Vector.range(5))
+        self.program.begin_for(1)
+        self.program.label(NEXT_INNER)
+        self.program.next(END_INNER)
+        self.program.local_load(1)
+        self.program.local_load(0)
+        self.program.add()
+        self.program.jump(NEXT_INNER)
+        self.program.label(END_INNER)
+        self.program.end_for()
+        self.program.jump(NEXT_OUTER)
+        self.program.label(END_OUTER)
+        self.program.end_for()
+        stack = self.program.execute(self.context)
+        self.assertEqual(stack, [Vector.range(10)])
+
 
 class TestLocalVars(unittest.TestCase):
     def setUp(self):
@@ -517,7 +625,7 @@ class TestFunc(unittest.TestCase):
         self.program.label(START)
         self.program.local_load(1)
         self.program.local_load(0)
-        self.program.add()
+        self.program.truediv()
         self.program.local_load(3)
         self.program.add()
         LABEL1 = self.program.new_label()
@@ -551,7 +659,15 @@ class TestFunc(unittest.TestCase):
         self.program.local_load(0)
         self.program.call(2)
         stack = self.program.execute(self.context)
-        self.assertEqual(stack, [9])
+        self.assertEqual(stack, [2.75])
+
+    def test_call_kwarg(self):
+        self.program.literal(4)
+        self.program.literal(3)
+        self.program.local_load(0)
+        self.program.call(0, ('y', 'x'))
+        stack = self.program.execute(self.context)
+        self.assertEqual(stack, [2.75])
 
     def test_additional_lnames(self):
         self.program.literal(-2)
@@ -561,14 +677,14 @@ class TestFunc(unittest.TestCase):
         self.program.local_load(1)
         self.program.call(2)
         stack = self.program.execute(self.context)
-        self.assertEqual(stack, [9])
+        self.assertEqual(stack, [2.75])
 
     def test_default_arg(self):
         self.program.literal(3)
         self.program.local_load(0)
         self.program.call(1)
         stack = self.program.execute(self.context)
-        self.assertEqual(stack, [6])
+        self.assertEqual(stack, [5])
 
     def test_default_arg2(self):
         self.program.local_load(0)
@@ -583,7 +699,7 @@ class TestFunc(unittest.TestCase):
         self.program.local_load(0)
         self.program.call(2)
         stack = self.program.execute(self.context)
-        self.assertEqual(stack, [10])
+        self.assertEqual(stack, [3.75])
 
 
 class TestRecursiveFunc(unittest.TestCase):
@@ -716,6 +832,120 @@ class TestCalls(unittest.TestCase):
         self.test_function.assert_called_once_with()
 
 
+class TestImports(unittest.TestCase):
+    def setUp(self):
+        self.program = Program()
+        self.context = Context(state=StateDict(), path=Path('.'))
+        self.test_module = Path(tempfile.mktemp('.fl'))
+        self.test_module.write_text("""
+let x=5 y=10
+""", encoding='utf8')
+        self.circular_module_a = Path(tempfile.mktemp('.fl'))
+        self.circular_module_b = Path(tempfile.mktemp('.fl'))
+        self.circular_module_a.write_text(f"""
+import y from '{self.circular_module_b}'
+let x=5
+""", encoding='utf8')
+        self.circular_module_b.write_text(f"""
+import x from '{self.circular_module_a}'
+let y=10
+""", encoding='utf8')
+
+    def tearDown(self):
+        if self.test_module.exists():
+            self.test_module.unlink()
+        if self.circular_module_a.exists():
+            self.circular_module_a.unlink()
+        if self.circular_module_b.exists():
+            self.circular_module_b.unlink()
+
+    def test_import_one_name(self):
+        self.program.literal(str(self.test_module))
+        self.program.import_(('x',))
+        self.program.local_load(0)
+        stack = self.program.execute(self.context)
+        self.assertEqual(stack, [5])
+        self.assertEqual(len(self.context.modules), 1)
+
+    def test_import_two_names(self):
+        self.program.literal(str(self.test_module))
+        self.program.import_(('x', 'y'))
+        self.program.local_load(1)
+        self.program.local_load(0)
+        stack = self.program.execute(self.context)
+        self.assertEqual(stack, [5, 10])
+        self.assertEqual(len(self.context.modules), 1)
+
+    def test_import_twice(self):
+        self.program.literal(str(self.test_module))
+        self.program.import_(('x',))
+        self.program.local_load(0)
+        self.program.literal(str(self.test_module))
+        self.program.import_(('y',))
+        self.program.local_load(0)
+        stack = self.program.execute(self.context)
+        self.assertEqual(stack, [5, 10])
+        self.assertEqual(len(self.context.modules), 1)
+
+    def test_import_bad_name(self):
+        self.program.literal(str(self.test_module))
+        self.program.import_(('z',))
+        self.program.local_load(0)
+        stack = self.program.execute(self.context)
+        self.assertEqual(stack, [null])
+        self.assertEqual(len(self.context.modules), 1)
+        self.assertEqual(self.context.errors, {f"Unable to import 'z' from '{self.test_module}'"})
+
+    def test_import_missing_module(self):
+        self.program.literal('this/is/not/a/module.fl')
+        self.program.import_(('x',))
+        self.program.local_load(0)
+        stack = self.program.execute(self.context)
+        self.assertEqual(stack, [null])
+        self.assertEqual(self.context.errors, {"Unable to import from 'this/is/not/a/module.fl'"})
+
+    def test_circular_import(self):
+        self.program.literal(str(self.circular_module_a))
+        self.program.import_(('x', 'y'))
+        self.program.local_load(1)
+        self.program.local_load(0)
+        stack = self.program.execute(self.context)
+        self.assertEqual(stack, [5, 10])
+        self.assertEqual(self.context.errors, {f"Circular import of '{self.circular_module_a}'"})
+
+
+class TestOptimizations(unittest.TestCase):
+    def test_paired_compose(self):
+        program = Program()
+        program.literal(0)
+        program.literal(1)
+        program.literal(2)
+        program.compose(2)
+        program.compose(2)
+        program.optimize()
+        self.assertEqual(str(program), "Literal 0\nLiteral 1\nLiteral 2\nCompose 3")
+
+    def test_compose_append(self):
+        program = Program()
+        program.literal(Node('a'))
+        program.literal(Node('b'))
+        program.literal(Node('c'))
+        program.compose(3)
+        program.append()
+        program.optimize()
+        self.assertEqual(str(program), "LiteralNode !a\nLiteralNode !b\nLiteralNode !c\nAppend 3")
+
+    def test_mul_add(self):
+        program = Program()
+        program.literal(0)
+        program.literal(1)
+        program.literal(2)
+        program.mul()
+        program.add()
+        program.optimize()
+        self.assertEqual(str(program), "Literal 0\nLiteral 1\nLiteral 2\nMulAdd")
+
+
 class TestStack(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -749,6 +979,17 @@ class TestStack(unittest.TestCase):
         self.assertEqual(len(stack), 1)
         self.assertEqual(stack.pop(), Vector(0))
         self.assertEqual(len(stack), 0)
+        with self.assertRaises(TypeError):
+            stack.pop()
+
+    def test_copy(self):
+        stack = VectorStack()
+        stack.push(Vector(0))
+        stack.push(Vector(1))
+        copy = stack.copy()
+        self.assertIsNot(stack, copy)
+        self.assertEqual(len(stack), len(copy))
+        self.assertEqual(stack.pop_list(len(stack)), copy.pop_list(len(copy)))
 
     def test_drop(self):
         stack = VectorStack()
@@ -763,6 +1004,8 @@ class TestStack(unittest.TestCase):
         self.assertEqual(len(stack), 1)
         self.assertEqual(stack.pop(), Vector(0))
         self.assertEqual(len(stack), 0)
+        with self.assertRaises(TypeError):
+            stack.drop()
 
     def test_realloc(self):
         stack = VectorStack(1)
@@ -791,6 +1034,10 @@ class TestStack(unittest.TestCase):
         self.assertEqual(len(stack), 1)
         self.assertEqual(stack.pop(), Vector(1))
         self.assertEqual(len(stack), 0)
+        with self.assertRaises(TypeError):
+            stack.peek()
+        with self.assertRaises(TypeError):
+            stack.poke(Vector(1))
 
     def test_peek_at_and_poke_at(self):
         stack = VectorStack()
@@ -801,9 +1048,13 @@ class TestStack(unittest.TestCase):
         self.assertEqual(stack.peek_at(0), Vector(2))
         self.assertEqual(stack.peek_at(1), Vector(1))
         self.assertEqual(stack.peek_at(2), Vector(0))
+        with self.assertRaises(TypeError):
+            stack.peek_at(3)
         stack.poke_at(0, Vector(3))
         stack.poke_at(1, Vector(4))
         stack.poke_at(2, Vector(5))
+        with self.assertRaises(TypeError):
+            stack.poke_at(3, Vector(6))
         self.assertEqual(len(stack), 3)
         self.assertEqual(stack.pop(), Vector(3))
         self.assertEqual(stack.pop(), Vector(4))
@@ -816,6 +1067,8 @@ class TestStack(unittest.TestCase):
         stack.push(Vector(1))
         stack.push(Vector(2))
         self.assertEqual(len(stack), 3)
+        with self.assertRaises(TypeError):
+            stack.pop_tuple(4)
         self.assertEqual(stack.pop_tuple(2), (Vector(1), Vector(2)))
         self.assertEqual(len(stack), 1)
         self.assertEqual(stack.pop(), Vector(0))
@@ -827,6 +1080,8 @@ class TestStack(unittest.TestCase):
         stack.push(Vector(1))
         stack.push(Vector(2))
         self.assertEqual(len(stack), 3)
+        with self.assertRaises(TypeError):
+            stack.pop_list(4)
         self.assertEqual(stack.pop_list(2), [Vector(1), Vector(2)])
         self.assertEqual(len(stack), 1)
         self.assertEqual(stack.pop(), Vector(0))
@@ -838,6 +1093,8 @@ class TestStack(unittest.TestCase):
         stack.push(Vector(1))
         stack.push(Vector(2))
         self.assertEqual(len(stack), 3)
+        with self.assertRaises(TypeError):
+            stack.pop_dict(('w', 'x', 'y', 'z'))
         self.assertEqual(stack.pop_dict(('x', 'y')), {'x': Vector(1), 'y': Vector(2)})
         self.assertEqual(len(stack), 1)
         self.assertEqual(stack.pop(), Vector(0))
@@ -845,11 +1102,21 @@ class TestStack(unittest.TestCase):
 
     def test_pop_composed(self):
         stack = VectorStack()
+        self.assertEqual(stack.pop_composed(0), null)
         stack.push(Vector(0))
         stack.push(Vector(1))
         stack.push(Vector(2))
-        self.assertEqual(len(stack), 3)
-        self.assertEqual(stack.pop_composed(2), Vector([1, 2]))
+        stack.push(null)
+        self.assertEqual(len(stack), 4)
+        with self.assertRaises(TypeError):
+            stack.pop_composed(5)
+        self.assertEqual(stack.pop_composed(3), Vector([1, 2]))
         self.assertEqual(len(stack), 1)
-        self.assertEqual(stack.pop(), Vector(0))
+        self.assertEqual(stack.pop_composed(1), Vector(0))
         self.assertEqual(len(stack), 0)
+        stack.push(null)
+        stack.push(null)
+        self.assertEqual(stack.pop_composed(2), null)
+        stack.push(Vector(1))
+        stack.push(Vector('a'))
+        self.assertEqual(stack.pop_composed(2), Vector([1, 'a']))

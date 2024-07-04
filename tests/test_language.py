@@ -8,7 +8,7 @@ import unittest
 
 from flitter import configure_logger
 from flitter.language.tree import Literal, Let, Sequence, Export, Binding, Top
-from flitter.language.parser import parse
+from flitter.language.parser import parse, ParseError
 from flitter.language.vm import Function
 from flitter.model import Vector, Node, Context, StateDict, DummyStateDict, null
 
@@ -22,6 +22,13 @@ class TestPragmas(unittest.TestCase):
         self.assertEqual(top.pragmas, ())
         program = top.compile()
         self.assertEqual(program.pragmas, {})
+
+    def test_pragma_not_at_top(self):
+        with self.assertRaises(ParseError):
+            parse("""
+let x=10
+%pragma tempo 120
+""")
 
     def test_pragmas(self):
         top = parse("""
@@ -38,6 +45,41 @@ class TestPragmas(unittest.TestCase):
         self.assertEqual(program.pragmas, {'foo': Vector(5), 'bar': Vector('five'), 'baz': Vector.symbol('five'), 'buz': Vector(Node('five'))})
 
 
+class TestParseErrors(unittest.TestCase):
+    def test_missing_bindings(self):
+        with self.assertRaises(ParseError):
+            parse("""
+let
+!foo
+""")
+
+    def test_unexpected_indent(self):
+        with self.assertRaises(ParseError):
+            parse("""
+let x=5
+    !foo x=x
+""")
+
+    def test_missing_indent(self):
+        with self.assertRaises(ParseError):
+            parse("""
+for x in ..5
+!foo x=x
+""")
+
+    def bad_identifier(self):
+        with self.assertRaises(ParseError):
+            parse("""
+let 1x=5
+""")
+
+    def mixed_position_and_named_args(self):
+        with self.assertRaises(ParseError):
+            parse("""
+f(1, x=2, 3)
+""")
+
+
 class TestLanguageFeatures(unittest.TestCase):
     """
     Test a series of language features by parsing the given code, evaluating it and comparing the
@@ -51,13 +93,18 @@ class TestLanguageFeatures(unittest.TestCase):
     It is assumed that all of the examples can be fully reduced to a literal by the simplifier.
     """
 
-    def assertCodeOutput(self, code, output, **names):
-        top = parse(code.strip() + "\n")
+    def assertCodeOutput(self, code, output, with_errors=None, **names):
+        top = parse(code.strip())
         output = output.strip()
-        run_context = Context(names={name: Vector(value) for name, value in names.items()}, state=StateDict())
-        vm_output = '\n'.join(repr(node) for node in top.compile(initial_lnames=tuple(names)).run(run_context).root.children)
+        if with_errors is None:
+            with_errors = set()
+        vm_context = Context(names={name: Vector(value) for name, value in names.items()}, state=StateDict())
+        vm_output = '\n'.join(repr(node) for node in top.compile(initial_lnames=tuple(names)).run(vm_context).root.children)
         self.assertEqual(vm_output, output, msg="VM output is incorrect")
-        expr = top.simplify(static=names).body
+        self.assertEqual(vm_context.errors, with_errors)
+        simplified_top, simplifier_context = top.simplify(static=names, return_context=True)
+        self.assertEqual(simplifier_context.errors, with_errors)
+        expr = simplified_top.body
         while not isinstance(expr, Literal):
             if isinstance(expr, Let):
                 expr = expr.body
@@ -65,18 +112,44 @@ class TestLanguageFeatures(unittest.TestCase):
                 expr = expr.expressions[0]
             else:
                 break
-        self.assertIsInstance(expr, Literal, msg="Unexpected simplification output")
-        simplifier_output = '\n'.join(repr(node) for node in expr.value)
+        if isinstance(expr, Export):
+            simplifier_output = ""
+        else:
+            self.assertIsInstance(expr, Literal, msg="Unexpected simplification output")
+            simplifier_output = '\n'.join(repr(node) for node in expr.value)
         self.assertEqual(simplifier_output, output, msg="Simplifier output is incorrect")
 
+    def test_empty(self):
+        self.assertCodeOutput("", "")
+
     def test_literal_node(self):
+        self.assertCodeOutput("!foo #bar x=5 y=:baz z='Hello world!'", "!foo #bar x=5 y=:baz z='Hello world!'")
+
+    def test_unicode_names(self):
+        self.assertCodeOutput("!café #århus 水=:𓀀", "!café #århus 水=:𓀀")
+
+    def test_names_with_primes(self):
         self.assertCodeOutput(
             """
-!foo #bar x=5 y=:baz z='Hello world!'
+let y=1 y''=y+1 y'''=y''+1
+!node' x'=y''' y=:y'''' z='prime'
             """,
             """
-!foo #bar x=5 y=:baz z='Hello world!'
+!node' x'=3 y=:y'''' z='prime'
             """)
+
+    def test_let_only(self):
+        self.assertCodeOutput("let x=5", "")
+
+    def test_contextual_parser(self):
+        self.assertCodeOutput(
+            """
+let let=import + 1
+!foo in=let
+            """,
+            """
+!foo in=6
+            """, **{'import': 5})
 
     def test_names(self):
         self.assertCodeOutput(
@@ -229,8 +302,8 @@ func fib(n)
             """)
 
     def test_anonymous_functions(self):
-        """Note that this is only statically reducible because `map` is inlined and so the
-           anonymous function is bound to `f` and therefore becomes a name"""
+        """Note that this is statically reducible because `map` is inlined and so the
+           anonymous function is bound to `f`, which therefore becomes a function name"""
         self.assertCodeOutput(
             """
 func map(f, xs)
@@ -242,6 +315,26 @@ func map(f, xs)
             """
 !doubled x=0;2;4;6;8;10;12;14;16;18
             """)
+
+    def test_some_deliberately_obtuse_behaviour(self):
+        self.assertCodeOutput(
+            """
+@(func(_, x) ((!foo x=x*y) for y in ..3)) x=5
+            """,
+            """
+!foo x=0
+!foo x=5
+!foo x=10
+            """)
+
+    def test_bad_function_call(self):
+        self.assertCodeOutput(
+            """
+!foo color=hsv()
+            """,
+            """
+!foo
+            """, with_errors={'Error calling hsv: hsv() takes exactly 1 positional argument (0 given)'})
 
 
 class TestExampleScripts(unittest.TestCase):

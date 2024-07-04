@@ -323,12 +323,28 @@ class TestImport(CompilerTestCase):
 
 
 class TestFunction(CompilerTestCase):
-    def test_single_parameter_no_captures(self):
-        func = Function('func', (Binding('x', Literal(null)),), Add(Name('x'), Literal(5)), captures=())
+    def test_single_parameter_missing_default_no_captures(self):
+        func = Function('func', (Binding('x', None),), Add(Name('x'), Literal(5)), captures=())
         program = Program()
         START = program.new_label()
         END = program.new_label()
         program.literal(null)
+        program.jump(END)
+        program.label(START)
+        program.local_load(0)
+        program.literal(5)
+        program.add()
+        program.exit()
+        program.label(END)
+        program.func(START, 'func', ('x',), 0)
+        self.assertCompilesTo(func, program)
+
+    def test_single_parameter_explicit_default_no_captures(self):
+        func = Function('func', (Binding('x', Literal(5)),), Add(Name('x'), Literal(5)), captures=())
+        program = Program()
+        START = program.new_label()
+        END = program.new_label()
+        program.literal(5)
         program.jump(END)
         program.label(START)
         program.local_load(0)
@@ -357,6 +373,25 @@ class TestFunction(CompilerTestCase):
         program.label(END)
         program.func(START, 'func', ('x',), 2)
         self.assertCompilesTo(func, program, lnames=('a', 'b'))
+
+    def test_undefined_capture(self):
+        """Attempting to capture an undefined name ends up capturing null and records an error
+           (this would normally be removed by the simplifier)"""
+        func = Function('func', (Binding('x', Literal(null)),), Add(Name('x'), Name('y')), captures=('y',))
+        program = Program()
+        START = program.new_label()
+        END = program.new_label()
+        program.literal(null)
+        program.literal(null)
+        program.jump(END)
+        program.label(START)
+        program.local_load(0)
+        program.local_load(2)
+        program.add()
+        program.exit()
+        program.label(END)
+        program.func(START, 'func', ('x',), 1)
+        self.assertCompilesTo(func, program, with_errors={"Unbound name 'y'"})
 
     def test_two_parameters_no_captures(self):
         func = Function('func', (Binding('x', Literal(null)), Binding('y', Literal(5))), Add(Name('x'), Name('y')), captures=())
@@ -461,3 +496,7 @@ class TestTop(CompilerTestCase):
 
     def test_literal_node(self):
         self.assertCompilesTo(Top((), Literal(Node('window'))), Program().literal(Node('window')).append())
+
+    def test_pragma(self):
+        self.assertCompilesTo(Top((Binding('tempo', Literal(60)),), Literal(Node('window'))),
+                              Program().set_pragma('tempo', Vector(60)).literal(Node('window')).append())
