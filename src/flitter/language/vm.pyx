@@ -667,15 +667,16 @@ cdef inline void call_helper(Context context, VectorStack stack, object function
 cdef inline dict import_module(Context context, str filename, bint record_stats, double* duration, bint simplify):
     cdef Program program = SharedCache.get_with_root(filename, context.path).read_flitter_program(simplify=simplify)
     if program is None:
+        PySet_Add(context.errors, f"Unable to import from '{filename}'")
         return None
-    if program in context.modules:
-        return context.modules[program]
     cdef Context import_context = context
     while import_context is not None:
         if import_context.path is program.path:
-            PySet_Add(context.errors, f"Circular import of {filename}")
+            PySet_Add(context.errors, f"Circular import of '{filename}'")
             return None
         import_context = import_context.parent
+    if program in context.modules:
+        return context.modules[program]
     cdef VectorStack stack=context.stack, lnames=context.lnames
     cdef int64_t stack_top=stack.top, lnames_top=lnames.top
     import_context = Context.__new__(Context)
@@ -834,6 +835,7 @@ cdef class Program:
 
     def set_pragma(self, str name, Vector value):
         self.pragmas[name] = value
+        return self
 
     def execute(self, Context context, list initial_stack=None, list lnames=None, bint record_stats=False):
         """This is a test-harness function. Do not use."""
@@ -1213,7 +1215,6 @@ cdef class Program:
                                 PySet_Add(context.errors, f"Unable to import '{<str>PyTuple_GET_ITEM(names, i)}' from '{filename}'")
                                 push(lnames, null_)
                     else:
-                        PySet_Add(context.errors, f"Unable to import from '{filename}'")
                         for i in range(n):
                             push(lnames, null_)
                     filename = names = import_names = None
@@ -1500,7 +1501,7 @@ cdef class Program:
                     PyDict_SetItem(exports, (<InstructionStr>instruction).value, pop(stack))
 
                 else:
-                    raise ValueError(f"Unrecognised instruction: {instruction}")
+                    raise AssertionError(f"Unrecognised instruction: {instruction}")
 
                 if record_stats:
                     duration += perf_counter()

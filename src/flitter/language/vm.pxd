@@ -41,8 +41,8 @@ cdef class Program:
     cdef readonly VectorStack stack
     cdef readonly VectorStack lnames
     cdef readonly set compiler_errors
+    cdef readonly bint simplify
     cdef int64_t next_label
-    cdef bint simplify
 
     cpdef Program link(self)
     cpdef Program optimize(self)
