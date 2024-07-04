@@ -654,7 +654,7 @@ cdef inline void call_helper(Context context, VectorStack stack, object function
     except (RecursionError, AssertionError):
         raise
     except Exception as exc:
-        PySet_Add(context.errors, f"Error calling {function!r}\n{str(exc)}")
+        PySet_Add(context.errors, f"Error calling {function.__name__}: {str(exc)}")
         push(stack, null_)
     if record_stats:
         call_duration += perf_counter()
@@ -1418,7 +1418,7 @@ cdef class Program:
                         try:
                             poke(stack, PyObject_CallOneArg((<InstructionObjectInt>instruction).obj, peek(stack)))
                         except Exception as exc:
-                            PySet_Add(context.errors, f"Error calling {(<InstructionObjectInt>instruction).obj!r}\n{str(exc)}")
+                            PySet_Add(context.errors, f"Error calling {(<InstructionObjectInt>instruction).obj.__name__}: {str(exc)}")
                             poke(stack, null_)
                     else:
                         args = pop_tuple(stack, n)
@@ -1427,7 +1427,7 @@ cdef class Program:
                         try:
                             push(stack, PyObject_CallObject((<InstructionObjectInt>instruction).obj, args))
                         except Exception as exc:
-                            PySet_Add(context.errors, f"Error calling {(<InstructionObjectInt>instruction).obj!r}\n{str(exc)}")
+                            PySet_Add(context.errors, f"Error calling {(<InstructionObjectInt>instruction).obj.__name__}: {str(exc)}")
                             push(stack, null_)
                         args = None
                     if record_stats:

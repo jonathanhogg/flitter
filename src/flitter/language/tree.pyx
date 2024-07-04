@@ -794,7 +794,9 @@ cdef class Call(Expression):
     cdef Expression _simplify(self, Context context):
         cdef Expression function = self.function._simplify(context)
         cdef Function func_expr = None
-        if isinstance(function, Name) and (<Name>function).name in context.names:
+        if isinstance(function, Function):
+            func_expr = <Function>function
+        elif isinstance(function, Name) and (<Name>function).name in context.names:
             value = context.names[(<Name>function).name]
             if isinstance(value, Function):
                 func_expr = <Function>value
@@ -847,10 +849,9 @@ cdef class Call(Expression):
                             results.append(Literal(func(context, *vector_args, **kwargs)))
                         else:
                             results.append(Literal(func(*vector_args, **kwargs)))
-                    except Exception:
-                        break
-            else:
-                return sequence_pack(results)
+                    except Exception as exc:
+                        context.errors.add(f"Error calling {func.__name__}: {str(exc)}")
+            return sequence_pack(results)
         if isinstance(function, Literal) and len(args) == 1:
             if (<Literal>function).value == static_builtins['ceil']:
                 return Ceil(args[0])
