@@ -79,9 +79,6 @@ class FlitterTransformer(Transformer):
         bindings = []
         while args and isinstance(args[-1], tree.Binding):
             bindings.insert(0, args.pop())
-        for arg in args:
-            if isinstance(arg, tree.Binding):
-                raise TypeError("Cannot mix positional and keyword arguments")
         return tree.Call(function, tuple(args) if args else None, tuple(bindings) if bindings else None)
 
     def template_call(self, function, bindings, sequence):

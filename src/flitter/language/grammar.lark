@@ -122,10 +122,10 @@ name_list : NAME (";" NAME)* -> tuple
       | call _LPAREN args _RPAREN -> call
       | call "[" node "]" -> slice
 
-args : (arg ("," arg)*)? -> tuple
+args : node ("," node)* ("," named_arg)* -> tuple
+     | (named_arg ("," named_arg)*)? -> tuple
 
-?arg : node
-     | NAME "=" node -> binding
+named_arg : NAME "=" node -> binding
 
 ?atom : literal
       | NAME -> name
