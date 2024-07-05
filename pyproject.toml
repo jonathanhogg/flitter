@@ -84,4 +84,5 @@ source = ["src"]
 
 [tool.coverage.report]
 ignore_errors = true
+skip_empty = true
 exclude_also = ["raise NotImplementedError", "raise MemoryError", "raise AssertionError"]
