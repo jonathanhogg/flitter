@@ -1,7 +1,5 @@
 """
 Tests of the flitter language virtual machine
-
-Note that `Import` is currently not tested.
 """
 
 import gc
@@ -842,14 +840,16 @@ let x=5 y=10
 """, encoding='utf8')
         self.circular_module_a = Path(tempfile.mktemp('.fl'))
         self.circular_module_b = Path(tempfile.mktemp('.fl'))
-        self.circular_module_a.write_text(f"""
-import y from '{self.circular_module_b}'
+        module_a = f"""
+import y from {str(self.circular_module_b)!r}
 let x=5
-""", encoding='utf8')
-        self.circular_module_b.write_text(f"""
-import x from '{self.circular_module_a}'
+"""
+        module_b = f"""
+import x from {str(self.circular_module_a)!r}
 let y=10
-""", encoding='utf8')
+"""
+        self.circular_module_a.write_text(module_a, encoding='utf8')
+        self.circular_module_b.write_text(module_b, encoding='utf8')
 
     def tearDown(self):
         if self.test_module.exists():
