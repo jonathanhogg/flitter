@@ -136,7 +136,7 @@ class TestNoise(unittest.TestCase):
         seed1 = Vector.symbol('seed1')
         seed2 = Vector.symbol('seed2')
         last_n1 = None
-        for x in map(lambda x: x/50, range(1, 1001)):
+        for x in map(lambda x: x/49, range(1, 1001)):
             n1 = float(noise(seed1, Vector(x)))
             self.assertTrue(-1 <= n1 <= 1)
             n2 = float(noise(seed2, Vector(x)))
@@ -150,8 +150,8 @@ class TestNoise(unittest.TestCase):
         seed1 = Vector.symbol('seed1')
         seed2 = Vector.symbol('seed2')
         last_n1 = None
-        y = 1/50
-        for x in map(lambda x: x/50, range(1, 1001)):
+        y = 1/49
+        for x in map(lambda x: x/49, range(1, 1001)):
             n1 = float(noise(seed1, Vector(x), Vector(y)))
             self.assertTrue(-1 <= n1 <= 1)
             n2 = float(noise(seed2, Vector(x), Vector(y)))
@@ -160,7 +160,7 @@ class TestNoise(unittest.TestCase):
             if last_n1 is not None:
                 self.assertLess(abs(n1 - last_n1), 0.1)
             last_n1 = n1
-        for y in map(lambda y: y/50, range(1, 1001)):
+        for y in map(lambda y: y/49, range(1, 1001)):
             n1 = float(noise(seed1, Vector(x), Vector(y)))
             self.assertTrue(-1 <= n1 <= 1)
             n2 = float(noise(seed2, Vector(x), Vector(y)))
@@ -173,9 +173,9 @@ class TestNoise(unittest.TestCase):
         seed1 = Vector.symbol('seed1')
         seed2 = Vector.symbol('seed2')
         last_n1 = None
-        y = 1/50
-        z = 1/50
-        for x in map(lambda x: x/50, range(1, 1001)):
+        y = 1/49
+        z = 1/49
+        for x in map(lambda x: x/49, range(1, 1001)):
             n1 = float(noise(seed1, Vector(x), Vector(y), Vector(z)))
             self.assertTrue(-1 <= n1 <= 1)
             n2 = float(noise(seed2, Vector(x), Vector(y), Vector(z)))
@@ -184,7 +184,7 @@ class TestNoise(unittest.TestCase):
             if last_n1 is not None:
                 self.assertLess(abs(n1 - last_n1), 0.1)
             last_n1 = n1
-        for y in map(lambda y: y/50, range(1, 1001)):
+        for y in map(lambda y: y/49, range(1, 1001)):
             n1 = float(noise(seed1, Vector(x), Vector(y), Vector(z)))
             self.assertTrue(-1 <= n1 <= 1)
             n2 = float(noise(seed2, Vector(x), Vector(y), Vector(z)))
@@ -192,7 +192,7 @@ class TestNoise(unittest.TestCase):
             self.assertNotEqual(n1, n2)
             self.assertLess(abs(n1 - last_n1), 0.1)
             last_n1 = n1
-        for z in map(lambda z: z/50, range(1, 1001)):
+        for z in map(lambda z: z/49, range(1, 1001)):
             n1 = float(noise(seed1, Vector(x), Vector(y), Vector(z)))
             self.assertTrue(-1 <= n1 <= 1)
             n2 = float(noise(seed2, Vector(x), Vector(y), Vector(z)))
@@ -205,11 +205,11 @@ class TestNoise(unittest.TestCase):
         seed1 = Vector.symbol('seed1')
         seed2 = Vector.symbol('seed2')
         last_n1 = None
-        y = 1/50
-        z = 1/50
+        y = 1/49
+        z = 1/49
         octaves = Vector(3)
         roughness = Vector(0.5)
-        for x in map(lambda x: x/50, range(1, 1001)):
+        for x in map(lambda x: x/49, range(1, 1001)):
             n1 = float(octnoise(seed1, octaves, roughness, Vector(x), Vector(y), Vector(z)))
             self.assertTrue(-1 <= n1 <= 1)
             n2 = float(octnoise(seed2, octaves, roughness, Vector(x), Vector(y), Vector(z)))
@@ -218,7 +218,7 @@ class TestNoise(unittest.TestCase):
             if last_n1 is not None:
                 self.assertLess(abs(n1 - last_n1), 0.1)
             last_n1 = n1
-        for y in map(lambda y: y/50, range(1, 1001)):
+        for y in map(lambda y: y/49, range(1, 1001)):
             n1 = float(octnoise(seed1, octaves, roughness, Vector(x), Vector(y), Vector(z)))
             self.assertTrue(-1 <= n1 <= 1)
             n2 = float(octnoise(seed2, octaves, roughness, Vector(x), Vector(y), Vector(z)))
@@ -226,7 +226,7 @@ class TestNoise(unittest.TestCase):
             self.assertNotEqual(n1, n2)
             self.assertLess(abs(n1 - last_n1), 0.1)
             last_n1 = n1
-        for z in map(lambda z: z/50, range(1, 1001)):
+        for z in map(lambda z: z/49, range(1, 1001)):
             n1 = float(octnoise(seed1, octaves, roughness, Vector(x), Vector(y), Vector(z)))
             self.assertTrue(-1 <= n1 <= 1)
             n2 = float(octnoise(seed2, octaves, roughness, Vector(x), Vector(y), Vector(z)))
