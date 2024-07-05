@@ -1,0 +1,45 @@
+
+name: CI coverage
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+    - ".github/workflows/ci-coverage.yml"
+    - "pyproject.toml"
+    - "src/**/*.py"
+    - "src/**/*.pyx"
+    - "src/**/*.pxd"
+    - "tests/**/*.py"
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+    - name: Install linter dependencies
+      run: |
+        python -m pip install --upgrade pip setuptools
+        python -m pip install coverage pytest
+    - name: Build in place with coverage analysis enabled
+      run: |
+        pip3 install .
+      env:
+        FLITTER_BUILD_COVERAGE: 1
+    - name: Run tests in coverage
+      run: |
+        coverage run -m pytest
+    - name: Run coverage report
+      run: |
+        coverage html
+    - name: Store the full report
+      uses: actions/upload-artifact@v4
+      with:
+        name: testcov
+        path: htmlcov/*
