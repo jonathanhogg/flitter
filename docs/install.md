@@ -99,21 +99,70 @@ example programs:
 $ flitter examples/hoops.fl
 ```
 
-### Editable installations
+## Developing Flitter
 
-If you want to edit the code, then ensure that `cython` and `setuptools` are
-installed in your runtime environment, do an *editable* package deployment, and
-then **throw away the built code**. **Flitter** automatically makes use of
-`pyximport` to (re)compile Cython code on-the-fly as it runs:
+If you want to edit the **Flitter** code, ensure that `cython` and `setuptools`
+are installed in your runtime environment, then do an *editable* package
+deployment:
 
 ```console
 $ pip3 install cython setuptools
 $ pip3 install --editable .
-$ rm **/*.c **/*.so
 ```
 
-If you want to lint the code and run the tests then you might also want to
-install `flake8`, `cython-lint` and `pytest`.
+**Flitter** automatically makes use of `pyximport` to (re)compile any changed
+Cython code on-the-fly as it runs.
+
+The code is linted with `flake8` and `cython-lint`:
+
+```console
+$ pip3 install flake8 cython-lint
+$ flake8 src tests
+$ cython-lint src
+```
+
+And the test suite can be run with `pytest`:
+
+```console
+$ pip3 install pytest
+$ pytest
+```
+
+### Checking code coverage
+
+If you want to run code coverage analysis, then you will need to do a special
+in-place build with coverage enabled (Cython line tracing):
+
+```console
+$ env FLITTER_BUILD_COVERAGE=1 python3 setup.py build_ext --inplace
+```
+
+You can then generate a code coverage report for the test suite with:
+
+```console
+$ pip3 install coverage
+$ coverage run -m pytest
+$ coverage report
+```
+
+Note that `pyximport` will *not* rebuild the code with line tracing enabled,
+so you will need to re-run `setup.py` if you change any of the Cython code.
+
+### Generating the documentation
+
+To generate a local HTML copy of the documentation, install `sphinx`,
+`myst_parser` and the separate [`flitter-pygments`
+package](https://github.com/jonathanhogg/flitter-pygments) (which adds syntax
+highlighting support for **Flitter** to `pygments`).
+
+You can generate the docs with:
+
+```console
+$ pip3 install sphinx myst_parser flitter-pygments
+$ sphinx-build docs build/html
+```
+
+They can then be read from `build/html/index.html`.
 
 ### Python package dependencies
 
