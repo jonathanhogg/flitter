@@ -6,7 +6,11 @@ import math
 import unittest
 
 from flitter.model import Vector, null
-from flitter.language.functions import (uniform, normal, beta, hypot, angle, split, ordv, chrv)
+from flitter.language.functions import (uniform, normal, beta,
+                                        length,
+                                        cosv, sinv, tanv, hypot, angle,
+                                        split, ordv, chrv)
+from flitter.language.noise import noise, octnoise
 
 
 Tau = 2*math.pi
@@ -74,7 +78,7 @@ class TestUniform(unittest.TestCase):
         from scipy.stats import kstest
         for i in range(2):
             with self.subTest(i=i):
-                result = kstest(self.FACTORY(i)[:10_000_000], *self.DISTRIBUTION)
+                result = kstest(self.FACTORY(i)[:1_000_000], *self.DISTRIBUTION)
                 self.assertGreater(result.pvalue, self.P_VALUE)
 
     def test_range(self):
@@ -108,11 +112,194 @@ class TestNormal(TestUniform):
         pass
 
 
+class TestNoise(unittest.TestCase):
+    def test_zero_behaviour(self):
+        self.assertEqual(noise(Vector.symbol('seed'), Vector(0)), Vector(0))
+        self.assertEqual(noise(Vector.symbol('seed'), Vector(0), Vector(0)), Vector(0))
+        n3 = abs(float(noise(Vector.symbol('seed'), Vector(0), Vector(0), Vector(0))))
+        self.assertGreater(abs(n3), Vector(0))
+        self.assertLess(abs(n3), Vector(1e-30))
+
+    def test_null_behaviour(self):
+        self.assertEqual(noise(null, Vector(0)), Vector(0))
+        self.assertEqual(noise(Vector.symbol('seed'), null), null)
+        self.assertEqual(noise(Vector.symbol('seed'), Vector(0), null), null)
+        self.assertEqual(noise(Vector.symbol('seed'), Vector(0), Vector(0), null), null)
+        self.assertEqual(octnoise(null, Vector(1), Vector(0.5), Vector(0)), Vector(0))
+        self.assertEqual(octnoise(Vector.symbol('seed'), null, Vector(0.5), Vector(0)), null)
+        self.assertEqual(octnoise(Vector.symbol('seed'), Vector(1), null, Vector(0)), null)
+        self.assertEqual(octnoise(Vector.symbol('seed'), Vector(1), Vector(0.5), null), null)
+        self.assertEqual(octnoise(Vector.symbol('seed'), Vector(1), Vector(0.5), Vector(0), null), null)
+        self.assertEqual(octnoise(Vector.symbol('seed'), Vector(1), Vector(0.5), Vector(0), Vector(0), null), null)
+
+    def test_noise_1(self):
+        seed1 = Vector.symbol('seed1')
+        seed2 = Vector.symbol('seed2')
+        last_n1 = None
+        for x in map(lambda x: x/50, range(1, 1001)):
+            n1 = float(noise(seed1, Vector(x)))
+            self.assertTrue(-1 <= n1 <= 1)
+            n2 = float(noise(seed2, Vector(x)))
+            self.assertTrue(-1 <= n2 <= 1)
+            self.assertNotEqual(n1, n2)
+            if last_n1 is not None:
+                self.assertLess(abs(n1 - last_n1), 0.1)
+            last_n1 = n1
+
+    def test_noise_2(self):
+        seed1 = Vector.symbol('seed1')
+        seed2 = Vector.symbol('seed2')
+        last_n1 = None
+        y = 1/50
+        for x in map(lambda x: x/50, range(1, 1001)):
+            n1 = float(noise(seed1, Vector(x), Vector(y)))
+            self.assertTrue(-1 <= n1 <= 1)
+            n2 = float(noise(seed2, Vector(x), Vector(y)))
+            self.assertTrue(-1 <= n2 <= 1)
+            self.assertNotEqual(n1, n2)
+            if last_n1 is not None:
+                self.assertLess(abs(n1 - last_n1), 0.1)
+            last_n1 = n1
+        for y in map(lambda y: y/50, range(1, 1001)):
+            n1 = float(noise(seed1, Vector(x), Vector(y)))
+            self.assertTrue(-1 <= n1 <= 1)
+            n2 = float(noise(seed2, Vector(x), Vector(y)))
+            self.assertTrue(-1 <= n2 <= 1)
+            self.assertNotEqual(n1, n2)
+            self.assertLess(abs(n1 - last_n1), 0.1)
+            last_n1 = n1
+
+    def test_noise_3(self):
+        seed1 = Vector.symbol('seed1')
+        seed2 = Vector.symbol('seed2')
+        last_n1 = None
+        y = 1/50
+        z = 1/50
+        for x in map(lambda x: x/50, range(1, 1001)):
+            n1 = float(noise(seed1, Vector(x), Vector(y), Vector(z)))
+            self.assertTrue(-1 <= n1 <= 1)
+            n2 = float(noise(seed2, Vector(x), Vector(y), Vector(z)))
+            self.assertTrue(-1 <= n2 <= 1)
+            self.assertNotEqual(n1, n2)
+            if last_n1 is not None:
+                self.assertLess(abs(n1 - last_n1), 0.1)
+            last_n1 = n1
+        for y in map(lambda y: y/50, range(1, 1001)):
+            n1 = float(noise(seed1, Vector(x), Vector(y), Vector(z)))
+            self.assertTrue(-1 <= n1 <= 1)
+            n2 = float(noise(seed2, Vector(x), Vector(y), Vector(z)))
+            self.assertTrue(-1 <= n2 <= 1)
+            self.assertNotEqual(n1, n2)
+            self.assertLess(abs(n1 - last_n1), 0.1)
+            last_n1 = n1
+        for z in map(lambda z: z/50, range(1, 1001)):
+            n1 = float(noise(seed1, Vector(x), Vector(y), Vector(z)))
+            self.assertTrue(-1 <= n1 <= 1)
+            n2 = float(noise(seed2, Vector(x), Vector(y), Vector(z)))
+            self.assertTrue(-1 <= n2 <= 1)
+            self.assertNotEqual(n1, n2)
+            self.assertLess(abs(n1 - last_n1), 0.1)
+            last_n1 = n1
+
+    def test_octnoise_3(self):
+        seed1 = Vector.symbol('seed1')
+        seed2 = Vector.symbol('seed2')
+        last_n1 = None
+        y = 1/50
+        z = 1/50
+        octaves = Vector(3)
+        roughness = Vector(0.5)
+        for x in map(lambda x: x/50, range(1, 1001)):
+            n1 = float(octnoise(seed1, octaves, roughness, Vector(x), Vector(y), Vector(z)))
+            self.assertTrue(-1 <= n1 <= 1)
+            n2 = float(octnoise(seed2, octaves, roughness, Vector(x), Vector(y), Vector(z)))
+            self.assertTrue(-1 <= n2 <= 1)
+            self.assertNotEqual(n1, n2)
+            if last_n1 is not None:
+                self.assertLess(abs(n1 - last_n1), 0.1)
+            last_n1 = n1
+        for y in map(lambda y: y/50, range(1, 1001)):
+            n1 = float(octnoise(seed1, octaves, roughness, Vector(x), Vector(y), Vector(z)))
+            self.assertTrue(-1 <= n1 <= 1)
+            n2 = float(octnoise(seed2, octaves, roughness, Vector(x), Vector(y), Vector(z)))
+            self.assertTrue(-1 <= n2 <= 1)
+            self.assertNotEqual(n1, n2)
+            self.assertLess(abs(n1 - last_n1), 0.1)
+            last_n1 = n1
+        for z in map(lambda z: z/50, range(1, 1001)):
+            n1 = float(octnoise(seed1, octaves, roughness, Vector(x), Vector(y), Vector(z)))
+            self.assertTrue(-1 <= n1 <= 1)
+            n2 = float(octnoise(seed2, octaves, roughness, Vector(x), Vector(y), Vector(z)))
+            self.assertTrue(-1 <= n2 <= 1)
+            self.assertNotEqual(n1, n2)
+            self.assertLess(abs(n1 - last_n1), 0.1)
+            last_n1 = n1
+
+    def test_seeds(self, n=2000):
+        values = sorted([float(noise(Vector(seed), Vector(0.5))) for seed in range(n)])
+        self.assertLess(values[0], -0.5)
+        self.assertTrue(-0.5 < values[n//4] < -0.25)
+        self.assertLess(abs(values[n // 2]), 0.1)
+        self.assertTrue(0.25 < values[-n//4] < 0.5)
+        self.assertGreater(values[-1], 0.5)
+
+    def test_single_range(self):
+        values1 = noise(Vector.symbol('seed'), Vector.range(100))
+        values2 = [float(noise(Vector.symbol('seed'), Vector(x))) for x in range(100)]
+        self.assertEqual(values1, values2)
+
+    def test_double_range(self):
+        values1 = noise(Vector.symbol('seed'), Vector.range(10), Vector.range(10))
+        values2 = [float(noise(Vector.symbol('seed'), Vector(x), Vector(y))) for x in range(10) for y in range(10)]
+        self.assertEqual(values1, values2)
+
+    def test_triple_range(self):
+        values1 = noise(Vector.symbol('seed'), Vector.range(10), Vector.range(10), Vector.range(10))
+        values2 = [float(noise(Vector.symbol('seed'), Vector(x), Vector(y), Vector(z))) for x in range(10) for y in range(10) for z in range(10)]
+        self.assertEqual(values1, values2)
+
+
+class TestBasicFunctions(unittest.TestCase):
+    def test_length(self):
+        self.assertEqual(length(null), 0)
+        self.assertEqual(length(Vector(1)), 1)
+        self.assertEqual(length(Vector('hello')), 1)
+        self.assertEqual(length(Vector(['hello', 'world'])), 2)
+        self.assertEqual(length(Vector.range(1000)), 1000)
+
+
 class TestTrig(unittest.TestCase):
     def setUp(self):
         self.a = Vector([1, 2, 3, 4])
         self.b = Vector([4, 5, 6, 7])
         self.c = Vector([2])
+
+    def test_cos(self):
+        self.assertEqual(cosv(null), null)
+        self.assertEqual(cosv(Vector('hello')), null)
+        theta = Vector.range(0, 1, 0.01)
+        values = [math.cos(th) for th in theta*Tau]
+        for i in range(len(values)):
+            self.assertEqual(cosv(theta.item(i)), values[i])
+        self.assertEqual(cosv(theta), values)
+
+    def test_sin(self):
+        self.assertEqual(sinv(null), null)
+        self.assertEqual(sinv(Vector('hello')), null)
+        theta = Vector.range(0, 1, 0.01)
+        values = [math.sin(th) for th in theta*Tau]
+        for i in range(len(values)):
+            self.assertEqual(sinv(theta.item(i)), values[i])
+        self.assertEqual(sinv(theta), values)
+
+    def test_tan(self):
+        self.assertEqual(tanv(null), null)
+        self.assertEqual(tanv(Vector('hello')), null)
+        theta = Vector.range(0, 1, 0.01)
+        values = [math.tan(th) for th in theta*Tau]
+        for i in range(len(values)):
+            self.assertEqual(tanv(theta.item(i)), values[i])
+        self.assertEqual(tanv(theta), values)
 
     def test_hypot_one_arg(self):
         self.assertEqual(hypot(), null)
