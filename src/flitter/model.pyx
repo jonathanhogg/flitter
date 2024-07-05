@@ -921,7 +921,7 @@ cdef class Vector:
             return result.objects[0] if result.objects is not None else result.numbers[0]
         return result
 
-    cdef Vector slice(self, Vector index):
+    cpdef Vector slice(self, Vector index):
         cdef int64_t i, j, m = index.length, n = self.length
         if index.numbers == NULL or n == 0:
             return null_
@@ -943,7 +943,7 @@ cdef class Vector:
                 result.numbers[i] = self.numbers[j]
         return result
 
-    cdef Vector item(self, int64_t i):
+    cpdef Vector item(self, int64_t i):
         cdef int64_t n = self.length
         if n == 0:
             return null_

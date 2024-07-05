@@ -69,7 +69,7 @@ cdef class uniform(Vector):
             return true_
         return false_
 
-    cdef Vector item(self, int64_t i):
+    cpdef Vector item(self, int64_t i):
         cdef Vector value = Vector.__new__(Vector)
         value.allocate_numbers(1)
         value.numbers[0] = self._item(i)

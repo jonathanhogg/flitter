@@ -55,8 +55,8 @@ cdef class Vector:
     cdef Vector lt(self, Vector other)
     cdef Vector le(self, Vector other)
     cdef int64_t compare(self, Vector other) except -2
-    cdef Vector slice(self, Vector index)
-    cdef Vector item(self, int64_t i)
+    cpdef Vector slice(self, Vector index)
+    cpdef Vector item(self, int64_t i)
     cpdef double squared_sum(self) noexcept
     cpdef Vector normalize(self)
     cpdef Vector dot(self, Vector other)
