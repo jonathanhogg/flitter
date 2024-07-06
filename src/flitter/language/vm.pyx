@@ -837,7 +837,7 @@ cdef class Program:
         self.pragmas[name] = value
         return self
 
-    def execute(self, Context context, list initial_stack=None, list lnames=None, bint record_stats=False):
+    def execute(self, Context context, list lnames=None, bint record_stats=False):
         """This is a test-harness function. Do not use."""
         assert self.initial_lnames == ()
         if not self.linked:
@@ -849,9 +849,6 @@ cdef class Program:
                 context.lnames.push(Vector._coerce(item))
         if context.stack is None:
             context.stack = VectorStack()
-        if initial_stack:
-            for item in initial_stack:
-                context.stack.push(Vector._coerce(item))
         self._execute(context, 0, record_stats)
         if lnames is not None:
             lnames.clear()

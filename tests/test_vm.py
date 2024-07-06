@@ -12,7 +12,7 @@ import unittest.mock
 from flitter import configure_logger
 from flitter.model import Vector, Node, Context, StateDict, null, true, false
 from flitter.language.tree import Top, Literal
-from flitter.language.vm import Program, Function, VectorStack
+from flitter.language.vm import Program, Function, VectorStack, log_vm_stats
 
 
 configure_logger('ERROR')
@@ -60,6 +60,24 @@ class TestProgramMethods(unittest.TestCase):
         self.assertTrue(program.simplify)
         program.use_simplifier(False)
         self.assertFalse(program.simplify)
+
+    @unittest.mock.patch('flitter.language.vm.logger')
+    def test_log_vm_stats(self, logger_mock):
+        program = Program()
+        context = Context(state=StateDict(), path=Path('.'))
+        program.literal(1)
+        program.literal(2)
+        program.add()
+        program.local_load(0)
+        program.call(1)
+        program.call_fast(lambda x: x+1, 1)
+        program.optimize()
+        program.link()
+        stack = program.execute(context, lnames=[lambda x: x+1], record_stats=True)
+        self.assertEqual(stack, [5])
+        log_vm_stats()
+        self.assertEqual(logger_mock.info.mock_calls[0], unittest.mock.call('VM execution statistics:'))
+        self.assertEqual(set(call.args[1] for call in logger_mock.info.mock_calls[1:]), {'(native funcs)', 'Add', 'Literal', 'LocalLoad', 'Call', 'CallFast'})
 
 
 class TestBasicInstructions(unittest.TestCase):
@@ -749,9 +767,10 @@ class TestCalls(unittest.TestCase):
         self.state = StateDict()
         self.test_function = unittest.mock.Mock()
         del self.test_function.context_func
+        self.test_function.__name__ = 'test'
         self.test_function.return_value = Vector(12)
         self.context_function = unittest.mock.Mock(context_func=True)
-        self.context_function.return_value = Vector(12)
+        self.context_function.return_value = Vector(13)
         self.names = {'test': Vector(self.test_function), 'context': Vector(self.context_function)}
         self.context = Context(state=self.state, names=self.names)
 
@@ -805,8 +824,28 @@ class TestCalls(unittest.TestCase):
         self.program.local_load(0)
         self.program.call(1, ('x', 'y'))
         stack = self.program.execute(self.context, lnames=[self.context_function])
-        self.assertEqual(stack, [12])
+        self.assertEqual(stack, [13])
         self.context_function.assert_called_once_with(self.context, Vector(1), x=Vector(2), y=Vector(3))
+
+    def test_not_a_func(self):
+        self.program.literal(1)
+        self.program.literal(2)
+        self.program.literal(null)
+        self.program.call(2)
+        stack = self.program.execute(self.context, lnames=[self.test_function, self.context_function])
+        self.assertEqual(stack, [null])
+
+    def test_multiple_funcs(self):
+        self.program.literal(1)
+        self.program.literal(2)
+        self.program.local_load(1)
+        self.program.local_load(0)
+        self.program.compose(2)
+        self.program.call(2)
+        stack = self.program.execute(self.context, lnames=[self.test_function, self.context_function])
+        self.assertEqual(stack, [(12, 13)])
+        self.test_function.assert_called_once_with(Vector(1), Vector(2))
+        self.context_function.assert_called_once_with(self.context, Vector(1), Vector(2))
 
     def test_call_fast_multiple_args(self):
         self.program.literal(1)
@@ -828,6 +867,23 @@ class TestCalls(unittest.TestCase):
         stack = self.program.execute(self.context)
         self.assertEqual(stack, [12])
         self.test_function.assert_called_once_with()
+
+    def test_call_fast_multiple_args_exception(self):
+        self.test_function.side_effect = ValueError("Test error")
+        self.program.literal(1)
+        self.program.literal(2)
+        self.program.call_fast(self.test_function, 2)
+        stack = self.program.execute(self.context)
+        self.assertEqual(stack, [null])
+        self.assertEqual(self.context.errors, {'Error calling test: Test error'})
+
+    def test_call_fast_single_arg_exception(self):
+        self.test_function.side_effect = ValueError("Test error")
+        self.program.literal(1)
+        self.program.call_fast(self.test_function, 1)
+        stack = self.program.execute(self.context)
+        self.assertEqual(stack, [null])
+        self.assertEqual(self.context.errors, {'Error calling test: Test error'})
 
 
 class TestImports(unittest.TestCase):
