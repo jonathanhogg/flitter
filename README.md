@@ -5,7 +5,7 @@ with trails moving outwards from the centre of the screen.](https://github.com/j
 
 [![CI lint](https://github.com/jonathanhogg/flitter/actions/workflows/ci-lint.yml/badge.svg?)](https://github.com/jonathanhogg/flitter/actions/workflows/ci-lint.yml)
 [![CI test](https://github.com/jonathanhogg/flitter/actions/workflows/ci-test.yml/badge.svg?)](https://github.com/jonathanhogg/flitter/actions/workflows/ci-test.yml)
-[![CI coverage](https://gist.githubusercontent.com/jonathanhogg/b7237d8b4e7ff50c3f284cb939e949d0/raw/5a768c77b0cd5c43064539325b21118401961070/badge.svg?)](https://github.com/jonathanhogg/flitter/actions/workflows/ci-coverage.yml)
+[![CI coverage](https://gist.githubusercontent.com/jonathanhogg/b7237d8b4e7ff50c3f284cb939e949d0/raw/badge.svg?)](https://github.com/jonathanhogg/flitter/actions/workflows/ci-coverage.yml)
 [![docs](https://readthedocs.org/projects/flitter/badge/?version=latest)](https://flitter.readthedocs.io/en/latest/?badge=latest)
 
 **Flitter** is a functional programming language and declarative system for
