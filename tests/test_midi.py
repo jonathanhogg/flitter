@@ -5,7 +5,7 @@ Tests of the flitter controller generic MIDI module
 import asyncio
 import time
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from loguru import logger
 
@@ -18,18 +18,32 @@ logger.disable('flitter.render.controller.midi')
 
 @patch('flitter.render.controller.midi.rtmidi2')
 class TestMidiPortCreation(unittest.IsolatedAsyncioTestCase):
-    async def test_create_input(self, rtmidi2_mock):
+    async def test_create_input_known(self, rtmidi2_mock):
+        rtmidi2_mock.get_in_ports.return_value = ['DUMMY:0', 'TEST_MIDI_PORT:1']
+        port = midi.MidiPort('TEST_MIDI_PORT', output=False)
+        port._midi_in.open_port.assert_called_with('TEST_MIDI_PORT:1')
+
+    async def test_create_input_unknown(self, rtmidi2_mock):
+        rtmidi2_mock.get_in_ports.return_value = []
         port = midi.MidiPort('TEST_MIDI_PORT', output=False)
         port._midi_in.open_port.assert_called_with('TEST_MIDI_PORT')
 
-    def test_create_output(self, rtmidi2_mock):
+    def test_create_output_known(self, rtmidi2_mock):
+        rtmidi2_mock.get_out_ports.return_value = ['DUMMY:0', 'TEST_MIDI_PORT:1']
+        port = midi.MidiPort('TEST_MIDI_PORT', input=False)
+        port._midi_out.open_port.assert_called_with('TEST_MIDI_PORT:1')
+
+    def test_create_output_unknown(self, rtmidi2_mock):
+        rtmidi2_mock.get_out_ports.return_value = []
         port = midi.MidiPort('TEST_MIDI_PORT', input=False)
         port._midi_out.open_port.assert_called_with('TEST_MIDI_PORT')
 
-    async def test_create_input_output(self, rtmidi2_mock):
+    async def test_create_input_output_known(self, rtmidi2_mock):
+        rtmidi2_mock.get_in_ports.return_value = ['DUMMY:0', 'TEST_MIDI_PORT:1']
+        rtmidi2_mock.get_out_ports.return_value = ['DUMMY:0', 'TEST_MIDI_PORT:1']
         port = midi.MidiPort('TEST_MIDI_PORT')
-        port._midi_in.open_port.assert_called_with('TEST_MIDI_PORT')
-        port._midi_out.open_port.assert_called_with('TEST_MIDI_PORT')
+        port._midi_in.open_port.assert_called_with('TEST_MIDI_PORT:1')
+        port._midi_out.open_port.assert_called_with('TEST_MIDI_PORT:1')
 
     def test_attempt_create_missing(self, rtmidi2_mock):
         rtmidi2_mock.MidiIn.side_effect = RuntimeError()
@@ -37,14 +51,21 @@ class TestMidiPortCreation(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ValueError):
             midi.MidiPort('MISSING_PORT')
 
+    def test_attempt_create_missing_out_only(self, rtmidi2_mock):
+        in_port_mock = Mock()
+        rtmidi2_mock.MidiIn.return_value = in_port_mock
+        rtmidi2_mock.MidiOut.side_effect = RuntimeError()
+        with self.assertRaises(ValueError):
+            midi.MidiPort('MISSING_PORT')
+        in_port_mock.open_port.assert_called_with('MISSING_PORT')
+        in_port_mock.close.assert_called_with()
+
     def test_attempt_create_missing_input(self, rtmidi2_mock):
         rtmidi2_mock.MidiIn.side_effect = RuntimeError()
-        rtmidi2_mock.MidiOut.side_effect = RuntimeError()
         with self.assertRaises(ValueError):
             midi.MidiPort('MISSING_PORT', output=False)
 
     def test_attempt_create_missing_output(self, rtmidi2_mock):
-        rtmidi2_mock.MidiIn.side_effect = RuntimeError()
         rtmidi2_mock.MidiOut.side_effect = RuntimeError()
         with self.assertRaises(ValueError):
             midi.MidiPort('MISSING_PORT', input=False)
@@ -174,6 +195,11 @@ class TestReceiveMidi(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(start < event.timestamp < end)
         self.assertEqual(event.value, 16370)
 
+    async def test_receive_unknown(self):
+        self.port._midi_in.callback(bytes([0xc0]), 0.0)
+        event = await self.port.wait_event()
+        self.assertIsNone(event)
+
     async def test_receive_timing(self):
         start = system_clock()
         self.port._midi_in.callback(bytes([0x80, 0x0a]), 0.0)
@@ -233,9 +259,19 @@ class TestSendMidi(unittest.IsolatedAsyncioTestCase):
         self.port.send_sysex(0x04, 0x05, 0x06)
         self.port._midi_out.send_raw.assert_called_with(0xf0, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0xf7)
 
+    def test_send_sysex_no_default_id(self):
+        port = midi.MidiPort('TEST_MIDI_PORT', input=False)
+        with self.assertRaises(TypeError):
+            port.send_sysex(0x04, 0x05, 0x06)
+
     def test_send_sysex_explicit_id(self):
         self.port.send_sysex(0x04, 0x05, 0x06, sysex_id=(0x71, 0x72, 0x73))
         self.port._midi_out.send_raw.assert_called_with(0xf0, 0x71, 0x72, 0x73, 0x04, 0x05, 0x06, 0xf7)
+
+    def test_send_sysex_explicit_id_no_default_id(self):
+        port = midi.MidiPort('TEST_MIDI_PORT', input=False)
+        port.send_sysex(0x04, 0x05, 0x06, sysex_id=(0x71, 0x72, 0x73))
+        port._midi_out.send_raw.assert_called_with(0xf0, 0x71, 0x72, 0x73, 0x04, 0x05, 0x06, 0xf7)
 
     def test_send_clock(self):
         self.port.send_clock()

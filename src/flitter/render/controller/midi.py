@@ -97,7 +97,7 @@ class MidiPort:
                 if virtual:
                     self._midi_out.open_virtual_port(self.name)
                 else:
-                    for port in rtmidi2.get_in_ports():
+                    for port in rtmidi2.get_out_ports():
                         if port.split(':')[0] == name:
                             name = port
                     self._midi_out.open_port(name)
