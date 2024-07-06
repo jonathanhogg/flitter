@@ -38,7 +38,7 @@ jobs:
       id: coverage
       run: |
         coverage run -m pytest
-        echo percent=`coverage report | grep '^TOTAL' | cut -w -f4` > "${GITHUB_OUTPUT}"
+        echo "percent=`coverage report | grep '^TOTAL' | cut -c60-70`" >> "${GITHUB_OUTPUT}"
     - name: Generate HTML coverage report
       run: |
         coverage html
@@ -54,3 +54,9 @@ jobs:
       with:
         name: htmlcov
         path: htmlcov/
+    - name: Update badge gist
+      uses: stellarhub/push-gist-action@v1
+      with:
+        token: ${{ secrets.GIST }}
+        gist_id: b7237d8b4e7ff50c3f284cb939e949d0
+        file_path: htmlcov/badge.svg
