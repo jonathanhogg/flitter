@@ -45,9 +45,10 @@ jobs:
     - name: Generate coverage badge
       uses: emibcn/badge-action@v2.0.3
       with:
-        label: 'CI-coverage'
+        label: 'CI coverage'
+        label-color: '333'
         status: ${{ steps.coverage.outputs.percent }}
-        color: 'blue,555,daf'
+        color: 'blue'
         path: htmlcov/badge.svg
     - name: Upload report
       uses: actions/upload-artifact@v4
