@@ -15,7 +15,7 @@ on:
     branches: ["main"]
 
 jobs:
-  build:
+  build-and-run-test-coverage:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -35,14 +35,22 @@ jobs:
       env:
         FLITTER_BUILD_COVERAGE: 1
     - name: Run tests with coverage
+      id: coverage
       run: |
         coverage run -m pytest
-        coverage report
+        echo percent=`coverage report | grep '^TOTAL' | cut -w -f4` > "${GITHUB_OUTPUT}"
     - name: Generate HTML coverage report
       run: |
         coverage html
+    - name: Generate coverage badge
+      uses: emibcn/badge-action@v2.0.3
+      with:
+        label: 'CI-coverage'
+        status: ${{ steps.coverage.outputs.percent }}
+        color: 'blue,555,daf'
+        path: htmlcov/badge.svg
     - name: Upload report
       uses: actions/upload-artifact@v4
       with:
         name: htmlcov
-        path: htmlcov/*
+        path: htmlcov/
