@@ -2,8 +2,11 @@
 Tests of the model.Vector class
 """
 
+import pickle
 import math
 import unittest
+
+import numpy
 
 from flitter.model import Vector, true, false, null, Node
 
@@ -78,6 +81,10 @@ class TestVector(unittest.TestCase):
                     vector2 = Vector.coerce(vector)
                     self.assertIs(vector2, vector)
 
+    def test_construct_from_numpy_array(self):
+        self.assertEqual(Vector(numpy.arange(0, 10, 0.5, dtype='float64')), Vector.range(0, 10, 0.5))
+        self.assertEqual(Vector(numpy.arange(0, 10, 0.5, dtype='float32')), Vector.range(0, 10, 0.5))
+
     def test_special_coercion_values(self):
         self.assertIs(Vector.coerce(None), null)
         self.assertIs(Vector.coerce([]), null)
@@ -108,9 +115,16 @@ class TestVector(unittest.TestCase):
         self.assertTrue(foo_1.numeric)
         self.assertEqual(foo_1[0], FOO_SYMBOL_NUMBER)
         self.assertEqual(foo_1[1], 1)
+        value = ('foo', 1, lambda x: x)
+        foo_2 = Vector.with_symbols(value)
+        self.assertIsInstance(foo_2, Vector)
+        self.assertEqual(len(foo_2), 3)
+        self.assertIs(foo_2[0], value[0])
+        self.assertIs(foo_2[1], value[1])
+        self.assertIs(foo_2[2], value[2])
 
     def test_copy(self):
-        for x in (Vector(["Hello ", "world!"]), Vector.range(10)):
+        for x in (Vector(), Vector(["Hello ", "world!"]), Vector.range(10), 5):
             y = Vector.copy(x)
             self.assertEqual(x, y)
             self.assertFalse(x is y)
@@ -126,6 +140,21 @@ class TestVector(unittest.TestCase):
         foo = Vector.symbol('foo')
         bar = Vector.symbol('bar')
         self.assertEqual(Vector.compose([foo, bar]), Vector([float(foo), float(bar)]))
+
+    def test_item(self):
+        x = Vector([0.5, "hello", 123])
+        self.assertIsInstance(x.item(0), Vector)
+        self.assertEqual(x.item(0), 0.5)
+        self.assertEqual(x.item(1), "hello")
+        self.assertEqual(x.item(2), 123)
+        numbers = Vector.range(10)
+        for i in range(-10, 20):
+            self.assertEqual(numbers.item(i), i % 10)
+        objects = Vector([str(i) for i in range(10)])
+        for i in range(-10, 20):
+            self.assertEqual(objects.item(i), str(i % 10))
+        for i in range(-10, 20):
+            self.assertEqual(null.item(i), null)
 
     def test_indexing(self):
         numbers = Vector.range(10)
@@ -146,6 +175,22 @@ class TestVector(unittest.TestCase):
                 self.assertEqual(numbers[r], r % 10)
                 self.assertEqual(objects[r], [str(int(i) % 10) for i in r])
                 self.assertEqual(null[r], null)
+
+    def test_range(self):
+        self.assertEqual(Vector.range(0), null)
+        self.assertEqual(Vector.range(1), [0])
+        self.assertEqual(Vector.range(1, 2), [1])
+        self.assertEqual(Vector.range(0, 4, 2), [0, 2])
+        self.assertEqual(Vector.range(0, 4, 0), null)
+        self.assertEqual(Vector.range(0, 10, 1), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+        self.assertEqual(Vector.range(10, 0, -1), [10, 9, 8, 7, 6, 5, 4, 3, 2, 1])
+        self.assertEqual(Vector.range('a', 10), null)
+        self.assertEqual(Vector.range(0, 'b'), null)
+        self.assertEqual(Vector.range(0, 10, 'c'), null)
+        with self.assertRaises(TypeError):
+            Vector.range()
+        with self.assertRaises(TypeError):
+            Vector.range(0, 1, 2, 3)
 
     def test_range_slice(self):
         TESTS = [
@@ -168,6 +213,19 @@ class TestVector(unittest.TestCase):
                 vector = Vector.range(*s)
                 self.assertEqual(list(vector), values)
                 self.assertTrue(len(values) == 0 or vector.numeric)
+
+    def test_reduce(self):
+        TESTS = [
+            null,
+            true,
+            false,
+            Vector.range(10),
+            Vector.symbol('foo'),
+            Vector('Hello world!'),
+            Vector([5, 1.3, 'a']),
+        ]
+        for v in TESTS:
+            self.assertEqual(pickle.loads(pickle.dumps(v)), v)
 
     def test_isinstance(self):
         TESTS = [
@@ -195,12 +253,14 @@ class TestVector(unittest.TestCase):
         self.assertFalse(Vector([0, 0, 0]))
         self.assertFalse(Vector([""]))
         self.assertFalse(Vector(["", "", ""]))
-        self.assertFalse(Vector([0, "", 0]))
+        self.assertFalse(Vector([0.0, "", 0]))
         self.assertTrue(true)
         self.assertTrue(Vector(1))
         self.assertTrue(Vector([0, 0, 1]))
         self.assertTrue(Vector(["foo"]))
         self.assertTrue(Vector(["", "bar"]))
+        self.assertTrue(Vector([0, "", 1.0]))
+        self.assertTrue(Vector([0.0, "", 1]))
         self.assertTrue(Vector(Node("foo")))
         self.assertTrue(Vector(test_func))
         self.assertTrue(Vector(test_class))
@@ -226,6 +286,8 @@ class TestVector(unittest.TestCase):
             (Vector(["testing", "testing", 1, 2.2, 3.0]), "testingtesting12.23"),
             (Vector.symbol('foo'), "foo"),
             (Vector.symbol('foo').concat(Vector.symbol('bar')), "foobar"),
+            (Vector(Node('foo', {'bar'}, {'baz': Vector(2)})), "foo"),
+            (Vector(self.test_as_string), "test_as_string"),
         ]
         for vector, string in TESTS:
             self.assertEqual(str(vector), string)
@@ -281,6 +343,8 @@ class TestVector(unittest.TestCase):
         self.assertEqual(Vector(-3.5).match(1, int), -4)
         self.assertEqual(Vector(3.5).match(1, str), None)
         self.assertEqual(Vector(3.5).match(3, float), [3.5, 3.5, 3.5])
+        self.assertEqual(Vector(3.5).match(3, str), None)
+        self.assertEqual(Vector(3.5).match(3, int), [3, 3, 3])
         self.assertEqual(Vector("Hello world!").match(1, str), "Hello world!")
         self.assertEqual(Vector("Hello world!").match(2, str), ["Hello world!", "Hello world!"])
         self.assertEqual(Vector(["Hello ", "world!"]).match(2, str), ["Hello ", "world!"])
@@ -298,6 +362,10 @@ class TestVector(unittest.TestCase):
         self.assertEqual(Vector.symbol('foo').concat(Vector(1)).match(2), ['foo', 1])
         self.assertEqual(Vector.symbol('foo').concat(Vector(1)).match(2, str), None)
         self.assertEqual(Vector.symbol('foo').concat(Vector(1)).match(2, float), [FOO_SYMBOL_NUMBER, 1])
+        self.assertEqual(Vector(FOO_SYMBOL_NUMBER).match(1, str), 'foo')
+        self.assertEqual(Vector(FOO_SYMBOL_NUMBER).match(2, None), ['foo', 'foo'])
+        self.assertEqual(Vector([FOO_SYMBOL_NUMBER, 'bar']).match(0, str), ['foo', 'bar'])
+        self.assertEqual(Vector([FOO_SYMBOL_NUMBER, 'bar']).slice(Vector(0)).match(2, str), ['foo', 'foo'])
 
     def test_repr(self):
         self.assertEqual(repr(null), "null")
@@ -362,6 +430,8 @@ class TestVector(unittest.TestCase):
         self.assertAllAlmostEqual(x + Vector([1, 2]), Vector([2, 2.1, -4, 1000002, math.inf]))
         self.assertAllAlmostEqual(Vector([1, 2]) + x, Vector([2, 2.1, -4, 1000002, math.inf]))
         self.assertAllAlmostEqual(x + x, Vector([2, 0.2, -10, 2e6, math.inf]))
+        self.assertAllAlmostEqual(x + 0, x)
+        self.assertAllAlmostEqual(0 + x, x)
 
     def test_mul_add(self):
         x = Vector([1, 0.1, -5, 1e6, math.inf])
@@ -391,6 +461,8 @@ class TestVector(unittest.TestCase):
         y = x - x
         self.assertAllAlmostEqual(y[:4], Vector([0, 0, 0, 0]))
         self.assertTrue(math.isnan(y[4]))
+        self.assertAllAlmostEqual(x - 0, x)
+        self.assertAllAlmostEqual(0 - x, -x)
 
     def test_mul(self):
         x = Vector([1, 0.1, -5, 1e6, math.inf])
@@ -403,6 +475,8 @@ class TestVector(unittest.TestCase):
         self.assertAllAlmostEqual(x * Vector([1, 2]), Vector([1, 0.2, -5, 2e6, math.inf]))
         self.assertAllAlmostEqual(Vector([1, 2]) * x, Vector([1, 0.2, -5, 2e6, math.inf]))
         self.assertAllAlmostEqual(x * x, Vector([1, 0.01, 25, 1e12, math.inf]))
+        self.assertAllAlmostEqual(x * 0, Vector([0, 0, 0, 0, math.nan]))
+        self.assertAllAlmostEqual(0 * x, Vector([0, 0, 0, 0, math.nan]))
 
     def test_truediv(self):
         x = Vector([1, 0.1, -5, 1e6, math.inf])
@@ -417,6 +491,8 @@ class TestVector(unittest.TestCase):
         y = x / x
         self.assertAllAlmostEqual(y[:4], Vector([1, 1, 1, 1]))
         self.assertTrue(math.isnan(y[4]))
+        self.assertAllAlmostEqual(x / 1, x)
+        self.assertAllAlmostEqual(1 / x, Vector([1, 10, -0.2, 1e-6, 0]))
 
     def test_floordiv(self):
         x = Vector([1, 0.1, -5.3, 1e6, math.inf])
@@ -431,6 +507,8 @@ class TestVector(unittest.TestCase):
         y = x // x
         self.assertEqual(y[:4], Vector([1, 1, 1, 1]))
         self.assertTrue(math.isnan(y[4]))
+        self.assertAllAlmostEqual(x // 1, Vector([1, 0, -6, 1e6, math.inf]))
+        self.assertAllAlmostEqual(1 // x, Vector([1, 10, -1, 0, 0]))
 
     def test_mod(self):
         x = Vector([1, 0.1, -5, 1e6])
@@ -443,6 +521,8 @@ class TestVector(unittest.TestCase):
         self.assertAllAlmostEqual(x % Vector([2, 3]), Vector([1, 0.1, 1, 1]))
         self.assertAllAlmostEqual(Vector([2, 3]) % x, Vector([0, 0, -3, 3]))
         self.assertAllAlmostEqual(x % x, Vector([0, 0, 0, 0]))
+        self.assertAllAlmostEqual(x % 2, Vector([1, 0.1, 1, 0]))
+        self.assertAllAlmostEqual(2 % x, Vector([0, 0, -3, 2]))
 
     def test_pow(self):
         x = Vector([1, 0.1, -5, 1e6, math.inf])
@@ -455,22 +535,33 @@ class TestVector(unittest.TestCase):
         self.assertAllAlmostEqual(x ** Vector([1, 2]), Vector([1, 0.01, -5, 1e12, math.inf]))
         self.assertAllAlmostEqual(Vector([1, 2]) ** x, Vector([1, 1.0717734625362931, 1, math.inf, 1]))
         self.assertAllAlmostEqual(x * x, Vector([1, 0.01, 25, 1e12, math.inf]))
+        self.assertAllAlmostEqual(pow(x, 2, 2), Vector([1, 0.01, 1, 0, math.nan]))
+        self.assertAllAlmostEqual(pow(2, x, 2), Vector([0, 1.0717734625362931, 0.03125, math.nan, math.nan]))
 
     def test_eq(self):
+        self.assertTrue(null == null)
+        self.assertTrue(null == Vector())
         self.assertTrue(null == Vector())
         self.assertTrue(true == Vector(1))
         self.assertTrue(false == Vector(0))
         self.assertTrue(Vector([1, 2, 3]) == Vector([1, 2, 3]))
+        self.assertFalse(Vector([1, 2]) == Vector([1, 2, 3]))
+        self.assertFalse(Vector([1, 2, 4]) == Vector([1, 2, 3]))
         self.assertTrue(Vector(["Hello ", "world!"]) == Vector(["Hello ", "world!"]))
+        self.assertFalse(Vector(["Hello ", "you!"]) == Vector(["Hello ", "world!"]))
         self.assertTrue(Vector.symbol('foo') == Vector(FOO_SYMBOL_NUMBER))
         self.assertTrue(Vector.symbol('foo') == Vector.symbol('foo'))
 
     def test_ne(self):
+        self.assertFalse(null != null)
         self.assertFalse(null != Vector())
         self.assertTrue(true != Vector(0))
         self.assertTrue(false != Vector(1))
         self.assertFalse(Vector([1, 2, 3]) != Vector([1, 2, 3]))
+        self.assertTrue(Vector([1, 2]) != Vector([1, 2, 3]))
+        self.assertTrue(Vector([1, 2, 4]) != Vector([1, 2, 3]))
         self.assertTrue(Vector(["Hello ", "world!"]) != Vector(["Hello world!"]))
+        self.assertTrue(Vector(["Hello ", "you!"]) != Vector(["Hello ", "world!"]))
         self.assertTrue(Vector.symbol('foo') != Vector.symbol('bar'))
 
     def test_gt(self):
@@ -480,9 +571,14 @@ class TestVector(unittest.TestCase):
         self.assertTrue(Vector([1, 2, 4]) > Vector([1, 2, 3]))
         self.assertTrue(Vector([1, 3]) > Vector([1, 2, 3]))
         self.assertTrue(Vector(["Hello world!"]) > Vector(["Hello ", "world!"]))
+        self.assertTrue(Vector(["Hello ", "world!"]) > Vector(["Hello ", "cruel world!"]))
         self.assertTrue(Vector(["Z"]) > Vector(["Hello world!"]))
+        with self.assertRaises(TypeError):
+            Vector('a') > Vector(1)
 
     def test_ge(self):
+        self.assertTrue(null >= null)
+        self.assertTrue(null >= Vector())
         self.assertTrue(Vector(1) >= null)
         self.assertTrue(true >= Vector(0))
         self.assertTrue(false >= Vector(0))
@@ -491,6 +587,10 @@ class TestVector(unittest.TestCase):
         self.assertTrue(Vector([1, 3]) >= Vector([1, 2, 3]))
         self.assertTrue(Vector(["Hello world!"]) >= Vector(["Hello ", "world!"]))
         self.assertTrue(Vector(["Z"]) >= Vector(["Hello world!"]))
+        x = Vector.symbol('foo').compose(Vector([1, 2, 3]))
+        self.assertTrue(x >= x)
+        with self.assertRaises(TypeError):
+            Vector('a') >= Vector(1)
 
     def test_lt(self):
         self.assertTrue(null < Vector(1))
@@ -500,8 +600,12 @@ class TestVector(unittest.TestCase):
         self.assertTrue(Vector([1, 2, 3]) < Vector([1, 3]))
         self.assertTrue(Vector(["Hello ", "world!"]) < Vector(["Hello world!"]))
         self.assertTrue(Vector(["Hello world!"]) < Vector(["Z"]))
+        with self.assertRaises(TypeError):
+            Vector('a') < Vector(1)
 
     def test_le(self):
+        self.assertTrue(null <= null)
+        self.assertTrue(null <= Vector())
         self.assertTrue(null <= Vector(1))
         self.assertTrue(Vector(0) <= true)
         self.assertTrue(Vector(0) <= false)
@@ -510,6 +614,8 @@ class TestVector(unittest.TestCase):
         self.assertTrue(Vector([1, 2, 3]) <= Vector([1, 3]))
         self.assertTrue(Vector(["Hello ", "world!"]) <= Vector(["Hello world!"]))
         self.assertTrue(Vector(["Hello world!"]) <= Vector(["Z"]))
+        with self.assertRaises(TypeError):
+            Vector('a') <= Vector(1)
 
     def test_getitem(self):
         x = Vector.range(100)
@@ -522,9 +628,12 @@ class TestVector(unittest.TestCase):
 
     def test_normalize(self):
         self.assertEqual(null.normalize(), null)
+        self.assertEqual(Vector(0).normalize(), null)
         self.assertEqual(Vector(["Hello world!"]).normalize(), null)
         self.assertEqual(Vector(1).normalize(), Vector(1))
-        self.assertEqual(Vector([0, 1]).normalize(), Vector([0, 1]))
+        self.assertEqual(Vector([0, 2]).normalize(), Vector([0, 1]))
+        self.assertEqual(Vector([-2, 0]).normalize(), Vector([-1, 0]))
+        self.assertEqual(Vector([0, 0]).normalize(), null)
         self.assertAllAlmostEqual(Vector([1, 1]).normalize(), Vector([0.707106781, 0.707106781]))
         self.assertAllAlmostEqual(Vector([1, -2, 3]).normalize(), Vector([0.267261242, -0.534522484, 0.801783726]))
 
@@ -557,3 +666,19 @@ class TestVector(unittest.TestCase):
         self.assertEqual(Vector(['hello']).concat(b), Vector(['hello', 4, 5, 6]))
         self.assertEqual(a.concat(Vector(['world'])), Vector([1, 2, 3, 'world']))
         self.assertEqual(Vector(['hello']).concat(Vector(['world'])), Vector(['hello', 'world']))
+
+    def test_clamp(self):
+        x = Vector.range(10)
+        self.assertIs(x.clamp(None, None), x)
+        self.assertIs(x.clamp(Vector(1), None), x)
+        self.assertIs(x.clamp(None, Vector(5)), x)
+        self.assertEqual(x.clamp(Vector(0), Vector(10)), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+        self.assertEqual(x.clamp(Vector(1), Vector(8)), [1, 1, 2, 3, 4, 5, 6, 7, 8, 8])
+        self.assertEqual(x.clamp(Vector(-1), Vector(8)), [0, 1, 2, 3, 4, 5, 6, 7, 8, 8])
+        self.assertEqual(x.clamp(Vector(1), Vector(11)), [1, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+
+    def test_squared_sum(self):
+        self.assertTrue(math.isnan(null.squared_sum()))
+        self.assertTrue(math.isnan(Vector('a').squared_sum()))
+        self.assertEqual(Vector(0).squared_sum(), 0)
+        self.assertEqual(Vector([0, 1, 2, 3]).squared_sum(), 14)
