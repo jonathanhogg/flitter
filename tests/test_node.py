@@ -20,6 +20,7 @@ class TestNode(unittest.TestCase):
         self.node3 = Node('node3', {'bar', 'baz'}, {'color': Vector(1)})
         self.node4 = Node('node4')
         self.node5 = Node('node5')
+        self.node6 = Node('node6', children=(Node('node7'),))
 
     def test_construct(self):
         self.assertEqual(self.node1.kind, 'node1')
@@ -37,6 +38,8 @@ class TestNode(unittest.TestCase):
         self.assertEqual(len(self.node3), 1)
         self.assertEqual(list(self.node3.items()), [('color', Vector(1))])
         self.assertEqual(list(self.node3.children), [])
+        self.assertEqual(len(list(self.node6.children)), 1)
+        self.assertEqual(list(self.node6.children)[0].kind, 'node7')
 
     def test_children(self):
         self.node1.append(self.node2)
@@ -45,6 +48,23 @@ class TestNode(unittest.TestCase):
         self.assertIs(next(children), self.node2)
         self.assertIs(next(children), self.node3)
         self.assertRaises(StopIteration, next, children)
+
+    def test_hash(self):
+        self.assertEqual(hash(self.node1), hash(Node('node1')))
+        self.assertNotEqual(hash(self.node2), hash(self.node3))
+        node6 = Node('node6')
+        node6.append(Node('node7'))
+        self.assertEqual(hash(self.node6), hash(node6))
+
+    def test_equal(self):
+        self.assertEqual(self.node1, Node('node1'))
+        self.assertNotEqual(self.node1, Node('node2'))
+        self.assertEqual(self.node2, Node('node2', {'bar', 'baz'}))
+        self.assertNotEqual(self.node2, Node('node2', {'bar'}))
+        self.assertEqual(self.node3, Node('node3', {'bar', 'baz'}, {'color': Vector(1)}))
+        self.assertNotEqual(self.node3, Node('node3', {'bar', 'baz'}, {'color': Vector(2)}))
+        self.assertEqual(self.node6, Node('node6', children=(Node('node7'),)))
+        self.assertNotEqual(self.node6, Node('node6', children=(Node('node8'),)))
 
     def test_copy(self):
         self.node2.append(self.node3)
@@ -155,6 +175,7 @@ class TestNode(unittest.TestCase):
         self.assertEqual(self.node1.get('mixed', 2), ['foo', 1])
         self.assertEqual(self.node1.get('mixed', 2, str), None)
         self.assertEqual(self.node1.get('mixed', 2, float), [FOO_SYMBOL_NUMBER, 1])
+        self.assertEqual(self.node4.get('missing'), None)
 
     def test_repr(self):
         self.assertEqual(repr(self.node1), '!node1')
