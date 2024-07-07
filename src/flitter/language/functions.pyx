@@ -590,7 +590,7 @@ def accumulate(Vector xs not None, Vector zs=true_):
 def minv(Vector xs not None, *args):
     cdef Vector ys = null_
     cdef double f
-    cdef int64_t i, n = xs.length
+    cdef int64_t c, i, n = xs.length
     if not args:
         if n:
             if xs.objects is None:
@@ -613,15 +613,17 @@ def minv(Vector xs not None, *args):
     else:
         ys = xs
         for xs in args:
-            if xs.compare(ys) == -1:
+            if (c := xs.compare(ys)) == -1:
                 ys = xs
+            elif c == -2:
+                return null_
     return ys
 
 
 def minindex(Vector xs not None, *args):
     cdef Vector ys
     cdef double f
-    cdef int64_t i, j = 0, n = xs.length
+    cdef int64_t c, i, j = 0, n = xs.length
     if not args:
         if n:
             if xs.objects is None:
@@ -638,10 +640,13 @@ def minindex(Vector xs not None, *args):
                         y = x
                         j = i
     else:
-        for i, ys in enumerate(args):
-            if ys.compare(xs) == -1:
-                xs = ys
+        ys = xs
+        for i, xs in enumerate(args):
+            if (c := xs.compare(ys)) == -1:
+                ys = xs
                 j = i + 1
+            elif c == -2:
+                return null_
     ys = Vector.__new__(Vector)
     ys.allocate_numbers(1)
     ys.numbers[0] = j
@@ -651,7 +656,7 @@ def minindex(Vector xs not None, *args):
 def maxv(Vector xs not None, *args):
     cdef Vector ys = null_
     cdef double f
-    cdef int64_t i, n = xs.length
+    cdef int64_t c, i, n = xs.length
     if not args:
         if n:
             if xs.objects is None:
@@ -674,15 +679,17 @@ def maxv(Vector xs not None, *args):
     else:
         ys = xs
         for xs in args:
-            if xs.compare(ys) == 1:
+            if (c := xs.compare(ys)) == 1:
                 ys = xs
+            elif c == -2:
+                return null_
     return ys
 
 
 def maxindex(Vector xs not None, *args):
     cdef Vector ys
     cdef double f
-    cdef int64_t i, j = 0, n = xs.length
+    cdef int64_t c, i, j = 0, n = xs.length
     if not args:
         if n:
             if xs.objects is None:
@@ -699,10 +706,13 @@ def maxindex(Vector xs not None, *args):
                         y = x
                         j = i
     else:
-        for i, ys in enumerate(args):
-            if ys.compare(xs) == 1:
-                xs = ys
+        ys = xs
+        for i, xs in enumerate(args):
+            if (c := xs.compare(ys)) == 1:
+                ys = xs
                 j = i + 1
+            elif c == -2:
+                return null_
     ys = Vector.__new__(Vector)
     ys.allocate_numbers(1)
     ys.numbers[0] = j

@@ -62,7 +62,7 @@ cdef inline uint64_t HASH_STRING(str value):
     return y
 
 
-cdef inline int vector_compare(Vector left, Vector right) except -2:
+cdef inline int vector_compare(Vector left, Vector right) noexcept:
     if left is right:
         return 0
     cdef int64_t i, n = left.length, m = right.length
@@ -94,7 +94,7 @@ cdef inline int vector_compare(Vector left, Vector right) except -2:
     elif m == 0:
         return 1
     else:
-        raise TypeError("Not comparable vectors")
+        return -2
     if n == m:
         return 0
     if n < m:
@@ -892,28 +892,44 @@ cdef class Vector:
         return vector_compare(self, other)
 
     def __gt__(self, other):
-        return self.gt(Vector._coerce(other)) is true_
+        cdef uint64_t c = vector_compare(self, Vector._coerce(other))
+        if c == -2:
+            raise TypeError("Not comparable vectors")
+        return c == 1
 
     cdef Vector gt(self, Vector other):
-        return true_ if vector_compare(self, other) == 1 else false_
+        cdef uint64_t c = vector_compare(self, other)
+        return null_ if c == -2 else true_ if c == 1 else false_
 
     def __ge__(self, other):
-        return self.ge(Vector._coerce(other)) is true_
+        cdef uint64_t c = vector_compare(self, Vector._coerce(other))
+        if c == -2:
+            raise TypeError("Not comparable vectors")
+        return c != -1
 
     cdef Vector ge(self, Vector other):
-        return true_ if vector_compare(self, other) != -1 else false_
+        cdef uint64_t c = vector_compare(self, other)
+        return null_ if c == -2 else true_ if c != -1 else false_
 
     def __lt__(self, other):
-        return self.lt(Vector._coerce(other)) is true_
+        cdef uint64_t c = vector_compare(self, Vector._coerce(other))
+        if c == -2:
+            raise TypeError("Not comparable vectors")
+        return c == -1
 
     cdef Vector lt(self, Vector other):
-        return true_ if vector_compare(self, other) == -1 else false_
+        cdef uint64_t c = vector_compare(self, other)
+        return null_ if c == -2 else true_ if c == -1 else false_
 
     def __le__(self, other):
-        return self.le(Vector._coerce(other)) is true_
+        cdef uint64_t c = vector_compare(self, Vector._coerce(other))
+        if c == -2:
+            raise TypeError("Not comparable vectors")
+        return c != 1
 
     cdef Vector le(self, Vector other):
-        return true_ if vector_compare(self, other) != 1 else false_
+        cdef uint64_t c = vector_compare(self, other)
+        return null_ if c == -2 else true_ if c != 1 else false_
 
     def __getitem__(self, index):
         cdef Vector result = self.slice(Vector._coerce(index))
