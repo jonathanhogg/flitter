@@ -15,7 +15,7 @@ with open('coverage.json') as f:
     elif percent > 70:
         print('color=green')
     elif percent > 60:
-        print('color=yellow')
+        print('color=BA1')
     elif percent > 50:
         print('color=orange')
     else:
