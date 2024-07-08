@@ -33,12 +33,12 @@ jobs:
         python -m pip install cython coverage pytest
     - name: Build in place with coverage analysis enabled
       run: |
-        python setup.py build_ext --inplace
+        pip3 install --editable .
       env:
         FLITTER_BUILD_COVERAGE: 1
     - name: Run tests with coverage
       run: |
-        xvfb-run coverage run -m pytest tests
+        xvfb-run coverage run --source=src -m pytest tests
     - name: Generate coverage reports
       id: report
       run: |
