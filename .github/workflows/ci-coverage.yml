@@ -35,20 +35,22 @@ jobs:
       env:
         FLITTER_BUILD_COVERAGE: 1
     - name: Run tests with coverage
-      id: coverage
       run: |
         coverage run -m pytest
-        echo "percent=`coverage report | grep '^TOTAL' | cut -c60-70`" >> "${GITHUB_OUTPUT}"
-    - name: Generate HTML coverage report
+    - name: Generate coverage reports
+      id: report
       run: |
+        coverage report
+        coverage json
+        python scripts/coverage_badge.py >> "${GITHUB_OUTPUT}"
         coverage html
     - name: Generate coverage badge
       uses: emibcn/badge-action@v2.0.3
       with:
         label: 'CI coverage'
         label-color: '333'
-        status: ${{ steps.coverage.outputs.percent }}
-        color: 'blue'
+        status: ${{ steps.report.outputs.status }}
+        color: ${{ steps.report.outputs.color }}
         path: htmlcov/badge.svg
     - name: Upload report
       uses: actions/upload-artifact@v4

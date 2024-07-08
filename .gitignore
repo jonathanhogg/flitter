@@ -2,6 +2,7 @@
 __pycache__
 /.pytest_cache
 /.coverage
+/coverage.json
 /htmlcov
 /build
 /dist
