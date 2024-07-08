@@ -538,6 +538,14 @@ class TestVector(unittest.TestCase):
         self.assertAllAlmostEqual(pow(x, 2, 2), Vector([1, 0.01, 1, 0, math.nan]))
         self.assertAllAlmostEqual(pow(2, x, 2), Vector([0, 1.0717734625362931, 0.03125, math.nan, math.nan]))
 
+    def test_compare(self):
+        x = Vector(1)
+        y = Vector(2)
+        self.assertEqual(x.compare(x), 0)
+        self.assertEqual(x.compare(y), -1)
+        self.assertEqual(y.compare(x), 1)
+        self.assertEqual(x.compare(Vector('x')), -2)
+
     def test_eq(self):
         self.assertTrue(null == null)
         self.assertTrue(null == Vector())

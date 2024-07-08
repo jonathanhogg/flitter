@@ -888,44 +888,44 @@ cdef class Vector:
                     return true_
         return false_
 
-    cdef int64_t compare(self, Vector other) except -2:
+    cpdef int64_t compare(self, Vector other) noexcept:
         return vector_compare(self, other)
 
     def __gt__(self, other):
-        cdef uint64_t c = vector_compare(self, Vector._coerce(other))
-        if c == -2:
+        cdef Vector c = self.gt(Vector._coerce(other))
+        if c is null:
             raise TypeError("Not comparable vectors")
-        return c == 1
+        return c is true
 
     cdef Vector gt(self, Vector other):
         cdef uint64_t c = vector_compare(self, other)
         return null_ if c == -2 else true_ if c == 1 else false_
 
     def __ge__(self, other):
-        cdef uint64_t c = vector_compare(self, Vector._coerce(other))
-        if c == -2:
+        cdef Vector c = self.ge(Vector._coerce(other))
+        if c is null:
             raise TypeError("Not comparable vectors")
-        return c != -1
+        return c is true
 
     cdef Vector ge(self, Vector other):
         cdef uint64_t c = vector_compare(self, other)
         return null_ if c == -2 else true_ if c != -1 else false_
 
     def __lt__(self, other):
-        cdef uint64_t c = vector_compare(self, Vector._coerce(other))
-        if c == -2:
+        cdef Vector c = self.lt(Vector._coerce(other))
+        if c is null:
             raise TypeError("Not comparable vectors")
-        return c == -1
+        return c is true
 
     cdef Vector lt(self, Vector other):
         cdef uint64_t c = vector_compare(self, other)
         return null_ if c == -2 else true_ if c == -1 else false_
 
     def __le__(self, other):
-        cdef uint64_t c = vector_compare(self, Vector._coerce(other))
-        if c == -2:
+        cdef Vector c = self.le(Vector._coerce(other))
+        if c is null:
             raise TypeError("Not comparable vectors")
-        return c != 1
+        return c is true
 
     cdef Vector le(self, Vector other):
         cdef uint64_t c = vector_compare(self, other)
