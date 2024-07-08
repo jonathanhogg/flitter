@@ -6,11 +6,13 @@ on:
     branches: ["main"]
     paths:
     - ".github/workflows/ci-coverage.yml"
+    - "scripts/coverage_badge.py"
     - "pyproject.toml"
-    - "src/**/*.py"
-    - "src/**/*.pyx"
-    - "src/**/*.pxd"
-    - "tests/**/*.py"
+    - "setup.py"
+    - "src/**/*"
+    - "tests/**/*"
+    - "docs/**/*.fl"
+    - "examples/**/*"
   pull_request:
     branches: ["main"]
 
@@ -28,7 +30,7 @@ jobs:
         echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" | sudo debconf-set-selections
         sudo apt-get install -y mesa-utils xvfb libfontconfig1 ttf-mscorefonts-installer
         python -m pip install --upgrade pip setuptools
-        python -m pip install cython coverage pytest pytest-xvfb
+        python -m pip install cython coverage pytest
     - name: Build in place with coverage analysis enabled
       run: |
         pip3 install .
@@ -36,7 +38,7 @@ jobs:
         FLITTER_BUILD_COVERAGE: 1
     - name: Run tests with coverage
       run: |
-        coverage run -m pytest
+        xvfb-run coverage run -m pytest tests
     - name: Generate coverage reports
       id: report
       run: |

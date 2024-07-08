@@ -12,6 +12,7 @@ on:
     - "src/**/*.pyx"
     - "src/**/*.pxd"
     - "tests/**/*.py"
+    - "scripts/**/*.py"
   pull_request:
     branches: ["main"]
 
@@ -30,7 +31,7 @@ jobs:
         python -m pip install flake8 cython-lint
     - name: Lint Python code with flake8
       run: |
-        flake8 src tests --count --show-source --statistics
+        flake8 src tests scripts --count --show-source --statistics
     - name: Lint Cython code with cython-lint
       run: |
         cython-lint src
