@@ -33,7 +33,7 @@ jobs:
         python -m pip install cython coverage pytest
     - name: Build in place with coverage analysis enabled
       run: |
-        pip3 install .
+        python setup.py build_ext --inplace
       env:
         FLITTER_BUILD_COVERAGE: 1
     - name: Run tests with coverage
