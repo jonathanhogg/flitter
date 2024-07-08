@@ -214,7 +214,7 @@ class TestVector(unittest.TestCase):
                 self.assertEqual(list(vector), values)
                 self.assertTrue(len(values) == 0 or vector.numeric)
 
-    def test_reduce(self):
+    def test_pickling(self):
         TESTS = [
             null,
             true,

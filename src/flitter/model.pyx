@@ -1907,7 +1907,7 @@ cdef class StateDict:
         self.set_item(Vector._coerce(key), Vector._coerce(value))
 
     def __contains__(self, key):
-        return Vector._coerce(key) in self._state
+        return self.contains(Vector._coerce(key))
 
     def __delitem__(self, key):
         cdef Vector key_vector = Vector._coerce(key)
