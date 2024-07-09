@@ -38,7 +38,7 @@ jobs:
         FLITTER_BUILD_COVERAGE: 1
     - name: Run tests with coverage
       run: |
-        xvfb-run coverage run --source=src -m pytest tests
+        xvfb-run coverage run --source=src -m pytest tests --durations=5
     - name: Generate coverage reports
       id: report
       run: |
@@ -59,13 +59,13 @@ jobs:
         status: ${{ steps.report.outputs.status }}
         color: ${{ steps.report.outputs.color }}
         path: badge.svg
-    - name: Generate coverage failed badge
+    - name: Generate coverage failing badge
       if: failure()
       uses: emibcn/badge-action@v2.0.3
       with:
         label: 'CI coverage'
         label-color: '333'
-        status: 'failed'
+        status: 'failing'
         color: 'red'
         path: badge.svg
     - name: Update badge gist
