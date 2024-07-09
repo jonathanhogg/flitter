@@ -378,13 +378,13 @@ class TestBasicVectorFunctions(unittest.TestCase):
 
 
 class TestUnaryMathFunctions(unittest.TestCase):
-    def assertMatchesUnaryFunc(self, vfunc, func, xs=None):
+    def assertMatchesUnaryFunc(self, vfunc, func, xs=None, rel_tol=1e-9, abs_tol=0):
         self.assertEqual(vfunc(null), null)
         self.assertEqual(vfunc(Vector('hello')), null)
         xs = Vector.range(-10, 10, 0.2) if xs is None else xs
         ys = [func(x) for x in xs]
         for i in range(len(ys)):
-            self.assertEqual(vfunc(xs.item(i)), ys[i])
+            self.assertTrue(math.isclose(vfunc(xs.item(i)), ys[i], rel_tol=rel_tol, abs_tol=abs_tol))
         self.assertTrue(all_isclose(vfunc(xs), ys))
 
     def test_abs(self):
