@@ -8,7 +8,7 @@ let SIZE=2000;1000
         !path
             !rect size=SIZE
             !fill color=1
-    !record filename=(OUTPUT or 'waveforms.png') keep_alpha=true
+    !record filename=OUTPUT keep_alpha=true
         !canvas color=0
             for i;waveform in zip(..7, bounce;impulse;sawtooth;sharkfin;sine;square;triangle)
                 let x=i%4 y=i//4

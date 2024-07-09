@@ -11,7 +11,7 @@ let SIZE=1500;500
         !path
             !rect size=SIZE
             !fill color=1
-    !record filename=(OUTPUT or 'pseudorandoms.png') keep_alpha=true
+    !record filename=OUTPUT keep_alpha=true
         !canvas color=0
             for i;distribution in zip(..3, beta;normal;uniform)
                 let x=i%4 y=0

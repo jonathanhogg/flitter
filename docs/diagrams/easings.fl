@@ -8,7 +8,7 @@ let SIZE=2000;500
         !path
             !rect size=SIZE
             !fill color=1
-    !record filename=(OUTPUT or 'easings.png') keep_alpha=true
+    !record filename=OUTPUT keep_alpha=true
         !canvas color=0
             for i;easing in zip(..4, linear;quad;cubic;snap)
                 let x=i%4 y=0
