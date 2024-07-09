@@ -26,10 +26,10 @@ let SIZE=1500;500
                             width=end-start
                             ns=(distribution()[..COUNT]-start)/width*BUCKETS//1
                         !transform scale=100/BUCKETS;100
-                            for i in ..BUCKETS
-                                let count=sum(1 if n == i for n in ns) or 0
+                            let ds=count(..BUCKETS, ns)
+                            for i;d in zip(..BUCKETS, ds)
                                 !path
-                                    !rect point=i+0.1;1 size=0.8;-count/YMAX
+                                    !rect point=i+0.1;1 size=0.8;-d/YMAX
                                     !fill
                         !font font_family='Georgia' font_slant=:italic font_size=10
                             for i in ..width+1

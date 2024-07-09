@@ -51,7 +51,7 @@ jobs:
       with:
         name: htmlcov
         path: htmlcov/
-    - name: Generate coverage badge
+    - name: Generate coverage percent badge
       uses: emibcn/badge-action@v2.0.3
       with:
         label: 'CI coverage'
@@ -59,7 +59,7 @@ jobs:
         status: ${{ steps.report.outputs.status }}
         color: ${{ steps.report.outputs.color }}
         path: badge.svg
-    - name: Generate coverage badge
+    - name: Generate coverage failed badge
       if: failure()
       uses: emibcn/badge-action@v2.0.3
       with:

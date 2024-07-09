@@ -639,6 +639,8 @@ def minindex(Vector xs not None, *args):
                     if x < y:
                         y = x
                         j = i
+        else:
+            return null_
     else:
         ys = xs
         for i, xs in enumerate(args):
@@ -705,6 +707,8 @@ def maxindex(Vector xs not None, *args):
                     if x > y:
                         y = x
                         j = i
+        else:
+            return null_
     else:
         ys = xs
         for i, xs in enumerate(args):
@@ -768,7 +772,6 @@ def mapv(Vector xs not None, Vector ys not None, Vector zs not None):
     return ws
 
 
-@cython.cdivision(True)
 def clamp(Vector xs not None, Vector ys not None, Vector zs not None):
     if xs.numbers == NULL or ys.numbers == NULL or zs.numbers == NULL:
         return null_
@@ -819,15 +822,24 @@ def zipv(*vectors):
 
 
 def count(Vector xs not None, Vector ys not None):
-    if xs.numbers == NULL or ys.objects is not None:
+    cdef int64_t i, j, k, n=xs.length, m=ys.length
+    if n == 0:
         return null_
     cdef Vector zs = Vector.__new__(Vector)
-    cdef int64_t i, j, k, n=xs.length, m=ys.length
     zs.allocate_numbers(n)
     for i in range(n):
         k = 0
         for j in range(m):
-            if ys.numbers[j] == xs.numbers[i]:
+            if xs.numbers != NULL and ys.numbers != NULL:
+                if ys.numbers[j] == xs.numbers[i]:
+                    k += 1
+            elif ys.numbers != NULL:
+                if ys.numbers[j] == xs.objects[i]:
+                    k += 1
+            elif xs.numbers != NULL:
+                if ys.objects[j] == xs.numbers[i]:
+                    k += 1
+            elif ys.objects[j] == xs.objects[i]:
                 k += 1
         zs.numbers[i] = k
     return zs
