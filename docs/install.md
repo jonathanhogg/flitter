@@ -103,21 +103,22 @@ $ flitter examples/hoops.fl
 
 If you want to edit the **Flitter** code, ensure that `cython` and `setuptools`
 are installed in your runtime environment, then do an *editable* package
-deployment:
+deployment and throw away the generated object files:
 
 ```console
 $ pip3 install cython setuptools
 $ pip3 install --editable .
+$ rm src/**/*.c src/**/*.so
 ```
 
-**Flitter** automatically makes use of `pyximport` to (re)compile any changed
-Cython code on-the-fly as it runs.
+**Flitter** automatically makes use of `pyximport` to (re)compile Cython code
+on-the-fly as it runs.
 
 The code is linted with `flake8` and `cython-lint`:
 
 ```console
 $ pip3 install flake8 cython-lint
-$ flake8 src tests
+$ flake8 src tests scripts
 $ cython-lint src
 ```
 
@@ -137,6 +138,11 @@ in-place build with coverage enabled (Cython line tracing):
 $ env FLITTER_BUILD_COVERAGE=1 python3 setup.py build_ext --inplace
 ```
 
+Importantly, this **will not work on Python 3.12**. This version introduced a
+change in the profiling API that Cython is not compatible with. If you are
+using Python 3.12, then you will need to do a parallel install of 3.11 and
+create a second virtual environment in which to do coverage analysis.
+
 You can then generate a code coverage report for the test suite with:
 
 ```console
@@ -145,8 +151,10 @@ $ coverage run -m pytest
 $ coverage report
 ```
 
-Note that `pyximport` will *not* rebuild the code with line tracing enabled,
-so you will need to re-run `setup.py` if you change any of the Cython code.
+You will need to re-run `setup.py` if you change any of the Cython code. You
+will need to delete all of these object files if you want to go back to using
+the normal `pyximport` automatic recompile (and you will want to do so as the
+coverage-enabled version of the code is *significantly* slower).
 
 ### Generating the documentation
 
