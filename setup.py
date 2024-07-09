@@ -15,7 +15,7 @@ def find_cython_files(dirpath):
             yield filepath
 
 
-def main():
+if __name__ == '__main__':
     if int(os.environ.get('FLITTER_BUILD_COVERAGE', '0')):
         print("Building for coverage testing")
         define_macros = [("CYTHON_TRACE_NOGIL", "1")]
@@ -23,12 +23,7 @@ def main():
     else:
         define_macros = []
         compiler_directives = {}
-    ext_modules = []
-    for filepath in find_cython_files(Path('src')):
-        module_name = '.'.join(filepath.with_suffix('').parts[1:])
-        ext_modules.append(Extension(module_name, [str(filepath)], define_macros=define_macros))
-    setup(ext_modules=cythonize(ext_modules, language_level=3, compiler_directives=compiler_directives, nthreads=multiprocessing.cpu_count()))
-
-
-if __name__ == '__main__':
-    main()
+    ext_modules = [Extension('.'.join(filepath.with_suffix('').parts[1:]), [str(filepath)], define_macros=define_macros)
+                   for filepath in find_cython_files(Path('src'))]
+    ext_modules = cythonize(ext_modules, language_level=3, compiler_directives=compiler_directives, nthreads=multiprocessing.cpu_count())
+    setup(ext_modules=ext_modules)
