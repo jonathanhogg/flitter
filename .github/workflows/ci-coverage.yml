@@ -42,7 +42,7 @@ jobs:
     - name: Generate coverage reports
       id: report
       run: |
-        coverage report
+        coverage report --sort=-miss
         coverage json
         python scripts/coverage_badge.py >> "${GITHUB_OUTPUT}"
         coverage html
