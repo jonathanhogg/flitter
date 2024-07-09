@@ -5,7 +5,6 @@ let SIZE=1080;1080
     CYCLE=($(:bubble;:clock) or 0)/15
     NBUBBLES=500
     RADIUS=250+250*sine(0.5+CYCLE*2)
-    ROT=sine(CYCLE)
     NOISE_T=CYCLE*10
     NOISE_SCALE=1/5
     MIN_BUBBLE_RADIUS=5
