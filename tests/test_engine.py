@@ -42,7 +42,7 @@ class TestRendering(unittest.TestCase):
         self.script_path = Path(tempfile.mktemp('.fl'))
         self.input_path = Path(tempfile.mktemp('.png'))
         self.output_path = Path(tempfile.mktemp('.png'))
-        self.controller = EngineController(realtime=False, target_fps=1, run_time=1, offscreen=True,
+        self.controller = EngineController(realtime=False, offscreen=True, target_fps=1, run_time=1,
                                            defined_names={'SIZE': self.SIZE,
                                                           'INPUT': str(self.input_path),
                                                           'OUTPUT': str(self.output_path)})
@@ -118,75 +118,135 @@ class TestRendering(unittest.TestCase):
         self.assertEqual(img.tobytes(), b'\x00\xff\x00' * self.SIZE[0] * self.SIZE[1])
 
 
-class FunctionalTest(unittest.TestCase):
-    def run_scripts(self, scripts, suffix='.png', **kwargs):
+class ScriptTest(unittest.TestCase):
+    def assertScriptOutputMatchesImage(self, script, suffix='.png', target_fps=1, run_time=1, **kwargs):
+        output_path = TEST_IMAGES_DIR / script.with_suffix(suffix).name
+        reference = PIL.Image.open(script.with_suffix('.png'))
+        controller = EngineController(realtime=False, offscreen=True, defined_names={'OUTPUT': str(output_path)},
+                                      target_fps=target_fps, run_time=run_time, **kwargs)
+        controller.load_page(script)
+        asyncio.run(controller.run())
+        output = PIL.Image.open(output_path)
+        self.assertEqual(reference.size, output.size, msg="Size mismatch")
+        self.assertLess(image_diff(reference, output), 0.005, msg="Output differs from reference image")
+
+    def assertAllScriptOutputsMatchesImages(self, scripts, suffix='.png', target_fps=1, run_time=1, **kwargs):
         for i, script in enumerate(scripts):
             with self.subTest(script=script, **kwargs):
-                output_path = TEST_IMAGES_DIR / script.with_suffix(suffix).name
-                reference = PIL.Image.open(script.with_suffix('.png'))
-                controller = EngineController(realtime=False, offscreen=True, defined_names={'OUTPUT': str(output_path)}, **kwargs)
-                controller.load_page(script)
-                asyncio.run(controller.run())
-                output = PIL.Image.open(output_path)
-                self.assertEqual(reference.size, output.size)
-                self.assertLess(image_diff(reference, output), 0.005)
+                self.assertScriptOutputMatchesImage(script, suffix=suffix, target_fps=target_fps, run_time=run_time, **kwargs)
 
 
-class TestDocumentationDiagrams(FunctionalTest):
+class TestDocumentationDiagrams(ScriptTest):
     """
     Recreate the documentation diagrams and check them against the pre-calculated ones.
-    Some amount of difference is expected here because the GitHub workflow tests run on
-    Ubuntu and the font availability is different. There also seems to be an issue with
-    Skia not doing anti-aliasing in Xvfb (Mesa).
     """
 
-    def test_diagrams(self):
-        scripts_dir = Path(__file__).parent.parent / 'docs/diagrams'
-        scripts = sorted(path for path in scripts_dir.iterdir() if path.suffix == '.fl')
-        self.assertTrue(len(scripts) > 0)
-        self.run_scripts(scripts, target_fps=1, run_time=1)
+    DIAGRAMS = Path(__file__).parent.parent / 'docs/diagrams'
+
+    def test_easings(self):
+        self.assertScriptOutputMatchesImage(self.DIAGRAMS / 'easings.fl')
+
+    def test_pseudorandoms(self):
+        self.assertScriptOutputMatchesImage(self.DIAGRAMS / 'pseudorandoms.fl')
+
+    def test_waveforms(self):
+        self.assertScriptOutputMatchesImage(self.DIAGRAMS / 'waveforms.fl')
 
 
-class TestDocumentationTutorial(FunctionalTest):
+class TestDocumentationTutorial(ScriptTest):
     """
     Recreate the tutorial images and check them against the pre-calculated ones.
     """
 
-    def test_tutorial(self):
-        scripts_dir = Path(__file__).parent.parent / 'docs/tutorial_images'
-        scripts = sorted(path for path in scripts_dir.iterdir() if path.suffix == '.fl')
-        self.assertTrue(len(scripts) > 0)
-        self.run_scripts(scripts, target_fps=1, run_time=1)
+    TUTORIAL_IMAGES = Path(__file__).parent.parent / 'docs/tutorial_images'
+
+    def test_tutorial1(self):
+        self.assertScriptOutputMatchesImage(self.TUTORIAL_IMAGES / 'tutorial1.fl')
+
+    def test_tutorial2(self):
+        self.assertScriptOutputMatchesImage(self.TUTORIAL_IMAGES / 'tutorial2.fl')
+
+    def test_tutorial3(self):
+        self.assertScriptOutputMatchesImage(self.TUTORIAL_IMAGES / 'tutorial3.fl')
+
+    def test_tutorial4(self):
+        self.assertScriptOutputMatchesImage(self.TUTORIAL_IMAGES / 'tutorial4.fl')
+
+    def test_tutorial5(self):
+        self.assertScriptOutputMatchesImage(self.TUTORIAL_IMAGES / 'tutorial5.fl')
+
+    def test_tutorial6(self):
+        self.assertScriptOutputMatchesImage(self.TUTORIAL_IMAGES / 'tutorial6.fl')
 
 
-class TestExamples(FunctionalTest):
+class TestExamples(ScriptTest):
     """
     Recreate the examples and check them against the pre-calculated ones.
     """
 
-    SHORT = ['bauble.fl', 'canvas3d.fl', 'linelight.fl', 'solidgeometry.fl', 'textures.fl', 'translucency.fl', 'video.fl']
-    LONG = ['bounce.fl', 'hoops.fl', 'physics.fl', 'smoke.fl']
-    SHORT_ES = ['bauble.fl', 'canvas3d.fl', 'linelight.fl', 'solidgeometry.fl', 'textures.fl', 'translucency.fl']
-    LONG_ES = ['bounce.fl', 'physics.fl']
+    EXAMPLES = Path(__file__).parent.parent / 'examples'
 
-    def test_short_examples(self):
-        scripts_dir = Path(__file__).parent.parent / 'examples'
-        scripts = [scripts_dir / name for name in self.SHORT]
-        self.run_scripts(scripts, target_fps=1, run_time=1)
+    def test_bauble(self):
+        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'bauble.fl')
 
-    def test_long_examples(self):
-        scripts_dir = Path(__file__).parent.parent / 'examples'
-        scripts = [scripts_dir / name for name in self.LONG]
-        self.run_scripts(scripts, target_fps=10, run_time=1)
+    def test_canvas3d(self):
+        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'canvas3d.fl')
+
+    def test_linelight(self):
+        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'linelight.fl')
+
+    def test_solidgeometry(self):
+        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'solidgeometry.fl')
+
+    def test_textures(self):
+        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'textures.fl')
+
+    def test_translucency(self):
+        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'translucency.fl')
+
+    def test_video(self):
+        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'video.fl')
+
+    def test_bounce(self):
+        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'bounce.fl', target_fps=10)
+
+    def test_hoops(self):
+        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'hoops.fl', target_fps=10)
+
+    def test_physics(self):
+        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'physics.fl', target_fps=10)
+
+    def test_smoke(self):
+        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'smoke.fl', target_fps=10)
 
     @unittest.skipIf(sys.platform != 'linux', 'OpenGL ES only available on Linux')
-    def test_short_examples_opengl_es(self):
-        scripts_dir = Path(__file__).parent.parent / 'examples'
-        scripts = [scripts_dir / name for name in self.SHORT_ES]
-        self.run_scripts(scripts, target_fps=1, run_time=1, opengl_es=True, suffix='.es.png')
+    def test_bauble_opengl_es(self):
+        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'bauble.fl', opengl_es=True, suffix='.es.png')
 
     @unittest.skipIf(sys.platform != 'linux', 'OpenGL ES only available on Linux')
-    def test_long_examples_opengl_es(self):
-        scripts_dir = Path(__file__).parent.parent / 'examples'
-        scripts = [scripts_dir / name for name in self.LONG_ES]
-        self.run_scripts(scripts, target_fps=10, run_time=1, opengl_es=True, suffix='.es.png')
+    def test_canvas3d_opengl_es(self):
+        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'canvas3d.fl', opengl_es=True, suffix='.es.png')
+
+    @unittest.skipIf(sys.platform != 'linux', 'OpenGL ES only available on Linux')
+    def test_linelight_opengl_es(self):
+        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'linelight.fl', opengl_es=True, suffix='.es.png')
+
+    @unittest.skipIf(sys.platform != 'linux', 'OpenGL ES only available on Linux')
+    def test_solidgeometry_opengl_es(self):
+        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'solidgeometry.fl', opengl_es=True, suffix='.es.png')
+
+    @unittest.skipIf(sys.platform != 'linux', 'OpenGL ES only available on Linux')
+    def test_textures_opengl_es(self):
+        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'textures.fl', opengl_es=True, suffix='.es.png')
+
+    @unittest.skipIf(sys.platform != 'linux', 'OpenGL ES only available on Linux')
+    def test_translucency_opengl_es(self):
+        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'translucency.fl', opengl_es=True, suffix='.es.png')
+
+    @unittest.skipIf(sys.platform != 'linux', 'OpenGL ES only available on Linux')
+    def test_bounce_opengl_es(self):
+        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'bounce.fl', target_fps=10, opengl_es=True, suffix='.es.png')
+
+    @unittest.skipIf(sys.platform != 'linux', 'OpenGL ES only available on Linux')
+    def test_physics_opengl_es(self):
+        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'physics.fl', target_fps=10, opengl_es=True, suffix='.es.png')

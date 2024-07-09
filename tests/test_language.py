@@ -337,10 +337,10 @@ func map(f, xs)
             """, with_errors={'Error calling hsv: hsv() takes exactly 1 positional argument (0 given)'})
 
 
-class TestExampleScripts(unittest.TestCase):
+class ScriptTest(unittest.TestCase):
     """
-    Run all Flitter scripts in `/examples`, `/docs/diagrams` and `/docs/tutorial_images` under three
-    different conditions and test that the generated root nodes and exported values match:
+    Run a Flitter script under three different conditions and test that the generated root nodes
+    and exported values match:
 
     1. Compile the AST and run it without *any* simplification and with an empty state
     2. Simplify the AST with known names (`beat`, etc.) as dynamic and an empty state
@@ -369,15 +369,15 @@ class TestExampleScripts(unittest.TestCase):
             else:
                 self.assertEqual(a, b, msg=msg)
 
-    def _test_integration_script(self, filepath):
+    def assertSimplifierDoesntChangeBehaviour(self, script):
         self.maxDiff = None
         state = StateDict()
         null_state = DummyStateDict()
         names = {'beat': Vector(0), 'tempo': Vector(120), 'quantum': Vector(4), 'fps': Vector(60), 'OUTPUT': null}
-        top = parse(filepath.read_text(encoding='utf8'))
+        top = parse(script.read_text(encoding='utf8'))
         # Compile un-simplified AST and execute program:
         program1 = top.compile(initial_lnames=tuple(names))
-        program1.set_path(filepath)
+        program1.set_path(script)
         program1.use_simplifier(False)
         context = program1.run(Context(names=dict(names), state=state))
         root1 = context.root
@@ -389,7 +389,7 @@ class TestExampleScripts(unittest.TestCase):
         top2 = top.simplify(dynamic=set(names))
         self.assertEqual(repr(top2.simplify(dynamic=set(names))), repr(top2), msg="Dynamic simplification not complete in one step")
         program2 = top2.compile(initial_lnames=tuple(names))
-        program2.set_path(filepath)
+        program2.set_path(script)
         self.assertNotEqual(len(program1), len(program2), msg="Dynamically-simplified program length should be different from original")
         context = program2.run(Context(names=dict(names), state=state))
         root2 = context.root
@@ -400,7 +400,7 @@ class TestExampleScripts(unittest.TestCase):
         top3 = top.simplify(static=names, state=null_state)
         self.assertEqual(repr(top3.simplify(static=names, state=null_state)), repr(top3), msg="Static simplification not complete in one step")
         program3 = top3.compile()
-        program3.set_path(filepath)
+        program3.set_path(script)
         self.assertNotEqual(len(program3), len(program1), msg="Statically-simplified program length should be different from original")
         context = program3.run(Context(state=state))
         root3 = context.root
@@ -410,21 +410,86 @@ class TestExampleScripts(unittest.TestCase):
         self.assertEqual(repr(root3), repr(root1), msg="Statically-simplified program output doesn't match original")
         self.assertExportsMatch(exports3, exports1, msg="Statically-simplified program exports don't match original")
 
-    def _test_integration_all_scripts(self, dirpath):
-        count = 0
-        for filename in dirpath.iterdir():
-            filepath = dirpath / filename
-            if filepath.suffix == '.fl':
-                with self.subTest(filepath=filepath):
-                    self._test_integration_script(filepath)
-                    count += 1
-        self.assertGreater(count, 0, msg="No scripts found")
 
-    def test_integration_examples(self):
-        self._test_integration_all_scripts(Path(__file__).parent.parent / 'examples')
+class TestDocumentationDiagrams(ScriptTest):
+    """
+    Recreate the documentation diagrams and check them against the pre-calculated ones.
+    """
 
-    def test_integration_docs_diagrams(self):
-        self._test_integration_all_scripts(Path(__file__).parent.parent / 'docs/diagrams')
+    DIAGRAMS = Path(__file__).parent.parent / 'docs/diagrams'
 
-    def test_integration_docs_tutorial(self):
-        self._test_integration_all_scripts(Path(__file__).parent.parent / 'docs/tutorial_images')
+    def test_easings(self):
+        self.assertSimplifierDoesntChangeBehaviour(self.DIAGRAMS / 'easings.fl')
+
+    def test_pseudorandoms(self):
+        self.assertSimplifierDoesntChangeBehaviour(self.DIAGRAMS / 'pseudorandoms.fl')
+
+    def test_waveforms(self):
+        self.assertSimplifierDoesntChangeBehaviour(self.DIAGRAMS / 'waveforms.fl')
+
+
+class TestDocumentationTutorial(ScriptTest):
+    """
+    Recreate the tutorial images and check them against the pre-calculated ones.
+    """
+
+    TUTORIAL_IMAGES = Path(__file__).parent.parent / 'docs/tutorial_images'
+
+    def test_tutorial1(self):
+        self.assertSimplifierDoesntChangeBehaviour(self.TUTORIAL_IMAGES / 'tutorial1.fl')
+
+    def test_tutorial2(self):
+        self.assertSimplifierDoesntChangeBehaviour(self.TUTORIAL_IMAGES / 'tutorial2.fl')
+
+    def test_tutorial3(self):
+        self.assertSimplifierDoesntChangeBehaviour(self.TUTORIAL_IMAGES / 'tutorial3.fl')
+
+    def test_tutorial4(self):
+        self.assertSimplifierDoesntChangeBehaviour(self.TUTORIAL_IMAGES / 'tutorial4.fl')
+
+    def test_tutorial5(self):
+        self.assertSimplifierDoesntChangeBehaviour(self.TUTORIAL_IMAGES / 'tutorial5.fl')
+
+    def test_tutorial6(self):
+        self.assertSimplifierDoesntChangeBehaviour(self.TUTORIAL_IMAGES / 'tutorial6.fl')
+
+
+class TestExamples(ScriptTest):
+    """
+    Recreate the examples and check them against the pre-calculated ones.
+    """
+
+    EXAMPLES = Path(__file__).parent.parent / 'examples'
+
+    def test_bauble(self):
+        self.assertSimplifierDoesntChangeBehaviour(self.EXAMPLES / 'bauble.fl')
+
+    def test_canvas3d(self):
+        self.assertSimplifierDoesntChangeBehaviour(self.EXAMPLES / 'canvas3d.fl')
+
+    def test_linelight(self):
+        self.assertSimplifierDoesntChangeBehaviour(self.EXAMPLES / 'linelight.fl')
+
+    def test_solidgeometry(self):
+        self.assertSimplifierDoesntChangeBehaviour(self.EXAMPLES / 'solidgeometry.fl')
+
+    def test_textures(self):
+        self.assertSimplifierDoesntChangeBehaviour(self.EXAMPLES / 'textures.fl')
+
+    def test_translucency(self):
+        self.assertSimplifierDoesntChangeBehaviour(self.EXAMPLES / 'translucency.fl')
+
+    def test_video(self):
+        self.assertSimplifierDoesntChangeBehaviour(self.EXAMPLES / 'video.fl')
+
+    def test_bounce(self):
+        self.assertSimplifierDoesntChangeBehaviour(self.EXAMPLES / 'bounce.fl')
+
+    def test_hoops(self):
+        self.assertSimplifierDoesntChangeBehaviour(self.EXAMPLES / 'hoops.fl')
+
+    def test_physics(self):
+        self.assertSimplifierDoesntChangeBehaviour(self.EXAMPLES / 'physics.fl')
+
+    def test_smoke(self):
+        self.assertSimplifierDoesntChangeBehaviour(self.EXAMPLES / 'smoke.fl')
