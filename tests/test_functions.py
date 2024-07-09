@@ -8,7 +8,7 @@ import unittest
 from flitter.model import Vector, null
 from flitter.language.functions import (uniform, normal, beta,
                                         length, sumv, accumulate, minv, maxv, minindex, maxindex, mapv, clamp, zipv, count,
-                                        absv, expv, sqrtv, logv, log2v, log10v, ceilv, floorv, fract,
+                                        roundv, absv, expv, sqrtv, logv, log2v, log10v, ceilv, floorv, fract,
                                         cosv, acosv, sinv, asinv, tanv, hypot, normalize, polar, angle,
                                         split, ordv, chrv)
 from flitter.language.noise import noise, octnoise
@@ -386,6 +386,9 @@ class TestUnaryMathFunctions(unittest.TestCase):
         for i in range(len(ys)):
             self.assertTrue(math.isclose(vfunc(xs.item(i)), ys[i], rel_tol=rel_tol, abs_tol=abs_tol))
         self.assertTrue(all_isclose(vfunc(xs), ys))
+
+    def test_round(self):
+        self.assertMatchesUnaryFunc(roundv, round)
 
     def test_abs(self):
         self.assertMatchesUnaryFunc(absv, abs)
