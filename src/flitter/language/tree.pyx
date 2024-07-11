@@ -913,9 +913,11 @@ cdef class Attributes(NodeModifier):
     cdef void _compile(self, Program program, list lnames):
         self.node._compile(program, lnames)
         cdef Binding binding
+        cdef list names = []
         for binding in self.bindings:
             binding.expr._compile(program, lnames)
-            program.attribute(binding.name)
+            names.append(binding.name)
+        program.attributes(tuple(names))
 
     cdef Expression _simplify(self, Context context):
         cdef Expression node = self

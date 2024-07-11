@@ -88,7 +88,7 @@ cdef class Program:
     cpdef Program call(self, int64_t count, tuple names=?)
     cpdef Program call_fast(self, function, int64_t count)
     cpdef Program tag(self, str name)
-    cpdef Program attribute(self, str name)
+    cpdef Program attributes(self, tuple names)
     cpdef Program append(self, int64_t count=?)
     cpdef Program compose(self, int64_t count)
     cpdef Program begin_for(self, int64_t count)

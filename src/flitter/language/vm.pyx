@@ -60,7 +60,7 @@ cdef int64_t CallOutCount = 0
 cdef enum OpCode:
     Add
     Append
-    Attribute
+    Attributes
     BeginFor
     BranchFalse
     BranchTrue
@@ -115,7 +115,7 @@ cdef enum OpCode:
 cdef dict OpCodeNames = {
     OpCode.Add: 'Add',
     OpCode.Append: 'Append',
-    OpCode.Attribute: 'Attribute',
+    OpCode.Attributes: 'Attributes',
     OpCode.BeginFor: 'BeginFor',
     OpCode.BranchFalse: 'BranchFalse',
     OpCode.BranchTrue: 'BranchTrue',
@@ -533,6 +533,9 @@ cdef inline Vector peek_at(VectorStack stack, int64_t offset):
     assert stack.top-offset > -1, "Stack empty"
     return <Vector>stack.vectors[stack.top-offset]
 
+cdef inline PyObject* PEEK_AT(VectorStack stack, int64_t offset):
+    return stack.vectors[stack.top-offset]
+
 cdef inline void poke(VectorStack stack, Vector vector) noexcept:
     assert vector is not None
     assert stack.top > -1, "Stack empty"
@@ -755,38 +758,47 @@ cdef inline void execute_append(VectorStack stack, int64_t count):
     drop(stack, count)
 
 
-cdef inline execute_attribute(VectorStack stack, str name):
-    cdef Vector value = pop(stack)
-    cdef Vector nodes_vec = peek(stack)
+cdef inline execute_attributes(VectorStack stack, tuple names):
+    cdef int64_t n = len(names)
+    cdef Vector nodes_vec = peek_at(stack, n)
     cdef tuple nodes = nodes_vec.objects
     if nodes is None:
+        drop(stack, n)
         return
-    cdef PyObject* objptr
-    cdef Node node
+    cdef Node copy
     cdef dict attributes
-    cdef int64_t i,  m=nodes_vec.length, n=value.length
+    cdef int64_t i, j, m=nodes_vec.length
+    cdef PyObject* nodeptr
+    cdef PyObject* attrptr
+    cdef PyObject* valptr
     for i in range(m):
-        objptr = PyTuple_GET_ITEM(nodes, i)
-        if type(<object>objptr) is not Node:
+        nodeptr = PyTuple_GET_ITEM(nodes, i)
+        if type(<object>nodeptr) is not Node:
             continue
-        if objptr.ob_refcnt > 1:
-            node = (<Node>objptr).copy()
-            Py_DECREF(<Node>objptr)
-            Py_INCREF(node)
-            PyTuple_SET_ITEM(nodes, i, node)
-        else:
-            node = <Node>objptr
-        attributes = node._attributes
-        if node._attributes_shared:
-            node._attributes = attributes = PyDict_Copy(attributes)
-            node._attributes_shared = False
-        elif attributes is None and n:
-            node._attributes = attributes = PyDict_New()
-        if n:
-            PyDict_SetItem(attributes, name, value)
-        elif attributes is not None and PyDict_GetItem(attributes, name) != NULL:
-            PyDict_DelItem(attributes, name)
-
+        if nodeptr.ob_refcnt > 1:
+            copy = (<Node>nodeptr).copy()
+            Py_DECREF(<Node>nodeptr)
+            Py_INCREF(copy)
+            PyTuple_SET_ITEM(nodes, i, copy)
+            nodeptr = <PyObject*>copy
+        attrptr = <PyObject*>(<Node>nodeptr)._attributes
+        if (<Node>nodeptr)._attributes_shared:
+            attributes = PyDict_Copy(<dict>attrptr)
+            attrptr = <PyObject*>attributes
+            (<Node>nodeptr)._attributes_shared = False
+            (<Node>nodeptr)._attributes = attributes
+        elif attrptr is <PyObject*>None:
+            attributes = PyDict_New()
+            attrptr = <PyObject*>attributes
+            (<Node>nodeptr)._attributes = attributes
+        for j in range(n):
+            valptr = stack.vectors[stack.top-(n-1-j)]
+            objptr = PyTuple_GET_ITEM(names, j)
+            if (<Vector>valptr).length:
+                PyDict_SetItem(<object>attrptr, <object>objptr, <Vector>valptr)
+            elif PyDict_GetItem(<object>attrptr, <object>objptr) != NULL:
+                PyDict_DelItem(<object>attrptr, <object>objptr)
+    drop(stack, n)
 
 cdef inline execute_tag(VectorStack stack, str name):
     cdef Vector nodes_vec = peek(stack)
@@ -1116,8 +1128,8 @@ cdef class Program:
         self.instructions.append(InstructionStr(OpCode.Tag, name))
         return self
 
-    cpdef Program attribute(self, str name):
-        self.instructions.append(InstructionStr(OpCode.Attribute, name))
+    cpdef Program attributes(self, tuple names):
+        self.instructions.append(InstructionTuple(OpCode.Attributes, names))
         return self
 
     cpdef Program append(self, int64_t count=1):
@@ -1456,8 +1468,8 @@ cdef class Program:
                 elif instruction.code == OpCode.Tag:
                     execute_tag(stack, (<InstructionStr>instruction).value)
 
-                elif instruction.code == OpCode.Attribute:
-                    execute_attribute(stack, (<InstructionStr>instruction).value)
+                elif instruction.code == OpCode.Attributes:
+                    execute_attributes(stack, (<InstructionTuple>instruction).value)
 
                 elif instruction.code == OpCode.Append:
                     execute_append(stack, (<InstructionInt>instruction).value)

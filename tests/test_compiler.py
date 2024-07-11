@@ -179,11 +179,11 @@ class TestNodeOperations(CompilerTestCase):
         self.assertCompilesTo(Tag(Name('x'), 'y'), Program().local_load(0).tag('y'), lnames=('x',))
 
     def test_single_attribute(self):
-        self.assertCompilesTo(Attributes(Name('x'), (Binding('y', Name('y')),)), Program().local_load(1).local_load(0).attribute('y'), lnames=('x', 'y'))
+        self.assertCompilesTo(Attributes(Name('x'), (Binding('y', Name('y')),)), Program().local_load(1).local_load(0).attributes(('y',)), lnames=('x', 'y'))
 
     def test_multiple_attributes(self):
         self.assertCompilesTo(Attributes(Name('x'), (Binding('y', Name('y')), Binding('z', Name('z')))),
-                              Program().local_load(2).local_load(1).attribute('y').local_load(0).attribute('z'), lnames=('x', 'y', 'z'))
+                              Program().local_load(2).local_load(1).local_load(0).attributes(('y', 'z')), lnames=('x', 'y', 'z'))
 
     def test_append(self):
         self.assertCompilesTo(Append(Name('x'), Name('y')), Program().local_load(1).local_load(0).append(), lnames=('x', 'y'))
