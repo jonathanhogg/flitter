@@ -818,6 +818,13 @@ class TestLet(SimplifierTestCase):
         """A let over a literal is always just the literal"""
         self.assertSimplifiesTo(Let((PolyBinding(('x',), Add(Name('y'), Literal(5))),), Literal(10)), Literal(10), dynamic={'y'})
 
+    def test_let_combining(self):
+        """A let over another let is combined into a single let with both sets of bindings"""
+        self.assertSimplifiesTo(Let((PolyBinding(('x1',), Add(Name('x'), Literal(1))),),
+                                    Let((PolyBinding(('y1',), Add(Name('y'), Literal(1))),), Add(Name('x1'), Name('y1')))),
+                                Let((PolyBinding(('x1',), Add(Name('x'), Literal(1))), PolyBinding(('y1',), Add(Name('y'), Literal(1)))),
+                                    Add(Name('x1'), Name('y1'))), dynamic={'x', 'y'})
+
     def test_literal_binding(self):
         """Simple binding of a name to a literal"""
         self.assertSimplifiesTo(Let((PolyBinding(('x',), Literal(5)),), Add(Name('x'), Name('y'))),

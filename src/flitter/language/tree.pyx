@@ -1051,14 +1051,18 @@ cdef class Let(Expression):
     cdef Expression _simplify(self, Context context):
         cdef dict saved = context.names
         context.names = saved.copy()
+        cdef list bindings = list(self.bindings)
         cdef list remaining = []
         cdef PolyBinding binding
-        cdef Expression expr
+        cdef Expression expr, body=self.body
         cdef Vector value
         cdef str name, existing_name
         cdef int64_t i, n
-        cdef bint maybe_resimplify, resimplify = False
-        for binding in self.bindings:
+        cdef bint maybe_resimplify, resimplify=False
+        while isinstance(body, Let):
+            bindings.extend((<Let>body).bindings)
+            body = (<Let>body).body
+        for binding in bindings:
             maybe_resimplify = False
             for existing_name in list(context.names):
                 existing_value = context.names[existing_name]
@@ -1091,10 +1095,14 @@ cdef class Let(Expression):
                 remaining.append(PolyBinding(binding.names, expr))
                 maybe_resimplify = False
             resimplify ^= maybe_resimplify
-        body = self.body._simplify(context)
+        body = body._simplify(context)
         context.names = saved
         if isinstance(body, Literal):
             return body
+        if isinstance(body, Let):
+            remaining.extend((<Let>body).bindings)
+            body = (<Let>body).body
+            resimplify = True
         if remaining:
             body = Let(tuple(remaining), body)
         if resimplify:
