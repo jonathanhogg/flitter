@@ -924,6 +924,10 @@ cdef class Program:
                     if (<InstructionVector>last).value.length == 0 and instruction.code == OpCode.Append:
                         instructions.pop()
                         continue
+                elif last.code == OpCode.LocalDrop:
+                    if instruction.code == OpCode.LocalDrop:
+                        instructions.pop()
+                        instruction = InstructionInt(OpCode.LocalDrop, (<InstructionInt>instruction).value + (<InstructionInt>last).value)
             instructions.append(instruction)
         self.instructions = instructions
         return self

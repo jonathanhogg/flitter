@@ -991,6 +991,14 @@ class TestOptimizations(unittest.TestCase):
         program.optimize()
         self.assertEqual(str(program), "LiteralNode !a\nLiteralNode !b\nLiteralNode !c\nAppend 3")
 
+    def test_literal_null_append(self):
+        program = Program()
+        program.literal(Node('a'))
+        program.literal(null)
+        program.append()
+        program.optimize()
+        self.assertEqual(str(program), "LiteralNode !a")
+
     def test_mul_add(self):
         program = Program()
         program.literal(0)
@@ -1000,6 +1008,17 @@ class TestOptimizations(unittest.TestCase):
         program.add()
         program.optimize()
         self.assertEqual(str(program), "Literal 0\nLiteral 1\nLiteral 2\nMulAdd")
+
+    def test_paired_local_drop(self):
+        program = Program()
+        program.literal(1)
+        program.local_push(1)
+        program.literal(2)
+        program.local_push(1)
+        program.local_drop(1)
+        program.local_drop(1)
+        program.optimize()
+        self.assertEqual(str(program), "Literal 1\nLocalPush 1\nLiteral 2\nLocalPush 1\nLocalDrop 2")
 
 
 class TestStack(unittest.TestCase):
