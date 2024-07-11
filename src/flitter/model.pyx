@@ -62,7 +62,7 @@ cdef inline uint64_t HASH_STRING(str value):
     return y
 
 
-cdef inline int vector_compare(Vector left, Vector right) noexcept:
+cdef inline int64_t vector_compare(Vector left, Vector right) noexcept:
     if left is right:
         return 0
     cdef int64_t i, n = left.length, m = right.length
@@ -898,7 +898,7 @@ cdef class Vector:
         return c is true
 
     cdef Vector gt(self, Vector other):
-        cdef uint64_t c = vector_compare(self, other)
+        cdef int64_t c = vector_compare(self, other)
         return null_ if c == -2 else true_ if c == 1 else false_
 
     def __ge__(self, other):
@@ -908,7 +908,7 @@ cdef class Vector:
         return c is true
 
     cdef Vector ge(self, Vector other):
-        cdef uint64_t c = vector_compare(self, other)
+        cdef int64_t c = vector_compare(self, other)
         return null_ if c == -2 else true_ if c != -1 else false_
 
     def __lt__(self, other):
@@ -918,7 +918,7 @@ cdef class Vector:
         return c is true
 
     cdef Vector lt(self, Vector other):
-        cdef uint64_t c = vector_compare(self, other)
+        cdef int64_t c = vector_compare(self, other)
         return null_ if c == -2 else true_ if c == -1 else false_
 
     def __le__(self, other):
@@ -928,7 +928,7 @@ cdef class Vector:
         return c is true
 
     cdef Vector le(self, Vector other):
-        cdef uint64_t c = vector_compare(self, other)
+        cdef int64_t c = vector_compare(self, other)
         return null_ if c == -2 else true_ if c != 1 else false_
 
     def __getitem__(self, index):
