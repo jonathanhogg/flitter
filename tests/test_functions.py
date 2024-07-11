@@ -17,14 +17,17 @@ from flitter.language.noise import noise, octnoise
 Tau = 2*math.pi
 
 
-def all_isclose(xs, ys, rel_tol=1e-9, abs_tol=0):
-    for x, y in zip(xs, ys):
-        if not math.isclose(x, y, rel_tol=rel_tol, abs_tol=abs_tol):
-            return False
-    return True
+class MathsTest(unittest.TestCase):
+    def assertIsClose(self, x, y, rel_tol=1e-9, abs_tol=1e-9):
+        self.assertTrue(math.isclose(x, y, rel_tol=rel_tol, abs_tol=abs_tol), f"{x} !~= {y}")
+
+    def assertAllClose(self, xs, ys, rel_tol=1e-9, abs_tol=1e-9):
+        self.assertEqual(len(xs), len(ys), f"Collection length mismatch: {len(xs)} != {len(ys)}")
+        for x, y in zip(xs, ys):
+            self.assertIsClose(x, y, rel_tol=rel_tol, abs_tol=abs_tol)
 
 
-class TestUniform(unittest.TestCase):
+class TestUniform(MathsTest):
     FACTORY = uniform
     DISTRIBUTION = ('uniform',)
     LOWER = 0
@@ -113,7 +116,7 @@ class TestNormal(TestUniform):
         pass
 
 
-class TestNoise(unittest.TestCase):
+class TestNoise(MathsTest):
     def test_zero_behaviour(self):
         self.assertEqual(noise(Vector.symbol('seed'), Vector(0)), Vector(0))
         self.assertEqual(noise(Vector.symbol('seed'), Vector(0), Vector(0)), Vector(0))
@@ -133,18 +136,24 @@ class TestNoise(unittest.TestCase):
         self.assertEqual(octnoise(Vector.symbol('seed'), Vector(1), Vector(0.5), Vector(0), null), null)
         self.assertEqual(octnoise(Vector.symbol('seed'), Vector(1), Vector(0.5), Vector(0), Vector(0), null), null)
 
+    def test_reproducability(self):
+        self.assertIsClose(noise(null, Vector(0.49)), 0.498956342)
+        self.assertIsClose(noise(null, Vector(0.49), Vector(0.49)), 0.167789989)
+        self.assertIsClose(noise(null, Vector(0.49), Vector(0.49), Vector(0.49)), -0.219814457)
+        self.assertIsClose(noise(null, Vector(0.49), Vector(0.49), Vector(0.49), Vector(0.49)), 0.119003482)
+
     def test_noise_1(self):
         seed1 = Vector.symbol('seed1')
         seed2 = Vector.symbol('seed2')
         last_n1 = None
         for x in map(lambda x: x/49, range(1, 1001)):
             n1 = float(noise(seed1, Vector(x)))
-            self.assertTrue(-1 <= n1 <= 1)
+            self.assertTrue(-1 <= n1 <= 1, f"Noise value bounds failure: {n1}")
             n2 = float(noise(seed2, Vector(x)))
-            self.assertTrue(-1 <= n2 <= 1)
+            self.assertTrue(-1 <= n2 <= 1, f"Noise value bounds failure: {n2}")
             self.assertNotEqual(n1, n2)
             if last_n1 is not None:
-                self.assertLess(abs(n1 - last_n1), 0.1)
+                self.assertLess(abs(n1 - last_n1), 0.05)
             last_n1 = n1
 
     def test_noise_2(self):
@@ -154,20 +163,20 @@ class TestNoise(unittest.TestCase):
         y = 1/49
         for x in map(lambda x: x/49, range(1, 1001)):
             n1 = float(noise(seed1, Vector(x), Vector(y)))
-            self.assertTrue(-1 <= n1 <= 1)
+            self.assertTrue(-1 <= n1 <= 1, f"Noise value bounds failure: {n1}")
             n2 = float(noise(seed2, Vector(x), Vector(y)))
-            self.assertTrue(-1 <= n2 <= 1)
+            self.assertTrue(-1 <= n2 <= 1, f"Noise value bounds failure: {n2}")
             self.assertNotEqual(n1, n2)
             if last_n1 is not None:
-                self.assertLess(abs(n1 - last_n1), 0.1)
+                self.assertLess(abs(n1 - last_n1), 0.05)
             last_n1 = n1
         for y in map(lambda y: y/49, range(1, 1001)):
             n1 = float(noise(seed1, Vector(x), Vector(y)))
-            self.assertTrue(-1 <= n1 <= 1)
+            self.assertTrue(-1 <= n1 <= 1, f"Noise value bounds failure: {n1}")
             n2 = float(noise(seed2, Vector(x), Vector(y)))
-            self.assertTrue(-1 <= n2 <= 1)
+            self.assertTrue(-1 <= n2 <= 1, f"Noise value bounds failure: {n2}")
             self.assertNotEqual(n1, n2)
-            self.assertLess(abs(n1 - last_n1), 0.1)
+            self.assertLess(abs(n1 - last_n1), 0.05)
             last_n1 = n1
 
     def test_noise_3(self):
@@ -178,28 +187,69 @@ class TestNoise(unittest.TestCase):
         z = 1/49
         for x in map(lambda x: x/49, range(1, 1001)):
             n1 = float(noise(seed1, Vector(x), Vector(y), Vector(z)))
-            self.assertTrue(-1 <= n1 <= 1)
+            self.assertTrue(-1 <= n1 <= 1, f"Noise value bounds failure: {n1}")
             n2 = float(noise(seed2, Vector(x), Vector(y), Vector(z)))
-            self.assertTrue(-1 <= n2 <= 1)
+            self.assertTrue(-1 <= n2 <= 1, f"Noise value bounds failure: {n2}")
             self.assertNotEqual(n1, n2)
             if last_n1 is not None:
-                self.assertLess(abs(n1 - last_n1), 0.1)
+                self.assertLess(abs(n1 - last_n1), 0.05)
             last_n1 = n1
         for y in map(lambda y: y/49, range(1, 1001)):
             n1 = float(noise(seed1, Vector(x), Vector(y), Vector(z)))
-            self.assertTrue(-1 <= n1 <= 1)
+            self.assertTrue(-1 <= n1 <= 1, f"Noise value bounds failure: {n1}")
             n2 = float(noise(seed2, Vector(x), Vector(y), Vector(z)))
-            self.assertTrue(-1 <= n2 <= 1)
+            self.assertTrue(-1 <= n2 <= 1, f"Noise value bounds failure: {n2}")
             self.assertNotEqual(n1, n2)
-            self.assertLess(abs(n1 - last_n1), 0.1)
+            self.assertLess(abs(n1 - last_n1), 0.05)
             last_n1 = n1
         for z in map(lambda z: z/49, range(1, 1001)):
             n1 = float(noise(seed1, Vector(x), Vector(y), Vector(z)))
-            self.assertTrue(-1 <= n1 <= 1)
+            self.assertTrue(-1 <= n1 <= 1, f"Noise value bounds failure: {n1}")
             n2 = float(noise(seed2, Vector(x), Vector(y), Vector(z)))
-            self.assertTrue(-1 <= n2 <= 1)
+            self.assertTrue(-1 <= n2 <= 1, f"Noise value bounds failure: {n2}")
             self.assertNotEqual(n1, n2)
-            self.assertLess(abs(n1 - last_n1), 0.1)
+            self.assertLess(abs(n1 - last_n1), 0.05)
+            last_n1 = n1
+
+    def test_noise_4(self):
+        seed1 = Vector.symbol('seed1')
+        seed2 = Vector.symbol('seed2')
+        last_n1 = None
+        y = 1/49
+        z = 1/49
+        w = 1/49
+        for x in map(lambda x: x/49, range(1, 1001)):
+            n1 = float(noise(seed1, Vector(x), Vector(y), Vector(z), Vector(w)))
+            self.assertTrue(-1 <= n1 <= 1, f"Noise value bounds failure: {n1}")
+            n2 = float(noise(seed2, Vector(x), Vector(y), Vector(z), Vector(w)))
+            self.assertTrue(-1 <= n2 <= 1, f"Noise value bounds failure: {n2}")
+            self.assertNotEqual(n1, n2)
+            if last_n1 is not None:
+                self.assertLess(abs(n1 - last_n1), 0.05)
+            last_n1 = n1
+        for y in map(lambda y: y/49, range(1, 1001)):
+            n1 = float(noise(seed1, Vector(x), Vector(y), Vector(z), Vector(w)))
+            self.assertTrue(-1 <= n1 <= 1, f"Noise value bounds failure: {n1}")
+            n2 = float(noise(seed2, Vector(x), Vector(y), Vector(z), Vector(w)))
+            self.assertTrue(-1 <= n2 <= 1, f"Noise value bounds failure: {n2}")
+            self.assertNotEqual(n1, n2)
+            self.assertLess(abs(n1 - last_n1), 0.05)
+            last_n1 = n1
+        for z in map(lambda z: z/49, range(1, 1001)):
+            n1 = float(noise(seed1, Vector(x), Vector(y), Vector(z), Vector(w)))
+            self.assertTrue(-1 <= n1 <= 1, f"Noise value bounds failure: {n1}")
+            n2 = float(noise(seed2, Vector(x), Vector(y), Vector(z), Vector(w)))
+            self.assertTrue(-1 <= n2 <= 1, f"Noise value bounds failure: {n2}")
+            self.assertNotEqual(n1, n2)
+            self.assertLess(abs(n1 - last_n1), 0.05)
+            last_n1 = n1
+        for w in map(lambda w: w/49, range(1, 1001)):
+            n1 = float(noise(seed1, Vector(x), Vector(y), Vector(z), Vector(w)))
+            self.assertTrue(-1 <= n1 <= 1, f"Noise value bounds failure: {n1}")
+            n2 = float(noise(seed2, Vector(x), Vector(y), Vector(z), Vector(w)))
+            self.assertTrue(-1 <= n2 <= 1, f"Noise value bounds failure: {n2}")
+            self.assertNotEqual(n1, n2)
+            self.assertLess(abs(n1 - last_n1), 0.05)
             last_n1 = n1
 
     def test_octnoise_3(self):
@@ -240,7 +290,7 @@ class TestNoise(unittest.TestCase):
         values = sorted([float(noise(Vector(seed), Vector(50/49))) for seed in range(n)])
         self.assertLess(values[0], -0.5)
         self.assertTrue(-0.5 < values[n//4] < -0.25)
-        self.assertLess(abs(values[n // 2]), 0.1)
+        self.assertLess(abs(values[n // 2]), 0.05)
         self.assertTrue(0.25 < values[-n//4] < 0.5)
         self.assertGreater(values[-1], 0.5)
 
@@ -260,7 +310,7 @@ class TestNoise(unittest.TestCase):
         self.assertEqual(values1, values2)
 
 
-class TestBasicVectorFunctions(unittest.TestCase):
+class TestBasicVectorFunctions(MathsTest):
     def test_length(self):
         self.assertEqual(length(null), 0)
         self.assertEqual(length(Vector(1)), 1)
@@ -377,15 +427,14 @@ class TestBasicVectorFunctions(unittest.TestCase):
         self.assertEqual(count(Vector(['a', 1]), Vector(['a', 'b', 1, 2, 3, 1])), [1, 2])
 
 
-class TestUnaryMathFunctions(unittest.TestCase):
+class TestUnaryMathFunctions(MathsTest):
     def assertMatchesUnaryFunc(self, vfunc, func, xs=None, rel_tol=1e-9, abs_tol=0):
         self.assertEqual(vfunc(null), null)
         self.assertEqual(vfunc(Vector('hello')), null)
         xs = Vector.range(-10, 10, 0.2) if xs is None else xs
         ys = [func(x) for x in xs]
-        for i in range(len(ys)):
-            self.assertTrue(math.isclose(vfunc(xs.item(i)), ys[i], rel_tol=rel_tol, abs_tol=abs_tol))
-        self.assertTrue(all_isclose(vfunc(xs), ys))
+        self.assertAllClose([vfunc(Vector(x)) for x in xs], ys, rel_tol=rel_tol, abs_tol=abs_tol)
+        self.assertAllClose(vfunc(xs), ys, rel_tol=rel_tol, abs_tol=abs_tol)
 
     def test_round(self):
         self.assertMatchesUnaryFunc(roundv, round)
@@ -418,7 +467,7 @@ class TestUnaryMathFunctions(unittest.TestCase):
         self.assertMatchesUnaryFunc(fract, lambda x: x % 1)
 
 
-class TestTrig(unittest.TestCase):
+class TestTrig(MathsTest):
     def setUp(self):
         self.a = Vector([1, 2, 3, 4])
         self.b = Vector([4, 5, 6, 7])
@@ -440,7 +489,7 @@ class TestTrig(unittest.TestCase):
         values = [math.acos(x)/Tau for x in xs]
         for i in range(len(values)):
             self.assertEqual(acosv(xs.item(i)), values[i])
-        self.assertTrue(all_isclose(acosv(xs), values))
+        self.assertAllClose(acosv(xs), values)
 
     def test_sin(self):
         self.assertEqual(sinv(null), null)
@@ -458,7 +507,7 @@ class TestTrig(unittest.TestCase):
         values = [math.asin(x)/Tau for x in xs]
         for i in range(len(values)):
             self.assertEqual(asinv(xs.item(i)), values[i])
-        self.assertTrue(all_isclose(asinv(xs), values))
+        self.assertAllClose(asinv(xs), values)
 
     def test_tan(self):
         self.assertEqual(tanv(null), null)
@@ -475,10 +524,10 @@ class TestTrig(unittest.TestCase):
         self.assertEqual(hypot(self.a, null), null)
         self.assertEqual(hypot(Vector([3, 4])), Vector(5))
         self.assertEqual(hypot(Vector([3, 4, 5])), Vector(math.sqrt(50)))
-        self.assertTrue(all_isclose(hypot(self.a, self.b), Vector([math.sqrt(17), math.sqrt(29), math.sqrt(45), math.sqrt(65)])))
-        self.assertTrue(all_isclose(hypot(self.a, self.c), Vector([math.sqrt(5), math.sqrt(8), math.sqrt(13), math.sqrt(20)])))
-        self.assertTrue(all_isclose(hypot(self.a, self.b, self.c),
-                                    Vector([math.sqrt(21), math.sqrt(33), math.sqrt(49), math.sqrt(69)])))
+        self.assertAllClose(hypot(self.a, self.b), Vector([math.sqrt(17), math.sqrt(29), math.sqrt(45), math.sqrt(65)]))
+        self.assertAllClose(hypot(self.a, self.c), Vector([math.sqrt(5), math.sqrt(8), math.sqrt(13), math.sqrt(20)]))
+        self.assertAllClose(hypot(self.a, self.b, self.c),
+                            Vector([math.sqrt(21), math.sqrt(33), math.sqrt(49), math.sqrt(69)]))
 
     def test_normalize(self):
         self.assertEqual(normalize(null), null)
@@ -496,16 +545,16 @@ class TestTrig(unittest.TestCase):
 
     def test_angle(self):
         self.assertEqual(angle(null), null)
-        self.assertTrue(all_isclose(angle(self.a), Vector([math.atan2(2, 1)/Tau, math.atan2(4, 3)/Tau])))
+        self.assertAllClose(angle(self.a), Vector([math.atan2(2, 1)/Tau, math.atan2(4, 3)/Tau]))
         self.assertEqual(angle(self.a, null), null)
         self.assertEqual(angle(null, self.a), null)
-        self.assertTrue(all_isclose(angle(self.a, self.b),
-                                    Vector([math.atan2(4, 1)/Tau, math.atan2(5, 2)/Tau, math.atan2(6, 3)/Tau, math.atan2(7, 4)/Tau])))
-        self.assertTrue(all_isclose(angle(self.a, self.c),
-                                    Vector([math.atan2(2, 1)/Tau, math.atan2(2, 2)/Tau, math.atan2(2, 3)/Tau, math.atan2(2, 4)/Tau])))
+        self.assertAllClose(angle(self.a, self.b),
+                            Vector([math.atan2(4, 1)/Tau, math.atan2(5, 2)/Tau, math.atan2(6, 3)/Tau, math.atan2(7, 4)/Tau]))
+        self.assertAllClose(angle(self.a, self.c),
+                            Vector([math.atan2(2, 1)/Tau, math.atan2(2, 2)/Tau, math.atan2(2, 3)/Tau, math.atan2(2, 4)/Tau]))
 
 
-class TestStringFuncs(unittest.TestCase):
+class TestStringFuncs(MathsTest):
     def test_ord(self):
         self.assertEqual(ordv(null), null)
         self.assertEqual(ordv(Vector('A')), Vector([65]))
