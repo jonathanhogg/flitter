@@ -240,22 +240,25 @@ to use them in mathematical expressions will evaluate to `null`.
 
 ## Noise functions
 
-`noise(` *seed* `,` *x* *[* `,` *y* *[* `,` *z* *] ] ]* `)`
+`noise(` *seed* `,` *x* *[* `,` *y* *[* `,` *z* *[* `,` *w* *] ] ] ]* `)`
 : [OpenSimplex 2S](https://github.com/KdotJPG/OpenSimplex2) noise function
   - *seed* is a seed value, as per [Pseudo-random sources](#pseudo-random-sources)
   - *x* is the first dimension
   - *y* is an optional second dimension
   - *z* is an optional third dimension
+  - *w* is an optional fourth dimension
 
 The function returns a value in the range *(-1,1)*. The function can be thought
 of as creating a wiggly line in 1 dimension, a landscape with hills and dips in
-2 dimensions or a volume of space filled with clouds in 3 dimensions.
+2 dimensions, a volume of space filled with clouds in 3 dimensions and is
+probably hard for most people to conceptualize in 4 dimensions.
 
-A slice through 3D noise will look like the output of a 2D noise function and,
-similarly, a slice through 2D noise will look like the output of a 1D noise
-function. Often a useful thing to do is to use a value derived from the beat
-counter as one of the inputs, yielding a 1D or 2D noise function that will
-smoothly change over time for the same input space.
+A slice through 4D noise will look like a 3D noise function, a slice through 3D
+noise will look like the output of a 2D noise function and, similarly, a slice
+through 2D noise will look like the output of a 1D noise function. Often a
+useful thing to do is to use a value derived from the beat counter as one of
+the inputs, yielding a 1D, 2D or 3D noise function that will smoothly change
+over time for the same input space.
 
 The function is entirely deterministic - always producing the same output
 for the same inputs. The *seed* value should be used to create multiple
@@ -263,16 +266,16 @@ independent noise sources.
 
 ### Multi-value vector inputs
 
-If one of the *x*, *y* or *z* arguments is a vector longer than 1, then the
+If one of the *x*, *y*, *z* or *w* arguments is a vector longer than 1, then the
 function will return a multi-value output. The return value is equivalent to
 the code:
 
 ```flitter
-((noise(seed, ix, iy, iz) for iz in z) for iy in y) for ix in x
+(((noise(seed, ix, iy, iz, iw) for iw in w) for iz in z) for iy in y) for ix in x
 ```
 
-However, calling `noise()` with an *n*-vector will be significantly faster than
-*n* separate calls.
+However, calling `noise()` with an *n*-vector is significantly faster than *n*
+separate calls.
 
 ### Multi-octave noise
 
@@ -295,7 +298,7 @@ Here the scale of the inputs doubles with each iteration and the weight halves.
 **Flitter** provides a function that will do this calculation significantly
 faster than the equivalent code:
 
-`octnoise(` *seed* `,` *n* `,` *k* `,` *x* *[* `,` *y* *[* `,` *z* *] ] ]* `)`
+`octnoise(` *seed* `,` *n* `,` *k* `,` *x* *[* `,` *y* *[* `,` *z* *[ `,` *w* *] ] ] ]* `)`
 : Multi-octave [OpenSimplex 2S](https://github.com/KdotJPG/OpenSimplex2) noise
 function
   - *seed* is a seed value
@@ -304,6 +307,7 @@ function
   - *x* is the first dimension
   - *y* is an optional second dimension
   - *z* is an optional third dimension
+  - *w* is an optional fourth dimension
 
 For each octave iteration (from $0$ to $n-1$), the individual weight is computed
 as $k^{-i}$ and the scaling factor for the inputs as $2^i$. A unique seed value
@@ -315,7 +319,13 @@ The equivalent `octnoise()` call to the code above would be:
 let z = octnoise(:seed, 4, 0.5, x, y)
 ```
 
-Again, this function will accept *n*-vectors as inputs.
+Again, this function will accept *n*-vectors as inputs and this should be done
+when large numbers of related noise values are required.
+
+The particular implementation of OpenSimplex 2S noise used in **Flitter** is
+based on [a Python implementation written by
+A. Svensson](https://code.larus.se/lmas/opensimplex) and licensed under the
+MIT license.
 
 ## Color functions
 

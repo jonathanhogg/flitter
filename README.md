@@ -95,3 +95,13 @@ There are a few quick
 in the main repository. However, there is also a separate repo containing [many
 more interesting examples](https://github.com/jonathanhogg/flitter-examples)
 that are worth checking out.
+
+## License
+
+**Flitter** is copyright © Jonathan Hogg and licensed under a [2-clause
+"simplified" BSD
+license](https://github.com/jonathanhogg/flitter/blob/main/LICENSE)
+except for the OpenSimplex 2S noise implementation, which is based on
+[code](https://code.larus.se/lmas/opensimplex) copyright © A. Svensson and
+licensed under an [MIT
+license](https://code.larus.se/lmas/opensimplex/src/branch/master/LICENSE).

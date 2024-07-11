@@ -43,8 +43,13 @@ repo](https://github.com/jonathanhogg/flitter-examples).
 
 ## License and Development
 
-**Flitter** is released under a [2-clause "simplified" BSD
-license](https://github.com/jonathanhogg/flitter/blob/main/LICENSE).
+**Flitter** is copyright © Jonathan Hogg and licensed under a [2-clause
+"simplified" BSD
+license](https://github.com/jonathanhogg/flitter/blob/main/LICENSE)
+except for the OpenSimplex 2S noise implementation, which is based on
+[code](https://code.larus.se/lmas/opensimplex) copyright © A. Svensson and
+licensed under an [MIT
+license](https://code.larus.se/lmas/opensimplex/src/branch/master/LICENSE).
 
 The complete source code is available in the [GitHub Flitter
 repo](https://github.com/jonathanhogg/flitter), which also hosts the
