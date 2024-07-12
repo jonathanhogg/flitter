@@ -1,25 +1,26 @@
-#version 330
+${HEADER}
 
 in vec2 coord;
-out vec4 fragment_color;
+out vec4 color;
 
-uniform int mode = 0;
-uniform float near = 500;
-uniform float far = 4500;
-
-uniform sampler2D color;
-uniform sampler2D depth;
+uniform sampler2D color_frame;
+uniform sampler2D depth_frame;
+uniform int mode;
+uniform float near;
+uniform float far;
+uniform bool flip_x;
+uniform bool flip_y;
 
 void main() {
-    vec2 inverted = vec2(coord.x, 1 - coord.y);
-    vec3 rgb = texture(color, inverted).rgb;
-    float d = texture(depth, inverted).r;
-    float a = d < near ? 0 : 1 - d / far;
+    vec2 inverted = vec2(flip_x ? 1.0 - coord.x : coord.x, flip_y ? coord.y : 1.0 - coord.y);
+    vec3 rgb = texture(color_frame, inverted).rgb;
+    float d = texture(depth_frame, inverted).r;
+    float a = 1.0 - (clamp(d, near, far) - near) / (far - near);
     if (mode == 0) {
-        fragment_color = vec4(rgb*a, a);
+        color = vec4(rgb * a, a);
     } else if (mode == 1) {
-        fragment_color = vec4(rgb, 1);
+        color = vec4(rgb, 1.0);
     } else if (mode == 2) {
-        fragment_color = vec4(a, a, a, a);
+        color = vec4(a, a, a, a);
     }
 }

@@ -5,14 +5,12 @@ pip3 install git+https://github.com/chris-castillo/freenect2-python.git
 """
 
 import threading
-import os
-
-os.environ['LIBFREENECT2_LOGGER_LEVEL'] = "error"
+import os; os.environ['LIBFREENECT2_LOGGER_LEVEL'] = "error"  # noqa
 
 from freenect2 import Device, NoDeviceError, FrameType, FrameFormat
 from loguru import logger
 
-from . import Shader, COLOR_FORMATS
+from . import Shader
 from .glsl import TemplateLoader
 
 
@@ -38,9 +36,9 @@ class Kinect(Shader):
     def child_textures(self):
         textures = {}
         if self._color_texture is not None:
-            textures['color'] = self._color_texture
+            textures['color_frame'] = self._color_texture
         if self._depth_texture is not None:
-            textures['depth'] = self._depth_texture
+            textures['depth_frame'] = self._depth_texture
         return textures
 
     def release(self):
@@ -54,13 +52,7 @@ class Kinect(Shader):
         self._depth_frame = None
 
     def create(self, engine, node, resized, **kwargs):
-        if self._framebuffer is None or self._texture is None or resized:
-            depth = COLOR_FORMATS[16]
-            self._last = None
-            self._texture = self.glctx.texture((self.width, self.height), 4, dtype=depth.moderngl_dtype)
-            self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
-            self._framebuffer.clear()
-            self._colorbits = 16
+        super().create(engine, node, resized, **kwargs)
         if self.Device is None:
             try:
                 self.Device = Device()
@@ -88,7 +80,6 @@ class Kinect(Shader):
             color_frame = self._color_frame
             depth_frame = self._depth_frame
         mode = {'color': 1, 'depth': 2}.get(node.get('output', 1, str, 'combined').lower(), 0)
-        kwargs['mode'] = mode
         if mode == 0 and color_frame is not None and depth_frame is not None:
             depth_frame, color_frame = self.Device.registration.apply(color_frame, depth_frame)
         if color_frame is not None:
@@ -105,7 +96,7 @@ class Kinect(Shader):
                 self._depth_texture.swizzle = swizzle
                 logger.debug("Create {}x{} kinect depth texture", depth_frame.width, depth_frame.height)
             self._depth_texture.write(depth_frame.data)
-        super().render(node, **kwargs)
+        super().render(node, mode=mode, near=500, far=4500, flip_x=False, flip_y=False, **kwargs)
 
 
 SCENE_NODE_CLASS = Kinect
