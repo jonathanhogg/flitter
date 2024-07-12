@@ -35,19 +35,36 @@ def debug(Context context, Vector value):
 @cython.boundscheck(False)
 def sample(Context context, Vector texture_id, Vector coord, Vector default=null_):
     cdef const double[:, :, :] data
-    if coord.length != 2 or coord.numbers == NULL \
+    if coord.numbers == NULL \
             or (scene_node := context.references.get(texture_id.as_string())) is None \
             or not hasattr(scene_node, 'texture_data') or (data := scene_node.texture_data) is None:
         return default
-    cdef int64_t height=data.shape[0], width=data.shape[1], x=int(coord.numbers[0] * width), y=int(coord.numbers[1] * height)
-    if x < 0 or x >= width or y < 0 or y >= height:
-        return default
-    cdef const double[:] color = data[y, x]
+    cdef int64_t x, y, height=data.shape[0], width=data.shape[1]
+    cdef const double[:] color
+    cdef int64_t i, j, n=coord.length // 2
     cdef Vector result = Vector.__new__(Vector)
-    result.allocate_numbers(3)
-    result.numbers[0] = color[0]
-    result.numbers[1] = color[1]
-    result.numbers[2] = color[2]
+    result.allocate_numbers(n * 3)
+    for i in range(n):
+        j = i * 2
+        x = int(coord.numbers[j] * width)
+        y = int(coord.numbers[j+1] * height)
+        j = i * 3
+        if x < 0 or x >= width or y < 0 or y >= height:
+            if n == 1:
+                return default
+            if default.numbers != NULL and default.length == 3:
+                result.numbers[j] = default.nummbers[0]
+                result.numbers[j+1] = default.nummbers[1]
+                result.numbers[j+2] = default.nummbers[2]
+            else:
+                result.numbers[j] = 0
+                result.numbers[j+1] = 0
+                result.numbers[j+2] = 0
+        else:
+            color = data[y, x]
+            result.numbers[j] = color[0]
+            result.numbers[j+1] = color[1]
+            result.numbers[j+2] = color[2]
     return result
 
 
