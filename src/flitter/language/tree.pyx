@@ -115,7 +115,7 @@ cdef class Top(Expression):
 
 
 cdef class Export(Expression):
-    cdef readonly dict explicits
+    cdef readonly dict static_exports
 
     def __init__(self, dict static_exports=None):
         self.static_exports = static_exports
