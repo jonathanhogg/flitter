@@ -711,36 +711,36 @@ cdef inline void execute_append(VectorStack stack, int64_t count):
     cdef Vector children
     cdef int64_t i, j, k, m=nodes_vec.length, n, o
     cdef tuple nodes = nodes_vec.objects
-    cdef tuple src
+    cdef PyObject* nodeptr
+    cdef PyObject* childrenptr
     cdef PyObject* objptr
-    cdef Node node
     cdef tuple dest
     if nodes is not None:
         for i in range(m):
-            objptr = PyTuple_GET_ITEM(nodes, i)
-            if type(<object>objptr) is not Node:
+            nodeptr = PyTuple_GET_ITEM(nodes, i)
+            if type(<object>nodeptr) is not Node:
                 continue
-            if objptr.ob_refcnt > 1:
-                node = (<Node>objptr).copy()
-                Py_DECREF(<Node>objptr)
+            if nodeptr.ob_refcnt > 1:
+                node = (<Node>nodeptr).copy()
+                Py_DECREF(<Node>nodeptr)
                 Py_INCREF(node)
                 PyTuple_SET_ITEM(nodes, i, node)
-            else:
-                node = <Node>objptr
-            n = o = PyTuple_GET_SIZE(node._children)
+                nodeptr = <PyObject*>node
+            childrenptr = <PyObject*>((<Node>nodeptr)._children)
+            n = o = PyTuple_GET_SIZE(<tuple>childrenptr)
             for j in range(count-1, -1, -1):
                 n += peek_at(stack, j).length
             dest = PyTuple_New(n)
             for j in range(o):
-                objptr = PyTuple_GET_ITEM(node._children, j)
+                objptr = PyTuple_GET_ITEM(<tuple>childrenptr, j)
                 Py_INCREF(<Node>objptr)
                 PyTuple_SET_ITEM(dest, j, <Node>objptr)
             for j in range(count-1, -1, -1):
                 children = peek_at(stack, j)
-                src = children.objects
-                if src is not None:
+                childrenptr = <PyObject*>children.objects
+                if childrenptr != <PyObject*>None:
                     for k in range(children.length):
-                        objptr = PyTuple_GET_ITEM(src, k)
+                        objptr = PyTuple_GET_ITEM(<tuple>childrenptr, k)
                         if type(<object>objptr) is Node:
                             Py_INCREF(<Node>objptr)
                             PyTuple_SET_ITEM(dest, o, <Node>objptr)
@@ -750,16 +750,16 @@ cdef inline void execute_append(VectorStack stack, int64_t count):
                     Py_INCREF(None)
                     PyTuple_SET_ITEM(dest, k, None)
                 if o:
-                    node._children = PyTuple_GetSlice(dest, 0, o)
+                    (<Node>nodeptr)._children = PyTuple_GetSlice(dest, 0, o)
                 else:
-                    node._children = ()
+                    (<Node>nodeptr)._children = ()
             else:
-                node._children = dest
+                (<Node>nodeptr)._children = dest
     drop(stack, count)
 
 
 cdef inline execute_attributes(VectorStack stack, tuple names):
-    cdef int64_t n = len(names)
+    cdef int64_t n = PyTuple_GET_SIZE(names)
     cdef Vector nodes_vec = peek_at(stack, n)
     cdef tuple nodes = nodes_vec.objects
     if nodes is None:
@@ -770,34 +770,36 @@ cdef inline execute_attributes(VectorStack stack, tuple names):
     cdef int64_t i, j, m=nodes_vec.length
     cdef PyObject* nodeptr
     cdef PyObject* attrptr
+    cdef PyObject* nameptr
     cdef PyObject* valptr
     for i in range(m):
         nodeptr = PyTuple_GET_ITEM(nodes, i)
         if type(<object>nodeptr) is not Node:
             continue
         if nodeptr.ob_refcnt > 1:
-            copy = (<Node>nodeptr).copy()
-            Py_DECREF(<Node>nodeptr)
+            copy = <Node>Node.__new__(Node)
+            copy.kind = (<Node>nodeptr).kind
+            if (<Node>nodeptr)._tags is not None:
+                copy._tags = set((<Node>nodeptr)._tags)
+            if (<Node>nodeptr)._attributes is not None:
+                copy._attributes = PyDict_Copy((<Node>nodeptr)._attributes)
+            copy._children = (<Node>nodeptr)._children
             Py_INCREF(copy)
             PyTuple_SET_ITEM(nodes, i, copy)
+            Py_DECREF(<Node>nodeptr)
             nodeptr = <PyObject*>copy
         attrptr = <PyObject*>(<Node>nodeptr)._attributes
-        if (<Node>nodeptr)._attributes_shared:
-            attributes = PyDict_Copy(<dict>attrptr)
-            attrptr = <PyObject*>attributes
-            (<Node>nodeptr)._attributes_shared = False
-            (<Node>nodeptr)._attributes = attributes
-        elif attrptr is <PyObject*>None:
+        if attrptr is <PyObject*>None:
             attributes = PyDict_New()
             attrptr = <PyObject*>attributes
             (<Node>nodeptr)._attributes = attributes
         for j in range(n):
             valptr = stack.vectors[stack.top-(n-1-j)]
-            objptr = PyTuple_GET_ITEM(names, j)
+            nameptr = PyTuple_GET_ITEM(names, j)
             if (<Vector>valptr).length:
-                PyDict_SetItem(<object>attrptr, <object>objptr, <Vector>valptr)
-            elif PyDict_GetItem(<object>attrptr, <object>objptr) != NULL:
-                PyDict_DelItem(<object>attrptr, <object>objptr)
+                PyDict_SetItem(<object>attrptr, <object>nameptr, <Vector>valptr)
+            elif PyDict_GetItem(<object>attrptr, <object>nameptr) != NULL:
+                PyDict_DelItem(<object>attrptr, <object>nameptr)
     drop(stack, n)
 
 cdef inline execute_tag(VectorStack stack, str name):
