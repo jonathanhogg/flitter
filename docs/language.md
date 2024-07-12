@@ -3,18 +3,17 @@
 
 ## Quick introduction
 
-**flitter** is a declarative tree-construction language (`Node` in the model).
-All values are arrays (`Vector` in the model), delimited with semicolons, and
-all maths is piece-wise. Short vectors are repeated as necessary in binary
-operations, i.e., `(1;2;3;4) * 2` is `2;4;6;8`. The `null` value is an empty
-array and most expressions evaluate to this in event of an error. In particular,
-all maths expressions involving a `null` will evaluate to `null`.
+**Flitter** is a declarative tree-construction language. All values are vectors,
+delimited with semicolons, and all maths is piece-wise. Short vectors are
+repeated as necessary in binary operations, i.e., `(1;2;3;4) * 2` is `2;4;6;8`.
+The `null` value is an empty vector and most expressions evaluate to this in
+the event of an error. In particular, all maths expressions involving a `null`
+will evaluate to `null`.
 
-A-la Python, indentation represents block structuring. `let` statements name
-constant values, everything else is largely about creating nodes to append to
-the implicit *root* node of the tree. There are *no variables*. The language
-is sort of pure-functional, if you imagine that the statements are monadic on
-a monad encapsulating the current tree.
+A-la Python (or Haskell), indentation represents block structuring. `let`
+expressions name constant values, everything else is largely about creating
+nodes to append to the implicit *root* node of the tree. There are *no
+variables* – the language is pure-functional.
 
 The simplest program would be something like:
 
@@ -29,14 +28,13 @@ let SIZE=1280;720
             !text point=SIZE/2 text="Hello world!"
 ```
 
-This contains a comment, a `let` statement and a node creation statement.
-Indented statements below this represent child nodes. Any name with a `!` in
+This contains a comment, a `let` expression and a node creation expression.
+Indented expressions below this represent child nodes. Any name with a `!` in
 front of it creates a node of that *kind*; the bindings following this specify
 attributes of the node. Nodes can also be followed by one or more `#tag`s to
-add tags that can be later searched for with *queries* (see language features
-below).
+add tags for readability and logging.
 
-When the **flitter** engine is run with this file, it will evaluate the code
+When the **Flitter** engine is run with this file, it will evaluate the code
 repeatedly (at an attempted 60fps) and render this to screen. Note that one
 explicitly specifies a window to be drawn into. The engine supports multiple
 windows.
@@ -57,12 +55,13 @@ but the return value from `sine()` here is automagically extended out to the
 
 `true` and `false` are synonyms for `1` and `0`. Truthfulness is represented by
 any non-empty vector that contains something other than 0 or the empty string.
-Names prefixed with a `:` are *symbols*, which internally are just string
-literals (so `"add"` is the same as `:add`) but are easier to write and read
-when specifying an identifier. When a string is required, such as the `text`
-attribute of `!text` in the example above, each element of the vector will be
-cast to a string if necessary and then concatenated together, e.g.,
-`"Hello ";name;"!"`.
+Names prefixed with a `:` are *symbols*, which should be considered as opaque
+values (see [Symbols](#symbols) below for details). When a string is required,
+such as the `text` attribute of `!text` in the example above or the `composite`
+attribute of `!canvas`, each element of the vector will be converted to a
+string as necessary and then these concatenated together, e.g.,
+`"Hello ";name;"!"`. Symbols return to being strings (without the leading `:`)
+in this conversion.
 
 So the end result of this should be the text "Hello world!" pulsing white in
 the middle of the window. You can edit and re-save the code while the engine is
@@ -76,9 +75,9 @@ The engine-supplied global values are:
 - `quantum` - the beats per quantum (usually 4)
 - `delta` - the difference between the current value of `beat` and the value
     at the last display frame
-- `clock` - the time in seconds since the "start" of the main clock, this
-    will adjust when the tempo or quantum is changed to keep the value of
-    `beat` constant, so it's generally not a particularly useful value
+- `clock` - the current frame time (derived from Python's `perf_counter()`
+    usually, though increasing by exactly `1/fps` per frame in non-realtime
+    mode)
 - `fps` - the current target frame-rate of the engine (the `--fps` option)
 - `performance` - a value in the range [0.5 .. 2.0] that increases fractionally
     if the engine has time to spare and decreases fractionally if it is missing
@@ -87,14 +86,29 @@ The engine-supplied global values are:
 - `realtime` - a `true`/`false` value indicating whether the engine is running
     in realtime mode (the default) or not (with the `--lockstep` option)
 
+## Unicode Support
+
+All **Flitter** source files must be UTF-8 encoded. All names, including
+[symbols](#symbols) and [node](#nodes) kinds and attributes, must begin with a
+Unicode alphabetic character or an underscore and then may contain any number
+and combination of underscores and Unicode alphanumeric characters, suffixed by
+zero or more single quote [primes](https://en.wikipedia.org/wiki/Prime_(symbol))
+(`'`). Therefore names may contain the full range of non-Latin characters
+including diacritics.
+
+All **Flitter** language keywords and supported render nodes and attributes use
+only Latin characters and are generally English words or abbreviations (using US
+spelling). Therefore, **Flitter** programs can be written using only ASCII
+characters, but feel free to use hieroglyphs if you wish.
+
 ## Values
 
 All values are vectors of either floating point numbers, Unicode strings, nodes
 or functions (or a mix thereof). The vector implementation is optimised for
 vectors of numbers, particularly short vectors. There are no dedicated integer
-values in **flitter** and so one should be careful of relying on integer numbers
+values in **Flitter** and so one should be careful of relying on integer numbers
 outside of the safe integer range of a double-precision floating point
-(-2^53..2^53).
+($-2^{53}$ .. $2^{53}$).
 
 Mathematical operators operate only on pure number vectors. Using them on
 anything else will return the empty vector (`null`). Unicode strings can be
@@ -112,8 +126,8 @@ repeated as necessary. This means that:
 (1;2;3;4;5;6;7;8;9) + (1;2;3) == (2;4;6;5;7;9;8;10;12)
 ```
 
-Note that the vector composition operator `;` has a very low precedence and so
-composed vectors will often have to be wrapped in parentheses when used with
+Note that the vector composition operator `;` has a *very* low precedence and so
+composed vectors will generally have to be wrapped in parentheses when used with
 operators:
 
 ```flitter
@@ -121,28 +135,57 @@ x;y+1 == x;(y+1)
 (x;y)+1 == (x+1);(y+1)
 ```
 
-Most built-in functions will do something sensible with an n-vector, e.g.,
-`sin(0.1;0.2)` will return a vector equivalent to `sin(0.1);sin(0.2)`, but
-will be substantially faster for long vectors. Some functions operate with both
-multiple arguments *and* n-vectors, e.g.:
+### SI Prefixes
+
+**Flitter** supports adding an SI prefix to the end of a number. This is
+confusing terminology, but an SI prefix is a prefix to a units suffix.
+**Flitter** does *not* support units, so you just end up with the SI prefix
+as a suffix. (Confused yet?)
+
+The allowed SI prefixes are:
+
+- `T` – $\times 10^{12}$
+- `G` – $\times 10^{9}$
+- `M` – $\times 10^{6}$
+- `k` – $\times 10^{3}$
+- `m` – $\times 10^{-3}$
+- `u` – $\times 10^{-6}$ (also `µ`)
+- `n` – $\times 10^{-9}$
+- `p` – $\times 10^{-12}$
+
+You can suffix any number with one of these letters, e.g., `10m` is the same as
+`0.01`. They are primarily useful for avoiding difficult-to-read long sequences
+of zeros, for example, when specifying the brightness of point and spot lights:
 
 ```flitter
-hypot(3, 4) == 5
-hypot(3;4) == 5
-hypot(3;4, 4;3) == (5;5)
+!light position=0 color=1M
 ```
 
-As functions are themselves first-order objects in the language, they may be
-composed into vectors. The language takes the orthogonal approach that calling
-a function vector is identical to composing the result of calling each function
-with the arguments, i.e., `(sin;cos)(x) == (sin(x);cos(x))`. This is arguably
-obtuse behaviour.
+### Unicode Strings
+
+All **Flitter** source code files must be UTF-8 encoded and all Unicode
+characters are permitted in string values. In-line strings may be denoted with
+straight single (`'`) or double (`"`) quotes. Strings may be broken across
+multiple lines by enclosing them in triple-single (`'''`) or triple-double
+(`"""`) quotes. The usual range of backslash escape sequences are supported
+within strings, including Unicode hexadecimal escapes with `\u`.
+
+Anywhere in the rendering engine where strings values are expected, vectors will
+be converted into a single string value. This will be done by concatenating each
+element of the vector after converting any non-string values into strings.
+Numeric values will be converted into their "general" representation (integer
+numbers will not have a decimal component, very large numbers will use `e`
+notation) with a maximum of 9 decimal places. Functions will be converted into
+the function name. Nodes will be converted into their kind, without the node
+literal exclamation character `!`, tags, attributes or children. Symbols will be
+converted into their name, without the `:` character.
 
 ### Symbols
 
-Names can be turned into short Unicode strings with a preceding `:` character.
-E.g., `:foo` is equivalent to `"foo"`. These are particularly useful for
-short strings that are used as enumerations, e.g.:
+Symbols are names that can be used as values. They are used in various places
+in the rendering engine for specifying enumerated values. For example, the
+`composite` attribute of `!canvas` specifies the blend function to use when
+drawing:
 
 ```flitter
 !window
@@ -150,47 +193,48 @@ short strings that are used as enumerations, e.g.:
         …
 ```
 
-The `composite` attribute of `!canvas` takes a string representing the name of
-the blend function to use when drawing. They are also useful when constructing
-state key vectors or seed vectors (see **State** and **Pseudo-random sources** below)
+They are also commonly used when constructing state key vectors or seed vectors
+(see [State](#state) below and [Pseudo-random
+sources](builtins.md#pseudo-random-sources)). Although strings may be used for
+the same purpose, symbols are more readable in the code and are specifically
+optimised in the engine for faster execution.
 
-## Sequences
+Symbols should be considered to be opaque values. They are actually
+deterministically converted to *very* large negative numbers in the parser
+(below $-10^{292}$). Whenever a name value is expected by the engine, numbers
+will be looked-up in the symbol table to see if they match a known symbol. If
+so, the number will be converted into the matching name. This should be treated
+as an implementation detail and not relied upon in code. In particular, because
+they are really just numbers, symbols *can* be used in mathematical operations.
+They shouldn't be, and are deliberately massive to hopefully cause bad things to
+happen if they are.
 
-The result of evaluating a sequence of expressions - such as might be found in
-the body of a loop, conditional or function - is the vector composition of the
-result of each expression.
+While a clash between a symbol's number and an actual number being used in a
+**Flitter** program is possible, it is very unlikely and wouldn't cause any
+problems unless that number is converted into a string – in which case, the
+number will become the symbol name.
 
-## Ranges
+:::{warning}
+While symbols and string values are interchangeable in situations where a string
+is accepted (such as the `composite` attribute in the example above), they are
+not interchangeable as [state mapping](#state) keys.
 
-```flitter
-start..stop|step
-```
+If this documentation refers to a specific state key as using a symbol, then
+that symbol **must** be used when retrieving that state value. Similarly, if a
+state key or prefix given in the program as a `state` attribute contains a
+symbol, then that symbol must be used to retrieve the state value. If a string
+has been used, then a symbol *cannot* be used to retrieve the value.
+:::
 
-A range creates a vector beginning at `start` and incrementing (or
-decrementing if negative) by `step` until the value is equal to or passes
-`stop` - the last value is *not* included in the range, i.e., it is a
-half-open range.
+### Nodes
 
-`start` and `|stop` may be omitted, in which case the vector will begin at 0
-and increment by 1. Therefore:
-
-- `..10` evaluates to the vector `0;1;2;3;4;5;6;7;8;9`
-- `1..21|5` evaluates to the vector `1;6;11;16`
-- `1..0|-0.1` evaluates to the vector `1;0.9;0.8;0.7;0.6;0.5;0.4;0.3;0.2;0.1`
-
-Ranges are *not* lazy like they are in Python, so `0..1000000` will create a
-vector with 1 million items.
-
-## Nodes
-
-The purpose of any **flitter** program is to construct a render tree.
+The purpose of any **Flitter** program is to construct a render tree.
 Individual literal nodes are represented by an exclamation mark followed by
 a name, e.g., `!window`. Nodes can be tagged with additional arbitrary names
-that aid in readability and in searching (see Queries below). A hash character
-followed by a name will tag the preceding node (or nodes) with that name, e.g.,
-`#top`. A name followed by an equals character will set that attribute on the
-preceding node. The resulting value in both of these instances is the
-tagged/attributed node.
+that aid in readability. A hash character followed by a name will tag the
+preceding node (or nodes) with that name, e.g., `#top`. A name followed by an
+equals character will set that attribute on the preceding node. The resulting
+value in both of these instances is the tagged/attributed node.
 
 For example:
 
@@ -232,49 +276,7 @@ appended to a `!window` node, which is the final value of this expression.
 Running this program as-is will result in a red window with the title "Hello
 world!".
 
-### Attribute name scoping
-
-Existing attributes of a node are brought into scope as names when evaluating
-the value of an attribute-set expression, e.g.:
-
-```flitter
-!rect point=200;100 size=(500;500)-point
-```
-
-is equivalent to:
-
-```flitter
-!rect point=200;100 size=300;400
-```
-
-Attribute names introduced in this way are added into a special "0-th" scope
-outside of built-ins and engine-supplied names. Thus, if an attribute name
-matches a name already in scope, then that existing name "wins". So:
-
-```flitter
-let point=400;200
-
-!rect point=200;100 size=(500;500)-point
-```
-
-results in a 100x300 rectangle.
-
-This rule is important for allowing the language partial-evaluator to determine
-bindings. As nodes are themselves values, the above can be legally written as:
-
-```flitter
-let point=400;200
-    rectangle=(!rect point=200;100)
-
-rectangle size=(500;500)-point
-```
-
-Without the special rule for attribute name binding, the partial-evaluator
-would not (in the general case) be able to statically determine whether the use
-of `point` in the `size=` attribute refers to the name introduced with the `let`
-or an attribute of the `rectangle` value.
-
-### Vector node operations
+#### Vector Node Operations
 
 As nodes are values, and thus vectors, tag unary-postfix operations and
 attribute-set binary operations are able to operate on a vector of nodes
@@ -288,7 +290,7 @@ let points=10;20;15;25;20;30;25;35
     ((!line_to point=x;y) for x;y in points) #segment
 ```
 
-is a strange, but perfectly legal, way of doing the equivalent (and more
+This is a strange, but perfectly legal, way of doing the equivalent (and more
 readable):
 
 ```flitter
@@ -296,45 +298,140 @@ let points=10;20;15;25;20;30;25;35
 
 !path
     !move_to point=0;0
-    for x;y in points:
+    for x;y in points
         !line_to #segment point=x;y
 ```
 
-When evaluating attribute-set operations on a vector of nodes, the attribute
-value is evaluated for each node, bringing that node's attribute names into
-scope on each iteration. For example:
+## Ranges
 
 ```flitter
-let nodes=((!foo a=a) for a in ..10)
-
-nodes b=a*2
+start..stop|step
 ```
 
-is equivalent to:
+A range creates a vector beginning at `start` and incrementing (or
+decrementing if negative) by `step` until the value is equal to or passes
+`stop` - the last value is *not* included in the range, i.e., it is a
+half-open range.
+
+`start` and `|step` may be omitted, in which case the vector will begin at 0
+and increment by 1. Therefore:
+
+- `..10` evaluates to the vector `0;1;2;3;4;5;6;7;8;9`
+- `1..21|5` evaluates to the vector `1;6;11;16`
+- `1..0|-0.1` evaluates to the vector `1;0.9;0.8;0.7;0.6;0.5;0.4;0.3;0.2;0.1`
+
+Ranges are *not* lazy like they are in Python, so `0..1000000` will create a
+vector with 1 million items.
+
+## Indexing
+
+Specific elements, or ranges of elements, may be extracted from a multi-element
+vector using indexing. Indexing uses the familiar syntax:
+
+*src*`[`*index*`]`
+
+As *all* values in **Flitter** are vectors, *index* may
+itself be a multi-element vector.
+
+The rules for indexing/slicing an *n*-element vector, *src*, are:
+
+- If either *index* or *src* is `null`, the operation will evaluate to `null`
+- *index* **must** be an entirely numeric vector or it will be treated as `null`
+- *index* is considered element-at-a-time
+- Non-integer indices are *floor*-ed to the next integer value down
+- Indices are used, modulo the length of *src*, to select an item from *src*
+- All matching elements are composed together into a new vector
+
+[Ranges](#ranges) are a convenient way to create indices for slicing a vector,
+e.g., `xs[..5]` will extract the first 5 elements of `xs` – if `xs` has fewer
+than 5 elements then it just evaluates to `xs`. Indices do not need to be
+contiguous or in any specific order. It is perfectly valid to use `x[1;6;0]`
+to extract the 2nd, 7th and 1st items, in that order.
+
+As indices are used modulo the length of the source vector, indices past the
+end of the vector will wrap around to the beginning and negative indices will
+select items backwards from the end. This means that `xs[-1]` can be used to
+pick out the last element of `xs`. It also means that all index values of a
+single element vector will return that element, and that a value can be easily
+expanded out to a long vector with a range. For example, the following will set
+`xs` to the number `5` repeated 100 times:
+
+```
+let xs = 5[..100]
+```
+
+Indexing of Unicode string vectors extracts the *n*-th element of the vector,
+*not* the *n*-th character of the string. Therefore `("Hello ";"world!")[0]` is
+`"Hello "`. See the [text functions](builtins.md#text-functions) for a mechanism
+for extracting individual characters or ranges of characters.
+
+## Operators
+
+**Flitter** supports the usual range of operators, with a lean towards the
+syntax and semantics of Python. The binary mathematical operators are:
+
+- *x* `+` *y* - addition
+- *x* `-` *y* - subtraction
+- *x* `/` *y* - division
+- *x* `*` *y* - multiplication
+- *x* `//` *y* - floor division (i.e, divide and round down)
+- *x* `%` *y* - modulo (pairs with floor division)
+- *x* `**` *y* - raise *x* to the power *y*
+
+All of these operations return a vector with the same length as the longer of
+*x* and *y*. The shorter vector is repeated as necessary. Note that, as well as
+this meaning `(1;2;3;4) + 1` is equal to `2;3;4;5`, it also means that
+`(1;2;3;4) + (1;-1)` is equal to `2;1;4;3`. The operators are left-associative,
+with `**` having the highest precedence, then `/`, `*`, `//` and `%` at the next
+level, and finally `+` and `-`.
+
+The `%` modulo operator follows the Python convention rather than C style. It
+is best understood as the remainder of a `//` floor division:
 
 ```flitter
-!foo a=0 b=0
-!foo a=1 b=2
-!foo a=2 b=4
-!foo a=3 b=6
-!foo a=4 b=8
-!foo a=5 b=10
-!foo a=6 b=12
-!foo a=7 b=14
-!foo a=8 b=16
-!foo a=9 b=18
+x % y == x - x // y * y
 ```
 
-Generally, this sort of behaviour is obtuse, but the semantics are important
-when using queries (see **Queries** below).
+This means that `%` will provide a seamless repeating sequence around zero:
 
-## Let expressions
+```flitter
+(-10..10) // 5 == (-2;-2;-2;-2;-2;-1;-1;-1;-1;-1; 0; 0; 0; 0; 0; 1; 1; 1; 1; 1)
+(-10..10) % 5  == ( 0; 1; 2; 3; 4; 0; 1; 2; 3; 4; 0; 1; 2; 3; 4; 0; 1; 2; 3; 4)
+```
+
+The unary mathematical operators are:
+
+- `-` *x* - negate
+- `+` *x* - identity
+
+They sit between `**` and `/`, `*`, `//` and `%` in precedence and so:
+
+```flitter
+-x ** y == -(x ** y)
+-x * y == (-x) * y
+```
+
+All of the mathematical operators return `null` if either *x* or *y* is an
+empty or non-numeric vector. Therefore, unary `+x` will return `x` iff `x` is
+numeric and `null` otherwise.
+
+Logical operators:
+
+- *x* `or` *y* - short-circuiting *or*: returns *x* if *x* is true, *y* otherwise
+- *x* `and` *y* - short-circuiting *and*: returns *x* if *x* is false, *y*
+  otherwise
+- *x* `xor` *y* - *exclusive or*: returns *y* if *x* is false, *x* if *y* is
+  false, `false` otherwise
+- `not` *x* - logical inverse: returns `false` if *x* is true, `true` otherwise
+
+## Let Expressions
 
 Values may be bound to names with the `let` keyword. It is followed by one or
-more `name=expression`s. The expressions are immediately evaluated and the
-resulting values are added into the scope of the expressions below.
+more `name=expression`s. The expressions are evaluated from left to right, with
+each name being bound to the resulting value and added into the scope of the
+current sequence.
 
-Lets may be used at the top-level in a **flitter** script or anywhere within
+Lets may be used at the top-level in a **Flitter** script or anywhere within
 a block-structured sequence, i.e., within append, function, conditional and
 loop bodies. Each of these sequences represents a new let scope and names
 that are re-bound will hide the same name in an outer scope. The outer scope
@@ -359,17 +456,6 @@ will evaluate to the two top-level nodes:
 !bar x=10
 ```
 
-There is also an inline version of let known as `where`. This allows names to
-be bound within a non-sequence expression, e.g.:
-
-```flitter
-!foo x=(x*x where x=10)
-```
-
-Note that `where` has higher precedence than `;` vector composition and so
-`x;x*x where x=10` is equivalent to `x;(x*x where x=10)` and thus the binding
-is only in scope for the `x*x` expression.
-
 A `let` expression may bind multiple names at once, which apply immediately
 in the order they are given, and supports using indentation for continuance.
 For example:
@@ -379,7 +465,7 @@ let x=1 y=2
     z=x*y
 ```
 
-A let binding may also specify multiple names separated with a semicolon to
+A let binding may also specify multiple names separated with semicolons to
 do an unpacked vector binding. For example:
 
 ```flitter
@@ -387,12 +473,77 @@ let x;y=SIZE/2
 ```
 
 This will pick off the first two items from the vector result of evaluating the
-expression and bind them in order to the names `x` and `y`. If the vector is
-longer than the number of names given then additional items are ignored. If the
-vector is shorter then the unmatched names will be bound to `null`.
+expression and bind them in order to the names `x` and `y`. The above code is
+roughly the same as:
+
+```flitter
+let src=SIZE/2
+    x=src[0]
+    y=src[1]
+```
+
+Therefore, unpacked binding follows the rules for [indexing](#indexing). If the
+source vector is longer than the number of names given then additional items are
+ignored. If the vector is shorter, then the the additional names will be bound
+to items wrapped around from the start again. If the vector is `null` then all
+names will be bound to `null`.
 
 Names introduced with a `let` can redefine engine-supplied values, like `beat`,
 and built-ins, like `sin`.
+
+:::{note}
+**Flitter** supports [primes](https://en.wikipedia.org/wiki/Prime_(symbol)) in
+names. This is a common mathematical convenience for a new unique name that
+references another. For example:
+
+```flitter
+let x' = x + 1
+```
+
+All identifiers may contain any number of single quote characters at the end.
+:::
+
+## Where
+
+There is also an inline version of `let` known as `where`. This allows names to
+be bound within a non-sequence expression, e.g.:
+
+```flitter
+!foo x=(x*x where x=10)
+```
+
+It is good practice, although not always necessary, to surround `where`
+expressions with parentheses to make the scope clear. However, note that `where`
+has higher precedence than `;` vector composition and so `(x;x*x where x=10)` is
+equivalent to `x;(x*x where x=10)`.
+
+## Sequences
+
+The result of evaluating an indented sequence of expressions separated by
+line breaks – such as might be found in the body of a loop, conditional or
+function – is the vector composition of the result of each expression. These
+need not necessarily be node expressions, it is perfectly normal for functions
+to operator on, and return, numeric or string vectors. For example:
+
+```flitter
+func fib(n, x=0, y=1)
+    x
+    if n > 1
+        fib(n-1, y, x+y)
+```
+
+This recursive function returns an `n`-item (at least one) vector of Fibonacci
+numbers beginning with `x;y`.
+
+```flitter
+debug(fib(10))
+```
+
+will output the following on the console:
+
+```flitter
+0;1;1;2;3;5;8;13;21;34
+```
 
 ## Conditionals
 
@@ -447,7 +598,7 @@ conditional expressions as necessary to achieve this, e.g.:
 !foo x=(x if x < 10 else (x*2 if x < 20 else x*3))
 ```
 
-## Loops
+## For Loops
 
 ```flitter
 for name《;name…》 in expression
@@ -456,14 +607,15 @@ for name《;name…》 in expression
 ```
 
 For loops iterate over vectors binding the values to the name(s). The result of
-evaluating the expressions within the loop body are concatenated into a single
+evaluating the expressions within the loop body are composed into a single
 vector that represents the result value of the loop. Normally this would be a
 vector of nodes to be appended to some enclosing node.
 
 When multiple names are given, each iteration will take multiple values from the
-source vector. If there are not enough values left in the source vector to bind
-all names in the last iteration, then the names lacking values will be bound to
-`null`.
+source vector. Unlike [unpacked vector binding](#let-expressions), if there are
+not enough values left in the source vector to bind all names in the last
+iteration, then the names lacking matching values will be bound to `null`, i.e.,
+a `for` loop cannot iterate past the end of the source vector.
 
 Iterating with multiple names is particularly useful combined with the `zip()`
 function, which merges multiple vectors together:
@@ -481,8 +633,8 @@ Note that `cos()` and `sin()` here are taking a 12-vector and returning another
 100 is applied to every element of this. Also of note here is that the flitter
 versions of `cos()` and `sin()` take values in *turns* not in radians. The
 dozen `!ellipse` nodes created by the loop are combined into a 12-vector, this
-has the final `!fill` node concatenated with it and then all of these nodes are
-appended to the `!group`.
+has the final `!fill` node composed with it and then all of these nodes are
+appended to the `!group` node.
 
 There is actually a more convenient `polar(theta)` function that does the same
 thing as `zip(cos(theta), sin(theta))`. Arguably, it would be even neater to
@@ -501,7 +653,32 @@ This will evaluate to:
 !line points=0;0;1;5;2;10;3;15;4;20
 ```
 
-## Functions
+## Function calling
+
+Functions are called in the normal way, with the name of the function followed
+by zero or more arguments, separated by commas, within parentheses, e.g.,
+`cos(x)` or `zip(xs, ys)`.
+
+Most built-in functions will do something sensible with an n-vector, e.g.,
+`sin(0.1;0.2)` will return a vector equivalent to `sin(0.1);sin(0.2)`, but
+will be substantially faster for long vectors. Some functions operate with both
+multiple arguments *and* n-vectors, e.g.:
+
+```flitter
+hypot(3;4) == 5
+hypot(3, 4) == 5
+hypot(3;30, 4;40) == (5;50)
+```
+
+As functions are themselves first-order objects in the language, they may be
+composed into vectors. The language takes the orthogonal approach that calling
+a function vector is identical to composing the result of calling each function
+with the arguments, i.e., `(sin;cos)(x) == (sin(x);cos(x))`. This is arguably
+obtuse behaviour.
+
+The **Flitter** [built-in functions](builtins.md) are documented separately.
+
+## Function Definitions
 
 ```flitter
 func name(parameter《=default》《, parameter…》)
@@ -515,9 +692,11 @@ an insufficient number of matching arguments, otherwise any parameters lacking
 matching arguments will be bound to `null`. The result of evaluating all
 body expressions will be returned as a single vector to the caller.
 
-Functions may refer to names bound in the enclosing scope(s) to the definition.
-These will be captured at definition time. Thus rebinding a name later in
-the same scope will be ignored, e.g.:
+Functions may be declared anywhere in a program including within another
+function definition. Functions may refer to names defined outside of the
+function definition at the top level. The values of these names will be
+captured at definition time and so rebinding a name later in the same scope
+will be ignored. For example:
 
 ```flitter
 let x=10
@@ -534,9 +713,12 @@ will evaluate to `!foo z=15` *not* `!foo z=25`.
 
 A function definition is itself an implicit `let` that binds the function
 definition to the function name in the definition scope. Functions are values
-in the **flitter** language and may be manipulated as such.
+in the **Flitter** language and may be manipulated as such. Functions may also
+recursively call themselves. That is, the function name is in scope within the
+body of the function.
 
-Function calls may include out-of-order named arguments, e.g.:
+Function calls to user-defined functions may include out-of-order named
+arguments, e.g.:
 
 ```flitter
 func multiply_add(x, y=1, z)
@@ -548,6 +730,42 @@ func multiply_add(x, y=1, z)
 will bind the arguments to parameters with `x` taking the value `2`, `y` taking
 the value `1` and `z` taking the value `3`. Named arguments should be given
 *after* any positional arguments and should not repeat positional arguments.
+
+Functions that have all literal (or unspecified) default parameter values, and
+that do not reference any non-local names within the body, will be inlined by
+the simplifier at each call site. The simplifier is then able to bind the
+parameters to the argument expressions and continue simplifying the body on
+that basis. Therefore, it is often more efficient to pass dynamic values (such
+as `beat`) into the function as parameters than allow them to be captured from
+the environment.
+
+## Anonymous functions
+
+**Flitter** also allows anonymous functions to be defined and used as values
+with the syntax:
+
+```flitter
+func (parameter《=default》《, parameter…》) body
+```
+
+In the grammar rules, anonymous functions sit above inline `if`/`else`
+expressions, but below inline `for` and `where` expressions. Therefore, the
+following creates a vector of 10 anonymous functions, each of which multiplies
+by a different value, not a single function that does 10 multiplications in
+a loop:
+
+```flitter
+let f = func(x) x*y for y in ..10
+```
+
+Note that as function calls are allowed to accept a vector of functions, it is
+valid to call `f`. So `f(3)` will still evaluate to `0;3;6;9;12;15;18;21;24;27`.
+
+It is wise to use parentheses to make the precedence explicit.
+
+As with regular functions, any captured names are bound at the point of
+definition. An anonymous function cannot be recursive as it has no function
+name to use within the body.
 
 ## Template function calls
 
@@ -585,175 +803,13 @@ wrapped with `!transform` nodes, the first with `scale=1` and the second with
 `scale=0.75`. The `!transform` nodes returned by the two template function
 calls are appended to the `!canvas` node.
 
-## Queries
-
-Queries allow the node tree so-far to be searched and manipulated. They use
-a CSS-selector-like syntax that is best explained by example:
-
-- `{*}` matches *all* nodes in the tree
-- `{window}` matches any `!window` node
-- `{#spot}` matches any node with the `#spot` tag
-- `{shader#blur}` matches `!shader` nodes with the `#blur` tag
-- `{ellipse|rect}` matches any `!ellipse` or `!rect` node
-- `{group path}` matches `!path` nodes anywhere within a `!group` node
-- `{path>line_to}` matches `!line_to` nodes *immediately* below a `!path` node
-- `{group.}` returns all `!group` nodes reachable from the root, but *not* any
-further `!group` nodes *within* those, i.e., it stops recursive descent on a
-match
-
-The result of a query expression is a vector of matching nodes. Note that nodes
-are appended to the main tree from the top-level after the complete evaluation
-of each expression, including any indented append operations. Thus a query
-evaluated within a nested expression cannot match any node that makes up part
-of that expression.
-
-A query expression may be combined with tag, attribute-set or node-append
-expressions to amend the current tree. For example:
-
-```flitter
-let SIZE=1280;720
-
-!window size=SIZE
-    !canvas size=SIZE color=1 font_size=100
-        !text point=SIZE/2 text="Hello world!"
-
-if beat > 10
-    {canvas} color=1;0;0
-```
-
-In this example, the text will turn red after 10 beats (5 seconds by default).
-
-Appending nodes to a query will append those nodes to all matches:
-
-```flitter
-…
-
-if beat > 10
-    {canvas}
-        !text point=SIZE*(0.5;0.75) text="(RED)" color=1;0;0
-```
-
-Appending queries to a node will re-parent the matching nodes into this new
-position in the tree. For example, the following code combines two queries
-to wrap all nodes within the canvas in a new group that turns them upside down
-and changes the default color to red:
-
-```flitter
-…
-
-if beat > 10
-    {canvas}
-        !group color=1;0;0 translate=SIZE rotate=0.5
-            {canvas>*}
-```
-
-As discussed in **Nodes** above, attributes from the matching nodes are brought
-into scope as names when evaluating attribute-set operations. So a queries can
-be used to amend an existing attribute value, e.g.:
-
-```flitter
-…
-
-{window} size=size*2
-```
-
-will double the `size` attribute of the window, as long as no other binding
-for `size` exists in the current scope.
-
-## Pseudo-random sources
-
-**flitter** provides three useful sources of pseudo-randomness: `uniform()`,
-`normal()` and `beta()`. These built-in functions return special "infinite"
-vectors that may only be indexed. These infinite vectors provide a reproducible
-stream of numbers matching the *Uniform(0,1)*, *Normal(0,1)* and *Beta(2,2)*
-distributions.
-
-The single argument to both functions is a vector that acts as the
-pseudo-random seed. Floating-point numbers within this seed vector are truncated
-to whole numbers before the seed is calculated. This is deliberate to allow new
-seeds to be generated at intervals, e.g.: `uniform(:foo;beat)` will create a new
-stream of pseudo-random numbers for each beat of the main clock. Multiplying or
-dividing this seed value then allows for different intervals, e.g., four times a
-beat: `uniform(:foo;beat*4)`.
-
-Similarly, the index value to the infinite-vector is truncated to pick a
-specific number in the stream. For example:
-
-```flitter
-let SIZE=1280;720
-
-!window size=SIZE
-    !canvas
-        for i in ..10
-            let x=uniform(:x;i)[beat] y=uniform(:y;i)[beat]
-                r=2*beta(:r;i)[beat] h=uniform(:h;i)[beat]
-            !path
-                !ellipse point=(x;y)*SIZE radius=r*50
-                !fill color=hsv(h;1;1)
-```
-
-This will create 10 circles distributed uniformly around the window with
-different radii clustered around 50 pixels and different uniformly picked hues.
-Every beat, the circles will be drawn in different places and with different
-sizes and hues. Note the use of symbols (`:x`, `:y`, etc.) combined with the
-index of the circle to create unique seeds. This code will draw exactly the
-same sequence of circles *every* time it is run as the pseudo-random functions
-are stable on their seed argument. There is no mechanism for generating true
-random numbers in **flitter**.
-
-The pseudo-random streams can be indexed with a range vector to generate a
-vector of numbers, e.g.: `uniform(:some_seed)[..100]` will generate a 100-vector
-of uniformly distributed numbers. The streams are arbitrarily long and are
-unit-cost to call, so indexing the billionth number takes the same amount of
-time as the 0th. Unlike normal vectors, the streams also extend into negative
-indices (which actually wrap around to the end of the 64-bit unsigned integer
-index range).
-
-Pseudo-random streams may be bound to a name list in a `let` expression to
-pick off the first few values, e.g.:
-
-```flitter
-let x;y;z = uniform(:position)
-```
-
-They are considered to be `true` in conditional expressions (`if`, `and`, etc.).
-In all other aspects, pseudo-random streams behave like the `null` vector, e.g.,
-attempts to use them in mathematical expressions will evaluate to `null`.
-
-## Counters
-
-Arbitrary counters can be managed with the `counter()` function. This takes
-either two or three arguments and **has state side-effects**.
-
-In the three-argument form, `counter(counter_id, clock, speed)`, the function
-will create or update a counter with a specific `clock` value and `speed`,
-storing the current state of the counter in the state mapping with the given
-`counter_id` key. The function returns the current count.
-
-Counters begin at zero and increment upwards by `speed` every unit increase of
-`clock`. The counter speed can be changed at any point and the counter will
-return the count at the previous speed before switching to counting with the
-new speed. The stored state only changes when the speed changes. `clock`
-*should* be a monotonically increasing number, such as `beat`. `speed` is
-allowed to be zero to stop the counter or negative to count downwards.
-
-Either `clock` or `speed` can be given as an n-vector to create a
-multi-dimensional counter. This can be useful, for instance, to move an object
-through space with a velocity vector:
-
-```flitter
-let velocity = 0.2;-1.5;3.0
-    position = counter(:thing_position, beat, velocity)
-```
-
-The two argument form of the function omits the speed and returns the count
-matching the value of `clock` at the last counter speed. If the counter has not
-already been initialised, then the speed will default to 1.
+As template function calls convert into regular function calls, templates may
+be used recursively.
 
 ## State
 
-Any interactive component of **flitter**, such as a MIDI controller,
-communicates with a running **flitter** program via a *state* mapping. This can
+Any interactive component of **Flitter**, such as a MIDI controller,
+communicates with a running **Flitter** program via a *state* mapping. This can
 be queried with the `$` operator like so:
 
 ```flitter
@@ -778,15 +834,18 @@ A key is any vector of numbers and/or strings (/symbols). As the `;` operator
 binds with very low precedence, a non-singleton key needs to be surrounded with
 brackets, e.g., `$(:circle;:radius)`.
 
-The state system is also used by the [physics engine](./physics.md) to
-communicate particle properties back to the program and by counters (see above)
-for storing a starting clock value and current speed. Be careful when choosing
-state keys to avoid collisions between these different uses.
+The state system is also used by the [physics engine](physics.md) to
+communicate particle properties back to the program and by
+[counters](counters.md). Be careful when choosing state keys to avoid collisions
+between these different uses.
 
 ## Pragmas
 
-There are three supported pragmas that may be placed at the top-level of a
-source file:
+One or more pragmas may be placed at the top of a source file before any other
+expressions. Pragmas take a name and a value, which must be a literal number
+or string.
+
+There are three currently supported pragmas:
 
 ```flitter
 %pragma tempo 110
@@ -799,46 +858,121 @@ defaults are 120 and 4, respectively), and the *current* target frame rate of
 the engine (default is 60 or the value specified with the `--fps` command-line
 option).
 
-## Partial-evaluation
+## Imports
+
+Top-level definitions (`let`s and `func`s) may be imported from one **Flitter**
+program file into another. This allows common definitions to be collected into
+*modules* that can be used elsewhere. For example:
+
+```flitter
+import SIZE;thing from 'common.fl'
+
+!window size=SIZE
+    @thing
+```
+
+The `import` `from` expression will execute the module with the supplied file
+name (interpreted as a string file name relative to the current program's
+source file) and include one or more names, separated with semicolons, into the
+current program as if they had been defined with a `let` or `func` at this
+point. Names not defined in the module will be bound to `null`.
+
+The module is executed in a new context and so top-level node expressions
+will not be added to the current tree, any [pragmas](#pragmas) will be ignored
+and all [state](#state) look-ups will evaluate to `null`. All [built-in
+names](builtins.md) will be defined in a module, but not runtime names (such as
+`beat`) or command-line names (supplied with `--define`). To use any of these
+values in an imported function they must be passed in as arguments. However,
+called functions *do* have access to the current [state](#state).
+
+If a function in a module is called from the main program, and this function
+makes use of any file built-ins – such as `read()` – then these will load files
+relative to the *module* file.
+
+Modules may import from other modules, provided that a cycle is not created.
+As module execution has no access to any dynamic values, the result of executing
+a module is cached until that file changes.
+
+## Parsing
+
+**Flitter** uses an LALR(1) parser with a contextual lexer. This means that, in
+general, there are *no reserved keywords*. The following is perfectly legal
+code that will parse and run:
+
+```flitter
+let let=..10
+
+for in in let
+    !let in=in
+```
+
+This is convenient in allowing things like `from` to be used as a keyword in an
+`import` `from` expression and also as an attribute name in a `!distance from=`
+physics node. However, it would be best not to rely on this flexibility too
+much as it will fail in many contexts. For instance, this very similar code to
+the above will not parse:
+
+```flitter
+let let=..10
+
+for in in let
+    !let for=in
+```
+
+This is because `for` cannot be used as an attribute name here as it is also
+a valid parser match at this point for the `for` keyword of an in-line `for`
+expression.
+
+## Simplification
 
 When a source file is loaded it is parsed into an abstract syntax tree and then
-that is *partially-evaluated*. This attempts to evaluate all static expressions.
-The partial-evaluator is quite sophisticated and is able to construct static
-parts of node trees, unroll loops with constant source vectors, evaluate
-conditionals with constant tests, call functions with constant arguments
-(including creating pseudo-random streams), replace `let` names with literal
-values, evaluate mathematical expressions (including some rearranging where
-necessary to achieve this) and generally reduces as much of the evaluation tree
-as possible to constant values.
+that is *partially-evaluated* by the simplifier. This attempts to evaluate all
+static expressions. The simplifier is quite sophisticated and is able to
+construct static parts of node trees, unroll loops with constant source vectors,
+evaluate conditionals with constant tests, call functions with constant
+arguments (including creating pseudo-random streams), inline functions that
+contain only local names, replace `let` names with literal values, evaluate
+mathematical expressions (including some rearranging where necessary to achieve
+this) and generally reduces as much of the expression tree as possible to
+constant values.
 
-Unbound names (which includes all of the globals listed above, like `beat`) and
-queries (`{...}`) are always dynamic, as will then obviously be any expressions
-that include these.
+Known global names (like `beat`) are always dynamic and so generally any
+expressions that include these will be dynamic. However, unbound names are
+interpreted as null values, therefore the simplifier will simply replace these
+with static `null`s, issuing a warning as it does so. It is sometimes useful to
+leave unbound names in a program in order to allow behaviour to be switched at
+run-time using the `--define NAME=value` command-line option. As the simplifier
+is able to follow these null values through conditionals, it will not affect
+performance and such uses can be considered similar to `#if` preprocessor
+instructions in other languages.
 
-After partial-evaluation has simplified the tree (and note that thanks to loop
-unrolling, "simpler" doesn't necessarily mean "smaller"), the tree is compiled
-into instructions for a stack-based virtual machine. These instructions are
-interpreted to run the program.
+After the simplifier has partially-evaluated the tree (and note that thanks to
+loop unrolling, "simpler" doesn't necessarily mean "smaller"), the tree is
+compiled into instructions for a stack-based virtual machine. These instructions
+are interpreted to run the program.
 
-The partial-evaluator and compiler can run again incorporating the state if
-that has been stable for a period of time (configurable with the `--evalstate`
-command-line option). If the state then changes (i.e., a pad or encoder is
-touched) the engine will return to the original compiled program. Counters
-update the state whenever their speed changes, and so doing this continously
-will defeat state-based partial-evaluation. The physics engine updates state on
-every iteration and so does the same.
+The simplifier and compiler can run again incorporating any state that has been
+stable for a period of time (configurable with the `--evalstate` command-line
+option). If any of these state keys then changes (i.e., a pad or encoder is
+touched) the engine will immediately return to the original compiled program.
 
-### A note on multi-processing
+## Run-time Error Behaviour
 
-I love Python, but the global interpreter lock basically makes any kind of
-serious multi-threading impossible. **flitter** supports a limited form of
-multi-processing instead. Adding the `--multiprocess` option on the command line
-will cause a separate renderer child process to be executed for each window,
-laser or DMX bus.
+**Flitter** is designed for live performance and so makes every attempt to
+charge on in the presence of errors. Most erroneous behaviour is simply silently
+ignored – such as numerical operations on non-numerical values resulting in
+`null`s. Some erroneous behaviour will log warnings or errors – such as using
+an unbound name or calling a built-in function with an incorrect number of
+arguments – before also evaluating to `null`.
 
-The main process handles evaluating the script to produce an output tree. This
-tree is then fed to each renderer and all renderers are waited on before moving
-on to the next iteration. This works well if the script and the renderers are
-expensive to run and the tree is small. As the tree grows large, the cost of
-pickling and un-pickling it across the process boundaries becomes a bottleneck,
-so your mileage may vary.
+If a live code change makes a program un-parseable then the engine will log a
+parser error and continue executing the previously loaded version of the file.
+Unfortunately, this does not hold for GLSL shader code, which resolves to
+strings that are parsed and compiled on-the-fly and so parse/compile errors in
+this will cause the runtime to ignore the code completely. This will cause
+`!shader` nodes to fall-back to their default pass-through behaviour and
+models contained in a `!canvas3d` group with a custom shader will fall back on
+the default shader.
+
+It is generally a good idea to keep the console log from **Flitter** visible
+when making live changes to be able to spot errors if they come up.

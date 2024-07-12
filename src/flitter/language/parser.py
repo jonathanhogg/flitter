@@ -9,6 +9,7 @@ from sys import intern
 from lark import Lark, Transformer
 from lark.exceptions import UnexpectedInput
 from lark.indenter import Indenter
+from lark.lexer import Token
 from lark.visitors import v_args
 
 from .. import model
@@ -20,11 +21,16 @@ SI_PREFIXES = {'p': 1e-12, 'n': 1e-9, 'u': 1e-6, 'µ': 1e-6, 'm': 1e-3, 'k': 1e3
 
 class FlitterIndenter(Indenter):
     NL_type = '_NL'
-    OPEN_PAREN_types = ['_LPAR', '_LBRA']
-    CLOSE_PAREN_types = ['_RPAR', '_RBRA']
+    OPEN_PAREN_types = ['_LPAREN']
+    CLOSE_PAREN_types = ['_RPAREN']
     INDENT_type = '_INDENT'
     DEDENT_type = '_DEDENT'
     tab_len = 8
+
+    def process(self, stream):
+        for token in super().process(stream):
+            yield token
+        yield Token('_EOF', '', start_pos=token.end_pos, end_pos=token.end_pos)
 
 
 class ParseError(Exception):
@@ -54,19 +60,16 @@ class FlitterTransformer(Transformer):
         return intern(str(token)[1:])
 
     def SYMBOL(self, token):
-        return model.Vector(intern(str(token)[1:]))
+        return model.Vector.symbol(intern(str(token)[1:]))
 
     def STRING(self, token):
-        return model.Vector(intern(literal_eval(token)))
-
-    def QUERY(self, token):
-        return model.Query(token[1:-1])
+        return model.Vector(literal_eval(token))
 
     def range(self, start, stop, step):
         return tree.Range(tree.Literal(model.null) if start is None else start, stop, tree.Literal(model.null) if step is None else step)
 
     def inline_if_else(self, then, condition, else_):
-        return tree.IfElse((tree.Test(condition, then),), else_)
+        return tree.IfElse((tree.IfCondition(condition, then),), else_)
 
     def inline_loop(self, body, names, source):
         return tree.For(names, source, body)
@@ -76,15 +79,18 @@ class FlitterTransformer(Transformer):
         bindings = []
         while args and isinstance(args[-1], tree.Binding):
             bindings.insert(0, args.pop())
-        for arg in args:
-            if isinstance(arg, tree.Binding):
-                raise TypeError("Cannot mix positional and keyword arguments")
         return tree.Call(function, tuple(args) if args else None, tuple(bindings) if bindings else None)
 
     def template_call(self, function, bindings, sequence):
         if sequence is not None:
             return tree.Call(function, (sequence,), bindings)
         return tree.Call(function, (tree.Literal(model.null),), bindings or None)
+
+    def let_function(self, function, sequence):
+        return tree.Let((tree.PolyBinding((function.name,), function),), sequence)
+
+    def anonymous_function(self, parameters, body):
+        return tree.Function('<anon>', parameters, body)
 
     tuple = v_args(inline=False)(tuple)
 
@@ -93,18 +99,18 @@ class FlitterTransformer(Transformer):
     attributes = tree.Attributes
     binding = tree.Binding
     bool = tree.Literal
+    condition = tree.IfCondition
     divide = tree.Divide
+    export = tree.Export
     eq = tree.EqualTo
-    file_import = tree.Import
-    floor_divide = tree.FloorDivide
     function = tree.Function
+    floor_divide = tree.FloorDivide
     ge = tree.GreaterThanOrEqualTo
     gt = tree.GreaterThan
     if_else = tree.IfElse
-    inline_let = tree.InlineLet
-    inline_sequence = tree.InlineSequence
     le = tree.LessThanOrEqualTo
     let = tree.Let
+    let_import = tree.Import
     literal = tree.Literal
     logical_and = tree.And
     logical_not = tree.Not
@@ -121,14 +127,10 @@ class FlitterTransformer(Transformer):
     poly_binding = tree.PolyBinding
     pos = tree.Positive
     power = tree.Power
-    pragma = tree.Pragma
-    prepend = tree.Prepend
-    search = tree.Search
     sequence = tree.Sequence
     slice = tree.Slice
     subtract = tree.Subtract
     tag = tree.Tag
-    test = tree.Test
     top = tree.Top
 
 
@@ -139,6 +141,8 @@ PARSER = Lark(GRAMMAR, postlex=FlitterIndenter(), regex=True, start='top', maybe
 
 def parse(source):
     try:
+        if not source.endswith('\n'):
+            source += '\n'
         return PARSER.parse(source)
     except UnexpectedInput as exc:
         raise ParseError(f"Parse error in source at line {exc.line} column {exc.column}",

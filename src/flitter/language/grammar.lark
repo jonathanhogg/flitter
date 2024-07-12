@@ -2,44 +2,50 @@
 %import common.WS_INLINE
 %ignore WS_INLINE
 %ignore /\\$\n/m
-%declare _INDENT _DEDENT
+%declare _INDENT _DEDENT _EOF
 
 _NL: /((--[^\r\n]*)?\r?\n[\t ]*)+/
 
-NAME : /[_a-z][_a-z0-9]*/i
-NODE : /![_a-z][_a-z0-9]*/i
-TAG : /#[_a-z][_a-z0-9]*/i
-SYMBOL : /:[_a-z][_a-z0-9]*/i
+NAME : /[_\p{alpha}][_\p{alnum}]*'*/i
+NODE : /![_\p{alpha}][_\p{alnum}]*'*/i
+TAG : /#[_\p{alpha}][_\p{alnum}]*'*/i
+SYMBOL : /:[_\p{alpha}][_\p{alnum}]*'*/i
 NUMBER : /[-+]?([0-9][_0-9]*(\.[0-9][_0-9]*)?|\.[0-9][_0-9]*)([eE][-+]?[0-9][_0-9]*)?[pnuµmkMGT]?/
-QUERY : /{[^}]+}/
 STRING : /('''([^'\\]|\\.|'{1,2}(?!'))*'''|'([^'\n\\]|\\.)*'|"""([^"\\]|\\.|"{1,2}(?!"))*"""|"([^"\n\\]|\\.)*")/
 _HASHBANG : /#!.*\r?\n/
+_LPAREN : "("
+_RPAREN : ")"
 
+top : _HASHBANG? _NL? pragmas _NL? sequence
 
-top : _HASHBANG? _NL? expressions
+pragmas : pragma* -> tuple
+
+pragma : "%pragma" NAME literal _NL -> binding
 
 sequence : expressions
 
-expressions : expression* -> tuple
+expressions : expression* let_expression? -> tuple
+
+let_expression : "let" multiline_bindings sequence -> let
+               | function sequence -> let_function
+               | "import" name_list "from" composition _NL sequence ->  let_import
 
 ?expression : node _NL
-            | node "^" _NL _INDENT sequence _DEDENT -> prepend
             | node _NL _INDENT sequence _DEDENT -> append
             | "@" atom [attribute_bindings] _NL [_INDENT sequence _DEDENT] -> template_call
             | "for" name_list "in" range _NL _INDENT sequence _DEDENT -> loop
-            | "let" multiline_bindings -> let
-            | "if" tests ["else" _NL _INDENT sequence _DEDENT] -> if_else
-            | "%pragma" NAME node _NL -> pragma
-            | "import" name_list "from" composition _NL ->  file_import
-            | "func" NAME "(" parameters ")" _NL _INDENT sequence _DEDENT -> function
+            | "if" conditions ["else" _NL _INDENT sequence _DEDENT] -> if_else
+            | _EOF -> export
+
+function : "func" NAME _LPAREN parameters _RPAREN _NL _INDENT sequence _DEDENT
 
 parameters : (parameter ("," parameter)*)? -> tuple
 
 parameter : NAME ["=" node] -> binding
 
-tests : test ("elif" test)* -> tuple
+conditions : condition ("elif" condition)* -> tuple
 
-test : composition _NL _INDENT sequence _DEDENT
+condition : composition _NL _INDENT sequence _DEDENT
 
 ?node : composition
       | node TAG -> tag
@@ -56,13 +62,14 @@ bindings : binding+ -> tuple
 binding : name_list "=" composition -> poly_binding
 
 ?composition : comprehension
-             | compositions -> inline_sequence
+             | compositions -> sequence
 
 compositions : comprehension (";" comprehension)+ -> tuple
 
 ?comprehension : conditional
                | comprehension "for" name_list "in" conditional -> inline_loop
                | comprehension "where" inline_bindings -> inline_let
+               | "func" _LPAREN parameters _RPAREN conditional -> anonymous_function
 
 inline_bindings: binding+ -> tuple
 
@@ -112,19 +119,18 @@ name_list : NAME (";" NAME)* -> tuple
        | power "**" call -> power
 
 ?call : atom
-      | call "(" args ")" -> call
+      | call _LPAREN args _RPAREN -> call
       | call "[" node "]" -> slice
 
-args : (arg ("," arg)*)? -> tuple
+args : node ("," node)* ("," named_arg)* -> tuple
+     | (named_arg ("," named_arg)*)? -> tuple
 
-?arg : node
-     | NAME "=" node -> binding
+named_arg : NAME "=" node -> binding
 
 ?atom : literal
       | NAME -> name
       | "$" atom -> lookup
-      | QUERY -> search
-      | "(" node ")"
+      | _LPAREN node _RPAREN
 
 literal : NUMBER
         | STRING

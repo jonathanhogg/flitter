@@ -1,4 +1,3 @@
-# cython: language_level=3, profile=True
 
 """
 Flitter drawing canvas based on Skia
@@ -6,13 +5,12 @@ Flitter drawing canvas based on Skia
 
 import array
 import functools
-from pathlib import Path
 
 import cython
 from cpython cimport array, PyObject
 from cpython.dict cimport PyDict_GetItem, PyDict_SetItem
-from libc.math cimport acos, sqrt, round
-from libc.stdint cimport int64_t
+from libc.math cimport acos, sqrt
+from libc.stdint cimport int64_t, uint32_t
 from loguru import logger
 import skia
 
@@ -35,6 +33,8 @@ cdef inline double perf_counter() noexcept nogil:
 logger = name_patch(logger, __name__)
 
 cdef double Tau = 6.283185307179586
+cdef str DefaultFontFamily = 'Helvetica'
+cdef int DefaultFontSize = 20
 
 cdef dict TextureFormatColorType = {
     'f1': (GL_RGBA8, skia.kRGBA_8888_ColorType),
@@ -144,7 +144,7 @@ cdef double turn_angle(double x0, double y0, double x1, double y1, double x2, do
 @cython.wraparound(False)
 cdef object line_path(object path, Vector points, double curve, bint closed):
     cdef bint sharp = curve <= 0
-    cdef int nverbs = 0, npoints = 0, n = points.length // 2
+    cdef uint32_t nverbs = 0, npoints = 0, n = points.length // 2
     if n == 0:
         return
     cdef array.array points_array = array.array('f')
@@ -154,7 +154,7 @@ cdef object line_path(object path, Vector points, double curve, bint closed):
     array.resize(verbs_array, n * 2 + 2)
     cdef unsigned char[:] pverbs = verbs_array
     cdef double last_mid_x, last_mid_y, last_x, last_y, x, y
-    cdef int i = 0, m = n, j
+    cdef uint32_t i = 0, m = n, j
     if closed and not sharp:
         m += 2
     while i < m:
@@ -232,7 +232,7 @@ cdef object line_path(object path, Vector points, double curve, bint closed):
     cdef bytearray data = bytearray()
     cdef array.array header_array = array.array('I')
     array.resize(header_array, 4)
-    cdef unsigned int[:] header = header_array
+    cdef uint32_t[:] header = header_array
     header[0] = 5
     header[1] = npoints / 2
     header[2] = 0
@@ -256,7 +256,7 @@ cdef object line_path(object path, Vector points, double curve, bint closed):
 
 
 cdef object get_color(Node node, default=None):
-    cdef Vector v = node._attributes.get('color')
+    cdef Vector v = node._attributes.get('color') if node._attributes else None
     cdef double r, g, b, a
     if v is not None and v.numbers != NULL:
         if v.length == 1:
@@ -276,9 +276,11 @@ cdef object get_color(Node node, default=None):
     return default
 
 
-cdef object update_context(Node node, ctx):
+cdef void update_context(Node node, ctx):
     cdef str key
     cdef Vector value
+    if not node._attributes:
+        return
     for key, value in node._attributes.items():
         if key == 'translate':
             if (translate := value.match(2, float)) is not None:
@@ -291,9 +293,11 @@ cdef object update_context(Node node, ctx):
                 ctx.scale(*scale)
 
 
-cdef object update_path(Node node, path):
+cdef void update_path(Node node, path):
     cdef str key
     cdef Vector value
+    if not node._attributes:
+        return
     for key, value in node._attributes.items():
         if key == 'fill_type':
             if (fill_type := FillType.get(value.match(1, str))) is not None:
@@ -303,6 +307,8 @@ cdef object update_path(Node node, path):
 cdef object update_paint(Node node, start_paint, colorspace):
     cdef str key
     cdef Vector value
+    if not node._attributes:
+        return start_paint
     paint = start_paint
     for key, value in node._attributes.items():
         if key == 'color':
@@ -349,8 +355,9 @@ cdef object update_paint(Node node, start_paint, colorspace):
 
 
 cdef object update_font(Node node, font):
-    if 'font_size' in node._attributes or 'font_family' in node._attributes or 'font_weight' in node._attributes or \
-       'font_width' in node._attributes or 'font_slant' in node._attributes:
+    if node._attributes is not None and ('font_size' in node._attributes or
+                                         'font_family' in node._attributes or 'font_weight' in node._attributes or
+                                         'font_width' in node._attributes or 'font_slant' in node._attributes):
         typeface = font.getTypeface()
         font_style = typeface.fontStyle()
         font_family = node.get('font_family', 1, str, typeface.getFamilyName())
@@ -367,10 +374,10 @@ cdef object update_font(Node node, font):
 
 cdef object make_image(ctx, Node node, dict references):
     if (filename := node.get('filename', 1, str)):
-        return SharedCache[filename].read_image()
+        return SharedCache[filename].read_skia_image()
     elif references is not None and (id := node.get('texture_id', 1, str)) and id in references:
         scene_node = references[id]
-        if scene_node.texture is not None:
+        if hasattr(scene_node, 'texture') and scene_node.texture is not None:
             texture = scene_node.texture
             format, colortype = TextureFormatColorType[texture.dtype]
             colorspace = skia.ColorSpace.MakeSRGBLinear()
@@ -386,12 +393,11 @@ cdef object make_shader(ctx, Node node, paint, dict references, colorspace):
     cdef int i, nstops
     cdef str noise_type, key
 
-    cdef Node child = node.first_child
-    while child is not None:
+    cdef Node child
+    for child in node._children:
         shader = make_shader(ctx, child, paint, references, colorspace)
         if shader is not None:
             shaders.append(shader)
-        child = child.next_sibling
 
     cdef str kind = node.kind
     if kind == 'color':
@@ -401,12 +407,10 @@ cdef object make_shader(ctx, Node node, paint, dict references, colorspace):
     elif kind == 'gradient':
         colors = []
         positions = []
-        child = node.first_child
-        while child is not None:
+        for child in node._children:
             if child.kind == 'stop':
                 positions.append(child.get('offset', 1, float))
                 colors.append(get_color(child, paint.getColor4f()).toColor())
-            child = child.next_sibling
         nstops = len(positions)
         if nstops:
             for i in range(nstops):
@@ -443,16 +447,17 @@ cdef object make_shader(ctx, Node node, paint, dict references, colorspace):
     elif kind == 'pattern':
         if (image := make_image(ctx, node, references)) is not None:
             matrix = skia.Matrix()
-            for key, value in node._attributes.items():
-                if key == 'translate':
-                    if (translate := value.match(2, float)) is not None:
-                        matrix.postTranslate(*translate)
-                elif key == 'rotate':
-                    if (rotate := value.match(1, float)) is not None:
-                        matrix.postRotate(rotate * 360)
-                elif key == 'scale':
-                    if (scale := value.match(2, float)) is not None:
-                        matrix.postScale(*scale)
+            if node._attributes:
+                for key, value in node._attributes.items():
+                    if key == 'translate':
+                        if (translate := value.match(2, float)) is not None:
+                            matrix.postTranslate(*translate)
+                    elif key == 'rotate':
+                        if (rotate := value.match(1, float)) is not None:
+                            matrix.postRotate(rotate * 360)
+                    elif key == 'scale':
+                        if (scale := value.match(2, float)) is not None:
+                            matrix.postScale(*scale)
             return image.makeShader(skia.TileMode.kRepeat, skia.TileMode.kRepeat, localMatrix=matrix)
 
     return None
@@ -460,12 +465,11 @@ cdef object make_shader(ctx, Node node, paint, dict references, colorspace):
 
 cdef object make_image_filter(Node node, paint, colorspace):
     cdef list sub_filters = []
-    cdef Node child = node.first_child
-    while child is not None:
+    cdef Node child
+    for child in node._children:
         image_filter = make_image_filter(child, paint, colorspace)
         if image_filter is not False:
             sub_filters.append(image_filter)
-        child = child.next_sibling
 
     cdef str kind = node.kind
     if kind == 'source':
@@ -553,12 +557,11 @@ cdef object make_image_filter(Node node, paint, colorspace):
 
 cdef object make_path_effect(Node node):
     cdef list sub_path_effects = []
-    cdef Node child = node.first_child
-    while child is not None:
+    cdef Node child
+    for child in node._children:
         path_effect = make_path_effect(child)
         if path_effect is not False:
             sub_path_effects.append(path_effect)
-        child = child.next_sibling
 
     cdef str kind = node.kind
     if kind == 'dash':
@@ -607,12 +610,11 @@ cpdef object draw(Node node, ctx, paint=None, font=None, path=None, dict stats=N
     ctx.save()
     update_context(node, ctx)
     paint = update_paint(node, skia.Paint(AntiAlias=True) if paint is None else paint, colorspace)
-    font = update_font(node, skia.Font(skia.Typeface(), 14) if font is None else font)
+    font = update_font(node, skia.Font(skia.Typeface(DefaultFontFamily), DefaultFontSize) if font is None else font)
     path = skia.Path()
-    cdef Node child = node.first_child
-    while child is not None:
-        paint = _draw(child, ctx, paint, font, path, stats, references, colorspace)
-        child = child.next_sibling
+    cdef Node child
+    for child in node._children:
+        paint = _draw(child, node, ctx, paint, font, path, stats, references, colorspace)
     ctx.restore()
     if stats is not None:
         duration = perf_counter() - start_time
@@ -620,7 +622,7 @@ cpdef object draw(Node node, ctx, paint=None, font=None, path=None, dict stats=N
         stats[node.kind] = count+1, total+duration
 
 
-cpdef object _draw(Node node, ctx, paint, font, path, dict stats, dict references, colorspace):
+cpdef object _draw(Node node, Node parent, ctx, paint, font, path, dict stats, dict references, colorspace):
     cdef double start_time = perf_counter()
     cdef Vector points
     cdef Node child
@@ -635,42 +637,32 @@ cpdef object _draw(Node node, ctx, paint, font, path, dict stats, dict reference
         update_context(node, ctx)
         group_paint = update_paint(node, paint, colorspace)
         font = update_font(node, font)
-        child = node.first_child
-        while child is not None:
-            group_paint = _draw(child, ctx, group_paint, font, path, stats, references, colorspace)
-            child = child.next_sibling
+        for child in node._children:
+            group_paint = _draw(child, node, ctx, group_paint, font, path, stats, references, colorspace)
         ctx.restore()
 
     elif kind == 'transform':
         ctx.save()
         update_context(node, ctx)
-        child = node.first_child
-        while child is not None:
-            paint = _draw(child, ctx, paint, font, path, stats, references, colorspace)
-            child = child.next_sibling
+        for child in node._children:
+            paint = _draw(child, node, ctx, paint, font, path, stats, references, colorspace)
         ctx.restore()
 
     elif kind == 'paint':
         paint_paint = update_paint(node, paint, colorspace)
-        child = node.first_child
-        while child is not None:
-            paint_paint = _draw(child, ctx, paint_paint, font, path, stats, references, colorspace)
-            child = child.next_sibling
+        for child in node._children:
+            paint_paint = _draw(child, node, ctx, paint_paint, font, path, stats, references, colorspace)
 
     elif kind == 'font':
         font = update_font(node, font)
-        child = node.first_child
-        while child is not None:
-            paint = _draw(child, ctx, paint, font, path, stats, references, colorspace)
-            child = child.next_sibling
+        for child in node._children:
+            paint = _draw(child, node, ctx, paint, font, path, stats, references, colorspace)
 
     elif kind == 'path':
         path = skia.Path()
         update_path(node, path)
-        child = node.first_child
-        while child is not None:
-            paint = _draw(child, ctx, paint, font, path, stats, references, colorspace)
-            child = child.next_sibling
+        for child in node._children:
+            paint = _draw(child, node, ctx, paint, font, path, stats, references, colorspace)
 
     elif kind == 'move_to':
         if (point := node.get('point', 2, float)) is not None:
@@ -738,7 +730,7 @@ cpdef object _draw(Node node, ctx, paint, font, path, dict stats, dict reference
                 ctx.drawPath(path, draw_paint)
 
     elif kind == 'line':
-        if (points := node._attributes.get('points')) is not None and points.numbers is not NULL:
+        if node._attributes and (points := node._attributes.get('points')) is not None and points.numbers is not NULL:
             curve = node.get('curve', 1, float, 0)
             close = node.get('close', 1, bool, False)
             if (fill := node.get_bool('fill', False)) or (stroke := node.get_bool('stroke', False)):
@@ -779,8 +771,8 @@ cpdef object _draw(Node node, ctx, paint, font, path, dict stats, dict reference
             if node.get('center', 1, bool, True):
                 bounds = skia.Rect(0, 0, 0, 0)
                 font.measureText(text, bounds=bounds, paint=text_paint)
-                rx = bounds.x() + bounds.width()/2
-                ry = bounds.y() + bounds.height()/2
+                rx = (bounds.fLeft + bounds.fRight)/2
+                ry = (bounds.fBottom + bounds.fTop)/2
                 ctx.drawString(text, x-rx, y-ry, font, text_paint)
             else:
                 ctx.drawString(text, x, y, font, text_paint)
@@ -825,10 +817,8 @@ cpdef object _draw(Node node, ctx, paint, font, path, dict stats, dict reference
             update_context(node, ctx)
             layer_paint = update_paint(node, paint, colorspace)
             font = update_font(node, font)
-            child = node.first_child
-            while child is not None:
-                layer_paint = _draw(child, ctx, layer_paint, font, path, stats, references, colorspace)
-                child = child.next_sibling
+            for child in node._children:
+                layer_paint = _draw(child, node, ctx, layer_paint, font, path, stats, references, colorspace)
             ctx.restore()
 
     elif shader := make_shader(ctx, node, paint, references, colorspace):
@@ -855,7 +845,7 @@ cpdef object _draw(Node node, ctx, paint, font, path, dict stats, dict reference
             PyDict_SetItem(stats, kind, (count+1, total+duration))
         else:
             PyDict_SetItem(stats, kind, (1, duration))
-        parent_kind = node.parent.kind
+        parent_kind = parent.kind
         objptr = PyDict_GetItem(stats, parent_kind)
         if objptr != NULL:
             count, total = <tuple>objptr
@@ -897,24 +887,26 @@ class Canvas(SceneNode):
         self._texture = None
 
     def create(self, engine, node, resized, **kwargs):
-        colorbits = node.get('colorbits', 1, int, self.glctx.extra['colorbits'])
-        if colorbits not in COLOR_FORMATS:
-            colorbits = self.glctx.extra['colorbits']
+        colorbits = node.get('colorbits', 1, int, 8)
         linear = node.get('linear', 1, bool, self.glctx.extra['linear'])
+        if not linear or colorbits not in COLOR_FORMATS:
+            colorbits = 8
         if resized or colorbits != self._colorbits or linear != self._linear:
-            depth = COLOR_FORMATS[colorbits]
-            skia_colortype = TextureFormatColorType[depth.moderngl_dtype][1]
-            internal_format = None if linear else GL_SRGB8_ALPHA8
+            color_format = COLOR_FORMATS[colorbits]
+            skia_colortype = TextureFormatColorType[color_format.moderngl_dtype][1]
+            internal_format = color_format.gl_format if linear else GL_SRGB8_ALPHA8
             self._colorspace = skia.ColorSpace.MakeSRGBLinear() if linear else skia.ColorSpace.MakeSRGB()
-            self._texture = self.glctx.texture((self.width, self.height), 4, dtype=depth.moderngl_dtype, internal_format=internal_format)
+            self._texture = self.glctx.texture((self.width, self.height), 4, dtype=color_format.moderngl_dtype, internal_format=internal_format)
             self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
-            backend_render_target = skia.GrBackendRenderTarget(self.width, self.height, 0, 0, skia.GrGLFramebufferInfo(self._framebuffer.glo, depth.gl_format))
+            backend_render_target = skia.GrBackendRenderTarget(self.width, self.height, 0, 0,
+                                                               skia.GrGLFramebufferInfo(self._framebuffer.glo, color_format.gl_format))
             self._surface = skia.Surface.MakeFromBackendRenderTarget(self._graphics_context, backend_render_target, skia.kBottomLeft_GrSurfaceOrigin,
                                                                      skia_colortype, self._colorspace)
             self._canvas = self._surface.getCanvas()
             self._colorbits = colorbits
             self._linear = linear
-            logger.debug("Created {:d}x{:d} canvas; skia version {}", self.width, self.height, skia.__version__)
+            logger.debug("Created {:d}x{:d} {}-bit {}sRGB canvas; skia version {}", self.width, self.height, colorbits,
+                         "linear " if linear else "", skia.__version__)
 
     async def descend(self, engine, node, **kwargs):
         # A canvas is a leaf node from the perspective of the OpenGL world

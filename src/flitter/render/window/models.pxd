@@ -1,41 +1,51 @@
-# cython: language_level=3, profile=True
+
+from ...model cimport Node, Vector, Matrix44
+
+
+cdef double DefaultSnapAngle
 
 
 cdef class Model:
     cdef str name
-
-    cdef tuple get_buffers(self, object glctx, dict objects)
-
-
-cdef class TrimeshModel(Model):
-    cdef bint flat
-    cdef bint invert
     cdef object trimesh_model
+    cdef Vector bounds
+    cdef bint valid
 
-    cdef object get_trimesh_model(self)
+    cdef bint is_constructed(self)
+    cdef bint check_valid(self)
+    cdef void build_trimesh_model(self)
+    cdef object get_watertight_trimesh_model(self)
+    cdef Vector get_bounds(self)
+    cdef tuple get_buffers(self, object glctx, dict objects)
+    cdef tuple instance(self, Matrix44 model_matrix)
 
-
-cdef class Box(TrimeshModel):
-    @staticmethod
-    cdef Box get(bint flat, bint invert)
-
-
-cdef class Sphere(TrimeshModel):
-    cdef int subdivisions
-
-    @staticmethod
-    cdef Sphere get(bint flat, bint invert, int subdivisions)
-
-
-cdef class Cylinder(TrimeshModel):
-    cdef int segments
-
-    @staticmethod
-    cdef Cylinder get(bint flat, bint invert, int segments)
-
-
-cdef class LoadedModel(TrimeshModel):
-    cdef str filename
+    cdef Model flatten(self)
+    cdef Model invert(self)
+    cdef Model repair(self)
+    cdef Model snap_edges(self, double snap_angle, double minimum_area)
+    cdef Model transform(self, Matrix44 transform_matrix)
+    cdef Model slice(self, Vector position, Vector normal)
 
     @staticmethod
-    cdef LoadedModel get(bint flat, bint invert, str filename)
+    cdef Model intersect(list models)
+
+    @staticmethod
+    cdef Model union(list models)
+
+    @staticmethod
+    cdef Model difference(list models)
+
+    @staticmethod
+    cdef Model get_box(Node node)
+
+    @staticmethod
+    cdef Model get_sphere(Node node)
+
+    @staticmethod
+    cdef Model get_cylinder(Node node)
+
+    @staticmethod
+    cdef Model get_cone(Node node)
+
+    @staticmethod
+    cdef Model get_external(Node node)

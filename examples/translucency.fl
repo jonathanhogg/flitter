@@ -1,0 +1,19 @@
+
+%pragma tempo 60
+
+import rbox from 'common/rbox.fl'
+
+let SIZE=1080
+
+!window size=SIZE
+    !canvas3d id=:top fov=60/360
+        !light color=5M focus=0 position=1000;0;0 outer=10/360
+        !light color=5M focus=0 position=-500;1000;0 outer=15/360
+        !light color=5M focus=0 position=0;-1000;-500 outer=20/360
+        !light color=0.1 direction=-1;0;-1
+        !transform rotate=(beat+5)/30
+            !material color=hsv(0;0.95;1) roughness=0.3 translucency=100
+                !union
+                    @rbox size=300 radius=50
+    !record filename=OUTPUT codec=:hevc crf=20 limit=60 hidden=true
+        !reference id=:top

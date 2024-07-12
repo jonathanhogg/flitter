@@ -1,24 +1,92 @@
 """
 Tests of the flitter language virtual machine
-
-Note that `Import` is currently not tested.
 """
 
 import gc
+import tempfile
 import tracemalloc
+from pathlib import Path
 import unittest
 import unittest.mock
 
-from flitter.model import Vector, Node, Query, Context, StateDict, null, true, false
-from flitter.language.vm import Program, Function, VectorStack
+from flitter import configure_logger
+from flitter.model import Vector, Node, Context, StateDict, null, true, false
+from flitter.language.tree import Top, Literal
+from flitter.language.vm import Program, Function, VectorStack, log_vm_stats
+
+
+configure_logger('ERROR')
+
+
+class TestProgramMethods(unittest.TestCase):
+    def test_run(self):
+        program = Program(lnames=('a',))
+        program.literal(Node('foo'))
+        program.local_load(0)
+        program.attributes(('a',))
+        program.append()
+        program.optimize()
+        program.link()
+        context = program.run(Context(state=StateDict(), names={'a': Vector(5)}))
+        self.assertEqual(context.root, Node('root', children=(Node('foo', attributes={'a': Vector(5)}),)))
+
+    def test_new_label(self):
+        program = Program()
+        self.assertEqual(program.new_label(), 1)
+        self.assertEqual(program.new_label(), 2)
+        self.assertEqual(program.new_label(), 3)
+
+    def test_set_path(self):
+        program = Program()
+        self.assertIsNone(program.path)
+        program.set_path(Path('a/b/c'))
+        self.assertEqual(program.path, Path('a/b/c'))
+
+    def test_set_top(self):
+        program = Program()
+        self.assertIsNone(program.top)
+        top = Top((), Literal(null))
+        program.set_top(top)
+        self.assertIs(program.top, top)
+
+    def test_set_pragma(self):
+        program = Program()
+        self.assertEqual(program.pragmas, {})
+        program.set_pragma('tempo', Vector(60))
+        self.assertEqual(program.pragmas, {'tempo': Vector(60)})
+
+    def test_use_simplifier(self):
+        program = Program()
+        self.assertTrue(program.simplify)
+        program.use_simplifier(False)
+        self.assertFalse(program.simplify)
+
+    @unittest.mock.patch('flitter.language.vm.logger')
+    def test_log_vm_stats(self, logger_mock):
+        program = Program()
+        context = Context(state=StateDict(), path=Path('.'))
+        program.literal(1)
+        program.literal(2)
+        program.add()
+        program.local_load(0)
+        program.call(1)
+        program.call_fast(lambda x: x+1, 1)
+        program.optimize()
+        program.link()
+        stack = program.execute(context, lnames=[lambda x: x+1], record_stats=True)
+        self.assertEqual(stack, [5])
+        log_vm_stats()
+        self.assertEqual(logger_mock.info.mock_calls[0], unittest.mock.call('VM execution statistics:'))
+        self.assertEqual(set(call.args[1] for call in logger_mock.info.mock_calls[1:]), {'(native funcs)', 'Add', 'Literal', 'LocalLoad', 'Call', 'CallFast'})
 
 
 class TestBasicInstructions(unittest.TestCase):
     def setUp(self):
         self.program = Program()
         self.state = StateDict()
-        self.variables = {}
-        self.context = Context(state=self.state, variables=self.variables)
+        self.names = {}
+        self.exports = {}
+        self.context = Context(state=self.state, names=self.names, exports=self.exports)
 
     def test_Add(self):
         self.program.literal(3)
@@ -32,48 +100,61 @@ class TestBasicInstructions(unittest.TestCase):
         self.program.literal(node)
         self.program.literal(Node('bar'))
         self.program.append()
+        self.program.literal(Vector([Node('baz1', None, {'a': Vector(1)}), Node('baz2', None, {'b': Vector(2)})]))
+        self.program.literal(Vector(Node('baz3', None, {'c': Vector(3)})))
+        self.program.append(2)
+        self.program.literal([1, Node('foo')])
+        self.program.literal([Node('bar'), 2])
+        self.program.append()
         self.program.literal(Node('baz'))
+        self.program.literal(['a', 'b'])
         self.program.append()
         stack = self.program.execute(self.context)
-        self.assertEqual(len(stack), 1)
-        self.assertEqual(repr(stack[0]), "(!foo #test x=1\n !bar\n !baz)")
+        self.assertEqual(len(stack), 3)
+        self.assertEqual(repr(stack[0]), "(!foo #test x=1\n !bar\n !baz1 a=1\n !baz2 b=2\n !baz3 c=3)")
+        self.assertEqual(stack[1], [1, Node('foo', children=(Node('bar'),))])
+        self.assertEqual(stack[2], [Node('baz')])
 
-    def test_AppendRoot(self):
-        node = Node('foo', {'test'}, {'x': Vector(1)})
-        self.program.literal(node)
-        self.program.append_root()
-        stack = self.program.execute(self.context)
-        self.assertEqual(len(stack), 0)
-        self.assertEqual(next(self.context.graph.children), node)
-
-    def test_AppendAttribute(self):
+    def test_Attribute(self):
         foo = Node('foo', {'test'}, {'x': Vector(1)})
         bar = Node('bar', None, {'x': Vector(2)})
-        self.variables['bar'] = Vector(bar)
+        self.names['bar'] = Vector(bar)
         self.program.literal(foo)
-        self.program.literal(12)
-        self.program.attribute('y')
+        self.program.literal(bar)
+        self.program.local_push(1)
         self.program.literal(5)
-        self.program.attribute('x')
+        self.program.literal(12)
+        self.program.attributes(('x', 'y',))
         self.program.literal(null)
-        self.program.attribute('y')
-        self.program.name('bar')
+        self.program.attributes(('y',))
+        self.program.local_load(0)
         self.program.literal(7)
-        self.program.attribute('y')
+        self.program.attributes(('y',))
+        self.program.literal([0, 1, 2])
+        self.program.literal(5)
+        self.program.attributes(('x',))
+        self.program.literal(['a', 'b', 'c'])
+        self.program.literal(10)
+        self.program.attributes(('x',))
         stack = self.program.execute(self.context)
-        self.assertEqual(len(stack), 2)
+        self.assertEqual(len(stack), 4)
         self.assertEqual(repr(stack[0]), "(!foo #test x=5)")
         self.assertFalse(stack[0][0] is foo)
         self.assertEqual(repr(stack[1]), "(!bar x=2 y=7)")
-        self.assertIs(stack[1][0], bar)
+        self.assertFalse(stack[1][0] is bar)
         self.assertEqual(foo['x'], Vector(1))
+        self.assertEqual(stack[2], [0, 1, 2])
+        self.assertEqual(stack[3], ['a', 'b', 'c'])
 
     def test_Compose(self):
         self.program.literal(3)
         self.program.literal(4)
         self.program.compose(2)
+        self.program.literal(Vector(['a', 'b']))
+        self.program.literal(Vector('c'))
+        self.program.compose(2)
         stack = self.program.execute(self.context)
-        self.assertEqual(stack, [Vector([3, 4])])
+        self.assertEqual(stack, [Vector([3, 4]), Vector(['a', 'b', 'c'])])
 
     def test_Drop(self):
         self.program.literal(3)
@@ -99,12 +180,30 @@ class TestBasicInstructions(unittest.TestCase):
         stack = self.program.execute(self.context)
         self.assertEqual(stack, [false, true])
 
+    def test_Ceil(self):
+        self.program.literal(-3.5)
+        self.program.ceil()
+        stack = self.program.execute(self.context)
+        self.assertEqual(stack, [-3])
+
+    def test_Floor(self):
+        self.program.literal(-3.5)
+        self.program.floor()
+        stack = self.program.execute(self.context)
+        self.assertEqual(stack, [-4])
+
     def test_FloorDiv(self):
         self.program.literal(11)
         self.program.literal(4)
         self.program.floordiv()
         stack = self.program.execute(self.context)
         self.assertEqual(stack, [2])
+
+    def test_Fract(self):
+        self.program.literal(-3.5)
+        self.program.fract()
+        stack = self.program.execute(self.context)
+        self.assertEqual(stack, [0.5])
 
     def test_Ge(self):
         self.program.literal(3)
@@ -139,7 +238,7 @@ class TestBasicInstructions(unittest.TestCase):
 
     def test_LiteralNodes(self):
         self.program.literal([Node('foo', {'test'}, {'x': Vector(1)}), Node('bar')])
-        self.assertEqual(str(self.program.instructions[-1]), 'LiteralNodes (!foo #test x=1);(!bar)')
+        self.assertEqual(str(self.program.instructions[-1]), 'LiteralNodes (!foo #test x=1, !bar)')
 
     def test_Literal(self):
         self.program.literal(range(10))
@@ -155,16 +254,16 @@ class TestBasicInstructions(unittest.TestCase):
         stack = self.program.execute(self.context)
         self.assertEqual(stack, [true, false])
 
-    def test_StoreGlobal(self):
+    def test_Export(self):
         self.program.literal((1, 2))
-        self.program.store_global('x')
+        self.program.export('x')
         self.program.literal(3)
-        self.program.store_global('y')
+        self.program.export('y')
         self.program.literal("Hello world!")
-        self.program.store_global('z')
+        self.program.export('z')
         stack = self.program.execute(self.context)
         self.assertEqual(len(stack), 0)
-        self.assertEqual(self.variables, {'x': Vector([1, 2]), 'y': Vector(3), 'z': Vector("Hello world!")})
+        self.assertEqual(self.exports, {'x': Vector([1, 2]), 'y': Vector(3), 'z': Vector("Hello world!")})
 
     def test_Lookup(self):
         self.state['y'] = 12
@@ -206,12 +305,13 @@ class TestBasicInstructions(unittest.TestCase):
         stack = self.program.execute(self.context)
         self.assertEqual(stack, [12])
 
-    def test_Name(self):
-        self.variables['y'] = 12
-        self.program.name('x')
-        self.program.name('y')
+    def test_MulAdd(self):
+        self.program.literal(3)
+        self.program.literal(4)
+        self.program.literal(5)
+        self.program.mul_add()
         stack = self.program.execute(self.context)
-        self.assertEqual(stack, [null, 12])
+        self.assertEqual(stack, [23])
 
     def test_Ne(self):
         self.program.literal(3)
@@ -252,24 +352,6 @@ class TestBasicInstructions(unittest.TestCase):
         stack = self.program.execute(self.context)
         self.assertEqual(stack, [81])
 
-    def test_Pragma(self):
-        self.program.literal(3)
-        self.program.pragma('x')
-        stack = self.program.execute(self.context)
-        self.assertEqual(len(stack), 0)
-        self.assertEqual(self.context.pragmas, {'x': Vector(3)})
-
-    def test_Prepend(self):
-        node = Node('foo', {'test'}, {'x': Vector(1)})
-        self.program.literal(node)
-        self.program.literal(Node('bar'))
-        self.program.prepend()
-        self.program.literal(Node('baz'))
-        self.program.prepend()
-        stack = self.program.execute(self.context)
-        self.assertEqual(len(stack), 1)
-        self.assertEqual(repr(stack[0]), "(!foo #test x=1\n !baz\n !bar)")
-
     def test_Range(self):
         self.program.literal(0)
         self.program.literal(10)
@@ -277,20 +359,6 @@ class TestBasicInstructions(unittest.TestCase):
         self.program.range()
         stack = self.program.execute(self.context)
         self.assertEqual(stack, [(0, 2, 4, 6, 8)])
-
-    def test_Search(self):
-        foo = Node('foo', {'test'}, {'x': Vector(1)})
-        bar = Node('bar', {'test'}, {'x': Vector(2)})
-        self.context.graph.append(foo)
-        self.context.graph.append(bar)
-        self.program.search(Query('#test'))
-        self.program.search(Query('bar'))
-        self.program.search(Query('#test!'))
-        stack = self.program.execute(self.context)
-        self.assertEqual(len(stack), 3)
-        self.assertEqual(stack[0], Vector([foo, bar]))
-        self.assertEqual(stack[1], Vector([bar]))
-        self.assertEqual(stack[2], Vector([foo]))
 
     def test_Slice(self):
         self.program.literal(range(1, 11))
@@ -314,12 +382,20 @@ class TestBasicInstructions(unittest.TestCase):
         self.assertEqual(stack, [-1])
 
     def test_Tag(self):
-        node = Node('foo', None, {'x': Vector(1)})
-        self.program.literal(node)
+        self.program.literal(Node('foo'))
+        self.program.tag('bar')
+        self.program.literal(5)
+        self.program.attributes(('x',))
+        self.program.tag('baz')
+        self.program.literal([0, 1, 2])
+        self.program.tag('test')
+        self.program.literal(['a', 'b', 'c'])
         self.program.tag('test')
         stack = self.program.execute(self.context)
-        self.assertEqual(len(stack), 1)
-        self.assertEqual(repr(stack[0]), "(!foo #test x=1)")
+        self.assertEqual(len(stack), 3)
+        self.assertEqual(repr(stack[0]), "(!foo #bar #baz x=5)")
+        self.assertEqual(stack[1], [0, 1, 2])
+        self.assertEqual(stack[2], ['a', 'b', 'c'])
 
     def test_TrueDiv(self):
         self.program.literal(3)
@@ -349,8 +425,8 @@ class TestJumps(unittest.TestCase):
     def setUp(self):
         self.program = Program()
         self.state = StateDict()
-        self.variables = {}
-        self.context = Context(state=self.state, variables=self.variables)
+        self.names = {}
+        self.context = Context(state=self.state, names=self.names)
 
     def test_jump(self):
         LABEL = self.program.new_label()
@@ -401,24 +477,22 @@ class TestForLoops(unittest.TestCase):
     def setUp(self):
         self.program = Program()
         self.state = StateDict()
-        self.variables = {}
-        self.context = Context(state=self.state, variables=self.variables)
+        self.names = {}
+        self.context = Context(state=self.state, names=self.names)
 
     def test_simple(self):
         NEXT = self.program.new_label()
         END = self.program.new_label()
         self.program.literal(Vector.range(10))
-        self.program.begin_for()
-        self.program.literal(null)
-        self.program.local_push(1)
+        self.program.begin_for(1)
         self.program.label(NEXT)
-        self.program.next(1, END)
+        self.program.next(END)
         self.program.local_load(0)
         self.program.literal(2)
         self.program.mul()
         self.program.jump(NEXT)
         self.program.label(END)
-        self.program.end_for_compose()
+        self.program.end_for()
         stack = self.program.execute(self.context)
         self.assertEqual(stack, [Vector.range(0, 20, 2)])
 
@@ -426,11 +500,9 @@ class TestForLoops(unittest.TestCase):
         NEXT = self.program.new_label()
         END = self.program.new_label()
         self.program.literal(Vector.range(10))
-        self.program.begin_for()
-        self.program.literal(null)
-        self.program.local_push(2)
+        self.program.begin_for(2)
         self.program.label(NEXT)
-        self.program.next(2, END)
+        self.program.next(END)
         self.program.local_load(1)
         self.program.literal(2)
         self.program.mul()
@@ -438,7 +510,7 @@ class TestForLoops(unittest.TestCase):
         self.program.compose(2)
         self.program.jump(NEXT)
         self.program.label(END)
-        self.program.end_for_compose()
+        self.program.end_for()
         stack = self.program.execute(self.context)
         self.assertEqual(stack, [(0, 1, 4, 3, 8, 5, 12, 7, 16, 9)])
 
@@ -446,11 +518,9 @@ class TestForLoops(unittest.TestCase):
         NEXT = self.program.new_label()
         END = self.program.new_label()
         self.program.literal(Vector.range(9))
-        self.program.begin_for()
-        self.program.literal(null)
-        self.program.local_push(2)
+        self.program.begin_for(2)
         self.program.label(NEXT)
-        self.program.next(2, END)
+        self.program.next(END)
         self.program.local_load(1)
         self.program.literal(2)
         self.program.mul()
@@ -458,7 +528,7 @@ class TestForLoops(unittest.TestCase):
         self.program.compose(2)
         self.program.jump(NEXT)
         self.program.label(END)
-        self.program.end_for_compose()
+        self.program.end_for()
         stack = self.program.execute(self.context)
         self.assertEqual(stack, [(0, 1, 4, 3, 8, 5, 12, 7, 16)])
 
@@ -466,42 +536,50 @@ class TestForLoops(unittest.TestCase):
         NEXT = self.program.new_label()
         END = self.program.new_label()
         self.program.literal(null)
-        self.program.begin_for()
-        self.program.literal(null)
-        self.program.local_push(1)
+        self.program.begin_for(1)
         self.program.label(NEXT)
-        self.program.next(1, END)
+        self.program.next(END)
         self.program.local_load(0)
-        self.program.literal(2)
-        self.program.mul()
-        self.program.jump(NEXT)
-        self.program.label(END)
-        self.program.end_for_compose()
-        stack = self.program.execute(self.context)
-        self.assertEqual(stack, [null])
-
-    def test_next_push(self):
-        NEXT = self.program.new_label()
-        END = self.program.new_label()
-        self.program.literal(Vector.range(5))
-        self.program.begin_for()
-        self.program.label(NEXT)
-        self.program.push_next(END)
         self.program.literal(2)
         self.program.mul()
         self.program.jump(NEXT)
         self.program.label(END)
         self.program.end_for()
         stack = self.program.execute(self.context)
-        self.assertEqual(stack, [0, 2, 4, 6, 8])
+        self.assertEqual(stack, [null])
+
+    def test_nested(self):
+        NEXT_OUTER = self.program.new_label()
+        END_OUTER = self.program.new_label()
+        NEXT_INNER = self.program.new_label()
+        END_INNER = self.program.new_label()
+        self.program.literal(Vector.range(0, 10, 5))
+        self.program.begin_for(1)
+        self.program.label(NEXT_OUTER)
+        self.program.next(END_OUTER)
+        self.program.literal(Vector.range(5))
+        self.program.begin_for(1)
+        self.program.label(NEXT_INNER)
+        self.program.next(END_INNER)
+        self.program.local_load(1)
+        self.program.local_load(0)
+        self.program.add()
+        self.program.jump(NEXT_INNER)
+        self.program.label(END_INNER)
+        self.program.end_for()
+        self.program.jump(NEXT_OUTER)
+        self.program.label(END_OUTER)
+        self.program.end_for()
+        stack = self.program.execute(self.context)
+        self.assertEqual(stack, [Vector.range(10)])
 
 
 class TestLocalVars(unittest.TestCase):
     def setUp(self):
         self.program = Program()
         self.state = StateDict()
-        self.variables = {}
-        self.context = Context(state=self.state, variables=self.variables)
+        self.names = {}
+        self.context = Context(state=self.state, names=self.names)
 
     def test_simple(self):
         self.program.literal(5)
@@ -537,56 +615,58 @@ class TestLocalVars(unittest.TestCase):
         self.program.local_load(1)
         self.program.add()
         self.program.local_drop(2)
+        self.program.literal([1, 2])
+        self.program.local_push(3)
+        self.program.local_load(0)
+        self.program.local_drop(3)
         stack = self.program.execute(self.context)
-        self.assertEqual(stack, [2, 3])
+        self.assertEqual(stack, [2, 3, 1])
 
 
 class TestFunc(unittest.TestCase):
     def setUp(self):
         self.program = Program()
         self.state = StateDict()
-        self.variables = {}
-        self.context = Context(state=self.state, variables=self.variables)
-        self.func_program = Program()
-        self.func_program.local_load(1)
-        self.func_program.local_load(0)
-        self.func_program.add()
-        self.func_program.local_load(2)
-        self.func_program.add()
-        LABEL1 = self.func_program.new_label()
-        self.func_program.literal('test')
-        self.func_program.lookup()
-        self.func_program.branch_false(LABEL1)
-        self.func_program.literal(1)
-        self.func_program.add()
-        self.func_program.label(LABEL1)
-        LABEL2 = self.func_program.new_label()
-        self.func_program.search(Query('#test'))
-        self.func_program.branch_false(LABEL2)
-        self.func_program.literal(2)
-        self.func_program.mul()
-        self.func_program.label(LABEL2)
-        self.func_program.link()
+        self.names = {}
+        self.context = Context(state=self.state, names=self.names)
         self.program.literal(2)
         self.program.local_push(1)
+        self.program.local_load(0)
         self.program.literal(null)
         self.program.literal(1)
-        self.program.literal(self.func_program)
-        self.program.func('f', ('x', 'y'))
+        END = self.program.new_label()
+        self.program.jump(END)
+        START = self.program.new_label()
+        self.program.label(START)
+        self.program.local_load(1)
+        self.program.local_load(0)
+        self.program.truediv()
+        self.program.local_load(3)
+        self.program.add()
+        LABEL1 = self.program.new_label()
+        self.program.literal('test')
+        self.program.lookup()
+        self.program.branch_false(LABEL1)
+        self.program.literal(1)
+        self.program.add()
+        self.program.label(LABEL1)
+        self.program.exit()
+        self.program.label(END)
+        self.program.func(START, 'f', ('x', 'y'), 1)
         self.program.local_push(1)
 
     def test_declare(self):
-        lvars = []
-        stack = self.program.execute(self.context, lvars=lvars)
+        lnames = []
+        stack = self.program.execute(self.context, lnames=lnames)
         self.assertEqual(len(stack), 0)
-        self.assertEqual(len(lvars), 2)
-        self.assertEqual(lvars[0], 2)
-        function, = lvars[1]
+        self.assertEqual(len(lnames), 2)
+        self.assertEqual(lnames[0], 2)
+        function, = lnames[1]
         self.assertTrue(isinstance(function, Function))
         self.assertEqual(function.__name__, 'f')
         self.assertEqual(function.parameters, ('x', 'y'))
         self.assertEqual(function.defaults, (null, 1))
-        self.assertIs(function.program, self.func_program)
+        self.assertIs(function.program, self.program)
 
     def test_call(self):
         self.program.literal(3)
@@ -594,9 +674,17 @@ class TestFunc(unittest.TestCase):
         self.program.local_load(0)
         self.program.call(2)
         stack = self.program.execute(self.context)
-        self.assertEqual(stack, [9])
+        self.assertEqual(stack, [2.75])
 
-    def test_additional_lvars(self):
+    def test_call_kwarg(self):
+        self.program.literal(4)
+        self.program.literal(3)
+        self.program.local_load(0)
+        self.program.call(0, ('y', 'x'))
+        stack = self.program.execute(self.context)
+        self.assertEqual(stack, [2.75])
+
+    def test_additional_lnames(self):
         self.program.literal(-2)
         self.program.local_push(1)
         self.program.literal(3)
@@ -604,14 +692,14 @@ class TestFunc(unittest.TestCase):
         self.program.local_load(1)
         self.program.call(2)
         stack = self.program.execute(self.context)
-        self.assertEqual(stack, [9])
+        self.assertEqual(stack, [2.75])
 
     def test_default_arg(self):
         self.program.literal(3)
         self.program.local_load(0)
         self.program.call(1)
         stack = self.program.execute(self.context)
-        self.assertEqual(stack, [6])
+        self.assertEqual(stack, [5])
 
     def test_default_arg2(self):
         self.program.local_load(0)
@@ -626,17 +714,50 @@ class TestFunc(unittest.TestCase):
         self.program.local_load(0)
         self.program.call(2)
         stack = self.program.execute(self.context)
-        self.assertEqual(stack, [10])
+        self.assertEqual(stack, [3.75])
 
-    def test_graph(self):
-        node = Node('foo', {'test'})
-        self.context.graph.append(node)
-        self.program.literal(3)
-        self.program.literal(4)
+
+class TestRecursiveFunc(unittest.TestCase):
+    def test_recursive_fib(self):
+        self.program = Program()
+        self.state = StateDict()
+        self.names = {}
+        self.context = Context(state=self.state, names=self.names)
+        self.program.literal(null)
+        END = self.program.new_label()
+        self.program.jump(END)
+        START = self.program.new_label()
+        self.program.label(START)
         self.program.local_load(0)
-        self.program.call(2)
+        self.program.literal(2)
+        self.program.lt()
+        LABEL2 = self.program.new_label()
+        self.program.branch_false(LABEL2)
+        self.program.local_load(0)
+        LABEL1 = self.program.new_label()
+        self.program.jump(LABEL1)
+        self.program.label(LABEL2)
+        self.program.local_load(0)
+        self.program.literal(1)
+        self.program.sub()
+        self.program.local_load(1)
+        self.program.call(1)
+        self.program.local_load(0)
+        self.program.literal(2)
+        self.program.sub()
+        self.program.local_load(1)
+        self.program.call(1)
+        self.program.add()
+        self.program.label(LABEL1)
+        self.program.exit()
+        self.program.label(END)
+        self.program.func(START, 'fib', ('x',))
+        self.program.local_push(1)
+        self.program.literal(10)
+        self.program.local_load(0)
+        self.program.call(1)
         stack = self.program.execute(self.context)
-        self.assertEqual(stack, [18])
+        self.assertEqual(stack, [55])
 
 
 class TestCalls(unittest.TestCase):
@@ -645,39 +766,87 @@ class TestCalls(unittest.TestCase):
         self.state = StateDict()
         self.test_function = unittest.mock.Mock()
         del self.test_function.context_func
+        self.test_function.__name__ = 'test'
+        self.test_function.return_value = Vector(12)
         self.context_function = unittest.mock.Mock(context_func=True)
-        self.variables = {'test': Vector(self.test_function), 'context': Vector(self.context_function)}
-        self.context = Context(state=self.state, variables=self.variables)
+        self.context_function.return_value = Vector(13)
+        self.names = {'test': Vector(self.test_function), 'context': Vector(self.context_function)}
+        self.context = Context(state=self.state, names=self.names)
 
     def test_no_args(self):
-        self.test_function.return_value = Vector(12)
-        self.program.name('test')
+        self.program.local_load(0)
         self.program.call(0)
-        stack = self.program.execute(self.context)
+        stack = self.program.execute(self.context, lnames=[self.test_function])
         self.assertEqual(stack, [12])
         self.test_function.assert_called_once_with()
 
     def test_one_arg(self):
-        self.test_function.return_value = Vector(12)
         self.program.literal(1)
-        self.program.name('test')
+        self.program.local_load(0)
         self.program.call(1)
-        stack = self.program.execute(self.context)
+        stack = self.program.execute(self.context, lnames=[self.test_function])
         self.assertEqual(stack, [12])
         self.test_function.assert_called_once_with(Vector(1))
 
     def test_multiple_args(self):
-        self.test_function.return_value = Vector(12)
         self.program.literal(1)
         self.program.literal(2)
-        self.program.name('test')
+        self.program.local_load(0)
         self.program.call(2)
-        stack = self.program.execute(self.context)
+        stack = self.program.execute(self.context, lnames=[self.test_function])
         self.assertEqual(stack, [12])
         self.test_function.assert_called_once_with(Vector(1), Vector(2))
 
-    def test_fast_multiple_args(self):
-        self.test_function.return_value = Vector(12)
+    def test_kwargs(self):
+        self.program.literal(1)
+        self.program.literal(2)
+        self.program.local_load(0)
+        self.program.call(0, ('x', 'y'))
+        stack = self.program.execute(self.context, lnames=[self.test_function])
+        self.assertEqual(stack, [12])
+        self.test_function.assert_called_once_with(x=Vector(1), y=Vector(2))
+
+    def test_args_kwargs(self):
+        self.program.literal(1)
+        self.program.literal(2)
+        self.program.literal(3)
+        self.program.local_load(0)
+        self.program.call(1, ('x', 'y'))
+        stack = self.program.execute(self.context, lnames=[self.test_function])
+        self.assertEqual(stack, [12])
+        self.test_function.assert_called_once_with(Vector(1), x=Vector(2), y=Vector(3))
+
+    def test_context_func(self):
+        self.program.literal(1)
+        self.program.literal(2)
+        self.program.literal(3)
+        self.program.local_load(0)
+        self.program.call(1, ('x', 'y'))
+        stack = self.program.execute(self.context, lnames=[self.context_function])
+        self.assertEqual(stack, [13])
+        self.context_function.assert_called_once_with(self.context, Vector(1), x=Vector(2), y=Vector(3))
+
+    def test_not_a_func(self):
+        self.program.literal(1)
+        self.program.literal(2)
+        self.program.literal(null)
+        self.program.call(2)
+        stack = self.program.execute(self.context, lnames=[self.test_function, self.context_function])
+        self.assertEqual(stack, [null])
+
+    def test_multiple_funcs(self):
+        self.program.literal(1)
+        self.program.literal(2)
+        self.program.local_load(1)
+        self.program.local_load(0)
+        self.program.compose(2)
+        self.program.call(2)
+        stack = self.program.execute(self.context, lnames=[self.test_function, self.context_function])
+        self.assertEqual(stack, [(12, 13)])
+        self.test_function.assert_called_once_with(Vector(1), Vector(2))
+        self.context_function.assert_called_once_with(self.context, Vector(1), Vector(2))
+
+    def test_call_fast_multiple_args(self):
         self.program.literal(1)
         self.program.literal(2)
         self.program.call_fast(self.test_function, 2)
@@ -685,37 +854,170 @@ class TestCalls(unittest.TestCase):
         self.assertEqual(stack, [12])
         self.test_function.assert_called_once_with(Vector(1), Vector(2))
 
-    def test_kwargs(self):
-        self.test_function.return_value = Vector(12)
+    def test_call_fast_single_arg(self):
         self.program.literal(1)
-        self.program.literal(2)
-        self.program.name('test')
-        self.program.call(0, ('x', 'y'))
+        self.program.call_fast(self.test_function, 1)
         stack = self.program.execute(self.context)
         self.assertEqual(stack, [12])
-        self.test_function.assert_called_once_with(x=Vector(1), y=Vector(2))
+        self.test_function.assert_called_once_with(Vector(1))
 
-    def test_args_kwargs(self):
-        self.test_function.return_value = Vector(12)
-        self.program.literal(1)
-        self.program.literal(2)
-        self.program.literal(3)
-        self.program.name('test')
-        self.program.call(1, ('x', 'y'))
+    def test_call_fast_no_args(self):
+        self.program.call_fast(self.test_function, 0)
         stack = self.program.execute(self.context)
         self.assertEqual(stack, [12])
-        self.test_function.assert_called_once_with(Vector(1), x=Vector(2), y=Vector(3))
+        self.test_function.assert_called_once_with()
 
-    def test_context_func(self):
-        self.context_function.return_value = Vector(12)
+    def test_call_fast_multiple_args_exception(self):
+        self.test_function.side_effect = ValueError("Test error")
         self.program.literal(1)
         self.program.literal(2)
-        self.program.literal(3)
-        self.program.name('context')
-        self.program.call(1, ('x', 'y'))
+        self.program.call_fast(self.test_function, 2)
         stack = self.program.execute(self.context)
-        self.assertEqual(stack, [12])
-        self.context_function.assert_called_once_with(self.context, Vector(1), x=Vector(2), y=Vector(3))
+        self.assertEqual(stack, [null])
+        self.assertEqual(self.context.errors, {'Error calling test: Test error'})
+
+    def test_call_fast_single_arg_exception(self):
+        self.test_function.side_effect = ValueError("Test error")
+        self.program.literal(1)
+        self.program.call_fast(self.test_function, 1)
+        stack = self.program.execute(self.context)
+        self.assertEqual(stack, [null])
+        self.assertEqual(self.context.errors, {'Error calling test: Test error'})
+
+
+class TestImports(unittest.TestCase):
+    def setUp(self):
+        self.program = Program()
+        self.context = Context(state=StateDict(), path=Path('.'))
+        self.test_module = Path(tempfile.mktemp('.fl'))
+        self.test_module.write_text("""
+let x=5 y=10
+""", encoding='utf8')
+        self.circular_module_a = Path(tempfile.mktemp('.fl'))
+        self.circular_module_b = Path(tempfile.mktemp('.fl'))
+        module_a = f"""
+import y from {str(self.circular_module_b)!r}
+let x=5
+"""
+        module_b = f"""
+import x from {str(self.circular_module_a)!r}
+let y=10
+"""
+        self.circular_module_a.write_text(module_a, encoding='utf8')
+        self.circular_module_b.write_text(module_b, encoding='utf8')
+
+    def tearDown(self):
+        if self.test_module.exists():
+            self.test_module.unlink()
+        if self.circular_module_a.exists():
+            self.circular_module_a.unlink()
+        if self.circular_module_b.exists():
+            self.circular_module_b.unlink()
+
+    def test_import_one_name(self):
+        self.program.literal(str(self.test_module))
+        self.program.import_(('x',))
+        self.program.local_load(0)
+        stack = self.program.execute(self.context)
+        self.assertEqual(stack, [5])
+        self.assertEqual(len(self.context.modules), 1)
+
+    def test_import_two_names(self):
+        self.program.literal(str(self.test_module))
+        self.program.import_(('x', 'y'))
+        self.program.local_load(1)
+        self.program.local_load(0)
+        stack = self.program.execute(self.context)
+        self.assertEqual(stack, [5, 10])
+        self.assertEqual(len(self.context.modules), 1)
+
+    def test_import_twice(self):
+        self.program.literal(str(self.test_module))
+        self.program.import_(('x',))
+        self.program.local_load(0)
+        self.program.literal(str(self.test_module))
+        self.program.import_(('y',))
+        self.program.local_load(0)
+        stack = self.program.execute(self.context)
+        self.assertEqual(stack, [5, 10])
+        self.assertEqual(len(self.context.modules), 1)
+
+    def test_import_bad_name(self):
+        self.program.literal(str(self.test_module))
+        self.program.import_(('z',))
+        self.program.local_load(0)
+        stack = self.program.execute(self.context)
+        self.assertEqual(stack, [null])
+        self.assertEqual(len(self.context.modules), 1)
+        self.assertEqual(self.context.errors, {f"Unable to import 'z' from '{self.test_module}'"})
+
+    def test_import_missing_module(self):
+        self.program.literal('this/is/not/a/module.fl')
+        self.program.import_(('x',))
+        self.program.local_load(0)
+        stack = self.program.execute(self.context)
+        self.assertEqual(stack, [null])
+        self.assertEqual(self.context.errors, {"Unable to import from 'this/is/not/a/module.fl'"})
+
+    def test_circular_import(self):
+        self.program.literal(str(self.circular_module_a))
+        self.program.import_(('x', 'y'))
+        self.program.local_load(1)
+        self.program.local_load(0)
+        stack = self.program.execute(self.context)
+        self.assertEqual(stack, [5, 10])
+        self.assertEqual(self.context.errors, {f"Circular import of '{self.circular_module_a}'"})
+
+
+class TestOptimizations(unittest.TestCase):
+    def test_paired_compose(self):
+        program = Program()
+        program.literal(0)
+        program.literal(1)
+        program.literal(2)
+        program.compose(2)
+        program.compose(2)
+        program.optimize()
+        self.assertEqual(str(program), "Literal 0\nLiteral 1\nLiteral 2\nCompose 3")
+
+    def test_compose_append(self):
+        program = Program()
+        program.literal(Node('a'))
+        program.literal(Node('b'))
+        program.literal(Node('c'))
+        program.compose(3)
+        program.append()
+        program.optimize()
+        self.assertEqual(str(program), "LiteralNode !a\nLiteralNode !b\nLiteralNode !c\nAppend 3")
+
+    def test_literal_null_append(self):
+        program = Program()
+        program.literal(Node('a'))
+        program.literal(null)
+        program.append()
+        program.optimize()
+        self.assertEqual(str(program), "LiteralNode !a")
+
+    def test_mul_add(self):
+        program = Program()
+        program.literal(0)
+        program.literal(1)
+        program.literal(2)
+        program.mul()
+        program.add()
+        program.optimize()
+        self.assertEqual(str(program), "Literal 0\nLiteral 1\nLiteral 2\nMulAdd")
+
+    def test_paired_local_drop(self):
+        program = Program()
+        program.literal(1)
+        program.local_push(1)
+        program.literal(2)
+        program.local_push(1)
+        program.local_drop(1)
+        program.local_drop(1)
+        program.optimize()
+        self.assertEqual(str(program), "Literal 1\nLocalPush 1\nLiteral 2\nLocalPush 1\nLocalDrop 2")
 
 
 class TestStack(unittest.TestCase):
@@ -751,6 +1053,17 @@ class TestStack(unittest.TestCase):
         self.assertEqual(len(stack), 1)
         self.assertEqual(stack.pop(), Vector(0))
         self.assertEqual(len(stack), 0)
+        with self.assertRaises(TypeError):
+            stack.pop()
+
+    def test_copy(self):
+        stack = VectorStack()
+        stack.push(Vector(0))
+        stack.push(Vector(1))
+        copy = stack.copy()
+        self.assertIsNot(stack, copy)
+        self.assertEqual(len(stack), len(copy))
+        self.assertEqual(stack.pop_list(len(stack)), copy.pop_list(len(copy)))
 
     def test_drop(self):
         stack = VectorStack()
@@ -765,6 +1078,8 @@ class TestStack(unittest.TestCase):
         self.assertEqual(len(stack), 1)
         self.assertEqual(stack.pop(), Vector(0))
         self.assertEqual(len(stack), 0)
+        with self.assertRaises(TypeError):
+            stack.drop()
 
     def test_realloc(self):
         stack = VectorStack(1)
@@ -793,6 +1108,10 @@ class TestStack(unittest.TestCase):
         self.assertEqual(len(stack), 1)
         self.assertEqual(stack.pop(), Vector(1))
         self.assertEqual(len(stack), 0)
+        with self.assertRaises(TypeError):
+            stack.peek()
+        with self.assertRaises(TypeError):
+            stack.poke(Vector(1))
 
     def test_peek_at_and_poke_at(self):
         stack = VectorStack()
@@ -803,9 +1122,13 @@ class TestStack(unittest.TestCase):
         self.assertEqual(stack.peek_at(0), Vector(2))
         self.assertEqual(stack.peek_at(1), Vector(1))
         self.assertEqual(stack.peek_at(2), Vector(0))
+        with self.assertRaises(TypeError):
+            stack.peek_at(3)
         stack.poke_at(0, Vector(3))
         stack.poke_at(1, Vector(4))
         stack.poke_at(2, Vector(5))
+        with self.assertRaises(TypeError):
+            stack.poke_at(3, Vector(6))
         self.assertEqual(len(stack), 3)
         self.assertEqual(stack.pop(), Vector(3))
         self.assertEqual(stack.pop(), Vector(4))
@@ -818,6 +1141,8 @@ class TestStack(unittest.TestCase):
         stack.push(Vector(1))
         stack.push(Vector(2))
         self.assertEqual(len(stack), 3)
+        with self.assertRaises(TypeError):
+            stack.pop_tuple(4)
         self.assertEqual(stack.pop_tuple(2), (Vector(1), Vector(2)))
         self.assertEqual(len(stack), 1)
         self.assertEqual(stack.pop(), Vector(0))
@@ -829,6 +1154,8 @@ class TestStack(unittest.TestCase):
         stack.push(Vector(1))
         stack.push(Vector(2))
         self.assertEqual(len(stack), 3)
+        with self.assertRaises(TypeError):
+            stack.pop_list(4)
         self.assertEqual(stack.pop_list(2), [Vector(1), Vector(2)])
         self.assertEqual(len(stack), 1)
         self.assertEqual(stack.pop(), Vector(0))
@@ -840,6 +1167,8 @@ class TestStack(unittest.TestCase):
         stack.push(Vector(1))
         stack.push(Vector(2))
         self.assertEqual(len(stack), 3)
+        with self.assertRaises(TypeError):
+            stack.pop_dict(('w', 'x', 'y', 'z'))
         self.assertEqual(stack.pop_dict(('x', 'y')), {'x': Vector(1), 'y': Vector(2)})
         self.assertEqual(len(stack), 1)
         self.assertEqual(stack.pop(), Vector(0))
@@ -847,11 +1176,21 @@ class TestStack(unittest.TestCase):
 
     def test_pop_composed(self):
         stack = VectorStack()
+        self.assertEqual(stack.pop_composed(0), null)
         stack.push(Vector(0))
         stack.push(Vector(1))
         stack.push(Vector(2))
-        self.assertEqual(len(stack), 3)
-        self.assertEqual(stack.pop_composed(2), Vector([1, 2]))
+        stack.push(null)
+        self.assertEqual(len(stack), 4)
+        with self.assertRaises(TypeError):
+            stack.pop_composed(5)
+        self.assertEqual(stack.pop_composed(3), Vector([1, 2]))
         self.assertEqual(len(stack), 1)
-        self.assertEqual(stack.pop(), Vector(0))
+        self.assertEqual(stack.pop_composed(1), Vector(0))
         self.assertEqual(len(stack), 0)
+        stack.push(null)
+        stack.push(null)
+        self.assertEqual(stack.pop_composed(2), null)
+        stack.push(Vector(1))
+        stack.push(Vector('a'))
+        self.assertEqual(stack.pop_composed(2), Vector([1, 'a']))

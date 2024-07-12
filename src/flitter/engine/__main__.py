@@ -4,8 +4,11 @@ Flitter main entry point
 
 import argparse
 import asyncio
+import os
+from pathlib import Path
+import sys
 
-from flitter import configure_logger
+from flitter import configure_logger, __version__, setproctitle
 from .control import EngineController
 
 
@@ -21,7 +24,8 @@ def keyvalue(text):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Flitter")
+    setproctitle('flitter')
+    parser = argparse.ArgumentParser(description=f"Flitter language interpreter, version {__version__}")
     parser.set_defaults(level=None)
     levels = parser.add_mutually_exclusive_group()
     levels.add_argument('--trace', action='store_const', const='TRACE', dest='level', help="Trace logging")
@@ -32,24 +36,35 @@ def main():
     parser.add_argument('--fps', type=int, default=60, help="Target framerate")
     parser.add_argument('--screen', type=int, default=0, help="Default screen number")
     parser.add_argument('--fullscreen', action='store_true', default=False, help="Default to full screen")
-    parser.add_argument('--vsync', action='store_true', default=False, help="Default to winow vsync")
+    parser.add_argument('--vsync', action='store_true', default=False, help="Default to window vsync")
     parser.add_argument('--state', type=str, help="State save/restore file")
     parser.add_argument('--autoreset', type=float, help="Auto-reset state on idle")
-    parser.add_argument('--evalstate', type=float, default=10, help="Partially-evaluate on state after stable period")
+    parser.add_argument('--nosimplify', action='store_true', default=False, help="Disable the language simplifier")
+    parser.add_argument('--simplifystate', type=float, default=10, help="Simplify on state after stable period")
     parser.add_argument('--lockstep', action='store_true', default=False, help="Run clock in non-realtime mode")
-    parser.add_argument('--define', '-D', action='append', default=[], type=keyvalue, dest='defines', help="Define variable for evaluation")
+    parser.add_argument('--define', '-D', action='append', default=[], type=keyvalue, dest='defines', help="Define name for evaluation")
     parser.add_argument('--vmstats', action='store_true', default=False, help="Report VM statistics")
     parser.add_argument('--runtime', type=float, help="Seconds to run for before exiting")
-    parser.add_argument('script', nargs='+', help="Script to execute")
+    parser.add_argument('--offscreen', action='store_true', default=False, help="Swap windows for offscreens")
+    parser.add_argument('--gamma', type=float, default=1, help="Default window gamma correction")
+    parser.add_argument('--opengles', action='store_true', default=False, help="Use OpenGL ES")
+    parser.add_argument('program', nargs='+', help="Program(s) to load")
     args = parser.parse_args()
     logger = configure_logger(args.level)
+    if args.opengles and sys.platform == 'darwin':
+        chrome_path = Path('/Applications/Google Chrome.app/Contents/Frameworks/Google Chrome Framework.framework/Libraries')
+        if chrome_path.exists() and 'DYLD_FALLBACK_LIBRARY_PATH' not in os.environ:
+            os.environ['DYLD_FALLBACK_LIBRARY_PATH'] = str(chrome_path)
+            logger.debug("Re-exec with Chrome ANGLE libraries...")
+            return os.execlp(sys.argv[0], *sys.argv)
+    logger.info("Flitter version {}", __version__)
     controller = EngineController(target_fps=args.fps, screen=args.screen, fullscreen=args.fullscreen, vsync=args.vsync,
-                                  state_file=args.state, autoreset=args.autoreset, state_eval_wait=args.evalstate,
-                                  realtime=not args.lockstep, defined_variables=dict(args.defines), vm_stats=args.vmstats,
-                                  run_time=args.runtime)
-    for script in args.script:
-        controller.load_page(script)
-    controller.switch_to_page(0)
+                                  state_file=args.state, autoreset=args.autoreset, state_simplify_wait=args.simplifystate,
+                                  realtime=not args.lockstep, defined_names=dict(args.defines), vm_stats=args.vmstats,
+                                  run_time=args.runtime, offscreen=args.offscreen, window_gamma=args.gamma, disable_simplifier=args.nosimplify,
+                                  opengl_es=args.opengles)
+    for program in args.program:
+        controller.load_page(program)
 
     try:
         if args.profile:

@@ -1,0 +1,50 @@
+
+-- Texture mapping
+--
+-- Spheres are mapped to a texture with the equirectangular projection. This is
+-- a pretty dumb projection, but it's simple to understand and easy to find
+-- appropriate images.
+--
+-- https://en.wikipedia.org/wiki/Equirectangular_projection
+--
+-- The relative sizes and orbit timings are roughly correct, but the moon is
+-- not really anywhere near this close to Earth.
+--
+-- The star sphere is inverted so that that inside surface of it is rendered.
+-- It is also placed in a separate group so that it can be lit with a single
+-- ambient light.
+
+%pragma tempo 60
+
+import bloom_filter from 'common/filters.fl'
+
+let SIZE=1920;1080
+    days=beat/60
+
+!offscreen
+    !image id=:stars filename='assets/stars.jpg'
+    !image id=:earth filename='assets/earth.jpg'
+    !image id=:earth_night filename='assets/earth-night.jpg'
+    !image id=:earth_reflection filename='assets/earth-reflection.jpg'
+    !image id=:earth_cloudmap filename='assets/earth-cloudmap.jpg'
+    !image id=:earth_cloudmap_transparency filename='assets/earth-cloudmap-transparency.jpg'
+    !image id=:moon filename='assets/moon.jpg'
+
+!window size=SIZE
+    !record filename=OUTPUT
+        @bloom_filter radius=hypot(SIZE)/100
+            !canvas3d samples=4 viewpoint=0;-25;0 up=0;0;1 near=1 far=150
+                !group
+                    !light color=1
+                    !sphere size=100 invert=true texture_id=:stars rotation=0;0;days/365.256
+                !group
+                    !light color=0.01
+                    !transform rotate_z=days/365.256
+                        !light color=1.5 direction=1;0;0
+                    !transform rotate_y=23.44/360 rotate_z=days
+                        !material texture_id=:earth emissive_texture_id=:earth_night roughness_texture_id=:earth_reflection
+                            !sphere segments=64 size=6.371 rotation=0;0;0.25
+                        !material texture_id=:earth_cloudmap transparency_texture_id=:earth_cloudmap_transparency
+                            !sphere segments=64 size=6.421 rotation=0;0;days/14 roughness=0.5
+                    !transform rotate_y=-5.14/360 rotate_z=days/27.322 translate=20;0;0
+                        !sphere segments=64 size=1.7375 texture_id=:moon rotation=0;(5.14-6.68)/360;0

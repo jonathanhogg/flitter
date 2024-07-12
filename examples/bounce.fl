@@ -1,0 +1,73 @@
+
+%pragma tempo 60
+
+import bloom_filter from 'common/filters.fl'
+
+let SIZE=1080;1080
+    NBALLS=150
+    RUN=beat/30
+    RADII=(beta(:radii)[..NBALLS]+0.5)*5
+
+-- Use a counter to provide a variable-rate time value:
+--
+!counter state=:time time=beat rate=bounce(RUN//1+linear(RUN%1*2))
+
+-- We simulate a bunch of randomly size balls with masses proportional to their
+-- area rather than volume to make them feel a bit more like empty plastic balls.
+-- They start with random initial locations and velocities and are constrained
+-- to stay within a box with the use of 6 barrier planes. A constant downward
+-- accelleration simulates the effect of gravity and a drag and collision force
+-- round out the simulation.
+--
+!physics dimensions=3 state=:balls run=RUN time=$(:time) or 0
+    let start=(uniform(:pos;RUN)[..3*NBALLS]-(0.5;0.5;0))*100
+        velocity=normal(:xy;RUN)[..3*NBALLS]*50
+    for i in ..NBALLS
+        !particle id=i radius=RADII[i] mass=RADII[i]**2/10 position=start[i*3..i*3+3] velocity=velocity[i*3..i*3+3]
+    !drag strength=50u
+    !barrier position=0;0;0 normal=0;0;1 restitution=0.95
+    !barrier position=0;0;100 normal=0;0;-1 restitution=0.95
+    !barrier position=-50;0;0 normal=1;0;0 restitution=0.95
+    !barrier position=50;0;0 normal=-1;0;0 restitution=0.95
+    !barrier position=0;-50;0 normal=0;1;0 restitution=0.95
+    !barrier position=0;50;0 normal=0;-1;0 restitution=0.95
+    !constant acceleration=0;0;-200
+    !collision strength=500 power=2
+
+!window size=SIZE colorbits=16
+    !record filename=(OUTPUT if round(60*beat/tempo*fps) == 9)
+        @bloom_filter radius=hypot(SIZE[..2])/100
+            !canvas3d samples=4 focus=0;0;50 camera_id=:cam far=1000 fog_color=0 fog_min=100 fog_max=1000 max_lights=NBALLS+5
+                !transform rotate_z=beat/20
+                    !camera id=:cam viewpoint=150 up=0;0;1 fov=60/360
+                -- A bright spotlight provides the main source of light
+                !light color=4.5M position=1000 focus=0;0;5 outer=5/360
+                !material color=0.025
+                    !cylinder size=5000;5000;0.01 position=0;0;-1
+                !group
+                    -- We put an ambient light in the group with the balls so that
+                    -- they have a bit of light coming "through" them
+                    !light color=0.3
+                    !material roughness=0.5
+                        for i in ..NBALLS
+                            let color=hsv(uniform(:hue)[i];0.95;1)
+                            !transform translate=$(:balls;i)
+                                !sphere position=0 size=RADII[i] color=color
+                !group
+                    -- Two boxes, one larger and one inverted create the effect of a
+                    -- glass container
+                    !material transparency=0.99 color=1 roughness=0.15
+                        !transform translate=0;0;50
+                            !box size=100 invert=true
+                            !box size=102
+                    -- We also put a light per ball in this group so that they shine
+                    -- on the walls but not on the balls themselves
+                    for i in ..NBALLS
+                        let color=hsv(uniform(:hue)[i];0.95;1)
+                        !transform translate=$(:balls;i)
+                            !light position=0 falloff=1;0;1;0 color=color radius=RADII[i]
+                    -- These additional directional lights are just here to create some
+                    -- reflections on the glass box that lend it more presence
+                    for x in (-1;1)
+                        for y in (-1;1)
+                            !light color=0.01 direction=x;y;0.5+0.1*y-0.05*x

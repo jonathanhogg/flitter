@@ -1,0 +1,73 @@
+
+name: CI test
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+    - ".github/workflows/ci-test.yml"
+    - "pyproject.toml"
+    - "setup.py"
+    - "src/**/*"
+    - "tests/**/*"
+    - "docs/**/*.fl"
+    - "examples/**/*"
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  build-and-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+        os: [ubuntu-latest, windows-latest, macos-13, macos-14]
+        include:
+        - os: macos-13
+          pytest_options: "--ignore=tests/test_engine.py"
+        - os: macos-14
+          pytest_options: "--ignore=tests/test_engine.py"
+    runs-on: ${{ matrix.os }}
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Upgrade pip
+      run: |
+        python -m pip install --upgrade pip
+    - name: Install Linux build dependencies
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        sudo apt-get update
+        sudo apt-get install libasound2-dev libjack-jackd2-dev
+    - name: Build and install package
+      run: |
+        python -m pip install .
+    - name: Install pytest
+      run: |
+        python -m pip install pytest
+    - name: Install Linux Mesa OpenGL drivers and Microsoft fonts
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" | sudo debconf-set-selections
+        sudo apt-get install -y mesa-utils xvfb libfontconfig1 ttf-mscorefonts-installer
+        python -m pip install pytest-xvfb
+    - name: Install Windows Mesa OpenGL drivers
+      if: matrix.os == 'windows-latest'
+      shell: cmd
+      run: |
+        curl -L --output mesa.7z --url https://github.com/pal1000/mesa-dist-win/releases/download/24.0.6/mesa3d-24.0.6-release-msvc.7z
+        "C:\Program Files\7-Zip\7z.exe" x mesa.7z
+        .\systemwidedeploy.cmd 1
+      working-directory: build
+    - name: Run all tests
+      run: |
+        pytest ${{ matrix.pytest_options }} tests
+    - name: Store the test generated images
+      if: ${{ failure() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: test_images-${{ matrix.os }}-${{ matrix.python-version }}
+        path: build/test_images/

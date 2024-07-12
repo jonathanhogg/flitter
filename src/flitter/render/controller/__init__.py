@@ -49,7 +49,7 @@ class Controller:
             try:
                 driver_module = importlib.import_module(f'.{driver}', __package__)
                 driver_class = driver_module.get_driver_class()
-            except (ImportError, NameError) as exc:
+            except (ImportError, NameError):
                 logger.warning("Unable to import controller driver: {}", driver)
                 driver_class = None
             self.DRIVER_CACHE[driver] = driver_class
@@ -85,7 +85,7 @@ class Controller:
             if not self.driver.handle_node(child):
                 unknown.add(child.kind)
         for kind in unknown.difference(self.unknown):
-            logger.warning("Unexpected '{}' node in controller", kind)
+            logger.warning("Unhandled node in controller: {!r}", child)
         self.purge()
         self.unknown = unknown
         self.controls = controls

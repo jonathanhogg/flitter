@@ -9,10 +9,18 @@ from loguru import logger
 
 try:
     import pyximport
-    pyximport.install()
+    pyximport.install(language_level=3)
 except ImportError:
     pass
 
+try:
+    from setproctitle import setproctitle
+except ImportError:
+    def setproctitle(title):
+        pass
+
+
+__version__ = "1.0.0b14"
 
 LOGGING_LEVEL = "SUCCESS"
 LOGGING_FORMAT = "{time:HH:mm:ss.SSS} {process}:{extra[shortname]:16s} | <level>{level}: {message}</level>"
@@ -46,7 +54,7 @@ def configure_logger(level=None):
         level = LOGGING_LEVEL
     else:
         LOGGING_LEVEL = level
-    logger.configure(handlers=[dict(sink=sys.stderr, format=LOGGING_FORMAT, level=level, enqueue=True)],
+    logger.configure(handlers=[dict(sink=sys.stderr, format=LOGGING_FORMAT, level=level)],
                      patcher=lambda record: record['extra'].update(shortname=record['name'].removeprefix('flitter')))
     LoguruInterceptHandler.install()
     return logger

@@ -1,0 +1,77 @@
+
+name: CI coverage
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+    - ".github/workflows/ci-coverage.yml"
+    - "scripts/coverage_badge.py"
+    - "pyproject.toml"
+    - "setup.py"
+    - "src/**/*"
+    - "tests/**/*"
+    - "docs/**/*.fl"
+    - "examples/**/*"
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  build-and-run-test-coverage:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+    - name: Install dependencies
+      run: |
+        echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" | sudo debconf-set-selections
+        sudo apt-get install -y mesa-utils xvfb libfontconfig1 ttf-mscorefonts-installer
+        python -m pip install --upgrade pip setuptools
+        python -m pip install cython coverage pytest
+    - name: Build in place with coverage analysis enabled
+      run: |
+        pip3 install --editable .
+      env:
+        FLITTER_BUILD_COVERAGE: 1
+    - name: Run tests with coverage
+      run: |
+        xvfb-run coverage run --source=src -m pytest tests --durations=5
+    - name: Generate coverage reports
+      id: report
+      run: |
+        coverage report --sort=-miss
+        coverage json
+        python scripts/coverage_badge.py >> "${GITHUB_OUTPUT}"
+        coverage html
+    - name: Upload report
+      uses: actions/upload-artifact@v4
+      with:
+        name: htmlcov
+        path: htmlcov/
+    - name: Generate coverage percent badge
+      uses: emibcn/badge-action@v2.0.3
+      with:
+        label: 'CI coverage'
+        label-color: '333'
+        status: ${{ steps.report.outputs.status }}
+        color: ${{ steps.report.outputs.color }}
+        path: badge.svg
+    - name: Generate coverage failing badge
+      if: failure()
+      uses: emibcn/badge-action@v2.0.3
+      with:
+        label: 'CI coverage'
+        label-color: '333'
+        status: 'failing'
+        color: 'red'
+        path: badge.svg
+    - name: Update badge gist
+      if: always()
+      uses: stellarhub/push-gist-action@v1
+      with:
+        token: ${{ secrets.GIST }}
+        gist_id: b7237d8b4e7ff50c3f284cb939e949d0
+        file_path: badge.svg

@@ -2,10 +2,15 @@
 Video scene node
 """
 
+from av.video.reformatter import VideoReformatter
+
 from . import Shader, COLOR_FORMATS
 from ...cache import SharedCache
-from .glconstants import GL_SRGB8
+from .glconstants import GL_SRGB8_ALPHA8
 from .glsl import TemplateLoader
+
+
+Reformatter = VideoReformatter()
 
 
 class Video(Shader):
@@ -62,24 +67,24 @@ class Video(Shader):
             depth = COLOR_FORMATS[colorbits]
             self._texture = self.glctx.texture((self.width, self.height), 4, dtype=depth.moderngl_dtype)
             self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
-            self._frame0_texture = self.glctx.texture((self.width, self.height), 3, internal_format=GL_SRGB8)
-            self._frame1_texture = self.glctx.texture((self.width, self.height), 3, internal_format=GL_SRGB8)
+            self._frame0_texture = self.glctx.texture((self.width, self.height), 4, internal_format=GL_SRGB8_ALPHA8)
+            self._frame1_texture = self.glctx.texture((self.width, self.height), 4, internal_format=GL_SRGB8_ALPHA8)
             self._colorbits = colorbits
         if frame0 is self._frame1 or frame1 is self._frame0:
             self._frame0_texture, self._frame1_texture = self._frame1_texture, self._frame0_texture
             self._frame0, self._frame1 = self._frame1, self._frame0
         if frame0 is not self._frame0:
-            rgb_frame = frame0.to_rgb()
+            rgb_frame = Reformatter.reformat(frame0, format='rgba')
             plane = rgb_frame.planes[0]
-            data = rgb_frame.to_ndarray().data if plane.line_size > plane.width * 3 else plane
+            data = rgb_frame.to_ndarray().data if plane.line_size > plane.width * 4 else plane
             self._frame0_texture.write(memoryview(data))
             self._frame0 = frame0
         if frame1 is None:
             self._frame1 = None
         elif frame1 is not self._frame1:
-            rgb_frame = frame1.to_rgb()
+            rgb_frame = Reformatter.reformat(frame1, format='rgba')
             plane = rgb_frame.planes[0]
-            data = rgb_frame.to_ndarray().data if plane.line_size > plane.width * 3 else plane
+            data = rgb_frame.to_ndarray().data if plane.line_size > plane.width * 4 else plane
             self._frame1_texture.write(memoryview(data))
             self._frame1 = frame1
         interpolate = node.get('interpolate', 1, bool, False)

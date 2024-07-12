@@ -1,0 +1,5 @@
+
+!window size=1280;720
+    !record filename=OUTPUT
+        !canvas font_family='Arial'
+            !text text="Hello world!" font_size=100 point=640;360 color=1

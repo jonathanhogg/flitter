@@ -9,6 +9,7 @@ import pickle
 
 from loguru import logger
 
+from .. import setproctitle
 from ..cache import SharedCache
 from ..clock import BeatCounter, system_clock
 from ..language.vm import log_vm_stats
@@ -18,20 +19,24 @@ from ..render import get_renderer
 
 class EngineController:
     def __init__(self, target_fps=60, screen=0, fullscreen=False, vsync=False, state_file=None,
-                 autoreset=None, state_eval_wait=0, realtime=True, defined_variables=None, vm_stats=False,
-                 run_time=None):
+                 autoreset=None, state_simplify_wait=0, realtime=True, defined_names=None, vm_stats=False,
+                 run_time=None, offscreen=False, window_gamma=1, disable_simplifier=False, opengl_es=False):
         self.default_fps = target_fps
         self.target_fps = target_fps
         self.realtime = realtime
         self.screen = screen
         self.fullscreen = fullscreen
         self.vsync = vsync
+        self.offscreen = offscreen
+        self.window_gamma = window_gamma
+        self.opengl_es = opengl_es
         self.autoreset = autoreset
-        self.state_eval_wait = state_eval_wait
-        if defined_variables:
-            self.defined_variables = {key: Vector.coerce(value) for key, value in defined_variables.items()}
+        self.disable_simplifier = disable_simplifier
+        self.state_simplify_wait = 0 if self.disable_simplifier else state_simplify_wait / 2
+        if defined_names:
+            self.defined_names = {key: Vector.coerce(value) for key, value in defined_names.items()}
         else:
-            self.defined_variables = {}
+            self.defined_names = {}
         self.vm_stats = vm_stats
         self.run_time = run_time
         self.state_file = Path(state_file) if state_file is not None else None
@@ -44,6 +49,9 @@ class EngineController:
         self.global_state_dirty = False
         self.state = None
         self.state_timestamp = None
+        self.state_generation0 = None
+        self.state_generation1 = None
+        self.state_generation2 = None
         self.renderers = {}
         self.counter = BeatCounter()
         self.pages = []
@@ -51,29 +59,38 @@ class EngineController:
         self.current_page = None
         self.current_path = None
         self._references = {}
+        self._modules = {}
 
     def load_page(self, filename):
         page_number = len(self.pages)
-        path = SharedCache[filename]
+        path = SharedCache.get_with_root(filename, '.')
         self.pages.append((path, self.global_state.setdefault(str(path), StateDict())))
         logger.info("Added code page {}: {}", page_number, path)
+        if page_number == 0:
+            self.switch_to_page(0)
 
     def switch_to_page(self, page_number):
         if self.pages is not None and 0 <= page_number < len(self.pages):
             path, state = self.pages[page_number]
             self.state = state
             self.state_timestamp = system_clock()
+            self.state_generation0 = set()
+            self.state_generation1 = set()
+            self.state_generation2 = set()
             self.current_path = path
             self.current_page = page_number
             SharedCache.set_root(self.current_path)
             logger.info("Switched to page {}: {}", page_number, self.current_path)
             if counter_state := self.state['_counter']:
                 tempo, quantum, start = counter_state
-                self.counter.update(tempo, int(quantum), start)
+                self.counter.reset(tempo, int(quantum), start)
                 logger.info("Restore counter at beat {:.1f}, tempo {:.1f}, quantum {}", self.counter.beat, self.counter.tempo, self.counter.quantum)
+            else:
+                self.counter.reset()
             for renderers in self.renderers.values():
                 for renderer in renderers:
                     renderer.purge()
+            setproctitle(f'flitter {self.current_path}')
 
     def has_next_page(self):
         return self.current_page < len(self.pages) - 1
@@ -89,12 +106,12 @@ class EngineController:
         if self.current_page > 0:
             self.switch_page = self.current_page - 1
 
-    async def update_renderers(self, graph, **kwargs):
+    async def update_renderers(self, root, **kwargs):
         nodes_by_kind = {}
-        for node in graph.children:
+        for node in root.children:
             nodes_by_kind.setdefault(node.kind, []).append(node)
         tasks = []
-        references = {}
+        references = dict(self._references)
         for kind, nodes in nodes_by_kind.items():
             renderer_class = get_renderer(kind)
             if renderer_class is not None:
@@ -122,100 +139,117 @@ class EngineController:
             raise
         return references
 
-    def handle_pragmas(self, pragmas):
+    def handle_pragmas(self, pragmas, timestamp):
         if '_counter' not in self.state:
             tempo = pragmas.get('tempo', null).match(1, float, 120)
+            if tempo != self.counter.tempo:
+                self.counter.set_tempo(tempo, timestamp)
             quantum = pragmas.get('quantum', null).match(1, float, 4)
-            self.counter.update(tempo, quantum, system_clock())
-            self.state['_counter'] = self.counter.tempo, self.counter.quantum, self.counter.start
-            logger.info("Start counter, tempo {}, quantum {}", self.counter.tempo, self.counter.quantum)
+            if quantum != self.counter.quantum:
+                self.counter.set_quantum(quantum, timestamp)
         self.target_fps = pragmas.get('fps', null).match(1, float, self.default_fps)
 
     def reset_state(self):
         self.state.clear()
         self.state_timestamp = None
+        self.state_generation0 = set()
+        self.state_generation1 = set()
+        self.state_generation2 = set()
         self.global_state_dirty = True
-
-    def sample(self, texture_id, coord, default=null):
-        if len(coord) != 2 \
-                or (scene_node := self._references.get(str(texture_id))) is None \
-                or (data := scene_node.texture_data) is None:
-            return default
-        height, width, _ = data.shape
-        x = int(coord[0] * width)
-        y = int(coord[1] * height)
-        if x < 0 or x >= width or y < 0 or y >= height:
-            return default
-        color = data[y, x]
-        if data.dtype == 'uint8':
-            color = color / 255
-        return Vector(color)
 
     async def run(self):
         try:
             frames = []
-            start_time = frame_time = system_clock()
+            start_time = frame_time = system_clock() if self.realtime else self.counter.start
             last = self.counter.beat_at_time(frame_time)
             dump_time = frame_time
             execution = render = housekeeping = 0
+            slow_frame = False
             performance = 1
+            run_program = current_program = errors = logs = None
+            simplify_state_time = system_clock() + self.state_simplify_wait
             gc.disable()
-            run_program = current_program = None
-            errors = set()
-            logs = set()
-            while self.run_time is None or frame_time - start_time < self.run_time:
+            while self.run_time is None or int(round((frame_time - start_time) * self.target_fps)) < int(round(self.run_time * self.target_fps)):
                 housekeeping -= system_clock()
 
                 beat = self.counter.beat_at_time(frame_time)
                 delta = beat - last
                 last = beat
                 names = {'beat': beat, 'quantum': self.counter.quantum, 'tempo': self.counter.tempo,
-                         'delta': delta, 'clock': frame_time, 'performance': performance,
-                         'fps': self.target_fps, 'realtime': self.realtime,
-                         'screen': self.screen, 'fullscreen': self.fullscreen, 'vsync': self.vsync,
-                         'sample': self.sample}
+                         'delta': delta, 'clock': frame_time, 'performance': performance, 'slow_frame': slow_frame,
+                         'fps': self.target_fps, 'realtime': self.realtime, 'window_gamma': self.window_gamma,
+                         'screen': self.screen, 'fullscreen': self.fullscreen, 'vsync': self.vsync, 'offscreen': self.offscreen,
+                         'opengl_es': self.opengl_es}
 
-                program = self.current_path.read_flitter_program(variables=self.defined_variables, undefined=names)
+                program = self.current_path.read_flitter_program(static=self.defined_names, dynamic=names, simplify=not self.disable_simplifier)
                 if program is not current_program:
                     level = 'SUCCESS' if current_program is None else 'INFO'
                     logger.log(level, "Loaded page {}: {}", self.current_page, self.current_path)
                     run_program = current_program = program
-
-                if current_program is not None and run_program is current_program and self.state_eval_wait and self.state_timestamp is not None and \
-                        system_clock() > self.state_timestamp + self.state_eval_wait:
-                    simplify_time = -system_clock()
-                    top = current_program.top.simplify(state=self.state, undefined=names)
-                    now = system_clock()
-                    simplify_time += now
-                    compile_time = -now
-                    run_program = top.compile()
-                    run_program.set_path(current_program.path)
-                    run_program.set_top(top)
-                    compile_time += system_clock()
-                    logger.debug("Simplified on state to {} instructions in -/{:.1f}/{:.1f}ms",
-                                 len(run_program), simplify_time*1000, compile_time*1000)
+                    self.handle_pragmas(program.pragmas, frame_time)
+                    errors = set()
+                    logs = set()
+                    self.state_generation0 ^= self.state_generation1
+                    self.state_generation1 = self.state_generation2
+                    self.state_generation2 = set()
+                    simplify_state_time = system_clock() + self.state_simplify_wait
 
                 if self.state.changed:
+                    if self.state_simplify_wait:
+                        changed_keys = self.state.changed_keys - self.state_generation0
+                        self.state_generation0 ^= changed_keys
+                        self.state_generation0 &= self.state.keys()
+                        if changed_keys:
+                            generation1to0 = self.state_generation1 & changed_keys
+                            changed_keys -= generation1to0
+                            self.state_generation1 -= generation1to0
+                            generation2to0 = self.state_generation2 & changed_keys
+                            if generation2to0:
+                                if run_program is not current_program:
+                                    run_program = current_program
+                                    logger.debug("Undo simplification on state; original program with {} instructions", len(run_program))
+                                self.state_generation1 ^= self.state_generation2 - generation2to0
+                                self.state_generation2 = set()
+                                simplify_state_time = system_clock() + self.state_simplify_wait
                     self.global_state_dirty = True
                     self.state_timestamp = system_clock()
                     self.state.clear_changed()
-                    if run_program is not current_program:
-                        logger.debug("Undo partial-evaluation on state")
-                        run_program = current_program
+
+                if self.state_simplify_wait and system_clock() > simplify_state_time:
+                    if current_program is not None and self.state_generation1:
+                        if self.state_generation1:
+                            self.state_generation2 ^= self.state_generation1
+                            simplify_state = self.state.with_keys(self.state_generation2)
+                            simplify_time = -system_clock()
+                            top = current_program.top.simplify(state=simplify_state, dynamic=names)
+                            now = system_clock()
+                            simplify_time += now
+                            compile_time = -now
+                            run_program = top.compile(initial_lnames=tuple(names))
+                            run_program.set_path(current_program.path)
+                            run_program.set_top(top)
+                            compile_time += system_clock()
+                            logger.debug("Simplified on {} static state keys to {} instructions in -/{:.1f}/{:.1f}ms",
+                                         len(self.state_generation2), len(run_program), simplify_time*1000, compile_time*1000)
+                    self.state_generation1 = self.state_generation0
+                    self.state_generation0 = set()
+                    simplify_state_time = system_clock() + self.state_simplify_wait
 
                 now = system_clock()
                 housekeeping += now
                 execution -= now
                 if run_program is not None:
-                    context = run_program.run(state=self.state, variables=names, record_stats=self.vm_stats)
+                    context = Context(names={key: Vector.coerce(value) for key, value in names.items()},
+                                      state=self.state, references=self._references, modules=self._modules)
+                    run_program.run(context, record_stats=self.vm_stats)
                 else:
                     context = Context()
-                self.handle_pragmas(context.pragmas)
-                new_errors = context.errors.difference(errors)
+
+                new_errors = context.errors.difference(errors) if errors is not None else context.errors
                 errors = context.errors
                 for error in new_errors:
-                    logger.error("Evaluation error: {}", error)
-                new_logs = context.logs.difference(logs)
+                    logger.error("Execution error: {}", error)
+                new_logs = context.logs.difference(logs) if logs is not None else context.logs
                 logs = context.logs
                 for log in new_logs:
                     print(log)
@@ -223,7 +257,7 @@ class EngineController:
                 execution += now
                 render -= now
 
-                self._references = await self.update_renderers(context.graph, **names)
+                self._references = await self.update_renderers(context.root, **names)
 
                 now = system_clock()
                 render += now
@@ -231,6 +265,8 @@ class EngineController:
 
                 del context
                 SharedCache.clean()
+
+                self.state['_counter'] = self.counter.tempo, self.counter.quantum, self.counter.start
 
                 if self.autoreset and self.state_timestamp is not None and system_clock() > self.state_timestamp + self.autoreset:
                     logger.debug("Auto-reset state")
@@ -269,8 +305,10 @@ class EngineController:
                     wait_time = 0.001
                     performance = 1
                 if wait_time > 0:
+                    slow_frame = False
                     await asyncio.sleep(wait_time)
                 else:
+                    slow_frame = True
                     logger.trace("Slow frame - {:.0f}ms", frame_period * 1000)
                     await asyncio.sleep(0)
                     frame_time = system_clock()
@@ -282,6 +320,7 @@ class EngineController:
                                 fps, 1000 * execution / nframes, 1000 * render / nframes, 1000 * housekeeping / nframes, performance)
                     frames = frames[-1:]
                     execution = render = housekeeping = 0
+                    logger.trace("State dictionary size: {} keys", len(self.state))
                     if run_program is not None:
                         logger.trace("VM stack size: {:d}", run_program.stack.size)
 

@@ -1,0 +1,30 @@
+
+let SIZE=2000;500
+    DIAGRAM=SIZE/(4;1)
+    SIDE=min(DIAGRAM)*0.6
+
+!window size=SIZE
+    !canvas
+        !path
+            !rect size=SIZE
+            !fill color=1
+    !record filename=OUTPUT keep_alpha=true
+        !canvas color=0
+            for i;easing in zip(..4, linear;quad;cubic;snap)
+                let x=i%4 y=0
+                !group translate=(x;y)*DIAGRAM+(DIAGRAM-SIDE)/2 scale=SIDE/100
+                    !transform translate=0;-10
+                        !path
+                            !rect point=0 size=100
+                            !fill color=1
+                            !stroke color=0.75 stroke_width=1
+                        !path
+                            !line points=(x;1-easing(x))*100 for x in 0..1.01|0.01
+                            !stroke stroke_width=2
+                        !font font_family='Georgia' font_slant=:italic font_size=10
+                            !text point=-10;0 text="1"
+                            !text point=-10;100 text="0"
+                            !text point=0;110 text="0"
+                            !text point=100;110 text="1"
+                        !font font_family='Menlo' font_weight=:bold font_size=12
+                            !text point=50;125 text=easing;'(x)'

@@ -1,0 +1,29 @@
+
+let SIZE=1080
+    R=1
+
+import bloom_filter from 'common/filters.fl'
+
+!window size=SIZE
+    !record filename=OUTPUT
+        @bloom_filter radius=hypot(SIZE[..2])/100
+            !canvas3d samples=4 viewpoint=0;-30;20 focus=0 up=0;0;1 fov_ref=:narrow
+                !transform rotate_z=beat/30+0.125
+                    !material color=0.5 roughness=0.25
+                        !cylinder size=100;100;0.1
+                        !box size=10;10;5 position=0;0;2.5
+                        !cone size=5;5;8 position=0;20;4
+                        !cone size=5;5;8 position=0;-20;4
+                    !material color=1 roughness=0.1
+                        !transform translate=0;0;10 rotate_y=0.05*sin(beat/10-0.125)
+                            !material emissive=0;2;0
+                                !cylinder start=-20;0;0 end=20;0;0 radius=R
+                                !sphere position=-20;0;0 size=R
+                                !sphere position=20;0;0 size=R
+                            !light start=-20;0;0 end=20;0;0 radius=R color=0;20;0
+                        !transform translate=0;-20;10
+                            !sphere size=R emissive=2;0;0
+                            !light position=0 color=50;0;00 radius=R
+                        !transform translate=0;20;10
+                            !sphere size=R emissive=0;0;2
+                            !light position=0 color=0;0;50 radius=R

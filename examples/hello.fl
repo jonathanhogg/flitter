@@ -1,8 +1,0 @@
--- Hello world!
-
-let SIZE=1280;720
-
-!window size=SIZE
-    !canvas size=SIZE
-        !group font="Helvetica" font_size=100 color=sine(beat/2)
-            !text point=SIZE/2 text="Hello world!"

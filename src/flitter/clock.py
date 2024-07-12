@@ -53,7 +53,9 @@ class BeatCounter:
     def phase(self):
         return self.beat_at_time(system_clock()) % self._quantum
 
-    def update(self, tempo, quantum, start):
+    def reset(self, tempo=120, quantum=4, start=None):
+        if start is None:
+            start = system_clock()
         self._start = start
         self._period = 60 / tempo
         self._quantum = quantum

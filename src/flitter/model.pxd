@@ -1,23 +1,29 @@
-# cython: language_level=3, profile=True
 
 import cython
 
+from libc.stdint cimport int64_t, uint64_t
+
 
 cdef class Vector:
-    cdef int length
-    cdef list objects
+    cdef int64_t length
+    cdef tuple objects
     cdef double* numbers
     cdef double[16] _numbers
-    cdef unsigned long long _hash
+    cdef uint64_t _hash
 
     @staticmethod
     cdef Vector _coerce(object other)
+
     @staticmethod
     cdef Vector _copy(Vector other)
+
     @staticmethod
     cdef Vector _compose(list vectors)
 
-    cdef int allocate_numbers(self, int n) except -1
+    @staticmethod
+    cdef Vector _symbol(str symbol)
+
+    cdef int64_t allocate_numbers(self, int64_t n) except -1
     cdef void deallocate_numbers(self) noexcept
     cpdef Vector intern(self)
     cdef void fill_range(self, Vector startv, Vector stopv, Vector stepv)
@@ -25,13 +31,15 @@ cdef class Vector:
     cdef bint as_bool(self)
     cdef double as_double(self) noexcept
     cdef str as_string(self)
-    cdef unsigned long long hash(self, bint floor_floats)
-    cpdef object match(self, int n=?, type t=?, default=?)
-    cpdef Vector copynodes(self, bint parented=?)
+    cdef uint64_t hash(self, bint floor_floats)
+    cpdef object match(self, int64_t n=?, type t=?, default=?)
     cdef str repr(self)
     cdef Vector neg(self)
-    cdef Vector pos(self) noexcept
+    cdef Vector pos(self)
     cdef Vector abs(self)
+    cdef Vector ceil(self)
+    cdef Vector floor(self)
+    cpdef Vector fract(self)
     cdef Vector add(self, Vector other)
     cpdef Vector mul_add(self, Vector left, Vector right)
     cdef Vector sub(self, Vector other)
@@ -46,13 +54,14 @@ cdef class Vector:
     cdef Vector ge(self, Vector other)
     cdef Vector lt(self, Vector other)
     cdef Vector le(self, Vector other)
-    cdef int compare(self, Vector other) except -2
-    cdef Vector slice(self, Vector index)
-    cdef Vector item(self, int i)
+    cpdef int64_t compare(self, Vector other) noexcept
+    cpdef Vector slice(self, Vector index)
+    cpdef Vector item(self, int64_t i)
     cpdef double squared_sum(self) noexcept
     cpdef Vector normalize(self)
     cpdef Vector dot(self, Vector other)
     cpdef Vector cross(self, Vector other)
+    cpdef Vector clamp(self, Vector minimum, Vector maximum)
     cpdef Vector concat(self, Vector other)
 
 
@@ -65,8 +74,10 @@ cdef Vector minusone_
 cdef class Matrix33(Vector):
     @staticmethod
     cdef Matrix33 _translate(Vector v)
+
     @staticmethod
     cdef Matrix33 _scale(Vector v)
+
     @staticmethod
     cdef Matrix33 _rotate(double turns)
 
@@ -78,66 +89,69 @@ cdef class Matrix33(Vector):
 
 cdef class Matrix44(Vector):
     @staticmethod
-    cdef Matrix44 _project(double aspect_ratio, double fov, double near, double far)
+    cdef Matrix44 _project(double xgradient, double ygradient, double near, double far)
+
     @staticmethod
     cdef Matrix44 _ortho(double aspect_ratio, double width, double near, double far)
+
     @staticmethod
     cdef Matrix44 _look(Vector from_position, Vector to_position, Vector up_direction)
+
     @staticmethod
     cdef Matrix44 _translate(Vector v)
+
     @staticmethod
     cdef Matrix44 _scale(Vector v)
+
     @staticmethod
     cdef Matrix44 _rotate_x(double turns)
+
     @staticmethod
     cdef Matrix44 _rotate_y(double turns)
+
     @staticmethod
     cdef Matrix44 _rotate_z(double turns)
+
     @staticmethod
     cdef Matrix44 _rotate(Vector v)
+
+    @staticmethod
+    cdef Matrix44 _shear_x(Vector v)
+
+    @staticmethod
+    cdef Matrix44 _shear_y(Vector v)
+
+    @staticmethod
+    cdef Matrix44 _shear_z(Vector v)
 
     cdef Matrix44 mmul(self, Matrix44 b)
     cdef Vector vmul(self, Vector b)
     cpdef Matrix44 inverse(self)
     cpdef Matrix44 transpose(self)
+    cpdef Matrix33 inverse_transpose_matrix33(self)
     cpdef Matrix33 matrix33(self)
 
 
-cdef class Query:
-    cdef str kind
-    cdef frozenset tags
-    cdef bint strict
-    cdef bint stop
-    cdef bint first
-    cdef Query subquery, altquery
-
-
 cdef class Node:
-    cdef object __weakref__
     cdef readonly str kind
     cdef set _tags
     cdef dict _attributes
     cdef bint _attributes_shared
-    cdef object _parent
-    cdef Node next_sibling, first_child, last_child
+    cdef tuple _children
 
-    cdef unsigned long long hash(self)
+    cdef uint64_t hash(self)
     cpdef Node copy(self)
     cpdef void add_tag(self, str tag)
-    cpdef void remove_tag(self, str tag)
+    cpdef void set_attribute(self, str name, Vector value)
     cpdef void append(self, Node node)
-    cdef void append_vector(self, Vector nodes, bint copy)
-    cpdef void insert(self, Node node)
-    cpdef void remove(self, Node node)
-    cdef bint _select(self, Query query, list nodes, bint first)
     cdef bint _equals(self, Node other)
     cpdef object get(self, str name, int n=?, type t=?, object default=?)
     cdef Vector get_fvec(self, str name, int n, Vector default)
     cdef double get_float(self, str name, double default)
-    cdef int get_int(self, str name, int default)
+    cdef int64_t get_int(self, str name, int64_t default)
     cdef bint get_bool(self, str name, bint default)
     cdef str get_str(self, str name, str default)
-    cdef str repr(self)
+    cdef void repr(self, list lines, int indent)
 
 
 cdef class StateDict:
@@ -150,12 +164,16 @@ cdef class StateDict:
 
 
 cdef class Context:
-    cdef readonly dict variables
-    cdef readonly set unbound
-    cdef readonly dict pragmas
+    cdef readonly dict names
+    cdef readonly set captures
     cdef readonly StateDict state
-    cdef readonly Node graph
+    cdef readonly Node root
     cdef readonly object path
     cdef readonly Context parent
+    cdef readonly dict modules
+    cdef readonly dict exports
     cdef readonly set errors
     cdef readonly set logs
+    cdef readonly dict references
+    cdef readonly object stack
+    cdef readonly object lnames
