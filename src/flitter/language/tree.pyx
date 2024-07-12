@@ -149,7 +149,7 @@ cdef class Export(Expression):
         return self
 
     def __repr__(self):
-        return f'Export({self.explicits!r})'
+        return f'Export({self.static_exports!r})'
 
 
 cdef class Import(Expression):
