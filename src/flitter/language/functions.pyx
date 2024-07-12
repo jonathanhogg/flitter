@@ -210,7 +210,7 @@ def read_csv(Context context, Vector filename, Vector row_number):
     return null_
 
 
-def length(Vector xs not None):
+def lenv(Vector xs not None):
     cdef Vector ys = Vector.__new__(Vector)
     ys.allocate_numbers(1)
     ys.numbers[0] = xs.length
@@ -297,6 +297,26 @@ def angle(Vector xy not None, Vector ys=None):
             y = ys.numbers[i % ys.length]
             theta.numbers[i] = atan2(y, x) / Tau
     return theta
+
+
+def length(Vector xy not None, Vector ys=None):
+    if xy.numbers == NULL or (ys is not None and ys.numbers == NULL):
+        return null_
+    cdef int64_t i, n = xy.length // 2 if ys is None else max(xy.length, ys.length)
+    cdef double x, y
+    cdef Vector d = Vector.__new__(Vector)
+    d.allocate_numbers(n)
+    if ys is None:
+        for i in range(n):
+            x = xy.numbers[i*2]
+            y = xy.numbers[i*2+1]
+            d.numbers[i] = sqrt(x*x + y*y)
+    else:
+        for i in range(n):
+            x = xy.numbers[i % xy.length]
+            y = ys.numbers[i % ys.length]
+            d.numbers[i] = sqrt(x*x + y*y)
+    return d
 
 
 def absv(Vector xs not None):
@@ -967,7 +987,8 @@ STATIC_FUNCTIONS = {
     'hsv': Vector(hsv),
     'hypot': Vector(hypot),
     'impulse': Vector(impulse),
-    'len': Vector(length),
+    'len': Vector(lenv),
+    'length': Vector(length),
     'linear': Vector(linear),
     'log': Vector(logv),
     'log10': Vector(log10v),

@@ -7,9 +7,9 @@ import unittest
 
 from flitter.model import Vector, null
 from flitter.language.functions import (uniform, normal, beta,
-                                        length, sumv, accumulate, minv, maxv, minindex, maxindex, mapv, clamp, zipv, count,
+                                        lenv, sumv, accumulate, minv, maxv, minindex, maxindex, mapv, clamp, zipv, count,
                                         roundv, absv, expv, sqrtv, logv, log2v, log10v, ceilv, floorv, fract,
-                                        cosv, acosv, sinv, asinv, tanv, hypot, normalize, polar, angle,
+                                        cosv, acosv, sinv, asinv, tanv, hypot, normalize, polar, angle, length,
                                         split, ordv, chrv)
 from flitter.language.noise import noise, octnoise
 
@@ -311,12 +311,12 @@ class TestNoise(MathsTest):
 
 
 class TestBasicVectorFunctions(MathsTest):
-    def test_length(self):
-        self.assertEqual(length(null), 0)
-        self.assertEqual(length(Vector(1)), 1)
-        self.assertEqual(length(Vector('hello')), 1)
-        self.assertEqual(length(Vector(['hello', 'world'])), 2)
-        self.assertEqual(length(Vector.range(1000)), 1000)
+    def test_len(self):
+        self.assertEqual(lenv(null), 0)
+        self.assertEqual(lenv(Vector(1)), 1)
+        self.assertEqual(lenv(Vector('hello')), 1)
+        self.assertEqual(lenv(Vector(['hello', 'world'])), 2)
+        self.assertEqual(lenv(Vector.range(1000)), 1000)
 
     def test_sum(self):
         xs = Vector.range(10)
@@ -552,6 +552,16 @@ class TestTrig(MathsTest):
                             Vector([math.atan2(4, 1)/Tau, math.atan2(5, 2)/Tau, math.atan2(6, 3)/Tau, math.atan2(7, 4)/Tau]))
         self.assertAllClose(angle(self.a, self.c),
                             Vector([math.atan2(2, 1)/Tau, math.atan2(2, 2)/Tau, math.atan2(2, 3)/Tau, math.atan2(2, 4)/Tau]))
+
+    def test_length(self):
+        self.assertEqual(length(null), null)
+        self.assertAllClose(length(self.a), Vector([math.sqrt(5), 5]))
+        self.assertEqual(length(self.a, null), null)
+        self.assertEqual(length(null, self.a), null)
+        self.assertAllClose(length(self.a, self.b),
+                            Vector([math.sqrt(17), math.sqrt(29), math.sqrt(45), math.sqrt(65)]))
+        self.assertAllClose(length(self.a, self.c),
+                            Vector([math.sqrt(5), math.sqrt(8), math.sqrt(13), math.sqrt(20)]))
 
 
 class TestStringFuncs(MathsTest):

@@ -83,10 +83,18 @@ generalises to n-vectors, returning a vector the length of the longest of
 `fract(` *x* `)`
 : Return fractional part of *x* (equivalent to `x - floor(x)`).
 
-`hypot(` *x* `,` [...] `)`
+`hypot(` *x* [`,` ...] `)`
 : Return the square root of the sum of the square of each value in `x` with one
 argument, with multiple arguments return a vector formed by calculating the same
 for the 1st, 2nd, etc., element of each of the argument vectors.
+
+`length(` *x* `;` *y* `)` (or `length(` *x* `,` *y* `)`)
+: Return the length of the cartesian vector *x,y*. This is similar to `hypot()`
+but restricted to cartesian vectors. The difference is that it will accept
+an n-vector of *x,y* pairs in the first form and return a sequence composed of
+the length of each pair, while `hypot()` will return the length of a single
+n-dimensional vector. This function is designed to be used with `angle()` to
+convert cartesian coordinates into polar coordinates.
 
 `log(` *x* `)`
 : Return natural logarithm ($log_e$) of *x* (`log(exp(x)) == x`)
