@@ -117,14 +117,14 @@ cdef class Top(Expression):
 cdef class Export(Expression):
     cdef readonly dict explicits
 
-    def __init__(self, dict explicits=None):
-        self.explicits = explicits
+    def __init__(self, dict static_exports=None):
+        self.static_exports = static_exports
 
     cdef void _compile(self, Program program, list lnames):
         cdef str name
         cdef Vector value
-        if self.explicits:
-            for name, value in self.explicits.items():
+        if self.static_exports:
+            for name, value in self.static_exports.items():
                 program.literal(value)
                 program.export(name)
         m = len(program.initial_lnames)
@@ -138,12 +138,14 @@ cdef class Export(Expression):
 
     cdef Expression _simplify(self, Context context):
         cdef str name
-        cdef dict explicits = dict(self.explicits) if self.explicits else {}
+        cdef dict static_exports = dict(self.static_exports) if self.static_exports else {}
+        cdef bint touched = False
         for name, value in context.names.items():
             if isinstance(value, Vector):
-                explicits[name] = value
-        if explicits:
-            return Export(explicits)
+                static_exports[name] = value
+                touched = True
+        if touched:
+            return Export(static_exports)
         return self
 
     def __repr__(self):
