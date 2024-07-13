@@ -199,6 +199,7 @@ class ProgramNode(SceneNode):
         self._vertex_source = None
         self._fragment_source = None
         self._last = None
+        self._first = None
 
     def release(self):
         self._program = None
@@ -206,6 +207,7 @@ class ProgramNode(SceneNode):
         self._vertex_source = None
         self._fragment_source = None
         self._last = None
+        self._first = None
 
     @property
     def framebuffer(self):
@@ -217,30 +219,30 @@ class ProgramNode(SceneNode):
 
     def create(self, engine, node, resized, **kwargs):
         super().create(engine, node, resized, **kwargs)
-        if resized and self._last is not None:
+        if resized and (self._last is not None or self._first is not None):
             self._last = None
+            self._first = None
 
-    def get_vertex_source(self, node):
+    def get_vertex_source(self, node, **kwargs):
         if 'vertex' in node:
             vertex = Template(node.get('vertex', 1, str))
         else:
             vertex = self.DEFAULT_VERTEX_SOURCE
-        return vertex.render(HEADER=self.glctx.extra['HEADER'], child_textures=list(self.child_textures))
+        return vertex.render(HEADER=self.glctx.extra['HEADER'], child_textures=list(self.child_textures), **kwargs)
 
-    def get_fragment_source(self, node):
+    def get_fragment_source(self, node, **kwargs):
         if 'fragment' in node:
             fragment = Template(node.get('fragment', 1, str))
         else:
             fragment = self.DEFAULT_FRAGMENT_SOURCE
-        composite = node.get('composite', 1, str, node.get('blend', 1, str, 'over'))
-        return fragment.render(HEADER=self.glctx.extra['HEADER'], child_textures=list(self.child_textures), composite=composite)
+        return fragment.render(HEADER=self.glctx.extra['HEADER'], child_textures=list(self.child_textures), **kwargs)
 
-    def make_last(self):
+    def make_secondary_texture(self):
         raise NotImplementedError()
 
-    def compile(self, node):
-        vertex_source = self.get_vertex_source(node)
-        fragment_source = self.get_fragment_source(node)
+    def compile(self, node, **kwargs):
+        vertex_source = self.get_vertex_source(node, **kwargs)
+        fragment_source = self.get_fragment_source(node, **kwargs)
         if vertex_source != self._vertex_source or fragment_source != self._fragment_source:
             self._vertex_source = vertex_source
             self._fragment_source = fragment_source
@@ -261,10 +263,11 @@ class ProgramNode(SceneNode):
                 end = system_clock()
                 logger.debug("{} GL program compiled in {:.1f}ms", self.name, 1000 * (end - start))
 
-    def render(self, node, **kwargs):
-        self.compile(node)
+    def render(self, node, composite='over', passes=1, **kwargs):
+        composite = node.get('composite', 1, str, node.get('blend', 1, str, composite))
+        passes = max(1, node.get('passes', 1, int, passes))
+        self.compile(node, passes=passes, composite=composite)
         if self._rectangle is not None:
-            passes = max(1, node.get('passes', 1, int, 1))
             sampler_args = {'repeat_x': False, 'repeat_y': False}
             if (border := node.get('border', 4, float)) is not None:
                 sampler_args['border_color'] = tuple(border)
@@ -282,13 +285,24 @@ class ProgramNode(SceneNode):
                 if isinstance(member, moderngl.Uniform):
                     if name == 'last':
                         if self._last is None:
-                            self._last = self.make_last()
+                            self._last = self.make_secondary_texture()
                         if sampler_args:
                             sampler = self.glctx.sampler(texture=self._last, **sampler_args)
                             sampler.use(location=unit)
                             samplers.append(sampler)
                         else:
                             self._last.use(location=unit)
+                        member.value = unit
+                        unit += 1
+                    elif name == 'first':
+                        if self._first is None:
+                            self._first = self.make_secondary_texture()
+                        if sampler_args:
+                            sampler = self.glctx.sampler(texture=self._first, **sampler_args)
+                            sampler.use(location=unit)
+                            samplers.append(sampler)
+                        else:
+                            self._first.use(location=unit)
                         member.value = unit
                         unit += 1
                     elif name in child_textures:
@@ -307,7 +321,7 @@ class ProgramNode(SceneNode):
                     elif name in node:
                         set_uniform_vector(member, node[name])
                     elif name in kwargs:
-                        member.value = kwargs[name]
+                        set_uniform_vector(member, Vector.coerce(kwargs[name]))
                     elif name in ('alpha', 'gamma'):
                         member.value = 1
             self.glctx.enable_direct(GL_FRAMEBUFFER_SRGB)
@@ -317,6 +331,8 @@ class ProgramNode(SceneNode):
             for pass_number in range(passes):
                 if self._last is not None:
                     self.glctx.copy_framebuffer(self._last, self.framebuffer)
+                if self._first is not None and pass_number == 1:
+                    self.glctx.copy_framebuffer(self._first, self.framebuffer)
                 if pass_member is not None:
                     pass_member.value = pass_number
                 self.framebuffer.clear(*self.CLEAR_COLOR)
@@ -361,8 +377,8 @@ class Shader(ProgramNode):
             self._colorbits = colorbits
             logger.debug("Created {}x{} {}-bit framebuffer for {}", self.width, self.height, self._colorbits, self.name)
 
-    def make_last(self):
-        logger.debug("Create {}x{} {}-bit last texture for {}", self.width, self.height, self._colorbits, self.name)
+    def make_secondary_texture(self):
+        logger.debug("Create {}x{} {}-bit secondary texture for {}", self.width, self.height, self._colorbits, self.name)
         return self.glctx.texture((self.width, self.height), 4, dtype=COLOR_FORMATS[self._colorbits].moderngl_dtype)
 
 
@@ -617,7 +633,7 @@ class Window(ProgramNode):
         if count := self.glctx.gc():
             logger.trace("Collected {} OpenGL objects", count)
 
-    def make_last(self):
+    def make_secondary_texture(self):
         width, height = self.window.get_framebuffer_size()
         return self.glctx.texture((width, height), 4)
 

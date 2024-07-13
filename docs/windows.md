@@ -212,9 +212,10 @@ program. Defaults to `:over`.
 If more specialised behaviour is required then a custom shader program can be
 specified. The rendering approach is as follows:
 
-- A single quad covering the whole output frame-buffer is rendered
+- The $[-1,1]$ screen-space vertices of a single quad covering the whole output
+frame-buffer is passed to the vertex shader as an `in vec2`
 - The default vertex shader passes standardized $[0,1]$ UV coordinates to the
-fragment `out vec2 coord`
+fragment shader via an `out vec2`
 - The fragment shader is expected to declare an `out vec4` fragment color that
 will be written to the node's texture
 
@@ -259,6 +260,13 @@ to hit the target frame-rate.
 : If specified, this sampler allows access to the final output of the shader
 from the previous frame if this is the first (or only) pass, or the output of
 the previous pass otherwise.
+
+`uniform sampler2D first`
+: If specified, this sampler allows access to the output of the first pass of
+the shader (`pass` equal to `0`). For the first pass this sampler is undefined,
+for the second pass it will be identical to `last`. Its utility comes in
+shaders with more than 2 passes, where it allows later passes to refer to the
+results of an initial processing step.
 
 In addition to these, the shader program may declare arbitrary numeric uniforms
 that can be set using attributes with matching names on the shader node.
