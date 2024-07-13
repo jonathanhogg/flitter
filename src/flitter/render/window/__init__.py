@@ -382,6 +382,59 @@ class Shader(ProgramNode):
         return self.glctx.texture((self.width, self.height), 4, dtype=COLOR_FORMATS[self._colorbits].moderngl_dtype)
 
 
+class Adjust(Shader):
+    DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('adjust.frag')
+
+    def render(self, node, **kwargs):
+        super().render(node, exposure=0, contrast=1, brightness=0, **kwargs)
+
+
+class Blur(Shader):
+    DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('blur.frag')
+
+    def render(self, node, **kwargs):
+        if len(self.children) > 1:
+            passes = 3
+        elif self.children:
+            passes = 2
+        else:
+            passes = 1
+        super().render(node, passes=passes, radius=0, sigma=0.3, **kwargs)
+
+
+class Bloom(Shader):
+    DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('bloom.frag')
+
+    def render(self, node, **kwargs):
+        if len(self.children) > 1:
+            passes = 5
+        elif self.children:
+            passes = 4
+        else:
+            passes = 1
+        super().render(node, passes=passes, radius=0, sigma=0.3, exposure=-1, contrast=1, brightness=0, **kwargs)
+
+
+class Edges(Shader):
+    DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('edges.frag')
+
+    def render(self, node, **kwargs):
+        if len(self.children) > 1:
+            passes = 4
+        elif self.children:
+            passes = 3
+        else:
+            passes = 1
+        super().render(node, passes=passes, radius=0, sigma=0.3, **kwargs)
+
+
+class Feedback(Shader):
+    DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('feedback.frag')
+
+    def render(self, node, **kwargs):
+        super().render(node, mixer=0, timebase=1, glow=0, translate=0, scale=1, rotate=0, **kwargs)
+
+
 class GLFWLoader:
     def load_opengl_function(self, name):
         address = glfw.get_proc_address(name)
@@ -642,6 +695,11 @@ RENDERER_CLASS = Window
 
 
 ClassCache = {
+    'adjust': Adjust,
+    'bloom': Bloom,
+    'blur': Blur,
+    'edges': Edges,
+    'feedback': Feedback,
     'reference': Reference,
     'shader': Shader,
 }

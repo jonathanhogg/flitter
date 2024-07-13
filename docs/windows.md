@@ -25,7 +25,8 @@ program.
 
 `!shader`
 : An OpenGL shader program. This may appear as a child node anywhere in the
-window rendering tree. It may have multiple child nodes.
+window rendering tree. It may have multiple child nodes. A number of built-in
+shaders are available – see [Filters](#filters) below.
 
 `!image`
 : Loads an image from an external file. This may appear as a child node anywhere
@@ -430,7 +431,7 @@ For example, a bloom-filter pipeline might look like this:
 ```flitter
 let SIZE=1920;1080
 
-!window size=SIZE blend=:lighten
+!window size=SIZE composite=:lighten
     !canvas3d id=:bloom_source
         …
     !shader fragment=read('blur.frag') radius=5
@@ -441,3 +442,110 @@ let SIZE=1920;1080
 This allows the `!canvas3d` output to appear at two places in the window
 rendering tree: as a direct child of the window, and as an input to the
 `threshold.frag` shader program.
+
+## Filters
+
+In addition to the nodes above, a set of useful filters are provided, each of
+which is implemented as an OpenGL shader program. Each of these nodes, in common
+with the default [`!shader` program](#shader), accepts one or more child nodes
+which will be composited together with the blend function controlled with
+the `composite` attribute (default `:over`).
+
+### `!adjust`
+
+The `!adjust` node allows for basic lightness adjustments and takes the
+following attributes:
+
+`exposure=` *STOPS*
+: Specifies an exposure adjustment in stops. This defaults to `0`. An exposure
+adjustment of `1` will double the color value of each pixel, an adjustment of
+`-1` will half the value of each pixel.
+
+`contrast=` *MULTIPLIER*
+: Specifies a contrast adjustment as a multiplier. This defaults to `1`. A
+contrast adjustment above 1 multiplies the value of each pixel around the
+midpoint, i.e., channels above 0.5 will become brighter and channels below 0.5
+will become darker. A contrast adjustment below 1 will compress the dynamic
+range around 0.5.
+
+`brightness=` *LEVEL*
+: Specifies an exposure adjustment in stops. This defaults to `0`. An exposure
+adjustment of `1` will double the color value of each pixel, an adjustment of
+`-1` will half the value of each pixel.
+
+These adjustments may be combined (e.g., adjusting contrast and brightness
+together). Note that color values may become greater than 1 with these
+adjustments, but will be clamped to zero to avoid negative values.
+
+### `!blur`
+
+The `!blur` node applies a blur using a 2-pass (horizontal and vertical), 1D,
+normalized Gaussian filter. It is controlled with the attributes:
+
+`radius=` *PIXELS*
+: Specifies the size of the blur to be applied as a number of pixels in each
+direction. A value of `0` will result in no blur being applied, which is the
+default if `radius` is not specified.
+
+`sigma=` *SIGMA*
+: Specifies the sigma value for the Gaussian filter as a multiple of the
+`radius`. This defaults to `0.3` and controls how quickly the blur will fall
+off.
+
+If visible square edges form around bright spots then it may be necessary to
+increase the value of `radius` and decrease the value of `sigma`. However, note
+that the larger the value of `radius`, the greater the GPU computational
+resource required to compute the blur.
+
+### `!bloom`
+
+A `!bloom` filter creates a soft glow around bright parts of the image to
+recreate the bloom effect commonly produced by camera lenses. It works by
+applying a lightness adjustment to darken the entire image, then applies a
+Gaussian blur and finally composites this together with the original image
+with a *lighten* blend function.
+
+The filter supports the same attributes as [`!adjust`](#adjust) – except with
+`exposure` defaulting to `-1` – and [`!blur`](#blur). The `radius` attribute
+must be specified and greater than zero for a bloom to be applied.
+
+The default settings of the `!bloom` node assume that the input will contain
+high dynamic range values, i.e., pixels with channel values much larger than 1.
+This is common when lighting 3D scenes, but unusual in 2D drawings. For the
+latter it may be better to set `exposure=0` and use `contrast` values greater
+than *1* instead.
+
+### `!edges`
+
+The `!edges` node applies a simple edge-detection filter by blurring the input
+and then blending this with the original image with a *difference* blend
+function. It supports the same attributes as [`!blur`](#blur) and, again,
+`radius` must be greater than zero or the output will be blank.
+
+### `!feedback`
+
+The `!feedback` node simulates the effect of the analogue video feedback loop
+formed by pointing a camera at a screen and mixing this with this input signal.
+The following attributes control this mixing and the transformation applied to
+the feedback signal:
+
+`timebase=` *BEATS*
+: Specifies a number of ticks of the beat counter that controls the application
+of the other attributes. This defaults to `1` beat.
+
+`mixer=` *AMOUNT*
+: Specifies the mix between the feedback signal and the input signal over
+`timebase` beats.
+
+`translate=` *X;Y*
+: Specifies how far the decaying feedback signal will move in pixels per
+`timebase` beats using the canvas coordinate system (i.e., origin in the top
+left). Defaults to `0`.
+
+`scale=` *SX;SY*
+: Specifies how much the decaying feedback signal will be scaled as a multiple
+over `timebase` beats. Defaults to `1`.
+
+`rotate=` *TURNS*
+: Specifies how much the decaying feedback signal will be rotated clockwise as
+a number of full turns per `timebase` beats. Defaults to `0`.

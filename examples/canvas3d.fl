@@ -13,15 +13,13 @@
 
 %pragma tempo 60
 
-import bloom_filter from 'common/filters.fl'
-
 let SIZE=1920;1080
     -- This offset chosen to produce an interesting static image:
     t=20.5+beat
 
 !window size=SIZE
     !record filename=OUTPUT
-        @bloom_filter radius=10
+        !bloom radius=10
             !canvas3d samples=4 viewpoint=0;150;-750 focus=0;100;0 up=0;1;0 fov=60/360 near=1 far=1500 \
                       fog_color=0;0;0.02 fog_min=0 fog_max=1500
                 -- Ambient (directionless) light source:

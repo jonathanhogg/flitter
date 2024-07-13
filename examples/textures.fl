@@ -32,7 +32,7 @@ let SIZE=1920;1080
 
 !window size=SIZE
     !record filename=OUTPUT
-        @bloom_filter radius=hypot(SIZE)/100
+        !bloom radius=hypot(SIZE)/100
             !canvas3d samples=4 viewpoint=0;-25;0 up=0;0;1 near=1 far=150
                 !group
                     !light color=1
