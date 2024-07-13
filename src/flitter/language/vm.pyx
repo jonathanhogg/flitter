@@ -914,36 +914,47 @@ cdef class Program:
         return self
 
     cpdef Program optimize(self):
-        cdef Instruction instruction, last=None
-        cdef list instructions=[]
+        cdef Instruction current, last=None
+        cdef list processed=[], remaining=list(self.instructions)
         cdef int64_t n
         assert not self.linked, "Cannot optimize a linked program"
-        for instruction in self.instructions:
-            if instructions:
-                last = instructions[len(instructions)-1]
+        while remaining:
+            current = remaining.pop(0)
+            if processed:
+                last = processed[len(processed)-1]
                 if last.code == OpCode.Compose:
-                    if instruction.code == OpCode.Compose:
-                        instructions.pop()
-                        n = (<InstructionInt>instruction).value - 1 + (<InstructionInt>last).value
-                        instruction = InstructionInt(OpCode.Compose, n)
-                    elif instruction.code == OpCode.Append:
-                        instructions.pop()
-                        n = (<InstructionInt>instruction).value - 1 + (<InstructionInt>last).value
-                        instruction = InstructionInt(OpCode.Append, n)
+                    if current.code == OpCode.Compose:
+                        logger.trace("VM instruction optimizer: combine ({}) and ({})", last, current)
+                        processed.pop()
+                        n = (<InstructionInt>current).value - 1 + (<InstructionInt>last).value
+                        current = InstructionInt(OpCode.Compose, n)
+                    elif current.code == OpCode.Append:
+                        logger.trace("VM instruction optimizer: combine ({}) and ({})", last, current)
+                        processed.pop()
+                        n = (<InstructionInt>current).value - 1 + (<InstructionInt>last).value
+                        current = InstructionInt(OpCode.Append, n)
+                    elif current.code == OpCode.LocalDrop:
+                        logger.trace("VM instruction optimizer: swap ({}) and ({})", last, current)
+                        processed.pop()
+                        remaining.insert(0, last)
+                        remaining.insert(0, current)
+                        continue
                 elif last.code == OpCode.Mul:
-                    if instruction.code == OpCode.Add:
-                        instructions.pop()
-                        instruction = Instruction(OpCode.MulAdd)
+                    if current.code == OpCode.Add:
+                        logger.trace("VM instruction optimizer: combine ({}) and ({})", last, current)
+                        processed.pop()
+                        current = Instruction(OpCode.MulAdd)
                 elif last.code == OpCode.Literal:
-                    if (<InstructionVector>last).value.length == 0 and instruction.code == OpCode.Append:
-                        instructions.pop()
+                    if (<InstructionVector>last).value.length == 0 and current.code == OpCode.Append:
+                        processed.pop()
                         continue
                 elif last.code == OpCode.LocalDrop:
-                    if instruction.code == OpCode.LocalDrop:
-                        instructions.pop()
-                        instruction = InstructionInt(OpCode.LocalDrop, (<InstructionInt>instruction).value + (<InstructionInt>last).value)
-            instructions.append(instruction)
-        self.instructions = instructions
+                    if current.code == OpCode.LocalDrop:
+                        logger.trace("VM instruction optimizer: combine ({}) and ({})", last, current)
+                        processed.pop()
+                        current = InstructionInt(OpCode.LocalDrop, (<InstructionInt>current).value + (<InstructionInt>last).value)
+            processed.append(current)
+        self.instructions = processed
         return self
 
     cpdef void use_simplifier(self, bint simplify):
