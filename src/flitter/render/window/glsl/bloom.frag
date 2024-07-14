@@ -32,12 +32,8 @@ void main() {
 %         for name in child_textures:
 %             if loop.index == 0:
             vec4 merged = texture(${name}, coord);
-%             elif loop.index == 1:
-            vec4 child = texture(${name}, coord);
-            merged = composite_${composite}(child, merged);
 %             else:
-            child = texture(${name}, coord);
-            merged = composite_${composite}(child, merged);
+            merged = composite_${composite}(texture(${name}, coord), merged);
 %             endif
 %         endfor
             color = merged;
