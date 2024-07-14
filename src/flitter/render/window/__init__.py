@@ -369,13 +369,12 @@ class Shader(ProgramNode):
         if colorbits not in COLOR_FORMATS:
             colorbits = self.glctx.extra['colorbits']
         if self._framebuffer is None or self._texture is None or resized or colorbits != self._colorbits:
-            depth = COLOR_FORMATS[colorbits]
-            self._last = None
-            self._texture = self.glctx.texture((self.width, self.height), 4, dtype=depth.moderngl_dtype)
-            self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
-            self._framebuffer.clear()
             self._colorbits = colorbits
-            logger.debug("Created {}x{} {}-bit framebuffer for {}", self.width, self.height, self._colorbits, self.name)
+            logger.debug("Create {}x{} {}-bit framebuffer for {}", self.width, self.height, self._colorbits, self.name)
+            self._texture = self.glctx.texture((self.width, self.height), 4, dtype=COLOR_FORMATS[colorbits].moderngl_dtype)
+            self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
+            self._first = None
+            self._last = None
 
     def make_secondary_texture(self):
         logger.debug("Create {}x{} {}-bit secondary texture for {}", self.width, self.height, self._colorbits, self.name)
