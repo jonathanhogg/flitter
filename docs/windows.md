@@ -549,3 +549,47 @@ over `timebase` beats. Defaults to `1`.
 `rotate=` *TURNS*
 : Specifies how much the decaying feedback signal will be rotated clockwise as
 a number of full turns per `timebase` beats. Defaults to `0`.
+
+### `!noise`
+
+The `!noise` node is primarily an image generator that generates 2D slices
+through [OpenSimplex 2S](https://github.com/KdotJPG/OpenSimplex2) 3D ("improved
+XY") noise. It is controlled with the following attributes:
+
+`seed=` *SEED*
+: `!noise` generates reproducible output with the same input values. Supply a
+unique vector with the `seed` attribute to generate different outputs, defaults
+to the null vector if not supplied.
+
+components=0, octaves=1, roughness=0.5, origin=0, z=0, scale=1, tscale=1
+
+`components=` *1..4*
+: Specify how many distinct noise planes to create, default `1`. Each will
+be assigned to one channel of the output image (in the order R, G, B, A).
+
+`octaves=` *OCTAVES*
+: Specify how many octaves of noise to generate, default `1`.
+
+`roughness=` *ROUGHNESS*
+: Each additional octave of noise has its input coordinate space and output
+value scaled by `roughness`, default `0.5`.
+
+`scale=` *SX;SY;SZ*
+: Specifies a scaling vector to be applied to the X, Y and Z coordinates
+passed into the noise function.
+
+`origin=` *X;Y*
+: Specifies an offset for the *pre-scaled* X and Y input values, default `0`.
+The pre-scaled X and Y coordinates are in pixels from the top left.
+
+`z=` *Z*
+: Specifies a *pre-scaled* Z coordinate for the plane to be calculated,
+default `0`.
+
+If one or more child textures are defined within the `!noise` node then they
+will be composited together and the resulting R, G, and B values passed into
+the noise function as X, Y and Z offsets, controlled with the attribute:
+
+`tscale=` *TX;TY;TZ;
+: Specifies a scaling factor for the RGB values read from the input image into
+offsets to the noise coordinates, default `1`.

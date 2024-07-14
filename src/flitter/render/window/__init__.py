@@ -17,7 +17,7 @@ import numpy as np
 from ...clock import system_clock
 from .glconstants import GL_RGBA8, GL_RGBA16F, GL_RGBA32F, GL_FRAMEBUFFER_SRGB
 from .glsl import TemplateLoader
-from ...model import Vector
+from ...model import Vector, null
 
 
 def set_uniform_vector(uniform, vector):
@@ -434,6 +434,14 @@ class Feedback(Shader):
         super().render(node, mixer=0, timebase=1, glow=0, translate=0, scale=1, rotate=0, **kwargs)
 
 
+class Noise(Shader):
+    DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('noise.frag')
+
+    def render(self, node, **kwargs):
+        seed_hash = hash(node['seed'] if 'seed' in node else null) / (1 << 48)
+        super().render(node, seed_hash=seed_hash, components=0, octaves=1, roughness=0.5, origin=0, z=0, scale=1, tscale=1, **kwargs)
+
+
 class GLFWLoader:
     def load_opengl_function(self, name):
         address = glfw.get_proc_address(name)
@@ -699,6 +707,7 @@ ClassCache = {
     'blur': Blur,
     'edges': Edges,
     'feedback': Feedback,
+    'noise': Noise,
     'reference': Reference,
     'shader': Shader,
 }
