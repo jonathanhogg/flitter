@@ -915,29 +915,33 @@ cdef class Program:
 
     cpdef Program optimize(self):
         cdef Instruction current, last=None
-        cdef list processed=[], remaining=list(self.instructions)
-        cdef int64_t n
+        cdef list processed=[], injection_stack=[]
+        cdef int64_t i=0, n=len(self.instructions), m
         assert not self.linked, "Cannot optimize a linked program"
-        while remaining:
-            current = remaining.pop(0)
+        while i < n or injection_stack:
+            if injection_stack:
+                current = injection_stack.pop()
+            else:
+                current = self.instructions[i]
+                i += 1
             if processed:
                 last = processed[len(processed)-1]
                 if last.code == OpCode.Compose:
                     if current.code == OpCode.Compose:
                         logger.trace("VM instruction optimizer: combine ({}) and ({})", last, current)
                         processed.pop()
-                        n = (<InstructionInt>current).value - 1 + (<InstructionInt>last).value
-                        current = InstructionInt(OpCode.Compose, n)
+                        m = (<InstructionInt>current).value - 1 + (<InstructionInt>last).value
+                        current = InstructionInt(OpCode.Compose, m)
                     elif current.code == OpCode.Append:
                         logger.trace("VM instruction optimizer: combine ({}) and ({})", last, current)
                         processed.pop()
-                        n = (<InstructionInt>current).value - 1 + (<InstructionInt>last).value
-                        current = InstructionInt(OpCode.Append, n)
+                        m = (<InstructionInt>current).value - 1 + (<InstructionInt>last).value
+                        current = InstructionInt(OpCode.Append, m)
                     elif current.code == OpCode.LocalDrop:
                         logger.trace("VM instruction optimizer: swap ({}) and ({})", last, current)
                         processed.pop()
-                        remaining.insert(0, last)
-                        remaining.insert(0, current)
+                        injection_stack.append(last)
+                        injection_stack.append(current)
                         continue
                 elif last.code == OpCode.Mul:
                     if current.code == OpCode.Add:
