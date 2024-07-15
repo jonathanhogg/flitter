@@ -398,7 +398,7 @@ class ScriptTest(unittest.TestCase):
         self.assertExportsMatch(exports2, exports1, msg="Dynamically-simplified program exports don't match original")
         # Simplify AST with static names and null state, compile and execute:
         top3 = top.simplify(static=names, state=null_state)
-        self.assertEqual(repr(top3.simplify(static=names, state=null_state)), repr(top3), msg="Static simplification not complete in one step")
+        self.assertIs(top3.simplify(static=names, state=null_state), top3, msg="Static simplification not complete in one step")
         program3 = top3.compile()
         program3.set_path(script)
         self.assertNotEqual(len(program3), len(program1), msg="Statically-simplified program length should be different from original")

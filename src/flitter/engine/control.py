@@ -224,13 +224,17 @@ class EngineController:
                             top = current_program.top.simplify(state=simplify_state, dynamic=names)
                             now = system_clock()
                             simplify_time += now
-                            compile_time = -now
-                            run_program = top.compile(initial_lnames=tuple(names))
-                            run_program.set_path(current_program.path)
-                            run_program.set_top(top)
-                            compile_time += system_clock()
-                            logger.debug("Simplified on {} static state keys to {} instructions in -/{:.1f}/{:.1f}ms",
-                                         len(self.state_generation2), len(run_program), simplify_time*1000, compile_time*1000)
+                            if top is current_program.top:
+                                logger.trace("Program unchanged after simplification on {} static state keys in {:.1f}ms",
+                                             len(self.state_generation2), simplify_time*1000)
+                            else:
+                                compile_time = -now
+                                run_program = top.compile(initial_lnames=tuple(names))
+                                run_program.set_path(current_program.path)
+                                run_program.set_top(top)
+                                compile_time += system_clock()
+                                logger.debug("Simplified on {} static state keys to {} instructions in {:.1f}/{:.1f}ms",
+                                             len(self.state_generation2), len(run_program), simplify_time*1000, compile_time*1000)
                     self.state_generation1 = self.state_generation0
                     self.state_generation0 = set()
                     simplify_state_time = system_clock() + self.state_simplify_wait

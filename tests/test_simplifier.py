@@ -22,7 +22,7 @@ class SimplifierTestCase(unittest.TestCase):
         x, context = x.simplify(state=state, dynamic=dynamic, static=static, return_context=True)
         if not isinstance(x, Let):
             z = x.simplify(state=state, dynamic=dynamic, static=static)
-            self.assertEqual(repr(z), repr(x), msg="Simplification not complete")
+            self.assertIs(z, x, msg="Simplification not complete")
         self.assertEqual(repr(x), repr(y))
         self.assertEqual(context.errors, set() if with_errors is None else with_errors)
         if with_names:

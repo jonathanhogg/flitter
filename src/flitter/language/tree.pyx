@@ -21,34 +21,28 @@ logger = name_patch(logger, __name__)
 cdef Literal NoOp = Literal(null_)
 
 
-cdef Expression sequence_pack(list expressions):
+cdef bint sequence_pack(list expressions):
     cdef Expression expr
-    cdef Vector value
-    cdef list vectors, remaining = []
+    cdef bint touched = False
+    cdef list vectors, todo=[]
     while expressions:
-        expr = <Expression>expressions.pop(0)
-        if isinstance(expr, Literal) and type((<Literal>expr).value) == Vector:
-            vectors = []
-            while isinstance(expr, Literal) and type((<Literal>expr).value) == Vector:
-                value = (<Literal>expr).value
-                if value.length:
-                    vectors.append(value)
-                if not expressions:
-                    expr = None
-                    break
-                expr = <Expression>expressions.pop(0)
-            if vectors:
-                remaining.append(Literal(Vector._compose(vectors)))
-        if expr is not None:
-            if isinstance(expr, Sequence):
-                expressions[:0] = (<Sequence>expr).expressions
-                continue
-            remaining.append(expr)
-    if len(remaining) == 0:
-        return NoOp
-    if len(remaining) == 1:
-        return remaining[0]
-    return Sequence(tuple(remaining))
+        todo.append(expressions.pop())
+    while todo:
+        expr = <Expression>todo.pop()
+        if todo and isinstance(expr, Literal):
+            vectors = [(<Literal>expr).value]
+            while todo and isinstance(todo[len(todo)-1], Literal):
+                vectors.append((<Literal>todo.pop()).value)
+            if len(vectors) > 1:
+                expr = Literal(Vector._compose(vectors))
+                touched = True
+        elif isinstance(expr, Sequence):
+            for expr in reversed((<Sequence>expr).expressions):
+                todo.append(expr)
+            touched = True
+            continue
+        expressions.append(expr)
+    return touched
 
 
 cdef class Expression:
@@ -108,7 +102,10 @@ cdef class Top(Expression):
         program.append(1)
 
     cdef Expression _simplify(self, Context context):
-        return Top(self.pragmas, self.body._simplify(context))
+        cdef Expression body = self.body._simplify(context)
+        if body is self.body:
+            return self
+        return Top(self.pragmas, body)
 
     def __repr__(self):
         return f'Top({self.pragmas!r}, {self.body!r})'
@@ -141,7 +138,7 @@ cdef class Export(Expression):
         cdef dict static_exports = dict(self.static_exports) if self.static_exports else {}
         cdef bint touched = False
         for name, value in context.names.items():
-            if isinstance(value, Vector):
+            if isinstance(value, Vector) and (name not in static_exports or value != static_exports[name]):
                 static_exports[name] = value
                 touched = True
         if touched:
@@ -170,12 +167,15 @@ cdef class Import(Expression):
 
     cdef Expression _simplify(self, Context context):
         cdef str name
+        cdef Expression filename = self.filename._simplify(context)
         cdef dict saved = dict(context.names)
         for name in self.names:
             context.names[name] = None
         expr = self.expr._simplify(context)
         context.names = saved
-        return Import(self.names, self.filename._simplify(context), expr)
+        if filename is self.filename and expr is self.expr:
+            return self
+        return Import(self.names, filename, expr)
 
     def __repr__(self):
         return f'Import({self.names!r}, {self.filename!r}, {self.expr!r})'
@@ -200,10 +200,20 @@ cdef class Sequence(Expression):
 
     cdef Expression _simplify(self, Context context):
         cdef list expressions = []
-        cdef Expression expr
+        cdef Expression expr, sexpr
+        cdef bint touched = False
         for expr in self.expressions:
-            expressions.append(expr._simplify(context))
-        return sequence_pack(expressions)
+            sexpr = expr._simplify(context)
+            expressions.append(sexpr)
+            touched |= sexpr is not expr
+        touched |= sequence_pack(expressions)
+        if not expressions:
+            return NoOp
+        if len(expressions) == 1:
+            return expressions[0]
+        if not touched:
+            return self
+        return Sequence(tuple(expressions))
 
     def __repr__(self):
         return f'Sequence({self.expressions!r})'
@@ -254,7 +264,7 @@ cdef class Name(Expression):
             elif isinstance(value, Name):
                 return (<Name>value)._simplify(context)
             elif type(value) is Vector:
-                return Literal(Vector.copy(<Vector>value))
+                return Literal(Vector._copy(<Vector>value))
             else:
                 return Literal(value)
         elif (value := static_builtins.get(self.name)) is not None:
@@ -291,6 +301,8 @@ cdef class Lookup(Expression):
             if context.state is not None and context.state.contains((<Literal>key).value):
                 value = context.state.get_item((<Literal>key).value)
                 return Literal(value)
+        if key is self.key:
+            return self
         return Lookup(key)
 
     def __repr__(self):
@@ -322,6 +334,8 @@ cdef class Range(Expression):
             result = Vector.__new__(Vector)
             result.fill_range((<Literal>start).value, (<Literal>stop).value, (<Literal>step).value)
             return Literal(result)
+        if start is self.start and stop is self.stop and step is self.step:
+            return self
         return Range(start, stop, step)
 
     def __repr__(self):
@@ -375,6 +389,8 @@ cdef class Negative(UnaryOperation):
             if isinstance(maths.left, Literal) or isinstance(maths.right, Literal):
                 expr = Add(Negative(maths.left), maths.right)
                 return expr._simplify(context)
+        if expr is self.expr:
+            return self
         return Negative(expr)
 
 
@@ -388,6 +404,8 @@ cdef class Positive(UnaryOperation):
             return Literal((<Literal>expr).value.pos())
         if isinstance(expr, (Negative, Positive, MathsBinaryOperation)):
             return expr._simplify(context)
+        if expr is self.expr:
+            return self
         return Positive(expr)
 
 
@@ -399,6 +417,8 @@ cdef class Not(UnaryOperation):
         cdef Expression expr = self.expr._simplify(context)
         if isinstance(expr, Literal):
             return Literal(false_ if (<Literal>expr).value.as_bool() else true_)
+        if expr is self.expr:
+            return self
         return Not(expr)
 
 
@@ -410,6 +430,8 @@ cdef class Ceil(UnaryOperation):
         cdef Expression expr = self.expr._simplify(context)
         if isinstance(expr, Literal):
             return Literal((<Literal>expr).value.ceil())
+        if expr is self.expr:
+            return self
         return Ceil(expr)
 
 
@@ -421,6 +443,8 @@ cdef class Floor(UnaryOperation):
         cdef Expression expr = self.expr._simplify(context)
         if isinstance(expr, Literal):
             return Literal((<Literal>expr).value.floor())
+        if expr is self.expr:
+            return self
         return Floor(expr)
 
 
@@ -432,6 +456,8 @@ cdef class Fract(UnaryOperation):
         cdef Expression expr = self.expr._simplify(context)
         if isinstance(expr, Literal):
             return Literal((<Literal>expr).value.fract())
+        if expr is self.expr:
+            return self
         return Fract(expr)
 
 
@@ -467,6 +493,8 @@ cdef class BinaryOperation(Expression):
                 return expr._simplify(context)
         if (expr := self.additional_rules(left, right)) is not None:
             return expr._simplify(context)
+        if left is self.left and right is self.right:
+            return self
         return type(self)(left, right)
 
     cdef Vector op(self, Vector left, Vector right):
@@ -689,7 +717,10 @@ cdef class And(BinaryOperation):
             if (<Literal>left).value.as_bool():
                 return self.right._simplify(context)
             return left
-        return And(left, self.right._simplify(context))
+        cdef Expression right = self.right._simplify(context)
+        if left is self.left and right is self.right:
+            return self
+        return And(left, right)
 
 
 cdef class Or(BinaryOperation):
@@ -708,7 +739,10 @@ cdef class Or(BinaryOperation):
             if not (<Literal>left).value.as_bool():
                 return self.right._simplify(context)
             return left
-        return Or(left, self.right._simplify(context))
+        cdef Expression right = self.right._simplify(context)
+        if left is self.left and right is self.right:
+            return self
+        return Or(left, right)
 
 
 cdef class Xor(BinaryOperation):
@@ -726,6 +760,8 @@ cdef class Xor(BinaryOperation):
             return left
         if literal_left and literal_right:
             return Literal(false_)
+        if left is self.left and right is self.right:
+            return self
         return Xor(left, right)
 
 
@@ -754,6 +790,8 @@ cdef class Slice(Expression):
             expr_value = (<Literal>expr).value
             index_value = (<Literal>index).value
             return Literal(expr_value.slice(index_value))
+        if expr is self.expr and index is self.index:
+            return self
         return Slice(expr, index)
 
     def __repr__(self):
@@ -792,6 +830,7 @@ cdef class Call(Expression):
 
     cdef Expression _simplify(self, Context context):
         cdef Expression function = self.function._simplify(context)
+        cdef bint touched = function is not self.function
         cdef Function func_expr = None
         if isinstance(function, Function):
             func_expr = <Function>function
@@ -803,19 +842,21 @@ cdef class Call(Expression):
         if literal_func and not (<Literal>function).value.objects:
             return NoOp
         cdef bint literal_args = True
-        cdef Expression arg, expr
+        cdef Expression arg, sarg, expr
         cdef list args = []
         if self.args:
             for arg in self.args:
-                arg = arg._simplify(context)
-                args.append(arg)
-                if not isinstance(arg, Literal):
+                sarg = arg._simplify(context)
+                touched |= sarg is not arg
+                args.append(sarg)
+                if not isinstance(sarg, Literal):
                     literal_args = False
         cdef list keyword_args = []
         cdef Binding binding
         if self.keyword_args:
             for binding in self.keyword_args:
                 arg = binding.expr._simplify(context)
+                touched |= arg is not binding.expr
                 keyword_args.append(Binding(binding.name, arg))
                 if not isinstance(arg, Literal):
                     literal_args = False
@@ -846,10 +887,10 @@ cdef class Call(Expression):
                 if callable(func):
                     try:
                         assert not hasattr(func, 'context_func')
-                        results.append(Literal(func(*vector_args, **kwargs)))
+                        results.append(func(*vector_args, **kwargs))
                     except Exception as exc:
                         context.errors.add(f"Error calling {func.__name__}: {str(exc)}")
-            return sequence_pack(results)
+            return Literal(Vector._compose(results))
         if isinstance(function, Literal) and len(args) == 1:
             if (<Literal>function).value == static_builtins['ceil']:
                 return Ceil(args[0])
@@ -857,8 +898,9 @@ cdef class Call(Expression):
                 return Floor(args[0])
             if (<Literal>function).value == static_builtins['fract']:
                 return Fract(args[0])
-        cdef Call call = Call(function, tuple(args), tuple(keyword_args) if keyword_args else None)
-        return call
+        if not touched:
+            return self
+        return Call(function, tuple(args), tuple(keyword_args) if keyword_args else None)
 
     def __repr__(self):
         return f'Call({self.function!r}, {self.args!r}, {self.keyword_args!r})'
@@ -899,6 +941,8 @@ cdef class Tag(NodeModifier):
                 else:
                     objects.append(obj)
             return Literal(objects)
+        if node is self.node:
+            return self
         return Tag(node, self.tag)
 
     def __repr__(self):
@@ -926,12 +970,17 @@ cdef class Attributes(NodeModifier):
         cdef list bindings = []
         cdef Attributes attrs
         cdef Binding binding
+        cdef Expression expr
+        cdef bint touched = False
         while isinstance(node, Attributes):
             attrs = <Attributes>node
             for binding in reversed(attrs.bindings):
-                bindings.append(Binding(binding.name, binding.expr._simplify(context)))
+                expr = binding.expr._simplify(context)
+                bindings.append(Binding(binding.name, expr))
+                touched |= expr is not binding.expr
             node = attrs.node
         node = node._simplify(context)
+        touched |= node is not self.node
         cdef Vector nodes, value
         cdef list objects
         if isinstance(node, Literal):
@@ -949,6 +998,9 @@ cdef class Attributes(NodeModifier):
                         if isinstance(obj, Node):
                             (<Node>obj).set_attribute(binding.name, value)
                 node = Literal(objects)
+                touched = True
+        if not touched:
+            return self
         if bindings:
             bindings.reverse()
             node = Attributes(node, tuple(bindings))
@@ -1002,6 +1054,8 @@ cdef class Append(NodeModifier):
                 return Append(node, children)._simplify(context)
         elif isinstance(node, Attributes) and isinstance((<Attributes>node).node, Literal):
             return Attributes(Append((<Attributes>node).node, children), (<Attributes>node).bindings)._simplify(context)
+        if node is self.node and children is self.children:
+            return self
         return Append(node, children)
 
     def __repr__(self):
@@ -1061,13 +1115,14 @@ cdef class Let(Expression):
         cdef Expression expr, body=self.body
         cdef Vector value
         cdef str name, existing_name
-        cdef int64_t i, n
-        cdef bint maybe_resimplify, resimplify=False
+        cdef int64_t i, j, n
+        cdef touched = False
+        cdef set shadowed=set(), discarded=set()
         while isinstance(body, Let):
             bindings.extend((<Let>body).bindings)
             body = (<Let>body).body
-        for binding in bindings:
-            maybe_resimplify = False
+            touched = True
+        for i, binding in enumerate(bindings):
             for existing_name in list(context.names):
                 existing_value = context.names[existing_name]
                 if existing_value is not None and isinstance(existing_value, Name):
@@ -1075,43 +1130,63 @@ cdef class Let(Expression):
                         if name == (<Name>existing_value).name:
                             context.names[existing_name] = None
                             remaining.append(PolyBinding((existing_name,), Name(name)))
-                            maybe_resimplify = True
+                            shadowed.add(name)
+                            touched = True
             n = len(binding.names)
             expr = binding.expr._simplify(context)
+            touched |= expr is not binding.expr
             if n == 1 and isinstance(expr, Function) and (<Function>expr).inlineable:
                 context.names[binding.names[0]] = expr
                 remaining.append(PolyBinding(binding.names, expr))
-            elif isinstance(expr, Literal):
+                continue
+            if isinstance(expr, Literal):
                 value = (<Literal>expr).value
                 if n == 1:
                     name = binding.names[0]
                     context.names[name] = value
+                    discarded.add(name)
                 else:
-                    for i, name in enumerate(binding.names):
-                        context.names[name] = value.item(i)
-            elif isinstance(expr, Name) and len(binding.names) == 1:
+                    for j, name in enumerate(binding.names):
+                        context.names[name] = value.item(j)
+                        discarded.add(name)
+                touched = True
+                continue
+            if n == 1 and isinstance(expr, Name):
                 name = binding.names[0]
-                if (<Name>expr).name != name:
+                if (<Name>expr).name == name:
+                    touched = True
+                    continue
+                for j in range(i+1, len(bindings)):
+                    if (<Name>expr).name in (<Binding>bindings[j]).names:
+                        context.names[name] = None
+                        shadowed.add((<Name>expr).name)
+                        break
+                else:
                     context.names[name] = expr
-            else:
-                for name in binding.names:
-                    context.names[name] = None
-                remaining.append(PolyBinding(binding.names, expr))
-                maybe_resimplify = False
-            resimplify ^= maybe_resimplify
-        body = body._simplify(context)
+                    discarded.add(name)
+                    touched = True
+                    continue
+            for name in binding.names:
+                context.names[name] = None
+            remaining.append(PolyBinding(binding.names, expr))
+        cdef bint resimplify = shadowed and shadowed & discarded
+        cdef Expression sbody = body._simplify(context)
+        touched |= sbody is not body
         context.names = saved
-        if isinstance(body, Literal):
-            return body
-        if isinstance(body, Let):
-            remaining.extend((<Let>body).bindings)
-            body = (<Let>body).body
+        if isinstance(sbody, Literal):
+            return sbody
+        if isinstance(sbody, Let):
+            remaining.extend((<Let>sbody).bindings)
+            sbody = (<Let>sbody).body
             resimplify = True
+            touched = True
+        if not touched:
+            return self
         if remaining:
-            body = Let(tuple(remaining), body)
+            sbody = Let(tuple(remaining), sbody)
         if resimplify:
-            return body._simplify(context)
-        return body
+            return sbody._simplify(context)
+        return sbody
 
     def __repr__(self):
         return f'Let({self.bindings!r}, {self.body!r})'
@@ -1155,6 +1230,8 @@ cdef class For(Expression):
                 context.names[name] = None
             body = self.body._simplify(context)
             context.names = saved
+            if source is self.source and body is self.body:
+                return self
             return For(self.names, source, body)
         values = (<Literal>source).value
         cdef int64_t i=0, n=values.length
@@ -1164,7 +1241,12 @@ cdef class For(Expression):
                 i += 1
             remaining.append(self.body._simplify(context))
         context.names = saved
-        return sequence_pack(remaining)
+        sequence_pack(remaining)
+        if not remaining:
+            return NoOp
+        if len(remaining) == 1:
+            return remaining[0]
+        return Sequence(tuple(remaining))
 
     def __repr__(self):
         return f'For({self.names!r}, {self.source!r}, {self.body!r})'
@@ -1210,8 +1292,10 @@ cdef class IfElse(Expression):
         cdef list remaining = []
         cdef IfCondition test
         cdef Expression condition, then
+        cdef bint touched = False
         for test in self.tests:
             condition = test.condition._simplify(context)
+            touched |= condition is not test.condition
             if isinstance(condition, Literal):
                 if (<Literal>condition).value.as_bool():
                     then = test.then._simplify(context)
@@ -1219,10 +1303,15 @@ cdef class IfElse(Expression):
                         return then
                     else:
                         return IfElse(tuple(remaining), then)
+                touched = True
             else:
                 then = test.then._simplify(context)
                 remaining.append(IfCondition(condition, then))
+                touched |= then is not test.then
         else_ = self.else_._simplify(context) if self.else_ is not None else None
+        touched |= else_ is not self.else_
+        if not touched:
+            return self
         if remaining:
             return IfElse(tuple(remaining), else_)
         return NoOp if else_ is None else else_
@@ -1285,11 +1374,13 @@ cdef class Function(Expression):
         cdef Binding parameter
         cdef bint literal = True
         cdef Expression body
+        cdef bint touched = False
         for parameter in self.parameters:
             expr = parameter.expr._simplify(context) if parameter.expr is not None else None
             if expr is not None and not isinstance(expr, Literal):
                 literal = False
             parameters.append(Binding(parameter.name, expr))
+            touched |= expr is not parameter.expr
         cdef dict saved = context.names
         cdef str key
         cdef set captures = context.captures
@@ -1301,16 +1392,23 @@ cdef class Function(Expression):
         for parameter in parameters:
             context.names[parameter.name] = None
         body = self.body._simplify(context)
+        touched |= body is not self.body
         cdef recursive = self.name in context.captures
         if recursive:
             context.captures.discard(self.name)
-        cdef Function function = Function(self.name, tuple(parameters), body, tuple(context.captures), literal and not context.captures, recursive)
+        touched |= recursive != self.recursive
+        cdef tuple captures_t = tuple(context.captures)
+        cdef bint inlineable = literal and not captures_t
+        touched |= inlineable != self.inlineable
         context.names = dict(saved)
         if captures is not None:
             context.captures.difference_update(saved)
             captures.update(context.captures)
         context.captures = captures
-        return function
+        touched |= captures_t != self.captures
+        if not touched:
+            return self
+        return Function(self.name, tuple(parameters), body, captures_t, inlineable, recursive)
 
     def __repr__(self):
         return f'Function({self.name!r}, {self.parameters!r}, {self.body!r}, {self.captures!r}, {self.inlineable!r}, {self.recursive!r})'
