@@ -20,6 +20,9 @@ if __name__ == '__main__':
         print("Building for coverage testing")
         define_macros = [("CYTHON_TRACE_NOGIL", "1")]
         compiler_directives = {'linetrace': True}
+    elif int(os.environ.get('FLITTER_BUILD_PROFILE', '0')):
+        define_macros = []
+        compiler_directives = {'profile': True}
     else:
         define_macros = []
         compiler_directives = {}
