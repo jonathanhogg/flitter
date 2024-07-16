@@ -73,6 +73,9 @@ cdef Vector minusone_
 
 cdef class Matrix33(Vector):
     @staticmethod
+    cdef Matrix44 _identity()
+
+    @staticmethod
     cdef Matrix33 _translate(Vector v)
 
     @staticmethod
@@ -88,6 +91,9 @@ cdef class Matrix33(Vector):
 
 
 cdef class Matrix44(Vector):
+    @staticmethod
+    cdef Matrix44 _identity()
+
     @staticmethod
     cdef Matrix44 _project(double xgradient, double ygradient, double near, double far)
 

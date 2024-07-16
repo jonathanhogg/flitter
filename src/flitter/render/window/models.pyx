@@ -19,7 +19,7 @@ cdef double Tau = 6.283185307179586
 cdef double RootHalf = sqrt(0.5)
 cdef double DefaultSnapAngle = 0.05
 cdef int64_t DefaultSegments = 64
-cdef Matrix44 IdentityTransform = Matrix44.__new__(Matrix44)
+cdef Matrix44 IdentityTransform = Matrix44._identity()
 
 
 cdef class Model:

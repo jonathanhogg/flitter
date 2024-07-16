@@ -30,7 +30,7 @@ cdef Vector One3 = Vector((1, 1, 1))
 cdef Vector Xaxis = Vector((1, 0, 0))
 cdef Vector Yaxis = Vector((0, 1, 0))
 cdef Vector DefaultFalloff = Vector((0, 0, 1, 0))
-cdef Matrix44 IdentityTransform = Matrix44.__new__(Matrix44)
+cdef Matrix44 IdentityTransform = Matrix44._identity()
 cdef int DEFAULT_MAX_LIGHTS = 50
 cdef double Pi = 3.141592653589793
 cdef tuple MaterialAttributes = ('color', 'metal', 'roughness', 'shininess', 'occlusion', 'emissive', 'transparency',
@@ -111,9 +111,9 @@ cdef class Material:
         material.metal = min(max(0, node.get_float('metal', self.metal)), 1)
         cdef Vector k
         if specular.ne(One3) is true_ and material.roughness < 1 and material.metal == 0:
-            k = Vector.__new__(Vector, 0.001)
+            k = Vector(0.001)
             material.metal = min(max(0, k.add(specular.sub(material.albedo)).truediv(k.add(specular.add(material.albedo))).squared_sum() / 3), 1)
-            k = Vector.__new__(Vector, material.metal)
+            k = Vector(material.metal)
             material.albedo = material.albedo.mul(true_.sub(k)).mul_add(k, specular)
             material.roughness = material.roughness ** 1.5
         material.occlusion = min(max(0, node.get_float('occlusion', self.occlusion)), 1)
@@ -278,7 +278,7 @@ cdef class Camera:
                 projection_matrix = Matrix44._project(gradient, gradient/aspect_ratio, camera.near, camera.far)  # horizontal
         camera.view_matrix = Matrix44._look(camera.position, camera.focus, camera.up)
         if camera.view_matrix is None:
-            camera.view_matrix = Matrix44.__new__(Matrix44)
+            camera.view_matrix = Matrix44._identity()
         camera.pv_matrix = projection_matrix.mmul(camera.view_matrix)
         return camera
 

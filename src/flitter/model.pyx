@@ -198,7 +198,7 @@ cdef class Vector:
                 return true_
             if other == -1:
                 return minusone_
-        return Vector.__new__(Vector, other)
+        return Vector(other)
 
     @staticmethod
     def copy(other):
@@ -328,7 +328,7 @@ cdef class Vector:
             raise TypeError("range takes 1-3 arguments")
         return result
 
-    def __cinit__(self, value=None):
+    def __init__(self, value=None):
         if value is None:
             return
         cdef int64_t i, n
@@ -1106,18 +1106,37 @@ false = false_
 
 cdef class Matrix33(Vector):
     @staticmethod
+    cdef Matrix44 _identity():
+        cdef Matrix33 result = Matrix33.__new__(Matrix44)
+        cdef double* numbers = result._numbers
+        cdef int64_t i
+        for i in range(9):
+            numbers[i] = 1 if i % 4 == 0 else 0
+        result.numbers = numbers
+        result.length = 9
+        return result
+
+    @staticmethod
+    def identity():
+        return Matrix33._identity()
+
+    @staticmethod
     cdef Matrix33 _translate(Vector v):
         cdef Matrix33 result
         cdef double* numbers
         if v is not None and v.numbers is not NULL and v.length < 3:
             result = Matrix33.__new__(Matrix33)
-            numbers = result.numbers
+            numbers = result._numbers
+            numbers[0] = numbers[4] = numbers[8] = 1
+            numbers[1] = numbers[2] = numbers[3] = numbers[5] = 0
             if v.length == 1:
                 numbers[6] = v.numbers[0]
                 numbers[7] = v.numbers[0]
             else:
                 numbers[6] = v.numbers[0]
                 numbers[7] = v.numbers[1]
+            result.numbers = numbers
+            result.length = 9
             return result
         return None
 
@@ -1131,13 +1150,17 @@ cdef class Matrix33(Vector):
         cdef double* numbers
         if v is not None and v.numbers is not NULL and v.length < 3:
             result = Matrix33.__new__(Matrix33)
-            numbers = result.numbers
+            numbers = result._numbers
+            numbers[8] = 1
+            numbers[1] = numbers[2] = numbers[3] = numbers[5] = numbers[6] = numbers[7] = 0
             if v.length == 1:
                 numbers[0] = v.numbers[0]
                 numbers[4] = v.numbers[0]
             elif v.length == 2:
                 numbers[0] = v.numbers[0]
                 numbers[4] = v.numbers[1]
+            result.numbers = numbers
+            result.length = 9
             return result
         return None
 
@@ -1151,11 +1174,16 @@ cdef class Matrix33(Vector):
             return None
         cdef double theta = turns*Tau, cth = cos(theta), sth = sin(theta)
         cdef Matrix33 result = Matrix33.__new__(Matrix33)
-        cdef double* numbers = result.numbers
+        cdef double* numbers = result._numbers
         numbers[0] = cth
         numbers[1] = sth
+        numbers[2] = 0
         numbers[3] = -sth
         numbers[4] = cth
+        numbers[5] = numbers[6] = numbers[7] = 0
+        numbers[8] = 1
+        result.numbers = numbers
+        result.length = 9
         return result
 
     @staticmethod
@@ -1163,33 +1191,52 @@ cdef class Matrix33(Vector):
         return Matrix33._rotate(float(turns))
 
     @cython.cdivision(True)
-    def __cinit__(self, obj=None):
-        if self.objects is not None:
-            raise ValueError("Argument must be a float or a sequence of 9 floats")
-        if self.length == 9:
-            return
+    def __init__(self, value=None):
+        cdef int64_t i
         cdef double k
-        if self.length == 0:
-            k = 1
+        cdef const double[:] arr
+        if type(value) is ndarray:
+            arr = value.astype(*AstypeArgs)
+            if arr.shape[0] != 9:
+                raise ValueError("Argument must be a float or a sequence of 9 floats")
             self.numbers = self._numbers
-        elif self.length == 1:
-            k = self.numbers[0]
+            for i in range(9):
+                self.numbers[i] = arr[i]
+            self.length = 9
+        elif isinstance(value, (list, tuple, bytes, set, dict, Vector)):
+            if len(value) != 9:
+                raise ValueError("Argument must be a float or a sequence of 9 floats")
+            try:
+                self.numbers = self._numbers
+                for i, v in enumerate(value):
+                    self.numbers[i] = v
+                self.length = 9
+            except TypeError:
+                raise ValueError("Argument must be a float or a sequence of 9 floats")
+        elif value is None or isinstance(value, (float, int)):
+            k = 1 if value is None else value
+            self.numbers = self._numbers
+            for i in range(9):
+                self.numbers[i] = k if i % 4 == 0 else 0
+            self.length = 9
+        elif isinstance(value, (range, slice)):
+            self.fill_range(Vector._coerce(value.start), Vector._coerce(value.stop), Vector._coerce(value.step))
+            if self.length != 9:
+                raise ValueError("Argument must be a float or a sequence of 9 floats")
         else:
             raise ValueError("Argument must be a float or a sequence of 9 floats")
-        cdef int64_t i
-        for i in range(9):
-            self.numbers[i] = k if i % 4 == 0 else 0
-        self.length = 9
 
     cdef Matrix33 mmul(self, Matrix33 b):
         cdef Matrix33 result = Matrix33.__new__(Matrix33)
-        cdef double* numbers = result.numbers
+        cdef double* numbers = result._numbers
         cdef double* a_numbers = self.numbers
         cdef double* b_numbers = b.numbers
         cdef int64_t i, j
         for i in range(0, 9, 3):
             for j in range(3):
                 numbers[i+j] = a_numbers[j]*b_numbers[i] + a_numbers[j+3]*b_numbers[i+1] + a_numbers[j+6]*b_numbers[i+2]
+        result.numbers = numbers
+        result.length = 9
         return result
 
     cdef Vector vmul(self, Vector b):
@@ -1225,7 +1272,7 @@ cdef class Matrix33(Vector):
         cdef double s5 = numbers[4]*numbers[6]
         cdef double invdet = 1 / (s0 - s1 - s2 - s3 + s4 - s5)
         cdef Matrix33 result = Matrix33.__new__(Matrix33)
-        cdef double* result_numbers = result.numbers
+        cdef double* result_numbers = result._numbers
         result_numbers[0] = (numbers[4]*numbers[8] - numbers[7]*numbers[5]) * invdet
         result_numbers[1] = (numbers[2]*numbers[7] - numbers[1]*numbers[8]) * invdet
         result_numbers[2] = (numbers[1]*numbers[5] - numbers[2]*numbers[4]) * invdet
@@ -1235,16 +1282,20 @@ cdef class Matrix33(Vector):
         result_numbers[6] = (numbers[3]*numbers[7] - numbers[6]*numbers[4]) * invdet
         result_numbers[7] = (numbers[6]*numbers[1] - numbers[0]*numbers[7]) * invdet
         result_numbers[8] = (numbers[0]*numbers[4] - numbers[3]*numbers[1]) * invdet
+        result.numbers = result_numbers
+        result.length = 9
         return result
 
     cpdef Matrix33 transpose(self):
         cdef double* numbers = self.numbers
         cdef Matrix33 result = Matrix33.__new__(Matrix33)
-        cdef double* result_numbers = result.numbers
+        cdef double* result_numbers = result._numbers
         cdef int64_t i, j
         for i in range(3):
             for j in range(3):
                 result_numbers[i*3+j] = numbers[j*3+i]
+        result.numbers = result_numbers
+        result.length = 9
         return result
 
     def __repr__(self):
@@ -1257,17 +1308,37 @@ cdef class Matrix33(Vector):
 
 
 cdef class Matrix44(Vector):
+    @staticmethod
+    cdef Matrix44 _identity():
+        cdef Matrix44 result = Matrix44.__new__(Matrix44)
+        cdef double* numbers = result._numbers
+        cdef int64_t i
+        for i in range(16):
+            numbers[i] = 1 if i % 5 == 0 else 0
+        result.numbers = numbers
+        result.length = 16
+        return result
+
+    @staticmethod
+    def identity():
+        return Matrix44._identity()
+
     @cython.cdivision(True)
     @staticmethod
     cdef Matrix44 _project(double xgradient, double ygradient, double near, double far):
         cdef Matrix44 result = Matrix44.__new__(Matrix44)
-        cdef double* numbers = result.numbers
+        cdef double* numbers = result._numbers
         numbers[0] = 1 / xgradient
+        numbers[1] = numbers[2] = numbers[3] = numbers[4] = 0
         numbers[5] = 1 / ygradient
+        numbers[6] = numbers[7] = numbers[8] = numbers[9] = 0
         numbers[10] = -(far+near) / (far-near)
         numbers[11] = -1
+        numbers[12] = numbers[13] = 0
         numbers[14] = -2*far*near / (far-near)
         numbers[15] = 0
+        result.numbers = numbers
+        result.length = 16
         return result
 
     @staticmethod
@@ -1278,11 +1349,17 @@ cdef class Matrix44(Vector):
     @staticmethod
     cdef Matrix44 _ortho(double aspect_ratio, double width, double near, double far):
         cdef Matrix44 result = Matrix44.__new__(Matrix44)
-        cdef double* numbers = result.numbers
+        cdef double* numbers = result._numbers
         numbers[0] = 2 / width
+        numbers[1] = numbers[2] = numbers[3] = numbers[4] = 0
         numbers[5] = 2 * aspect_ratio / width
+        numbers[6] = numbers[7] = numbers[8] = numbers[9] = 0
         numbers[10] = -2 / (far-near)
+        numbers[11] = numbers[12] = numbers[13] = 0
         numbers[14] = -(far+near) / (far-near)
+        numbers[15] = 1
+        result.numbers = numbers
+        result.length = 16
         return result
 
     @staticmethod
@@ -1299,16 +1376,22 @@ cdef class Matrix44(Vector):
         cdef double* numbers
         if translation is not None and x.length == 3 and y.length == 3 and z.length == 3:
             result = Matrix44.__new__(Matrix44)
-            numbers = result.numbers
+            numbers = result._numbers
             numbers[0] = x.numbers[0]
             numbers[1] = y.numbers[0]
             numbers[2] = z.numbers[0]
+            numbers[3] = 0
             numbers[4] = x.numbers[1]
             numbers[5] = y.numbers[1]
             numbers[6] = z.numbers[1]
+            numbers[7] = 0
             numbers[8] = x.numbers[2]
             numbers[9] = y.numbers[2]
             numbers[10] = z.numbers[2]
+            numbers[11] = numbers[12] = numbers[13] = numbers[14] = 0
+            numbers[15] = 1
+            result.numbers = numbers
+            result.length = 16
             result = result.mmul(translation)
         return result
 
@@ -1322,7 +1405,12 @@ cdef class Matrix44(Vector):
         cdef double* numbers
         if v is not None and v.numbers is not NULL and v.length in (1, 3):
             result = Matrix44.__new__(Matrix44)
-            numbers = result.numbers
+            numbers = result._numbers
+            numbers[0] = numbers[5] = numbers[10] = numbers[15] = 1
+            numbers[1] = numbers[2] = numbers[3] = numbers[4] = 0
+            numbers[6] = numbers[7] = numbers[8] = numbers[9] = 0
+            numbers[11] = 0
+            numbers[11] = 0
             if v.length == 1:
                 numbers[12] = v.numbers[0]
                 numbers[13] = v.numbers[0]
@@ -1331,6 +1419,8 @@ cdef class Matrix44(Vector):
                 numbers[12] = v.numbers[0]
                 numbers[13] = v.numbers[1]
                 numbers[14] = v.numbers[2]
+            result.numbers = numbers
+            result.length = 16
             return result
         return None
 
@@ -1344,7 +1434,11 @@ cdef class Matrix44(Vector):
         cdef double* numbers
         if v is not None and v.numbers is not NULL and v.length in (1, 3):
             result = Matrix44.__new__(Matrix44)
-            numbers = result.numbers
+            numbers = result._numbers
+            numbers[1] = numbers[2] = numbers[3] = numbers[4] = 0
+            numbers[6] = numbers[7] = numbers[8] = numbers[9]= 0
+            numbers[11] = numbers[12] = numbers[13] = numbers[14] = 0
+            numbers[15] = 1
             if v.length == 1:
                 numbers[0] = v.numbers[0]
                 numbers[5] = v.numbers[0]
@@ -1353,6 +1447,8 @@ cdef class Matrix44(Vector):
                 numbers[0] = v.numbers[0]
                 numbers[5] = v.numbers[1]
                 numbers[10] = v.numbers[2]
+            result.numbers = numbers
+            result.length = 16
             return result
         return None
 
@@ -1366,11 +1462,18 @@ cdef class Matrix44(Vector):
             return None
         cdef double theta = turns*Tau, cth = cos(theta), sth = sin(theta)
         cdef Matrix44 result = Matrix44.__new__(Matrix44)
-        cdef double* numbers = result.numbers
+        cdef double* numbers = result._numbers
+        numbers[0] = 1
+        numbers[1] = numbers[2] = numbers[3] = numbers[4] = 0
         numbers[5] = cth
         numbers[6] = sth
+        numbers[7] = numbers[8] = 0
         numbers[9] = -sth
         numbers[10] = cth
+        numbers[11] = numbers[12] = numbers[13] = numbers[14] = 0
+        numbers[15] = 1
+        result.numbers = numbers
+        result.length = 16
         return result
 
     @staticmethod
@@ -1383,11 +1486,20 @@ cdef class Matrix44(Vector):
             return None
         cdef double theta = turns*Tau, cth = cos(theta), sth = sin(theta)
         cdef Matrix44 result = Matrix44.__new__(Matrix44)
-        cdef double* numbers = result.numbers
+        cdef double* numbers = result._numbers
         numbers[0] = cth
+        numbers[1] = 0
         numbers[2] = -sth
+        numbers[3] = numbers[4] = 0
+        numbers[5] = 1
+        numbers[6] = numbers[7] = 0
         numbers[8] = sth
+        numbers[9] = 0
         numbers[10] = cth
+        numbers[11] = numbers[12] = numbers[13] = numbers[14] = 0
+        numbers[15] = 1
+        result.numbers = numbers
+        result.length = 16
         return result
 
     @staticmethod
@@ -1400,11 +1512,18 @@ cdef class Matrix44(Vector):
             return None
         cdef double theta = turns*Tau, cth = cos(theta), sth = sin(theta)
         cdef Matrix44 result = Matrix44.__new__(Matrix44)
-        cdef double* numbers = result.numbers
+        cdef double* numbers = result._numbers
         numbers[0] = cth
         numbers[1] = sth
+        numbers[2] = numbers[3] = 0
         numbers[4] = -sth
         numbers[5] = cth
+        numbers[6] = numbers[7] = numbers[8] = numbers[9] = 0
+        numbers[10] = 1
+        numbers[11] = numbers[12] = numbers[13] = numbers[14] = 0
+        numbers[15] = 1
+        result.numbers = numbers
+        result.length = 16
         return result
 
     @staticmethod
@@ -1430,7 +1549,7 @@ cdef class Matrix44(Vector):
                     matrix = Matrix44._rotate_x(v.numbers[0])
                     result = matrix if result is None else matrix.mmul(result)
         if result is None:
-            result = Matrix44.__new__(Matrix44)
+            result = Matrix44._identity()
         return result
 
     @staticmethod
@@ -1442,9 +1561,19 @@ cdef class Matrix44(Vector):
         cdef Matrix44 result = None
         if v is not None and v.numbers is not NULL and v.length in (1, 2):
             result = Matrix44.__new__(Matrix44)
-            numbers = result.numbers
+            numbers = result._numbers
+            numbers[0] = 1
+            numbers[1] = numbers[2] = numbers[3] = 0
             numbers[4] = v.numbers[0]
+            numbers[5] = 1
+            numbers[6] = numbers[7] = 0
             numbers[8] = v.numbers[1] if v.length == 2 else v.numbers[0]
+            numbers[9] = 0
+            numbers[10] = 1
+            numbers[11] = numbers[12] = numbers[13] = numbers[14] = 0
+            numbers[15] = 1
+            result.numbers = numbers
+            result.length = 16
             return result
         return result
 
@@ -1457,9 +1586,18 @@ cdef class Matrix44(Vector):
         cdef Matrix44 result = None
         if v is not None and v.numbers is not NULL and v.length in (1, 2):
             result = Matrix44.__new__(Matrix44)
-            numbers = result.numbers
+            numbers = result._numbers
+            numbers[0] = 1
             numbers[1] = v.numbers[0]
+            numbers[2] = numbers[3] = numbers[4] = 0
+            numbers[5] = 1
+            numbers[6] = numbers[7] = numbers[8] = 0
             numbers[9] = v.numbers[1] if v.length == 2 else v.numbers[0]
+            numbers[10] = 1
+            numbers[11] = numbers[12] = numbers[13] = numbers[14] = 0
+            numbers[15] = 1
+            result.numbers = numbers
+            result.length = 16
             return result
         return result
 
@@ -1472,9 +1610,19 @@ cdef class Matrix44(Vector):
         cdef Matrix44 result = None
         if v is not None and v.numbers is not NULL and v.length in (1, 2):
             result = Matrix44.__new__(Matrix44)
-            numbers = result.numbers
+            numbers = result._numbers
+            numbers[0] = 1
+            numbers[1] = 0
             numbers[2] = v.numbers[0]
+            numbers[3] = numbers[4] = 0
+            numbers[5] = 1
             numbers[6] = v.numbers[1] if v.length == 2 else v.numbers[0]
+            numbers[7] = numbers[8] = numbers[9] = 0
+            numbers[10] = 1
+            numbers[11] = numbers[12] = numbers[13] = numbers[14] = 0
+            numbers[15] = 1
+            result.numbers = numbers
+            result.length = 16
             return result
         return result
 
@@ -1483,36 +1631,65 @@ cdef class Matrix44(Vector):
         return Matrix44._shear_z(Vector._coerce(v))
 
     @cython.cdivision(True)
-    def __cinit__(self, obj=None):
-        if self.objects is not None:
-            raise ValueError("Argument must be a float or a sequence of 16 floats")
-        if self.length == 16:
-            return
+    def __init__(self, value=None):
+        cdef int64_t i
         cdef double k
-        if self.length == 0:
-            k = 1
+        cdef const double[:] arr
+        if type(value) is ndarray:
+            arr = value.astype(*AstypeArgs)
+            if arr.shape[0] != 16:
+                raise ValueError("Argument must be a float or a sequence of 16 floats")
             self.numbers = self._numbers
-        elif self.length == 1:
-            k = self.numbers[0]
+            for i in range(16):
+                self.numbers[i] = arr[i]
+            self.length = 16
+        elif isinstance(value, (list, tuple, bytes, set, dict, Vector)):
+            if len(value) != 16:
+                raise ValueError("Argument must be a float or a sequence of 16 floats")
+            try:
+                self.numbers = self._numbers
+                for i, v in enumerate(value):
+                    self.numbers[i] = v
+                self.length = 16
+            except TypeError:
+                raise ValueError("Argument must be a float or a sequence of 16 floats")
+        elif value is None or isinstance(value, (float, int)):
+            k = 1 if value is None else value
+            self.numbers = self._numbers
+            for i in range(16):
+                self.numbers[i] = k if i % 5 == 0 else 0
+            self.length = 16
+        elif isinstance(value, (range, slice)):
+            self.length = 0
+            self.fill_range(Vector._coerce(value.start), Vector._coerce(value.stop), Vector._coerce(value.step))
+            if self.length != 16:
+                raise ValueError("Argument must be a float or a sequence of 16 floats")
         else:
             raise ValueError("Argument must be a float or a sequence of 16 floats")
-        cdef int64_t i
-        for i in range(16):
-            self.numbers[i] = k if i % 5 == 0 else 0
-        self.length = 16
 
     cdef Matrix44 mmul(self, Matrix44 b):
         cdef Matrix44 result = Matrix44.__new__(Matrix44)
-        cdef double* numbers = result.numbers
+        cdef double* numbers = result._numbers
         cdef double* a_numbers = self.numbers
         cdef double* b_numbers = b.numbers
-        cdef int64_t i, j
-        for i in range(0, 16, 4):
-            for j in range(4):
-                numbers[i+j] = a_numbers[j]*b_numbers[i] + \
-                               a_numbers[j+4]*b_numbers[i+1] + \
-                               a_numbers[j+8]*b_numbers[i+2] + \
-                               a_numbers[j+12]*b_numbers[i+3]
+        numbers[0] = a_numbers[0]*b_numbers[0] + a_numbers[4]*b_numbers[1] + a_numbers[8]*b_numbers[2] + a_numbers[12]*b_numbers[3]
+        numbers[1] = a_numbers[1]*b_numbers[0] + a_numbers[5]*b_numbers[1] + a_numbers[9]*b_numbers[2] + a_numbers[13]*b_numbers[3]
+        numbers[2] = a_numbers[2]*b_numbers[0] + a_numbers[6]*b_numbers[1] + a_numbers[10]*b_numbers[2] + a_numbers[14]*b_numbers[3]
+        numbers[3] = a_numbers[3]*b_numbers[0] + a_numbers[7]*b_numbers[1] + a_numbers[11]*b_numbers[2] + a_numbers[15]*b_numbers[3]
+        numbers[4] = a_numbers[0]*b_numbers[4] + a_numbers[4]*b_numbers[5] + a_numbers[8]*b_numbers[6] + a_numbers[12]*b_numbers[7]
+        numbers[5] = a_numbers[1]*b_numbers[4] + a_numbers[5]*b_numbers[5] + a_numbers[9]*b_numbers[6] + a_numbers[13]*b_numbers[7]
+        numbers[6] = a_numbers[2]*b_numbers[4] + a_numbers[6]*b_numbers[5] + a_numbers[10]*b_numbers[6] + a_numbers[14]*b_numbers[7]
+        numbers[7] = a_numbers[3]*b_numbers[4] + a_numbers[7]*b_numbers[5] + a_numbers[11]*b_numbers[6] + a_numbers[15]*b_numbers[7]
+        numbers[8] = a_numbers[0]*b_numbers[8] + a_numbers[4]*b_numbers[9] + a_numbers[8]*b_numbers[10] + a_numbers[12]*b_numbers[11]
+        numbers[9] = a_numbers[1]*b_numbers[8] + a_numbers[5]*b_numbers[9] + a_numbers[9]*b_numbers[10] + a_numbers[13]*b_numbers[11]
+        numbers[10] = a_numbers[2]*b_numbers[8] + a_numbers[6]*b_numbers[9] + a_numbers[10]*b_numbers[10] + a_numbers[14]*b_numbers[11]
+        numbers[11] = a_numbers[3]*b_numbers[8] + a_numbers[7]*b_numbers[9] + a_numbers[11]*b_numbers[10] + a_numbers[15]*b_numbers[11]
+        numbers[12] = a_numbers[0]*b_numbers[12] + a_numbers[4]*b_numbers[13] + a_numbers[8]*b_numbers[14] + a_numbers[12]*b_numbers[15]
+        numbers[13] = a_numbers[1]*b_numbers[12] + a_numbers[5]*b_numbers[13] + a_numbers[9]*b_numbers[14] + a_numbers[13]*b_numbers[15]
+        numbers[14] = a_numbers[2]*b_numbers[12] + a_numbers[6]*b_numbers[13] + a_numbers[10]*b_numbers[14] + a_numbers[14]*b_numbers[15]
+        numbers[15] = a_numbers[3]*b_numbers[12] + a_numbers[7]*b_numbers[13] + a_numbers[11]*b_numbers[14] + a_numbers[15]*b_numbers[15]
+        result.numbers = numbers
+        result.length = 16
         return result
 
     cdef Vector vmul(self, Vector b):
@@ -1563,7 +1740,7 @@ cdef class Matrix44(Vector):
         cdef double c0 = numbers[8]*numbers[13] - numbers[12]*numbers[9]
         cdef double invdet = 1 / (s0*c5 - s1*c4 + s2*c3 + s3*c2 - s4*c1 + s5*c0)
         cdef Matrix44 result = Matrix44.__new__(Matrix44)
-        cdef double* result_numbers = result.numbers
+        cdef double* result_numbers = result._numbers
         result_numbers[0] = (numbers[5]*c5 - numbers[6]*c4 + numbers[7]*c3) * invdet
         result_numbers[1] = (-numbers[1]*c5 + numbers[2]*c4 - numbers[3]*c3) * invdet
         result_numbers[2] = (numbers[13]*s5 - numbers[14]*s4 + numbers[15]*s3) * invdet
@@ -1580,26 +1757,32 @@ cdef class Matrix44(Vector):
         result_numbers[13] = (numbers[0]*c3 - numbers[1]*c1 + numbers[2]*c0) * invdet
         result_numbers[14] = (-numbers[12]*s3 + numbers[13]*s1 - numbers[14]*s0) * invdet
         result_numbers[15] = (numbers[8]*s3 - numbers[9]*s1 + numbers[10]*s0) * invdet
+        result.numbers = result_numbers
+        result.length = 16
         return result
 
     cpdef Matrix44 transpose(self):
         cdef double* numbers = self.numbers
         cdef Matrix44 result = Matrix44.__new__(Matrix44)
-        cdef double* result_numbers = result.numbers
+        cdef double* result_numbers = result._numbers
         cdef int64_t i, j
         for i in range(4):
             for j in range(4):
                 result_numbers[i*4+j] = numbers[j*4+i]
+        result.numbers = result_numbers
+        result.length = 16
         return result
 
     cpdef Matrix33 matrix33(self):
         cdef double* numbers = self.numbers
         cdef Matrix33 result = Matrix33.__new__(Matrix33)
-        cdef double* result_numbers = result.numbers
+        cdef double* result_numbers = result._numbers
         cdef int64_t i, j
         for i in range(3):
             for j in range(3):
                 result_numbers[3*i+j] = numbers[4*i+j]
+        result.numbers = result_numbers
+        result.length = 9
         return result
 
     @cython.cdivision(True)
@@ -1619,7 +1802,7 @@ cdef class Matrix44(Vector):
         cdef double c0 = numbers[8]*numbers[13] - numbers[12]*numbers[9]
         cdef double invdet = 1 / (s0*c5 - s1*c4 + s2*c3 + s3*c2 - s4*c1 + s5*c0)
         cdef Matrix33 result = Matrix33.__new__(Matrix33)
-        cdef double* result_numbers = result.numbers
+        cdef double* result_numbers = result._numbers
         result_numbers[0] = (numbers[5]*c5 - numbers[6]*c4 + numbers[7]*c3) * invdet
         result_numbers[3] = (-numbers[1]*c5 + numbers[2]*c4 - numbers[3]*c3) * invdet
         result_numbers[6] = (numbers[13]*s5 - numbers[14]*s4 + numbers[15]*s3) * invdet
@@ -1629,6 +1812,8 @@ cdef class Matrix44(Vector):
         result_numbers[2] = (numbers[4]*c4 - numbers[5]*c2 + numbers[7]*c0) * invdet
         result_numbers[5] = (-numbers[0]*c4 + numbers[1]*c2 - numbers[3]*c0) * invdet
         result_numbers[8] = (numbers[12]*s4 - numbers[13]*s2 + numbers[15]*s0) * invdet
+        result.numbers = result_numbers
+        result.length = 9
         return result
 
     def __repr__(self):

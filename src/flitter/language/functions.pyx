@@ -69,7 +69,8 @@ def sample(Context context, Vector texture_id, Vector coord, Vector default=null
 
 
 cdef class uniform(Vector):
-    def __cinit__(self, value=None):
+    def __init__(self, value=None):
+        super().__init__(value)
         self._hash = self.hash(True)
         self.deallocate_numbers()
         self.length = 0

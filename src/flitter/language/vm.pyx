@@ -1478,7 +1478,7 @@ cdef class Program:
                     n = PyTuple_GET_SIZE(function.parameters)
                     function.defaults = pop_tuple(stack, n)
                     function.captures = pop_tuple(stack, (<InstructionFunc>instruction).ncaptures)
-                    function.vself = Vector.__new__(Vector, function)
+                    function.vself = Vector(function)
                     push(stack, function.vself)
                     function = None
 
