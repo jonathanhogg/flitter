@@ -225,14 +225,14 @@ class ProgramNode(SceneNode):
 
     def get_vertex_source(self, node, **kwargs):
         if 'vertex' in node:
-            vertex = Template(node.get('vertex', 1, str))
+            vertex = Template(node.get('vertex', 1, str), lookup=TemplateLoader)
         else:
             vertex = self.DEFAULT_VERTEX_SOURCE
         return vertex.render(HEADER=self.glctx.extra['HEADER'], child_textures=list(self.child_textures), **kwargs)
 
     def get_fragment_source(self, node, **kwargs):
         if 'fragment' in node:
-            fragment = Template(node.get('fragment', 1, str))
+            fragment = Template(node.get('fragment', 1, str), lookup=TemplateLoader)
         else:
             fragment = self.DEFAULT_FRAGMENT_SOURCE
         return fragment.render(HEADER=self.glctx.extra['HEADER'], child_textures=list(self.child_textures), **kwargs)
