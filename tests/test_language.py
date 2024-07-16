@@ -118,6 +118,11 @@ class TestLanguageFeatures(unittest.TestCase):
             self.assertIsInstance(expr, Literal, msg="Unexpected simplification output")
             simplifier_output = '\n'.join(repr(node) for node in expr.value)
         self.assertEqual(simplifier_output, output, msg="Simplifier output is incorrect")
+        mixed_top, simplifier_context = top.simplify(dynamic=names, return_context=True)
+        vm_context = Context(names={name: Vector(value) for name, value in names.items()}, state=StateDict())
+        vm_output = '\n'.join(repr(node) for node in mixed_top.compile(initial_lnames=tuple(names)).run(vm_context).root.children)
+        self.assertEqual(vm_output, output, msg="VM output is incorrect")
+        self.assertEqual(simplifier_context.errors | vm_context.errors, with_errors)
 
     def test_empty(self):
         self.assertCodeOutput("", "")
@@ -174,23 +179,24 @@ let x=5 y=:baz z='Hello world!'
         self.assertCodeOutput(
             """
 for x;y in ..9
-    !node x=x y=y
+    !node x=x y=y z=z
             """,
             """
-!node x=0 y=1
-!node x=2 y=3
-!node x=4 y=5
-!node x=6 y=7
-!node x=8
-            """)
+!node x=0 y=1 z=0
+!node x=2 y=3 z=0
+!node x=4 y=5 z=0
+!node x=6 y=7 z=0
+!node x=8 z=0
+            """, z=0)
 
     def test_nested_loops(self):
         self.assertCodeOutput(
             """
+let n=4
 for i in ..n
     !group i=i
         for j in ..i
-            !item numbers=(k*(j+1) for k in 1..i+1)
+            !item numbers=(k*(j+1) for k in m..i+1)
             """,
             """
 !group i=0
@@ -203,7 +209,7 @@ for i in ..n
  !item numbers=1;2;3
  !item numbers=2;4;6
  !item numbers=3;6;9
-            """, n=4)
+            """, m=1)
 
     def test_if(self):
         self.assertCodeOutput(
