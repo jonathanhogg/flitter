@@ -1,6 +1,4 @@
 
-import bloom_filter from 'common/filters.fl'
-
 let SIZE=1080;1080
     CYCLE=($(:bubble;:clock) or 0)/15
     NBUBBLES=500
