@@ -146,6 +146,26 @@ class TestBasicInstructions(unittest.TestCase):
         self.assertEqual(stack[2], [0, 1, 2])
         self.assertEqual(stack[3], ['a', 'b', 'c'])
 
+    def test_LiteralNode_sharing(self):
+        foo = Vector([Node('foo', attributes={'y': Vector(10)})])
+        bar = Vector([Node('bar'), Node('baz')])
+        self.program.literal(foo)
+        self.program.literal(foo)
+        self.program.literal(bar)
+        self.program.append()
+        self.program.literal(5)
+        self.program.attributes(('x',))
+        stack = self.program.execute(self.context)
+        self.assertEqual(len(stack), 2)
+        self.assertIs(stack[0][0], foo[0])
+        self.assertEqual(repr(stack[1]), "(!foo y=10 x=5\n !bar\n !baz)")
+        self.assertIsNot(stack[1][0], foo[0])
+        children = tuple(stack[1][0].children)
+        self.assertIs(children[0], bar[0])
+        self.assertIs(children[1], bar[1])
+        self.assertEqual(repr(foo), "(!foo y=10)")
+        self.assertEqual(repr(bar), "(!bar);(!baz)")
+
     def test_Compose(self):
         self.program.literal(3)
         self.program.literal(4)

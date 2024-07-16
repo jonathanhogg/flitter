@@ -777,19 +777,18 @@ cdef inline execute_attributes(VectorStack stack, tuple names):
         if type(<object>nodeptr) is not Node:
             continue
         if nodeptr.ob_refcnt > 1:
-            copy = <Node>Node.__new__(Node)
-            copy.kind = (<Node>nodeptr).kind
-            if (<Node>nodeptr)._tags is not None:
-                copy._tags = set((<Node>nodeptr)._tags)
-            if (<Node>nodeptr)._attributes is not None:
-                copy._attributes = PyDict_Copy((<Node>nodeptr)._attributes)
-            copy._children = (<Node>nodeptr)._children
+            copy = (<Node>nodeptr).copy()
             Py_INCREF(copy)
             PyTuple_SET_ITEM(nodes, i, copy)
             Py_DECREF(<Node>nodeptr)
             nodeptr = <PyObject*>copy
         attrptr = <PyObject*>(<Node>nodeptr)._attributes
-        if attrptr is <PyObject*>None:
+        if (<Node>nodeptr)._attributes_shared:
+            attributes = PyDict_Copy(<object>attrptr)
+            (<Node>nodeptr)._attributes = attributes
+            (<Node>nodeptr)._attributes_shared = False
+            attrptr = <PyObject*>(<Node>nodeptr)._attributes
+        elif attrptr is <PyObject*>None:
             attributes = PyDict_New()
             attrptr = <PyObject*>attributes
             (<Node>nodeptr)._attributes = attributes
