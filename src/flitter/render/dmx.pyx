@@ -188,7 +188,7 @@ cdef class DMX:
             self.driver = None
 
     async def update(self, engine, model.Node node, **kwargs):
-        driver = node.get('driver', 1, str, '').lower()
+        driver = node.get('driver', 1, str, '')
         cls = {'entec': EntecDMXDriver, 'outputarts': OutputArtsDMXDriver}.get(driver)
         if cls is not None:
             tty = node.get('id', 1, str)
@@ -211,7 +211,7 @@ cdef class DMX:
         cdef list channels
         cdef int start, end, i, n=1
         for child in node.children:
-            if child.kind == 'fixture':
+            if child.kind is 'fixture':
                 address = child.get('address', 1, int)
                 channels = child.get('channels', 0, float)
                 if address is not None and channels is not None:

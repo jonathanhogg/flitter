@@ -282,13 +282,13 @@ cdef void update_context(Node node, ctx):
     if not node._attributes:
         return
     for key, value in node._attributes.items():
-        if key == 'translate':
+        if key is 'translate':
             if (translate := value.match(2, float)) is not None:
                 ctx.translate(*translate)
-        elif key == 'rotate':
+        elif key is 'rotate':
             if (rotate := value.match(1, float)) is not None:
                 ctx.rotate(rotate * 360)
-        elif key == 'scale':
+        elif key is 'scale':
             if (scale := value.match(2, float)) is not None:
                 ctx.scale(*scale)
 
@@ -311,7 +311,7 @@ cdef object update_paint(Node node, start_paint, colorspace):
         return start_paint
     paint = start_paint
     for key, value in node._attributes.items():
-        if key == 'color':
+        if key is 'color':
             if (color := get_color(node)) is not None:
                 if paint is start_paint:
                     paint = skia.Paint(paint)
@@ -336,17 +336,17 @@ cdef object update_paint(Node node, start_paint, colorspace):
                 if paint is start_paint:
                     paint = skia.Paint(paint)
                 paint.setStrokeCap(stroke_cap)
-        elif key == 'composite':
+        elif key is 'composite':
             if (composite := Composite.get(value.match(1, str))) is not None:
                 if paint is start_paint:
                     paint = skia.Paint(paint)
                 paint.setBlendMode(composite)
-        elif key == 'antialias':
+        elif key is 'antialias':
             if (antialias := value.match(1, bool)) is not None:
                 if paint is start_paint:
                     paint = skia.Paint(paint)
                 paint.setAntiAlias(antialias)
-        elif key == 'dither':
+        elif key is 'dither':
             if (dither := value.match(1, bool)) is not None:
                 if paint is start_paint:
                     paint = skia.Paint(paint)
@@ -400,15 +400,15 @@ cdef object make_shader(ctx, Node node, paint, dict references, colorspace):
             shaders.append(shader)
 
     cdef str kind = node.kind
-    if kind == 'color':
+    if kind is 'color':
         color = get_color(node, paint.getColor())
         return skia.Shaders.Color(color, colorspace)
 
-    elif kind == 'gradient':
+    elif kind is 'gradient':
         colors = []
         positions = []
         for child in node._children:
-            if child.kind == 'stop':
+            if child.kind is 'stop':
                 positions.append(child.get('offset', 1, float))
                 colors.append(get_color(child, paint.getColor4f()).toColor())
         nstops = len(positions)
@@ -424,38 +424,38 @@ cdef object make_shader(ctx, Node node, paint, dict references, colorspace):
                 matrix = skia.Matrix.Scale(*radius).postRotate(rotate * 360).postTranslate(*node.get('point', 2, float, (0, 0)))
                 return skia.GradientShader.MakeRadial(skia.Point(0, 0), 1, colors, positions, localMatrix=matrix)
 
-    elif kind == 'noise':
+    elif kind is 'noise':
         if (frequency := node.get('frequency', 2, float)) is not None:
             octaves = node.get('octaves', 1, int, 8)
             seed = node.get('seed', 1, float, 0)
             size = skia.ISize(*node.get('size', 2, int, (0, 0)))
             noise_type = node.get('type', 1, str, 'improved')
-            if noise_type == 'fractal':
+            if noise_type is 'fractal':
                 return skia.PerlinNoiseShader.MakeFractalNoise(*frequency, octaves, seed, size)
-            elif noise_type == 'turbulence':
+            elif noise_type is 'turbulence':
                 return skia.PerlinNoiseShader.MakeTurbulence(*frequency, octaves, seed, size)
             else:
                 return skia.PerlinNoiseShader.MakeImprovedNoise(*frequency, octaves, seed)
 
-    elif kind == 'blend':
+    elif kind is 'blend':
         if len(shaders) == 2:
             if (ratio := node.get('ratio', 1, float)) is not None:
                 return skia.Shaders.Lerp(min(max(0, ratio), 1), *shaders)
             if (mode := Composite.get(node.get('mode', 1, str, 'over'))) is not None:
                 return skia.Shaders.Blend(skia.BlendMode(mode), *shaders)
 
-    elif kind == 'pattern':
+    elif kind is 'pattern':
         if (image := make_image(ctx, node, references)) is not None:
             matrix = skia.Matrix()
             if node._attributes:
                 for key, value in node._attributes.items():
-                    if key == 'translate':
+                    if key is 'translate':
                         if (translate := value.match(2, float)) is not None:
                             matrix.postTranslate(*translate)
-                    elif key == 'rotate':
+                    elif key is 'rotate':
                         if (rotate := value.match(1, float)) is not None:
                             matrix.postRotate(rotate * 360)
-                    elif key == 'scale':
+                    elif key is 'scale':
                         if (scale := value.match(2, float)) is not None:
                             matrix.postScale(*scale)
             return image.makeShader(skia.TileMode.kRepeat, skia.TileMode.kRepeat, localMatrix=matrix)
@@ -472,10 +472,10 @@ cdef object make_image_filter(Node node, paint, colorspace):
             sub_filters.append(image_filter)
 
     cdef str kind = node.kind
-    if kind == 'source':
+    if kind is 'source':
         return None
 
-    elif kind == 'blend':
+    elif kind is 'blend':
         if len(sub_filters) == 2:
             if (coefficients := node.get('coefficients', 4, float)) is not None:
                 return skia.ImageFilters.Arithmetic(*coefficients, True, *sub_filters)
@@ -484,12 +484,12 @@ cdef object make_image_filter(Node node, paint, colorspace):
             if (mode := Composite.get(node.get('mode', 1, str))) is not None:
                 return skia.ImageFilters.Xfermode(mode, *sub_filters)
 
-    elif kind == 'blur':
+    elif kind is 'blur':
         if len(sub_filters) <= 1 and (radius := node.get('radius', 2, float)) is not None:
             input_filter = sub_filters[0] if len(sub_filters) == 1 else None
             return skia.ImageFilters.Blur(*radius, skia.TileMode.kClamp, input=input_filter)
 
-    elif kind == 'shadow':
+    elif kind is 'shadow':
         if len(sub_filters) <= 1 and (radius := node.get('radius', 2, float)) is not None:
             input_filter = sub_filters[0] if len(sub_filters) == 1 else None
             offset = node.get('offset', 2, float, (0, 0))
@@ -498,22 +498,22 @@ cdef object make_image_filter(Node node, paint, colorspace):
                 return skia.ImageFilters.DropShadowOnly(*offset, *radius, color.toColor(), input=input_filter)
             return skia.ImageFilters.DropShadow(*offset, *radius, color.toColor(), input=input_filter)
 
-    elif kind == 'offset':
+    elif kind is 'offset':
         if len(sub_filters) <= 1 and (offset := node.get('offset', 2, float)) is not None:
             input_filter = sub_filters[0] if len(sub_filters) == 1 else None
             return skia.ImageFilters.Offset(*offset, input=input_filter)
 
-    elif kind == 'dilate':
+    elif kind is 'dilate':
         if len(sub_filters) <= 1 and (radius := node.get('radius', 2, float)) is not None:
             input_filter = sub_filters[0] if len(sub_filters) == 1 else None
             return skia.ImageFilters.Dilate(*radius, input=input_filter)
 
-    elif kind == 'erode':
+    elif kind is 'erode':
         if len(sub_filters) <= 1 and (radius := node.get('radius', 2, float)) is not None:
             input_filter = sub_filters[0] if len(sub_filters) == 1 else None
             return skia.ImageFilters.Erode(*radius, input=input_filter)
 
-    elif kind == 'paint':
+    elif kind is 'paint':
         if len(sub_filters) == 0:
             paint = update_paint(node, paint, colorspace)
             return skia.ImageFilters.Paint(paint)
@@ -564,7 +564,7 @@ cdef object make_path_effect(Node node):
             sub_path_effects.append(path_effect)
 
     cdef str kind = node.kind
-    if kind == 'dash':
+    if kind is 'dash':
         if len(sub_path_effects) <= 1 and (intervals := node.get('intervals', 0, float)):
             offset = node.get('offset', 1, float, 0)
             path_effect = skia.DashPathEffect.Make(intervals, offset)
@@ -575,7 +575,7 @@ cdef object make_path_effect(Node node):
             path_effect = skia.CornerPathEffect.Make(radius)
             return path_effect if not sub_path_effects else skia.PathEffect.MakeCompose(path_effect, sub_path_effects[0])
 
-    elif kind == 'jitter':
+    elif kind is 'jitter':
         if len(sub_path_effects) <= 1 and (length := node.get('length', 1, float)) and (deviation := node.get('deviation', 1, float)):
             seed = node.get('seed', 1, int, 0)
             path_effect = skia.DiscretePathEffect.Make(length, deviation, seed)
@@ -597,7 +597,7 @@ cdef object make_path_effect(Node node):
                 path_effect = skia.MatrixPathEffect.Make(skia.Matrix.MakeAll(*matrix))
                 return path_effect if not sub_path_effects else skia.PathEffect.MakeCompose(path_effect, sub_path_effects[0])
 
-    elif kind == 'sum':
+    elif kind is 'sum':
         if len(sub_path_effects) >= 2:
             return functools.reduce(skia.PathEffect.MakeSum, sub_path_effects)
 
@@ -630,7 +630,7 @@ cpdef object _draw(Node node, Node parent, ctx, paint, font, path, dict stats, d
     cdef double x, y, rx, ry, sx, sy
     cdef bint fill, stroke
 
-    if kind == 'group':
+    if kind is 'group':
         ctx.save()
         path = skia.Path()
         update_path(node, path)
@@ -641,24 +641,24 @@ cpdef object _draw(Node node, Node parent, ctx, paint, font, path, dict stats, d
             group_paint = _draw(child, node, ctx, group_paint, font, path, stats, references, colorspace)
         ctx.restore()
 
-    elif kind == 'transform':
+    elif kind is 'transform':
         ctx.save()
         update_context(node, ctx)
         for child in node._children:
             paint = _draw(child, node, ctx, paint, font, path, stats, references, colorspace)
         ctx.restore()
 
-    elif kind == 'paint':
+    elif kind is 'paint':
         paint_paint = update_paint(node, paint, colorspace)
         for child in node._children:
             paint_paint = _draw(child, node, ctx, paint_paint, font, path, stats, references, colorspace)
 
-    elif kind == 'font':
+    elif kind is 'font':
         font = update_font(node, font)
         for child in node._children:
             paint = _draw(child, node, ctx, paint, font, path, stats, references, colorspace)
 
-    elif kind == 'path':
+    elif kind is 'path':
         path = skia.Path()
         update_path(node, path)
         for child in node._children:
@@ -688,7 +688,7 @@ cpdef object _draw(Node node, Node parent, ctx, paint, font, path, dict stats, d
             ccw = node.get('ccw', 1, bool, False)
             path.arcTo(rx, ry, rotate, large, ccw, x, y)
 
-    elif kind == 'arc':
+    elif kind is 'arc':
         if (point := node.get('point', 2, float, (0, 0))) is not None and (radius := node.get('radius', 2, float)) is not None:
             x, y = point
             rx, ry = radius
@@ -701,7 +701,7 @@ cpdef object _draw(Node node, Node parent, ctx, paint, font, path, dict stats, d
                 move_to = node.get('move_to', 1, bool, False)
                 path.arcTo(skia.Rect(x-rx, y-ry, x+rx, y+ry), start*360, sweep*360, move_to)
 
-    elif kind == 'rect':
+    elif kind is 'rect':
         if (size := node.get('size', 2, float)) is not None:
             sx, sy = size
             x, y = node.get('point', 2, float, (0, 0))
@@ -717,7 +717,7 @@ cpdef object _draw(Node node, Node parent, ctx, paint, font, path, dict stats, d
                 draw_paint.setStyle((FillStyle if not stroke else StrokeAndFillStyle) if fill else StrokeStyle)
                 ctx.drawPath(path, draw_paint)
 
-    elif kind == 'ellipse':
+    elif kind is 'ellipse':
         if (radius := node.get('radius', 2, float)) is not None:
             rx, ry = radius
             x, y = node.get('point', 2, float, (0, 0))
@@ -729,7 +729,7 @@ cpdef object _draw(Node node, Node parent, ctx, paint, font, path, dict stats, d
                 draw_paint.setStyle((FillStyle if not stroke else StrokeAndFillStyle) if fill else StrokeStyle)
                 ctx.drawPath(path, draw_paint)
 
-    elif kind == 'line':
+    elif kind is 'line':
         if node._attributes and (points := node._attributes.get('points')) is not None and points.numbers is not NULL:
             curve = node.get('curve', 1, float, 0)
             close = node.get('close', 1, bool, False)
@@ -741,26 +741,26 @@ cpdef object _draw(Node node, Node parent, ctx, paint, font, path, dict stats, d
                 draw_paint.setStyle((FillStyle if not stroke else StrokeAndFillStyle) if fill else StrokeStyle)
                 ctx.drawPath(path, draw_paint)
 
-    elif kind == 'close':
+    elif kind is 'close':
         path.close()
 
-    elif kind == 'clip':
+    elif kind is 'clip':
         ctx.clipPath(path, skia.ClipOp.kIntersect, paint.isAntiAlias())
 
-    elif kind == 'mask':
+    elif kind is 'mask':
         ctx.clipPath(path, skia.ClipOp.kDifference, paint.isAntiAlias())
 
-    elif kind == 'fill':
+    elif kind is 'fill':
         fill_paint = update_paint(node, paint, colorspace)
         fill_paint.setStyle(FillStyle)
         ctx.drawPath(path, fill_paint)
 
-    elif kind == 'stroke':
+    elif kind is 'stroke':
         stroke_paint = update_paint(node, paint, colorspace)
         stroke_paint.setStyle(StrokeStyle)
         ctx.drawPath(path, stroke_paint)
 
-    elif kind == 'text':
+    elif kind is 'text':
         if (text := node.get('text', 1, str)) is not None:
             x, y = node.get('point', 2, float, (0, 0))
             text_paint = update_paint(node, paint, colorspace)
@@ -777,7 +777,7 @@ cpdef object _draw(Node node, Node parent, ctx, paint, font, path, dict stats, d
             else:
                 ctx.drawString(text, x, y, font, text_paint)
 
-    elif kind == 'image':
+    elif kind is 'image':
         if (image := make_image(ctx, node, references)) is not None:
             width, height = image.width(), image.height()
             point = node.get('point', 2, float, (0, 0))
@@ -806,7 +806,7 @@ cpdef object _draw(Node node, Node parent, ctx, paint, font, path, dict stats, d
                 dst = skia.Rect.MakeXYWH(*point, *size)
             ctx.drawImageRect(image, src, dst, paint=paint)
 
-    elif kind == 'layer':
+    elif kind is 'layer':
         if (size := node.get('size', 2, float)) is not None:
             alpha = node.get('alpha', 1, float, 1)
             origin = node.get('origin', 2, float, (0, 0))

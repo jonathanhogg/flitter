@@ -304,6 +304,7 @@ cdef class Vector:
 
     @staticmethod
     cdef Vector _symbol(str symbol):
+        symbol = intern(symbol)
         # Symbols are the top 52 bits of the FNV-1a string hash multiplied by -0x1p1023
         cdef uint64_t code = HASH_STRING(symbol)
         cdef double number = double_long(l=SymbolPrefix | (code >> 12)).f
@@ -502,6 +503,8 @@ cdef class Vector:
                     text += (<Node>objptr).kind
                 elif callable(<object>objptr) and hasattr(<object>objptr, '__name__'):
                     text += (<object>objptr).__name__
+        elif n == 1:
+            return SymbolTable.get(self.numbers[0], f'{self.numbers[0]:.9g}')
         elif n:
             for i in range(n):
                 text += SymbolTable.get(self.numbers[i], f'{self.numbers[i]:.9g}')
@@ -616,7 +619,7 @@ cdef class Vector:
                 obj = <object>PyTuple_GET_ITEM(self.objects, 0)
                 if (t is str or t is None) and type(obj) is float and (symbol := SymbolTable.get(obj)) is not None:
                     obj = symbol
-                if t is not None:
+                if t is not None and type(obj) is not t:
                     obj = t(obj)
                 if n == 1:
                     return obj
@@ -633,7 +636,7 @@ cdef class Vector:
                     obj = <object>PyTuple_GET_ITEM(self.objects, i)
                     if (t is str or t is None) and type(obj) is float and (symbol := SymbolTable.get(obj)) is not None:
                         obj = symbol
-                    if t is not None:
+                    if t is not None and type(obj) is not t:
                         obj = t(obj)
                     Py_INCREF(obj)
                     PyList_SET_ITEM(values, i, obj)
