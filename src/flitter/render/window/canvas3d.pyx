@@ -456,8 +456,8 @@ cdef void collect(Node node, Matrix44 transform_matrix, Material material, Rende
         new_render_group.composite = node.get_str('composite', 'over' if render_group is None else render_group.composite).lower()
         vertex_shader = node.get_str('vertex', None)
         fragment_shader = node.get_str('fragment', None)
-        new_render_group.vertex_shader_template = Template(vertex_shader) if vertex_shader is not None else None
-        new_render_group.fragment_shader_template = Template(fragment_shader) if fragment_shader is not None else None
+        new_render_group.vertex_shader_template = Template(vertex_shader, lookup=TemplateLoader) if vertex_shader is not None else None
+        new_render_group.fragment_shader_template = Template(fragment_shader, lookup=TemplateLoader) if fragment_shader is not None else None
         new_render_group.names = {}
         if node._attributes:
             for name, value in node._attributes.items():
