@@ -228,7 +228,11 @@ fragment shader via an `out vec2`
 will be written to the node's texture
 
 The vertex and fragment shaders have a number of available uniforms that
-will be populated if declared:
+will be automatically set if declared:
+
+`uniform int passes`
+: Will be set to the number of times that this shader will be executed as
+specified by the `passes` attribute or `1` if not specified.
 
 `uniform int pass`
 : Will be set to the pass number of this execution, counting from `0`.
@@ -261,26 +265,83 @@ frame.
 : A value in the range $[0.5,2]$ that indicates how well the engine is managing
 to hit the target frame-rate.
 
+`uniform float alpha`
+: The value of the `alpha` attribute on the node or a default value of `1`.
+This is *not* automatically applied to the output of custom fragment shaders
+and must be implemented in the code if desired.
+
+`uniform float gamma`
+: The value of the `gamma` attribute on the node or a default value of `1`.
+This is *not* automatically applied to the output of custom fragment shaders
+and must be implemented in the code if desired.
+
 `uniform sampler2D` [ `texture0` | `texture1` | … ]
 : These will be bound to the texture of each child node in turn.
 
 `uniform sampler2D last`
 : If specified, this sampler allows access to the final output of the shader
-from the previous frame if this is the first (or only) pass, or the output of
+from the previous frame, if this is the first (or only) pass, or the output of
 the previous pass otherwise.
 
 `uniform sampler2D first`
-: If specified, this sampler allows access to the output of the first pass of
-the shader (`pass` equal to `0`). For the first pass this sampler is undefined,
+: If specified, this sampler allows access to the output of the *first pass* of
+the shader (`pass` equal to `0`). In the first pass this sampler is undefined,
 for the second pass it will be identical to `last`. Its utility comes in
 shaders with more than 2 passes, where it allows later passes to refer to the
 results of an initial processing step.
 
 In addition to these, the shader program may declare arbitrary numeric uniforms
 that can be set using attributes with matching names on the shader node.
-`float`, `vec2`, `vec3` and `vec4` uniforms expect 1-, 2- , 3- and 4-item
-numeric vectors, respectively; arrays of these types expect vectors with an
-appropriate multiple of these sizes.
+`float`, `vec2`, `vec3`, `vec4`, `mat3` and `mat4` uniforms expect 1-, 2- , 3-,
+4-, 9- and 16-item numeric vectors, respectively; arrays of these types expect
+vectors with an appropriate multiple of these sizes. `int`s, `double`s and
+`bool`s, plus their `vec` and `mat` variants are also supported.
+
+If an attribute matching the uniform is not provided (or is of an incorrect
+type) then the uniform will have the OpenGL uninitialized value (an appropriate
+variant of 0) or whatever default is supplied in the shader code if using
+uniform initializers (which appear to be variably supported by different
+OpenGL implementations).
+
+:::{note}
+If a custom uniform attribute becomes unset (i.e., `null` or missing) after
+having previously had a value, the shader program will retain the *last value*
+of that uniform rather than resetting to 0 or the initializer value.
+:::
+
+### Shader templating
+
+**Flitter** uses [Mako templates](https://www.makotemplates.org) internally to
+allow shaders to adapt to different uses. Shader code will be evaluated using
+this before being compiled. All of the uniform names described above (except
+`pass`), including any custom attributes on the `!shader` node, are available
+as values to the template logic. In addition, the following special names are
+defined:
+
+`HEADER`
+: Will be set to either the standard OpenGL 3.3 version header or an OpenGL ES
+3.0 version header, depending on whether the engine is runnning in ES mode or
+not. Shader code that is compatible with both of these versions (which includes
+all of the internal **Flitter** GLSL code) can include `${HEADER}` as the first
+line to automatically adapt.
+
+`child_textures`
+: Will be set to a list of strings representing the uniform name for each of
+the sub-nodes of this shader, e.g., `texture0`. If the shader has no children
+then this list will be empty. A shader can use template `<% for %/>` loops to
+declare the correct sampler uniforms and process multiple input textures.
+
+Note that if a shader is templated on a value, then it will be automatically
+recompiled if that value changes (or, to be precise, the changed value causes
+a change in the evaluated source text). This will cause severe rendering
+performance problems if if occurs frequently. So, while templating on the value
+of `passes` or perhaps `size` would be a reasonable thing to do, templating
+on the value of `beat` would be a bad idea.
+
+The current value of `pass` is *not* provided to the template engine – the same
+shader program is always used for every pass of a multi-pass shader. Shader
+programs must use the `pass` uniform and switch behaviour in code for different
+passes.
 
 ## `!image`
 

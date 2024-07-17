@@ -40,6 +40,7 @@ COLOR_FORMATS = {
     32: ColorFormat('f4', GL_RGBA32F)
 }
 
+RESERVED_NAMES = {'fragment', 'vertex', 'loop', 'context', 'UNDEFINED'}
 DEFAULT_LINEAR = False
 DEFAULT_COLORBITS = 16
 PUSHED = Vector.symbol('pushed')
@@ -223,19 +224,25 @@ class ProgramNode(SceneNode):
             self._last = None
             self._first = None
 
-    def get_vertex_source(self, node, **kwargs):
-        if 'vertex' in node:
-            vertex = Template(node.get('vertex', 1, str), lookup=TemplateLoader)
-        else:
-            vertex = self.DEFAULT_VERTEX_SOURCE
-        return vertex.render(HEADER=self.glctx.extra['HEADER'], child_textures=list(self.child_textures), **kwargs)
+    def get_vertex_source(self, node, **defaults):
+        vertex = Template(node.get('vertex', 1, str), lookup=TemplateLoader) if 'vertex' in node else self.DEFAULT_VERTEX_SOURCE
+        names = dict(defaults)
+        for name, value in node.items():
+            if name not in RESERVED_NAMES:
+                names[name] = value
+        names['child_textures'] = list(self.child_textures)
+        names['HEADER'] = self.glctx.extra['HEADER']
+        return vertex.render(**names)
 
-    def get_fragment_source(self, node, **kwargs):
-        if 'fragment' in node:
-            fragment = Template(node.get('fragment', 1, str), lookup=TemplateLoader)
-        else:
-            fragment = self.DEFAULT_FRAGMENT_SOURCE
-        return fragment.render(HEADER=self.glctx.extra['HEADER'], child_textures=list(self.child_textures), **kwargs)
+    def get_fragment_source(self, node, **defaults):
+        fragment = Template(node.get('fragment', 1, str), lookup=TemplateLoader) if 'fragment' in node else self.DEFAULT_FRAGMENT_SOURCE
+        names = dict(defaults)
+        for name, value in node.items():
+            if name not in RESERVED_NAMES:
+                names[name] = value
+        names['child_textures'] = list(self.child_textures)
+        names['HEADER'] = self.glctx.extra['HEADER']
+        return fragment.render(**names)
 
     def make_secondary_texture(self):
         raise NotImplementedError()
