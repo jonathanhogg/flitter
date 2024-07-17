@@ -203,12 +203,19 @@ texture.
 
 The default shader program (and that also used for `!window`, `!offscreen`
 nodes) is a single-pass shader that composites together the output textures of
-all child nodes with a blend function that can be controlled with the following
-attribute:
+all child nodes. It can be controlled with the following attributes:
 
 `composite=` [ `:over` | `:dest_over` | `:lighten` | `:darken` | `:add` | `:difference` | `:multiply` ]
-: Specifies the blend function to use in the standard compositing shader
-program. Defaults to `:over`.
+: Specifies the blend function to use, default `:over`.
+
+`gamma=` *ALPHA*
+: Specifies a gamma curve correction to be applied after compositing, default
+`1` (i.e., no correction). Values less than 1 will lighten the output image and
+values greater than 1 will darken it.
+
+`alpha=` *ALPHA*
+: Specifies a final alpha value to be applied to the entire shader output,
+default `1`.
 
 If more specialised behaviour is required then a custom shader program can be
 specified. The rendering approach is as follows:
@@ -333,6 +340,14 @@ default is `false`.
 overall performance, but introduces a small delay on the first frame. This delay
 may be unacceptable if the video needs to start immediately on load.
 
+`gamma=` *ALPHA*
+: Specifies a gamma curve correction to be applied to the video frames, default
+`1` (i.e., no correction). Values less than 1 will lighten the output image and
+values greater than 1 will darken it.
+
+`alpha=` *ALPHA*
+: Specifies a final alpha value to be applied to the video frames, default `1`.
+
 Like `!image`, `!video` does not inherit its size from its parent. However,
 unlike `!image`, the `!video` output texture will *always* match the pixel
 dimensions of the video and any `size` attribute is ignored.
@@ -449,7 +464,8 @@ In addition to the nodes above, a set of useful filters are provided, each of
 which is implemented as an OpenGL shader program. Each of these nodes, in common
 with the default [`!shader` program](#shader), accepts one or more child nodes
 which will be composited together with the blend function controlled with
-the `composite` attribute (default `:over`).
+the `composite` attribute (default `:over`). All of the filters also support
+the standard shader `gamma` and `alpha` attributes.
 
 ### `!adjust`
 

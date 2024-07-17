@@ -16,6 +16,8 @@ uniform vec2 origin;
 uniform float z;
 uniform vec3 scale;
 uniform vec3 tscale;
+uniform float alpha;
+uniform float gamma;
 % for name in child_textures:
 uniform sampler2D ${name};
 % endfor
@@ -92,5 +94,6 @@ void main() {
         weight += multiplier;
         multiplier *= roughness;
     }
-    color = vec4(sum/weight*0.5 + 0.5, 1.0);
+    vec4 merged = vec4(sum/weight*0.5 + 0.5, 1.0);
+    color = gamma == 1.0 ? merged * alpha : pow(merged * alpha, vec4(gamma));
 }
