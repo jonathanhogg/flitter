@@ -811,10 +811,9 @@ with the attributes:
 `normal=` *nX*`;`*nY*`;`*nZ*
 : The normal of the cutting plane (plane "up" direction).
 
-Everything on the "up" side of the plane will be discarded. The engine will
-attempt to fill holes left in the mesh – though this may not succeed for complex
-shapes. The `!slice` node may have multiple child nodes, in which case the
-result will be equivalent to a slice of the `!union` of the child nodes.
+Everything on the "up" side of the plane will be discarded. The `!slice` node
+may have multiple child nodes, in which case the result will be equivalent to a
+slice of the `!union` of the child nodes.
 
 A model construction tree may contain `!transform` nodes at any point. These
 differ from normal transformations in that they apply the transforms to the

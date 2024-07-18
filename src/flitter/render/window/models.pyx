@@ -1,6 +1,7 @@
 
 import cython
 from loguru import logger
+import manifold3d
 import numpy as np
 import trimesh
 
@@ -349,7 +350,12 @@ cdef class SlicedModel(ModelTransformer):
             self.original.build_trimesh_model()
         if self.original.trimesh_model is not None:
             logger.trace("Slice model {}", self.original.name)
-            trimesh_model = self.original.trimesh_model.slice_plane(tuple(self.origin), tuple(self.normal.neg()), True)
+            trimesh_model = self.original.get_watertight_trimesh_model()
+            manifold = manifold3d.Manifold(mesh=manifold3d.Mesh(vert_properties=np.array(trimesh_model.vertices, dtype=np.float32),
+                                                                tri_verts=np.array(trimesh_model.faces, dtype=np.uint32)))
+            normal = self.normal.neg()
+            mesh = manifold.trim_by_plane(normal=tuple(normal), origin_offset=self.origin.dot(normal)).to_mesh()
+            trimesh_model = trimesh.base.Trimesh(vertices=mesh.vert_properties, faces=mesh.tri_verts)
             self.trimesh_model = trimesh_model if len(trimesh_model.vertices) and len(trimesh_model.faces) else None
         else:
             self.trimesh_model = None
