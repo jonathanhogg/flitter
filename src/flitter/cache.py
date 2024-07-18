@@ -35,19 +35,18 @@ class CachePath:
     def cleanup(self):
         while self._cache:
             key, value = self._cache.popitem()
-            match key:
-                case 'video', _:
-                    container, decoder, frames = value
-                    if decoder is not None:
-                        decoder.close()
-                    if container is not None:
-                        container.close()
-                        logger.debug("Closing video: {}", self._path)
-                case 'video_output':
-                    writer, queue, *_ = value
-                    if queue is not None:
-                        queue.put(None)
-                        writer.join()
+            if key[0] == 'video':
+                container, decoder, frames = value
+                if decoder is not None:
+                    decoder.close()
+                if container is not None:
+                    container.close()
+                    logger.debug("Closing video: {}", self._path)
+            elif key[0] == 'video_output':
+                writer, queue = value
+                if queue is not None:
+                    queue.put(None)
+                    writer.join()
 
     def check_unmodified(self):
         self._touched = system_clock()
@@ -58,7 +57,7 @@ class CachePath:
         if mtime == self._mtime:
             return True
         self._mtime = mtime
-        self._cache = {}
+        self.cleanup()
         return False
 
     def read_text(self, encoding=None, errors=None):
@@ -80,7 +79,7 @@ class CachePath:
         return text
 
     def read_bytes(self):
-        key = 'bytes'
+        key = 'bytes',
         if self.check_unmodified() and (data := self._cache.get(key, False)) is not False:
             return data
         if self._mtime is None:
@@ -147,9 +146,10 @@ class CachePath:
         return program
 
     def read_csv_vector(self, row_number):
+        key = 'csv_vector',
         import csv
         from .model import Vector, null
-        if self.check_unmodified() and (cached := self._cache.get('csv', False)) is not False:
+        if self.check_unmodified() and (cached := self._cache.get(key, False)) is not False:
             reader, rows = cached
         elif self._mtime is None:
             logger.warning("File not found: {}", self._path)
@@ -183,13 +183,14 @@ class CachePath:
             except Exception as exc:
                 logger.opt(exception=exc).warning("Error reading CSV: {}", self._path)
                 reader = None
-        self._cache['csv'] = reader, rows
+        self._cache[key] = reader, rows
         if 0 <= row_number < len(rows):
             return rows[row_number]
         return null
 
     def read_pil_image(self):
-        if self.check_unmodified() and (image := self._cache.get('pil_image', False)) is not False:
+        key = 'pil_image',
+        if self.check_unmodified() and (image := self._cache.get(key, False)) is not False:
             return image
         import PIL.Image
         if self._mtime is None:
@@ -203,11 +204,12 @@ class CachePath:
                 image = None
             else:
                 logger.debug("Read image file: {}", self._path)
-        self._cache['pil_image'] = image
+        self._cache[key] = image
         return image
 
     def read_skia_image(self):
-        if self.check_unmodified() and (image := self._cache.get('skia_image', False)) is not False:
+        key = 'skia_image',
+        if self.check_unmodified() and (image := self._cache.get(key, False)) is not False:
             return image
         import skia
         if self._mtime is None:
@@ -221,7 +223,7 @@ class CachePath:
                 image = None
             else:
                 logger.debug("Read image file: {}", self._path)
-        self._cache['skia_image'] = image
+        self._cache[key] = image
         return image
 
     def read_video_frames(self, obj, position, loop=False, threading=False):
@@ -306,7 +308,8 @@ class CachePath:
         return ratio, current_frame, next_frame
 
     def read_trimesh_model(self):
-        if self.check_unmodified() and (trimesh_model := self._cache.get('trimesh', False)) is not False:
+        key = 'trimesh',
+        if self.check_unmodified() and (trimesh_model := self._cache.get(key, False)) is not False:
             return trimesh_model
         if self._mtime is None:
             logger.warning("File not found: {}", self._path)
@@ -320,14 +323,15 @@ class CachePath:
                 trimesh_model = None
             else:
                 logger.debug("Read {}v/{}f mesh: {}", len(trimesh_model.vertices), len(trimesh_model.faces), self._path)
-        self._cache['trimesh'] = trimesh_model
+        self._cache[key] = trimesh_model
         return trimesh_model
 
     def write_image(self, framebuffer, quality=None, alpha=False):
         import PIL.Image
         import PIL.ImageCms
         self._touched = system_clock()
-        if 'write_image' in self._cache:
+        key = 'write_image', quality, alpha
+        if key in self._cache and self._path.exists():
             return
         suffix = self._path.suffix.lower()
         registered_extensions = PIL.Image.registered_extensions()
@@ -350,23 +354,15 @@ class CachePath:
                 logger.opt(exception=exc).error("Unable to save image to: {}", self._path)
             else:
                 logger.success("Saved image to file: {}", self._path)
-        self._cache['write_image'] = True
+        self._cache[key] = True
 
     def write_video_frame(self, framebuffer, timestamp, codec='h264', pixfmt='yuv420p', fps=60, realtime=False,
                           crf=None, preset=None, limit=None, alpha=False):
         import av
         self._touched = system_clock()
-        writer = queue = start = None
         width, height = framebuffer.width, framebuffer.height
-        config = [width, height, alpha, codec, pixfmt, fps, crf, preset, limit]
-        if 'video_output' in self._cache:
-            writer, queue, start, *cached_config = self._cache['video_output']
-            if cached_config != config:
-                if queue is not None:
-                    logger.debug("Closing output video container as configuration has changed")
-                    queue.put(None)
-                    writer.join()
-                container = queue = writer = start = None
+        key = 'video_output', width, height, alpha, codec, pixfmt, fps, crf, preset, limit
+        writer, queue, start = self._cache.get(key, (None, None, None))
         if start is None:
             self.cleanup()
             if self._path.exists():
@@ -392,7 +388,7 @@ class CachePath:
                 stream = container.add_stream(av_codec, rate=fps, options=options)
             except Exception as exc:
                 logger.opt(exception=exc).error("Unable to open video output: {}", self._path)
-                self._cache['video_output'] = False, None, timestamp, *config
+                self._cache[key] = False, None, timestamp
                 return
             stream.width = width
             stream.height = height
@@ -404,14 +400,14 @@ class CachePath:
             writer = threading.Thread(target=self._video_writer, args=(container, stream, queue))
             writer.start()
             start = timestamp
-            self._cache['video_output'] = writer, queue, start, *config
+            self._cache[key] = writer, queue, start
             logger.debug("Beginning {} {} video output{}: {}", av_codec.name, stream.pix_fmt, " (with alpha)" if alpha else "", self._path)
         if queue is not None and (not realtime or not queue.full()):
             frame_time = int(round((timestamp - start) * fps))
             if limit is not None and frame_time >= int(round(limit * fps)):
                 queue.put(None)
                 writer.join()
-                self._cache['video_output'] = None, None, start, *config
+                self._cache[key] = None, None, start
                 return
             frame = av.VideoFrame(width, height, 'rgba')
             line_size = frame.planes[0].line_size
