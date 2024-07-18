@@ -198,7 +198,7 @@ cdef class Flatten(UnaryOperation):
     @staticmethod
     cdef Flatten get(Model original):
         cdef str name = f'flat({original.name})'
-        cdef Flatten model = ModelCache.pop(name, None)
+        cdef Flatten model = <Flatten>ModelCache.pop(name, None)
         if model is None:
             model = Flatten.__new__(Flatten)
             model.name = name
@@ -219,7 +219,7 @@ cdef class Invert(UnaryOperation):
     @staticmethod
     cdef Invert get(Model original):
         cdef str name = f'invert({original.name})'
-        cdef Invert model = ModelCache.pop(name, None)
+        cdef Invert model = <Invert>ModelCache.pop(name, None)
         if model is None:
             model = Invert.__new__(Invert)
             model.name = name
@@ -253,7 +253,7 @@ cdef class SnappedEdgesModel(UnaryOperation):
         if minimum_area:
             name += f', {minimum_area:g}'
         name += ')'
-        cdef SnappedEdgesModel model = ModelCache.pop(name, None)
+        cdef SnappedEdgesModel model = <SnappedEdgesModel>ModelCache.pop(name, None)
         if model is None:
             model = SnappedEdgesModel.__new__(SnappedEdgesModel)
             model.name = name
@@ -278,7 +278,7 @@ cdef class Repair(UnaryOperation):
     @staticmethod
     cdef Repair get(Model original):
         cdef str name = f'repair({original.name})'
-        cdef Repair model = ModelCache.pop(name, None)
+        cdef Repair model = <Repair>ModelCache.pop(name, None)
         if model is None:
             model = Repair.__new__(Repair)
             model.name = name
@@ -314,7 +314,7 @@ cdef class Transform(UnaryOperation):
     @staticmethod
     cdef Model get(Model original, Matrix44 transform_matrix):
         cdef str name = f'{original.name}@{hex(transform_matrix.hash(False))[3:]}'
-        cdef Transform model = ModelCache.pop(name, None)
+        cdef Transform model = <Transform>ModelCache.pop(name, None)
         if model is None:
             model = Transform.__new__(Transform)
             model.name = name
@@ -361,7 +361,7 @@ cdef class Slice(UnaryOperation):
     cdef Slice get(Model original, Vector origin, Vector normal):
         original = original.watertight()
         cdef str name = f'slice({original.name}, {hex(origin.hash(False) ^ normal.hash(False))[3:]})'
-        cdef Slice model = ModelCache.pop(name, None)
+        cdef Slice model = <Slice>ModelCache.pop(name, None)
         if model is None:
             model = Slice.__new__(Slice)
             model.name = name
@@ -439,7 +439,7 @@ cdef class BooleanOperation(Model):
                 name += ', '
             name += child_model.name
         name += ')'
-        cdef BooleanOperation model = ModelCache.pop(name, None)
+        cdef BooleanOperation model = <BooleanOperation>ModelCache.pop(name, None)
         if model is None:
             model = BooleanOperation.__new__(BooleanOperation)
             model.name = name
@@ -548,7 +548,7 @@ cdef class Box(PrimitiveModel):
     @staticmethod
     cdef Box get(Node node):
         cdef str name = '!box'
-        cdef Box model = ModelCache.pop(name, None)
+        cdef Box model = <Box>ModelCache.pop(name, None)
         if model is None:
             model = Box.__new__(Box)
             model.name = name
@@ -569,7 +569,7 @@ cdef class Sphere(PrimitiveModel):
     cdef Sphere get(Node node):
         cdef int64_t segments = max(4, node.get_int('segments', DefaultSegments))
         cdef str name = f'!sphere-{segments}' if segments != DefaultSegments else '!sphere'
-        cdef Sphere model = ModelCache.pop(name, None)
+        cdef Sphere model = <Sphere>ModelCache.pop(name, None)
         if model is None:
             model = Sphere.__new__(Sphere)
             model.name = name
@@ -638,7 +638,7 @@ cdef class Cylinder(PrimitiveModel):
     cdef Cylinder get(Node node):
         cdef int64_t segments = max(2, node.get_int('segments', DefaultSegments))
         cdef str name = f'!cylinder-{segments}' if segments != DefaultSegments else '!cylinder'
-        cdef Cylinder model = ModelCache.pop(name, None)
+        cdef Cylinder model = <Cylinder>ModelCache.pop(name, None)
         if model is None:
             model = Cylinder.__new__(Cylinder)
             model.name = name
@@ -723,7 +723,7 @@ cdef class Cone(PrimitiveModel):
     cdef Cone get(Node node):
         cdef int64_t segments = max(2, node.get_int('segments', DefaultSegments))
         cdef str name = f'!cone-{segments}' if segments != DefaultSegments else '!cone'
-        cdef Cone model = ModelCache.pop(name, None)
+        cdef Cone model = <Cone>ModelCache.pop(name, None)
         if model is None:
             model = Cone.__new__(Cone)
             model.name = name
@@ -794,7 +794,7 @@ cdef class ExternalModel(Model):
         cdef str name = node.get_str('filename', None)
         if not name:
             return None
-        cdef ExternalModel model = ModelCache.pop(name, None)
+        cdef ExternalModel model = <ExternalModel>ModelCache.pop(name, None)
         if model is None:
             model = ExternalModel.__new__(ExternalModel)
             model.name = name

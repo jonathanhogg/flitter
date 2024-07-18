@@ -33,12 +33,11 @@ cdef Vector DefaultFalloff = Vector((0, 0, 1, 0))
 cdef Matrix44 IdentityTransform = Matrix44._identity()
 cdef int DEFAULT_MAX_LIGHTS = 50
 cdef double Pi = 3.141592653589793
-cdef tuple MaterialAttributes = ('color', 'metal', 'roughness', 'shininess', 'occlusion', 'emissive', 'transparency',
-                                 'texture_id', 'metal_texture_id', 'roughness_texture_id', 'occlusion_texture_id',
-                                 'emissive_texture_id', 'transparency_texture_id')
-cdef tuple TransformAttributes = ('translate', 'scale', 'rotate', 'rotate_x', 'rotate_y', 'rotate_z', 'shear_x', 'shear_y', 'shear_z')
+cdef set MaterialAttributes = {'color', 'metal', 'roughness', 'shininess', 'occlusion', 'emissive', 'transparency',
+                               'texture_id', 'metal_texture_id', 'roughness_texture_id', 'occlusion_texture_id',
+                               'emissive_texture_id', 'transparency_texture_id'}
 cdef set GroupAttributes = set(MaterialAttributes)
-GroupAttributes.update(TransformAttributes)
+GroupAttributes.update(('translate', 'scale', 'rotate', 'rotate_x', 'rotate_y', 'rotate_z', 'shear_x', 'shear_y', 'shear_z'))
 GroupAttributes.update(('max_lights', 'depth_test', 'face_cull', 'cull_face', 'composite', 'vertex', 'fragment'))
 
 cdef object StandardVertexTemplate = TemplateLoader.get_template("standard_lighting.vert")
@@ -97,25 +96,18 @@ cdef class Material:
     cdef Textures textures
 
     cdef Material update(Material self, Node node):
-        for attr in MaterialAttributes:
-            if node._attributes and attr in node._attributes:
+        if node._attributes is None:
+            return self
+        for attr in node._attributes:
+            if attr in MaterialAttributes:
                 break
         else:
             return self
         cdef Material material = Material.__new__(Material)
         material.albedo = node.get_fvec('color', 3, self.albedo)
         material.ior = max(1, node.get_float('ior', 1.5))
-        cdef double shininess = max(0, node.get_float('shininess', (10 / self.roughness - 10)**2))
-        material.roughness = min(max(1e-6, node.get_float('roughness', 10 / (10 + sqrt(shininess)))), 1)
-        cdef Vector specular = node.get_fvec('specular', 3, One3)
+        material.roughness = min(max(1e-6, node.get_float('roughness', 1)), self.roughness)
         material.metal = min(max(0, node.get_float('metal', self.metal)), 1)
-        cdef Vector k
-        if specular.ne(One3) is true_ and material.roughness < 1 and material.metal == 0:
-            k = Vector(0.001)
-            material.metal = min(max(0, k.add(specular.sub(material.albedo)).truediv(k.add(specular.add(material.albedo))).squared_sum() / 3), 1)
-            k = Vector(material.metal)
-            material.albedo = material.albedo.mul(true_.sub(k)).mul_add(k, specular)
-            material.roughness = material.roughness ** 1.5
         material.occlusion = min(max(0, node.get_float('occlusion', self.occlusion)), 1)
         material.emissive = node.get_fvec('emissive', 3, self.emissive)
         material.transparency = min(max(0, node.get_float('transparency', self.transparency)), 1)

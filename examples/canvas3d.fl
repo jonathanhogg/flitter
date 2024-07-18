@@ -6,8 +6,7 @@
 -- * Similarly, there is no support for reflections (beyond light sources and
 --   material specular reflections)
 -- * Point and spot light sources have inverse-squared fall-off in intensity
--- * Material shine can be controlled by either PBR `roughness` in the range
---   (0,1] or a Phong-like `shininess` exponent in the range [0,∞)
+-- * Material shine is controlled PBR `roughness` in the range (0,1]
 -- * `transparency` can be used to create partially or fully transparent
 --   materials which *do not* refract light, but *do* have specular reflections
 
