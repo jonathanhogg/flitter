@@ -99,111 +99,6 @@ example programs:
 $ flitter examples/hoops.fl
 ```
 
-## Developing Flitter
-
-If you want to edit the **Flitter** code, ensure that `cython` and `setuptools`
-are installed in your runtime environment, then do an *editable* package
-deployment and throw away the generated object files:
-
-```console
-$ pip3 install cython setuptools
-$ pip3 install --editable .
-$ rm src/**/*.c src/**/*.so
-```
-
-**Flitter** automatically makes use of `pyximport` to (re)compile Cython code
-on-the-fly as it runs.
-
-The code is linted with `flake8` and `cython-lint`:
-
-```console
-$ pip3 install flake8 cython-lint
-$ flake8 src tests scripts
-$ cython-lint src
-```
-
-And the test suite can be run with `pytest`:
-
-```console
-$ pip3 install pytest
-$ pytest
-```
-
-### Checking code coverage
-
-If you want to run code coverage analysis, then you will need to do a special
-in-place build with coverage enabled (Cython line tracing):
-
-```console
-$ env FLITTER_BUILD_COVERAGE=1 python3 setup.py build_ext --inplace
-```
-
-Importantly, this **will not work on Python 3.12**. This version introduced a
-change in the profiling API that Cython is not compatible with. If you are
-using Python 3.12, then you will need to do a parallel install of 3.11 and
-create a second virtual environment in which to do coverage analysis.
-
-You can then generate a code coverage report for the test suite with:
-
-```console
-$ pip3 install coverage
-$ coverage run -m pytest
-$ coverage report
-```
-
-You will need to re-run `setup.py` if you change any of the Cython code. You
-will need to delete all of these object files if you want to go back to using
-the normal `pyximport` automatic recompile (and you will want to do so as the
-coverage-enabled version of the code is *significantly* slower).
-
-### Generating the documentation
-
-To generate a local HTML copy of the documentation, install `sphinx`,
-`myst_parser` and the separate [`flitter-pygments`
-package](https://github.com/jonathanhogg/flitter-pygments) (which adds syntax
-highlighting support for **Flitter** to `pygments`).
-
-You can generate the docs with:
-
-```console
-$ pip3 install sphinx myst_parser flitter-pygments
-$ sphinx-build docs build/html
-```
-
-They can then be read from `build/html/index.html`.
-
-### Python package dependencies
-
-The first-level runtime Python package dependencies are listed below. These will
-all be installed for you by `pip`, but it's useful to know what you're getting
-into.
-
-- `av` - for encoding and decoding video
-- `glfw` - for OpenGL windowing
-- `lark` - for the language parser
-- `loguru` - for enhanced logging
-- `mako` - for templating of the GLSL source
-- `manifold3d` - used by `trimesh` for 3D boolean operations
-- `mapbox_earcut` - used by `trimesh` for triangulating polygons
-- `moderngl` - for a higher-level API to OpenGL
-- `networkx` - used by `trimesh` for graph algorithms
-- `numpy` - for fast memory crunching
-- `pillow` - for saving screenshots as image files
-- `pyserial` - for talking to DMX interfaces
-- `pyusb` - for low-level communication with the Push 2 and LaserCube
-- `regex` - used by `lark` for advanced regular expressions
-- `rtmidi2` - for talking MIDI to control surfaces
-- `rtree` - used by `trimesh` for spatial tree intersection
-- `scipy` - used by `trimesh` for computing convex hulls
-- `shapely` - used by `trimesh` for polygon operations
-- `skia-python` - for 2D drawing
-- `trimesh` - for loading 3D meshes
-
-During install, `pip` will also use:
-
-- `cython` - because half of **Flitter** is implemented in Cython for speed
-- `setuptools` - to run the build file
-
 ## Running Flitter
 
 If you've installed **Flitter** in a virtual environment, then you'll need to
@@ -339,3 +234,141 @@ then it's possible that the standard sRGB transfer function is being applied
 twice, you can undo this with `--gamma 0.45`. Too bright and you might want to
 start with `--gamma 2.2`. As usual, you can control this per-window with the
 `gamma=N` attribute of `!window`.
+
+## Developing Flitter
+
+If you want to edit the **Flitter** code, ensure that `cython` and `setuptools`
+are installed in your runtime environment, then do an *editable* package
+deployment and throw away the generated object files:
+
+```console
+$ pip3 install cython setuptools
+$ pip3 install --editable .
+$ rm src/**/*.c src/**/*.so
+```
+
+**Flitter** automatically makes use of `pyximport` to (re)compile Cython code
+on-the-fly as it runs.
+
+The code is linted with `flake8` and `cython-lint`:
+
+```console
+$ pip3 install flake8 cython-lint
+$ flake8 src tests scripts
+$ cython-lint src
+```
+
+And the test suite can be run with `pytest`:
+
+```console
+$ pip3 install pytest
+$ pytest
+```
+
+### Checking code coverage
+
+If you want to run code coverage analysis, then you will need to do a special
+in-place build with coverage enabled (Cython line tracing):
+
+```console
+$ env FLITTER_BUILD_COVERAGE=1 python3 setup.py build_ext --inplace
+```
+
+Importantly, this **will not work on Python 3.12**. This version introduced a
+change in the profiling API that Cython is not compatible with. If you are
+using Python 3.12, then you will need to do a parallel install of 3.11 and
+create a second virtual environment in which to do coverage analysis.
+
+You can then generate a code coverage report for the test suite with:
+
+```console
+$ pip3 install coverage
+$ coverage run -m pytest
+$ coverage report
+```
+
+You will need to re-run `setup.py` if you change any of the Cython code. You
+will need to delete all of these object files if you want to go back to using
+the normal `pyximport` automatic recompile (and you will want to do so as the
+coverage-enabled version of the code is *significantly* slower).
+
+### Profiling
+
+**Flitter** has built-in support for running itself with profiling turned on:
+just add the `--profile` command line option when running it. This is best
+combined with `--lockstep` and `--runtime=N` to run for exactly *N* seconds of
+frame time. At the end of execution (including a keyboard interrupt), the
+standard Python profiler output will be printed, ordered by `tottime`.
+
+By default, the Cython modules are *not* compiled with profiling support. This
+means that only pure Python functions will be listed in the profiler, with all
+time spent inside Cython code aggregated into those functions' runtime. All
+of the Cython modules can be compiled with profiling by setting the
+`FLITTER_BUILD_PROFILE` environment variable to `1` and running `setup.py`:
+
+```console
+$ env FLITTER_BUILD_COVERAGE=1 python3 setup.py build_ext --inplace
+```
+
+However, this may not be the best thing to do as the overhead of adding
+profiling support to Cython is quite high and the results will be skewed by
+the cost of the profiling. It is probably better to *only* compile the
+module(s) that you are considering with profiling support. This can be done
+with `cythonize`:
+
+```console
+$ cythonize --build --inplace --force -3 --annotate -X profile=True \
+    src/flitter/render/window/canvas3d.pyx
+```
+
+Note that as for compiling with code coverage, profiling Cython code is
+currently **not supported on Python 3.12**. You will need to use 3.11 to run
+profiling tests.
+
+### Generating the documentation
+
+To generate a local HTML copy of the documentation, install `sphinx`,
+`myst_parser` and the separate [`flitter-pygments`
+package](https://github.com/jonathanhogg/flitter-pygments) (which adds syntax
+highlighting support for **Flitter** to `pygments`).
+
+You can generate the docs with:
+
+```console
+$ pip3 install sphinx myst_parser flitter-pygments
+$ sphinx-build docs build/html
+```
+
+They can then be read from `build/html/index.html`.
+
+### Python package dependencies
+
+The first-level runtime Python package dependencies are listed below. These will
+all be installed for you by `pip`, but it's useful to know what you're getting
+into.
+
+- `av` - for encoding and decoding video
+- `glfw` - for OpenGL windowing
+- `lark` - for the language parser
+- `loguru` - for enhanced logging
+- `mako` - for templating of the GLSL source
+- `manifold3d` - used by `trimesh` for 3D boolean operations
+- `mapbox_earcut` - used by `trimesh` for triangulating polygons
+- `moderngl` - for a higher-level API to OpenGL
+- `networkx` - used by `trimesh` for graph algorithms
+- `numpy` - for fast memory crunching
+- `pillow` - for saving screenshots as image files
+- `pyserial` - for talking to DMX interfaces
+- `pyusb` - for low-level communication with the Push 2 and LaserCube
+- `regex` - used by `lark` for advanced regular expressions
+- `rtmidi2` - for talking MIDI to control surfaces
+- `rtree` - used by `trimesh` for spatial tree intersection
+- `scipy` - used by `trimesh` for computing convex hulls
+- `shapely` - used by `trimesh` for polygon operations
+- `skia-python` - for 2D drawing
+- `trimesh` - for loading 3D meshes
+
+During install, `pip` will also use:
+
+- `cython` - because half of **Flitter** is implemented in Cython for speed
+- `setuptools` - to run the build file
