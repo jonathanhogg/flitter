@@ -44,15 +44,18 @@ cdef class Model:
             self.build_trimesh_model()
         if self.trimesh_model is None:
             return None
-        trimesh_model = self.trimesh_model.copy()
+        trimesh_model = self.trimesh_model
         if not trimesh_model.is_watertight:
-            trimesh_model = trimesh_model.process(validate=True, merge_tex=True, merge_norm=True)
+            trimesh_model = trimesh_model.copy()
+            trimesh_model.merge_vertices(merge_tex=True, merge_norm=True)
             if not trimesh_model.is_watertight:
                 if trimesh_model.fill_holes():
                     logger.debug("Filled holes in non-watertight mesh: {}", self.name)
                 else:
-                    logger.warning("Computing convex hull of: {}", self.name)
                     trimesh_model = trimesh_model.convex_hull
+                    logger.warning("Computed convex hull of non-watertight mesh: {}", self.name)
+            else:
+                logger.trace("Merged vertices of non-watertight mesh: {}", self.name)
         return trimesh_model
 
     cdef Vector get_bounds(self):
@@ -326,6 +329,9 @@ cdef class TransformedModel(ModelTransformer):
 cdef class SlicedModel(ModelTransformer):
     cdef Vector origin
     cdef Vector normal
+
+    cdef bint is_constructed(self):
+        return True
 
     @staticmethod
     cdef SlicedModel get(Model original, Vector origin, Vector normal):
