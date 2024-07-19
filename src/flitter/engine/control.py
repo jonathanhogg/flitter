@@ -164,7 +164,7 @@ class EngineController:
             save_state_time = system_clock() + self.STATE_SAVE_PERIOD
             execution = render = housekeeping = 0
             slow_frame = False
-            performance = 1
+            performance = 1 if self.realtime else 2
             run_program = current_program = errors = logs = None
             simplify_state_time = system_clock() + self.state_simplify_wait
             static = dict(self.defined_names)
@@ -294,19 +294,19 @@ class EngineController:
                     logger.trace("Collected {} objects", count)
 
                 now = system_clock()
-                frames.append(now)
-                frame_period = now - frame_time
                 housekeeping += now
+
+                frames.append(frame_time if self.realtime else now)
+                frame_period = now - frame_time
                 frame_time += 1 / self.target_fps
                 if self.realtime:
                     wait_time = frame_time - now
                     performance = min(performance + 0.001, 2) if wait_time > 0.001 else max(0.5, performance - 0.01)
                 else:
                     wait_time = 0.001
-                    performance = 1
-                if wait_time > 0:
+                if wait_time >= 0.001:
                     slow_frame = False
-                    await asyncio.sleep(wait_time)
+                    await asyncio.sleep(wait_time - 0.001)
                 else:
                     slow_frame = True
                     logger.trace("Slow frame - {:.0f}ms", frame_period * 1000)
