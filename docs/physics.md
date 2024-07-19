@@ -73,27 +73,25 @@ positions.
 #### The Simulation Clock
 
 The simulation maintains an internal simulation clock that begins at zero and
-advances in simulation steps. When the simulation starts, the initial value of
-`time` is remembered. On each subsequent frame, a delta is calculated between
-the starting time plus the internal clock and the current value of `time`.
-The simulation step will be the minimum of this delta and `resolution`.
+advances in simulation steps. On each frame, a delta is calculated between
+the current value of time minus the value at the last frame. The simulation
+step will be the minimum of this delta and `resolution`.
 
 If each delta is smaller than `resolution`, the internal clock will advance in
 lockstep with `time`. If not, then the simulation will advance at `resolution`
 intervals instead. This allows `resolution` to be used to avoid numerical
 instability being caused by computing forces with large time deltas.
 
-If the simulation clock has fallen behind `time` and the the engine subsequently
-has time to spare then the engine *may* compute an additional simulation step to
-try and bring the internal simulation clock back up to match `time`. This can
-stop the simulation from dropping behind because of the occasional missed frame,
-but will not be able to deal with a consistent failure to keep up.
+If the delta is greater than `resolution`, then the physics engine *may* insert
+an additional simulation step if the general performance of the engine is good.
+This allows the simulation to keep up if an occasional frame is delayed.
 
 If the engine is consistently unable to keep up with the requested `resolution`,
 then the internal simulation clock will advance more slowly than `time` and the
 simulation will subjectively slow down (although all of the particles will
 actually be moving correctly with respect to the simulation clock). It is best
-to reduce program/simulation complexity if this is the case.
+to reduce program/simulation complexity if this is the case (or increase
+`resolution` if the simulation will remain stable run at a lower granularity).
 
 If **Flitter** is run in non-realtime mode, with the [`--lockstep` command-line
 option](install.md#running-flitter), then the simulation behaviour is different.
@@ -101,8 +99,8 @@ In non-realtime mode, the simulation will *always* insert *as many* additional
 simulation steps per frame as necessary to keep to the minimum resolution.
 
 For example, if `resolution` is set to `1/60` and the engine is run with
-`--lockstep --fps=30` – for instance, to record a clean output video – then
-the simulation will advance *two* steps at each frame instead of subjectively
+`--lockstep --fps=30` – for instance, to record an output video – then the
+simulation will advance *two* steps at each frame instead of subjectively
 slowing down.
 
 The internal simulation clock can be read from the state and used to track the
@@ -438,7 +436,8 @@ For a `!physics` system with `state` set to *prefix*, and a particle with `id`
 set to *id*, the following key/value pairs will be stored in the state
 dictionary:
 
-- *prefix* - the value of `time` when the simulation started
+- *prefix* - the value of `time` when the simulation (or run) started
+- *prefix*`;:last` - the last value of `time`
 - *prefix*`;:clock` - the (zero-based) internal simulation clock
 - *prefix*`;:run` - the last run number (as an integer value)
 - *prefix*`;`*id* - the last position of the particle
@@ -452,7 +451,10 @@ dictionary, even though position will always be whatever was provided with the
 the system and `state` must be unique if multiple simultaneous systems are
 used. Obviously one should avoid using a `state` prefix that might collide with
 other users of the state dictionary, such as MIDI controllers. One should also
-not use `:clock` as the id of a particle.
+not use `:last`, `:clock` or `:run` as the `id` of a particle.
+
+Performance of the state system is negatively affected by using `id` values
+that contain strings - stick to symbols when possible.
 
 ## Example
 

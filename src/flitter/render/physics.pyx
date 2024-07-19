@@ -26,6 +26,7 @@ cdef extern from "Python.h":
 logger = name_patch(logger, __name__)
 
 cdef Vector VELOCITY = Vector._symbol('velocity')
+cdef Vector LAST = Vector._symbol('last')
 cdef Vector CLOCK = Vector._symbol('clock')
 cdef Vector RUN = Vector._symbol('run')
 
@@ -341,7 +342,6 @@ cdef class AdhesionForceApplier(MatrixPairForceApplier):
 cdef class PhysicsSystem:
     cdef set state_keys
     cdef int64_t dimensions
-    cdef double start_time
     cdef double resolution
     cdef double speed_of_light
 
@@ -354,7 +354,7 @@ cdef class PhysicsSystem:
     def purge(self):
         pass
 
-    async def update(self, engine, Node node, double clock, double performance, bint slow_frame, **kwargs):
+    async def update(self, engine, Node node, double clock, double performance, **kwargs):
         cdef int64_t run = node.get_int('run', 0)
         self.dimensions = node.get_int('dimensions', 0)
         if self.dimensions < 1:
@@ -373,6 +373,12 @@ cdef class PhysicsSystem:
             clock = time_vector.numbers[0]
         else:
             clock = 0
+        cdef double last_time
+        time_vector = state.get_item(state_prefix.concat(LAST))
+        if time_vector.length == 1 and time_vector.numbers != NULL:
+            last_time = time_vector.numbers[0]
+        else:
+            last_time = time
         cdef Vector last_run_vector = state.get_item(state_prefix.concat(RUN))
         cdef int64_t last_run
         if last_run_vector.length == 1 and last_run_vector.numbers != NULL:
@@ -385,6 +391,10 @@ cdef class PhysicsSystem:
             for state_key in self.state_keys:
                 state.set_item(state_key, null_)
             self.state_keys = set()
+            time_vector = Vector.__new__(Vector)
+            time_vector.allocate_numbers(1)
+            time_vector.numbers[0] = time
+            state.set_item(state_prefix, time_vector)
         cdef Vector run_vector = Vector.__new__(Vector)
         run_vector.allocate_numbers(1)
         run_vector.numbers[0] = run
@@ -456,25 +466,25 @@ cdef class PhysicsSystem:
             specific_force.from_index = particles_by_id.get(specific_force.from_particle_id, -1)
             specific_force.to_index = particles_by_id.get(specific_force.to_particle_id, -1)
         time_vector = state.get_item(state_prefix)
-        if time_vector.length == 1 and time_vector.numbers != NULL:
-            self.start_time = time_vector.numbers[0]
-        else:
+        if time_vector.length != 1 or time_vector.numbers == NULL:
             logger.debug("New {}D physics {!r} with {} particles and {} forces", self.dimensions, state_prefix, len(particles),
                          len(particle_forces) + len(matrix_forces) + len(specific_forces))
-            self.start_time = time
             time_vector = Vector.__new__(Vector)
             time_vector.allocate_numbers(1)
-            time_vector.numbers[0] = self.start_time
+            time_vector.numbers[0] = time
             state.set_item(state_prefix, time_vector)
-        cdef double behind = (time - self.start_time - clock) / self.resolution
-        cdef bint extra = performance > 1 and not slow_frame and random_uniform() > min(100 / behind, 0.9)
+        cdef bint extra = performance > 1.5
         cdef tuple objects
-        if time > self.start_time + clock:
+        if time > last_time:
             objects = particles, non_anchors, particle_forces, matrix_forces, specific_forces, barriers
-            clock = await asyncio.to_thread(self.calculate, objects, engine.realtime, extra, time, clock)
+            clock = await asyncio.to_thread(self.calculate, objects, engine.realtime, extra, time, last_time, clock)
             for particle in particles:
                 state.set_item(particle.position_state_key, particle.position)
                 state.set_item(particle.velocity_state_key, particle.velocity)
+        time_vector = Vector.__new__(Vector)
+        time_vector.allocate_numbers(1)
+        time_vector.numbers[0] = time
+        state.set_item(state_prefix.concat(LAST), time_vector)
         time_vector = Vector.__new__(Vector)
         time_vector.allocate_numbers(1)
         time_vector.numbers[0] = clock
@@ -483,11 +493,11 @@ cdef class PhysicsSystem:
             state.set_item(state_key, null_)
         self.state_keys = new_state_keys
 
-    cpdef double calculate(self, tuple objects, bint realtime, bint extra, double time, double clock):
+    cpdef double calculate(self, tuple objects, bint realtime, bint extra, double time, double last_time, double clock):
         cdef list particles, non_anchors, particle_forces, matrix_forces, specific_forces, barriers
         particles, non_anchors, particle_forces, matrix_forces, specific_forces, barriers = objects
         cdef int64_t i, j, k, ii, m, n=len(particles), o=len(non_anchors)
-        cdef double delta, last_time = self.start_time + clock
+        cdef double delta
         cdef Vector direction = Vector.__new__(Vector)
         direction.allocate_numbers(self.dimensions)
         cdef double d, distance, distance_squared
