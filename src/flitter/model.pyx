@@ -2107,13 +2107,8 @@ cdef class StateDict:
         return iter(self._state)
 
     def clear(self):
-        cdef Vector key, value
-        cdef dict new_state = {}
-        for key, value in self._state.items():
-            if key.length == 1 and key.objects is not None and isinstance(key.objects[0], str) and key.objects[0].startswith('_'):
-                new_state[key] = value
-        self._state = new_state
-        self._changed_keys = set()
+        self._changed_keys = set(self._state)
+        self._state = {}
 
     def items(self):
         return self._state.items()

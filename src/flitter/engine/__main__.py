@@ -38,7 +38,7 @@ def main():
     parser.add_argument('--fullscreen', action='store_true', default=False, help="Default to full screen")
     parser.add_argument('--vsync', action='store_true', default=False, help="Default to window vsync")
     parser.add_argument('--state', type=str, help="State save/restore file")
-    parser.add_argument('--autoreset', type=float, help="Auto-reset state on idle")
+    parser.add_argument('--resetonswitch', action='store_true', default=False, help="Reset state when switching pages")
     parser.add_argument('--nosimplify', action='store_true', default=False, help="Disable the language simplifier")
     parser.add_argument('--simplifystate', type=float, default=10, help="Simplify on state after stable period")
     parser.add_argument('--lockstep', action='store_true', default=False, help="Run clock in non-realtime mode")
@@ -59,7 +59,7 @@ def main():
             return os.execlp(sys.argv[0], *sys.argv)
     logger.info("Flitter version {}", __version__)
     controller = EngineController(target_fps=args.fps, screen=args.screen, fullscreen=args.fullscreen, vsync=args.vsync,
-                                  state_file=args.state, autoreset=args.autoreset, state_simplify_wait=args.simplifystate,
+                                  state_file=args.state, reset_on_switch=args.resetonswitch, state_simplify_wait=args.simplifystate,
                                   realtime=not args.lockstep, defined_names=dict(args.defines), vm_stats=args.vmstats,
                                   run_time=args.runtime, offscreen=args.offscreen, window_gamma=args.gamma, disable_simplifier=args.nosimplify,
                                   opengl_es=args.opengles)

@@ -89,13 +89,12 @@ class TestStateDict(unittest.TestCase):
         self.assertEqual(list(state.items()), [(Vector('x'), Vector(5)), (Vector('y'), Vector(7))])
 
     def test_clear(self):
-        state = StateDict({'x': 5, '_x': 6})
+        state = StateDict({'x': 5, 'y': 6})
         self.assertEqual(len(state), 2)
         state.clear()
-        self.assertEqual(len(state), 1)
-        self.assertEqual(state['_x'], Vector(6))
-        self.assertFalse(state.changed)
-        self.assertEqual(state.changed_keys, set())
+        self.assertEqual(len(state), 0)
+        self.assertTrue(state.changed)
+        self.assertEqual(state.changed_keys, {Vector('x'), Vector('y')})
 
     def test_with_keys(self):
         state = StateDict({'x': [1, 2, 3], 'y': 'test', Vector.symbol('z'): Vector.range(10)})

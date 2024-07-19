@@ -18,8 +18,10 @@ from ..render import get_renderer
 
 
 class EngineController:
+    STATE_SAVE_PERIOD = 1
+
     def __init__(self, target_fps=60, screen=0, fullscreen=False, vsync=False, state_file=None,
-                 autoreset=None, state_simplify_wait=0, realtime=True, defined_names=None, vm_stats=False,
+                 reset_on_switch=False, state_simplify_wait=0, realtime=True, defined_names=None, vm_stats=False,
                  run_time=None, offscreen=False, window_gamma=1, disable_simplifier=False, opengl_es=False):
         self.default_fps = target_fps
         self.target_fps = target_fps
@@ -30,7 +32,7 @@ class EngineController:
         self.offscreen = offscreen
         self.window_gamma = window_gamma
         self.opengl_es = opengl_es
-        self.autoreset = autoreset
+        self.reset_on_switch = reset_on_switch
         self.disable_simplifier = disable_simplifier
         self.state_simplify_wait = 0 if self.disable_simplifier else state_simplify_wait / 2
         if defined_names:
@@ -71,6 +73,11 @@ class EngineController:
 
     def switch_to_page(self, page_number):
         if self.pages is not None and 0 <= page_number < len(self.pages):
+            if self.state is not None:
+                if self.reset_on_switch:
+                    self.state.clear()
+                self.global_state_dirty = self.global_state_dirty or self.state.changed
+                self.state.clear_changed()
             path, state = self.pages[page_number]
             self.state = state
             self.state_timestamp = system_clock()
@@ -149,20 +156,12 @@ class EngineController:
                 self.counter.set_quantum(quantum, timestamp)
         self.target_fps = pragmas.get('fps', null).match(1, float, self.default_fps)
 
-    def reset_state(self):
-        self.state.clear()
-        self.state_timestamp = None
-        self.state_generation0 = set()
-        self.state_generation1 = set()
-        self.state_generation2 = set()
-        self.global_state_dirty = True
-
     async def run(self):
         try:
             frames = []
             start_time = frame_time = system_clock() if self.realtime else self.counter.start
             last = self.counter.beat_at_time(frame_time)
-            dump_time = frame_time
+            save_state_time = system_clock() + self.STATE_SAVE_PERIOD
             execution = render = housekeeping = 0
             slow_frame = False
             performance = 1
@@ -272,21 +271,14 @@ class EngineController:
 
                 self.state['_counter'] = self.counter.tempo, self.counter.quantum, self.counter.start
 
-                if self.autoreset and self.state_timestamp is not None and system_clock() > self.state_timestamp + self.autoreset:
-                    logger.debug("Auto-reset state")
-                    self.reset_state()
-                    current_program = program
-
-                if self.global_state_dirty and self.state_file is not None and frame_time > dump_time + 1:
-                    logger.debug("Saving state")
+                if self.global_state_dirty and self.state_file is not None and system_clock() > save_state_time:
+                    logger.trace("Saving state")
                     with open(self.state_file, 'wb') as file:
                         pickle.dump(self.global_state, file)
                     self.global_state_dirty = False
-                    dump_time = frame_time
+                    save_state_time = system_clock() + self.STATE_SAVE_PERIOD
 
                 if self.switch_page is not None:
-                    if self.autoreset:
-                        self.reset_state()
                     self.switch_to_page(self.switch_page)
                     self.switch_page = None
                     run_program = current_program = None
