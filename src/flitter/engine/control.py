@@ -167,6 +167,9 @@ class EngineController:
             performance = 1
             run_program = current_program = errors = logs = None
             simplify_state_time = system_clock() + self.state_simplify_wait
+            static = dict(self.defined_names)
+            static.update({'realtime': self.realtime, 'window_gamma': self.window_gamma, 'screen': self.screen, 'fullscreen': self.fullscreen,
+                           'vsync': self.vsync, 'offscreen': self.offscreen, 'opengl_es': self.opengl_es})
             gc.disable()
             while self.run_time is None or int(round((frame_time - start_time) * self.target_fps)) < int(round(self.run_time * self.target_fps)):
                 housekeeping -= system_clock()
@@ -174,13 +177,12 @@ class EngineController:
                 beat = self.counter.beat_at_time(frame_time)
                 delta = beat - last
                 last = beat
-                names = {'beat': beat, 'quantum': self.counter.quantum, 'tempo': self.counter.tempo,
-                         'delta': delta, 'clock': frame_time, 'performance': performance, 'slow_frame': slow_frame,
-                         'fps': self.target_fps, 'realtime': self.realtime, 'window_gamma': self.window_gamma,
-                         'screen': self.screen, 'fullscreen': self.fullscreen, 'vsync': self.vsync, 'offscreen': self.offscreen,
-                         'opengl_es': self.opengl_es}
+                dynamic = {'beat': beat, 'quantum': self.counter.quantum, 'tempo': self.counter.tempo, 'fps': self.target_fps,
+                           'delta': delta, 'clock': frame_time, 'performance': performance, 'slow_frame': slow_frame}
+                names = dict(static)
+                names.update(dynamic)
 
-                program = self.current_path.read_flitter_program(static=self.defined_names, dynamic=names, simplify=not self.disable_simplifier)
+                program = self.current_path.read_flitter_program(static=static, dynamic=dynamic, simplify=not self.disable_simplifier)
                 if program is not current_program:
                     level = 'SUCCESS' if current_program is None else 'INFO'
                     logger.log(level, "Loaded page {}: {}", self.current_page, self.current_path)
@@ -192,6 +194,41 @@ class EngineController:
                     self.state_generation1 = self.state_generation2
                     self.state_generation2 = set()
                     simplify_state_time = system_clock() + self.state_simplify_wait
+
+                now = system_clock()
+                housekeeping += now
+                execution -= now
+
+                if run_program is not None:
+                    context = Context(names={key: Vector.coerce(value) for key, value in dynamic.items()},
+                                      state=self.state, references=self._references, modules=self._modules)
+                    run_program.run(context, record_stats=self.vm_stats)
+                else:
+                    context = Context()
+
+                new_errors = context.errors.difference(errors) if errors is not None else context.errors
+                errors = context.errors
+                for error in new_errors:
+                    logger.error("Execution error: {}", error)
+                new_logs = context.logs.difference(logs) if logs is not None else context.logs
+                logs = context.logs
+                for log in new_logs:
+                    print(log)
+
+                now = system_clock()
+                execution += now
+                render -= now
+
+                self._references = await self.update_renderers(context.root, **names)
+
+                now = system_clock()
+                render += now
+                housekeeping -= now
+
+                del context
+                SharedCache.clean()
+
+                self.state['_counter'] = self.counter.tempo, self.counter.quantum, self.counter.start
 
                 if self.state.changed:
                     if self.state_simplify_wait:
@@ -237,39 +274,6 @@ class EngineController:
                     self.state_generation1 = self.state_generation0
                     self.state_generation0 = set()
                     simplify_state_time = system_clock() + self.state_simplify_wait
-
-                now = system_clock()
-                housekeeping += now
-                execution -= now
-                if run_program is not None:
-                    context = Context(names={key: Vector.coerce(value) for key, value in names.items()},
-                                      state=self.state, references=self._references, modules=self._modules)
-                    run_program.run(context, record_stats=self.vm_stats)
-                else:
-                    context = Context()
-
-                new_errors = context.errors.difference(errors) if errors is not None else context.errors
-                errors = context.errors
-                for error in new_errors:
-                    logger.error("Execution error: {}", error)
-                new_logs = context.logs.difference(logs) if logs is not None else context.logs
-                logs = context.logs
-                for log in new_logs:
-                    print(log)
-                now = system_clock()
-                execution += now
-                render -= now
-
-                self._references = await self.update_renderers(context.root, **names)
-
-                now = system_clock()
-                render += now
-                housekeeping -= now
-
-                del context
-                SharedCache.clean()
-
-                self.state['_counter'] = self.counter.tempo, self.counter.quantum, self.counter.start
 
                 if self.global_state_dirty and self.state_file is not None and system_clock() > save_state_time:
                     logger.trace("Saving state")
