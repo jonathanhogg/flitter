@@ -36,7 +36,7 @@ class Record(ProgramNode):
             self._texture = self.glctx.texture((self.width, self.height), 4, dtype='f1', internal_format=GL_SRGB8_ALPHA8)
             self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
 
-    def render(self, node, **kwargs):
+    def render(self, node, time, fps, realtime, **kwargs):
         if filename := node.get('filename', 1, str):
             super().render(node, **kwargs)
             path = SharedCache[filename]
@@ -48,8 +48,7 @@ class Record(ProgramNode):
                 crf = node.get('crf', 1, int)
                 preset = node.get('preset', 1, str)
                 limit = node.get('limit', 1, float)
-                path.write_video_frame(self._framebuffer, kwargs['clock'],
-                                       fps=int(kwargs['fps']), realtime=kwargs['realtime'], codec=codec,
+                path.write_video_frame(self._framebuffer, time, fps=int(fps), realtime=realtime, codec=codec,
                                        pixfmt=pixfmt, crf=crf, preset=preset, limit=limit, alpha=keep_alpha)
             else:
                 quality = node.get('quality', 1, int)

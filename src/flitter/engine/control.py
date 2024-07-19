@@ -178,7 +178,7 @@ class EngineController:
                 delta = beat - last
                 last = beat
                 dynamic = {'beat': beat, 'quantum': self.counter.quantum, 'tempo': self.counter.tempo, 'fps': self.target_fps,
-                           'delta': delta, 'clock': frame_time, 'performance': performance, 'slow_frame': slow_frame}
+                           'delta': delta, 'time': frame_time, 'performance': performance, 'slow_frame': slow_frame}
                 names = dict(static)
                 names.update(dynamic)
 

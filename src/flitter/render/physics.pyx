@@ -354,7 +354,7 @@ cdef class PhysicsSystem:
     def purge(self):
         pass
 
-    async def update(self, engine, Node node, double clock, double performance, **kwargs):
+    async def update(self, engine, Node node, double time, double performance, **kwargs):
         cdef int64_t run = node.get_int('run', 0)
         self.dimensions = node.get_int('dimensions', 0)
         if self.dimensions < 1:
@@ -362,7 +362,7 @@ cdef class PhysicsSystem:
         cdef Vector state_prefix = <Vector>node._attributes.get('state') if node._attributes else None
         if state_prefix is None:
             return
-        cdef double time = node.get_float('time', clock)
+        time = node.get_float('time', time)
         self.resolution = node.get_float('resolution', 1/engine.target_fps)
         if self.resolution <= 0:
             return

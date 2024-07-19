@@ -47,11 +47,11 @@ A `!canvas` node creates a 2D drawing canvas that follows an SVG-like drawing
 model. `!group` sets styles and transforms. `!text` draws text, centred at
 `point` by default. `sine()` is a function that reproduces a sine wave ranging
 over [0..1] with the argument expressed in waves (turns/circumferens). `beat`
-is a global representing the current floating point beat of the main clock. The
-default BPM is 120, so `beat/2` is effectively a number of seconds since the
-clock started. `color`s are 3- or 4-vectors (RGB and RGBA) in the range [0..1],
-but the return value from `sine()` here is automagically extended out to the
-3-vector resulting in a varying brightness of white.
+is a global representing the current floating point beat of the beat counter.
+The default BPM is 120, so `beat/2` is effectively a number of seconds since
+the counter started. `color`s are 3- or 4-vectors (RGB and RGBA) in the range
+[0..1], but the return value from `sine()` here is automagically extended out
+to a 3-vector resulting in a varying brightness of white.
 
 `true` and `false` are synonyms for `1` and `0`. Truthfulness is represented by
 any non-empty vector that contains something other than 0 or the empty string.
@@ -70,12 +70,12 @@ not to be noticeable.
 
 The engine-supplied global values are:
 
-- `beat` - the current main clock beat (a monotonically-increasing floating
+- `beat` - the current beat counter beat (a monotonically-increasing floating
     point value)
 - `quantum` - the beats per quantum (usually 4)
 - `delta` - the difference between the current value of `beat` and the value
     at the last display frame
-- `clock` - the current frame time (derived from Python's `perf_counter()`
+- `time` - the current frame time (derived from Python's `perf_counter()`
     usually, though increasing by exactly `1/fps` per frame in non-realtime
     mode)
 - `fps` - the current target frame-rate of the engine (the `--fps` option)

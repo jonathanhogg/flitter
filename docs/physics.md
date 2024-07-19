@@ -41,24 +41,25 @@ greater than or equal to `1`)
 - `time` is an optional attribute providing the simulation clock
 - `resolution` is an optional attribute specifying a *minimum* simulation step
 interval
-- `run` specifies an optional "run number" for this simulation, non-integer
-values will be *floor*ed
+- `run` specifies an optional integer "run number" for this simulation,
+non-integer values will be *floor*ed
 - `speed_of_light` is an optional attribute that, if set, specifies an upper
 limit to any particle's computed speed
 
 If `time` and `resolution` are not specified then the system will default to
-**Flitter**'s internal frame clock and the target frame-rate interval
-respectively. This means that the simulation time units will be seconds and the
-simulation will advance in time steps equal to the frame interval. If `time`
-*is* specified then `resolution` should be set to a sensible matching value
-somewhere at or above the expected increment in `time` at the engine frame-rate.
+**Flitter**'s internal frame time (i.e., the value of the `time` global) and
+the target frame-rate interval (i.e., `1/fps`) respectively. This means that
+the simulation time units will be seconds and the simulation will advance in
+time steps equal to the frame interval. If `time` *is* specified then
+`resolution` should be set to a sensible matching value somewhere at or above
+the expected increment in `time` at the engine frame-rate.
 
 If `run` changes then the current system state is abandoned and the simulation
 will begin again from the starting positions and velocities of each particle.
 As this value is *floor*ed before being used, a simulation can be easily reset
-at intervals by setting `run=beat/interval`.
+at intervals by setting `run=time/interval`.
 
-All other nodes described below must be contained with the `!physics` node.
+All other nodes described below must be contained within a `!physics` node.
 
 :::{note}
 Starting a simulation with forces immediately applied can cause wild instability

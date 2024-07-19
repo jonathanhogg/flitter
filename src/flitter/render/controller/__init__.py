@@ -41,7 +41,7 @@ class Controller:
             asyncio.create_task(self.driver.stop())
             self.driver = None
 
-    async def update(self, engine, node, clock, **kwargs):
+    async def update(self, engine, node, time, **kwargs):
         driver = node.get('driver', 1, str)
         if driver in self.DRIVER_CACHE:
             driver_class = self.DRIVER_CACHE[driver]
@@ -78,7 +78,7 @@ class Controller:
                     controls[key] = control
                     if key in self.controls:
                         del self.controls[key]
-                    if control.update(child, clock):
+                    if control.update(child, time):
                         control.update_representation()
                     control.update_state()
                     continue

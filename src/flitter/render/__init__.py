@@ -37,7 +37,7 @@ class Renderer:
     async def update(self, engine, node, **kwargs):
         """
         `update()`` is called every frame with the node to render and the engine
-        global definitions (including `clock` and `beat`).
+        global definitions (including `time` and `beat`).
         """
         raise NotImplementedError()
 
