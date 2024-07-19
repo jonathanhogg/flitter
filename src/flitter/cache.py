@@ -99,7 +99,7 @@ class CachePath:
     def read_flitter_program(self, static=None, dynamic=None, simplify=True):
         key = 'flitter', tuple(sorted(static.items())) if static else None, tuple(dynamic) if dynamic else (), simplify
         current_program = self._cache.get(key, False)
-        if current_program is not False and self.check_unmodified():
+        if self.check_unmodified() and current_program is not False:
             return current_program
         if self._mtime is None:
             if current_program is False:
