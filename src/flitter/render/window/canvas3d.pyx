@@ -355,12 +355,24 @@ cdef Model get_model(Node node, bint top):
     cdef Vector origin, normal
     cdef list models
     cdef double snap_angle, minimum_area
-    if node.kind == 'intersect':
+    if node.kind == 'box':
+        model = Model.get_box(node)
+    elif node.kind == 'sphere':
+        model = Model.get_sphere(node)
+    elif node.kind == 'cylinder':
+        model = Model.get_cylinder(node)
+    elif node.kind == 'cone':
+        model = Model.get_cone(node)
+    elif node.kind == 'model':
+        model = Model.get_external(node)
+        if model is not None and node.get_bool('repair', False):
+            model = model.repair()
+    elif node.kind == 'intersect':
         models = []
         for child in node._children:
             models.append(get_model(child, False))
         model = Model.intersect(models)
-    elif node.kind == 'union' or node.kind == 'transform':
+    elif node.kind == 'union' or (not top and node.kind == 'transform'):
         models = []
         for child in node._children:
             models.append(get_model(child, False))
@@ -381,19 +393,6 @@ cdef Model get_model(Node node, bint top):
         model = Model.union(models)
         if model is not None and normal.as_bool():
             model = model.slice(origin, normal)
-    else:
-        if node.kind == 'box':
-            model = Model.get_box(node)
-        elif node.kind == 'sphere':
-            model = Model.get_sphere(node)
-        elif node.kind == 'cylinder':
-            model = Model.get_cylinder(node)
-        elif node.kind == 'cone':
-            model = Model.get_cone(node)
-        elif node.kind == 'model':
-            model = Model.get_external(node)
-            if model is not None and node.get_bool('repair', False):
-                model = model.repair()
     if model is not None:
         if top:
             if node.get_bool('flat', False):
@@ -421,43 +420,22 @@ cdef void collect(Node node, Matrix44 transform_matrix, Material material, Rende
     cdef tuple model_textures
     cdef RenderGroup new_render_group
 
-    if node.kind == 'material':
-        material = material.update(node)
-        for child in node._children:
-            collect(child, transform_matrix, material, render_group, render_groups, default_camera, cameras, max_samples)
-
-    elif node.kind == 'transform':
+    if node.kind == 'transform':
         transform_matrix = update_transform_matrix(node, transform_matrix)
         for child in node._children:
             collect(child, transform_matrix, material, render_group, render_groups, default_camera, cameras, max_samples)
 
-    elif node.kind == 'group' or node.kind == 'canvas3d':
-        transform_matrix = update_transform_matrix(node, transform_matrix)
+    elif node.kind == 'material':
         material = material.update(node)
-        new_render_group = RenderGroup.__new__(RenderGroup)
-        new_render_group.parent_group = render_group
-        new_render_group.max_lights = node.get_int('max_lights', DEFAULT_MAX_LIGHTS if render_group is None else render_group.max_lights)
-        new_render_group.lights = []
-        new_render_group.instances = {}
-        new_render_group.depth_test = node.get_bool('depth_test', True if render_group is None else render_group.depth_test)
-        new_render_group.face_cull = node.get_bool('face_cull', True if render_group is None else render_group.face_cull)
-        if 'cull_face' in node:
-            new_render_group.cull_front_face = node.get_str('cull_face', 'back') == 'front'
-        else:
-            new_render_group.cull_front_face = False if render_group is None else render_group.cull_front_face
-        new_render_group.composite = node.get_str('composite', 'over' if render_group is None else render_group.composite).lower()
-        vertex_shader = node.get_str('vertex', None)
-        fragment_shader = node.get_str('fragment', None)
-        new_render_group.vertex_shader_template = Template(vertex_shader, lookup=TemplateLoader) if vertex_shader is not None else None
-        new_render_group.fragment_shader_template = Template(fragment_shader, lookup=TemplateLoader) if fragment_shader is not None else None
-        new_render_group.names = {}
-        if node._attributes:
-            for name, value in node._attributes.items():
-                if name not in GroupAttributes:
-                    new_render_group.names[name] = value
-        render_groups.append(new_render_group)
         for child in node._children:
-            collect(child, transform_matrix, material, new_render_group, render_groups, default_camera, cameras, max_samples)
+            collect(child, transform_matrix, material, render_group, render_groups, default_camera, cameras, max_samples)
+
+    elif (model := get_model(node, True)) is not None:
+        instance = Instance.__new__(Instance)
+        instance.model_matrix = get_model_transform(node, transform_matrix)
+        instance.material = material.update(node)
+        model_textures = (model, instance.material.textures)
+        (<list>render_group.instances.setdefault(model_textures, [])).append(instance)
 
     elif node.kind == 'light':
         color = node.get_fvec('color', 3, null_)
@@ -502,12 +480,33 @@ cdef void collect(Node node, Matrix44 transform_matrix, Material material, Rende
         if (camera_id := node.get_str('id', None)) is not None:
             cameras[camera_id] = default_camera.derive(node, transform_matrix, max_samples)
 
-    elif (model := get_model(node, True)) is not None:
-        instance = Instance.__new__(Instance)
-        instance.model_matrix = get_model_transform(node, transform_matrix)
-        instance.material = material.update(node)
-        model_textures = (model, instance.material.textures)
-        (<list>render_group.instances.setdefault(model_textures, [])).append(instance)
+    elif node.kind is 'group' or node.kind is 'canvas3d':
+        transform_matrix = update_transform_matrix(node, transform_matrix)
+        material = material.update(node)
+        new_render_group = RenderGroup.__new__(RenderGroup)
+        new_render_group.parent_group = render_group
+        new_render_group.max_lights = node.get_int('max_lights', DEFAULT_MAX_LIGHTS if render_group is None else render_group.max_lights)
+        new_render_group.lights = []
+        new_render_group.instances = {}
+        new_render_group.depth_test = node.get_bool('depth_test', True if render_group is None else render_group.depth_test)
+        new_render_group.face_cull = node.get_bool('face_cull', True if render_group is None else render_group.face_cull)
+        if 'cull_face' in node:
+            new_render_group.cull_front_face = node.get_str('cull_face', 'back') is 'front'
+        else:
+            new_render_group.cull_front_face = False if render_group is None else render_group.cull_front_face
+        new_render_group.composite = node.get_str('composite', 'over' if render_group is None else render_group.composite)
+        vertex_shader = node.get_str('vertex', None)
+        fragment_shader = node.get_str('fragment', None)
+        new_render_group.vertex_shader_template = Template(vertex_shader, lookup=TemplateLoader) if vertex_shader is not None else None
+        new_render_group.fragment_shader_template = Template(fragment_shader, lookup=TemplateLoader) if fragment_shader is not None else None
+        new_render_group.names = {}
+        if node._attributes:
+            for name, value in node._attributes.items():
+                if name not in GroupAttributes:
+                    new_render_group.names[name] = value
+        render_groups.append(new_render_group)
+        for child in node._children:
+            collect(child, transform_matrix, material, new_render_group, render_groups, default_camera, cameras, max_samples)
 
 
 def fst(tuple ab):
