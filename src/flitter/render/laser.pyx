@@ -434,6 +434,3 @@ cdef class Laser:
                     th = TWO_PI * i/n
                     path.append(transform.t(x + sx*cos(th), y + sy*sin(th)))
                 paths.append((path, color))
-
-
-RENDERER_CLASS = Laser

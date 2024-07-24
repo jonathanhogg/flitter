@@ -11,10 +11,6 @@ from .midi import MidiPort, NoteOnEvent, PitchBendEvent, ControlChangeEvent
 from ...model import Vector, Node
 
 
-def get_driver_class():
-    return XTouchMiniDriver
-
-
 DEFAULT_CONFIG = [
     Node('button', attributes={'id': Vector.symbol('a'), 'action': Vector.symbol('next')}),
     Node('button', attributes={'id': Vector.symbol('b'), 'action': Vector.symbol('previous')}),

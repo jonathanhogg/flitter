@@ -55,11 +55,11 @@ def configure_logger(level=None):
     else:
         LOGGING_LEVEL = level
     logger.configure(handlers=[dict(sink=sys.stderr, format=LOGGING_FORMAT, level=level)],
-                     patcher=lambda record: record['extra'].update(shortname=record['name'].removeprefix('flitter')))
+                     patcher=lambda record: record['extra'].update(shortname=record['name'].removeprefix('flitter.')))
     LoguruInterceptHandler.install()
     return logger
 
 
 def name_patch(logger, name):
     return logger.patch(lambda record, name=name: (record.update(name=name),
-                                                   record['extra'].update(shortname=name.removeprefix('flitter'))))
+                                                   record['extra'].update(shortname=name.removeprefix('flitter.'))))

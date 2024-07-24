@@ -74,10 +74,6 @@ SCREEN_ROTARIES = {
 BUTTON_ID_MAPPING = {button: Vector.symbol(button.name.lower()) for button in BUTTONS}
 
 
-def get_driver_class():
-    return Push2Driver
-
-
 class Push2RotaryControl(TouchControl, EncoderControl):
     DEFAULT_DECIMALS = 1
 

@@ -14,7 +14,7 @@ from libc.stdint cimport int64_t, uint32_t
 from loguru import logger
 import skia
 
-from . import SceneNode, COLOR_FORMATS
+from . import WindowNode, COLOR_FORMATS
 from flitter import name_patch
 from ...cache import SharedCache
 from ...model cimport Vector, Node
@@ -856,7 +856,7 @@ cpdef object _draw(Node node, Node parent, ctx, paint, font, path, dict stats, d
     return paint
 
 
-class Canvas(SceneNode):
+class Canvas(WindowNode):
     def __init__(self, glctx):
         super().__init__(glctx)
         self._graphics_context = skia.GrDirectContext.MakeGL()
@@ -934,6 +934,3 @@ class Canvas(SceneNode):
         draw(node, self._canvas, stats=self._stats, references=references, colorspace=self._colorspace)
         self._surface.flushAndSubmit()
         self._total_duration += perf_counter()
-
-
-SCENE_NODE_CLASS = Canvas

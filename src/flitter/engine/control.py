@@ -14,7 +14,7 @@ from ..cache import SharedCache
 from ..clock import BeatCounter, system_clock
 from ..language.vm import log_vm_stats
 from ..model import Vector, StateDict, Context, null, numbers_cache_counts, empty_numbers_cache
-from ..render import get_renderer
+from ..plugins import get_plugin
 
 
 class EngineController:
@@ -120,7 +120,7 @@ class EngineController:
         tasks = []
         references = dict(self._references)
         for kind, nodes in nodes_by_kind.items():
-            renderer_class = get_renderer(kind)
+            renderer_class = get_plugin('flitter.render', kind)
             if renderer_class is not None:
                 renderers = self.renderers.setdefault(kind, [])
                 count = 0

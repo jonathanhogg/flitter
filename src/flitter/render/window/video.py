@@ -89,6 +89,3 @@ class Video(Shader):
             self._frame1 = frame1
         interpolate = node.get('interpolate', 1, bool, False)
         self.render(node, ratio=ratio if interpolate else 0, **kwargs)
-
-
-SCENE_NODE_CLASS = Video

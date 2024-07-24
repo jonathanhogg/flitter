@@ -5,12 +5,12 @@ Video scene node
 from loguru import logger
 import PIL.Image
 
-from . import SceneNode
+from . import WindowNode
 from ...cache import SharedCache
 from .glconstants import GL_SRGB8_ALPHA8
 
 
-class Image(SceneNode):
+class Image(WindowNode):
     def __init__(self, glctx):
         super().__init__(glctx)
         self._filename = None
@@ -57,6 +57,3 @@ class Image(SceneNode):
 
     def similar_to(self, node):
         return super().similar_to(node) and node.get('filename', 1, str) == self._filename
-
-
-SCENE_NODE_CLASS = Image

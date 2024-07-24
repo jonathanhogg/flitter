@@ -63,6 +63,38 @@ Issues = "https://github.com/jonathanhogg/flitter/issues"
 [project.scripts]
 flitter = "flitter.engine.__main__:main"
 
+[project.entry-points."flitter.render"]
+controller = "flitter.render.controller:Controller"
+counter = "flitter.render.counter:Counter"
+dmx = "flitter.render.dmx:DMX"
+laser = "flitter.render.laser:Laser"
+offscreen = "flitter.render.window:Offscreen"
+physics = "flitter.render.physics:PhysicsSystem"
+window = "flitter.render.window:Window"
+
+[project.entry-points."flitter.render.window"]
+adjust = "flitter.render.window:Adjust"
+bloom = "flitter.render.window:Bloom"
+blur = "flitter.render.window:Blur"
+canvas = "flitter.render.window.canvas:Canvas"
+canvas3d = "flitter.render.window.canvas3d:Canvas3D"
+edges = "flitter.render.window:Edges"
+feedback = "flitter.render.window:Feedback"
+image = "flitter.render.window.image:Image"
+noise = "flitter.render.window:Noise"
+record = "flitter.render.window.record:Record"
+reference = "flitter.render.window:Reference"
+shader = "flitter.render.window:Shader"
+video = "flitter.render.window.video:Video"
+
+[project.entry-points."flitter.render.controller"]
+push2 = "flitter.render.controller.push2:Push2Driver"
+xtouch_mini = "flitter.render.controller.xtouch_mini:XTouchMiniDriver"
+
+[project.entry-points."flitter.render.dmx"]
+entec = "flitter.render.dmx:EntecDMXDriver"
+outputarts = "flitter.render.dmx:OutputArtsDMXDriver"
+
 [tool.setuptools.dynamic]
 version = {attr = "flitter.__version__"}
 

@@ -44,6 +44,3 @@ class Counter:
             current = timev.sub(last_time).mul(rate).add(current)
         state.set_item(current_key, current.clamp(minimum, maximum))
         state.set_item(last_time_key, timev)
-
-
-RENDERER_CLASS = Counter

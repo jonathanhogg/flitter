@@ -563,6 +563,3 @@ cdef class PhysicsSystem:
                     break
                 extra = False
         return clock
-
-
-RENDERER_CLASS = PhysicsSystem

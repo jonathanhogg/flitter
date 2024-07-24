@@ -13,7 +13,7 @@ import numpy as np
 from libc.math cimport cos, log2, sqrt, tan
 from libc.stdint cimport int64_t
 
-from . import SceneNode, COLOR_FORMATS, set_uniform_vector
+from . import WindowNode, COLOR_FORMATS, set_uniform_vector
 from ... import name_patch
 from ...clock import system_clock
 from ...model cimport Node, Vector, Matrix44, Matrix33, null_, true_
@@ -1047,7 +1047,7 @@ cdef class RenderTarget:
         self.render_framebuffer.depth_mask = enabled
 
 
-class Canvas3D(SceneNode):
+class Canvas3D(WindowNode):
     def __init__(self, glctx):
         super().__init__(glctx)
         self._primary_render_target = None
@@ -1151,6 +1151,3 @@ class Canvas3D(SceneNode):
             del self._secondary_render_targets[camera_id]
         self._total_duration += system_clock()
         self._total_count += 1
-
-
-SCENE_NODE_CLASS = Canvas3D

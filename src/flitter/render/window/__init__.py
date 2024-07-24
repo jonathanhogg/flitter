@@ -5,7 +5,6 @@ Flitter window management
 import array
 import ctypes
 from collections import namedtuple
-import importlib
 import sys
 
 import glfw
@@ -18,6 +17,7 @@ from ...clock import system_clock
 from .glconstants import GL_RGBA8, GL_RGBA16F, GL_RGBA32F, GL_FRAMEBUFFER_SRGB
 from .glsl import TemplateLoader
 from ...model import Vector, null
+from ...plugins import get_plugin
 
 
 def set_uniform_vector(uniform, vector):
@@ -51,27 +51,7 @@ RELEASED_BEAT = Vector.symbol('released').concat(Vector.symbol('beat'))
 GLFUNCTYPE = ctypes.WINFUNCTYPE if sys.platform == 'win32' else ctypes.CFUNCTYPE
 
 
-def get_scene_node_class(kind):
-    global ClassCache
-    if kind in ClassCache:
-        return ClassCache[kind]
-    try:
-        module = importlib.import_module(f'.{kind}', __package__)
-        cls = module.SCENE_NODE_CLASS
-    except ModuleNotFoundError:
-        logger.warning("No sub-module for '{}'", kind)
-        cls = None
-    except ImportError:
-        logger.exception("Import error")
-        cls = None
-    except AttributeError:
-        logger.warning("Sub-module '{}' does not contain a scene node class", kind)
-        cls = None
-    ClassCache[kind] = cls
-    return cls
-
-
-class SceneNode:
+class WindowNode:
     def __init__(self, glctx):
         self.glctx = glctx
         self.children = []
@@ -144,7 +124,7 @@ class SceneNode:
         for child in node.children:
             if self.handle_node(engine, child, **kwargs):
                 continue
-            cls = get_scene_node_class(child.kind)
+            cls = get_plugin('flitter.render.window', child.kind)
             if cls is not None:
                 for i, scene_node in enumerate(existing):
                     if type(scene_node) is cls and scene_node.similar_to(child):
@@ -171,7 +151,7 @@ class SceneNode:
         raise NotImplementedError()
 
 
-class Reference(SceneNode):
+class Reference(WindowNode):
     def __init__(self, glctx):
         super().__init__(glctx)
         self._reference = None
@@ -188,7 +168,7 @@ class Reference(SceneNode):
         self._reference = None
 
 
-class ProgramNode(SceneNode):
+class ProgramNode(WindowNode):
     DEFAULT_VERTEX_SOURCE = TemplateLoader.get_template('default.vert')
     DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('default.frag')
     CLEAR_COLOR = (0, 0, 0, 0)
@@ -705,16 +685,6 @@ class Window(ProgramNode):
         return self.glctx.texture((width, height), 4)
 
 
-RENDERER_CLASS = Window
-
-
-ClassCache = {
-    'adjust': Adjust,
-    'bloom': Bloom,
-    'blur': Blur,
-    'edges': Edges,
-    'feedback': Feedback,
-    'noise': Noise,
-    'reference': Reference,
-    'shader': Shader,
-}
+class Offscreen(Window):
+    def __init__(self, offscreen=False, **kwargs):
+        super().__init__(offscreen=True, **kwargs)

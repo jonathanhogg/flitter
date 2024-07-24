@@ -3,10 +3,10 @@ Flitter generic controller framework
 """
 
 import asyncio
-import importlib
 
 from loguru import logger
 
+from ...plugins import get_plugin
 from . import midi
 
 
@@ -43,18 +43,7 @@ class Controller:
 
     async def update(self, engine, node, time, **kwargs):
         driver = node.get('driver', 1, str)
-        if driver in self.DRIVER_CACHE:
-            driver_class = self.DRIVER_CACHE[driver]
-        elif driver:
-            try:
-                driver_module = importlib.import_module(f'.{driver}', __package__)
-                driver_class = driver_module.get_driver_class()
-            except (ImportError, NameError):
-                logger.warning("Unable to import controller driver: {}", driver)
-                driver_class = None
-            self.DRIVER_CACHE[driver] = driver_class
-        else:
-            driver_class = None
+        driver_class = get_plugin('flitter.render.controller', driver)
         if self.driver is not None and (driver_class is None or not isinstance(self.driver, driver_class)):
             await self.driver.stop()
             self.driver = None
@@ -91,6 +80,3 @@ class Controller:
         self.controls = controls
         await self.driver.finish_update()
         await asyncio.sleep(0)
-
-
-RENDERER_CLASS = Controller

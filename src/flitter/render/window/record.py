@@ -53,6 +53,3 @@ class Record(ProgramNode):
             else:
                 quality = node.get('quality', 1, int)
                 path.write_image(self._framebuffer, quality=quality, alpha=keep_alpha)
-
-
-SCENE_NODE_CLASS = Record

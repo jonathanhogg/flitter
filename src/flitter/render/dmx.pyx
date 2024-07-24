@@ -16,6 +16,7 @@ from .. import name_patch
 from ..clock import system_clock
 from .. cimport model
 from ..streams import SerialStream
+from ..plugins import get_plugin
 
 
 logger = name_patch(logger, __name__)
@@ -189,7 +190,7 @@ cdef class DMX:
 
     async def update(self, engine, model.Node node, **kwargs):
         driver = node.get('driver', 1, str, '').lower()
-        cls = {'entec': EntecDMXDriver, 'outputarts': OutputArtsDMXDriver}.get(driver)
+        cls = get_plugin('flitter.render.dmx', driver)
         if cls is not None:
             tty = node.get('id', 1, str)
             baudrate = node.get('baudrate', 1, int, cls.DEFAULT_BAUD_RATE)
@@ -223,6 +224,3 @@ cdef class DMX:
                         if end > n:
                             n = end
         return n
-
-
-RENDERER_CLASS = DMX
