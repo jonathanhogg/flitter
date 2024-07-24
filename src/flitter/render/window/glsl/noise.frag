@@ -76,7 +76,7 @@ void main() {
 % else:
     vec4 c = vec4(0.0);
 % endif
-    vec3 point = vec3(coord*size + origin, z)*scale + c.xyz*tscale;
+    vec3 point = (vec3(coord*size + origin, z) + c.xyz*tscale) * scale;
     mat4 hashes;
     hashes[0] = permute(vec4(seed_hash));
     hashes[1] = permute(hashes[0] + 1.0);

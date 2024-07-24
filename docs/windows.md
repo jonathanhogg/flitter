@@ -638,8 +638,6 @@ XY") noise. It is controlled with the following attributes:
 unique vector with the `seed` attribute to generate different outputs, defaults
 to the null vector if not supplied.
 
-components=0, octaves=1, roughness=0.5, origin=0, z=0, scale=1, tscale=1
-
 `components=` *1..4*
 : Specify how many distinct noise planes to create, default `1`. Each will
 be assigned to one channel of the output image (in the order R, G, B, A).
@@ -653,7 +651,7 @@ value scaled by `roughness`, default `0.5`.
 
 `scale=` *SX;SY;SZ*
 : Specifies a scaling vector to be applied to the X, Y and Z coordinates
-passed into the noise function.
+passed into the noise function, default `1`.
 
 `origin=` *X;Y*
 : Specifies an offset for the *pre-scaled* X and Y input values, default `0`.
@@ -669,4 +667,4 @@ the noise function as X, Y and Z offsets, controlled with the attribute:
 
 `tscale=` *TX;TY;TZ;
 : Specifies a scaling factor for the RGB values read from the input image into
-offsets to the noise coordinates, default `1`.
+offsets that will be added to the pre-`scale`d noise coordinates, default `1`.
