@@ -11,14 +11,14 @@ cdef class Model:
     cdef Vector bounds
     cdef bint valid
 
-    cdef bint is_constructed(self)
+    cdef bint is_watertight(self)
     cdef bint check_valid(self)
     cdef void build_trimesh_model(self)
-    cdef object get_watertight_trimesh_model(self)
     cdef Vector get_bounds(self)
     cdef tuple get_buffers(self, object glctx, dict objects)
     cdef tuple instance(self, Matrix44 model_matrix)
 
+    cdef Model watertight(self)
     cdef Model flatten(self)
     cdef Model invert(self)
     cdef Model repair(self)

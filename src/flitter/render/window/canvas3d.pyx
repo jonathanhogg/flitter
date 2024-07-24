@@ -373,8 +373,8 @@ cdef Model get_model(Node node, bint top):
         for child in node._children:
             models.append(get_model(child, False))
         model = Model.union(models)
-        if node.kind == 'transform':
-            model = model.transform(update_transform_matrix(node, IdentityTransform))
+        if node.kind == 'transform' and (transform_matrix := update_transform_matrix(node, IdentityTransform)) is not IdentityTransform:
+            model = model.transform(transform_matrix)
     elif node.kind == 'difference':
         models = []
         for child in node._children:
@@ -406,13 +406,14 @@ cdef Model get_model(Node node, bint top):
         if top:
             if node.get_bool('flat', False):
                 model = model.flatten()
-            elif (snap_angle := min(max(0, node.get_float('snap_edges', DefaultSnapAngle if model.is_constructed() else 0.5)), 0.5)) < 0.5:
+            elif (snap_angle := min(max(0, node.get_float('snap_edges', DefaultSnapAngle if model.is_watertight() else 0.5)), 0.5)) < 0.5:
                 minimum_area = min(max(0, node.get_float('minimum_area', 0)), 1)
                 model = model.snap_edges(snap_angle, minimum_area)
             if node.get_bool('invert', False):
                 model = model.invert()
         elif node.kind != 'transform':
-            model = model.transform(get_model_transform(node, IdentityTransform))
+            if (transform_matrix := get_model_transform(node, IdentityTransform)) is not IdentityTransform:
+                model = model.transform(transform_matrix)
     return model
 
 

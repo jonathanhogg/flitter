@@ -20,7 +20,6 @@ cdef double Tau = 6.283185307179586
 cdef double RootHalf = sqrt(0.5)
 cdef double DefaultSnapAngle = 0.05
 cdef int64_t DefaultSegments = 64
-cdef Matrix44 IdentityTransform = Matrix44._identity()
 
 
 cdef class Model:
@@ -30,7 +29,7 @@ cdef class Model:
     def __eq__(self, other):
         return self is other
 
-    cdef bint is_constructed(self):
+    cdef bint is_watertight(self):
         return False
 
     cdef bint check_valid(self):
@@ -38,25 +37,6 @@ cdef class Model:
 
     cdef void build_trimesh_model(self):
         raise NotImplementedError()
-
-    cdef object get_watertight_trimesh_model(self):
-        if not self.check_valid():
-            self.build_trimesh_model()
-        if self.trimesh_model is None:
-            return None
-        trimesh_model = self.trimesh_model
-        if not trimesh_model.is_watertight:
-            trimesh_model = trimesh_model.copy()
-            trimesh_model.merge_vertices(merge_tex=True, merge_norm=True)
-            if not trimesh_model.is_watertight:
-                if trimesh_model.fill_holes():
-                    logger.debug("Filled holes in non-watertight mesh: {}", self.name)
-                else:
-                    trimesh_model = trimesh_model.convex_hull
-                    logger.warning("Computed convex hull of non-watertight mesh: {}", self.name)
-            else:
-                logger.trace("Merged vertices of non-watertight mesh: {}", self.name)
-        return trimesh_model
 
     cdef Vector get_bounds(self):
         if self.check_valid() and self.bounds is not None:
@@ -103,6 +83,9 @@ cdef class Model:
 
     cdef tuple instance(self, Matrix44 model_matrix):
         return self, model_matrix
+
+    cdef Model watertight(self):
+        return WatertightModel.get(self)
 
     cdef Model flatten(self):
         return FlattenedModel.get(self)
@@ -158,8 +141,8 @@ cdef class Model:
 cdef class ModelTransformer(Model):
     cdef Model original
 
-    cdef bint is_constructed(self):
-        return self.original.is_constructed()
+    cdef bint is_watertight(self):
+        return self.original.is_watertight()
 
     cdef bint check_valid(self):
         if not self.valid:
@@ -168,6 +151,50 @@ cdef class ModelTransformer(Model):
             return True
         self.valid = False
         return False
+
+
+cdef class WatertightModel(ModelTransformer):
+    @staticmethod
+    cdef WatertightModel get(Model original):
+        assert not isinstance(original, WatertightModel)
+        cdef str name = f'watertight({original.name})'
+        cdef WatertightModel model = <WatertightModel>ModelCache.pop(name, None)
+        if model is None:
+            model = WatertightModel.__new__(WatertightModel)
+            model.name = name
+            model.original = original
+        ModelCache[name] = model
+        return model
+
+    cdef bint is_watertight(self):
+        return True
+
+    cdef Model watertight(self):
+        return self
+
+    cdef Model flatten(self):
+        return self.original.flatten()
+
+    cdef Model snap_edges(self, double snap_angle, double minimum_area):
+        return self.original.snap_edges(snap_angle, minimum_area)
+
+    cdef void build_trimesh_model(self):
+        if not self.original.check_valid():
+            self.original.build_trimesh_model()
+        trimesh_model = self.original.trimesh_model
+        if trimesh_model is not None and not trimesh_model.is_watertight:
+            trimesh_model = trimesh_model.copy()
+            trimesh_model.merge_vertices(merge_tex=True, merge_norm=True)
+            if not trimesh_model.is_watertight:
+                if trimesh_model.fill_holes():
+                    logger.debug("Filled holes in non-watertight mesh: {}", self.original.name)
+                else:
+                    trimesh_model = trimesh_model.convex_hull
+                    logger.warning("Computed convex hull of non-watertight mesh: {}", self.original.name)
+            else:
+                logger.trace("Merged vertices of non-watertight mesh: {}", self.original.name)
+        self.trimesh_model = trimesh_model
+        self.valid = True
 
 
 cdef class FlattenedModel(ModelTransformer):
@@ -202,6 +229,9 @@ cdef class InvertedModel(ModelTransformer):
             model.original = original
         ModelCache[name] = model
         return model
+
+    cdef Model watertight(self):
+        return InvertedModel.get(self.original.watertight())
 
     cdef void build_trimesh_model(self):
         if not self.original.check_valid():
@@ -259,8 +289,11 @@ cdef class RepairedModel(ModelTransformer):
         ModelCache[name] = model
         return model
 
-    cdef bint is_constructed(self):
+    cdef bint is_watertight(self):
         return True
+
+    cdef Model watertight(self):
+        return self
 
     cdef void build_trimesh_model(self):
         if not self.original.check_valid():
@@ -283,8 +316,6 @@ cdef class TransformedModel(ModelTransformer):
 
     @staticmethod
     cdef Model get(Model original, Matrix44 transform_matrix):
-        if transform_matrix.eq(IdentityTransform):
-            return original
         cdef str name = f'{original.name}@{hex(transform_matrix.hash(False))[3:]}'
         cdef TransformedModel model = ModelCache.pop(name, None)
         if model is None:
@@ -300,6 +331,9 @@ cdef class TransformedModel(ModelTransformer):
 
     cdef Model transform(self, Matrix44 transform_matrix):
         return TransformedModel.get(self.original, transform_matrix.mmul(self.transform_matrix))
+
+    cdef Model watertight(self):
+        return TransformedModel.get(self.original.watertight(), self.transform_matrix)
 
     cdef Model flatten(self):
         return FlattenedModel.get(self.original).transform(self.transform_matrix)
@@ -317,7 +351,6 @@ cdef class TransformedModel(ModelTransformer):
         if not self.original.check_valid():
             self.original.build_trimesh_model()
         if self.original.trimesh_model is not None:
-            logger.trace("Transform model {}", self.original.name)
             transform_array = np.array(self.transform_matrix, dtype='float64').reshape((4, 4)).transpose()
             trimesh_model = self.original.trimesh_model.copy().apply_transform(transform_array)
             self.trimesh_model = trimesh_model if len(trimesh_model.vertices) and len(trimesh_model.faces) else None
@@ -330,12 +363,10 @@ cdef class SlicedModel(ModelTransformer):
     cdef Vector origin
     cdef Vector normal
 
-    cdef bint is_constructed(self):
-        return True
-
     @staticmethod
     cdef SlicedModel get(Model original, Vector origin, Vector normal):
-        cdef str name = f'{original.name}/{hex(origin.hash(False) ^ normal.hash(False))[3:]}'
+        original = original.watertight()
+        cdef str name = f'slice({original.name}, {hex(origin.hash(False) ^ normal.hash(False))[3:]})'
         cdef SlicedModel model = ModelCache.pop(name, None)
         if model is None:
             model = SlicedModel.__new__(SlicedModel)
@@ -345,6 +376,12 @@ cdef class SlicedModel(ModelTransformer):
             model.normal = normal.normalize()
         ModelCache[name] = model
         return model
+
+    cdef bint is_watertight(self):
+        return True
+
+    cdef Model watertight(self):
+        return self
 
     cdef Model transform(self, Matrix44 transform_matrix):
         cdef Vector origin = transform_matrix.vmul(self.origin)
@@ -356,7 +393,7 @@ cdef class SlicedModel(ModelTransformer):
             self.original.build_trimesh_model()
         if self.original.trimesh_model is not None:
             logger.trace("Slice model {}", self.original.name)
-            trimesh_model = self.original.get_watertight_trimesh_model()
+            trimesh_model = self.original.trimesh_model
             manifold = manifold3d.Manifold(mesh=manifold3d.Mesh(vert_properties=np.array(trimesh_model.vertices, dtype=np.float32),
                                                                 tri_verts=np.array(trimesh_model.faces, dtype=np.uint32)))
             normal = self.normal.neg()
@@ -371,9 +408,6 @@ cdef class SlicedModel(ModelTransformer):
 cdef class BooleanOperationModel(Model):
     cdef str operation
     cdef list models
-
-    cdef bint is_constructed(self):
-        return True
 
     @staticmethod
     cdef Model get(str operation, list models):
@@ -392,6 +426,7 @@ cdef class BooleanOperationModel(Model):
         for child_model in models:
             if child_model is None:
                 continue
+            child_model = child_model.watertight()
             if child_model in existing:
                 if operation == 'difference' and len(collected_models) and child_model is collected_models[0]:
                     return None
@@ -418,6 +453,12 @@ cdef class BooleanOperationModel(Model):
             model.models = models
         ModelCache[name] = model
         return model
+
+    cdef bint is_watertight(self):
+        return True
+
+    cdef Model watertight(self):
+        return self
 
     cdef Model transform(self, Matrix44 transform_matrix):
         cdef Model model
@@ -454,8 +495,10 @@ cdef class BooleanOperationModel(Model):
         cdef Model model
         self.trimesh_model = None
         for model in self.models:
-            if (trimesh_model := model.get_watertight_trimesh_model()) is not None:
-                trimesh_models.append(trimesh_model)
+            if not model.check_valid():
+                model.build_trimesh_model()
+            if model.trimesh_model is not None:
+                trimesh_models.append(model.trimesh_model)
         if trimesh_models:
             if self.operation == 'difference' and len(trimesh_models) > 2:
                 union_models = trimesh.boolean.boolean_manifold(trimesh_models[1:], 'union')
