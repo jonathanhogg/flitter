@@ -85,37 +85,37 @@ cdef class Model:
         return self, model_matrix
 
     cdef Model watertight(self):
-        return WatertightModel.get(self)
+        return Watertight.get(self)
 
     cdef Model flatten(self):
-        return FlattenedModel.get(self)
+        return Flatten.get(self)
 
     cdef Model invert(self):
-        return InvertedModel.get(self)
+        return Invert.get(self)
 
     cdef Model repair(self):
-        return RepairedModel.get(self)
+        return Repair.get(self)
 
     cdef Model snap_edges(self, double snap_angle, double minimum_area):
         return SnappedEdgesModel.get(self, snap_angle, minimum_area)
 
     cdef Model transform(self, Matrix44 transform_matrix):
-        return TransformedModel.get(self, transform_matrix)
+        return Transform.get(self, transform_matrix)
 
     cdef Model slice(self, Vector origin, Vector normal):
-        return SlicedModel.get(self, origin, normal)
+        return Slice.get(self, origin, normal)
 
     @staticmethod
     cdef Model intersect(list models):
-        return BooleanOperationModel.get('intersection', models)
+        return BooleanOperation.get('intersection', models)
 
     @staticmethod
     cdef Model union(list models):
-        return BooleanOperationModel.get('union', models)
+        return BooleanOperation.get('union', models)
 
     @staticmethod
     cdef Model difference(list models):
-        return BooleanOperationModel.get('difference', models)
+        return BooleanOperation.get('difference', models)
 
     @staticmethod
     cdef Model get_box(Node node):
@@ -138,7 +138,7 @@ cdef class Model:
         return ExternalModel.get(node)
 
 
-cdef class ModelTransformer(Model):
+cdef class UnaryOperation(Model):
     cdef Model original
 
     cdef bint is_watertight(self):
@@ -153,14 +153,14 @@ cdef class ModelTransformer(Model):
         return False
 
 
-cdef class WatertightModel(ModelTransformer):
+cdef class Watertight(UnaryOperation):
     @staticmethod
-    cdef WatertightModel get(Model original):
-        assert not isinstance(original, WatertightModel)
+    cdef Watertight get(Model original):
+        assert not isinstance(original, Watertight)
         cdef str name = f'watertight({original.name})'
-        cdef WatertightModel model = <WatertightModel>ModelCache.pop(name, None)
+        cdef Watertight model = <Watertight>ModelCache.pop(name, None)
         if model is None:
-            model = WatertightModel.__new__(WatertightModel)
+            model = Watertight.__new__(Watertight)
             model.name = name
             model.original = original
         ModelCache[name] = model
@@ -197,13 +197,13 @@ cdef class WatertightModel(ModelTransformer):
         self.valid = True
 
 
-cdef class FlattenedModel(ModelTransformer):
+cdef class Flatten(UnaryOperation):
     @staticmethod
-    cdef FlattenedModel get(Model original):
+    cdef Flatten get(Model original):
         cdef str name = f'flat({original.name})'
-        cdef FlattenedModel model = ModelCache.pop(name, None)
+        cdef Flatten model = ModelCache.pop(name, None)
         if model is None:
-            model = FlattenedModel.__new__(FlattenedModel)
+            model = Flatten.__new__(Flatten)
             model.name = name
             model.original = original
         ModelCache[name] = model
@@ -218,20 +218,20 @@ cdef class FlattenedModel(ModelTransformer):
         self.valid = True
 
 
-cdef class InvertedModel(ModelTransformer):
+cdef class Invert(UnaryOperation):
     @staticmethod
-    cdef InvertedModel get(Model original):
+    cdef Invert get(Model original):
         cdef str name = f'invert({original.name})'
-        cdef InvertedModel model = ModelCache.pop(name, None)
+        cdef Invert model = ModelCache.pop(name, None)
         if model is None:
-            model = InvertedModel.__new__(InvertedModel)
+            model = Invert.__new__(Invert)
             model.name = name
             model.original = original
         ModelCache[name] = model
         return model
 
     cdef Model watertight(self):
-        return InvertedModel.get(self.original.watertight())
+        return Invert.get(self.original.watertight())
 
     cdef void build_trimesh_model(self):
         if not self.original.check_valid():
@@ -244,7 +244,7 @@ cdef class InvertedModel(ModelTransformer):
         self.valid = True
 
 
-cdef class SnappedEdgesModel(ModelTransformer):
+cdef class SnappedEdgesModel(UnaryOperation):
     cdef double snap_angle
     cdef double minimum_area
 
@@ -277,13 +277,13 @@ cdef class SnappedEdgesModel(ModelTransformer):
         self.valid = True
 
 
-cdef class RepairedModel(ModelTransformer):
+cdef class Repair(UnaryOperation):
     @staticmethod
-    cdef RepairedModel get(Model original):
+    cdef Repair get(Model original):
         cdef str name = f'repair({original.name})'
-        cdef RepairedModel model = ModelCache.pop(name, None)
+        cdef Repair model = ModelCache.pop(name, None)
         if model is None:
-            model = RepairedModel.__new__(RepairedModel)
+            model = Repair.__new__(Repair)
             model.name = name
             model.original = original
         ModelCache[name] = model
@@ -311,15 +311,15 @@ cdef class RepairedModel(ModelTransformer):
         self.valid = True
 
 
-cdef class TransformedModel(ModelTransformer):
+cdef class Transform(UnaryOperation):
     cdef Matrix44 transform_matrix
 
     @staticmethod
     cdef Model get(Model original, Matrix44 transform_matrix):
         cdef str name = f'{original.name}@{hex(transform_matrix.hash(False))[3:]}'
-        cdef TransformedModel model = ModelCache.pop(name, None)
+        cdef Transform model = ModelCache.pop(name, None)
         if model is None:
-            model = TransformedModel.__new__(TransformedModel)
+            model = Transform.__new__(Transform)
             model.name = name
             model.original = original
             model.transform_matrix = transform_matrix
@@ -330,19 +330,19 @@ cdef class TransformedModel(ModelTransformer):
         return self.original, model_matrix.mmul(self.transform_matrix)
 
     cdef Model transform(self, Matrix44 transform_matrix):
-        return TransformedModel.get(self.original, transform_matrix.mmul(self.transform_matrix))
+        return Transform.get(self.original, transform_matrix.mmul(self.transform_matrix))
 
     cdef Model watertight(self):
-        return TransformedModel.get(self.original.watertight(), self.transform_matrix)
+        return Transform.get(self.original.watertight(), self.transform_matrix)
 
     cdef Model flatten(self):
-        return FlattenedModel.get(self.original).transform(self.transform_matrix)
+        return Flatten.get(self.original).transform(self.transform_matrix)
 
     cdef Model invert(self):
-        return InvertedModel.get(self.original).transform(self.transform_matrix)
+        return Invert.get(self.original).transform(self.transform_matrix)
 
     cdef Model repair(self):
-        return RepairedModel.get(self.original).transform(self.transform_matrix)
+        return Repair.get(self.original).transform(self.transform_matrix)
 
     cdef Model snap_edges(self, double snap_angle, double minimum_area):
         return SnappedEdgesModel.get(self.original, snap_angle, minimum_area).transform(self.transform_matrix)
@@ -359,17 +359,17 @@ cdef class TransformedModel(ModelTransformer):
         self.valid = True
 
 
-cdef class SlicedModel(ModelTransformer):
+cdef class Slice(UnaryOperation):
     cdef Vector origin
     cdef Vector normal
 
     @staticmethod
-    cdef SlicedModel get(Model original, Vector origin, Vector normal):
+    cdef Slice get(Model original, Vector origin, Vector normal):
         original = original.watertight()
         cdef str name = f'slice({original.name}, {hex(origin.hash(False) ^ normal.hash(False))[3:]})'
-        cdef SlicedModel model = ModelCache.pop(name, None)
+        cdef Slice model = ModelCache.pop(name, None)
         if model is None:
-            model = SlicedModel.__new__(SlicedModel)
+            model = Slice.__new__(Slice)
             model.name = name
             model.original = original
             model.origin = origin
@@ -386,7 +386,7 @@ cdef class SlicedModel(ModelTransformer):
     cdef Model transform(self, Matrix44 transform_matrix):
         cdef Vector origin = transform_matrix.vmul(self.origin)
         cdef Vector normal = transform_matrix.inverse_transpose_matrix33().vmul(self.normal).normalize()
-        return SlicedModel.get(self.original.transform(transform_matrix), origin, normal)
+        return Slice.get(self.original.transform(transform_matrix), origin, normal)
 
     cdef void build_trimesh_model(self):
         if not self.original.check_valid():
@@ -405,7 +405,7 @@ cdef class SlicedModel(ModelTransformer):
         self.valid = True
 
 
-cdef class BooleanOperationModel(Model):
+cdef class BooleanOperation(Model):
     cdef str operation
     cdef list models
 
@@ -416,8 +416,8 @@ cdef class BooleanOperationModel(Model):
         if operation == 'union':
             collected_models = []
             for child_model in models:
-                if isinstance(child_model, BooleanOperationModel) and (<BooleanOperationModel>child_model).operation == 'union':
-                    collected_models.extend((<BooleanOperationModel>child_model).models)
+                if isinstance(child_model, BooleanOperation) and (<BooleanOperation>child_model).operation == 'union':
+                    collected_models.extend((<BooleanOperation>child_model).models)
                 else:
                     collected_models.append(child_model)
             models = collected_models
@@ -445,9 +445,9 @@ cdef class BooleanOperationModel(Model):
                 name += ', '
             name += child_model.name
         name += ')'
-        cdef BooleanOperationModel model = ModelCache.pop(name, None)
+        cdef BooleanOperation model = ModelCache.pop(name, None)
         if model is None:
-            model = BooleanOperationModel.__new__(BooleanOperationModel)
+            model = BooleanOperation.__new__(BooleanOperation)
             model.name = name
             model.operation = operation
             model.models = models
@@ -465,7 +465,7 @@ cdef class BooleanOperationModel(Model):
         cdef list models = []
         for model in self.models:
             models.append(model.transform(transform_matrix))
-        return BooleanOperationModel.get(self.operation, models)
+        return BooleanOperation.get(self.operation, models)
 
     cdef Model slice(self, Vector origin, Vector normal):
         cdef Model model
@@ -476,7 +476,7 @@ cdef class BooleanOperationModel(Model):
                 models.append(model.slice(origin, normal))
             else:
                 models.append(model)
-        return BooleanOperationModel.get(self.operation, models)
+        return BooleanOperation.get(self.operation, models)
 
     cdef bint check_valid(self):
         if not self.valid:
