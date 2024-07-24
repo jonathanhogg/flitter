@@ -28,15 +28,26 @@ class SerialStream:
         raise SerialException("No matching serial device")
 
     def __init__(self, device, **kwargs):
-        self._device = device
-        self._connection = serial.Serial(self._device, timeout=0, write_timeout=0, **kwargs)
+        self._connection = serial.Serial(device, timeout=0, write_timeout=0, **kwargs)
         logger.debug("Opened SerialStream on {} ({!r})", device, ', '.join(f'{k}={v!r}' for k, v in kwargs.items()))
         self._loop = asyncio.get_event_loop()
         self._output_buffer = bytes()
         self._output_buffer_empty = None
 
     def __repr__(self):
-        return f'<{self.__class__.__name__}:{self._device}>'
+        return f'<{self.__class__.__name__}:{self.device}>'
+
+    @property
+    def device(self):
+        return self._connection.name
+
+    @property
+    def baudrate(self):
+        return self._connection.baudrate
+
+    @baudrate.setter
+    def baudrate(self, value):
+        self._connection.baudrate = int(value)
 
     @property
     def dtr(self):
@@ -48,6 +59,7 @@ class SerialStream:
 
     def close(self):
         if self._connection is not None:
+            logger.debug("Closed SerialStream on {}", self.device)
             self._connection.close()
             self._connection = None
 

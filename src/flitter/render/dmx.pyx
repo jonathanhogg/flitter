@@ -15,18 +15,15 @@ from loguru import logger
 from .. import name_patch
 from ..clock import system_clock
 from .. cimport model
-from ..streams import SerialStream
 from ..plugins import get_plugin
+from ..streams import SerialStream, SerialException
 
 
 logger = name_patch(logger, __name__)
 
 
 class DMXDriver:
-    async def connect(self, tty=None):
-        raise NotImplementedError()
-
-    async def send_dmx_data(self, data):
+    async def update(self, model.Node node, data):
         raise NotImplementedError()
 
     def close(self):
@@ -34,6 +31,8 @@ class DMXDriver:
 
 
 class EntecDMXDriver(DMXDriver):
+    VENDOR_ID = 0x0403
+    PRODUCT_ID = 0x6001
     DEFAULT_BAUD_RATE = 57600
     PACKET_START = 0x7e
     PACKET_END = 0xe7
@@ -64,26 +63,43 @@ class EntecDMXDriver(DMXDriver):
     def __init__(self, timeout=2.5):
         self._timeout = timeout
         self._stream = None
+        self._failed = False
         self.parameters = None
 
-    async def connect(self, tty=None, baudrate=None):
-        try:
-            if baudrate is None:
-                baudrate = self.DefaultBaudrate
-            if tty is not None:
-                self._stream = SerialStream(tty, baudrate=baudrate)
-            else:
-                self._stream = SerialStream.stream_matching(vid=0x0403, pid=0x6001, baudrate=baudrate)
-            await self.send_packet(self.Label.GetParameters, struct.pack('<H', 508))
-            label, payload = await self.recv_packet()
-            if label != self.Label.GetParameters:
-                raise ConnectionError("Label mismatch on initial parameters request")
-            self.parameters = self.Parameters.from_payload(payload)
-            logger.info("Connected to DMX interface; firmware version {}, refresh rate {}", self.parameters.firmware_version, self.parameters.refresh_rate)
-        except ConnectionError:
-            raise
-        except Exception as exc:
-            raise ConnectionError("Unable to connect") from exc
+    async def update(self, model.Node node, data):
+        baudrate = node.get('baudrate', 1, int, self.DEFAULT_BAUD_RATE)
+        device = node.get('device', 1, str)
+        if self._stream is not None:
+            if device is not None and device != self._stream.device:
+                self._stream.close()
+                self._stream = None
+            elif baudrate != self._stream.baudrate:
+                self._stream.baudrate = baudrate
+        if self._stream is None:
+            try:
+                if device is not None:
+                    self._stream = SerialStream(device, baudrate=baudrate)
+                else:
+                    self._stream = SerialStream.stream_matching(vid=self.VENDOR_ID, pid=self.PRODUCT_ID, baudrate=baudrate)
+                await self.send_packet(self.Label.GetParameters, struct.pack('<H', 508))
+                label, payload = await self.recv_packet()
+                if label != self.Label.GetParameters:
+                    raise ConnectionError("Label mismatch on initial parameters request")
+                self.parameters = self.Parameters.from_payload(payload)
+                logger.success("Connected to Entec DMX interface on {}", self._stream.device)
+                logger.debug("Firmware version {}, refresh rate {}", self.parameters.firmware_version, self.parameters.refresh_rate)
+                self._failed = False
+            except (ConnectionError, SerialException):
+                if not self._failed:
+                    logger.warning("Unable to connect to DMX interface")
+                    self._failed = True
+        if self._stream is not None:
+            try:
+                await self.send_packet(self.Label.SendDMXPacket, data, pad=25)
+            except SerialException:
+                logger.error("Error writing to DMX interface")
+                self.close()
+                self._failed = True
 
     async def send_packet(self, label, payload, pad=None):
         length = len(payload) if pad is None else max(len(payload), pad)
@@ -116,12 +132,10 @@ class EntecDMXDriver(DMXDriver):
         assert (await self._readexactly(1, fail_time)) == bytes([self.PACKET_END])
         return label, payload
 
-    async def send_dmx_data(self, data):
-        await self.send_packet(self.Label.SendDMXPacket, data, pad=25)
-
     def close(self):
-        self._stream.close()
-        self._stream = None
+        if self._stream is not None:
+            self._stream.close()
+            self._stream = None
 
 
 @cython.boundscheck(False)
@@ -152,21 +166,44 @@ cdef frame_and_escape(unsigned char[:] data):
 
 
 class OutputArtsDMXDriver(DMXDriver):
+    VENDOR_ID = 0x03eb
+    PRODUCT_ID = 0x2044
     DEFAULT_BAUD_RATE = 115200
 
     def __init__(self):
         self._stream = None
+        self._failed = False
 
-    async def connect(self, tty=None, baudrate=None):
-        if tty is not None:
-            self._stream = SerialStream(tty, baudrate=baudrate)
-        else:
-            self._stream = SerialStream.stream_matching(vid=0x03eb, pid=0x2044, baudrate=baudrate)
-
-    async def send_dmx_data(self, data):
-        frame = frame_and_escape(data)
-        self._stream.write(bytes(frame))
-        await self._stream.drain()
+    async def update(self, model.Node node, data):
+        baudrate = node.get('baudrate', 1, int, self.DEFAULT_BAUD_RATE)
+        device = node.get('device', 1, str)
+        if self._stream is not None:
+            if device is not None and device != self._stream.device:
+                self._stream.close()
+                self._stream = None
+            elif baudrate != self._stream.baudrate:
+                self._stream.baudrate = baudrate
+        if self._stream is None:
+            try:
+                if device is not None:
+                    self._stream = SerialStream(device, baudrate=baudrate)
+                else:
+                    self._stream = SerialStream.stream_matching(vid=self.VENDOR_ID, pid=self.PRODUCT_ID, baudrate=baudrate)
+                self._failed = False
+                logger.success("Connected to OutputArts DMX interface on {}", self._stream.device)
+            except SerialException:
+                if not self._failed:
+                    logger.warning("Unable to connect to DMX interface")
+                    self._failed = True
+        if self._stream is not None:
+            try:
+                frame = frame_and_escape(data)
+                self._stream.write(bytes(frame))
+                await self._stream.drain()
+            except SerialException:
+                logger.error("Error writing to DMX interface")
+                self.close()
+                self._failed = True
 
     def close(self):
         if self._stream is not None:
@@ -192,16 +229,13 @@ cdef class DMX:
         driver = node.get('driver', 1, str, '').lower()
         cls = get_plugin('flitter.render.dmx', driver)
         if cls is not None:
-            tty = node.get('id', 1, str)
-            baudrate = node.get('baudrate', 1, int, cls.DEFAULT_BAUD_RATE)
             if not isinstance(self.driver, cls):
                 if self.driver is not None:
                     self.driver.close()
                 self.driver = cls()
-                await self.driver.connect(tty, baudrate=baudrate)
             channel_data = bytearray(513)
             end = self.collect_channels(node, channel_data)
-            await self.driver.send_dmx_data(channel_data[:end])
+            await self.driver.update(node, channel_data[:end])
         elif self.driver is not None:
             self.driver.close()
             self.driver = None
