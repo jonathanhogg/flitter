@@ -81,9 +81,6 @@ cdef class Model:
         objects[name] = buffers
         return buffers
 
-    cdef tuple instance(self, Matrix44 model_matrix):
-        return self, model_matrix
-
     cdef Model watertight(self):
         return Watertight.get(self)
 
@@ -325,9 +322,6 @@ cdef class Transform(UnaryOperation):
             model.transform_matrix = transform_matrix
         ModelCache[name] = model
         return model
-
-    cdef tuple instance(self, Matrix44 model_matrix):
-        return self.original, model_matrix.mmul(self.transform_matrix)
 
     cdef Model transform(self, Matrix44 transform_matrix):
         return Transform.get(self.original, transform_matrix.mmul(self.transform_matrix))

@@ -428,7 +428,6 @@ cdef void collect(Node node, Matrix44 transform_matrix, Material material, Rende
     cdef Instance instance
     cdef tuple model_textures
     cdef RenderGroup new_render_group
-    cdef Matrix44 model_matrix
 
     if node.kind == 'material':
         material = material.update(node)
@@ -512,12 +511,10 @@ cdef void collect(Node node, Matrix44 transform_matrix, Material material, Rende
             cameras[camera_id] = default_camera.derive(node, transform_matrix, max_samples)
 
     elif (model := get_model(node, True)) is not None:
-        model, model_matrix = model.instance(get_model_transform(node, transform_matrix))
-        material = material.update(node)
         instance = Instance.__new__(Instance)
-        instance.model_matrix = model_matrix
-        instance.material = material
-        model_textures = (model, material.textures)
+        instance.model_matrix = get_model_transform(node, transform_matrix)
+        instance.material = material.update(node)
+        model_textures = (model, instance.material.textures)
         (<list>render_group.instances.setdefault(model_textures, [])).append(instance)
 
 
