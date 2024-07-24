@@ -407,10 +407,10 @@ cdef class BooleanOperation(Model):
     cdef Model get(str operation, list models):
         cdef Model child_model
         cdef list collected_models
-        if operation == 'union':
+        if operation is 'union':
             collected_models = []
             for child_model in models:
-                if isinstance(child_model, BooleanOperation) and (<BooleanOperation>child_model).operation == 'union':
+                if isinstance(child_model, BooleanOperation) and (<BooleanOperation>child_model).operation is 'union':
                     collected_models.extend((<BooleanOperation>child_model).models)
                 else:
                     collected_models.append(child_model)
@@ -422,7 +422,7 @@ cdef class BooleanOperation(Model):
                 continue
             child_model = child_model.watertight()
             if child_model in existing:
-                if operation == 'difference' and len(collected_models) and child_model is collected_models[0]:
+                if operation is 'difference' and len(collected_models) and child_model is collected_models[0]:
                     return None
                 continue
             existing.add(child_model)
@@ -466,7 +466,7 @@ cdef class BooleanOperation(Model):
         cdef list models = []
         cdef int64_t i
         for i, model in enumerate(self.models):
-            if i == 0 or self.operation == 'union':
+            if i == 0 or self.operation is 'union':
                 models.append(model.slice(origin, normal))
             else:
                 models.append(model)
@@ -494,7 +494,7 @@ cdef class BooleanOperation(Model):
             if model.trimesh_model is not None:
                 trimesh_models.append(model.trimesh_model)
         if trimesh_models:
-            if self.operation == 'difference' and len(trimesh_models) > 2:
+            if self.operation is 'difference' and len(trimesh_models) > 2:
                 union_models = trimesh.boolean.boolean_manifold(trimesh_models[1:], 'union')
                 trimesh_model = trimesh.boolean.boolean_manifold([trimesh_models[0], union_models], 'difference')
             else:
