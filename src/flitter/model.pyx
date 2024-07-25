@@ -497,14 +497,14 @@ cdef class Vector:
                     text += <str>objptr
                 elif isinstance(<object>objptr, (float, int)):
                     number= <object>objptr
-                    text += SymbolTable.get(number, f'{number:.9g}')
+                    text += SymbolTable.get(number, f'{number:z.9g}')
                 elif isinstance(<object>objptr, Node):
                     text += (<Node>objptr).kind
                 elif callable(<object>objptr) and hasattr(<object>objptr, '__name__'):
                     text += (<object>objptr).__name__
         elif n:
             for i in range(n):
-                text += SymbolTable.get(self.numbers[i], f'{self.numbers[i]:.9g}')
+                text += SymbolTable.get(self.numbers[i], f'{self.numbers[i]:z.9g}')
         return text
 
     def __iter__(self):
@@ -654,12 +654,12 @@ cdef class Vector:
         if self.numbers != NULL:
             for i in range(n):
                 symbol = SymbolTable.get(self.numbers[i])
-                parts.append(':' + symbol if symbol is not None else f'{self.numbers[i]:.9g}')
+                parts.append(':' + symbol if symbol is not None else f'{self.numbers[i]:z.9g}')
         else:
             for obj in self.objects:
                 if isinstance(obj, (float, int)):
                     symbol = SymbolTable.get(obj)
-                    parts.append(':' + symbol if symbol is not None else f'{obj:.9g}')
+                    parts.append(':' + symbol if symbol is not None else f'{obj:z.9g}')
                 elif isinstance(obj, str):
                     parts.append(repr(<str>obj))
                 else:
