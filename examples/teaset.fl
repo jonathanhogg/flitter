@@ -1,0 +1,24 @@
+
+let SIZE=1920;1080
+    CUPS=8
+    SPOONS=60
+
+!window size=SIZE
+    !record filename=OUTPUT
+        !canvas3d samples=4 camera_id=:cam face_cull=false
+            !transform rotate_y=beat/60
+                !camera id=:cam position=0;250;500
+            !light color=colortemp(4000)*600k position=0;500;0 focus=0 outer=0.25
+            !light color=colortemp(3000)*500k position=500;250;0 focus=0 outer=0.25
+            !light color=colortemp(2000) direction=0;1;0
+            !cylinder size=350;350;1 rotation=0.25;0;0 color=0.1;0.2;0
+            !material color=1 roughness=0.4
+                !model filename='assets/teapot.obj' size=50 position=0
+            !material color=1 roughness=0.4
+                for i in ..CUPS
+                    !transform rotate_y=i/CUPS translate=200;0;0
+                        !model filename='assets/teacup.obj' size=50 rotation=0;beat/10+i/CUPS;0
+            !material color=1 roughness=0.3 metal=true
+                for i in ..SPOONS
+                    !transform rotate_y=i/SPOONS-beat/60 translate=300;0;0 rotate_x=0.1*sin(beat/5+3*i/SPOONS)
+                        !model filename='assets/spoon.obj' size=50 rotation=0.25;0;0.25 position=0;50;0

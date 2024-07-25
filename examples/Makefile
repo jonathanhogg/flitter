@@ -3,7 +3,7 @@
 
 all: short long
 
-short: bauble.png canvas3d.png linelight.png solidgeometry.png textures.png translucency.png
+short: bauble.png canvas3d.png linelight.png solidgeometry.png teaset.png textures.png translucency.png
 
 long: bounce.png hoops.png physics.png smoke.png video.png
 
@@ -29,6 +29,9 @@ smoke.png: smoke.fl
 	flitter --offscreen --lockstep --fps=10 --runtime=1 --define "OUTPUT=$@" $<
 
 solidgeometry.png: solidgeometry.fl
+	flitter --offscreen --lockstep --fps=1 --runtime=1 --define "OUTPUT=$@" $<
+
+teaset.png: teaset.fl
 	flitter --offscreen --lockstep --fps=1 --runtime=1 --define "OUTPUT=$@" $<
 
 textures.png: textures.fl

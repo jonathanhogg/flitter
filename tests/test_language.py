@@ -479,6 +479,9 @@ class TestExamples(ScriptTest):
     def test_solidgeometry(self):
         self.assertSimplifierDoesntChangeBehaviour(self.EXAMPLES / 'solidgeometry.fl')
 
+    def test_teaset(self):
+        self.assertSimplifierDoesntChangeBehaviour(self.EXAMPLES / 'teaset.fl')
+
     def test_textures(self):
         self.assertSimplifierDoesntChangeBehaviour(self.EXAMPLES / 'textures.fl')
 

@@ -198,6 +198,9 @@ class TestExamples(ScriptTest):
     def test_solidgeometry(self):
         self.assertScriptOutputMatchesImage(self.EXAMPLES / 'solidgeometry.fl')
 
+    def test_teaset(self):
+        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'teaset.fl')
+
     def test_textures(self):
         self.assertScriptOutputMatchesImage(self.EXAMPLES / 'textures.fl')
 
@@ -234,6 +237,10 @@ class TestExamples(ScriptTest):
     @unittest.skipIf(sys.platform != 'linux', 'OpenGL ES only available on Linux')
     def test_solidgeometry_opengl_es(self):
         self.assertScriptOutputMatchesImage(self.EXAMPLES / 'solidgeometry.fl', opengl_es=True, suffix='.es.png')
+
+    @unittest.skipIf(sys.platform != 'linux', 'OpenGL ES only available on Linux')
+    def test_teaset_opengl_es(self):
+        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'teaset.fl', opengl_es=True, suffix='.es.png')
 
     @unittest.skipIf(sys.platform != 'linux', 'OpenGL ES only available on Linux')
     def test_textures_opengl_es(self):
