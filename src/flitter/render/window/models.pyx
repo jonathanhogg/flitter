@@ -15,7 +15,6 @@ from ...cache import SharedCache
 logger = name_patch(logger, __name__)
 
 cdef dict ModelCache = {}
-cdef int64_t MaxModelCacheEntries = 4096
 cdef double Tau = 6.283185307179586
 cdef double RootHalf = sqrt(0.5)
 cdef double DefaultSnapAngle = 0.05
@@ -65,12 +64,6 @@ cdef class Model:
             if name in objects:
                 del objects[name]
             return None, None
-        while len(ModelCache) > MaxModelCacheEntries:
-            dead_name = next(iter(ModelCache))
-            del ModelCache[dead_name]
-            if dead_name in objects:
-                del objects[dead_name]
-            logger.trace("Removed model {} from cache", dead_name)
         cdef tuple buffers
         cdef bint has_uv = trimesh_model.visual is not None and isinstance(trimesh_model.visual, trimesh.visual.texture.TextureVisuals) and \
             trimesh_model.visual.uv is not None
@@ -156,12 +149,12 @@ cdef class Watertight(UnaryOperation):
     cdef Watertight get(Model original):
         assert not isinstance(original, Watertight)
         cdef str name = f'watertight({original.name})'
-        cdef Watertight model = <Watertight>ModelCache.pop(name, None)
+        cdef Watertight model = <Watertight>ModelCache.get(name, None)
         if model is None:
             model = Watertight.__new__(Watertight)
             model.name = name
             model.original = original
-        ModelCache[name] = model
+            ModelCache[name] = model
         return model
 
     cdef bint is_watertight(self):
@@ -199,12 +192,12 @@ cdef class Flatten(UnaryOperation):
     @staticmethod
     cdef Flatten get(Model original):
         cdef str name = f'flat({original.name})'
-        cdef Flatten model = <Flatten>ModelCache.pop(name, None)
+        cdef Flatten model = <Flatten>ModelCache.get(name, None)
         if model is None:
             model = Flatten.__new__(Flatten)
             model.name = name
             model.original = original
-        ModelCache[name] = model
+            ModelCache[name] = model
         return model
 
     cdef void build_trimesh_model(self):
@@ -220,12 +213,12 @@ cdef class Invert(UnaryOperation):
     @staticmethod
     cdef Invert get(Model original):
         cdef str name = f'invert({original.name})'
-        cdef Invert model = <Invert>ModelCache.pop(name, None)
+        cdef Invert model = <Invert>ModelCache.get(name, None)
         if model is None:
             model = Invert.__new__(Invert)
             model.name = name
             model.original = original
-        ModelCache[name] = model
+            ModelCache[name] = model
         return model
 
     cdef Model watertight(self):
@@ -254,14 +247,14 @@ cdef class SnappedEdgesModel(UnaryOperation):
         if minimum_area:
             name += f', {minimum_area:g}'
         name += ')'
-        cdef SnappedEdgesModel model = <SnappedEdgesModel>ModelCache.pop(name, None)
+        cdef SnappedEdgesModel model = <SnappedEdgesModel>ModelCache.get(name, None)
         if model is None:
             model = SnappedEdgesModel.__new__(SnappedEdgesModel)
             model.name = name
             model.original = original
             model.snap_angle = snap_angle
             model.minimum_area = minimum_area
-        ModelCache[name] = model
+            ModelCache[name] = model
         return model
 
     cdef void build_trimesh_model(self):
@@ -279,12 +272,12 @@ cdef class Repair(UnaryOperation):
     @staticmethod
     cdef Repair get(Model original):
         cdef str name = f'repair({original.name})'
-        cdef Repair model = <Repair>ModelCache.pop(name, None)
+        cdef Repair model = <Repair>ModelCache.get(name, None)
         if model is None:
             model = Repair.__new__(Repair)
             model.name = name
             model.original = original
-        ModelCache[name] = model
+            ModelCache[name] = model
         return model
 
     cdef bint is_watertight(self):
@@ -301,8 +294,8 @@ cdef class Repair(UnaryOperation):
             trimesh_model = trimesh_model.copy()
             trimesh_model.process(validate=True, merge_tex=True, merge_norm=True)
             trimesh_model.remove_unreferenced_vertices()
-            trimesh_model.fix_normals()
             trimesh_model.fill_holes()
+            trimesh_model.fix_normals()
             self.trimesh_model = trimesh_model
         else:
             self.trimesh_model = None
@@ -315,13 +308,13 @@ cdef class Transform(UnaryOperation):
     @staticmethod
     cdef Model get(Model original, Matrix44 transform_matrix):
         cdef str name = f'{original.name}@{hex(transform_matrix.hash(False))[3:]}'
-        cdef Transform model = <Transform>ModelCache.pop(name, None)
+        cdef Transform model = <Transform>ModelCache.get(name, None)
         if model is None:
             model = Transform.__new__(Transform)
             model.name = name
             model.original = original
             model.transform_matrix = transform_matrix
-        ModelCache[name] = model
+            ModelCache[name] = model
         return model
 
     cdef Model transform(self, Matrix44 transform_matrix):
@@ -362,14 +355,14 @@ cdef class Slice(UnaryOperation):
     cdef Slice get(Model original, Vector origin, Vector normal):
         original = original.watertight()
         cdef str name = f'slice({original.name}, {hex(origin.hash(False) ^ normal.hash(False))[3:]})'
-        cdef Slice model = <Slice>ModelCache.pop(name, None)
+        cdef Slice model = <Slice>ModelCache.get(name, None)
         if model is None:
             model = Slice.__new__(Slice)
             model.name = name
             model.original = original
             model.origin = origin
             model.normal = normal.normalize()
-        ModelCache[name] = model
+            ModelCache[name] = model
         return model
 
     cdef bint is_watertight(self):
@@ -440,13 +433,13 @@ cdef class BooleanOperation(Model):
                 name += ', '
             name += child_model.name
         name += ')'
-        cdef BooleanOperation model = <BooleanOperation>ModelCache.pop(name, None)
+        cdef BooleanOperation model = <BooleanOperation>ModelCache.get(name, None)
         if model is None:
             model = BooleanOperation.__new__(BooleanOperation)
             model.name = name
             model.operation = operation
             model.models = models
-        ModelCache[name] = model
+            ModelCache[name] = model
         return model
 
     cdef bint is_watertight(self):
@@ -570,13 +563,13 @@ cdef class Sphere(PrimitiveModel):
     cdef Sphere get(Node node):
         cdef int64_t segments = max(4, node.get_int('segments', DefaultSegments))
         cdef str name = f'!sphere-{segments}' if segments != DefaultSegments else '!sphere'
-        cdef Sphere model = <Sphere>ModelCache.pop(name, None)
+        cdef Sphere model = <Sphere>ModelCache.get(name, None)
         if model is None:
             model = Sphere.__new__(Sphere)
             model.name = name
             model.segments = segments
             model.trimesh_model = None
-        ModelCache[name] = model
+            ModelCache[name] = model
         return model
 
     @cython.cdivision(True)
@@ -639,13 +632,13 @@ cdef class Cylinder(PrimitiveModel):
     cdef Cylinder get(Node node):
         cdef int64_t segments = max(2, node.get_int('segments', DefaultSegments))
         cdef str name = f'!cylinder-{segments}' if segments != DefaultSegments else '!cylinder'
-        cdef Cylinder model = <Cylinder>ModelCache.pop(name, None)
+        cdef Cylinder model = <Cylinder>ModelCache.get(name, None)
         if model is None:
             model = Cylinder.__new__(Cylinder)
             model.name = name
             model.segments = segments
             model.trimesh_model = None
-        ModelCache[name] = model
+            ModelCache[name] = model
         return model
 
     @cython.cdivision(True)
@@ -724,13 +717,13 @@ cdef class Cone(PrimitiveModel):
     cdef Cone get(Node node):
         cdef int64_t segments = max(2, node.get_int('segments', DefaultSegments))
         cdef str name = f'!cone-{segments}' if segments != DefaultSegments else '!cone'
-        cdef Cone model = <Cone>ModelCache.pop(name, None)
+        cdef Cone model = <Cone>ModelCache.get(name, None)
         if model is None:
             model = Cone.__new__(Cone)
             model.name = name
             model.segments = segments
             model.trimesh_model = None
-        ModelCache[name] = model
+            ModelCache[name] = model
         return model
 
     @cython.cdivision(True)
@@ -795,13 +788,13 @@ cdef class ExternalModel(Model):
         cdef str name = node.get_str('filename', None)
         if not name:
             return None
-        cdef ExternalModel model = <ExternalModel>ModelCache.pop(name, None)
+        cdef ExternalModel model = <ExternalModel>ModelCache.get(name, None)
         if model is None:
             model = ExternalModel.__new__(ExternalModel)
             model.name = name
             model.cache_path = SharedCache[name]
             model.trimesh_model = None
-        ModelCache[name] = model
+            ModelCache[name] = model
         return model
 
     cdef bint check_valid(self):

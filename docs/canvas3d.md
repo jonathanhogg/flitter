@@ -648,7 +648,7 @@ In addition to these transformation attributes, all models may have
 [material](#materials) attributes that provide material properties specific to
 the model.
 
-Model data is aggressively cached but automatically rebuilt if required. This
+Model data is aggressively cached but automatically rebuilt as required. This
 includes automatically reloading external models if the file modification
 time-stamp changes. Multiple instances of the *same* model are collated and
 [dispatched simultaneously](#instance-ordering) to the GPU.
@@ -839,8 +839,10 @@ result in a new model being generated.
 Animating a transform or slice operation inside a model construction tree will
 cause the model to be reconstructed repeatedly. If the construction operations
 are non-trivial to carry out, then this will slow the engine down significantly.
+It will also result in a large amount of memory being consumed as each new model
+is cached.
 
-If the animation loops, then you can take advantage of caching by "stepping"
+If the animation loops, then you can take advantage of the caching by "stepping"
 the animated values so that they loop through a fixed, repeating sequence of
 values. For instance using the following code will cause a new model to be
 created on every frame, as the maths varies slightly every time.
@@ -851,8 +853,8 @@ created on every frame, as the maths varies slightly every time.
     !cylinder size=(r;r;4) where r=0.5+sine(beat/10)
 ```
 
-Using this code will create a maximum of 50 versions of the model and repeat
-them:
+However, using this code will create a maximum of 50 versions of the model and
+repeat them:
 
 ```flitter
 !difference
@@ -868,13 +870,13 @@ satisfy these constraints. They are all designed to have sane normals and UV
 coordinates, which requires them to have split seams and duplicated vertices.
 
 **Flitter** will check models before attempting to operate on them. If any of
-the constituent models of a CSG operation are not watertight, it will attempt
-to "fix" them with the following – increasingly intrusive – steps:
+the constituent models of a CSG operation are not watertight, they will be
+"fixed" with the following – increasingly intrusive – steps:
 
 - First the model will be processed to merge all duplicate vertices and remove
 any duplicate faces
-- If the model is still not watertight, then an attempt will be made to cap any
-holes
+- If the model is still not watertight, then an attempt will be made to cap
+simple holes
 - If this fails then a convex hull will be computed from the model and this used
 instead.
 
@@ -887,7 +889,7 @@ The result of any CSG operation will also be a watertight mesh, this means that
 all adjacent faces will have shared vertices with normals computed as an average
 of the face normals. For a smooth object, this will render correctly. However,
 a model with any sharp edges will show strange shading distortions at these
-edges. For this reason, constructed models automatically have [edge
+boundaries. For this reason, constructed models automatically have [edge
 snapping](#model-shading) applied with the snap angle set to 0.05 turns (18°).
 This can be controlled by adding an explicit `snap_edges` attribute to the top
 node in the model construction tree.
