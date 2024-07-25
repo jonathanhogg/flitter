@@ -257,7 +257,7 @@ class EngineController:
                             self.state_generation2 ^= self.state_generation1
                             simplify_state = self.state.with_keys(self.state_generation2)
                             simplify_time = -system_clock()
-                            top = current_program.top.simplify(state=simplify_state, dynamic=names)
+                            top = current_program.top.simplify(state=simplify_state, dynamic=dynamic)
                             now = system_clock()
                             simplify_time += now
                             if top is current_program.top:
@@ -265,7 +265,7 @@ class EngineController:
                                              len(self.state_generation2), simplify_time*1000)
                             else:
                                 compile_time = -now
-                                run_program = top.compile(initial_lnames=tuple(names))
+                                run_program = top.compile(initial_lnames=tuple(dynamic))
                                 run_program.set_path(current_program.path)
                                 run_program.set_top(top)
                                 compile_time += system_clock()
