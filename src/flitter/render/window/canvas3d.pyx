@@ -38,7 +38,7 @@ cdef set MaterialAttributes = {'color', 'metal', 'roughness', 'shininess', 'occl
                                'emissive_texture_id', 'transparency_texture_id'}
 cdef set GroupAttributes = set(MaterialAttributes)
 GroupAttributes.update(('translate', 'scale', 'rotate', 'rotate_x', 'rotate_y', 'rotate_z', 'shear_x', 'shear_y', 'shear_z'))
-GroupAttributes.update(('max_lights', 'depth_test', 'face_cull', 'cull_face', 'composite', 'vertex', 'fragment'))
+GroupAttributes.update(('max_lights', 'depth_sort', 'depth_test', 'face_cull', 'cull_face', 'composite', 'vertex', 'fragment'))
 
 cdef object StandardVertexTemplate = TemplateLoader.get_template("standard_lighting.vert")
 cdef object StandardFragmentTemplate = TemplateLoader.get_template("standard_lighting.frag")
@@ -150,6 +150,7 @@ cdef class RenderGroup:
     cdef int max_lights
     cdef list lights
     cdef dict instances
+    cdef bint depth_sort
     cdef bint depth_test
     cdef bint face_cull
     cdef bint cull_front_face
@@ -488,6 +489,7 @@ cdef void collect(Node node, Matrix44 transform_matrix, Material material, Rende
         new_render_group.max_lights = node.get_int('max_lights', DEFAULT_MAX_LIGHTS if render_group is None else render_group.max_lights)
         new_render_group.lights = []
         new_render_group.instances = {}
+        new_render_group.depth_sort = node.get_bool('depth_sort', True if render_group is None else render_group.depth_sort)
         new_render_group.depth_test = node.get_bool('depth_test', True if render_group is None else render_group.depth_test)
         new_render_group.face_cull = node.get_bool('face_cull', True if render_group is None else render_group.face_cull)
         if 'cull_face' in node:
@@ -561,6 +563,7 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
     cdef tuple transparent_object, translucent_object
     cdef list transparent_objects = []
     cdef list translucent_objects = []
+    cdef bint depth_sorted
     cdef double[:] zs
     cdef int64_t[:] indices
     cdef dict shaders = objects.setdefault('canvas3d_shaders', {})
@@ -654,7 +657,8 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
         instances_data = view.array((n, 37), 4, 'f')
         k = 0
         bounds = model.get_bounds()
-        if render_group.depth_test and bounds.length == 6:
+        depth_sorted = render_group.depth_sort and render_group.depth_test and bounds.length == 6
+        if depth_sorted:
             zs_array = np.empty(n)
             zs = zs_array
             for i, instance in enumerate(instances):
@@ -666,9 +670,9 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
             instance = instances[i]
             material = instance.material
             if material.translucency > 0:
-                translucent_objects.append((-zs[i], model, instance))
+                translucent_objects.append((-zs[i] if depth_sorted else 0, model, instance))
             elif (material.transparency > 0 or has_transparency_texture) and render_group.depth_test:
-                transparent_objects.append((-zs[i], model, instance))
+                transparent_objects.append((-zs[i] if depth_sorted else 0, model, instance))
             else:
                 src = instance.model_matrix.numbers
                 dest = &instances_data[k, 0]
@@ -707,7 +711,8 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
         glctx.blend_func = moderngl.ONE, moderngl.ZERO
         render_target.use_auxilary_buffer(glctx)
         n = len(translucent_objects)
-        translucent_objects.sort(key=fst)
+        if render_group.depth_sort and render_group.depth_test:
+            translucent_objects.sort(key=fst)
         instances_data = view.array((n, 37), 4, 'f')
         k = 0
         for i, translucent_object in enumerate(translucent_objects):
@@ -779,7 +784,8 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
     if transparent_objects:
         render_target.depth_write(False)
         n = len(transparent_objects)
-        transparent_objects.sort(key=fst)
+        if render_group.depth_sort and render_group.depth_test:
+            transparent_objects.sort(key=fst)
         instances_data = view.array((n, 37), 4, 'f')
         k = 0
         for i, transparent_object in enumerate(transparent_objects):

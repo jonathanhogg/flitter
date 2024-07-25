@@ -130,15 +130,19 @@ The default is 50. The default shader supports up to a few hundred lights.
 Changing this attribute will cause the program to be recompiled.
 
 `composite=` [ `:over` | `:dest_over` | `:lighten` | `:darken` | `:add` | `:difference` | `:multiply` ]
-: Control the OpenGL blend mode used when rendering models that overlap each
+: Control the OpenGL blend function used when rendering models that overlap each
 other. The default is `:over`.
+
+`depth_sort=` [ `true` | `false` ]
+: Controls the depth-sorting phase of [instance ordering](#instance-ordering).
+Setting this to `false` will result in instances of the same model being
+dispatched for rendering in an arbitrary order. The default is `true`.
 
 `depth_test=` [ `true` | `false` ]
 : Turn off OpenGL depth-testing for this render group if set to `true`, the
-default is `false`. This also disables the **Flitter** 3D engine model [instance
-ordering](#instance-ordering) and will result in instances being dispatched for
-rendering in arbitrary order. Generally this is only useful when combined with a
-blending function like `:add` or `:lighten`.
+default is `false`. Setting `depth_test` to `false` will also disable depth
+sorting. Generally this is only useful when combined with a blend function
+like `:add` or `:lighten`.
 
 `face_cull=` [ `true` | `false` ]
 : Turn off OpenGL face-culling for this render group if set to `true`, the
@@ -184,10 +188,10 @@ supported is 4.1.
 
 Within a render group, all instances of specific models are dispatched to the
 GPU in one call, with per-instance data providing the specific transformation
-matrix and [material properties](#materials). Instances that have no
-transparency or translucency are sorted from front-to-back before being
-dispatched so that early depth-testing can discard fragments of occluded
-instances. This is done for each model in turn.
+matrix and [material properties](#materials). For each model, any instances
+that have no transparency or translucency are sorted from front-to-back before
+being dispatched. This allows the OpenGL early depth-testing to immediately
+discard fragments of objects that are hidden by a nearer object.
 
 After non-transparent instances have been dispatched, all instances with
 translucency are collected together and rendered in back-to-front
@@ -195,19 +199,30 @@ depth order, followed by all instances with transparency in back-to-front
 depth order. Using translucency forces an additional render pass for the
 translucent objects to build up a backface depth/normal buffer.
 
-Instance depth ordering is done by computing a bounding box for the model
-(aligned on the model axes) and then finding the corner nearest to the camera
-for each instance. This will generally work for well-spaced models but may fail
-to derive a correct ordering for close/overlapping models causing transparency
-to render incorrectly.
-
 Depth-buffer *writing* is turned **off** when rendering instances with
 transparency. This means that all transparent objects will be rendered fully
 even if they intersect with one another, overlap in non-trivial ways or the
-depth-ordering calculation results in an incorrect order. However, the
-depth-buffer is still honoured for deciding whether a fragment is to be rendered
+depth-sorting calculation results in an incorrect order. However, the
+depth buffer is still honoured for deciding whether a fragment is to be rendered
 and so instances with transparency occluded by a non-transparent instance will
 be hidden correctly.
+
+Instance depth sorting is done by computing a bounding box for the model
+(aligned on the model axes) and then finding the corner nearest to the camera
+for each instance. This will generally work for well-spaced models but may fail
+to derive a correct ordering for close/overlapping models causing transparency
+to render incorrectly. Depth sorting can be controlled for a specific render
+group with the `depth_sort` attribute.
+
+Turning off depth sorting will cause all instances to be dispatched to the GPU
+in an arbitrary order instead of front-to-back or back-to-front. For
+non-transparent objects this will have no visual effect as the depth buffer
+will resolve overlaps. However, for overlapping transparent objects this may
+result in odd inversions. When rendering large numbers of small, non-transparent
+objects, it may be faster to turn off depth sorting and let the depth buffer
+handle overlaps. If depth buffer testing has been disabled with
+`depth_test=false`, then depth sorting is also automatically disabled.
+
 
 ## Cameras
 
