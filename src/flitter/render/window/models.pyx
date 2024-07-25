@@ -72,7 +72,8 @@ cdef class Model:
                 del objects[dead_name]
             logger.trace("Removed model {} from cache", dead_name)
         cdef tuple buffers
-        cdef bint has_uv = trimesh_model.visual is not None and isinstance(trimesh_model.visual, trimesh.visual.texture.TextureVisuals)
+        cdef bint has_uv = trimesh_model.visual is not None and isinstance(trimesh_model.visual, trimesh.visual.texture.TextureVisuals) and \
+            trimesh_model.visual.uv is not None
         vertex_uvs = trimesh_model.visual.uv if has_uv else np.zeros((len(trimesh_model.vertices), 2))
         vertex_data = np.hstack((trimesh_model.vertices, trimesh_model.vertex_normals, vertex_uvs)).astype('f4')
         index_data = trimesh_model.faces.astype('i4')
