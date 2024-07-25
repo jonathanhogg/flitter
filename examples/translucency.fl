@@ -13,7 +13,6 @@ let SIZE=1080
         !light color=0.1 direction=-1;0;-1
         !transform rotate=(beat+5)/30
             !material color=hsv(0;0.95;1) roughness=0.3 translucency=100
-                !union
-                    @rbox size=300 radius=50
+                @rbox size=300 radius=50
     !record filename=OUTPUT codec=:hevc crf=20 limit=60 hidden=true
         !reference id=:top
