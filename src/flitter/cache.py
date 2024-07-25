@@ -317,7 +317,8 @@ class CachePath:
         else:
             try:
                 import trimesh
-                trimesh_model = trimesh.load(str(self._path))
+                trimesh_model = trimesh.load_mesh(self._path)
+                assert isinstance(trimesh_model, trimesh.Trimesh)
             except Exception as exc:
                 logger.opt(exception=exc).warning("Error reading model file: {}", self._path)
                 trimesh_model = None
