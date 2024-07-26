@@ -43,7 +43,7 @@ class CachePath:
                     container.close()
                     logger.debug("Closing video: {}", self._path)
             elif key[0] == 'video_output':
-                writer, queue = value
+                writer, queue, start = value
                 if queue is not None:
                     queue.put(None)
                     writer.join()
@@ -227,7 +227,7 @@ class CachePath:
         return image
 
     def read_video_frames(self, obj, position, loop=False, threading=False):
-        key = 'video', id(obj)
+        key = 'video', id(obj), threading
         container = decoder = current_frame = next_frame = None
         frames = []
         ratio = 0
