@@ -255,14 +255,14 @@ class ProgramNode(WindowNode):
         passes = max(1, node.get('passes', 1, int, passes))
         self.compile(node, passes=passes, composite=composite)
         if self._rectangle is not None:
-            sampler_args = {'repeat_x': False, 'repeat_y': False}
-            if (border := node.get('border', 4, float)) is not None:
-                sampler_args['border_color'] = tuple(border)
-            elif (repeat := node.get('repeat', 2, bool)) is not None:
-                if repeat[0]:
-                    del sampler_args['repeat_x']
-                if repeat[1]:
-                    del sampler_args['repeat_y']
+            border = node.get('border', 4, float)
+            repeat = node.get('repeat', 2, bool)
+            if border is not None:
+                sampler_args = {'border_color': tuple(border)}
+            elif repeat is not None:
+                sampler_args = {'repeat_x': repeat[0], 'repeat_y': repeat[1]}
+            else:
+                sampler_args = {'border_color': (0, 0, 0, 0)}
             child_textures = self.child_textures
             samplers = []
             unit = 1
@@ -366,6 +366,20 @@ class Shader(ProgramNode):
     def make_secondary_texture(self):
         logger.debug("Create {}x{} {}-bit secondary texture for {}", self.width, self.height, self._colorbits, self.name)
         return self.glctx.texture((self.width, self.height), 4, dtype=COLOR_FORMATS[self._colorbits].moderngl_dtype)
+
+
+class Transform(Shader):
+    DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('transform.frag')
+
+    def render(self, node, **kwargs):
+        super().render(node, scale=1, translate=0, rotate=0, **kwargs)
+
+
+class Vignette(Shader):
+    DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('vignette.frag')
+
+    def render(self, node, **kwargs):
+        super().render(node, inset=0.25, **kwargs)
 
 
 class Adjust(Shader):

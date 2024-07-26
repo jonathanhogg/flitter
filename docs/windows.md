@@ -528,6 +528,48 @@ which will be composited together with the blend function controlled with
 the `composite` attribute (default `:over`). All of the filters also support
 the standard shader `gamma` and `alpha` attributes.
 
+### `!transform`
+
+Composites its input nodes and then scales, rotates and translates its output.
+This is similar to the `!translate` node in `!canvas` and `!canvas3d` with the
+exception that the order of operations is fixed: scale, rotate, translate. The
+origin for all of these operations is the *centre* of the image.
+
+`scale=` *SX;SY*
+: Specifies an amount to scale the image on the X and Y axes, default `1`.
+Negative scales will flip the image on the X and/or Y axis.
+
+`rotate=` *TURNS*
+: Specifies a clockwise rotation in *turns*, default `0`.
+
+`translate=` *X;Y*
+: Specifies an amount to translate the image on the X and Y axes specified in
+*pixels*, with the Y axis pointing up, default `0`.
+
+Areas "outside" the transformed image will be transparent by default. This can
+be controlled with attribute:
+
+`border=` *R;G;B;A*
+: Specifies a color to use for all pixels that fall outside of the transformed
+image.
+
+*or*:
+
+`repeat=` *RX;RY*
+: Specifies whether to, instead, either wrap or clamp the edges of the image.
+If `repeat` is `true` for either of the X or Y axes then the image will repeat
+along that/those axes. Otherwise the color at the edge of the image will be
+stretched across all pixels in that direction.
+
+### `!vignette`
+
+A *very* simple vignette filter that (alpha-) fades out the edges of its output.
+It is controlled with the single attribute:
+
+`inset=` *(0,0.5)*
+: Specifies the inset as a proportion of the height and width at which the
+fade-out will occur, default `0.25`.
+
 ### `!adjust`
 
 The `!adjust` node allows for basic lightness adjustments and takes the

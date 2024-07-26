@@ -85,7 +85,9 @@ noise = "flitter.render.window:Noise"
 record = "flitter.render.window.record:Record"
 reference = "flitter.render.window:Reference"
 shader = "flitter.render.window:Shader"
+transform = "flitter.render.window:Transform"
 video = "flitter.render.window.video:Video"
+vignette = "flitter.render.window:Vignette"
 
 [project.entry-points."flitter.render.controller"]
 push2 = "flitter.render.controller.push2:Push2Driver"
