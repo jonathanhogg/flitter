@@ -379,9 +379,10 @@ class Blur(Shader):
     DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('blur.frag')
 
     def render(self, node, **kwargs):
-        if len(self.children) > 1:
+        child_textures = self.child_textures
+        if len(child_textures) > 1:
             passes = 3
-        elif self.children:
+        elif child_textures:
             passes = 2
         else:
             passes = 1
@@ -392,9 +393,10 @@ class Bloom(Shader):
     DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('bloom.frag')
 
     def render(self, node, **kwargs):
-        if len(self.children) > 1:
+        child_textures = self.child_textures
+        if len(child_textures) > 1:
             passes = 5
-        elif self.children:
+        elif child_textures:
             passes = 4
         else:
             passes = 1
@@ -405,9 +407,10 @@ class Edges(Shader):
     DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('edges.frag')
 
     def render(self, node, **kwargs):
-        if len(self.children) > 1:
+        child_textures = self.child_textures
+        if len(child_textures) > 1:
             passes = 4
-        elif self.children:
+        elif child_textures:
             passes = 3
         else:
             passes = 1
