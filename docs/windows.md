@@ -189,7 +189,8 @@ no pointer events have been processed).
 ## `!shader`
 
 The `!shader` node allows insertion of an arbitrary OpenGL shader program into
-the window render tree. `!shader` nodes support the following attributes:
+the window render tree. `!shader` nodes (and all other program nodes) support
+the following attributes:
 
 `passes=` *PASSES*
 : This specifies how many times the shader should be executed in succession for
@@ -200,6 +201,22 @@ below.
 `colorbits=` [ `8` | `16` | `32` ]
 : This overrides the default color channel bit depth for this node's output
 texture.
+
+Shader programs can access the texture backing of all child nodes declared
+within the `!shader` node. These textures are sampled with samplers controlled
+by the following attributes:
+
+`border=` *R*`;`*G*`;`*B*`;`*A*
+: Specifies a color that will be returned for any coordinates outside of the
+texture.
+
+`repeat=` *RX*`;`*RY*
+: Specifies whether to wrap around (and therefore repeat) the texture in the
+X and Y axes, if *RX* or *RY* is `true`, or to return the color at the edge of
+the image, if *RY* or *RX* is `false`.
+
+If neither `border` nor `repeat` is specified then the default is to return
+transparent.
 
 The default shader program (and that also used for `!window`, `!offscreen`
 nodes) is a single-pass shader that composites together the output textures of
@@ -535,31 +552,20 @@ This is similar to the `!translate` node in `!canvas` and `!canvas3d` with the
 exception that the order of operations is fixed: scale, rotate, translate. The
 origin for all of these operations is the *centre* of the image.
 
-`scale=` *SX;SY*
+`scale=` *SX*`;`*SY*
 : Specifies an amount to scale the image on the X and Y axes, default `1`.
 Negative scales will flip the image on the X and/or Y axis.
 
 `rotate=` *TURNS*
 : Specifies a clockwise rotation in *turns*, default `0`.
 
-`translate=` *X;Y*
+`translate=` *X*`;`*Y*
 : Specifies an amount to translate the image on the X and Y axes specified in
 *pixels*, with the Y axis pointing up, default `0`.
 
 Areas "outside" the transformed image will be transparent by default. This can
-be controlled with attribute:
-
-`border=` *R;G;B;A*
-: Specifies a color to use for all pixels that fall outside of the transformed
-image.
-
-*or*:
-
-`repeat=` *RX;RY*
-: Specifies whether to, instead, either wrap or clamp the edges of the image.
-If `repeat` is `true` for either of the X or Y axes then the image will repeat
-along that/those axes. Otherwise the color at the edge of the image will be
-stretched across all pixels in that direction.
+be controlled with the `border` and `repeat` attributes described above for
+[`!shader`](#shader).
 
 ### `!vignette`
 
@@ -656,18 +662,26 @@ of the other attributes. This defaults to `1` beat.
 : Specifies the mix between the feedback signal and the input signal over
 `timebase` beats.
 
-`translate=` *X;Y*
+`translate=` *X*`;`*Y*
 : Specifies how far the decaying feedback signal will move in pixels per
 `timebase` beats using the canvas coordinate system (i.e., origin in the top
 left). Defaults to `0`.
 
-`scale=` *SX;SY*
+`scale=` *SX*`;`*SY*
 : Specifies how much the decaying feedback signal will be scaled as a multiple
 over `timebase` beats. Defaults to `1`.
 
 `rotate=` *TURNS*
 : Specifies how much the decaying feedback signal will be rotated clockwise as
 a number of full turns per `timebase` beats. Defaults to `0`.
+
+:::{note}
+The `!blur`, `!bloom`, `!edges` and `!feedback` shader programs use samplers
+that default to sampling the edge color for pixels beyond the edge of the image
+as this produces the best results for those programs. This can be controlled
+with the `border` and `repeat` attributes as described above for
+[the `!shader` node](#shader).
+:::
 
 ### `!noise`
 
@@ -691,11 +705,11 @@ be assigned to one channel of the output image (in the order R, G, B, A).
 : Each additional octave of noise has its input coordinate space and output
 value scaled by `roughness`, default `0.5`.
 
-`scale=` *SX;SY;SZ*
+`scale=` *SX*`;`*SY*`;`*SZ*
 : Specifies a scaling vector to be applied to the X, Y and Z coordinates
 passed into the noise function, default `1`.
 
-`origin=` *X;Y*
+`origin=` *X*`;`*Y*
 : Specifies an offset for the *pre-scaled* X and Y input values, default `0`.
 The pre-scaled X and Y coordinates are in pixels from the top left.
 
@@ -707,6 +721,6 @@ If one or more child textures are defined within the `!noise` node then they
 will be composited together and the resulting R, G, and B values passed into
 the noise function as X, Y and Z offsets, controlled with the attribute:
 
-`tscale=` *TX;TY;TZ;
+`tscale=` *TX*`;`*TY*`;`*TZ*
 : Specifies a scaling factor for the RGB values read from the input image into
 offsets that will be added to the pre-`scale`d noise coordinates, default `1`.
