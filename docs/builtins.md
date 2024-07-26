@@ -382,6 +382,11 @@ The name `c` will have the value `"o w"`.
 
 ## File functions
 
+`glob(` *pattern* `)`
+: Return an *n*-vector of strings representing file paths matching the given
+shell "glob" pattern. Files are matched relative to the directory containing
+the running program.
+
 `csv(` *filename* `,` *row* `)`
 : Return a vector of values obtained by reading a
 specific *row* (indexed from *0*) from the CSV file with the given *filename*;
@@ -391,3 +396,9 @@ the row into numeric values.
 `read(` *filename* `)`
 : Returns a single string value containing the entire text of *filename* (this
 function intelligently caches).
+
+`read_bytes(` *filename* `)`
+: Returns a numeric vector value containing the entire text of *filename* (this
+function intelligently caches) as a sequence of bytes. This is a *very*
+memory-inefficient function as each byte will be represented by a
+double-precision floating point value.

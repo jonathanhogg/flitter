@@ -163,6 +163,11 @@ cdef class normal(uniform):
 
 
 @context_func
+def glob(Context context, Vector pattern):
+    return Vector._coerce(sorted(str(p.resolve()) for p in context.path.parent.glob(pattern.as_string())))
+
+
+@context_func
 def read_text(Context context, Vector filename):
     cdef str path = filename.as_string()
     if path:
@@ -175,6 +180,15 @@ def read_bytes(Context context, Vector filename):
     cdef str path = filename.as_string()
     if path:
         return Vector._coerce(SharedCache.get_with_root(path, context.path).read_bytes())
+    return null_
+
+
+@context_func
+def read_csv(Context context, Vector filename, Vector row_number):
+    cdef str path = str(filename)
+    row = row_number.match(1, int)
+    if filename and row is not None:
+        return SharedCache.get_with_root(path, context.path).read_csv_vector(row)
     return null_
 
 
@@ -200,15 +214,6 @@ def split(Vector text):
     if text.length == 0:
         return null_
     return Vector._coerce(text.as_string().rstrip('\n').split('\n'))
-
-
-@context_func
-def read_csv(Context context, Vector filename, Vector row_number):
-    cdef str path = str(filename)
-    row = row_number.match(1, int)
-    if filename and row is not None:
-        return SharedCache.get_with_root(path, context.path).read_csv_vector(row)
-    return null_
 
 
 def lenv(Vector xs not None):
@@ -1025,6 +1030,7 @@ STATIC_FUNCTIONS = {
 DYNAMIC_FUNCTIONS = {
     'debug': Vector(debug),
     'sample': Vector(sample),
+    'glob': Vector(glob),
     'csv': Vector(read_csv),
     'read': Vector(read_text),
     'read_bytes': Vector(read_bytes),

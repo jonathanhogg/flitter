@@ -29,6 +29,10 @@ class CachePath:
     def suffix(self):
         return self._path.suffix
 
+    @property
+    def parent(self):
+        return self._path.parent
+
     def exists(self):
         return self._path.exists()
 
