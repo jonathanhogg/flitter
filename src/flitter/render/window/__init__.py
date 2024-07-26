@@ -250,13 +250,13 @@ class ProgramNode(WindowNode):
                 end = system_clock()
                 logger.debug("{} GL program compiled in {:.1f}ms", self.name, 1000 * (end - start))
 
-    def render(self, node, composite='over', passes=1, **kwargs):
+    def render(self, node, composite='over', passes=1, border=None, repeat=None, **kwargs):
         composite = node.get('composite', 1, str, node.get('blend', 1, str, composite))
         passes = max(1, node.get('passes', 1, int, passes))
         self.compile(node, passes=passes, composite=composite)
         if self._rectangle is not None:
-            border = node.get('border', 4, float)
-            repeat = node.get('repeat', 2, bool)
+            border = node.get('border', 4, float, border)
+            repeat = node.get('repeat', 2, bool, repeat)
             if border is not None:
                 sampler_args = {'border_color': tuple(border)}
             elif repeat is not None:
@@ -400,7 +400,7 @@ class Blur(Shader):
             passes = 2
         else:
             passes = 1
-        super().render(node, passes=passes, radius=0, sigma=0.3, **kwargs)
+        super().render(node, passes=passes, radius=0, sigma=0.3, repeat=(False, False), **kwargs)
 
 
 class Bloom(Shader):
@@ -414,7 +414,7 @@ class Bloom(Shader):
             passes = 4
         else:
             passes = 1
-        super().render(node, passes=passes, radius=0, sigma=0.3, exposure=-1, contrast=1, brightness=0, **kwargs)
+        super().render(node, passes=passes, radius=0, sigma=0.3, exposure=-1, contrast=1, brightness=0, repeat=(False, False), **kwargs)
 
 
 class Edges(Shader):
@@ -428,14 +428,14 @@ class Edges(Shader):
             passes = 3
         else:
             passes = 1
-        super().render(node, passes=passes, radius=0, sigma=0.3, **kwargs)
+        super().render(node, passes=passes, radius=0, sigma=0.3, repeat=(False, False), **kwargs)
 
 
 class Feedback(Shader):
     DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('feedback.frag')
 
     def render(self, node, **kwargs):
-        super().render(node, mixer=0, timebase=1, glow=0, translate=0, scale=1, rotate=0, **kwargs)
+        super().render(node, mixer=0, timebase=1, glow=0, translate=0, scale=1, rotate=0, repeat=(False, False), **kwargs)
 
 
 class Noise(Shader):
