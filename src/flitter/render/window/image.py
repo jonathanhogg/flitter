@@ -1,5 +1,5 @@
 """
-Video scene node
+Image window node
 """
 
 from loguru import logger

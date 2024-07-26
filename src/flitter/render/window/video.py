@@ -1,13 +1,14 @@
 """
-Video scene node
+Video window node
 """
 
 from av.video.reformatter import VideoReformatter
 
-from . import Shader, COLOR_FORMATS
+from . import COLOR_FORMATS
 from ...cache import SharedCache
 from .glconstants import GL_SRGB8_ALPHA8
 from .glsl import TemplateLoader
+from .shaders import Shader
 
 
 Reformatter = VideoReformatter()

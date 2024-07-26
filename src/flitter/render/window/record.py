@@ -1,5 +1,5 @@
 """
-Record scene node
+Record window node
 """
 
 from . import ProgramNode
