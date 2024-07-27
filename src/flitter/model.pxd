@@ -73,7 +73,7 @@ cdef Vector minusone_
 
 cdef class Matrix33(Vector):
     @staticmethod
-    cdef Matrix44 _identity()
+    cdef Matrix33 _identity()
 
     @staticmethod
     cdef Matrix33 _translate(Vector v)

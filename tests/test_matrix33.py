@@ -31,6 +31,9 @@ class TestMatrix33(unittest.TestCase):
         self.assertRaises(ValueError, Matrix33, "Hello world!")
         self.assertRaises(ValueError, Matrix33, [1, 2, 3])
 
+    def test_identity(self):
+        self.assertEqual(Matrix33.identity(), [1, 0, 0, 0, 1, 0, 0, 0, 1])
+
     def test_translate(self):
         self.assertIsNone(Matrix33.translate(None))
         self.assertIsNone(Matrix33.translate([0, 1, 2]))

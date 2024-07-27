@@ -30,6 +30,9 @@ class TestMatrix44(unittest.TestCase):
         self.assertRaises(ValueError, Matrix44, "Hello world!")
         self.assertRaises(ValueError, Matrix44, [1, 2, 3])
 
+    def test_identity(self):
+        self.assertEqual(Matrix44.identity(), [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1])
+
     def test_project(self):
         self.assertAllAlmostEqual(Matrix44.project(1, 1, 1, 2), [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, -3, -1, 0, 0, -4, 0])
         self.assertAllAlmostEqual(Matrix44.project(1, 0.5, 1, 2), [1, 0, 0, 0, 0, 2, 0, 0, 0, 0, -3, -1, 0, 0, -4, 0])

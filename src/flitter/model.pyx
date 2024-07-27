@@ -1112,8 +1112,8 @@ false = false_
 
 cdef class Matrix33(Vector):
     @staticmethod
-    cdef Matrix44 _identity():
-        cdef Matrix33 result = Matrix33.__new__(Matrix44)
+    cdef Matrix33 _identity():
+        cdef Matrix33 result = Matrix33.__new__(Matrix33)
         cdef double* numbers = result._numbers
         cdef int64_t i
         for i in range(9):
