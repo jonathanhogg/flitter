@@ -66,12 +66,11 @@ cdef class Expression:
             for key in dynamic:
                 context_vars[key] = None
         cdef Context context = Context(state=state, names=context_vars)
-        cdef Expression expr
+        cdef Expression expr = self
         try:
-            expr = self._simplify(context)
-        except Exception as exc:
-            logger.opt(exception=exc).warning("Unable to simplify program")
-            return self
+            expr = expr._simplify(context)
+        except Exception as exc:                                             # pragma: no cover
+            logger.opt(exception=exc).warning("Unable to simplify program")  # pragma: no cover
         if return_context:
             return expr, context
         else:
