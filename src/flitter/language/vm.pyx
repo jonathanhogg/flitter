@@ -533,9 +533,6 @@ cdef inline Vector peek_at(VectorStack stack, int64_t offset):
     assert stack.top-offset > -1, "Stack empty"
     return <Vector>stack.vectors[stack.top-offset]
 
-cdef inline PyObject* PEEK_AT(VectorStack stack, int64_t offset):
-    return stack.vectors[stack.top-offset]
-
 cdef inline void poke(VectorStack stack, Vector vector) noexcept:
     assert vector is not None
     assert stack.top > -1, "Stack empty"
