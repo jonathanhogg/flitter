@@ -3,6 +3,7 @@ Flitter language compiler unit tests
 """
 
 import unittest
+import unittest.mock
 
 from flitter.model import Vector, Node, null
 from flitter.language import functions
@@ -25,6 +26,15 @@ class CompilerTestCase(unittest.TestCase):
         compiled = expr.compile(initial_lnames=lnames, log_errors=False)
         self.assertEqual(str(compiled), str(program))
         self.assertEqual(compiled.compiler_errors, set() if with_errors is None else with_errors)
+        if with_errors:
+            with unittest.mock.patch('flitter.language.tree.logger') as mock_logger:
+                expr.compile(initial_lnames=lnames)
+                errors = set()
+                for name, args, kwargs in mock_logger.warning.mock_calls:
+                    self.assertEqual(len(args), 2)
+                    self.assertEqual(args[0], "Compiler error: {}")
+                    errors.add(args[1])
+                self.assertEqual(errors, with_errors)
 
 
 class TestLiteral(CompilerTestCase):

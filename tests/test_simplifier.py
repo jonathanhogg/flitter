@@ -3,6 +3,7 @@ Flitter language simplifier unit tests
 """
 
 import unittest
+import unittest.mock
 
 from flitter.model import Vector, Node, StateDict, null, true, false
 from flitter.language import functions
@@ -18,27 +19,27 @@ from flitter.language.tree import (Literal, Name, Sequence,
 
 
 class SimplifierTestCase(unittest.TestCase):
-    def assertSimplifiesTo(self, x, y, state=None, dynamic=None, static=None, with_errors=None, with_names=None):
-        x, context = x.simplify(state=state, dynamic=dynamic, static=static, return_context=True)
-        if not isinstance(x, Let):
-            z = x.simplify(state=state, dynamic=dynamic, static=static)
-            self.assertIs(z, x, msg="Simplification not complete")
-        self.assertEqual(repr(x), repr(y))
+    def assertSimplifiesTo(self, x, y, state=None, dynamic=None, static=None, with_errors=None):
+        xx, context = x.simplify(state=state, dynamic=dynamic, static=static, return_context=True)
+        xxx = xx.simplify(state=state, dynamic=dynamic, static=static)
+        self.assertIs(xxx, xx, msg="Simplification not complete")
+        self.assertEqual(repr(xx), repr(y))
         self.assertEqual(context.errors, set() if with_errors is None else with_errors)
-        if with_names:
-            for name, value in with_names.items():
-                if isinstance(value, (Name, Function)):
-                    self.assertEqual(repr(context.names.pop(name)), repr(value), msg=f"{name} differs from expected")
-                else:
-                    self.assertEqual(context.names.pop(name), value, msg=f"{name} differs from expected")
+        if with_errors:
+            with unittest.mock.patch('flitter.language.tree.logger') as mock_logger:
+                x.simplify(state=state, dynamic=dynamic, static=static)
+                errors = set()
+                for name, args, kwargs in mock_logger.warning.mock_calls:
+                    self.assertEqual(len(args), 2)
+                    self.assertEqual(args[0], "Simplification error: {}")
+                    errors.add(args[1])
+                self.assertEqual(errors, with_errors)
         if static is not None:
             for name in static:
-                if with_names is None or name not in with_names:
-                    self.assertEqual(context.names.pop(name), static[name], msg=f"{name} differs from original static value")
+                self.assertEqual(context.names.pop(name), static[name], msg=f"{name} differs from original static value")
         if dynamic is not None:
             for name in dynamic:
-                if with_names is None or name not in with_names:
-                    self.assertEqual(context.names.pop(name), None, msg=f"{name} should be dynamic")
+                self.assertEqual(context.names.pop(name), None, msg=f"{name} should be dynamic")
         self.assertEqual(len(context.names), 0, msg=f"Unexpected names: {context.names!r}")
 
 
@@ -120,6 +121,10 @@ class TestSequence(SimplifierTestCase):
 
 
 class TestPositive(SimplifierTestCase):
+    def test_recursive(self):
+        """Expression is simplified"""
+        self.assertSimplifiesTo(Positive(Name('x')), Positive(Name('y')), dynamic={'y'}, static={'x': Name('y')})
+
     def test_numeric_literal(self):
         """Numeric literals are left alone"""
         self.assertSimplifiesTo(Positive(Literal(5)), Literal(5))
@@ -149,6 +154,10 @@ class TestPositive(SimplifierTestCase):
 
 
 class TestNegative(SimplifierTestCase):
+    def test_recursive(self):
+        """Expression is simplified"""
+        self.assertSimplifiesTo(Negative(Name('x')), Negative(Name('y')), dynamic={'y'}, static={'x': Name('y')})
+
     def test_numeric_literal(self):
         """Numeric literal gets negated"""
         self.assertSimplifiesTo(Negative(Literal(5)), Literal(-5))
@@ -187,6 +196,10 @@ class TestNegative(SimplifierTestCase):
 
 
 class TestCeil(SimplifierTestCase):
+    def test_recursive(self):
+        """Expression is simplified"""
+        self.assertSimplifiesTo(Ceil(Name('x')), Ceil(Name('y')), dynamic={'y'}, static={'x': Name('y')})
+
     def test_dynamic(self):
         """Dynamic ceiling is left alone"""
         self.assertSimplifiesTo(Ceil(Name('x')), Ceil(Name('x')), dynamic={'x'})
@@ -197,6 +210,10 @@ class TestCeil(SimplifierTestCase):
 
 
 class TestFloor(SimplifierTestCase):
+    def test_recursive(self):
+        """Expression is simplified"""
+        self.assertSimplifiesTo(Floor(Name('x')), Floor(Name('y')), dynamic={'y'}, static={'x': Name('y')})
+
     def test_dynamic(self):
         """Dynamic floor is left alone"""
         self.assertSimplifiesTo(Floor(Name('x')), Floor(Name('x')), dynamic={'x'})
@@ -207,6 +224,10 @@ class TestFloor(SimplifierTestCase):
 
 
 class TestFract(SimplifierTestCase):
+    def test_recursive(self):
+        """Expression is simplified"""
+        self.assertSimplifiesTo(Fract(Name('x')), Fract(Name('y')), dynamic={'y'}, static={'x': Name('y')})
+
     def test_dynamic(self):
         """Dynamic floor is left alone"""
         self.assertSimplifiesTo(Fract(Name('x')), Fract(Name('x')), dynamic={'x'})
@@ -689,6 +710,10 @@ class TestLookup(SimplifierTestCase):
 
 
 class TestTag(SimplifierTestCase):
+    def test_recursive(self):
+        """Node is simplified"""
+        self.assertSimplifiesTo(Tag(Name('x'), 'tag'), Tag(Name('y'), 'tag'), dynamic={'y'}, static={'x': Name('y')})
+
     def test_dynamic(self):
         """Dynamic node expression is left alone"""
         self.assertSimplifiesTo(Tag(Name('node'), 'tag'), Tag(Name('node'), 'tag'), dynamic={'node'})
@@ -887,6 +912,10 @@ class TestLet(SimplifierTestCase):
         self.assertSimplifiesTo(Let((PolyBinding(('x',), Name('y')), PolyBinding(('y',), Name('z'))), Add(Name('x'), Name('y'))),
                                 Add(Name('y'), Name('z')),
                                 dynamic={'y', 'z'})
+
+    def test_same_name(self):
+        """Let of a name to that name"""
+        self.assertSimplifiesTo(Let((PolyBinding(('x',), Name('x')),), Add(Name('x'), Name('y'))), Add(Name('x'), Name('y')), dynamic={'x', 'y'})
 
 
 class TestCall(SimplifierTestCase):
