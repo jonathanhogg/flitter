@@ -175,6 +175,16 @@ let x=5 y=:baz z='Hello world!'
 !foo #bar x=5 y=:baz z='Hello world!'
             """)
 
+    def test_where(self):
+        self.assertCodeOutput(
+            """
+let z=2
+!foo x=y+z where y=z*2 where z=5
+            """,
+            """
+!foo x=15
+            """)
+
     def test_multibind_loop(self):
         self.assertCodeOutput(
             """

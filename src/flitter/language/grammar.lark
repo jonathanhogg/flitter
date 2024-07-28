@@ -71,7 +71,7 @@ compositions : comprehension (";" comprehension)+ -> tuple
                | comprehension "where" inline_bindings -> inline_let
                | "func" _LPAREN parameters _RPAREN conditional -> anonymous_function
 
-inline_bindings: binding+ -> tuple
+inline_bindings: inline_binding+ -> tuple
 
 inline_binding: name_list "=" conditional -> poly_binding
 
