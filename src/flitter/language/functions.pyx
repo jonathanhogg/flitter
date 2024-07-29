@@ -95,10 +95,10 @@ cdef class uniform(Vector):
 
     @cython.cdivision(True)
     cdef double _item(self, uint64_t i) noexcept nogil:
-        cdef uint64_t x, y, z
-        # Compute a 32bit float PRN using the Squares algorithm [https://arxiv.org/abs/2004.06278]
-        x = y = i * self._hash
-        z = y + self._hash
+        # Compute a 64bit PRN using the 5-round Squares algorithm [https://arxiv.org/abs/2004.06278]
+        cdef uint64_t t, x, y, z
+        x = y = i * <uint64_t>self._hash
+        z = y + <uint64_t>self._hash
         x = x*x + y
         x = (x >> 32) | (x << 32)
         x = x*x + z
@@ -106,7 +106,12 @@ cdef class uniform(Vector):
         x = x*x + y
         x = (x >> 32) | (x << 32)
         x = x*x + z
-        return <double>(x >> 32) / <double>(1<<32)
+        t = x
+        x = (x >> 32) | (x << 32)
+        x = x*x + y
+        t ^= x >> 32
+        # This double will retain *at least* 53 bits of the 64bit PRN
+        return <double>t / <double>(1<<64)
 
     cpdef Vector slice(self, Vector index):
         if index.numbers == NULL:
@@ -151,7 +156,7 @@ cdef class normal(uniform):
         if not self.cached or i != self.i:
             u1 = uniform._item(self, i)
             u2 = uniform._item(self, i + 1)
-            if u1 < 1 / <double>(1<<32):
+            if u1 == 0:
                 u1, u2 = u2, u1
             self.R = sqrt(-2 * log(u1))
             self.th = Tau * u2

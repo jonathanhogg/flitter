@@ -3,7 +3,9 @@ Tests of the flitter language built-in functions
 """
 
 import math
+import struct
 import unittest
+import zlib
 
 from flitter.model import Vector, null
 from flitter.language.functions import (uniform, normal, beta,
@@ -32,12 +34,16 @@ class TestUniform(MathsTest):
     DISTRIBUTION = ('uniform',)
     LOWER = 0
     UPPER = 1
-    P_VALUE = 0.05
+    ALPHA = 0.1
 
     def test_creation(self):
         self.assertIsInstance(self.FACTORY(), self.FACTORY)
         self.assertEqual(hash(self.FACTORY()), hash(Vector()))
         self.assertEqual(hash(self.FACTORY(1.0)), hash(self.FACTORY(1.9)))
+
+    def test_repr(self):
+        source = self.FACTORY(1)
+        self.assertEqual(repr(source), f"{self.FACTORY.__name__}({hash(source)!r})")
 
     def test_eq(self):
         source1 = self.FACTORY(1)
@@ -54,23 +60,31 @@ class TestUniform(MathsTest):
         self.assertEqual(self.FACTORY() // 1, null)
         self.assertEqual(self.FACTORY() ** 1, null)
 
+    def test_bool(self):
+        self.assertEqual(bool(self.FACTORY()), True)
+        self.assertEqual(bool(self.FACTORY(1)), True)
+        self.assertEqual(bool(self.FACTORY("hello")), True)
+
+    def test_null_slice(self):
+        source = self.FACTORY()
+        self.assertEqual(source[null], null)
+
     def test_indexing_and_overlap(self):
         source = self.FACTORY()
         last_xs = None
         for i in range(-100, 100):
             source_i = source[i]
             self.assertIsInstance(source_i, float)
-            with self.subTest(i=i):
-                xs = source[i:i+10]
-                self.assertIsInstance(xs, Vector)
-                self.assertEqual(len(xs), 10)
-                self.assertEqual(xs[0], source_i)
-                for x in xs:
-                    self.assertIsInstance(x, float)
-                if last_xs is not None:
-                    self.assertNotEqual(last_xs, xs)
-                    self.assertEqual(last_xs[1:10], xs[0:9])
-                last_xs = xs
+            xs = source[i:i+10]
+            self.assertIsInstance(xs, Vector)
+            self.assertEqual(len(xs), 10)
+            self.assertEqual(xs[0], source_i)
+            for x in xs:
+                self.assertIsInstance(x, float)
+            if last_xs is not None:
+                self.assertNotEqual(last_xs, xs)
+                self.assertEqual(last_xs[1:10], xs[0:9])
+            last_xs = xs
 
     def test_reproducability(self):
         source1 = self.FACTORY(1.0)
@@ -80,25 +94,24 @@ class TestUniform(MathsTest):
 
     def test_distribution(self):
         from scipy.stats import kstest
-        for i in range(2):
-            with self.subTest(i=i):
-                result = kstest(self.FACTORY(i)[:100_000], *self.DISTRIBUTION)
-                self.assertGreater(result.pvalue, self.P_VALUE)
+        for i in range(5):
+            seed = Vector.symbol('seed').concat(Vector(i))
+            with self.subTest(seed=seed):
+                result = kstest(self.FACTORY(seed)[:100_000], *self.DISTRIBUTION)
+                self.assertGreater(result.pvalue, self.ALPHA)
 
     def test_range(self):
         source = self.FACTORY()
         for i in range(10000):
-            with self.subTest(i=i):
-                x = source[i]
-                self.assertTrue(x >= self.LOWER)
-                self.assertTrue(x < self.UPPER)
+            x = source[i]
+            self.assertGreater(x, self.LOWER)
+            self.assertLess(x, self.UPPER)
 
     def test_apparent_entropy(self):
-        from struct import pack
-        from zlib import compress
-        data = pack('<1000L', *(int(n * (1 << 32)) for n in self.FACTORY()[:1000]))
-        compressed = compress(data, 9)
-        self.assertGreater(len(compressed) / len(data), 0.99)
+        """Should get an average of something like 59 bits of pseudo-entropy per 64"""
+        data = struct.pack('<10000Q', *(int((n - self.LOWER) / (self.UPPER - self.LOWER) * (1 << 64)) for n in self.FACTORY()[:10000]))
+        compressed = zlib.compress(data, 9)
+        self.assertGreater(len(compressed) / len(data), 59/64)
 
 
 class TestBeta(TestUniform):
@@ -109,11 +122,8 @@ class TestBeta(TestUniform):
 class TestNormal(TestUniform):
     FACTORY = normal
     DISTRIBUTION = ('norm',)
-    LOWER = -10
-    UPPER = 10
-
-    def test_apparent_entropy(self):
-        pass
+    UPPER = math.sqrt(-2 * math.log(1 / (1 << 64)))
+    LOWER = -UPPER
 
 
 class TestNoise(MathsTest):
@@ -143,10 +153,10 @@ class TestNoise(MathsTest):
         self.assertIsClose(noise(null, Vector(0.49), Vector(0.49), Vector(0.49), Vector(0.49)), 0.119003482)
 
     def test_noise_1(self):
-        seed1 = Vector.symbol('seed1')
-        seed2 = Vector.symbol('seed2')
+        seed1 = Vector.symbol('seed').concat(Vector(1))
+        seed2 = Vector.symbol('seed').concat(Vector(2))
         last_n1 = None
-        for x in map(lambda x: x/49, range(1, 1001)):
+        for x in map(lambda x: x/49.999, range(1, 1001)):
             n1 = float(noise(seed1, Vector(x)))
             self.assertTrue(-1 <= n1 <= 1, f"Noise value bounds failure: {n1}")
             n2 = float(noise(seed2, Vector(x)))
@@ -157,11 +167,11 @@ class TestNoise(MathsTest):
             last_n1 = n1
 
     def test_noise_2(self):
-        seed1 = Vector.symbol('seed1')
-        seed2 = Vector.symbol('seed2')
+        seed1 = Vector.symbol('seed').concat(Vector(1))
+        seed2 = Vector.symbol('seed').concat(Vector(2))
         last_n1 = None
-        y = 1/49
-        for x in map(lambda x: x/49, range(1, 1001)):
+        y = 1/49.999
+        for x in map(lambda x: x/49.999, range(1, 1001)):
             n1 = float(noise(seed1, Vector(x), Vector(y)))
             self.assertTrue(-1 <= n1 <= 1, f"Noise value bounds failure: {n1}")
             n2 = float(noise(seed2, Vector(x), Vector(y)))
@@ -170,22 +180,24 @@ class TestNoise(MathsTest):
             if last_n1 is not None:
                 self.assertLess(abs(n1 - last_n1), 0.05)
             last_n1 = n1
-        for y in map(lambda y: y/49, range(1, 1001)):
+        for y in map(lambda y: y/49.999, range(1, 1001)):
             n1 = float(noise(seed1, Vector(x), Vector(y)))
             self.assertTrue(-1 <= n1 <= 1, f"Noise value bounds failure: {n1}")
             n2 = float(noise(seed2, Vector(x), Vector(y)))
             self.assertTrue(-1 <= n2 <= 1, f"Noise value bounds failure: {n2}")
+            if n1 == n2:
+                print(x, y)
             self.assertNotEqual(n1, n2)
             self.assertLess(abs(n1 - last_n1), 0.05)
             last_n1 = n1
 
     def test_noise_3(self):
-        seed1 = Vector.symbol('seed1')
-        seed2 = Vector.symbol('seed2')
+        seed1 = Vector.symbol('seed').concat(Vector(1))
+        seed2 = Vector.symbol('seed').concat(Vector(2))
         last_n1 = None
-        y = 1/49
-        z = 1/49
-        for x in map(lambda x: x/49, range(1, 1001)):
+        y = 1/49.999
+        z = 1/49.999
+        for x in map(lambda x: x/49.999, range(1, 1001)):
             n1 = float(noise(seed1, Vector(x), Vector(y), Vector(z)))
             self.assertTrue(-1 <= n1 <= 1, f"Noise value bounds failure: {n1}")
             n2 = float(noise(seed2, Vector(x), Vector(y), Vector(z)))
@@ -194,7 +206,7 @@ class TestNoise(MathsTest):
             if last_n1 is not None:
                 self.assertLess(abs(n1 - last_n1), 0.05)
             last_n1 = n1
-        for y in map(lambda y: y/49, range(1, 1001)):
+        for y in map(lambda y: y/49.999, range(1, 1001)):
             n1 = float(noise(seed1, Vector(x), Vector(y), Vector(z)))
             self.assertTrue(-1 <= n1 <= 1, f"Noise value bounds failure: {n1}")
             n2 = float(noise(seed2, Vector(x), Vector(y), Vector(z)))
@@ -202,7 +214,7 @@ class TestNoise(MathsTest):
             self.assertNotEqual(n1, n2)
             self.assertLess(abs(n1 - last_n1), 0.05)
             last_n1 = n1
-        for z in map(lambda z: z/49, range(1, 1001)):
+        for z in map(lambda z: z/49.999, range(1, 1001)):
             n1 = float(noise(seed1, Vector(x), Vector(y), Vector(z)))
             self.assertTrue(-1 <= n1 <= 1, f"Noise value bounds failure: {n1}")
             n2 = float(noise(seed2, Vector(x), Vector(y), Vector(z)))
@@ -212,13 +224,13 @@ class TestNoise(MathsTest):
             last_n1 = n1
 
     def test_noise_4(self):
-        seed1 = Vector.symbol('seed1')
-        seed2 = Vector.symbol('seed2')
+        seed1 = Vector.symbol('seed').concat(Vector(1))
+        seed2 = Vector.symbol('seed').concat(Vector(2))
         last_n1 = None
-        y = 1/49
-        z = 1/49
-        w = 1/49
-        for x in map(lambda x: x/49, range(1, 1001)):
+        y = 1/49.999
+        z = 1/49.999
+        w = 1/49.999
+        for x in map(lambda x: x/49.999, range(1, 1001)):
             n1 = float(noise(seed1, Vector(x), Vector(y), Vector(z), Vector(w)))
             self.assertTrue(-1 <= n1 <= 1, f"Noise value bounds failure: {n1}")
             n2 = float(noise(seed2, Vector(x), Vector(y), Vector(z), Vector(w)))
@@ -227,7 +239,7 @@ class TestNoise(MathsTest):
             if last_n1 is not None:
                 self.assertLess(abs(n1 - last_n1), 0.05)
             last_n1 = n1
-        for y in map(lambda y: y/49, range(1, 1001)):
+        for y in map(lambda y: y/49.999, range(1, 1001)):
             n1 = float(noise(seed1, Vector(x), Vector(y), Vector(z), Vector(w)))
             self.assertTrue(-1 <= n1 <= 1, f"Noise value bounds failure: {n1}")
             n2 = float(noise(seed2, Vector(x), Vector(y), Vector(z), Vector(w)))
@@ -235,7 +247,7 @@ class TestNoise(MathsTest):
             self.assertNotEqual(n1, n2)
             self.assertLess(abs(n1 - last_n1), 0.05)
             last_n1 = n1
-        for z in map(lambda z: z/49, range(1, 1001)):
+        for z in map(lambda z: z/49.999, range(1, 1001)):
             n1 = float(noise(seed1, Vector(x), Vector(y), Vector(z), Vector(w)))
             self.assertTrue(-1 <= n1 <= 1, f"Noise value bounds failure: {n1}")
             n2 = float(noise(seed2, Vector(x), Vector(y), Vector(z), Vector(w)))
@@ -243,7 +255,7 @@ class TestNoise(MathsTest):
             self.assertNotEqual(n1, n2)
             self.assertLess(abs(n1 - last_n1), 0.05)
             last_n1 = n1
-        for w in map(lambda w: w/49, range(1, 1001)):
+        for w in map(lambda w: w/49.999, range(1, 1001)):
             n1 = float(noise(seed1, Vector(x), Vector(y), Vector(z), Vector(w)))
             self.assertTrue(-1 <= n1 <= 1, f"Noise value bounds failure: {n1}")
             n2 = float(noise(seed2, Vector(x), Vector(y), Vector(z), Vector(w)))
@@ -253,14 +265,14 @@ class TestNoise(MathsTest):
             last_n1 = n1
 
     def test_octnoise_3(self):
-        seed1 = Vector.symbol('seed1')
-        seed2 = Vector.symbol('seed2')
+        seed1 = Vector.symbol('seed').concat(Vector(1))
+        seed2 = Vector.symbol('seed').concat(Vector(2))
         last_n1 = None
-        y = 1/49
-        z = 1/49
+        y = 1/49.999
+        z = 1/49.999
         octaves = Vector(3)
         roughness = Vector(0.5)
-        for x in map(lambda x: x/49, range(1, 1001)):
+        for x in map(lambda x: x/49.999, range(1, 1001)):
             n1 = float(octnoise(seed1, octaves, roughness, Vector(x), Vector(y), Vector(z)))
             self.assertTrue(-1 <= n1 <= 1)
             n2 = float(octnoise(seed2, octaves, roughness, Vector(x), Vector(y), Vector(z)))
@@ -269,7 +281,7 @@ class TestNoise(MathsTest):
             if last_n1 is not None:
                 self.assertLess(abs(n1 - last_n1), 0.1)
             last_n1 = n1
-        for y in map(lambda y: y/49, range(1, 1001)):
+        for y in map(lambda y: y/49.999, range(1, 1001)):
             n1 = float(octnoise(seed1, octaves, roughness, Vector(x), Vector(y), Vector(z)))
             self.assertTrue(-1 <= n1 <= 1)
             n2 = float(octnoise(seed2, octaves, roughness, Vector(x), Vector(y), Vector(z)))
@@ -277,7 +289,7 @@ class TestNoise(MathsTest):
             self.assertNotEqual(n1, n2)
             self.assertLess(abs(n1 - last_n1), 0.1)
             last_n1 = n1
-        for z in map(lambda z: z/49, range(1, 1001)):
+        for z in map(lambda z: z/49.999, range(1, 1001)):
             n1 = float(octnoise(seed1, octaves, roughness, Vector(x), Vector(y), Vector(z)))
             self.assertTrue(-1 <= n1 <= 1)
             n2 = float(octnoise(seed2, octaves, roughness, Vector(x), Vector(y), Vector(z)))
@@ -287,7 +299,7 @@ class TestNoise(MathsTest):
             last_n1 = n1
 
     def test_seeds(self, n=1001):
-        values = sorted([float(noise(Vector(seed), Vector(50/49))) for seed in range(n)])
+        values = sorted([float(noise(Vector(seed), Vector(50/49.999))) for seed in range(n)])
         self.assertLess(values[0], -0.5)
         self.assertTrue(-0.5 < values[n//4] < -0.25)
         self.assertLess(abs(values[n // 2]), 0.05)
