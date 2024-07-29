@@ -39,6 +39,10 @@ logger = name_patch(logger, __name__)
 
 cdef const char* ContextFunc = "context_func\0"
 
+cdef int64_t DEFAULT_STACK_SIZE = 32
+cdef int64_t MAX_STACK_SIZE = 1 << 20
+cdef int64_t MAX_CALL_DEPTH = 500
+
 cdef dict dynamic_builtins = DYNAMIC_FUNCTIONS
 cdef dict static_builtins = {
     'true': true_,
@@ -312,8 +316,20 @@ cdef class InstructionObjectInt(Instruction):
         return f'{OpCodeNames[self.code]} {self.obj!r} {self.value!r}'
 
 
+class StackError(Exception):
+    pass
+
+
+class StackUnderflow(StackError):
+    pass
+
+
+class StackOverflow(StackError):
+    pass
+
+
 cdef class VectorStack:
-    def __cinit__(self, int64_t size=32, int64_t max_size=1<<20):
+    def __cinit__(self, int64_t size=DEFAULT_STACK_SIZE, int64_t max_size=MAX_STACK_SIZE):
         self.vectors = <PyObject**>PyMem_Malloc(sizeof(PyObject*) * size)
         if self.vectors == NULL:
             raise MemoryError()
@@ -343,69 +359,54 @@ cdef class VectorStack:
         return new_stack
 
     cpdef void drop(self, int64_t count=1):
-        if self.top+1 < count:
-            raise TypeError("Insufficient items")
         drop(self, count)
 
     cpdef void push(self, Vector vector):
         push(self, vector)
 
     cpdef Vector pop(self):
-        if self.top == -1:
-            raise TypeError("Stack empty")
         return pop(self)
 
     cpdef tuple pop_tuple(self, int64_t count):
-        if self.top+1 < count:
-            raise TypeError("Insufficient items")
         return pop_tuple(self, count)
 
     cpdef list pop_list(self, int64_t count):
-        if self.top+1 < count:
-            raise TypeError("Insufficient items")
         return pop_list(self, count)
 
     cpdef dict pop_dict(self, tuple keys):
-        if self.top+1 < len(keys):
-            raise TypeError("Insufficient items")
         return pop_dict(self, keys)
 
     cpdef Vector pop_composed(self, int64_t count):
-        if self.top+1 < count:
-            raise TypeError("Insufficient items")
         return pop_composed(self, count)
 
     cpdef Vector peek(self):
-        if self.top == -1:
-            raise TypeError("Stack empty")
         return peek(self)
 
     cpdef Vector peek_at(self, int64_t offset):
-        if self.top - offset <= -1:
-            raise TypeError("Insufficient items")
         return peek_at(self, offset)
 
     cpdef void poke(self, Vector vector):
-        if self.top == -1:
-            raise TypeError("Stack empty")
         poke(self, vector)
 
     cpdef void poke_at(self, int64_t offset, Vector vector):
-        if self.top - offset <= -1:
-            raise TypeError("Insufficient items")
         poke_at(self, offset, vector)
 
 cdef int64_t increase(VectorStack stack) except 0:
+    if stack.size == stack.max_size:
+        raise StackOverflow(f"Stack cannot grow beyond {stack.max_size} items")
     cdef int64_t new_size = min(stack.size * 2, stack.max_size)
-    assert new_size > stack.size, "Stack overflow"
     stack.vectors = <PyObject**>PyMem_Realloc(stack.vectors, sizeof(PyObject*) * new_size)
     if stack.vectors == NULL:
         raise MemoryError()
     stack.size = new_size
     return new_size
 
-cdef inline void drop(VectorStack stack, int64_t n) noexcept:
-    assert stack.top - n >= -1, "Stack empty"
+cdef inline int64_t stack_free(VectorStack stack) noexcept:
+    return stack.max_size - stack.top - 1
+
+cdef inline void drop(VectorStack stack, int64_t n):
+    if stack.top -n < -1:
+        raise StackUnderflow(f"Cannot drop {n} items from {stack.top+1} depth stack")
     stack.top -= n
     cdef int64_t i
     for i in range(1, n+1):
@@ -414,15 +415,16 @@ cdef inline void drop(VectorStack stack, int64_t n) noexcept:
 
 cdef inline int64_t push(VectorStack stack, Vector vector) except 0:
     assert vector is not None
-    stack.top += 1
-    if stack.top == stack.size:
+    if stack.top + 1 == stack.size:
         increase(stack)
+    stack.top += 1
     Py_INCREF(vector)
     stack.vectors[stack.top] = <PyObject*>vector
     return stack.size
 
 cdef inline Vector pop(VectorStack stack):
-    assert stack.top > -1, "Stack empty"
+    if stack.top == -1:
+        raise StackUnderflow("Stack empty")
     cdef Vector vector = <Vector>stack.vectors[stack.top]
     stack.vectors[stack.top] = NULL
     stack.top -= 1
@@ -432,7 +434,8 @@ cdef inline Vector pop(VectorStack stack):
 cdef inline tuple pop_tuple(VectorStack stack, int64_t n):
     if n == 0:
         return ()
-    assert stack.top - n >= -1, "Stack empty"
+    if stack.top - n < -1:
+        raise StackUnderflow(f"Cannot pop {n} items from {stack.top+1} depth stack")
     cdef tuple t = PyTuple_New(n)
     stack.top -= n
     cdef PyObject* ptr
@@ -444,7 +447,8 @@ cdef inline tuple pop_tuple(VectorStack stack, int64_t n):
     return t
 
 cdef inline list pop_list(VectorStack stack, int64_t n):
-    assert stack.top - n >= -1, "Stack empty"
+    if stack.top - n < -1:
+        raise StackUnderflow(f"Cannot pop {n} items from {stack.top+1} depth stack")
     cdef list t = PyList_New(n)
     stack.top -= n
     cdef PyObject* ptr
@@ -457,7 +461,8 @@ cdef inline list pop_list(VectorStack stack, int64_t n):
 
 cdef inline dict pop_dict(VectorStack stack, tuple keys):
     cdef int64_t n = len(keys)
-    assert stack.top - n >= -1, "Stack empty"
+    if stack.top - n < -1:
+        raise StackUnderflow(f"Cannot pop {n} items from {stack.top+1} depth stack")
     cdef dict t = {}
     stack.top -= n
     cdef PyObject* ptr
@@ -470,7 +475,8 @@ cdef inline dict pop_dict(VectorStack stack, tuple keys):
     return t
 
 cdef inline Vector pop_composed(VectorStack stack, int64_t m):
-    assert stack.top - m >= -1, "Stack empty"
+    if stack.top - m < -1:
+        raise StackUnderflow(f"Cannot pop {m} items from {stack.top+1} depth stack")
     if m == 1:
         return pop(stack)
     if m == 0:
@@ -526,23 +532,27 @@ cdef inline Vector pop_composed(VectorStack stack, int64_t m):
     return result
 
 cdef inline Vector peek(VectorStack stack):
-    assert stack.top > -1, "Stack empty"
+    if stack.top == -1:
+        raise StackUnderflow("Stack empty")
     return <Vector>stack.vectors[stack.top]
 
 cdef inline Vector peek_at(VectorStack stack, int64_t offset):
-    assert stack.top-offset > -1, "Stack empty"
+    if stack.top - offset < 0:
+        raise StackUnderflow(f"Cannot peek {offset} items below top of {stack.top+1} item stack")
     return <Vector>stack.vectors[stack.top-offset]
 
-cdef inline void poke(VectorStack stack, Vector vector) noexcept:
+cdef inline void poke(VectorStack stack, Vector vector):
     assert vector is not None
-    assert stack.top > -1, "Stack empty"
+    if stack.top == -1:
+        raise StackUnderflow("Stack empty")
     Py_DECREF(<Vector>stack.vectors[stack.top])
     Py_INCREF(vector)
     stack.vectors[stack.top] = <PyObject*>vector
 
-cdef inline void poke_at(VectorStack stack, int64_t offset, Vector vector) noexcept:
+cdef inline void poke_at(VectorStack stack, int64_t offset, Vector vector):
     assert vector is not None
-    assert stack.top-offset > -1, "Stack empty"
+    if stack.top - offset < 0:
+        raise StackUnderflow(f"Cannot poke {offset} items below top of {stack.top+1} item stack")
     Py_DECREF(<Vector>stack.vectors[stack.top-offset])
     Py_INCREF(vector)
     stack.vectors[stack.top-offset] = <PyObject*>vector
@@ -558,8 +568,12 @@ cdef class Function:
     cdef readonly object root_path
     cdef readonly bint record_stats
     cdef readonly tuple captures
+    cdef readonly int64_t call_depth
 
     def __call__(self, Context context, *args, **kwargs):
+        if self.call_depth == MAX_CALL_DEPTH:
+            PySet_Add(context.errors, f"Recursion depth exceeded for func '{self.__name__}'")
+            return null_
         cdef int64_t i, lnames_top, stack_top, k=PyTuple_GET_SIZE(self.captures), m=PyTuple_GET_SIZE(self.parameters), n=PyTuple_GET_SIZE(args)
         cdef PyObject* objptr
         cdef object saved_path
@@ -579,7 +593,11 @@ cdef class Function:
                 push(lnames, <Vector>PyTuple_GET_ITEM(self.defaults, i))
         saved_path = context.path
         context.path = self.root_path
-        self.program._execute(context, self.address, self.record_stats)
+        self.call_depth += 1
+        try:
+            self.program._execute(context, self.address, self.record_stats)
+        finally:
+            self.call_depth -= 1
         drop(lnames, k + 1 + m)
         cdef Vector result = pop(stack)
         assert stack.top == stack_top, "Bad function return stack"
@@ -867,25 +885,33 @@ cdef class Program:
         return context.stack.pop_list(len(context.stack))
 
     def run(self, Context context, bint record_stats=False):
-        if self.stack is None:
-            self.stack = VectorStack.__new__(VectorStack)
-        context.stack = self.stack
-        if self.lnames is None:
-            self.lnames = VectorStack.__new__(VectorStack)
-        context.lnames = self.lnames
+        if context.stack is None:
+            if self.stack is None:
+                self.stack = VectorStack.__new__(VectorStack)
+            context.stack = self.stack
+        if context.lnames is None:
+            if self.lnames is None:
+                self.lnames = VectorStack.__new__(VectorStack)
+            context.lnames = self.lnames
         context.path = self.path
         cdef int64_t i, n=PyTuple_GET_SIZE(self.initial_lnames)
         cdef PyObject* objptr
         for i in range(n):
             objptr = PyDict_GetItem(context.names, <object>PyTuple_GET_ITEM(self.initial_lnames, i))
             assert objptr != NULL, "Missing lname"
-            push(self.lnames, <Vector>objptr)
-        push(self.stack, Vector(context.root))
-        self._execute(context, 0, record_stats)
-        assert (<VectorStack>self.lnames).top == n-1, "Bad lnames"
-        drop(self.lnames, n)
-        assert (<VectorStack>self.stack).top == 0, "Bad stack"
-        cdef Vector result = pop(self.stack)
+            push(context.lnames, <Vector>objptr)
+        push(context.stack, Vector(context.root))
+        try:
+            self._execute(context, 0, record_stats)
+        except StackOverflow:
+            context.errors.add("Stack overflow in program")
+            drop(context.lnames, len(context.lnames) - n)
+            drop(context.stack, len(context.stack) - 1)
+            return context
+        assert (<VectorStack>context.lnames).top == n-1, "Bad lnames"
+        drop(context.lnames, n)
+        assert (<VectorStack>context.stack).top == 0, "Bad stack"
+        cdef Vector result = pop(context.stack)
         assert result.length == 1 and result.objects is not None and isinstance(result.objects[0], Node), "Bad root node"
         context.root = result.objects[0]
         return context
@@ -1534,7 +1560,7 @@ cdef class Program:
                     StatsCount[<int64_t>instruction.code] += 1
                     StatsDuration[<int64_t>instruction.code] += duration
 
-        except (AssertionError, RecursionError):
+        except (AssertionError, StackError):
             raise
 
         except Exception:

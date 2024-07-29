@@ -12,7 +12,7 @@ import unittest.mock
 from flitter import configure_logger
 from flitter.model import Vector, Node, Context, StateDict, null, true, false
 from flitter.language.tree import Top, Literal
-from flitter.language.vm import Program, Function, VectorStack, log_vm_stats
+from flitter.language.vm import Program, Function, VectorStack, StackUnderflow, StackOverflow, log_vm_stats
 
 
 configure_logger('ERROR')
@@ -739,45 +739,71 @@ class TestFunc(unittest.TestCase):
 
 class TestRecursiveFunc(unittest.TestCase):
     def test_recursive_fib(self):
-        self.program = Program()
-        self.state = StateDict()
-        self.names = {}
-        self.context = Context(state=self.state, names=self.names)
-        self.program.literal(null)
-        END = self.program.new_label()
-        self.program.jump(END)
-        START = self.program.new_label()
-        self.program.label(START)
-        self.program.local_load(0)
-        self.program.literal(2)
-        self.program.lt()
-        LABEL2 = self.program.new_label()
-        self.program.branch_false(LABEL2)
-        self.program.local_load(0)
-        LABEL1 = self.program.new_label()
-        self.program.jump(LABEL1)
-        self.program.label(LABEL2)
-        self.program.local_load(0)
-        self.program.literal(1)
-        self.program.sub()
-        self.program.local_load(1)
-        self.program.call(1)
-        self.program.local_load(0)
-        self.program.literal(2)
-        self.program.sub()
-        self.program.local_load(1)
-        self.program.call(1)
-        self.program.add()
-        self.program.label(LABEL1)
-        self.program.exit()
-        self.program.label(END)
-        self.program.func(START, 'fib', ('x',))
-        self.program.local_push(1)
-        self.program.literal(10)
-        self.program.local_load(0)
-        self.program.call(1)
-        stack = self.program.execute(self.context)
+        program = Program()
+        state = StateDict()
+        names = {}
+        context = Context(state=state, names=names)
+        program.literal(null)
+        END = program.new_label()
+        program.jump(END)
+        START = program.new_label()
+        program.label(START)
+        program.local_load(0)
+        program.literal(2)
+        program.lt()
+        LABEL2 = program.new_label()
+        program.branch_false(LABEL2)
+        program.local_load(0)
+        LABEL1 = program.new_label()
+        program.jump(LABEL1)
+        program.label(LABEL2)
+        program.local_load(0)
+        program.literal(1)
+        program.sub()
+        program.local_load(1)
+        program.call(1)
+        program.local_load(0)
+        program.literal(2)
+        program.sub()
+        program.local_load(1)
+        program.call(1)
+        program.add()
+        program.label(LABEL1)
+        program.exit()
+        program.label(END)
+        program.func(START, 'fib', ('x',))
+        program.local_push(1)
+        program.literal(10)
+        program.local_load(0)
+        program.call(1)
+        stack = program.execute(context)
         self.assertEqual(stack, [55])
+
+    def test_infinite_recursion(self):
+        program = Program()
+        state = StateDict()
+        names = {}
+        context = Context(state=state, names=names)
+        program.literal(null)
+        END = program.new_label()
+        program.jump(END)
+        START = program.new_label()
+        program.label(START)
+        program.local_load(0)
+        program.literal(1)
+        program.add()
+        program.local_load(1)
+        program.call(1)
+        program.exit()
+        program.label(END)
+        program.func(START, 'f', ('x',))
+        program.local_push(1)
+        program.literal(0)
+        program.local_load(0)
+        program.call(1)
+        stack = program.execute(context)
+        self.assertEqual(stack, [null])
+        self.assertEqual(context.errors, {"Recursion depth exceeded for func 'f'"})
 
 
 class TestCalls(unittest.TestCase):
@@ -1040,6 +1066,71 @@ class TestOptimizations(unittest.TestCase):
         self.assertEqual(str(program), "Literal 1\nLocalPush 1\nLiteral 2\nLocalPush 1\nLocalDrop 2")
 
 
+class TestStackExhaustion(unittest.TestCase):
+    def test_for_loop_push(self):
+        program = Program()
+        NEXT = program.new_label()
+        END = program.new_label()
+        program.literal(null)
+        program.literal(1000)
+        program.literal(null)
+        program.range()
+        program.begin_for(1)
+        program.label(NEXT)
+        program.next(END)
+        program.local_load(0)
+        program.jump(NEXT)
+        program.label(END)
+        program.end_for()
+        context = Context(state=StateDict(), stack=VectorStack(max_size=1000))
+        stack = program.execute(context)
+        self.assertEqual(len(stack), 1)
+        self.assertEqual(stack[0], Vector.range(1000))
+        context = Context(state=StateDict(), stack=VectorStack(max_size=999))
+        with self.assertRaises(StackOverflow):
+            program.execute(context)
+
+    def test_too_many_locals(self):
+        program = Program()
+        for i in range(1000):
+            program.literal(i)
+            program.local_push(1)
+        context = Context(state=StateDict(), lnames=VectorStack(max_size=1000))
+        lnames = []
+        stack = program.execute(context, lnames=lnames)
+        self.assertEqual(len(stack), 0)
+        self.assertEqual(len(lnames), 1000)
+        context = Context(state=StateDict(), lnames=VectorStack(max_size=999))
+        with self.assertRaises(StackOverflow):
+            program.execute(context)
+
+    def test_run_for_loop_push(self):
+        program = Program()
+        NEXT = program.new_label()
+        END = program.new_label()
+        program.literal(null)
+        program.literal(1000)
+        program.literal(null)
+        program.range()
+        program.begin_for(1)
+        program.label(NEXT)
+        program.next(END)
+        program.local_load(0)
+        program.jump(NEXT)
+        program.label(END)
+        program.end_for()
+        program.attributes(('x',))
+        program.link()
+        context = Context(state=StateDict(), root=Node('root'))
+        program.run(context)
+        self.assertEqual(context.errors, set())
+        self.assertEqual(context.root['x'], Vector.range(1000))
+        context = Context(state=StateDict(), root=Node('root'), stack=VectorStack(max_size=999))
+        program.run(context)
+        self.assertEqual(context.errors, {"Stack overflow in program"})
+        self.assertEqual(context.root, Node('root'))
+
+
 class TestStack(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -1064,16 +1155,18 @@ class TestStack(unittest.TestCase):
         self.assertEqual(len(stack), 0)
 
     def test_basic_push_and_pop(self):
-        stack = VectorStack()
+        stack = VectorStack(1, max_size=2)
         stack.push(Vector(0))
         self.assertEqual(len(stack), 1)
         stack.push(Vector(1))
         self.assertEqual(len(stack), 2)
+        with self.assertRaises(StackOverflow):
+            stack.push(Vector(2))
         self.assertEqual(stack.pop(), Vector(1))
         self.assertEqual(len(stack), 1)
         self.assertEqual(stack.pop(), Vector(0))
         self.assertEqual(len(stack), 0)
-        with self.assertRaises(TypeError):
+        with self.assertRaises(StackUnderflow):
             stack.pop()
 
     def test_copy(self):
@@ -1098,7 +1191,7 @@ class TestStack(unittest.TestCase):
         self.assertEqual(len(stack), 1)
         self.assertEqual(stack.pop(), Vector(0))
         self.assertEqual(len(stack), 0)
-        with self.assertRaises(TypeError):
+        with self.assertRaises(StackUnderflow):
             stack.drop()
 
     def test_realloc(self):
@@ -1128,9 +1221,9 @@ class TestStack(unittest.TestCase):
         self.assertEqual(len(stack), 1)
         self.assertEqual(stack.pop(), Vector(1))
         self.assertEqual(len(stack), 0)
-        with self.assertRaises(TypeError):
+        with self.assertRaises(StackUnderflow):
             stack.peek()
-        with self.assertRaises(TypeError):
+        with self.assertRaises(StackUnderflow):
             stack.poke(Vector(1))
 
     def test_peek_at_and_poke_at(self):
@@ -1142,12 +1235,12 @@ class TestStack(unittest.TestCase):
         self.assertEqual(stack.peek_at(0), Vector(2))
         self.assertEqual(stack.peek_at(1), Vector(1))
         self.assertEqual(stack.peek_at(2), Vector(0))
-        with self.assertRaises(TypeError):
+        with self.assertRaises(StackUnderflow):
             stack.peek_at(3)
         stack.poke_at(0, Vector(3))
         stack.poke_at(1, Vector(4))
         stack.poke_at(2, Vector(5))
-        with self.assertRaises(TypeError):
+        with self.assertRaises(StackUnderflow):
             stack.poke_at(3, Vector(6))
         self.assertEqual(len(stack), 3)
         self.assertEqual(stack.pop(), Vector(3))
@@ -1161,7 +1254,7 @@ class TestStack(unittest.TestCase):
         stack.push(Vector(1))
         stack.push(Vector(2))
         self.assertEqual(len(stack), 3)
-        with self.assertRaises(TypeError):
+        with self.assertRaises(StackUnderflow):
             stack.pop_tuple(4)
         self.assertEqual(stack.pop_tuple(2), (Vector(1), Vector(2)))
         self.assertEqual(len(stack), 1)
@@ -1174,7 +1267,7 @@ class TestStack(unittest.TestCase):
         stack.push(Vector(1))
         stack.push(Vector(2))
         self.assertEqual(len(stack), 3)
-        with self.assertRaises(TypeError):
+        with self.assertRaises(StackUnderflow):
             stack.pop_list(4)
         self.assertEqual(stack.pop_list(2), [Vector(1), Vector(2)])
         self.assertEqual(len(stack), 1)
@@ -1187,7 +1280,7 @@ class TestStack(unittest.TestCase):
         stack.push(Vector(1))
         stack.push(Vector(2))
         self.assertEqual(len(stack), 3)
-        with self.assertRaises(TypeError):
+        with self.assertRaises(StackUnderflow):
             stack.pop_dict(('w', 'x', 'y', 'z'))
         self.assertEqual(stack.pop_dict(('x', 'y')), {'x': Vector(1), 'y': Vector(2)})
         self.assertEqual(len(stack), 1)
@@ -1202,7 +1295,7 @@ class TestStack(unittest.TestCase):
         stack.push(Vector(2))
         stack.push(null)
         self.assertEqual(len(stack), 4)
-        with self.assertRaises(TypeError):
+        with self.assertRaises(StackUnderflow):
             stack.pop_composed(5)
         self.assertEqual(stack.pop_composed(3), Vector([1, 2]))
         self.assertEqual(len(stack), 1)
