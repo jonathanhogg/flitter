@@ -522,7 +522,7 @@ cdef class Vector:
     def __hash__(self):
         return self.hash(False)
 
-    cdef uint64_t hash(self, bint floor_floats):
+    cpdef int64_t hash(self, bint floor_floats):
         if not floor_floats and self._hash:
             return self._hash
         cdef uint64_t y, _hash = HASH_START
@@ -542,7 +542,7 @@ cdef class Vector:
                         y = double_long(f=PyFloat_AS_DOUBLE(<object>value)).l
                 elif type(<object>value) is int:
                     if floor_floats:
-                        y = <uint64_t>(PyLong_AsLongLong(<object>value))
+                        y = double_long(f=c_floor(PyLong_AsDouble(<object>value))).l
                     else:
                         y = double_long(f=PyLong_AsDouble(<object>value)).l
                 else:
@@ -556,8 +556,8 @@ cdef class Vector:
                     y = double_long(f=self.numbers[i]).l
                 _hash = HASH_UPDATE(_hash, y)
         if not floor_floats:
-            self._hash = _hash
-        return _hash
+            self._hash = <int64_t>_hash
+        return <int64_t>_hash
 
     cpdef object match(self, int64_t n=0, type t=None, default=None):
         cdef int64_t i, m = self.length
@@ -1842,7 +1842,7 @@ cdef class Node:
     def __hash__(self):
         return self.hash()
 
-    cdef uint64_t hash(self):
+    cdef int64_t hash(self):
         cdef uint64_t _hash = HASH_START
         _hash = HASH_UPDATE(_hash, HASH_STRING(self.kind))
         if self._tags is not None:
@@ -1861,7 +1861,7 @@ cdef class Node:
         if self._children is not ():
             for child in self._children:
                 _hash = HASH_UPDATE(_hash, (<Node>child).hash())
-        return _hash
+        return <int64_t>_hash
 
     @property
     def children(self):

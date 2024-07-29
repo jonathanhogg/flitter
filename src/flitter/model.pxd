@@ -9,7 +9,7 @@ cdef class Vector:
     cdef tuple objects
     cdef double* numbers
     cdef double[16] _numbers
-    cdef uint64_t _hash
+    cdef int64_t _hash
 
     @staticmethod
     cdef Vector _coerce(object other)
@@ -31,7 +31,7 @@ cdef class Vector:
     cdef bint as_bool(self)
     cdef double as_double(self) noexcept
     cdef str as_string(self)
-    cdef uint64_t hash(self, bint floor_floats)
+    cpdef int64_t hash(self, bint floor_floats)
     cpdef object match(self, int64_t n=?, type t=?, default=?)
     cdef str repr(self)
     cdef Vector neg(self)
@@ -145,7 +145,7 @@ cdef class Node:
     cdef bint _attributes_shared
     cdef tuple _children
 
-    cdef uint64_t hash(self)
+    cdef int64_t hash(self)
     cpdef Node copy(self)
     cpdef void add_tag(self, str tag)
     cpdef void set_attribute(self, str name, Vector value)

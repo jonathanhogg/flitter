@@ -320,6 +320,13 @@ class TestVector(unittest.TestCase):
         self.assertIsNotNone(hash(Vector(test_func)))  # just check it works, value will not be stable
         self.assertIsNotNone(hash(Vector(test_class)))  # just check it works, value will not be stable
 
+    def test_hash_floor_floats(self):
+        self.assertEqual(null.hash(True), hash(null))
+        self.assertEqual(Vector(0.1).hash(True), hash(Vector(0)))
+        self.assertEqual(Vector("Hello world!").hash(True), hash(Vector("Hello world!")))
+        self.assertEqual(Vector(["foo", 1]).hash(True), hash(Vector(["foo", 1.0])))
+        self.assertEqual(Vector(["foo", 1.1]).hash(True), hash(Vector(["foo", 1.0])))
+
     def test_hash_uniformity(self):
         from scipy.stats import kstest
         hashes = []
