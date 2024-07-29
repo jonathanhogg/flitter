@@ -118,7 +118,7 @@ class EngineController:
         for node in root.children:
             nodes_by_kind.setdefault(node.kind, []).append(node)
         tasks = []
-        references = dict(self._references)
+        updated_references = []
         for kind, nodes in nodes_by_kind.items():
             renderer_class = get_plugin('flitter.render', kind)
             if renderer_class is not None:
@@ -128,7 +128,9 @@ class EngineController:
                     if count == len(renderers):
                         renderer = renderer_class(**kwargs)
                         renderers.append(renderer)
+                    references = dict(self._references)
                     tasks.append(asyncio.create_task(renderers[count].update(self, node, references=references, **kwargs)))
+                    updated_references.append(references)
                     count += 1
                 while len(renderers) > count:
                     renderers.pop().destroy()
@@ -144,7 +146,8 @@ class EngineController:
                     task.cancel()
             await asyncio.gather(*tasks, return_exceptions=True)
             raise
-        return references
+        for references in updated_references:
+            self._references.update(references)
 
     def handle_pragmas(self, pragmas, timestamp):
         if '_counter' not in self.state:
@@ -220,7 +223,7 @@ class EngineController:
                 execution += now
                 render -= now
 
-                self._references = await self.update_renderers(context.root, **names)
+                await self.update_renderers(context.root, **names)
 
                 now = system_clock()
                 render += now

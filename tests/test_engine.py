@@ -202,7 +202,7 @@ class TestExamples(ScriptTest):
         self.assertScriptOutputMatchesImage(self.EXAMPLES / 'teaset.fl')
 
     def test_textures(self):
-        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'textures.fl')
+        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'textures.fl', target_fps=2)
 
     def test_translucency(self):
         self.assertScriptOutputMatchesImage(self.EXAMPLES / 'translucency.fl')
@@ -244,7 +244,7 @@ class TestExamples(ScriptTest):
 
     @unittest.skipIf(sys.platform != 'linux', 'OpenGL ES only available on Linux')
     def test_textures_opengl_es(self):
-        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'textures.fl', opengl_es=True, suffix='.es.png')
+        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'textures.fl', target_fps=2, opengl_es=True, suffix='.es.png')
 
     @unittest.skipIf(sys.platform != 'linux', 'OpenGL ES only available on Linux')
     def test_translucency_opengl_es(self):

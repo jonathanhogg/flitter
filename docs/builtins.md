@@ -406,12 +406,13 @@ double-precision floating point value.
 ## Texture sampling
 
 The `sample` function allows reading colors from the *previous* rendered image
-of a referenced window node:
+of a referenced window node. See the explanation of the
+[`!reference`](windows.md#reference) node for more information on references.
 
 `sample(` *id* `,` *coordinate(s)* [ `,` *default* ] `)`
 : Given the `id` of a [window node](windows.md) and a *2n*-vector of X/Y
-texture coordinates in the *[0,1)* range, return a *4n*-vector of RGBA color
-values. These color values *may* be outside of the normal *[0,1)* range if the
+coordinates in the *[0,1)* range, return a *4n*-vector of RGBA color values.
+These color values *may* be outside of the normal *[0,1)* range if the
 `colorbits` depth of the node is greater than 8. If (any of) the coordinates
 are outside of the *[0,1)* range then the returned color will either be
 `0;0;0;0` or `default` if specified (and a 4-vector).

@@ -536,6 +536,18 @@ This allows the `!canvas3d` output to appear at two places in the window
 rendering tree: as a direct child of the window, and as an input to the
 `threshold.frag` shader program.
 
+References *within* a single `!window` tree are updated in render order: the
+children of a node are rendered in-order before rendering the node. So a
+`!reference` node that refers to a node that has already been rendered will
+use the *current* rendered image of that node. A reference to a node that occurs
+later (including any parent node of the `!reference`) is valid only *after* the
+first frame and will return the rendered image from the previous frame.
+
+A `!reference` to a node *outside* of the enclosing `!window` (or `!offscreen`)
+is also valid only after the first frame and will return the rendered texture
+from *either the current or previous frame*. No guarantees are made about the
+render order of top-level nodes.
+
 ## Filters
 
 In addition to the nodes above, a set of useful filters are provided, each of

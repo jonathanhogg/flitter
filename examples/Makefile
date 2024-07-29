@@ -35,7 +35,7 @@ teaset.png: teaset.fl
 	flitter --offscreen --lockstep --fps=1 --runtime=1 --define "OUTPUT=$@" $<
 
 textures.png: textures.fl
-	flitter --offscreen --lockstep --fps=1 --runtime=1 --define "OUTPUT=$@" $<
+	flitter --offscreen --lockstep --fps=2 --runtime=1 --define "OUTPUT=$@" $<
 
 translucency.png: translucency.fl
 	flitter --offscreen --lockstep --fps=1 --runtime=1 --define "OUTPUT=$@" $<
