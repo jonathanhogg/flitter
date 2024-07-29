@@ -401,9 +401,6 @@ cdef int64_t increase(VectorStack stack) except 0:
     stack.size = new_size
     return new_size
 
-cdef inline int64_t stack_free(VectorStack stack) noexcept:
-    return stack.max_size - stack.top - 1
-
 cdef inline void drop(VectorStack stack, int64_t n):
     if stack.top -n < -1:
         raise StackUnderflow(f"Cannot drop {n} items from {stack.top+1} depth stack")
