@@ -43,28 +43,31 @@ def sample(Context context, Vector texture_id, Vector coord, Vector default=null
     cdef const double[:] color
     cdef int64_t i, j, n=coord.length // 2
     cdef Vector result = Vector.__new__(Vector)
-    result.allocate_numbers(n * 3)
+    result.allocate_numbers(n * 4)
     for i in range(n):
         j = i * 2
         x = int(coord.numbers[j] * width)
         y = int(coord.numbers[j+1] * height)
-        j = i * 3
+        j = i * 4
         if x < 0 or x >= width or y < 0 or y >= height:
             if n == 1:
                 return default
-            if default.numbers != NULL and default.length == 3:
+            if default.numbers != NULL and default.length == 4:
                 result.numbers[j] = default.nummbers[0]
                 result.numbers[j+1] = default.nummbers[1]
                 result.numbers[j+2] = default.nummbers[2]
+                result.numbers[j+3] = default.nummbers[3]
             else:
                 result.numbers[j] = 0
                 result.numbers[j+1] = 0
                 result.numbers[j+2] = 0
+                result.numbers[j+3] = 0
         else:
             color = data[y, x]
             result.numbers[j] = color[0]
             result.numbers[j+1] = color[1]
             result.numbers[j+2] = color[2]
+            result.numbers[j+3] = color[3]
     return result
 
 

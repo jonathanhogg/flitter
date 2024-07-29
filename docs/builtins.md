@@ -402,3 +402,20 @@ function intelligently caches).
 function intelligently caches) as a sequence of bytes. This is a *very*
 memory-inefficient function as each byte will be represented by a
 double-precision floating point value.
+
+## Texture sampling
+
+The `sample` function allows reading colors from the *previous* rendered image
+of a referenced window node:
+
+`sample(` *id* `,` *coordinate(s)* [ `,` *default* ] `)`
+: Given the `id` of a [window node](windows.md) and a *2n*-vector of X/Y
+texture coordinates in the *[0,1)* range, return a *4n*-vector of RGBA color
+values. These color values *may* be outside of the normal *[0,1)* range if the
+`colorbits` depth of the node is greater than 8. If (any of) the coordinates
+are outside of the *[0,1)* range then the returned color will either be
+`0;0;0;0` or `default` if specified (and a 4-vector).
+
+Note that use of this function *may* cause a significant slow-down in the
+execution of the engine as rendering will need to be completed before the
+texture can be read, causing a GPU pipeline stall.
