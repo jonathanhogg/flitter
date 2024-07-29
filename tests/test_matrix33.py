@@ -5,6 +5,8 @@ Tests of the model.Matrix33 class
 import math
 import unittest
 
+import numpy as np
+
 from flitter.model import Matrix33
 
 
@@ -28,8 +30,13 @@ class TestMatrix33(unittest.TestCase):
         self.assertEqual(Matrix33(1), [1, 0, 0, 0, 1, 0, 0, 0, 1])
         self.assertEqual(Matrix33(2), [2, 0, 0, 0, 2, 0, 0, 0, 2])
         self.assertEqual(Matrix33(range(9)), range(9))
+        self.assertEqual(Matrix33([0, 1, 2, 3, 4, 5, 6, 7, 8]), range(9))
+        self.assertEqual(Matrix33(np.arange(9)), range(9))
         self.assertRaises(ValueError, Matrix33, "Hello world!")
         self.assertRaises(ValueError, Matrix33, [1, 2, 3])
+        self.assertRaises(ValueError, Matrix33, ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'])
+        self.assertRaises(ValueError, Matrix33, range(8))
+        self.assertRaises(ValueError, Matrix33, np.arange(8))
 
     def test_identity(self):
         self.assertEqual(Matrix33.identity(), [1, 0, 0, 0, 1, 0, 0, 0, 1])

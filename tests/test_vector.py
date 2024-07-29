@@ -8,7 +8,7 @@ import unittest
 
 import numpy
 
-from flitter.model import Vector, true, false, null, Node
+from flitter.model import Vector, true, false, null, Node, initialize_numbers_cache, empty_numbers_cache, numbers_cache_counts
 
 
 FOO_SYMBOL_NUMBER = float.fromhex('-0x1.dcb27518fed9dp+1023')
@@ -96,6 +96,25 @@ class TestVector(unittest.TestCase):
         self.assertIs(Vector.coerce(1), true)
         self.assertIs(Vector.coerce(0), false)
         self.assertIs(Vector.coerce(-1), Vector.coerce(-1))
+
+    def test_numbers_cache(self):
+        initialize_numbers_cache(100_001)
+        x = Vector.range(100_001)
+        self.assertEqual(numbers_cache_counts(), {})
+        del x
+        self.assertEqual(numbers_cache_counts(), {100016: 1})
+        x = Vector.range(100_001)
+        self.assertEqual(numbers_cache_counts(), {})
+        del x
+        self.assertEqual(numbers_cache_counts(), {100016: 1})
+        empty_numbers_cache()
+        self.assertEqual(numbers_cache_counts(), {})
+        x = Vector.range(16)
+        del x
+        self.assertEqual(numbers_cache_counts(), {})
+        x = Vector.range(17)
+        del x
+        self.assertEqual(numbers_cache_counts(), {32: 1})
 
     def test_symbol(self):
         foo = Vector.symbol('foo')

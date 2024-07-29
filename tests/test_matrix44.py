@@ -5,6 +5,8 @@ Tests of the model.Matrix44 class
 import math
 import unittest
 
+import numpy as np
+
 from flitter.model import Matrix44, Matrix33
 
 
@@ -29,6 +31,19 @@ class TestMatrix44(unittest.TestCase):
         self.assertEqual(Matrix44(range(16)), range(16))
         self.assertRaises(ValueError, Matrix44, "Hello world!")
         self.assertRaises(ValueError, Matrix44, [1, 2, 3])
+
+        self.assertEqual(Matrix44(), [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1])
+        self.assertEqual(Matrix44(0), [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+        self.assertEqual(Matrix44(1), [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1])
+        self.assertEqual(Matrix44(2), [2, 0, 0, 0, 0, 2, 0, 0, 0, 0, 2, 0, 0, 0, 0, 2])
+        self.assertEqual(Matrix44(range(16)), range(16))
+        self.assertEqual(Matrix44([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]), range(16))
+        self.assertEqual(Matrix44(np.arange(16)), range(16))
+        self.assertRaises(ValueError, Matrix44, "Hello world!")
+        self.assertRaises(ValueError, Matrix44, [1, 2, 3])
+        self.assertRaises(ValueError, Matrix44, ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'])
+        self.assertRaises(ValueError, Matrix44, range(15))
+        self.assertRaises(ValueError, Matrix44, np.arange(15))
 
     def test_identity(self):
         self.assertEqual(Matrix44.identity(), [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1])
