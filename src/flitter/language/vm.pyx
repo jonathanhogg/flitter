@@ -666,7 +666,7 @@ cdef inline void call_helper(Context context, VectorStack stack, object function
             push(stack, PyObject_CallObject(function, args))
         else:
             push(stack, PyObject_Call(function, args, kwargs))
-    except (RecursionError, AssertionError):
+    except (RecursionError, AssertionError, StackError):
         raise
     except Exception as exc:
         PySet_Add(context.errors, f"Error calling {function.__name__}: {str(exc)}")
@@ -1557,13 +1557,13 @@ cdef class Program:
                     StatsCount[<int64_t>instruction.code] += 1
                     StatsDuration[<int64_t>instruction.code] += duration
 
-        except (AssertionError, StackError):
+        except StackOverflow:
             raise
 
         except Exception:
             if instruction is not None:
-                logger.error("VM exception processing:\n{} <--",
-                             "\n".join(str(instruction) for instruction in self.instructions[pc-5:pc]))
+                logger.exception("VM exception processing:\n{} <--",
+                                 "\n".join(str(instruction) for instruction in self.instructions[pc-5:pc]))
             raise
 
         assert pc == program_end, "Jump outside of program"
