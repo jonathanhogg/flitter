@@ -78,6 +78,9 @@ The engine-supplied global values are:
 - `time` - the current frame time (derived from Python's `perf_counter()`
     usually, though increasing by exactly `1/fps` per frame in non-realtime
     mode)
+- `frame` - the current frame number, counting from 0 and increasing by one
+    for each rendered frame (this will increase by exactly 1 on each program
+    execution when running in non-realtime mode)
 - `fps` - the current target frame-rate of the engine (the `--fps` option)
 - `performance` - a value in the range [0.5 .. 2.0] that increases fractionally
     if the engine has time to spare and decreases fractionally if it is missing
@@ -85,6 +88,8 @@ The engine-supplied global values are:
     in the code – e.g., number of things on screen – to maintain frame rate
 - `realtime` - a `true`/`false` value indicating whether the engine is running
     in realtime mode (the default) or not (with the `--lockstep` option)
+- `run_time` - the number of seconds that the engine will run for before
+    exiting, controlled with the `--runtime` options.
 
 ## Unicode Support
 

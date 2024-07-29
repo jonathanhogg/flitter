@@ -158,6 +158,7 @@ class EngineController:
 
     async def run(self):
         try:
+            frame_count = 0
             frames = []
             start_time = frame_time = system_clock() if self.realtime else self.counter.start
             last = self.counter.beat_at_time(frame_time)
@@ -169,7 +170,7 @@ class EngineController:
             simplify_state_time = system_clock() + self.state_simplify_wait
             static = dict(self.defined_names)
             static.update({'realtime': self.realtime, 'window_gamma': self.window_gamma, 'screen': self.screen, 'fullscreen': self.fullscreen,
-                           'vsync': self.vsync, 'offscreen': self.offscreen, 'opengl_es': self.opengl_es})
+                           'vsync': self.vsync, 'offscreen': self.offscreen, 'opengl_es': self.opengl_es, 'run_time': self.run_time})
             gc.disable()
             while self.run_time is None or int(round((frame_time - start_time) * self.target_fps)) < int(round(self.run_time * self.target_fps)):
                 housekeeping -= system_clock()
@@ -178,7 +179,7 @@ class EngineController:
                 delta = beat - last
                 last = beat
                 dynamic = {'beat': beat, 'quantum': self.counter.quantum, 'tempo': self.counter.tempo, 'fps': self.target_fps,
-                           'delta': delta, 'time': frame_time, 'performance': performance, 'slow_frame': slow_frame}
+                           'delta': delta, 'time': frame_time, 'frame': frame_count, 'performance': performance, 'slow_frame': slow_frame}
                 names = dict(static)
                 names.update(dynamic)
 
@@ -296,6 +297,7 @@ class EngineController:
                 now = system_clock()
                 housekeeping += now
 
+                frame_count += 1
                 frames.append(frame_time if self.realtime else now)
                 frame_period = now - frame_time
                 frame_time += 1 / self.target_fps

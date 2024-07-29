@@ -15,7 +15,7 @@ let SIZE=1920;1080
 !counter state=:position time=beat rate=$(:speed) initial=START
 
 !window size=SIZE
-    !record filename=(OUTPUT if round(60*beat/tempo*fps) == 9)
+    !record filename=(OUTPUT if frame == run_time * fps - 1)
         !canvas composite=:add antialias=false linear=true
             let position=(($(:position) or START) + R) % (SIZE + 2*R) - R
             !group color=0.01;0.006;0.006
