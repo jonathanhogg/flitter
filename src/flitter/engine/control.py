@@ -326,7 +326,7 @@ class EngineController:
                     frames = frames[-1:]
                     execution = render = housekeeping = 0
                     logger.trace("State dictionary size: {} keys", len(self.state))
-                    if run_program is not None:
+                    if run_program is not None and run_program.stack is not None:
                         logger.trace("VM stack size: {:d}", run_program.stack.size)
 
         finally:
