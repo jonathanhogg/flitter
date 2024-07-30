@@ -1670,7 +1670,7 @@ def octnoise(Vector seed, Vector octaves, Vector roughness, *args):
     for arg in args:
         if arg.numbers == NULL:
             return null_
-        coords.append(Vector._copy(arg))
+        coords.append(arg.copy())
     cdef int64_t i, j, n = <int64_t>octaves.numbers[0]
     cdef double weight_sum = 0, weight = 1, k = roughness.numbers[0]
     cdef Vector single, result = null_

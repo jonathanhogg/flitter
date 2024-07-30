@@ -352,7 +352,7 @@ cdef class VectorStack:
         cdef int64_t i
         cdef Vector value
         for i in range(self.top+1):
-            value = Vector._copy(<Vector>self.vectors[i])
+            value = (<Vector>self.vectors[i]).copy()
             Py_INCREF(value)
             new_stack.vectors[i] = <PyObject*>value
         new_stack.top = self.top
@@ -1296,7 +1296,7 @@ cdef class Program:
 
                 elif instruction.code == OpCode.LocalLoad:
                     r1 = peek_at(lnames, (<InstructionInt>instruction).value)
-                    push(stack, Vector._copy(r1) if r1.objects is not None else r1)
+                    push(stack, r1.copy() if r1.objects is not None else r1)
                     r1 = None
 
                 elif instruction.code == OpCode.LocalPush:

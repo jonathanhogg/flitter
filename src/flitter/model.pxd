@@ -15,9 +15,6 @@ cdef class Vector:
     cdef Vector _coerce(object other)
 
     @staticmethod
-    cdef Vector _copy(Vector other)
-
-    @staticmethod
     cdef Vector _compose(list vectors)
 
     @staticmethod
@@ -25,6 +22,7 @@ cdef class Vector:
 
     cdef int64_t allocate_numbers(self, int64_t n) except -1
     cdef void deallocate_numbers(self) noexcept
+    cpdef Vector copy(self)
     cpdef Vector intern(self)
     cdef void fill_range(self, Vector startv, Vector stopv, Vector stepv)
     cpdef bint isinstance(self, t) noexcept
@@ -84,6 +82,7 @@ cdef class Matrix33(Vector):
     @staticmethod
     cdef Matrix33 _rotate(double turns)
 
+    cpdef Matrix33 copy(self)
     cdef Matrix33 mmul(self, Matrix33 b)
     cdef Vector vmul(self, Vector b)
     cpdef Matrix33 inverse(self)
@@ -130,7 +129,9 @@ cdef class Matrix44(Vector):
     @staticmethod
     cdef Matrix44 _shear_z(Vector v)
 
+    cpdef Matrix44 copy(self)
     cdef Matrix44 mmul(self, Matrix44 b)
+    cdef Matrix44 immul(self, Matrix44 b)
     cdef Vector vmul(self, Vector b)
     cpdef Matrix44 inverse(self)
     cpdef Matrix44 transpose(self)
@@ -150,6 +151,7 @@ cdef class Node:
     cpdef void add_tag(self, str tag)
     cpdef void set_attribute(self, str name, Vector value)
     cpdef void append(self, Node node)
+    cpdef void append_vector(self, Vector nodes)
     cdef bint _equals(self, Node other)
     cpdef object get(self, str name, int n=?, type t=?, object default=?)
     cdef Vector get_fvec(self, str name, int n, Vector default)

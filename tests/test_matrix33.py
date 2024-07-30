@@ -38,6 +38,13 @@ class TestMatrix33(unittest.TestCase):
         self.assertRaises(ValueError, Matrix33, range(8))
         self.assertRaises(ValueError, Matrix33, np.arange(8))
 
+    def test_copy(self):
+        m1 = Matrix33(range(9))
+        m2 = m1.copy()
+        self.assertEqual(type(m1), type(m2))
+        self.assertEqual(m1, m2)
+        self.assertIsNot(m1, m2)
+
     def test_identity(self):
         self.assertEqual(Matrix33.identity(), [1, 0, 0, 0, 1, 0, 0, 0, 1])
 

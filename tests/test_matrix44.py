@@ -45,6 +45,13 @@ class TestMatrix44(unittest.TestCase):
         self.assertRaises(ValueError, Matrix44, range(15))
         self.assertRaises(ValueError, Matrix44, np.arange(15))
 
+    def test_copy(self):
+        m1 = Matrix44(range(16))
+        m2 = m1.copy()
+        self.assertEqual(type(m1), type(m2))
+        self.assertEqual(m1, m2)
+        self.assertIsNot(m1, m2)
+
     def test_identity(self):
         self.assertEqual(Matrix44.identity(), [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1])
 
@@ -157,6 +164,27 @@ class TestMatrix44(unittest.TestCase):
         self.assertEqual(Matrix44.translate([1, 2, 3]) @ Matrix44.translate([1, 2, 3]), Matrix44.translate([2, 4, 6]))
         self.assertEqual(Matrix44.translate([1, 2, 3]) @ Matrix44.scale(2), [2, 0, 0, 0, 0, 2, 0, 0, 0, 0, 2, 0, 1, 2, 3, 1])
         self.assertEqual(Matrix44.scale(2) @ Matrix44.translate([1, 2, 3]), [2, 0, 0, 0, 0, 2, 0, 0, 0, 0, 2, 0, 2, 4, 6, 1])
+
+    def test_immul(self):
+        m = m1 = Matrix44()
+        m @= m1
+        self.assertIs(m, m1)
+        self.assertEqual(m, Matrix44())
+        m = Matrix44.translate([1, 2, 3])
+        m @= Matrix44()
+        self.assertEqual(m, Matrix44.translate([1, 2, 3]))
+        m = Matrix44()
+        m @= Matrix44.translate([1, 2, 3])
+        self.assertEqual(m, Matrix44.translate([1, 2, 3]))
+        m = Matrix44.translate([1, 2, 3])
+        m @= Matrix44.translate([1, 2, 3])
+        self.assertEqual(m, Matrix44.translate([2, 4, 6]))
+        m = Matrix44.translate([1, 2, 3])
+        m @= Matrix44.scale(2)
+        self.assertEqual(m, [2, 0, 0, 0, 0, 2, 0, 0, 0, 0, 2, 0, 1, 2, 3, 1])
+        m = Matrix44.scale(2)
+        m @= Matrix44.translate([1, 2, 3])
+        self.assertEqual(m, [2, 0, 0, 0, 0, 2, 0, 0, 0, 0, 2, 0, 2, 4, 6, 1])
 
     def test_vmul(self):
         self.assertEqual(Matrix44() @ None, None)

@@ -14,7 +14,7 @@ from cpython.long cimport (PyLong_FromDouble, PyLong_AsLongLong, PyLong_AsDouble
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
 from cpython.object cimport PyObject_RichCompareBool, Py_NE, Py_EQ, Py_LT
 from cpython.set cimport PySet_Add
-from cpython.tuple cimport PyTuple_New, PyTuple_GET_ITEM, PyTuple_SET_ITEM, PyTuple_Pack
+from cpython.tuple cimport PyTuple_New, PyTuple_GET_SIZE, PyTuple_GET_ITEM, PyTuple_SET_ITEM, PyTuple_Pack
 from cpython.unicode cimport PyUnicode_DATA, PyUnicode_GET_LENGTH, PyUnicode_KIND, PyUnicode_READ
 
 
@@ -201,35 +201,6 @@ cdef class Vector:
         return Vector(other)
 
     @staticmethod
-    def copy(other):
-        cdef Vector vector = Vector._coerce(other)
-        if vector is other:
-            return Vector._copy(vector)
-        return vector
-
-    @staticmethod
-    cdef Vector _copy(Vector other):
-        cdef int64_t i, n=other.length
-        if n == 0:
-            return null_
-        cdef Vector result = Vector.__new__(Vector)
-        if other.numbers != NULL:
-            result.allocate_numbers(n)
-            for i in range(n):
-                result.numbers[i] = other.numbers[i]
-            return result
-        cdef tuple objects=other.objects
-        cdef tuple copy_objects = PyTuple_New(n)
-        cdef PyObject* objptr
-        for i in range(n):
-            objptr = PyTuple_GET_ITEM(objects, i)
-            Py_INCREF(<object>objptr)
-            PyTuple_SET_ITEM(copy_objects, i, <object>objptr)
-        result.objects = copy_objects
-        result.length = n
-        return result
-
-    @staticmethod
     def compose(vectors):
         vectors = [Vector._coerce(v) for v in  vectors]
         return Vector._compose(vectors)
@@ -311,7 +282,8 @@ cdef class Vector:
         SymbolTable[number] = symbol
         ReverseSymbolTable[symbol] = number
         cdef Vector result = Vector.__new__(Vector)
-        result.allocate_numbers(1)
+        result.numbers = result._numbers
+        result.length = 1
         result.numbers[0] = number
         return result
 
@@ -348,7 +320,8 @@ cdef class Vector:
                     self.deallocate_numbers()
                     self.objects = tuple(value)
         elif isinstance(value, (float, int)):
-            self.allocate_numbers(1)
+            self.numbers = self._numbers
+            self.length = 1
             self.numbers[0] = value
         elif isinstance(value, (range, slice)):
             self.fill_range(Vector._coerce(value.start), Vector._coerce(value.stop), Vector._coerce(value.step))
@@ -387,6 +360,27 @@ cdef class Vector:
             Py_INCREF(value)
             PyList_SET_ITEM(values, i, value)
         return Vector, (values,)
+
+    cpdef Vector copy(self):
+        cdef int64_t i, n=self.length
+        if n == 0:
+            return null_
+        cdef Vector result = Vector.__new__(Vector)
+        if self.numbers != NULL:
+            result.allocate_numbers(n)
+            for i in range(n):
+                result.numbers[i] = self.numbers[i]
+            return result
+        cdef tuple objects=self.objects
+        cdef tuple copy_objects = PyTuple_New(n)
+        cdef PyObject* objptr
+        for i in range(n):
+            objptr = PyTuple_GET_ITEM(objects, i)
+            Py_INCREF(<object>objptr)
+            PyTuple_SET_ITEM(copy_objects, i, <object>objptr)
+        result.objects = copy_objects
+        result.length = n
+        return result
 
     cpdef Vector intern(self):
         return <Vector>InternedVectors.setdefault(self, self)
@@ -970,21 +964,22 @@ cdef class Vector:
         if n == 0:
             return null_
         cdef Vector result = Vector.__new__(Vector)
+        result.length = 1
         cdef tuple objects = self.objects
         cdef PyObject* objptr
         if objects is not None:
             objptr = PyTuple_GET_ITEM(objects, i % n)
             if type(<object>objptr) is float:
-                result.allocate_numbers(1)
+                result.numbers = result._numbers
                 result.numbers[0] = PyFloat_AS_DOUBLE(<object>objptr)
             elif type(<object>objptr) is int:
-                result.allocate_numbers(1)
+                result.numbers = result._numbers
                 result.numbers[0] = PyLong_AsDouble(<object>objptr)
             else:
                 result.objects = PyTuple_Pack(1, objptr)
                 result.length = 1
         else:
-            result.allocate_numbers(1)
+            result.numbers = result._numbers
             result.numbers[0] = self.numbers[i % n]
         return result
 
@@ -1025,7 +1020,8 @@ cdef class Vector:
         if self.numbers != NULL and other.numbers != NULL:
             for i in range(result.allocate_numbers(max(n, m))):
                 sum += self.numbers[i % n] * other.numbers[i % m]
-            result.allocate_numbers(1)
+            result.numbers = result._numbers
+            result.length = 1
             result.numbers[0] = sum
         return result
 
@@ -1035,7 +1031,8 @@ cdef class Vector:
         cdef double* self_numbers = self.numbers
         cdef double* other_numbers = other.numbers
         cdef Vector result = Vector.__new__(Vector)
-        result.allocate_numbers(3)
+        result.numbers = result._numbers
+        result.length = 3
         cdef double* result_numbers = result.numbers
         result_numbers[0] = self_numbers[1]*other_numbers[2] - self_numbers[2]*other_numbers[1]
         result_numbers[1] = self_numbers[2]*other_numbers[0] - self_numbers[0]*other_numbers[2]
@@ -1232,6 +1229,17 @@ cdef class Matrix33(Vector):
         else:
             raise ValueError("Argument must be a float or a sequence of 9 floats")
 
+    cpdef Matrix33 copy(self):
+        cdef Matrix33 result = Matrix33.__new__(Matrix33)
+        cdef double* self_numbers=self.numbers
+        cdef double* numbers=result._numbers
+        cdef int64_t i
+        for i in range(9):
+            numbers[i] = self_numbers[i]
+        result.numbers = numbers
+        result.length = 9
+        return result
+
     cdef Matrix33 mmul(self, Matrix33 b):
         cdef Matrix33 result = Matrix33.__new__(Matrix33)
         cdef double* numbers = result._numbers
@@ -1252,11 +1260,13 @@ cdef class Matrix33(Vector):
         cdef double* a_numbers = self.numbers
         cdef double* b_numbers = b.numbers
         if b.length == 2:
-            result.allocate_numbers(2)
+            result.numbers = result._numbers
+            result.length = 2
             result.numbers[0] = a_numbers[0]*b_numbers[0] + a_numbers[3]*b_numbers[1] + a_numbers[6]
             result.numbers[1] = a_numbers[1]*b_numbers[0] + a_numbers[4]*b_numbers[1] + a_numbers[7]
         else:
-            result.allocate_numbers(3)
+            result.numbers = result._numbers
+            result.length = 3
             result.numbers[0] = a_numbers[0]*b_numbers[0] + a_numbers[3]*b_numbers[1] + a_numbers[6]*b_numbers[2]
             result.numbers[1] = a_numbers[1]*b_numbers[0] + a_numbers[4]*b_numbers[1] + a_numbers[7]*b_numbers[2]
             result.numbers[2] = a_numbers[2]*b_numbers[0] + a_numbers[5]*b_numbers[1] + a_numbers[8]*b_numbers[2]
@@ -1673,6 +1683,17 @@ cdef class Matrix44(Vector):
         else:
             raise ValueError("Argument must be a float or a sequence of 16 floats")
 
+    cpdef Matrix44 copy(self):
+        cdef Matrix44 result = Matrix44.__new__(Matrix44)
+        cdef double* self_numbers=self.numbers
+        cdef double* numbers=result._numbers
+        cdef int64_t i
+        for i in range(16):
+            numbers[i] = self_numbers[i]
+        result.numbers = numbers
+        result.length = 16
+        return result
+
     cdef Matrix44 mmul(self, Matrix44 b):
         cdef Matrix44 result = Matrix44.__new__(Matrix44)
         cdef double* numbers = result._numbers
@@ -1698,35 +1719,65 @@ cdef class Matrix44(Vector):
         result.length = 16
         return result
 
+    cdef Matrix44 immul(self, Matrix44 b):
+        if b is None:
+            return self
+        cdef double* numbers = self._numbers
+        cdef double* b_numbers = b.numbers
+        cdef double a0=self.numbers[0], a1=self.numbers[1], a2=self.numbers[2], a3=self.numbers[3]
+        cdef double a4=self.numbers[4], a5=self.numbers[5], a6=self.numbers[6], a7=self.numbers[7]
+        cdef double a8=self.numbers[8], a9=self.numbers[9], a10=self.numbers[10], a11=self.numbers[11]
+        cdef double a12=self.numbers[12], a13=self.numbers[13], a14=self.numbers[14], a15=self.numbers[15]
+        numbers[0] = a0*b_numbers[0] + a4*b_numbers[1] + a8*b_numbers[2] + a12*b_numbers[3]
+        numbers[1] = a1*b_numbers[0] + a5*b_numbers[1] + a9*b_numbers[2] + a13*b_numbers[3]
+        numbers[2] = a2*b_numbers[0] + a6*b_numbers[1] + a10*b_numbers[2] + a14*b_numbers[3]
+        numbers[3] = a3*b_numbers[0] + a7*b_numbers[1] + a11*b_numbers[2] + a15*b_numbers[3]
+        numbers[4] = a0*b_numbers[4] + a4*b_numbers[5] + a8*b_numbers[6] + a12*b_numbers[7]
+        numbers[5] = a1*b_numbers[4] + a5*b_numbers[5] + a9*b_numbers[6] + a13*b_numbers[7]
+        numbers[6] = a2*b_numbers[4] + a6*b_numbers[5] + a10*b_numbers[6] + a14*b_numbers[7]
+        numbers[7] = a3*b_numbers[4] + a7*b_numbers[5] + a11*b_numbers[6] + a15*b_numbers[7]
+        numbers[8] = a0*b_numbers[8] + a4*b_numbers[9] + a8*b_numbers[10] + a12*b_numbers[11]
+        numbers[9] = a1*b_numbers[8] + a5*b_numbers[9] + a9*b_numbers[10] + a13*b_numbers[11]
+        numbers[10] = a2*b_numbers[8] + a6*b_numbers[9] + a10*b_numbers[10] + a14*b_numbers[11]
+        numbers[11] = a3*b_numbers[8] + a7*b_numbers[9] + a11*b_numbers[10] + a15*b_numbers[11]
+        numbers[12] = a0*b_numbers[12] + a4*b_numbers[13] + a8*b_numbers[14] + a12*b_numbers[15]
+        numbers[13] = a1*b_numbers[12] + a5*b_numbers[13] + a9*b_numbers[14] + a13*b_numbers[15]
+        numbers[14] = a2*b_numbers[12] + a6*b_numbers[13] + a10*b_numbers[14] + a14*b_numbers[15]
+        numbers[15] = a3*b_numbers[12] + a7*b_numbers[13] + a11*b_numbers[14] + a15*b_numbers[15]
+        return self
+
     cdef Vector vmul(self, Vector b):
         if b.numbers is NULL or b.length not in (3, 4):
             return None
         cdef Vector result = Vector.__new__(Vector)
-        cdef double* numbers
+        cdef double* numbers = result._numbers
         cdef double* a_numbers = self.numbers
         cdef double* b_numbers = b.numbers
-        cdef int64_t j
+        cdef double x=b_numbers[0], y=b_numbers[1], z=b_numbers[2], w
         if b.length == 3:
-            result.allocate_numbers(3)
-            numbers = result.numbers
-            for j in range(3):
-                numbers[j] = a_numbers[j]*b_numbers[0] + \
-                             a_numbers[j+4]*b_numbers[1] + \
-                             a_numbers[j+8]*b_numbers[2] + \
-                             a_numbers[j+12]
+            numbers[0] = a_numbers[0]*x + a_numbers[4]*y + a_numbers[8]*z + a_numbers[12]
+            numbers[1] = a_numbers[1]*x + a_numbers[5]*y + a_numbers[9]*z + a_numbers[13]
+            numbers[2] = a_numbers[2]*x + a_numbers[6]*y + a_numbers[10]*z + a_numbers[14]
+            result.length = 3
         else:
-            result.allocate_numbers(4)
-            numbers = result.numbers
-            for j in range(4):
-                numbers[j] = a_numbers[j]*b_numbers[0] + \
-                             a_numbers[j+4]*b_numbers[1] + \
-                             a_numbers[j+8]*b_numbers[2] + \
-                             a_numbers[j+12]*b_numbers[3]
+            numbers = result.numbers = result._numbers
+            w = b_numbers[3]
+            numbers[0] = a_numbers[0]*x + a_numbers[4]*y + a_numbers[8]*z + a_numbers[12]*w
+            numbers[1] = a_numbers[1]*x + a_numbers[5]*y + a_numbers[9]*z + a_numbers[13]*w
+            numbers[2] = a_numbers[2]*x + a_numbers[6]*y + a_numbers[10]*z + a_numbers[14]*w
+            numbers[3] = a_numbers[3]*x + a_numbers[7]*y + a_numbers[11]*z + a_numbers[15]*w
+            result.length = 4
+        result.numbers = numbers
         return result
 
     def __matmul__(self, other):
         if isinstance(other, Matrix44):
             return self.mmul(<Matrix44>other)
+        return self.vmul(Vector._coerce(other))
+
+    def __imatmul__(self, other):
+        if isinstance(other, Matrix44):
+            return self.immul(<Matrix44>other)
         return self.vmul(Vector._coerce(other))
 
     @cython.cdivision(True)

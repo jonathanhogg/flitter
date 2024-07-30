@@ -143,8 +143,8 @@ class TestVector(unittest.TestCase):
         self.assertIs(foo_2[2], value[2])
 
     def test_copy(self):
-        for x in (Vector(), Vector(["Hello ", "world!"]), Vector.range(10), 5):
-            y = Vector.copy(x)
+        for x in (Vector(), Vector(["Hello ", "world!"]), Vector.range(10), Vector(5)):
+            y = x.copy()
             self.assertEqual(x, y)
             self.assertFalse(x is y)
 

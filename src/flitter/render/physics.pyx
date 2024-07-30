@@ -69,17 +69,17 @@ cdef class Particle:
         self.position_state_key = prefix.concat(self.id).intern()
         cdef Vector position = state.get_item(self.position_state_key)
         if position.length == zero.length and position.numbers != NULL:
-            self.position = Vector._copy(position)
+            self.position = position.copy()
         else:
-            self.position = Vector._copy(node.get_fvec('position', zero.length, zero))
+            self.position = node.get_fvec('position', zero.length, zero.copy())
         self.velocity_state_key = self.position_state_key.concat(VELOCITY).intern()
         cdef Vector velocity = state.get_item(self.velocity_state_key)
         if velocity.length == zero.length and velocity.numbers != NULL:
-            self.velocity = Vector._copy(velocity)
+            self.velocity = velocity.copy()
         else:
-            self.velocity = Vector._copy(node.get_fvec('velocity', zero.length, zero))
+            self.velocity = node.get_fvec('velocity', zero.length, zero.copy())
         self.initial_force = node.get_fvec('force', zero.length, zero)
-        self.force = Vector._copy(self.initial_force)
+        self.force = self.initial_force.copy()
         self.radius = max(0, node.get_float('radius', 1))
         self.mass = max(0, node.get_float('mass', 1))
         self.charge = node.get_float('charge', 1)
@@ -115,7 +115,7 @@ cdef class Particle:
 cdef class Anchor(Particle):
     def __cinit__(self, Node node, Vector id, Vector zero, Vector prefix, StateDict state):
         self.position = node.get_fvec('position', zero.length, zero)
-        self.velocity = Vector._copy(zero)
+        self.velocity = zero.copy()
 
     cdef void update(self, double speed_of_light, double clock, double delta) noexcept nogil:
         pass
@@ -238,7 +238,7 @@ cdef class BuoyancyForceApplier(ParticleForceApplier):
         self.density = node.get_float('density', 1)
         self.gravity = node.get_fvec('gravity', zero.length, zero)
         if self.gravity is zero:
-            self.gravity = Vector._copy(self.gravity)
+            self.gravity = self.gravity.copy()
             self.gravity.numbers[zero.length-1] = -1
 
     cdef void apply(self, Particle particle, double delta) noexcept nogil:

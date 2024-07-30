@@ -561,7 +561,7 @@ cpdef shuffle(uniform source, Vector xs):
     cdef int64_t i, j, n = xs.length
     cdef PyObject* a
     cdef PyObject* b
-    xs = Vector._copy(xs)
+    xs = xs.copy()
     cdef tuple objects=xs.objects
     if objects is None:
         for i in range(n - 1):
