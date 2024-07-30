@@ -263,7 +263,7 @@ cdef class Name(Expression):
             elif isinstance(value, Name):
                 return (<Name>value)._simplify(context)
             elif type(value) is Vector:
-                return Literal(Vector._copy(<Vector>value))
+                return Literal((<Vector>value).copy())
             else:
                 return Literal(value)
         elif (value := static_builtins.get(self.name)) is not None:
@@ -1024,28 +1024,25 @@ cdef class Append(NodeModifier):
     cdef Expression _simplify(self, Context context):
         cdef Expression node = self.node._simplify(context)
         cdef Expression children = self.children._simplify(context)
-        cdef Vector nodes, childs
-        cdef Node n
+        cdef Vector nodes, children_vector
         cdef int64_t i
         cdef list objects
+        cdef tuple node_objects
         if (isinstance(node, Literal) and (<Literal>node).value.objects is None) or \
                 (isinstance(children, Literal) and (<Literal>children).value.objects is None):
             return node
         if isinstance(node, Literal):
             nodes = (<Literal>node).value
             if isinstance(children, Literal):
-                childs = (<Literal>children).value
+                children_vector = (<Literal>children).value
+                node_objects = nodes.objects
                 objects = []
                 for i in range(nodes.length):
-                    obj = nodes.objects[i]
+                    obj = node_objects[i]
                     if isinstance(obj, Node):
-                        n = (<Node>obj).copy()
-                        for child in childs.objects:
-                            if isinstance(child, Node):
-                                n.append(<Node>child)
-                        objects.append(n)
-                    else:
-                        objects.append(obj)
+                        obj = (<Node>obj).copy()
+                        (<Node>obj).append_vector(children_vector)
+                    objects.append(obj)
                 return Literal(objects)
             elif isinstance(children, Sequence) and isinstance((<Sequence>children).expressions[0], Literal):
                 node = Append(node, (<Sequence>children).expressions[0])

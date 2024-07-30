@@ -1959,7 +1959,37 @@ cdef class Node:
             PyDict_DelItem(attributes, name)
 
     cpdef void append(self, Node node):
-        self._children = self._children + (node,)
+        cdef tuple children=self._children
+        cdef uint64_t i, m=PyTuple_GET_SIZE(children)
+        cdef tuple new_children=PyTuple_New(m + 1)
+        for i in range(m):
+            nodeptr = PyTuple_GET_ITEM(children, i)
+            Py_INCREF(<object>nodeptr)
+            PyTuple_SET_ITEM(new_children, i, <object>nodeptr)
+        Py_INCREF(node)
+        PyTuple_SET_ITEM(new_children, m, node)
+        self._children = new_children
+
+    cpdef void append_vector(self, Vector nodes):
+        cdef tuple children=self._children, objects=nodes.objects
+        cdef uint64_t i, m=PyTuple_GET_SIZE(children), n=nodes.length, o=m
+        if objects is None:
+            return
+        for i in range(n):
+            if type(<object>PyTuple_GET_ITEM(objects, i)) is Node:
+                o += 1
+        cdef tuple new_children=PyTuple_New(o)
+        cdef PyObject* nodeptr
+        for i in range(m):
+            nodeptr = PyTuple_GET_ITEM(children, i)
+            Py_INCREF(<object>nodeptr)
+            PyTuple_SET_ITEM(new_children, i, <object>nodeptr)
+        for i in range(n):
+            if type(<object>(nodeptr := PyTuple_GET_ITEM(objects, i))) is Node:
+                Py_INCREF(<object>nodeptr)
+                PyTuple_SET_ITEM(new_children, m, <object>nodeptr)
+                m += 1
+        self._children = new_children
 
     cdef bint _equals(self, Node other):
         if self.kind != other.kind:

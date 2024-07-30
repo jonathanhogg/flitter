@@ -6,7 +6,7 @@ import unittest
 
 from flitter.model import Node, Vector, null
 
-from test_vector import FOO_SYMBOL_NUMBER
+from .test_vector import FOO_SYMBOL_NUMBER
 
 
 class TestNode(unittest.TestCase):
@@ -114,6 +114,21 @@ class TestNode(unittest.TestCase):
         children = list(self.node2.children)
         self.assertEqual(len(children), 1)
         self.assertIs(children[0], self.node3)
+
+    def test_append_vector(self):
+        nodes = Vector([self.node2, self.node3, "Hello world!"])
+        self.node1.append_vector(nodes)
+        children = list(self.node1.children)
+        self.assertEqual(len(children), 2)
+        self.assertIs(children[0], self.node2)
+        self.assertIs(children[1], self.node3)
+        self.node1.append_vector(nodes)
+        children = list(self.node1.children)
+        self.assertEqual(len(children), 4)
+        self.assertIs(children[0], self.node2)
+        self.assertIs(children[1], self.node3)
+        self.assertIs(children[2], self.node2)
+        self.assertIs(children[3], self.node3)
 
     def test_attributes(self):
         self.assertTrue('color' in self.node3)
