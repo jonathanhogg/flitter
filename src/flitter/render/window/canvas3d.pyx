@@ -277,41 +277,34 @@ cdef class Camera:
 
 
 cdef Matrix44 update_transform_matrix(Node node, Matrix44 transform_matrix):
-    cdef Matrix44 matrix
     cdef str attribute
     cdef Vector vector
     if node._attributes:
+        transform_matrix = transform_matrix.copy()
         for attribute, vector in node._attributes.items():
             if attribute == 'translate':
-                if (matrix := Matrix44._translate(vector)) is not None:
-                    transform_matrix = transform_matrix.mmul(matrix)
+                transform_matrix.immul(Matrix44._translate(vector))
             elif attribute == 'scale':
-                if (matrix := Matrix44._scale(vector)) is not None:
-                    transform_matrix = transform_matrix.mmul(matrix)
+                transform_matrix.immul(Matrix44._scale(vector))
             elif attribute == 'rotate':
-                if (matrix := Matrix44._rotate(vector)) is not None:
-                    transform_matrix = transform_matrix.mmul(matrix)
+                transform_matrix.immul(Matrix44._rotate(vector))
             elif attribute == 'rotate_x':
-                if vector.numbers != NULL and vector.length == 1 and (matrix := Matrix44._rotate_x(vector.numbers[0])) is not None:
-                    transform_matrix = transform_matrix.mmul(matrix)
+                if vector.numbers != NULL and vector.length == 1:
+                    transform_matrix.immul(Matrix44._rotate_x(vector.numbers[0]))
             elif attribute == 'rotate_y':
-                if vector.numbers != NULL and vector.length == 1 and (matrix := Matrix44._rotate_y(vector.numbers[0])) is not None:
-                    transform_matrix = transform_matrix.mmul(matrix)
+                if vector.numbers != NULL and vector.length == 1:
+                    transform_matrix.immul(Matrix44._rotate_y(vector.numbers[0]))
             elif attribute == 'rotate_z':
-                if vector.numbers != NULL and vector.length == 1 and (matrix := Matrix44._rotate_z(vector.numbers[0])) is not None:
-                    transform_matrix = transform_matrix.mmul(matrix)
+                if vector.numbers != NULL and vector.length == 1:
+                    transform_matrix.immul(Matrix44._rotate_z(vector.numbers[0]))
             elif attribute == 'shear_x':
-                if (matrix := Matrix44._shear_x(vector)) is not None:
-                    transform_matrix = transform_matrix.mmul(matrix)
+                transform_matrix.immul(Matrix44._shear_x(vector))
             elif attribute == 'shear_y':
-                if (matrix := Matrix44._shear_y(vector)) is not None:
-                    transform_matrix = transform_matrix.mmul(matrix)
+                transform_matrix.immul(Matrix44._shear_y(vector))
             elif attribute == 'shear_z':
-                if (matrix := Matrix44._shear_z(vector)) is not None:
-                    transform_matrix = transform_matrix.mmul(matrix)
-            elif attribute == 'matrix':
-                if (matrix := Matrix44(vector)) is not None:
-                    transform_matrix = transform_matrix.mmul(matrix)
+                transform_matrix.immul(Matrix44._shear_z(vector))
+            elif attribute == 'matrix' and vector.length == 16:
+                transform_matrix.immul(Matrix44(vector))
     return transform_matrix
 
 
@@ -335,18 +328,14 @@ cdef Matrix44 instance_start_end_matrix(Vector start, Vector end, double radius)
 
 
 cdef Matrix44 get_model_transform(Node node, Matrix44 transform_matrix):
-    cdef Vector vec=None, start=None, end=None
-    cdef Matrix44 matrix = None
-    if (start := node.get_fvec('start', 3, None)) is not None and (end := node.get_fvec('end', 3, None)) is not None \
-            and (matrix := instance_start_end_matrix(start, end, node.get_float('radius', 1))) is not None:
-        transform_matrix = transform_matrix.mmul(matrix)
+    transform_matrix = transform_matrix.copy()
+    cdef Vector end=node.get_fvec('end', 3, None)
+    if end is not None:
+        transform_matrix.immul(instance_start_end_matrix(node.get_fvec('start', 3, Zero3), end, node.get_float('radius', 1)))
     else:
-        if (vec := node.get_fvec('position', 3, None)) is not None and (matrix := Matrix44._translate(vec)) is not None:
-            transform_matrix = transform_matrix.mmul(matrix)
-        if (vec := node.get_fvec('rotation', 3, None)) is not None and (matrix := Matrix44._rotate(vec)) is not None:
-            transform_matrix = transform_matrix.mmul(matrix)
-        if (vec := node.get_fvec('size', 3, None)) is not None and (matrix := Matrix44._scale(vec)) is not None:
-            transform_matrix = transform_matrix.mmul(matrix)
+        transform_matrix.immul(Matrix44._translate(node.get_fvec('position', 3, None)))
+        transform_matrix.immul(Matrix44._rotate(node.get_fvec('rotation', 3, None)))
+        transform_matrix.immul(Matrix44._scale(node.get_fvec('size', 3, None)))
     return transform_matrix
 
 
