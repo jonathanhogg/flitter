@@ -42,15 +42,16 @@ class Video(Shader):
     def similar_to(self, node):
         return super().similar_to(node) and node.get('filename', 1, str) == self._filename
 
-    async def update(self, engine, node, **kwargs):
-        references = kwargs.setdefault('references', {})
-        if node_id := node.get('id', 1, str):
-            references[node_id] = self
-        self.hidden = node.get('hidden', 1, bool, False)
+    async def descend(self, engine, node, **kwargs):
+        # A video is a leaf node from the perspective of the OpenGL world
+        pass
+
+    def render(self, node, **kwargs):
         self._filename = node.get('filename', 1, str)
         position = node.get('position', 1, float, 0)
         loop = node.get('loop', 1, bool, False)
         threading = node.get('thread', 1, bool, False)
+        aspect = {'fit': 1, 'fill': 2}.get(node.get('aspect', 1, str), 0)
         if self._filename is not None:
             ratio, frame0, frame1 = SharedCache[self._filename].read_video_frames(self, position, loop, threading=threading)
         else:
@@ -58,19 +59,18 @@ class Video(Shader):
         colorbits = node.get('colorbits', 1, int, self.glctx.extra['colorbits'])
         if colorbits not in COLOR_FORMATS:
             colorbits = self.glctx.extra['colorbits']
-        if self._texture is not None and (frame0 is None or (self.width, self.height) != (frame0.width, frame0.height)) \
-                or colorbits != self._colorbits:
-            self.release()
+        if self._frame0_texture is not None and (frame0 is None or (frame0.width, frame0.height) != self._frame0_texture.size):
+            self._frame0_texture = None
+            self._frame1_texture = None
+            self._frame0 = None
+            self._frame1 = None
         if frame0 is None:
+            self.framebuffer.clear()
             return
-        if self._texture is None:
-            self.width, self.height = frame0.width, frame0.height
-            depth = COLOR_FORMATS[colorbits]
-            self._texture = self.glctx.texture((self.width, self.height), 4, dtype=depth.moderngl_dtype)
-            self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
-            self._frame0_texture = self.glctx.texture((self.width, self.height), 4, internal_format=GL_SRGB8_ALPHA8)
-            self._frame1_texture = self.glctx.texture((self.width, self.height), 4, internal_format=GL_SRGB8_ALPHA8)
-            self._colorbits = colorbits
+        frame_size = frame0.width, frame0.height
+        if self._frame0_texture is None:
+            self._frame0_texture = self.glctx.texture(frame_size, 4, internal_format=GL_SRGB8_ALPHA8)
+            self._frame1_texture = self.glctx.texture(frame_size, 4, internal_format=GL_SRGB8_ALPHA8)
         if frame0 is self._frame1 or frame1 is self._frame0:
             self._frame0_texture, self._frame1_texture = self._frame1_texture, self._frame0_texture
             self._frame0, self._frame1 = self._frame1, self._frame0
@@ -89,4 +89,4 @@ class Video(Shader):
             self._frame1_texture.write(memoryview(data))
             self._frame1 = frame1
         interpolate = node.get('interpolate', 1, bool, False)
-        self.render(node, ratio=ratio if interpolate else 0, **kwargs)
+        super().render(node, frame_size=frame_size, aspect_mode=aspect, ratio=ratio if interpolate else 0, **kwargs)

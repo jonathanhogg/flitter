@@ -60,8 +60,8 @@ common attributes:
 
 `size=` *WIDTH*`;`*HEIGHT*
 : Specifies the size of the texture that this node will render into. This value
-is inherited from the parent node if not specified or, in the case of `!image`
-and `!video` nodes, matched to the content.
+is inherited from the parent node if not specified or, in the case of `!image`,
+matched to the content.
 
 `id=` *ID*
 : Specifies a string or symbol identifier for this node that allows the output
@@ -391,7 +391,11 @@ image library](https://pillow.readthedocs.io/en/stable/handbook/image-file-forma
 ## `!video`
 
 A `!video` node loads and renders frames from an external video file into a
-texture. The following attributes are supported:
+texture. The texture will inherit the `size` attribute as normal, or this can
+be specified explicitly. By default, the video will be stretched to fill this
+size, but this can be controlled with the `aspect` attribute described below.
+
+The following attributes are supported:
 
 `filename=` *PATH*
 : Specifies the path of the video to open with respect to the location of the
@@ -413,6 +417,20 @@ value between the frame time-stamps. This can be useful for generating
 slow-motion output if the video does not contain too much fast movement. The
 default is `false`.
 
+`aspect=` [ `:fit` | `:fill` ]
+: If the source video is a different aspect ratio to that of the node `size`,
+then this specifies that the video aspect ratio should be respected and the
+video either scaled to *fit* in the frame (with borders on the top/bottom or
+left/right sides) or scaled to *fill* the entire frame (with the video cropped
+at the top/bottom or left/right sides). If not specified, then the default is
+to stretch the video to fill the frame.
+
+`fill=` [ `true` | `false` ]
+: If the source video is a different aspect ratio to that of the node `size`,
+then this specifies that the video aspect ratio should be respected and the
+video scaled and cropped so that the entire frame is filled. Defaults to
+`false` and ignored if `fit=true`.
+
 `thread=` [ `true` | `false` ]
 : Specifies whether to use multi-threaded video decoding. This has higher
 overall performance, but introduces a small delay on the first frame. This delay
@@ -426,14 +444,11 @@ values greater than 1 will darken it.
 `alpha=` *ALPHA*
 : Specifies a final alpha value to be applied to the video frames, default `1`.
 
-Like `!image`, `!video` does not inherit its size from its parent. However,
-unlike `!image`, the `!video` output texture will *always* match the pixel
-dimensions of the video and any `size` attribute is ignored.
-
 A video is played by setting the `position` attribute to a time-varying value
-in code. There is no requirement for this value to vary at real-time, it can
-slow to a stop or run faster. `position` may skip forward or backwards by a
-large step, which will cause a frame seek to the new location.
+in code such as the `time` global name. There is no requirement for this value
+to vary at real-time, it can slow to a stop or run faster. `position` may skip
+forward or backwards by a large step, which will cause a frame seek to the new
+location.
 
 :::{warning}
 `position` may run *backwards*. However there is an important caveat: if the
@@ -446,8 +461,8 @@ forwards will have to be done each time an I-frame is hit.
 :::
 
 `!video` uses the [**PyAV** library](https://pyav.org), which is a wrapper
-around [**ffmpeg**](https://ffmpeg.org). It thus supports a very wide range of
-video file types.
+around [**ffmpeg**](https://ffmpeg.org). It thus supports a wide range of
+video file types (including animated GIF files).
 
 ## `!record`
 
@@ -502,13 +517,28 @@ i.e., once an image has been written to a particular file, the `!record` node
 will do nothing. However, the `filename` attribute can be changed to record a
 new image. In this way, a constantly changing filename can be used to write
 individual animation frames as images. For example, this program will write a
-new JPEG snapshot into the `output` folder every beat:
+new JPEG snapshot into the `output` folder on every frame:
 
 ```flitter
 !window …
-    !record filename='output/frame';beat//1;'.jpg' quality=90
+    !record filename='output/frame';frame;'.jpg' quality=90
         …
 ```
+
+:::{note}
+If the **Flitter** engine is running in realtime mode, `!record` can will
+attempt to record a "live" video. The frame rate of the output video will be
+variable and will depend on how fast the encoder can run.
+
+The video encoding runs on a background thread with a 1-second frame buffer.
+With a fast hardware accelerated encoder (such as `:hevc_videotoolbox` on a
+Mac), this can be used to record a decent video of a live performance. However,
+if the encoder is unable to keep up with the running frame rate of the engine,
+then live frames will be dropped and the output video will contain stutters.
+
+To record clean videos with a fixed frame rate, the engine should be run in
+non-realtime mode with the `--lockstep` command-line option.
+:::
 
 ## `!reference`
 
