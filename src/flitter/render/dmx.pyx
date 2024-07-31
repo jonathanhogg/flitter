@@ -246,7 +246,7 @@ cdef class DMX:
         cdef list channels
         cdef int start, end, i, n=1
         for child in node.children:
-            if child.kind == 'fixture':
+            if child.kind is 'fixture':
                 address = child.get('address', 1, int)
                 channels = child.get('channels', 0, float)
                 if address is not None and channels is not None:

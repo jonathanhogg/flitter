@@ -414,7 +414,7 @@ cdef class PhysicsSystem:
         cdef set old_state_keys = self.state_keys
         cdef set new_state_keys = set()
         for child in node._children:
-            if child.kind == 'particle':
+            if child.kind is 'particle':
                 id = <Vector>child._attributes.get('id')
                 if id is not None:
                     particle = Particle.__new__(Particle, child, id, zero, state_prefix, state)
@@ -425,7 +425,7 @@ cdef class PhysicsSystem:
                     old_state_keys.discard(particle.position_state_key)
                     new_state_keys.add(particle.velocity_state_key)
                     old_state_keys.discard(particle.velocity_state_key)
-            elif child.kind == 'anchor':
+            elif child.kind is 'anchor':
                 id = <Vector>child._attributes.get('id')
                 if id is not None:
                     particle = Anchor.__new__(Anchor, child, id, zero, state_prefix, state)
@@ -435,7 +435,7 @@ cdef class PhysicsSystem:
                     old_state_keys.discard(particle.position_state_key)
                     new_state_keys.add(particle.velocity_state_key)
                     old_state_keys.discard(particle.velocity_state_key)
-            elif child.kind == 'barrier':
+            elif child.kind is 'barrier':
                 barrier = Barrier.__new__(Barrier, child, zero)
                 barriers.append(barrier)
             else:
@@ -443,23 +443,23 @@ cdef class PhysicsSystem:
                 ease = child.get_float('ease', 0)
                 if ease > 0 and ease < clock:
                     strength *= clock/ease
-                if child.kind == 'distance':
+                if child.kind is 'distance':
                     specific_forces.append(DistanceForceApplier.__new__(DistanceForceApplier, child, strength, zero))
-                elif child.kind == 'drag':
+                elif child.kind is 'drag':
                     particle_forces.append(DragForceApplier.__new__(DragForceApplier, child, strength, zero))
-                elif child.kind == 'buoyancy':
+                elif child.kind is 'buoyancy':
                     particle_forces.append(BuoyancyForceApplier.__new__(BuoyancyForceApplier, child, strength, zero))
-                elif child.kind == 'constant':
+                elif child.kind is 'constant':
                     particle_forces.append(ConstantForceApplier.__new__(ConstantForceApplier, child, strength, zero))
-                elif child.kind == 'random':
+                elif child.kind is 'random':
                     particle_forces.append(RandomForceApplier.__new__(RandomForceApplier, child, strength, zero))
-                elif child.kind == 'collision':
+                elif child.kind is 'collision':
                     matrix_forces.append(CollisionForceApplier.__new__(CollisionForceApplier, child, strength, zero))
-                elif child.kind == 'gravity':
+                elif child.kind is 'gravity':
                     matrix_forces.append(GravityForceApplier.__new__(GravityForceApplier, child, strength, zero))
-                elif child.kind == 'electrostatic':
+                elif child.kind is 'electrostatic':
                     matrix_forces.append(ElectrostaticForceApplier.__new__(ElectrostaticForceApplier, child, strength, zero))
-                elif child.kind == 'adhesion':
+                elif child.kind is 'adhesion':
                     matrix_forces.append(AdhesionForceApplier.__new__(AdhesionForceApplier, child, strength, zero))
         cdef SpecificPairForceApplier specific_force
         for specific_force in specific_forces:

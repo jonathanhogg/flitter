@@ -392,19 +392,19 @@ cdef class Laser:
 
         if node.kind in ('laser', 'group'):
             for key in node.keys():
-                if key == 'translate':
+                if key is 'translate':
                     translate = node.get('translate', 2, float)
                     transform = transform @ AffineTransform.translate(*translate)
-                elif key == 'scale':
+                elif key is 'scale':
                     scale = node.get('scale', 2, float)
                     transform = transform @ AffineTransform.scale(*scale)
-                elif key == 'rotate':
+                elif key is 'rotate':
                     rotate = node.get('rotate', 1, float)
                     transform = transform @ AffineTransform.rotate(TWO_PI * rotate)
             for child in node.children:
                 self.collect_paths(child, paths, color, transform)
 
-        elif node.kind == 'line':
+        elif node.kind is 'line':
             points = node.get('points', 0, float)
             n = len(points)
             if n >= 2:
@@ -415,7 +415,7 @@ cdef class Laser:
                     path.append(path[0])
                 paths.append((path, color))
 
-        elif node.kind == 'rect':
+        elif node.kind is 'rect':
             size = node.get('size', 2, float)
             if size is not None:
                 sx, sy = size
@@ -423,7 +423,7 @@ cdef class Laser:
                 path = [transform.t(x, y), transform.t(x+sx, y), transform.t(x+sx, y+sy), transform.t(x, y+sy), transform.t(x, y)]
                 paths.append((path, color))
 
-        elif node.kind == 'ellipse':
+        elif node.kind is 'ellipse':
             radius = node.get('radius', 2, float)
             if radius is not None:
                 sx, sy = radius

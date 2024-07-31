@@ -161,21 +161,21 @@ cdef class RenderGroup:
 
     cdef void set_blend(self, glctx):
         glctx.blend_equation = moderngl.FUNC_ADD
-        if self.composite == 'source':
+        if self.composite is 'source':
             glctx.blend_func = moderngl.ONE, moderngl.ZERO
-        elif self.composite == 'dest':
+        elif self.composite is 'dest':
             glctx.blend_func = moderngl.ZERO, moderngl.ONE
-        elif self.composite == 'dest_over':
+        elif self.composite is 'dest_over':
             glctx.blend_func = moderngl.ONE_MINUS_DST_ALPHA, moderngl.ONE
-        elif self.composite == 'add':
+        elif self.composite is 'add':
             glctx.blend_func = moderngl.ONE, moderngl.ONE
-        elif self.composite == 'subtract':
+        elif self.composite is 'subtract':
             glctx.blend_equation = moderngl.FUNC_SUBTRACT
             glctx.blend_func = moderngl.ONE, moderngl.ONE
-        elif self.composite == 'lighten':
+        elif self.composite is 'lighten':
             glctx.blend_equation = moderngl.MAX
             glctx.blend_func = moderngl.ONE, moderngl.ONE
-        elif self.composite == 'darken':
+        elif self.composite is 'darken':
             glctx.blend_equation = moderngl.MIN
             glctx.blend_func = moderngl.ONE, moderngl.ONE
         else:   # over
@@ -252,17 +252,17 @@ cdef class Camera:
             projection_matrix = Matrix44._ortho(aspect_ratio, camera.ortho_width, camera.near, camera.far)
         else:
             gradient = tan(Pi*camera.fov)
-            if camera.fov_ref == 'diagonal':
+            if camera.fov_ref is 'diagonal':
                 diagonal_ratio = sqrt(1 + aspect_ratio*aspect_ratio)
                 projection_matrix = Matrix44._project(aspect_ratio*gradient/diagonal_ratio, gradient/diagonal_ratio, camera.near, camera.far)  # diagonal
-            elif camera.fov_ref == 'vertical':
+            elif camera.fov_ref is 'vertical':
                 projection_matrix = Matrix44._project(aspect_ratio*gradient, gradient, camera.near, camera.far)  # vertical
-            elif camera.fov_ref == 'wide':
+            elif camera.fov_ref is 'wide':
                 if aspect_ratio > 1:  # widescreen
                     projection_matrix = Matrix44._project(gradient, gradient/aspect_ratio, camera.near, camera.far)  # horizontal
                 else:
                     projection_matrix = Matrix44._project(aspect_ratio*gradient, gradient, camera.near, camera.far)  # vertical
-            elif camera.fov_ref == 'narrow':
+            elif camera.fov_ref is 'narrow':
                 if aspect_ratio > 1:  # widescreen
                     projection_matrix = Matrix44._project(aspect_ratio*gradient, gradient, camera.near, camera.far)  # vertical
                 else:
@@ -282,28 +282,28 @@ cdef Matrix44 update_transform_matrix(Node node, Matrix44 transform_matrix):
     if node._attributes:
         transform_matrix = transform_matrix.copy()
         for attribute, vector in node._attributes.items():
-            if attribute == 'translate':
+            if attribute is 'translate':
                 transform_matrix.immul(Matrix44._translate(vector))
-            elif attribute == 'scale':
+            elif attribute is 'scale':
                 transform_matrix.immul(Matrix44._scale(vector))
-            elif attribute == 'rotate':
+            elif attribute is 'rotate':
                 transform_matrix.immul(Matrix44._rotate(vector))
-            elif attribute == 'rotate_x':
+            elif attribute is 'rotate_x':
                 if vector.numbers != NULL and vector.length == 1:
                     transform_matrix.immul(Matrix44._rotate_x(vector.numbers[0]))
-            elif attribute == 'rotate_y':
+            elif attribute is 'rotate_y':
                 if vector.numbers != NULL and vector.length == 1:
                     transform_matrix.immul(Matrix44._rotate_y(vector.numbers[0]))
-            elif attribute == 'rotate_z':
+            elif attribute is 'rotate_z':
                 if vector.numbers != NULL and vector.length == 1:
                     transform_matrix.immul(Matrix44._rotate_z(vector.numbers[0]))
-            elif attribute == 'shear_x':
+            elif attribute is 'shear_x':
                 transform_matrix.immul(Matrix44._shear_x(vector))
-            elif attribute == 'shear_y':
+            elif attribute is 'shear_y':
                 transform_matrix.immul(Matrix44._shear_y(vector))
-            elif attribute == 'shear_z':
+            elif attribute is 'shear_z':
                 transform_matrix.immul(Matrix44._shear_z(vector))
-            elif attribute == 'matrix' and vector.length == 16:
+            elif attribute is 'matrix' and vector.length == 16:
                 transform_matrix.immul(Matrix44(vector))
     return transform_matrix
 
@@ -345,36 +345,36 @@ cdef Model get_model(Node node, bint top):
     cdef Vector origin, normal
     cdef list models
     cdef double snap_angle, minimum_area
-    if node.kind == 'box':
+    if node.kind is 'box':
         model = Model.get_box(node)
-    elif node.kind == 'sphere':
+    elif node.kind is 'sphere':
         model = Model.get_sphere(node)
-    elif node.kind == 'cylinder':
+    elif node.kind is 'cylinder':
         model = Model.get_cylinder(node)
-    elif node.kind == 'cone':
+    elif node.kind is 'cone':
         model = Model.get_cone(node)
-    elif node.kind == 'model':
+    elif node.kind is 'model':
         model = Model.get_external(node)
         if model is not None and node.get_bool('repair', False):
             model = model.repair()
-    elif node.kind == 'intersect':
+    elif node.kind is 'intersect':
         models = []
         for child in node._children:
             models.append(get_model(child, False))
         model = Model.intersect(models)
-    elif node.kind == 'union' or (not top and node.kind == 'transform'):
+    elif node.kind is 'union' or (not top and node.kind is 'transform'):
         models = []
         for child in node._children:
             models.append(get_model(child, False))
         model = Model.union(models)
-        if node.kind == 'transform' and (transform_matrix := update_transform_matrix(node, IdentityTransform)) is not IdentityTransform:
+        if node.kind is 'transform' and (transform_matrix := update_transform_matrix(node, IdentityTransform)) is not IdentityTransform:
             model = model.transform(transform_matrix)
-    elif node.kind == 'difference':
+    elif node.kind is 'difference':
         models = []
         for child in node._children:
             models.append(get_model(child, False))
         model = Model.difference(models)
-    elif node.kind == 'slice':
+    elif node.kind is 'slice':
         normal = node.get_fvec('normal', 3, null_)
         origin = node.get_fvec('origin', 3, Zero3)
         models = []
@@ -410,12 +410,12 @@ cdef void collect(Node node, Matrix44 transform_matrix, Material material, Rende
     cdef tuple model_textures
     cdef RenderGroup new_render_group
 
-    if node.kind == 'transform':
+    if node.kind is 'transform':
         transform_matrix = update_transform_matrix(node, transform_matrix)
         for child in node._children:
             collect(child, transform_matrix, material, render_group, render_groups, default_camera, cameras, max_samples)
 
-    elif node.kind == 'material':
+    elif node.kind is 'material':
         material = material.update(node)
         for child in node._children:
             collect(child, transform_matrix, material, render_group, render_groups, default_camera, cameras, max_samples)
@@ -427,7 +427,7 @@ cdef void collect(Node node, Matrix44 transform_matrix, Material material, Rende
         model_textures = (model, instance.material.textures)
         (<list>render_group.instances.setdefault(model_textures, [])).append(instance)
 
-    elif node.kind == 'light':
+    elif node.kind is 'light':
         color = node.get_fvec('color', 3, null_)
         if color.as_bool():
             position = node.get_fvec('position', 3, null_)
@@ -466,7 +466,7 @@ cdef void collect(Node node, Matrix44 transform_matrix, Material material, Rende
                 light.direction = None
             render_group.lights.append(light)
 
-    elif node.kind == 'camera':
+    elif node.kind is 'camera':
         if (camera_id := node.get_str('id', None)) is not None:
             cameras[camera_id] = default_camera.derive(node, transform_matrix, max_samples)
 
@@ -574,7 +574,7 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
         if name in shader:
             member = shader[name]
             if isinstance(member, moderngl.Uniform):
-                if member.fmt == '1i' and (ref := references.get(value.as_string())) is not None \
+                if member.fmt is '1i' and (ref := references.get(value.as_string())) is not None \
                         and hasattr(ref, 'texture') and ref.texture is not None:
                     sampler = glctx.sampler(texture=ref.texture, filter=(moderngl.NEAREST, moderngl.NEAREST))
                     sampler.use(base_unit_id)
