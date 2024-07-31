@@ -247,7 +247,7 @@ class CachePath:
                 if threading:
                     stream.thread_type = 'AUTO'
                 ctx = stream.codec_context
-                logger.debug("Opened {}x{} {:.0f}fps video file: {}", ctx.width, ctx.height, float(stream.average_rate), self._path)
+                logger.debug("Opened {}x{} {} {:.0f}fps video file: {}", ctx.width, ctx.height, ctx.name, float(stream.average_rate), self._path)
             except Exception as exc:
                 logger.opt(exception=exc).warning("Error reading video: {}", self._path)
                 container = None
