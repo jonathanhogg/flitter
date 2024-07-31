@@ -105,7 +105,7 @@ cdef class Material:
             return self
         cdef Material material = Material.__new__(Material)
         material.albedo = node.get_fvec('color', 3, self.albedo)
-        material.ior = max(1, node.get_float('ior', 1.5))
+        material.ior = max(1, node.get_float('ior', self.ior))
         material.roughness = min(max(1e-6, node.get_float('roughness', 1)), self.roughness)
         material.metal = min(max(0, node.get_float('metal', self.metal)), 1)
         material.occlusion = min(max(0, node.get_float('occlusion', self.occlusion)), 1)
@@ -1105,6 +1105,7 @@ class Canvas3D(WindowNode):
         material.roughness = 1
         material.occlusion = 1
         material.emissive = Zero3
+        material.ior = 1.5
         cdef list render_groups = []
         cdef dict cameras = {}
         cameras[default_camera.id] = default_camera
