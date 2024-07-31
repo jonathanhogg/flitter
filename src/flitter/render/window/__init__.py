@@ -253,7 +253,7 @@ class ProgramNode(WindowNode):
     def render(self, node, composite='over', passes=1, border=None, repeat=None, **kwargs):
         composite = node.get('composite', 1, str, node.get('blend', 1, str, composite))
         passes = max(1, node.get('passes', 1, int, passes))
-        self.compile(node, passes=passes, composite=composite)
+        self.compile(node, passes=passes, composite=composite, **kwargs)
         if self._rectangle is not None:
             border = node.get('border', 4, float, border)
             repeat = node.get('repeat', 2, bool, repeat)
