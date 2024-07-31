@@ -12,6 +12,8 @@ import numpy as np
 
 from libc.math cimport cos, log2, sqrt, tan
 from libc.stdint cimport int64_t
+from cpython.dict cimport PyDict_GetItem
+from cpython.object cimport PyObject
 
 from . import WindowNode, COLOR_FORMATS, set_uniform_vector
 from ... import name_patch
@@ -97,11 +99,6 @@ cdef class Material:
 
     cdef Material update(Material self, Node node):
         if node._attributes is None:
-            return self
-        for attr in node._attributes:
-            if attr in MaterialAttributes:
-                break
-        else:
             return self
         cdef Material material = Material.__new__(Material)
         material.albedo = node.get_fvec('color', 3, self.albedo)
@@ -409,6 +406,7 @@ cdef void collect(Node node, Matrix44 transform_matrix, Material material, Rende
     cdef Instance instance
     cdef tuple model_textures
     cdef RenderGroup new_render_group
+    cdef PyObject* instances
 
     if node.kind is 'transform':
         transform_matrix = update_transform_matrix(node, transform_matrix)
@@ -423,9 +421,17 @@ cdef void collect(Node node, Matrix44 transform_matrix, Material material, Rende
     elif (model := get_model(node, True)) is not None:
         instance = Instance.__new__(Instance)
         instance.model_matrix = get_model_transform(node, transform_matrix)
-        instance.material = material.update(node)
+        instance.material = material
+        if node._attributes is not None:
+            for attr in node._attributes:
+                if attr in MaterialAttributes:
+                    instance.material = material.update(node)
+                    break
         model_textures = (model, instance.material.textures)
-        (<list>render_group.instances.setdefault(model_textures, [])).append(instance)
+        if (instances := PyDict_GetItem(render_group.instances, model_textures)) != NULL:
+            (<list>instances).append(instance)
+        else:
+            render_group.instances[model_textures] = [instance]
 
     elif node.kind is 'light':
         color = node.get_fvec('color', 3, null_)
