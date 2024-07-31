@@ -589,3 +589,6 @@ class Window(ProgramNode):
 class Offscreen(Window):
     def __init__(self, offscreen=False, **kwargs):
         super().__init__(offscreen=True, **kwargs)
+
+    def render(self, node, **kwargs):
+        pass
