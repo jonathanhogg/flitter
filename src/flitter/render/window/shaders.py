@@ -57,9 +57,13 @@ class Transform(Shader):
 
 class Vignette(Shader):
     DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('vignette.frag')
+    EASE_FUNCTIONS = {'linear', 'quad', 'cubic'}
 
     def render(self, node, **kwargs):
-        super().render(node, inset=0.25, **kwargs)
+        ease = node.get('fade', 1, str)
+        if ease not in self.EASE_FUNCTIONS:
+            ease = 'linear'
+        super().render(node, inset=0.25, ease=ease, **kwargs)
 
 
 class Adjust(Shader):

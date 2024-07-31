@@ -10,20 +10,22 @@ uniform sampler2D ${name};
 % endfor
 
 <%include file="composite_functions.glsl"/>
+<%include file="ease_functions.glsl"/>
 
 void main() {
 % if child_textures:
-    float k = alpha;
+    float a = 1, b = 1;
     if (coord.x < inset) {
-        k *= coord.x / inset;
+        a *= coord.x / inset;
     } else if (coord.x > 1 - inset) {
-        k *= (1 - coord.x) / inset;
+        a *= (1 - coord.x) / inset;
     }
     if (coord.y < inset) {
-        k *= coord.y / inset;
+        b *= coord.y / inset;
     } else if (coord.y > 1 - inset) {
-        k *= (1 - coord.y) / inset;
+        b *= (1 - coord.y) / inset;
     }
+    float k = ease_${ease}(a) * ease_${ease}(b) * alpha;
 %     for name in child_textures:
 %         if loop.index == 0:
     vec4 merged = texture(${name}, coord);
