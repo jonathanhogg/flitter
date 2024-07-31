@@ -21,6 +21,7 @@ class Video(Shader):
     def __init__(self, glctx):
         super().__init__(glctx)
         self._filename = None
+        self._threading = None
         self._frame0 = None
         self._frame1 = None
         self._frame0_texture = None
@@ -28,6 +29,10 @@ class Video(Shader):
         self._colorbits = None
 
     def release(self):
+        if self._filename is not None:
+            SharedCache[self._filename].read_video_frames(self, None, threading=self._threading)
+            self._filename = None
+            self._threading = None
         self._frame0_texture = None
         self._frame1_texture = None
         self._frame0 = None
@@ -50,10 +55,10 @@ class Video(Shader):
         self._filename = node.get('filename', 1, str)
         position = node.get('position', 1, float, 0)
         loop = node.get('loop', 1, bool, False)
-        threading = node.get('thread', 1, bool, False)
+        self._threading = node.get('thread', 1, bool, False)
         aspect = {'fit': 1, 'fill': 2}.get(node.get('aspect', 1, str), 0)
         if self._filename is not None:
-            ratio, frame0, frame1 = SharedCache[self._filename].read_video_frames(self, position, loop, threading=threading)
+            ratio, frame0, frame1 = SharedCache[self._filename].read_video_frames(self, position, loop, threading=self._threading)
         else:
             ratio, frame0, frame1 = 0, None, None
         colorbits = node.get('colorbits', 1, int, self.glctx.extra['colorbits'])

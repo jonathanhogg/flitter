@@ -239,7 +239,7 @@ class CachePath:
             container, decoder, frames = cached
         elif self._mtime is None:
             logger.warning("File not found: {}", self._path)
-        else:
+        elif position is not None:
             try:
                 import av
                 container = av.container.open(str(self._path))
@@ -252,62 +252,69 @@ class CachePath:
                 logger.opt(exception=exc).warning("Error reading video: {}", self._path)
                 container = None
         if container is not None:
-            try:
-                stream = container.streams.video[0]
-                if loop:
-                    timestamp = stream.start_time + int(position / stream.time_base) % stream.duration
-                else:
-                    timestamp = stream.start_time + min(max(0, int(position / stream.time_base)), stream.duration)
-                count = 0
-                while True:
-                    if len(frames) >= 2 and timestamp >= frames[0].pts and (frames[-1] is None or timestamp < frames[-1].pts):
-                        break
-                    if frames and timestamp < frames[0].pts:
-                        logger.trace("Discard {} buffered video frames", len(frames))
-                        frames = []
-                    if len(frames) >= 2 and frames[-1].key_frame and timestamp > 2*frames[-1].pts - frames[0].pts:
-                        logger.trace("Discard {} buffered video frames", len(frames))
-                        frames = []
-                    if not frames:
-                        if decoder is not None:
-                            decoder.close()
-                        logger.trace("Seek video {} to {:.2f}s", self._path, float(timestamp * stream.time_base))
-                        container.seek(timestamp, stream=stream)
-                        decoder = container.decode(streams=(stream.index,))
-                    if decoder is not None:
-                        try:
-                            frame = next(decoder)
-                            if frame.key_frame:
-                                logger.trace("Read video key frame @ {:.2f}s", float(frame.pts * stream.time_base))
-                                for i in range(len(frames)-1, 0, -1):
-                                    if frames[i].key_frame:
-                                        frames = frames[i:]
-                                        logger.trace("Discard {} buffered video frames", i)
-                                        break
-                            else:
-                                logger.trace("Read video frame @ {:.2f}s", float(frame.pts * stream.time_base))
-                            count += 1
-                        except StopIteration:
-                            logger.trace("Hit end of video {}", self._path)
-                            decoder = None
-                            frame = None
-                        if len(frames) == MAX_CACHE_VIDEO_FRAMES:
-                            frames.pop(0)
-                            logger.trace("Discard one buffered video frame (hit maximum)")
-                        frames.append(frame)
-                        if len(frames) == 1:
-                            logger.trace("Decoding frames from {:.2f}s", float(frames[0].pts * stream.time_base))
-                if count > 1:
-                    logger.trace("Decoded {} frames to find position {:.2f}s", count, float(timestamp * stream.time_base))
-                for current_frame in reversed(frames):
-                    if current_frame is not None and current_frame.pts <= timestamp:
-                        break
-                    next_frame = current_frame
-                ratio = 0 if next_frame is None else (timestamp - current_frame.pts) / (next_frame.pts - current_frame.pts)
-            except Exception as exc:
-                logger.opt(exception=exc).warning("Error reading video: {}", self._path)
+            if position is None:
+                logger.debug("Closing video: {}", self._path)
+                decoder.close()
+                container.close()
                 container = decoder = None
                 frames = []
+            else:
+                try:
+                    stream = container.streams.video[0]
+                    if loop:
+                        timestamp = stream.start_time + int(position / stream.time_base) % stream.duration
+                    else:
+                        timestamp = stream.start_time + min(max(0, int(position / stream.time_base)), stream.duration)
+                    count = 0
+                    while True:
+                        if len(frames) >= 2 and timestamp >= frames[0].pts and (frames[-1] is None or timestamp < frames[-1].pts):
+                            break
+                        if frames and timestamp < frames[0].pts:
+                            logger.trace("Discard {} buffered video frames", len(frames))
+                            frames = []
+                        if len(frames) >= 2 and frames[-1].key_frame and timestamp > 2*frames[-1].pts - frames[0].pts:
+                            logger.trace("Discard {} buffered video frames", len(frames))
+                            frames = []
+                        if not frames:
+                            if decoder is not None:
+                                decoder.close()
+                            logger.trace("Seek video {} to {:.2f}s", self._path, float(timestamp * stream.time_base))
+                            container.seek(timestamp, stream=stream)
+                            decoder = container.decode(streams=(stream.index,))
+                        if decoder is not None:
+                            try:
+                                frame = next(decoder)
+                                if frame.key_frame:
+                                    logger.trace("Read video key frame @ {:.2f}s", float(frame.pts * stream.time_base))
+                                    for i in range(len(frames)-1, 0, -1):
+                                        if frames[i].key_frame:
+                                            frames = frames[i:]
+                                            logger.trace("Discard {} buffered video frames", i)
+                                            break
+                                else:
+                                    logger.trace("Read video frame @ {:.2f}s", float(frame.pts * stream.time_base))
+                                count += 1
+                            except StopIteration:
+                                logger.trace("Hit end of video {}", self._path)
+                                decoder = None
+                                frame = None
+                            if len(frames) == MAX_CACHE_VIDEO_FRAMES:
+                                frames.pop(0)
+                                logger.trace("Discard one buffered video frame (hit maximum)")
+                            frames.append(frame)
+                            if len(frames) == 1:
+                                logger.trace("Decoding frames from {:.2f}s", float(frames[0].pts * stream.time_base))
+                    if count > 1:
+                        logger.trace("Decoded {} frames to find position {:.2f}s", count, float(timestamp * stream.time_base))
+                    for current_frame in reversed(frames):
+                        if current_frame is not None and current_frame.pts <= timestamp:
+                            break
+                        next_frame = current_frame
+                    ratio = 0 if next_frame is None else (timestamp - current_frame.pts) / (next_frame.pts - current_frame.pts)
+                except Exception as exc:
+                    logger.opt(exception=exc).warning("Error reading video: {}", self._path)
+                    container = decoder = None
+                    frames = []
         self._cache[key] = container, decoder, frames
         return ratio, current_frame, next_frame
 
