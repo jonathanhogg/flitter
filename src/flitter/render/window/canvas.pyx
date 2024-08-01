@@ -859,7 +859,7 @@ cpdef object _draw(Node node, Node parent, ctx, paint, font, path, dict stats, d
 class Canvas(WindowNode):
     def __init__(self, glctx):
         super().__init__(glctx)
-        self._graphics_context = skia.GrDirectContext.MakeGL()
+        self._graphics_context = None
         self._texture = None
         self._framebuffer = None
         self._surface = None
@@ -898,6 +898,8 @@ class Canvas(WindowNode):
             self._colorspace = skia.ColorSpace.MakeSRGBLinear() if linear else skia.ColorSpace.MakeSRGB()
             self._texture = self.glctx.texture((self.width, self.height), 4, dtype=color_format.moderngl_dtype, internal_format=internal_format)
             self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
+            if self._graphics_context is None:
+                self._graphics_context = skia.GrDirectContext.MakeGL()
             backend_render_target = skia.GrBackendRenderTarget(self.width, self.height, 0, 0,
                                                                skia.GrGLFramebufferInfo(self._framebuffer.glo, color_format.gl_format))
             self._surface = skia.Surface.MakeFromBackendRenderTarget(self._graphics_context, backend_render_target, skia.kBottomLeft_GrSurfaceOrigin,
