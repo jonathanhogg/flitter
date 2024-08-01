@@ -380,14 +380,16 @@ cdef class Slice(UnaryOperation):
         if not self.original.check_valid():
             self.original.build_trimesh_model()
         if self.original.trimesh_model is not None:
-            logger.trace("Slice model {}", self.original.name)
             trimesh_model = self.original.trimesh_model
             manifold = manifold3d.Manifold(mesh=manifold3d.Mesh(vert_properties=np.array(trimesh_model.vertices, dtype=np.float32),
                                                                 tri_verts=np.array(trimesh_model.faces, dtype=np.uint32)))
             normal = self.normal.neg()
             mesh = manifold.trim_by_plane(normal=tuple(normal), origin_offset=self.origin.dot(normal)).to_mesh()
-            trimesh_model = trimesh.base.Trimesh(vertices=mesh.vert_properties, faces=mesh.tri_verts)
-            self.trimesh_model = trimesh_model if len(trimesh_model.vertices) and len(trimesh_model.faces) else None
+            if len(mesh.vert_properties) and len(mesh.tri_verts):
+                self.trimesh_model = trimesh.base.Trimesh(vertices=mesh.vert_properties, faces=mesh.tri_verts)
+            else:
+                self.trimesh_model = None
+                logger.warning("Result of slice was empty mesh: {}", self.name)
         else:
             self.trimesh_model = None
         self.valid = True
@@ -487,7 +489,9 @@ cdef class BooleanOperation(Model):
                 model.build_trimesh_model()
             if model.trimesh_model is not None:
                 trimesh_models.append(model.trimesh_model)
-        if trimesh_models:
+        if len(trimesh_models) == 1:
+            self.trimesh_model = trimesh_models[0]
+        elif trimesh_models:
             if self.operation is 'difference' and len(trimesh_models) > 2:
                 union_models = trimesh.boolean.boolean_manifold(trimesh_models[1:], 'union')
                 trimesh_model = trimesh.boolean.boolean_manifold([trimesh_models[0], union_models], 'difference')
@@ -495,8 +499,8 @@ cdef class BooleanOperation(Model):
                 trimesh_model = trimesh.boolean.boolean_manifold(trimesh_models, self.operation)
             if len(trimesh_model.vertices) and len(trimesh_model.faces):
                 self.trimesh_model = trimesh_model
-        if self.trimesh_model is None:
-            logger.warning("Result of operation was empty mesh: {}", self.operation, self.name)
+            if self.trimesh_model is None:
+                logger.warning("Result of {} was empty mesh: {}", self.operation, self.name)
         self.valid = True
 
 
