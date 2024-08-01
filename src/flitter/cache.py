@@ -230,7 +230,7 @@ class CachePath:
         self._cache[key] = image
         return image
 
-    def read_video_frames(self, obj, position, loop=False, threading=False):
+    def read_video_frames(self, obj, position, loop=False, back_and_forth=False, trim_start=0, trim_end=0, threading=False):
         key = 'video', id(obj), threading
         container = decoder = current_frame = next_frame = None
         frames = []
@@ -261,10 +261,16 @@ class CachePath:
             else:
                 try:
                     stream = container.streams.video[0]
+                    start = stream.start_time + int(trim_start / stream.time_base)
+                    duration = stream.duration - int((trim_start + trim_end) / stream.time_base)
+                    pos = int(position / stream.time_base)
                     if loop:
-                        timestamp = stream.start_time + int(position / stream.time_base) % stream.duration
+                        pd = pos % duration
+                        if back_and_forth and pos // duration % 2 == 1:
+                            pd = duration - pd
+                        timestamp = start + pd
                     else:
-                        timestamp = stream.start_time + min(max(0, int(position / stream.time_base)), stream.duration)
+                        timestamp = start + min(max(0, pos), duration)
                     count = 0
                     while True:
                         if len(frames) >= 2 and timestamp >= frames[0].pts and (frames[-1] is None or timestamp < frames[-1].pts):

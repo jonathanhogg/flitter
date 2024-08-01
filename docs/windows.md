@@ -411,11 +411,22 @@ to the beginning. This also enables negative time-stamps, which will loop around
 to the end. If set to `false` (the default), time-stamps outside of the video
 range will be clamped to the first or last frames of the video.
 
+`back_and_forth=` [ `true` | `false` ]
+: If `loop=true` and `back_and_forth=true` then timestamps beyond the end of
+the video will work backwards through the video to the start and then forwards
+again. This is useful for textural videos to avoid a discontinuity but may
+cause performance problems depending on the video encoding (see note below).
+
+`trim=` *START*`;`*END*
+: Specifies an amount of time in seconds to trim off the beginning and end of
+the video. This affects how `position` is mapped to the source video and the
+operation of `loop`.
+
 `interpolate=` [ `true` | `false` ]
 : Specifies whether to mix two successive frames if `position` references a
 value between the frame time-stamps. This can be useful for generating
-slow-motion output if the video does not contain too much fast movement. The
-default is `false`.
+slow-motion output if the video does not contain much movement. The default is
+`false`.
 
 `aspect=` [ `:fit` | `:fill` ]
 : If the source video is a different aspect ratio to that of the node `size`,

@@ -55,10 +55,13 @@ class Video(Shader):
         self._filename = node.get('filename', 1, str)
         position = node.get('position', 1, float, 0)
         loop = node.get('loop', 1, bool, False)
+        back_and_forth = node.get('back_and_forth', 1, bool, False)
+        trim_start, trim_end = node.get('trim', 2, float, (0, 0))
         self._threading = node.get('thread', 1, bool, False)
         aspect = {'fit': 1, 'fill': 2}.get(node.get('aspect', 1, str), 0)
         if self._filename is not None:
-            ratio, frame0, frame1 = SharedCache[self._filename].read_video_frames(self, position, loop, threading=self._threading)
+            ratio, frame0, frame1 = SharedCache[self._filename].read_video_frames(self, position, loop=loop, back_and_forth=back_and_forth,
+                                                                                  trim_start=trim_start, trim_end=trim_end, threading=self._threading)
         else:
             ratio, frame0, frame1 = 0, None, None
         colorbits = node.get('colorbits', 1, int, self.glctx.extra['colorbits'])
