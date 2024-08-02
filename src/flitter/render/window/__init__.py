@@ -16,7 +16,7 @@ import numpy as np
 from ...clock import system_clock
 from .glconstants import GL_RGBA8, GL_RGBA16F, GL_RGBA32F, GL_FRAMEBUFFER_SRGB
 from .glsl import TemplateLoader
-from ...model import Vector
+from ...model import Vector, false
 from ...plugins import get_plugin
 
 
@@ -30,6 +30,11 @@ def set_uniform_vector(uniform, vector):
             uniform.value = tuple(value)
         else:
             uniform.value = [tuple(value[i*m:(i+1)*m]) for i in range(n)]
+        return True
+    elif n > 1 and m > 1 and (value := vector.match(m, dtype)) is not None:
+        uniform.value = [tuple(value) for i in range(n)]
+        return True
+    return False
 
 
 ColorFormat = namedtuple('ColorFormat', ('moderngl_dtype', 'gl_format'))
@@ -305,12 +310,15 @@ class ProgramNode(WindowNode):
                         member.value = self.size
                     elif name == 'pass':
                         pass_member = member
-                    elif name in node:
-                        set_uniform_vector(member, node[name])
-                    elif name in kwargs:
-                        set_uniform_vector(member, Vector.coerce(kwargs[name]))
+                    elif name in node and set_uniform_vector(member, node[name]):
+                        pass
+                    elif name in kwargs and set_uniform_vector(member, Vector.coerce(kwargs[name])):
+                        pass
                     elif name in ('alpha', 'gamma'):
                         member.value = 1
+                    else:
+                        logger.trace("Unbound uniform: {}", name)
+                        set_uniform_vector(member, false)
             self.glctx.enable_direct(GL_FRAMEBUFFER_SRGB)
             self.glctx.enable(moderngl.BLEND)
             self.glctx.blend_func = moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA

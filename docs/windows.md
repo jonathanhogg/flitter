@@ -312,19 +312,9 @@ that can be set using attributes with matching names on the shader node.
 `float`, `vec2`, `vec3`, `vec4`, `mat3` and `mat4` uniforms expect 1-, 2- , 3-,
 4-, 9- and 16-item numeric vectors, respectively; arrays of these types expect
 vectors with an appropriate multiple of these sizes. `int`s, `double`s and
-`bool`s, plus their `vec` and `mat` variants are also supported.
-
-If an attribute matching the uniform is not provided (or is of an incorrect
-type) then the uniform will have the OpenGL uninitialized value (an appropriate
-variant of 0) or whatever default is supplied in the shader code if using
-uniform initializers (which appear to be variably supported by different
-OpenGL implementations).
-
-:::{note}
-If a custom uniform attribute becomes unset (i.e., `null` or missing) after
-having previously had a value, the shader program will retain the *last value*
-of that uniform rather than resetting to 0 or the initializer value.
-:::
+`bool`s, plus their `vec` and `mat` variants are also supported. If an
+attribute matching the uniform is not provided (or is of an incorrect type)
+then the uniform will be set to 0 (or the type-appropriate variant of this).
 
 ### Shader templating
 
