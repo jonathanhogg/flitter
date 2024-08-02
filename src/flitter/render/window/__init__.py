@@ -474,7 +474,6 @@ class Window(ProgramNode):
             moderngl.init_context(GLFWLoader())
             self.glctx = moderngl.get_context()
             self.glctx.gc_mode = 'context_gc'
-            self.glctx.extra = {}
             if self._visible:
                 logger.debug("{} opened on screen {}", self.name, screen)
             else:
@@ -485,6 +484,10 @@ class Window(ProgramNode):
                 glfw.set_key_callback(self.window, self.key_callback)
                 glfw.set_cursor_pos_callback(self.window, self.pointer_movement_callback)
                 glfw.set_mouse_button_callback(self.window, self.pointer_button_callback)
+            zero = self.glctx.texture((1, 1), 4, dtype='f1')
+            zero.write(bytes([0, 0, 0, 0]))
+            zero.use(0)
+            self.glctx.extra = {'zero': zero}
         if self._visible:
             self.recalculate_viewport(new_window)
         self.glctx.extra['linear'] = node.get('linear', 1, bool, DEFAULT_LINEAR)

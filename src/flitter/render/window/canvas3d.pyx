@@ -18,7 +18,7 @@ from cpython.object cimport PyObject
 from . import WindowNode, COLOR_FORMATS, set_uniform_vector
 from ... import name_patch
 from ...clock import system_clock
-from ...model cimport Node, Vector, Matrix44, Matrix33, null_, true_
+from ...model cimport Node, Vector, Matrix44, Matrix33, null_, true_, false_
 from .glsl import TemplateLoader
 from .models cimport Model, DefaultSnapAngle
 
@@ -589,6 +589,8 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
                     samplers.append(sampler)
                 elif value.numbers != NULL:
                     set_uniform_vector(member, value)
+                else:
+                    set_uniform_vector(member, false_)
     shader['pv_matrix'] = camera.pv_matrix
     shader['orthographic'] = camera.orthographic
     if 'monochrome' in shader:
@@ -691,90 +693,93 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
                 k += 1
         dispatch_instances(glctx, objects, shader, model, k, instances_data, textures, references, base_unit_id)
 
-    if translucent_objects and 'backface_data' in shader:
-        backface_shader = get_shader(glctx, shaders, names, StandardVertexTemplate, BackfaceFragmentTemplate)
-        backface_shader['pv_matrix'] = camera.pv_matrix
-        backface_shader['orthographic'] = camera.orthographic
-        backface_shader['view_position'] = camera.position
-        backface_shader['view_focus'] = camera.focus
-        backface_shader['nlights'] = nlights
-        backface_shader['lights_data'].binding = 1
-        glctx.disable(flags)
-        glctx.enable(moderngl.BLEND | moderngl.DEPTH_TEST | moderngl.CULL_FACE)
-        glctx.cull_face = 'front'
-        glctx.blend_equation = moderngl.FUNC_ADD
-        glctx.blend_func = moderngl.ONE, moderngl.ZERO
-        render_target.use_auxilary_buffer(glctx)
-        n = len(translucent_objects)
-        if render_group.depth_sort and render_group.depth_test:
-            translucent_objects.sort(key=fst)
-        instances_data = view.array((n, 37), 4, 'f')
-        k = 0
-        for i, translucent_object in enumerate(translucent_objects):
-            model = translucent_object[1]
-            instance = translucent_object[2]
-            material = instance.material
-            src = instance.model_matrix.numbers
-            dest = &instances_data[k, 0]
-            for j in range(16):
-                dest[j] = src[j]
-            normal_matrix = instance.model_matrix.inverse_transpose_matrix33()
-            src = normal_matrix.numbers
-            dest = &instances_data[k, 16]
-            for j in range(9):
-                dest[j] = src[j]
-            dest = &instances_data[k, 25]
-            for j in range(3):
-                dest[j] = material.albedo.numbers[j]
-                dest[j+4] = material.emissive.numbers[j]
-            dest[3] = material.transparency
-            dest[7] = material.translucency
-            dest[8] = material.ior
-            dest[9] = material.metal
-            dest[10] = material.roughness
-            dest[11] = material.occlusion
-            k += 1
-            if i == n-1 or (<tuple>translucent_objects[i+1])[1] is not model:
-                dispatch_instances(glctx, objects, backface_shader, model, k, instances_data, material.textures, references, base_unit_id)
-                k = 0
-        glctx.disable(moderngl.BLEND | moderngl.DEPTH_TEST | moderngl.CULL_FACE)
-        glctx.enable(flags)
-        glctx.cull_face = 'front' if render_group.cull_front_face else 'back'
-        render_group.set_blend(glctx)
-        render_target.use_main_buffer()
-        sampler = glctx.sampler(texture=render_target.auxilary_image_texture, filter=(moderngl.NEAREST, moderngl.NEAREST))
-        sampler.use(base_unit_id)
-        shader['backface_data'] = base_unit_id
-        base_unit_id += 1
-        samplers.append(sampler)
-        k = 0
-        for i, translucent_object in enumerate(translucent_objects):
-            model = translucent_object[1]
-            instance = translucent_object[2]
-            material = instance.material
-            src = instance.model_matrix.numbers
-            dest = &instances_data[k, 0]
-            for j in range(16):
-                dest[j] = src[j]
-            normal_matrix = instance.model_matrix.inverse_transpose_matrix33()
-            src = normal_matrix.numbers
-            dest = &instances_data[k, 16]
-            for j in range(9):
-                dest[j] = src[j]
-            dest = &instances_data[k, 25]
-            for j in range(3):
-                dest[j] = material.albedo.numbers[j]
-                dest[j+4] = material.emissive.numbers[j]
-            dest[3] = material.transparency
-            dest[7] = material.translucency
-            dest[8] = material.ior
-            dest[9] = material.metal
-            dest[10] = material.roughness
-            dest[11] = material.occlusion
-            k += 1
-            if i == n-1 or (<tuple>translucent_objects[i+1])[1] is not model:
-                dispatch_instances(glctx, objects, shader, model, k, instances_data, material.textures, references, base_unit_id)
-                k = 0
+    if 'backface_data' in shader:
+        if translucent_objects:
+            backface_shader = get_shader(glctx, shaders, names, StandardVertexTemplate, BackfaceFragmentTemplate)
+            backface_shader['pv_matrix'] = camera.pv_matrix
+            backface_shader['orthographic'] = camera.orthographic
+            backface_shader['view_position'] = camera.position
+            backface_shader['view_focus'] = camera.focus
+            backface_shader['nlights'] = nlights
+            backface_shader['lights_data'].binding = 1
+            glctx.disable(flags)
+            glctx.enable(moderngl.BLEND | moderngl.DEPTH_TEST | moderngl.CULL_FACE)
+            glctx.cull_face = 'front'
+            glctx.blend_equation = moderngl.FUNC_ADD
+            glctx.blend_func = moderngl.ONE, moderngl.ZERO
+            render_target.use_auxilary_buffer(glctx)
+            n = len(translucent_objects)
+            if render_group.depth_sort and render_group.depth_test:
+                translucent_objects.sort(key=fst)
+            instances_data = view.array((n, 37), 4, 'f')
+            k = 0
+            for i, translucent_object in enumerate(translucent_objects):
+                model = translucent_object[1]
+                instance = translucent_object[2]
+                material = instance.material
+                src = instance.model_matrix.numbers
+                dest = &instances_data[k, 0]
+                for j in range(16):
+                    dest[j] = src[j]
+                normal_matrix = instance.model_matrix.inverse_transpose_matrix33()
+                src = normal_matrix.numbers
+                dest = &instances_data[k, 16]
+                for j in range(9):
+                    dest[j] = src[j]
+                dest = &instances_data[k, 25]
+                for j in range(3):
+                    dest[j] = material.albedo.numbers[j]
+                    dest[j+4] = material.emissive.numbers[j]
+                dest[3] = material.transparency
+                dest[7] = material.translucency
+                dest[8] = material.ior
+                dest[9] = material.metal
+                dest[10] = material.roughness
+                dest[11] = material.occlusion
+                k += 1
+                if i == n-1 or (<tuple>translucent_objects[i+1])[1] is not model:
+                    dispatch_instances(glctx, objects, backface_shader, model, k, instances_data, material.textures, references, base_unit_id)
+                    k = 0
+            glctx.disable(moderngl.BLEND | moderngl.DEPTH_TEST | moderngl.CULL_FACE)
+            glctx.enable(flags)
+            glctx.cull_face = 'front' if render_group.cull_front_face else 'back'
+            render_group.set_blend(glctx)
+            render_target.use_main_buffer()
+            sampler = glctx.sampler(texture=render_target.auxilary_image_texture, filter=(moderngl.NEAREST, moderngl.NEAREST))
+            sampler.use(base_unit_id)
+            shader['backface_data'] = base_unit_id
+            base_unit_id += 1
+            samplers.append(sampler)
+            k = 0
+            for i, translucent_object in enumerate(translucent_objects):
+                model = translucent_object[1]
+                instance = translucent_object[2]
+                material = instance.material
+                src = instance.model_matrix.numbers
+                dest = &instances_data[k, 0]
+                for j in range(16):
+                    dest[j] = src[j]
+                normal_matrix = instance.model_matrix.inverse_transpose_matrix33()
+                src = normal_matrix.numbers
+                dest = &instances_data[k, 16]
+                for j in range(9):
+                    dest[j] = src[j]
+                dest = &instances_data[k, 25]
+                for j in range(3):
+                    dest[j] = material.albedo.numbers[j]
+                    dest[j+4] = material.emissive.numbers[j]
+                dest[3] = material.transparency
+                dest[7] = material.translucency
+                dest[8] = material.ior
+                dest[9] = material.metal
+                dest[10] = material.roughness
+                dest[11] = material.occlusion
+                k += 1
+                if i == n-1 or (<tuple>translucent_objects[i+1])[1] is not model:
+                    dispatch_instances(glctx, objects, shader, model, k, instances_data, material.textures, references, base_unit_id)
+                    k = 0
+        else:
+            shader['backface_data'] = 0
 
     if transparent_objects:
         render_target.depth_write(False)
