@@ -224,7 +224,7 @@ cdef class Camera:
         else:
             camera.up = transform_matrix.inverse_transpose_matrix33().vmul(up).normalize()
         camera.fov = node.get_float('fov', self.fov)
-        camera.fov_ref = node.get_str('fov_ref', self.fov_ref).lower()
+        camera.fov_ref = node.get_str('fov_ref', self.fov_ref)
         camera.monochrome = node.get_bool('monochrome', self.monochrome)
         camera.tint = node.get_fvec('tint', 3, self.tint)
         camera.orthographic = node.get_bool('orthographic', self.orthographic)
