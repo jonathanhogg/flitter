@@ -1722,12 +1722,12 @@ cdef class Matrix44(Vector):
     cdef Matrix44 immul(self, Matrix44 b):
         if b is None:
             return self
-        cdef double* numbers = self._numbers
+        cdef double* numbers = self.numbers
         cdef double* b_numbers = b.numbers
-        cdef double a0=self.numbers[0], a1=self.numbers[1], a2=self.numbers[2], a3=self.numbers[3]
-        cdef double a4=self.numbers[4], a5=self.numbers[5], a6=self.numbers[6], a7=self.numbers[7]
-        cdef double a8=self.numbers[8], a9=self.numbers[9], a10=self.numbers[10], a11=self.numbers[11]
-        cdef double a12=self.numbers[12], a13=self.numbers[13], a14=self.numbers[14], a15=self.numbers[15]
+        cdef double a0=numbers[0], a1=numbers[1], a2=numbers[2], a3=numbers[3]
+        cdef double a4=numbers[4], a5=numbers[5], a6=numbers[6], a7=numbers[7]
+        cdef double a8=numbers[8], a9=numbers[9], a10=numbers[10], a11=numbers[11]
+        cdef double a12=numbers[12], a13=numbers[13], a14=numbers[14], a15=numbers[15]
         numbers[0] = a0*b_numbers[0] + a4*b_numbers[1] + a8*b_numbers[2] + a12*b_numbers[3]
         numbers[1] = a1*b_numbers[0] + a5*b_numbers[1] + a9*b_numbers[2] + a13*b_numbers[3]
         numbers[2] = a2*b_numbers[0] + a6*b_numbers[1] + a10*b_numbers[2] + a14*b_numbers[3]
