@@ -217,7 +217,7 @@ class ProgramNode(WindowNode):
                 names[name] = value
         names['child_textures'] = list(self.child_textures)
         names['HEADER'] = self.glctx.extra['HEADER']
-        return vertex.render(**names)
+        return vertex.render(**names).strip()
 
     def get_fragment_source(self, node, **defaults):
         fragment = Template(node.get('fragment', 1, str), lookup=TemplateLoader) if 'fragment' in node else self.DEFAULT_FRAGMENT_SOURCE
@@ -227,7 +227,7 @@ class ProgramNode(WindowNode):
                 names[name] = value
         names['child_textures'] = list(self.child_textures)
         names['HEADER'] = self.glctx.extra['HEADER']
-        return fragment.render(**names)
+        return fragment.render(**names).strip()
 
     def make_secondary_texture(self):
         raise NotImplementedError()
