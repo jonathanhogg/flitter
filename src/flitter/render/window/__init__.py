@@ -5,6 +5,7 @@ Flitter window management
 import array
 import ctypes
 from collections import namedtuple
+import os
 import sys
 
 import glfw
@@ -329,29 +330,51 @@ class ProgramNode(WindowNode):
 
 
 class GLFWLoader:
-    def load_opengl_function(self, name):
+    FUNCTIONS = {}
+    ALLOW_MISSING = {'glPrimitiveRestartIndex'}
+
+    @staticmethod
+    def load_opengl_function(name):
         address = glfw.get_proc_address(name)
-        if address is None:
-            if name == 'glClearDepth':
-                if not hasattr(self, '_glClearDepth'):
-                    glClearDepthf = ctypes.cast(glfw.get_proc_address('glClearDepthf'), GLFUNCTYPE(None, ctypes.c_float))
+        if address is not None:
+            return address
+        if name in GLFWLoader.ALLOW_MISSING:
+            return 0
+        if (function := getattr(GLFWLoader, 'shim_' + name, None)) is not None:
+            logger.debug("Use shim for missing GL function: {}", name)
+            return ctypes.cast(function, ctypes.c_void_p).value
+        logger.trace("Request for missing GL function: {}", name)
 
-                    def glClearDepth(depth):
-                        glClearDepthf(depth)
-                    self._glClearDepth = GLFUNCTYPE(None, ctypes.c_double)(glClearDepth)
-                return ctypes.cast(self._glClearDepth, ctypes.c_void_p).value
-            elif name in ('glReadBuffer', 'glDrawBuffer'):
-                if not hasattr(self, '_glIgnore'):
-                    def glIgnore(i):
-                        pass
-                    self._glIgnore = GLFUNCTYPE(None, ctypes.c_double)(glIgnore)
-                return ctypes.cast(self._glIgnore, ctypes.c_void_p).value
-            else:
-                logger.trace("Unresolved GL function: {}", name)
-                return 0
-        return address
+        def missing(name):
+            def func():
+                logger.error("Call to missing GL function: {}", name)
+                os._exit(1)
+            return func
+        return ctypes.cast(GLFUNCTYPE(None)(missing(name)), ctypes.c_void_p).value
 
-    def release(self):
+    @staticmethod
+    def get_function(name, *signature):
+        function = GLFWLoader.FUNCTIONS.get(name)
+        if function is None:
+            function = ctypes.cast(glfw.get_proc_address(name), GLFUNCTYPE(*signature))
+            GLFWLoader.FUNCTIONS[name] = function
+        return function
+
+    @GLFUNCTYPE(None, ctypes.c_double)
+    @staticmethod
+    def shim_glClearDepth(depth):
+        print('glClearDepth')
+        glClearDepthf = GLFWLoader.get_function('glClearDepthf', None, ctypes.c_float)
+        glClearDepthf(depth)
+
+    @GLFUNCTYPE(None, ctypes.c_int)
+    @staticmethod
+    def shim_glDrawBuffer(buf):
+        glDrawBuffers = GLFWLoader.get_function('glDrawBuffers', None, ctypes.c_int, ctypes.c_void_p)
+        glDrawBuffers(1, ctypes.pointer(ctypes.c_int(buf)))
+
+    @staticmethod
+    def release():
         pass
 
 
@@ -462,8 +485,7 @@ class Window(ProgramNode):
         self._keys = {}
         self._pointer_state = None
         if new_window:
-            moderngl.init_context(GLFWLoader())
-            self.glctx = moderngl.get_context()
+            self.glctx = moderngl.create_context(require=300 if opengl_es else 330, context=GLFWLoader)
             self.glctx.gc_mode = 'context_gc'
             if self._visible:
                 logger.debug("{} opened on screen {}", self.name, screen)
