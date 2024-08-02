@@ -34,13 +34,13 @@ def debug(Context context, Vector value):
 @context_func
 @cython.boundscheck(False)
 def sample(Context context, Vector texture_id, Vector coord, Vector default=null_):
-    cdef const double[:, :, :] data
+    cdef const float[:, :, :] data
     if coord.numbers == NULL \
             or (scene_node := context.references.get(texture_id.as_string())) is None \
             or not hasattr(scene_node, 'texture_data') or (data := scene_node.texture_data) is None:
         return default
     cdef int64_t x, y, height=data.shape[0], width=data.shape[1]
-    cdef const double[:] color
+    cdef const float[:] color
     cdef int64_t i, j, n=coord.length // 2
     cdef Vector result = Vector.__new__(Vector)
     result.allocate_numbers(n * 4)

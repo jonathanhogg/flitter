@@ -72,17 +72,17 @@ class WindowNode:
         return '#'.join((self.__class__.__name__.lower(), *self.tags))
 
     @property
+    def framebuffer(self):
+        return None
+
+    @property
     def texture(self):
-        raise NotImplementedError()
+        raise None
 
     @property
     def texture_data(self):
-        if self._texture_data is None and (texture := self.texture) is not None:
-            dtype = {'f1': 'uint8', 'f2': 'float16', 'f4': 'float32'}[texture.dtype]
-            data = np.ndarray((texture.height, texture.width, texture.components), dtype, texture.read())
-            self._texture_data = data.astype('float64')
-            if dtype == 'uint8':
-                self._texture_data /= 255
+        if self._texture_data is None and (framebuffer := self.framebuffer) is not None:
+            self._texture_data = np.ndarray((framebuffer.height, framebuffer.width, 4), 'float32', framebuffer.read(components=4, dtype='f4'))
         return self._texture_data
 
     @property
@@ -163,6 +163,10 @@ class Reference(WindowNode):
         self._reference = None
 
     @property
+    def framebuffer(self):
+        return self._reference.framebuffer if self._reference is not None else None
+
+    @property
     def texture(self):
         return self._reference.texture if self._reference is not None else None
 
@@ -195,10 +199,6 @@ class ProgramNode(WindowNode):
         self._fragment_source = None
         self._last = None
         self._first = None
-
-    @property
-    def framebuffer(self):
-        raise NotImplementedError()
 
     @property
     def size(self):
@@ -343,14 +343,19 @@ class GLFWLoader:
         if (function := getattr(GLFWLoader, 'shim_' + name, None)) is not None:
             logger.debug("Use shim for missing GL function: {}", name)
             return ctypes.cast(function, ctypes.c_void_p).value
+        if (function := GLFWLoader.FUNCTIONS.get(name)) is not None:
+            return ctypes.cast(function, ctypes.c_void_p).value
         logger.trace("Request for missing GL function: {}", name)
 
         def missing(name):
-            def func():
+            def function():
                 logger.error("Call to missing GL function: {}", name)
                 os._exit(1)
-            return func
-        return ctypes.cast(GLFUNCTYPE(None)(missing(name)), ctypes.c_void_p).value
+            return function
+
+        function = GLFUNCTYPE(None)(missing(name))
+        GLFWLoader.FUNCTIONS[name] = function
+        return ctypes.cast(function, ctypes.c_void_p).value
 
     @staticmethod
     def get_function(name, *signature):
@@ -360,17 +365,21 @@ class GLFWLoader:
             GLFWLoader.FUNCTIONS[name] = function
         return function
 
+    @GLFUNCTYPE(None, ctypes.c_int, ctypes.c_int)
+    @staticmethod
+    def shim_glClampColor(target, clamp):
+        pass
+
     @GLFUNCTYPE(None, ctypes.c_double)
     @staticmethod
     def shim_glClearDepth(depth):
-        print('glClearDepth')
         glClearDepthf = GLFWLoader.get_function('glClearDepthf', None, ctypes.c_float)
         glClearDepthf(depth)
 
     @GLFUNCTYPE(None, ctypes.c_int)
     @staticmethod
     def shim_glDrawBuffer(buf):
-        glDrawBuffers = GLFWLoader.get_function('glDrawBuffers', None, ctypes.c_int, ctypes.c_void_p)
+        glDrawBuffers = GLFWLoader.get_function('glDrawBuffers', None, ctypes.c_int, ctypes.POINTER(ctypes.c_int))
         glDrawBuffers(1, ctypes.pointer(ctypes.c_int(buf)))
 
     @staticmethod

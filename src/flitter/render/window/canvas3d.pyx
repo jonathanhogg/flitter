@@ -977,6 +977,7 @@ cdef class RenderTarget:
     cdef int samples
     cdef object image_texture
     cdef object image_framebuffer
+    cdef object image_texture_data
     cdef object color_renderbuffer
     cdef object depth_renderbuffer
     cdef object render_framebuffer
@@ -985,8 +986,19 @@ cdef class RenderTarget:
     cdef object auxilary_framebuffer
 
     @property
+    def framebuffer(self):
+        return self.image_framebuffer
+
+    @property
     def texture(self):
         return self.image_texture
+
+    @property
+    def texture_data(self):
+        if self.image_texture_data is None:
+            framebuffer = self.image_framebuffer or self.render_framebuffer
+            self.image_texture_data = np.ndarray((self.height, self.width, 4), 'float32', framebuffer.read(components=4, dtype='f4'))
+        return self.image_texture_data
 
     cpdef void release(self):
         self.width = 0
@@ -995,6 +1007,7 @@ cdef class RenderTarget:
         self.samples = 0
         self.image_texture = None
         self.image_framebuffer = None
+        self.image_texture_data = None
         self.color_renderbuffer = None
         self.depth_renderbuffer = None
         self.render_framebuffer = None
@@ -1032,6 +1045,7 @@ cdef class RenderTarget:
         else:
             clear_color = Zero4
         self.render_framebuffer.clear(*tuple(clear_color))
+        self.image_texture_data = None
 
     cdef void use_main_buffer(self):
         self.render_framebuffer.use()
