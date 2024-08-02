@@ -278,32 +278,23 @@ class ProgramNode(WindowNode):
                     if name == 'last':
                         if self._last is None:
                             self._last = self.make_secondary_texture()
-                        if sampler_args:
-                            sampler = self.glctx.sampler(texture=self._last, **sampler_args)
-                            sampler.use(location=unit)
-                            samplers.append(sampler)
-                        else:
-                            self._last.use(location=unit)
+                        sampler = self.glctx.sampler(texture=self._last, **sampler_args)
+                        sampler.use(location=unit)
+                        samplers.append(sampler)
                         member.value = unit
                         unit += 1
                     elif name == 'first':
                         if self._first is None:
                             self._first = self.make_secondary_texture()
-                        if sampler_args:
-                            sampler = self.glctx.sampler(texture=self._first, **sampler_args)
-                            sampler.use(location=unit)
-                            samplers.append(sampler)
-                        else:
-                            self._first.use(location=unit)
+                        sampler = self.glctx.sampler(texture=self._first, **sampler_args)
+                        sampler.use(location=unit)
+                        samplers.append(sampler)
                         member.value = unit
                         unit += 1
                     elif name in child_textures:
-                        if sampler_args:
-                            sampler = self.glctx.sampler(texture=child_textures[name], **sampler_args)
-                            sampler.use(location=unit)
-                            samplers.append(sampler)
-                        else:
-                            child_textures[name].use(location=unit)
+                        sampler = self.glctx.sampler(texture=child_textures[name], **sampler_args)
+                        sampler.use(location=unit)
+                        samplers.append(sampler)
                         member.value = unit
                         unit += 1
                     elif name == 'size':
