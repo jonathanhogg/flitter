@@ -71,13 +71,13 @@ cdef class Particle:
         if position.length == zero.length and position.numbers != NULL:
             self.position = position.copy()
         else:
-            self.position = node.get_fvec('position', zero.length, zero.copy())
+            self.position = node.get_fvec('position', zero.length, zero).copy()
         self.velocity_state_key = self.position_state_key.concat(VELOCITY).intern()
         cdef Vector velocity = state.get_item(self.velocity_state_key)
         if velocity.length == zero.length and velocity.numbers != NULL:
             self.velocity = velocity.copy()
         else:
-            self.velocity = node.get_fvec('velocity', zero.length, zero.copy())
+            self.velocity = node.get_fvec('velocity', zero.length, zero).copy()
         self.initial_force = node.get_fvec('force', zero.length, zero)
         self.force = self.initial_force.copy()
         self.radius = max(0, node.get_float('radius', 1))
