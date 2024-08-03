@@ -213,6 +213,9 @@ class TestExamples(ScriptTest):
     def test_bounce(self):
         self.assertScriptOutputMatchesImage(self.EXAMPLES / 'bounce.fl', target_fps=10)
 
+    def test_dots(self):
+        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'dots.fl', target_fps=10)
+
     def test_hoops(self):
         self.assertScriptOutputMatchesImage(self.EXAMPLES / 'hoops.fl', target_fps=10)
 

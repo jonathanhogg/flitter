@@ -1,0 +1,45 @@
+
+%pragma tempo 60
+
+let SIZE=1080
+    SIDE=SIZE*2/3
+    N=100
+    R=300
+    D=100
+
+!physics dimensions=3 state=:dot
+    !anchor id=:middle
+    !collision strength=100
+    for i in ..N
+        !particle id=i radius=10 position=(beta(:p;i)[..3]-.5)*R*1.5
+        !distance from=:middle to=i max=R-20 strength=100
+    !drag strength=0.1m
+    !random strength=50
+
+!window size=SIZE
+    let rot=(3+beat)/30
+    !canvas3d size=SIDE orthographic=true far=R*2 width=R*2 fog_max=R*2 samples=4 color=1 camera_id=:view;0 hidden=true
+        !transform rotate=rot scale=R
+            !camera id=:view;0 position=0;0;+1 up=0;+1;0 secondary=true
+            !camera id=:view;1 position=0;+1;0 up=0;0;-1 secondary=true
+            !camera id=:view;2 position=+1;0;0 up=0;0;-1 secondary=true
+            !camera id=:view;3 position=0;0;-1 up=-1;0;0 secondary=true
+            !camera id=:view;4 position=-1;0;0 up=0;0;+1 secondary=true
+            !camera id=:view;5 position=0;-1;0 up=0;0;+1 secondary=true
+        !light color=1 direction=0;0;-1
+        for i in ..N
+            let a=$(:dot;i)
+            !sphere position=a size=10
+            for j in i+1..N
+                let b=$(:dot;j) d=hypot(a-b)
+                if d < D
+                    !cylinder radius=2 start=a end=b transparency=quad(d/D)
+    !canvas id=:cube_map size=SIDE*(6;1) scale=SIDE stroke_width=6m color=1 hidden=true
+        for i in ..6
+            !transform translate=i;0
+                !image size=1 texture_id=:view;i
+                !rect point=3m size=1-6m stroke=true
+    !record filename=(OUTPUT if frame == run_time * fps - 1)
+        !canvas3d viewpoint=0;0;R*4 up=0;1;0 fov=55/360 far=R*8 fog_min=R*3 fog_max=R*5 samples=4
+            !light color=1
+            !box size=R*2 texture_id=:cube_map rotation=rot

@@ -16,6 +16,9 @@ bounce.png: bounce.fl
 canvas3d.png: canvas3d.fl
 	flitter --offscreen --lockstep --fps=1 --runtime=1 --define "OUTPUT=$@" $<
 
+dots.png: dots.fl
+	flitter --offscreen --lockstep --fps=10 --runtime=1 --define "OUTPUT=$@" $<
+
 hoops.png: hoops.fl
 	flitter --offscreen --lockstep --fps=10 --runtime=1 --define "OUTPUT=$@" $<
 

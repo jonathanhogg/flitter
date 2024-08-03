@@ -504,6 +504,9 @@ class TestExamples(ScriptTest):
     def test_bounce(self):
         self.assertSimplifierDoesntChangeBehaviour(self.EXAMPLES / 'bounce.fl')
 
+    def test_dots(self):
+        self.assertSimplifierDoesntChangeBehaviour(self.EXAMPLES / 'dots.fl')
+
     def test_hoops(self):
         self.assertSimplifierDoesntChangeBehaviour(self.EXAMPLES / 'hoops.fl')
 
