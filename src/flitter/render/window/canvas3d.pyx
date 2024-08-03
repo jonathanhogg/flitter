@@ -580,16 +580,14 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
         if name in shader:
             member = shader[name]
             if isinstance(member, moderngl.Uniform):
-                if member.fmt is '1i' and (ref := references.get(value.as_string())) is not None \
+                if member.fmt == '1i' and (ref := references.get(value.as_string())) is not None \
                         and hasattr(ref, 'texture') and ref.texture is not None:
                     sampler = glctx.sampler(texture=ref.texture, filter=(moderngl.NEAREST, moderngl.NEAREST))
                     sampler.use(base_unit_id)
                     member.value = base_unit_id
                     base_unit_id += 1
                     samplers.append(sampler)
-                elif value.numbers != NULL:
-                    set_uniform_vector(member, value)
-                else:
+                elif not set_uniform_vector(member, value):
                     set_uniform_vector(member, false_)
     shader['pv_matrix'] = camera.pv_matrix
     shader['orthographic'] = camera.orthographic
