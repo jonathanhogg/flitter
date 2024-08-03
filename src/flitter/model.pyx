@@ -567,9 +567,9 @@ cdef class Vector:
                         if t is str or (t is None and f in SymbolTable):
                             return SymbolTable.get(f, default)
                         if t is int:
-                            return <int64_t>c_floor(f)
+                            return PyLong_FromDouble(c_floor(f)) if f not in SymbolTable else default
                         if t is bool:
-                            return f != 0
+                            return PyBool_FromLong(f != 0)
                         return f
                     else:
                         values = PyList_New(m)
@@ -581,6 +581,8 @@ cdef class Vector:
                                     return default
                                 obj = <object>objptr
                             elif t is int:
+                                if f in SymbolTable:
+                                    return default
                                 obj = PyLong_FromDouble(c_floor(f))
                             elif t is bool:
                                 obj = PyBool_FromLong(f != 0)
@@ -598,6 +600,8 @@ cdef class Vector:
                             return default
                         obj = <object>objptr
                     elif t is int:
+                        if f in SymbolTable:
+                            return default
                         obj = PyLong_FromDouble(c_floor(f))
                     elif t is bool:
                         obj = PyBool_FromLong(f != 0)
