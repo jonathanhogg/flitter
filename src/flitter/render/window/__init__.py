@@ -15,7 +15,7 @@ import moderngl
 import numpy as np
 
 from ...clock import system_clock
-from .glconstants import GL_RGBA8, GL_RGBA16F, GL_RGBA32F, GL_FRAMEBUFFER_SRGB
+from .glconstants import GL_RGBA8, GL_RGBA16F, GL_RGBA32F
 from .glsl import TemplateLoader
 from ...model import Vector, false
 from ...plugins import get_plugin
@@ -311,7 +311,6 @@ class ProgramNode(WindowNode):
                     else:
                         logger.trace("Unbound uniform: {}", name)
                         set_uniform_vector(member, false)
-            self.glctx.enable_direct(GL_FRAMEBUFFER_SRGB)
             self.glctx.enable(moderngl.BLEND)
             self.glctx.blend_func = moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA
             self.framebuffer.use()
@@ -326,7 +325,6 @@ class ProgramNode(WindowNode):
                 self._rectangle.render()
             for sampler in samplers:
                 sampler.clear()
-            self.glctx.disable_direct(GL_FRAMEBUFFER_SRGB)
 
 
 class GLFWLoader:
@@ -389,6 +387,7 @@ class GLFWLoader:
 
 
 class Window(ProgramNode):
+    DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('window.frag')
     CLEAR_COLOR = (0, 0, 0, 1)
     Windows = []
 
@@ -456,7 +455,7 @@ class Window(ProgramNode):
             glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 0 if opengl_es else 3)
             glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_ANY_PROFILE if opengl_es else glfw.OPENGL_CORE_PROFILE)
             glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, glfw.TRUE)
-            glfw.window_hint(glfw.SRGB_CAPABLE, glfw.TRUE)
+            glfw.window_hint(glfw.SRGB_CAPABLE, glfw.FALSE)
             glfw.window_hint(glfw.SAMPLES, 0)
             glfw.window_hint(glfw.VISIBLE, glfw.TRUE if self._visible else glfw.FALSE)
             if self._visible:

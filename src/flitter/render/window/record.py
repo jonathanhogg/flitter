@@ -4,7 +4,7 @@ Record window node
 
 from . import ProgramNode
 from ...cache import SharedCache
-from .glconstants import GL_SRGB8_ALPHA8
+from .glconstants import GL_SRGB8_ALPHA8, GL_FRAMEBUFFER_SRGB
 from .glsl import TemplateLoader
 
 
@@ -38,7 +38,9 @@ class Record(ProgramNode):
 
     def render(self, node, time, fps, realtime, **kwargs):
         if filename := node.get('filename', 1, str):
+            self.glctx.enable_direct(GL_FRAMEBUFFER_SRGB)
             super().render(node, **kwargs)
+            self.glctx.disable_direct(GL_FRAMEBUFFER_SRGB)
             path = SharedCache[filename]
             ext = path.suffix.lower()
             codec = node.get('codec', 1, str, 'h264')
