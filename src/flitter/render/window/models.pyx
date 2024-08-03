@@ -28,7 +28,7 @@ cdef class Model:
     def __eq__(self, other):
         return self is other
 
-    cdef bint is_watertight(self):
+    cdef bint is_manifold(self):
         return False
 
     cdef bint check_valid(self):
@@ -75,8 +75,8 @@ cdef class Model:
         objects[name] = buffers
         return buffers
 
-    cdef Model watertight(self):
-        return Watertight.get(self)
+    cdef Model manifold(self):
+        return Manifold.get(self)
 
     cdef Model flatten(self):
         return Flatten.get(self)
@@ -132,8 +132,8 @@ cdef class Model:
 cdef class UnaryOperation(Model):
     cdef Model original
 
-    cdef bint is_watertight(self):
-        return self.original.is_watertight()
+    cdef bint is_manifold(self):
+        return self.original.is_manifold()
 
     cdef bint check_valid(self):
         if not self.valid:
@@ -144,23 +144,23 @@ cdef class UnaryOperation(Model):
         return False
 
 
-cdef class Watertight(UnaryOperation):
+cdef class Manifold(UnaryOperation):
     @staticmethod
-    cdef Watertight get(Model original):
-        assert not isinstance(original, Watertight)
-        cdef str name = f'watertight({original.name})'
-        cdef Watertight model = <Watertight>ModelCache.get(name, None)
+    cdef Manifold get(Model original):
+        assert not isinstance(original, Manifold)
+        cdef str name = f'manifold({original.name})'
+        cdef Manifold model = <Manifold>ModelCache.get(name, None)
         if model is None:
-            model = Watertight.__new__(Watertight)
+            model = Manifold.__new__(Manifold)
             model.name = name
             model.original = original
             ModelCache[name] = model
         return model
 
-    cdef bint is_watertight(self):
+    cdef bint is_manifold(self):
         return True
 
-    cdef Model watertight(self):
+    cdef Model manifold(self):
         return self
 
     cdef Model flatten(self):
@@ -172,18 +172,28 @@ cdef class Watertight(UnaryOperation):
     cdef void build_trimesh_model(self):
         if not self.original.check_valid():
             self.original.build_trimesh_model()
+        cdef bint merged=False, filled=False, hull=False
         trimesh_model = self.original.trimesh_model
-        if trimesh_model is not None and not trimesh_model.is_watertight:
-            trimesh_model = trimesh_model.copy()
-            trimesh_model.merge_vertices(merge_tex=True, merge_norm=True)
+        if trimesh_model is not None:
             if not trimesh_model.is_watertight:
-                if trimesh_model.fill_holes():
-                    logger.debug("Filled holes in non-watertight mesh: {}", self.original.name)
-                else:
-                    trimesh_model = trimesh_model.convex_hull
-                    logger.warning("Computed convex hull of non-watertight mesh: {}", self.original.name)
-            else:
-                logger.trace("Merged vertices of non-watertight mesh: {}", self.original.name)
+                trimesh_model = trimesh_model.copy()
+                trimesh_model.merge_vertices(merge_tex=True, merge_norm=True)
+                merged = True
+                if not trimesh_model.is_watertight:
+                    if trimesh_model.fill_holes():
+                        filled = True
+                    else:
+                        trimesh_model = trimesh_model.convex_hull
+                        hull = True
+            if not trimesh_model.is_volume:
+                logger.error("Mesh is not a volume: {}", self.original.name)
+                trimesh_model = None
+            elif hull:
+                logger.warning("Computed convex hull of non-manifold mesh: {}", self.original.name)
+            elif filled:
+                logger.debug("Filled holes in non-manifold mesh: {}", self.original.name)
+            elif merged:
+                logger.trace("Merged vertices of non-manifold mesh: {}", self.original.name)
         self.trimesh_model = trimesh_model
         self.valid = True
 
@@ -221,8 +231,8 @@ cdef class Invert(UnaryOperation):
             ModelCache[name] = model
         return model
 
-    cdef Model watertight(self):
-        return Invert.get(self.original.watertight())
+    cdef Model manifold(self):
+        return Invert.get(self.original.manifold())
 
     cdef void build_trimesh_model(self):
         if not self.original.check_valid():
@@ -280,10 +290,10 @@ cdef class Repair(UnaryOperation):
             ModelCache[name] = model
         return model
 
-    cdef bint is_watertight(self):
+    cdef bint is_manifold(self):
         return True
 
-    cdef Model watertight(self):
+    cdef Model manifold(self):
         return self
 
     cdef void build_trimesh_model(self):
@@ -320,9 +330,6 @@ cdef class Transform(UnaryOperation):
     cdef Model transform(self, Matrix44 transform_matrix):
         return Transform.get(self.original, transform_matrix.mmul(self.transform_matrix))
 
-    cdef Model watertight(self):
-        return Transform.get(self.original.watertight(), self.transform_matrix)
-
     cdef Model flatten(self):
         return Flatten.get(self.original).transform(self.transform_matrix)
 
@@ -353,7 +360,7 @@ cdef class Slice(UnaryOperation):
 
     @staticmethod
     cdef Slice get(Model original, Vector origin, Vector normal):
-        original = original.watertight()
+        original = original.manifold()
         cdef str name = f'slice({original.name}, {hex(origin.hash(False) ^ normal.hash(False))[3:]})'
         cdef Slice model = <Slice>ModelCache.get(name, None)
         if model is None:
@@ -365,10 +372,10 @@ cdef class Slice(UnaryOperation):
             ModelCache[name] = model
         return model
 
-    cdef bint is_watertight(self):
+    cdef bint is_manifold(self):
         return True
 
-    cdef Model watertight(self):
+    cdef Model manifold(self):
         return self
 
     cdef Model transform(self, Matrix44 transform_matrix):
@@ -416,7 +423,7 @@ cdef class BooleanOperation(Model):
         for child_model in models:
             if child_model is None:
                 continue
-            child_model = child_model.watertight()
+            child_model = child_model.manifold()
             if child_model in existing:
                 if operation is 'difference' and len(collected_models) and child_model is collected_models[0]:
                     return None
@@ -444,10 +451,10 @@ cdef class BooleanOperation(Model):
             ModelCache[name] = model
         return model
 
-    cdef bint is_watertight(self):
+    cdef bint is_manifold(self):
         return True
 
-    cdef Model watertight(self):
+    cdef Model manifold(self):
         return self
 
     cdef Model transform(self, Matrix44 transform_matrix):
@@ -483,7 +490,6 @@ cdef class BooleanOperation(Model):
     cdef void build_trimesh_model(self):
         cdef list trimesh_models = []
         cdef Model model
-        self.trimesh_model = None
         for model in self.models:
             if not model.check_valid():
                 model.build_trimesh_model()
@@ -499,8 +505,9 @@ cdef class BooleanOperation(Model):
                 trimesh_model = trimesh.boolean.boolean_manifold(trimesh_models, self.operation)
             if len(trimesh_model.vertices) and len(trimesh_model.faces):
                 self.trimesh_model = trimesh_model
-            if self.trimesh_model is None:
+            else:
                 logger.warning("Result of {} was empty mesh: {}", self.operation, self.name)
+                self.trimesh_model = None
         self.valid = True
 
 
