@@ -366,6 +366,7 @@ class GLFWLoader:
         return function
 
     @GLFUNCTYPE(None, ctypes.c_int, ctypes.c_int)
+    @GLFUNCTYPE(None, ctypes.c_uint, ctypes.c_uint)
     @staticmethod
     def shim_glClampColor(target, clamp):
         pass
@@ -379,8 +380,8 @@ class GLFWLoader:
     @GLFUNCTYPE(None, ctypes.c_int)
     @staticmethod
     def shim_glDrawBuffer(buf):
-        glDrawBuffers = GLFWLoader.get_function('glDrawBuffers', None, ctypes.c_int, ctypes.POINTER(ctypes.c_int))
-        glDrawBuffers(1, ctypes.pointer(ctypes.c_int(buf)))
+        glDrawBuffers = GLFWLoader.get_function('glDrawBuffers', None, ctypes.c_uint, ctypes.POINTER(ctypes.c_uint))
+        glDrawBuffers(1, ctypes.byref(ctypes.c_uint(buf)))
 
     @staticmethod
     def release():
