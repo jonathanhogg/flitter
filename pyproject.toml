@@ -39,7 +39,6 @@ dependencies = [
     "loguru",
     "mako",
     "manifold3d",
-    "mapbox_earcut",
     "moderngl",
     "networkx",
     "numpy",
@@ -48,9 +47,7 @@ dependencies = [
     "pyusb",
     "regex",
     "rtmidi2",
-    "rtree",
     "scipy",
-    "shapely",
     "skia-python>=117.0b3",
     "trimesh",
 ]

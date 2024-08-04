@@ -352,8 +352,7 @@ into.
 - `lark` - for the language parser
 - `loguru` - for enhanced logging
 - `mako` - for templating of the GLSL source
-- `manifold3d` - used by `trimesh` for 3D boolean operations
-- `mapbox_earcut` - used by `trimesh` for triangulating polygons
+- `manifold3d` - for constructive solid geometry operations
 - `moderngl` - for a higher-level API to OpenGL
 - `networkx` - used by `trimesh` for graph algorithms
 - `numpy` - for fast memory crunching
@@ -362,9 +361,7 @@ into.
 - `pyusb` - for low-level communication with the Push 2 and LaserCube
 - `regex` - used by `lark` for advanced regular expressions
 - `rtmidi2` - for talking MIDI to control surfaces
-- `rtree` - used by `trimesh` for spatial tree intersection
 - `scipy` - used by `trimesh` for computing convex hulls
-- `shapely` - used by `trimesh` for polygon operations
 - `skia-python` - for 2D drawing
 - `trimesh` - for loading 3D meshes
 
