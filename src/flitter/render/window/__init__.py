@@ -191,6 +191,8 @@ class ProgramNode(WindowNode):
         self._fragment_source = None
         self._last = None
         self._first = None
+        self._last_framebuffer = None
+        self._first_framebuffer = None
 
     def release(self):
         self._program = None
@@ -199,6 +201,8 @@ class ProgramNode(WindowNode):
         self._fragment_source = None
         self._last = None
         self._first = None
+        self._last_framebuffer = None
+        self._first_framebuffer = None
 
     @property
     def size(self):
@@ -280,6 +284,7 @@ class ProgramNode(WindowNode):
                     if name == 'last':
                         if self._last is None:
                             self._last = self.make_secondary_texture()
+                            self._last_framebuffer = self.glctx.framebuffer(color_attachments=(self._last,))
                         sampler = self.glctx.sampler(texture=self._last, **sampler_args)
                         sampler.use(location=unit)
                         samplers.append(sampler)
@@ -288,6 +293,7 @@ class ProgramNode(WindowNode):
                     elif name == 'first':
                         if self._first is None:
                             self._first = self.make_secondary_texture()
+                            self._first_framebuffer = self.glctx.framebuffer(color_attachments=(self._first,))
                         sampler = self.glctx.sampler(texture=self._first, **sampler_args)
                         sampler.use(location=unit)
                         samplers.append(sampler)
@@ -317,13 +323,14 @@ class ProgramNode(WindowNode):
             self.framebuffer.use()
             for pass_number in range(passes):
                 if self._last is not None:
-                    self.glctx.copy_framebuffer(self._last, self.framebuffer)
+                    self.glctx.copy_framebuffer(self._last_framebuffer, self.framebuffer)
                 if self._first is not None and pass_number == 1:
-                    self.glctx.copy_framebuffer(self._first, self.framebuffer)
+                    self.glctx.copy_framebuffer(self._first_framebuffer, self.framebuffer)
                 if pass_member is not None:
                     pass_member.value = pass_number
                 self.framebuffer.clear(*self.CLEAR_COLOR)
                 self._rectangle.render()
+            self.glctx.disable(moderngl.BLEND)
             for sampler in samplers:
                 sampler.clear()
 
