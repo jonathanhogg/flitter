@@ -898,15 +898,20 @@ class Canvas(WindowNode):
             self._colorspace = skia.ColorSpace.MakeSRGBLinear() if linear else skia.ColorSpace.MakeSRGB()
             self._texture = self.glctx.texture((self.width, self.height), 4, dtype=color_format.moderngl_dtype, internal_format=internal_format)
             self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
+            self._colorbits = colorbits
+            self._linear = linear
             if self._graphics_context is None:
                 self._graphics_context = skia.GrDirectContext.MakeGL()
+                if self._graphics_context is None:
+                    logger.error("Failed to create GL context for Skia (is this OpenGL ES?)")
+                    self._surface = None
+                    self._canvas = None
+                    return
             backend_render_target = skia.GrBackendRenderTarget(self.width, self.height, 0, 0,
                                                                skia.GrGLFramebufferInfo(self._framebuffer.glo, color_format.gl_format))
             self._surface = skia.Surface.MakeFromBackendRenderTarget(self._graphics_context, backend_render_target, skia.kBottomLeft_GrSurfaceOrigin,
                                                                      skia_colortype, self._colorspace)
             self._canvas = self._surface.getCanvas()
-            self._colorbits = colorbits
-            self._linear = linear
             logger.debug("Created {:d}x{:d} {}-bit {}sRGB canvas; skia version {}", self.width, self.height, colorbits,
                          "linear " if linear else "", skia.__version__)
 
@@ -915,24 +920,26 @@ class Canvas(WindowNode):
         pass
 
     def purge(self):
-        total_count = self._stats['canvas'][0]
-        logger.info("{} render stats - {:d} x {:.1f}ms = {:.1f}s", self.name, total_count,
-                    1e3 * self._total_duration / total_count, self._total_duration)
-        draw_duration = 0
-        for duration, count, key in sorted(((duration, count, key) for (key, (count, duration)) in self._stats.items()), reverse=True):
+        if 'canvas' in self._stats:
+            total_count = self._stats['canvas'][0]
+            logger.info("{} render stats - {:d} x {:.1f}ms = {:.1f}s", self.name, total_count,
+                        1e3 * self._total_duration / total_count, self._total_duration)
+            draw_duration = 0
+            for duration, count, key in sorted(((duration, count, key) for (key, (count, duration)) in self._stats.items()), reverse=True):
+                logger.debug("{:15s}  - {:8d}  x {:6.1f}µs = {:5.1f}s  ({:4.1f}%)",
+                             key, count, 1e6 * duration / count, duration, 100 * duration / self._total_duration)
+                draw_duration += duration
+            overhead = self._total_duration - draw_duration
             logger.debug("{:15s}  - {:8d}  x {:6.1f}µs = {:5.1f}s  ({:4.1f}%)",
-                         key, count, 1e6 * duration / count, duration, 100 * duration / self._total_duration)
-            draw_duration += duration
-        overhead = self._total_duration - draw_duration
-        logger.debug("{:15s}  - {:8d}  x {:6.1f}µs = {:5.1f}s  ({:4.1f}%)",
-                     '(surface)', total_count, 1e6 * overhead / total_count, overhead, 100 * overhead / self._total_duration)
+                         '(surface)', total_count, 1e6 * overhead / total_count, overhead, 100 * overhead / self._total_duration)
         self._stats = {}
         self._total_duration = 0
 
     def render(self, node, references=None, **kwargs):
-        self._total_duration -= perf_counter()
-        self._graphics_context.resetContext()
-        self._framebuffer.clear()
-        draw(node, self._canvas, stats=self._stats, references=references, colorspace=self._colorspace)
-        self._surface.flushAndSubmit()
-        self._total_duration += perf_counter()
+        if self._graphics_context is not None:
+            self._total_duration -= perf_counter()
+            self._graphics_context.resetContext()
+            self._framebuffer.clear()
+            draw(node, self._canvas, stats=self._stats, references=references, colorspace=self._colorspace)
+            self._surface.flushAndSubmit()
+            self._total_duration += perf_counter()
