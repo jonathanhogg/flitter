@@ -572,7 +572,7 @@ cdef class Sphere(PrimitiveModel):
 
     @staticmethod
     cdef Sphere get(Node node):
-        cdef int64_t segments = max(4, node.get_int('segments', DefaultSegments))
+        cdef int64_t segments = max(4, node.get_int('segments', DefaultSegments) // 4 * 4)
         cdef str name = f'!sphere-{segments}' if segments != DefaultSegments else '!sphere'
         cdef Sphere model = <Sphere>ModelCache.get(name, None)
         if model is None:
@@ -584,55 +584,62 @@ cdef class Sphere(PrimitiveModel):
         return model
 
     @cython.cdivision(True)
+    @cython.boundscheck(False)
     cdef void build_trimesh_model(self):
-        cdef int64_t ncols = self.segments, nrows = ncols//2, nvertices = (nrows+1)*(ncols+1), nfaces = (2+(nrows-2)*2)*ncols
+        cdef int64_t nrows = self.segments / 4, nvertices = (nrows + 1) * (nrows + 2) * 4, nfaces = nrows * nrows * 8
         cdef object vertices_array = np.empty((nvertices, 3), dtype='f4')
         cdef float[:, :] vertices = vertices_array
-        cdef object vertex_normals_array = np.empty((nvertices, 3), dtype='f4')
-        cdef float[:, :] vertex_normals = vertex_normals_array
         cdef object vertex_uv_array = np.empty((nvertices, 2), dtype='f4')
         cdef float[:, :] vertex_uv = vertex_uv_array
         cdef object faces_array = np.empty((nfaces, 3), dtype='i4')
         cdef int32_t[:, :] faces = faces_array
         cdef float x, y, z, r, th, u, v
-        cdef int64_t row, col, i=0, j=0
-        for row in range(nrows + 1):
-            if row == 0:
-                v = 0
-                r, z = 0, -1
-            elif row == nrows:
-                v = 1
-                r, z = 0, 1
-            else:
-                v = <float>row / nrows
-                th = Tau*(v-0.5)/2
-                r, z = cos(th), sin(th)
-            for col in range(ncols+1):
-                if row == 0:
-                    x = y = 0
-                    u = (col + 0.5) / ncols
-                elif row == nrows:
-                    x = y = 0
-                    u = (col - 0.5) / ncols
-                else:
-                    u = <float>col / ncols
-                    if col == 0 or col == ncols:
-                        x, y = r, 0
+        cdef int64_t side, hemisphere, row, col, i = 0, j = 0
+        for side in range(4):
+            for hemisphere in range(-1, 2, 2):
+                for row in range(nrows + 1):
+                    if row == 0:
+                        r, z, v = 0, hemisphere, hemisphere * 0.5 + 0.5
+                    elif row == nrows:
+                        r, z, v = 1, 0, 0.5
                     else:
-                        x, y = r*cos(Tau*u), r*sin(Tau*u)
-                vertices[i, 0], vertices[i, 1], vertices[i, 2] = x, y, z
-                vertex_normals[i, 0], vertex_normals[i, 1], vertex_normals[i, 2] = x, y, z
-                vertex_uv[i, 0], vertex_uv[i, 1] = u, v
-                if col < ncols and row < nrows:
-                    if row < nrows-1:
-                        faces[j, 0], faces[j, 1], faces[j, 2] = i, i+2+ncols, i+1+ncols
-                        j += 1
-                    if row > 0:
-                        faces[j, 0], faces[j, 1], faces[j, 2] = i, i+1, i+2+ncols
-                        j += 1
-                i += 1
+                        th = hemisphere * (1 - <float>row / nrows) / 4
+                        r, z, v = cos(Tau * th), sin(Tau * th), th * 2 + 0.5
+                    for col in range(row + 1):
+                        if row == 0:
+                            u = (side + 0.125) / 4
+                            x = y = 0
+                        elif col == 0:
+                            u = side / 4.0
+                            x = r if side == 0 else -r if side == 2 else 0
+                            y = r if side == 1 else -r if side == 3 else 0
+                        elif col == row:
+                            u = (side + 1.0) / 4
+                            x = r if side == 3 else -r if side == 1 else 0
+                            y = r if side == 0 else -r if side == 2 else 0
+                        else:
+                            u = (side + (<float>col / row)) / 4
+                            th = Tau * u
+                            x, y = r * cos(th), r * sin(th)
+                        vertices[i, 0], vertices[i, 1], vertices[i, 2] = x, y, z
+                        vertex_uv[i, 0], vertex_uv[i, 1] = u, v
+                        if col:
+                            faces[j, 0] = i
+                            if hemisphere == -1:
+                                faces[j, 1], faces[j, 2] = i-1, i-row-1
+                            else:
+                                faces[j, 1], faces[j, 2] = i-row-1, i-1
+                            j += 1
+                            if col < row:
+                                faces[j, 0] = i
+                                if hemisphere == -1:
+                                    faces[j, 1], faces[j, 2] = i-row-1, i-row
+                                else:
+                                    faces[j, 1], faces[j, 2] = i-row, i-row-1
+                                j += 1
+                        i += 1
         visual = trimesh.visual.texture.TextureVisuals(uv=vertex_uv_array)
-        self.trimesh_model = trimesh.base.Trimesh(vertices=vertices_array, vertex_normals=vertex_normals_array, faces=faces_array, visual=visual)
+        self.trimesh_model = trimesh.base.Trimesh(vertices=vertices_array, vertex_normals=vertices_array, faces=faces_array, visual=visual)
         self.valid = True
 
 
@@ -654,6 +661,7 @@ cdef class Cylinder(PrimitiveModel):
 
     @cython.cdivision(True)
     @cython.boundscheck(False)
+    @cython.wraparound(False)
     cdef void build_trimesh_model(self):
         cdef int64_t i, j, k, n = self.segments, m = (n+1)*6
         cdef object vertices_array = np.empty((m, 3), dtype='f4')
