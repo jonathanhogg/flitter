@@ -604,7 +604,8 @@ cdef class Sphere(PrimitiveModel):
                         r, z, v = 1, 0, 0.5
                     else:
                         th = hemisphere * (1 - <float>row / nrows) / 4
-                        r, z, v = cos(Tau * th), sin(Tau * th), th * 2 + 0.5
+                        v, th = 2 * th + 0.5, th * Tau
+                        r, z = cos(th), sin(th)
                     for col in range(row + 1):
                         if row == 0:
                             u = (side + 0.125) / 4
