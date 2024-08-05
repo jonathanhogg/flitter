@@ -340,7 +340,6 @@ cdef Model get_model(Node node, bint top):
     cdef Node child
     cdef Model model = None
     cdef Vector origin, normal
-    cdef list models
     cdef double snap_angle, minimum_area
     if node.kind is 'box':
         model = Model.get_box(node)
