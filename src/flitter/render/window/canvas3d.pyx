@@ -625,6 +625,8 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
         else:
             lights_buffer.write(lights_data)
         lights_buffer.bind_to_uniform_block(1)
+    if 'backface_data' in shader:
+        shader['backface_data'] = 0
     cdef int flags = moderngl.BLEND
     if render_group.depth_test:
         flags |= moderngl.DEPTH_TEST
@@ -679,8 +681,8 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
                 k += 1
         dispatch_instances(glctx, objects, shader, model, k, instances_data, textures, references, base_unit_id)
 
-    if 'backface_data' in shader:
-        if translucent_objects:
+    if translucent_objects:
+        if 'backface_data' in shader:
             backface_shader = get_shader(glctx, shaders, names, StandardVertexTemplate, BackfaceFragmentTemplate)
             backface_shader['pv_matrix'] = camera.pv_matrix
             backface_shader['orthographic'] = camera.orthographic
@@ -736,38 +738,40 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
             shader['backface_data'] = base_unit_id
             base_unit_id += 1
             samplers.append(sampler)
-            k = 0
-            for i, translucent_object in enumerate(translucent_objects):
-                model = translucent_object[1]
-                instance = translucent_object[2]
-                material = instance.material
-                src = instance.model_matrix.numbers
-                dest = &instances_data[k, 0]
-                for j in range(16):
-                    dest[j] = src[j]
-                normal_matrix = instance.model_matrix.inverse_transpose_matrix33()
-                src = normal_matrix.numbers
-                dest = &instances_data[k, 16]
-                for j in range(9):
-                    dest[j] = src[j]
-                dest = &instances_data[k, 25]
-                for j in range(3):
-                    dest[j] = material.albedo.numbers[j]
-                    dest[j+4] = material.emissive.numbers[j]
-                dest[3] = material.transparency
-                dest[7] = material.translucency
-                dest[8] = material.ior
-                dest[9] = material.metal
-                dest[10] = material.roughness
-                dest[11] = material.occlusion
-                k += 1
-                if i == n-1 or (<tuple>translucent_objects[i+1])[1] is not model:
-                    dispatch_instances(glctx, objects, shader, model, k, instances_data, material.textures, references, base_unit_id)
-                    k = 0
         else:
             shader['backface_data'] = 0
+        k = 0
+        for i, translucent_object in enumerate(translucent_objects):
+            model = translucent_object[1]
+            instance = translucent_object[2]
+            material = instance.material
+            src = instance.model_matrix.numbers
+            dest = &instances_data[k, 0]
+            for j in range(16):
+                dest[j] = src[j]
+            normal_matrix = instance.model_matrix.inverse_transpose_matrix33()
+            src = normal_matrix.numbers
+            dest = &instances_data[k, 16]
+            for j in range(9):
+                dest[j] = src[j]
+            dest = &instances_data[k, 25]
+            for j in range(3):
+                dest[j] = material.albedo.numbers[j]
+                dest[j+4] = material.emissive.numbers[j]
+            dest[3] = material.transparency
+            dest[7] = material.translucency
+            dest[8] = material.ior
+            dest[9] = material.metal
+            dest[10] = material.roughness
+            dest[11] = material.occlusion
+            k += 1
+            if i == n-1 or (<tuple>translucent_objects[i+1])[1] is not model:
+                dispatch_instances(glctx, objects, shader, model, k, instances_data, material.textures, references, base_unit_id)
+                k = 0
 
     if transparent_objects:
+        if 'backface_data' in shader:
+            shader['backface_data'] = 0
         render_target.depth_write(False)
         n = len(transparent_objects)
         if render_group.depth_sort and render_group.depth_test:
@@ -1032,6 +1036,7 @@ cdef class RenderTarget:
             clear_color = Zero4
         self.render_framebuffer.clear(*tuple(clear_color))
         self.image_texture_data = None
+        glctx.extra['zero'].use(0)
 
     cdef void use_main_buffer(self):
         self.render_framebuffer.use()

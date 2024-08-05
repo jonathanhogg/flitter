@@ -271,6 +271,7 @@ class ProgramNode(WindowNode):
                 sampler_args = {'border_color': (0, 0, 0, 0)}
             child_textures = self.child_textures
             samplers = []
+            self.glctx.extra['zero'].use(0)
             unit = 1
             pass_member = None
             for name in self._program:
@@ -508,7 +509,6 @@ class Window(ProgramNode):
                 glfw.set_mouse_button_callback(self.window, self.pointer_button_callback)
             zero = self.glctx.texture((1, 1), 4, dtype='f1')
             zero.write(bytes([0, 0, 0, 0]))
-            zero.use(0)
             self.glctx.extra = {'zero': zero}
         if self._visible:
             self.recalculate_viewport(new_window)
