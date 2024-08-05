@@ -16,8 +16,8 @@ from ..cache import SharedCache
 from ..model cimport Vector, Matrix44, Context, null_, true_, false_
 
 
-cdef double Pi = 3.141592653589793
-cdef double Tau = 6.283185307179586
+cdef double Pi = 3.141592653589793115997963468544185161590576171875
+cdef double Tau = 6.283185307179586231995926937088370323181152343750
 
 
 def context_func(func):

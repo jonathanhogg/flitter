@@ -15,7 +15,7 @@ from ...cache import SharedCache
 logger = name_patch(logger, __name__)
 
 cdef dict ModelCache = {}
-cdef double Tau = 6.283185307179586
+cdef double Tau = 6.283185307179586231995926937088370323181152343750231995926937088370323181152343750
 cdef double RootHalf = sqrt(0.5)
 cdef double DefaultSnapAngle = 0.05
 cdef int64_t DefaultSegments = 64

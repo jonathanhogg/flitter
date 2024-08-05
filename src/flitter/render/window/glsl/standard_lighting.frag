@@ -1,7 +1,7 @@
 ${HEADER}
 
 const vec3 greyscale = vec3(0.299, 0.587, 0.114);
-const float Tau = 6.283185307179586;
+const float Tau = 6.283185307179586231995926937088370323181152343750;
 
 in vec3 world_position;
 in vec3 world_normal;

@@ -32,7 +32,7 @@ cdef inline double perf_counter() noexcept nogil:
 
 logger = name_patch(logger, __name__)
 
-cdef double Tau = 6.283185307179586
+cdef double Tau = 6.283185307179586231995926937088370323181152343750
 cdef str DefaultFontFamily = 'Helvetica'
 cdef int DefaultFontSize = 20
 

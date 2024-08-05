@@ -1,6 +1,6 @@
 ${HEADER}
 
-const float Tau = 6.283185307179586;
+const float Tau = 6.283185307179586231995926937088370323181152343750;
 
 in vec2 coord;
 out vec4 color;

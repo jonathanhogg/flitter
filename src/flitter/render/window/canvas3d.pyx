@@ -34,7 +34,7 @@ cdef Vector Yaxis = Vector((0, 1, 0))
 cdef Vector DefaultFalloff = Vector((0, 0, 1, 0))
 cdef Matrix44 IdentityTransform = Matrix44._identity()
 cdef int DEFAULT_MAX_LIGHTS = 50
-cdef double Pi = 3.141592653589793
+cdef double Pi = 3.141592653589793115997963468544185161590576171875
 cdef set MaterialAttributes = {'color', 'metal', 'roughness', 'shininess', 'occlusion', 'emissive', 'transparency',
                                'texture_id', 'metal_texture_id', 'roughness_texture_id', 'occlusion_texture_id',
                                'emissive_texture_id', 'transparency_texture_id'}

@@ -18,8 +18,8 @@ from cpython.tuple cimport PyTuple_New, PyTuple_GET_SIZE, PyTuple_GET_ITEM, PyTu
 from cpython.unicode cimport PyUnicode_DATA, PyUnicode_GET_LENGTH, PyUnicode_KIND, PyUnicode_READ
 
 
-cdef double Pi = 3.141592653589793
-cdef double Tau = 6.283185307179586
+cdef double Pi = 3.141592653589793115997963468544185161590576171875
+cdef double Tau = 6.283185307179586231995926937088370323181152343750
 cdef double NaN = float("nan")
 cdef uint64_t SymbolPrefix = <uint64_t>(0xffe0_0000_0000_0000)
 cdef frozenset EmptySet = frozenset()
