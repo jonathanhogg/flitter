@@ -681,11 +681,11 @@ UV space.
 
 `!sphere`
 : This model represents a unit-radius sphere (strictly speaking, the surface is
-made up of triangular faces with vertices on this sphere). UV coordinates use
-the [Equirectangular
-projection](https://en.wikipedia.org/wiki/Equirectangular_projection) with the
-model positive $z$ direction being "North" and the 0 longitude arc aligned
-to the model $x$ axis.
+made up of triangular faces with vertices on this sphere). The sphere is
+constructed from eight octants with overlapping seams. UV coordinates use the
+[Equirectangular projection](https://en.wikipedia.org/wiki/Equirectangular_projection)
+with the model positive $z$ direction being "North" and the 0 longitude arc
+aligned to the model $x$ axis.
 
 `!cylinder`
 : This is a unit-radius and unit-height cylinder with its axis of rotational
@@ -704,14 +704,15 @@ attribute:
 
 `segments=` *N*
 : This specifies the number of segments to be generated in the model. For a
-cylinder this will be the number of rectangles making up the sides and the
-number of triangles making up the top and bottom circles. Cones are very
-similar except that the sides are made up of triangles as well. For spheres,
-the value gives the number of stripes of longitude and the number of stripes of
-latitude will be half this (rounded down). The default in all primitives is
-`64`. The minimum number of segments for a `!cylinder` or `!cone` is `2`
-(resulting in a flat double-sided rectangle or triangle respectively) and the
-minimum for a `!sphere` is `4` (resulting in an octahedron).
+cylinder this will be the number of rectangular faces making up the sides and
+the number of triangles making up the top and bottom. Cones are similar except
+that the sides are also made up of triangles. For spheres, the value gives the
+number of edges at the equator. The default in all primitives is `64`. The
+minimum number of segments for a `!cylinder` or `!cone` is `2` (resulting in a
+flat double-sided rectangle or triangle respectively) and the minimum for a
+`!sphere` is `4` (resulting in an octahedron). As a `!sphere` is made up of
+octants, `segments` is constrained to be a multiple of 4 and will be rounded
+*down* to the nearest multiple.
 
 :::{warning}
 The number of model vertices and faces scales linearly or quadratically (in the
@@ -719,8 +720,9 @@ case of spheres) with the number of `segments` and so this should be no greater
 than that necessary to eliminate obvious visual artefacts.
 
 That said, when rendering large numbers of a particular kind of primitive, it
-is best to keep them all at the same value for `segments`, as this allows the
-engine to dispatch them simultaneously.
+is best to keep them all at the same value for `segments`, as this results in
+the instances sharing the same underlying model and allows the engine to
+dispatch them for rendering simultaneously.
 :::
 
 ### External Models
@@ -788,10 +790,10 @@ windings.
 : Setting this attribute to `true` on a model node will invert the model.
 
 The result of inverting a model is that the insides of the back faces of the
-model will be rendered instead of the outside of the front faces. Other than
-producing some strange special effects, this is primarily useful for creating
-environments. For example, a large inverted sphere with a texture map can be
-used as a "sky box".
+model will be rendered instead of the outside of the front faces. This can be
+used to render specular reflections on the back faces of transparent objects
+(by rendering the object twice: normal and inverted) or to create environments
+(e.g., by texture-mapping a large inverted sphere that encloses the scene).
 
 As with all models, the results of these operations are cached.
 
