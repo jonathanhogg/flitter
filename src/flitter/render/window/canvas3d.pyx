@@ -354,30 +354,19 @@ cdef Model get_model(Node node, bint top):
         model = Model.get_external(node)
         if model is not None and node.get_bool('repair', False):
             model = model.repair()
+    elif not top and node.kind is 'transform':
+        transform_matrix = update_transform_matrix(node, IdentityTransform)
+        model = Model.union([get_model(child, False).transform(transform_matrix) for child in node._children])
     elif node.kind is 'intersect':
-        models = []
-        for child in node._children:
-            models.append(get_model(child, False))
-        model = Model.intersect(models)
-    elif node.kind is 'union' or (not top and node.kind is 'transform'):
-        models = []
-        for child in node._children:
-            models.append(get_model(child, False))
-        model = Model.union(models)
-        if node.kind is 'transform' and (transform_matrix := update_transform_matrix(node, IdentityTransform)) is not IdentityTransform:
-            model = model.transform(transform_matrix)
+        model = Model.intersect([get_model(child, False) for child in node._children])
+    elif node.kind is 'union':
+        model = Model.union([get_model(child, False) for child in node._children])
     elif node.kind is 'difference':
-        models = []
-        for child in node._children:
-            models.append(get_model(child, False))
-        model = Model.difference(models)
+        model = Model.difference([get_model(child, False) for child in node._children])
     elif node.kind is 'slice':
         normal = node.get_fvec('normal', 3, null_)
         origin = node.get_fvec('origin', 3, Zero3)
-        models = []
-        for child in node._children:
-            models.append(get_model(child, False))
-        model = Model.union(models)
+        model = Model.union([get_model(child, False) for child in node._children])
         if model is not None and normal.as_bool():
             model = model.slice(origin, normal)
     if model is not None:
@@ -386,7 +375,7 @@ cdef Model get_model(Node node, bint top):
                 model = model.flatten()
             elif (snap_angle := min(max(0, node.get_float('snap_edges', DefaultSnapAngle if model.is_manifold() else 0.5)), 0.5)) < 0.5:
                 minimum_area = min(max(0, node.get_float('minimum_area', 0)), 1)
-                model = model.snap_edges(snap_angle, minimum_area)
+                model = model.snap(snap_angle, minimum_area)
             if node.get_bool('invert', False):
                 model = model.invert()
         elif node.kind != 'transform':
