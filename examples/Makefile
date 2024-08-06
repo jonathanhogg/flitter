@@ -1,11 +1,9 @@
 
-.PHONY: all short long
+.PHONY: all
 
-all: short long
-
-short: bauble.png canvas3d.png linelight.png solidgeometry.png teaset.png textures.png translucency.png
-
-long: bounce.png hoops.png physics.png smoke.png video.png
+all: bauble.png bounce.png canvas3d.png dots.png hoops.png linear.png \
+	linelight.png physics.png smoke.png solidgeometry.png sphere.png \
+	teaset.png textures.png translucency.png video.png
 
 bauble.png: bauble.fl
 	flitter --offscreen --lockstep --fps=1 --runtime=1 --define "OUTPUT=$@" $<
@@ -22,6 +20,9 @@ dots.png: dots.fl
 hoops.png: hoops.fl
 	flitter --offscreen --lockstep --fps=10 --runtime=1 --define "OUTPUT=$@" $<
 
+linear.png: linear.fl
+	flitter --offscreen --lockstep --fps=1 --runtime=1 --define "OUTPUT=$@" $<
+
 linelight.png: linelight.fl
 	flitter --offscreen --lockstep --fps=1 --runtime=1 --define "OUTPUT=$@" $<
 
@@ -32,6 +33,9 @@ smoke.png: smoke.fl
 	flitter --offscreen --lockstep --fps=10 --runtime=1 --define "OUTPUT=$@" $<
 
 solidgeometry.png: solidgeometry.fl
+	flitter --offscreen --lockstep --fps=1 --runtime=1 --define "OUTPUT=$@" $<
+
+sphere.png: sphere.fl
 	flitter --offscreen --lockstep --fps=1 --runtime=1 --define "OUTPUT=$@" $<
 
 teaset.png: teaset.fl

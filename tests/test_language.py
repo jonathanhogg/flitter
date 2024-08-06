@@ -480,14 +480,35 @@ class TestExamples(ScriptTest):
     def test_bauble(self):
         self.assertSimplifierDoesntChangeBehaviour(self.EXAMPLES / 'bauble.fl')
 
+    def test_bounce(self):
+        self.assertSimplifierDoesntChangeBehaviour(self.EXAMPLES / 'bounce.fl')
+
     def test_canvas3d(self):
         self.assertSimplifierDoesntChangeBehaviour(self.EXAMPLES / 'canvas3d.fl')
+
+    def test_dots(self):
+        self.assertSimplifierDoesntChangeBehaviour(self.EXAMPLES / 'dots.fl')
+
+    def test_hoops(self):
+        self.assertSimplifierDoesntChangeBehaviour(self.EXAMPLES / 'hoops.fl')
+
+    def test_linear(self):
+        self.assertSimplifierDoesntChangeBehaviour(self.EXAMPLES / 'linear.fl')
 
     def test_linelight(self):
         self.assertSimplifierDoesntChangeBehaviour(self.EXAMPLES / 'linelight.fl')
 
+    def test_physics(self):
+        self.assertSimplifierDoesntChangeBehaviour(self.EXAMPLES / 'physics.fl')
+
+    def test_smoke(self):
+        self.assertSimplifierDoesntChangeBehaviour(self.EXAMPLES / 'smoke.fl')
+
     def test_solidgeometry(self):
         self.assertSimplifierDoesntChangeBehaviour(self.EXAMPLES / 'solidgeometry.fl')
+
+    def test_sphere(self):
+        self.assertSimplifierDoesntChangeBehaviour(self.EXAMPLES / 'sphere.fl')
 
     def test_teaset(self):
         self.assertSimplifierDoesntChangeBehaviour(self.EXAMPLES / 'teaset.fl')
@@ -500,18 +521,3 @@ class TestExamples(ScriptTest):
 
     def test_video(self):
         self.assertSimplifierDoesntChangeBehaviour(self.EXAMPLES / 'video.fl')
-
-    def test_bounce(self):
-        self.assertSimplifierDoesntChangeBehaviour(self.EXAMPLES / 'bounce.fl')
-
-    def test_dots(self):
-        self.assertSimplifierDoesntChangeBehaviour(self.EXAMPLES / 'dots.fl')
-
-    def test_hoops(self):
-        self.assertSimplifierDoesntChangeBehaviour(self.EXAMPLES / 'hoops.fl')
-
-    def test_physics(self):
-        self.assertSimplifierDoesntChangeBehaviour(self.EXAMPLES / 'physics.fl')
-
-    def test_smoke(self):
-        self.assertSimplifierDoesntChangeBehaviour(self.EXAMPLES / 'smoke.fl')

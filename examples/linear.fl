@@ -54,34 +54,35 @@ void main() {
 let SIZE=1024;1024
 
 !window size=SIZE
-    -- This OpenGL implemented gradient will always be in linear color space:
-    !shader fragment=COLORBARS
-    -- The two overlay stripes in this canvas will render differently depending
-    -- on the `linear` setting (which will swap every 2 seconds):
-    let linear=beat//2%2
-        text="Linear" if linear else "Non-linear"
-    !canvas id=:lineartest antialias=false linear=linear stroke_width=2/max(SIZE)
-        !group scale=SIZE
-            !path
-                !gradient start=0;0 end=1;0
-                    !stop color=0;1;0
-                    !stop color=1;0;0
-                !rect point=0;1/6 size=1;1/6
-                !fill
-                !stroke color=0
-            -- Do the yellow stripe as a series of rectangles to demonstrate that
-            -- `color` operates the same outside of a `!gradient`:
-            let n=16
-            for i in ..n
-                !rect point=i/n;4/6 size=1/n;1/6 color=i/n;i/n;0 fill=true
-            !rect point=0;4/6 size=1;1/6 color=0 stroke=true
-        !group color=0
-            !text point=(1/2;3/12)*SIZE font_size=32 text=text
-            !text point=(1/2;9/12)*SIZE font_size=32 text=text
-    -- This canvas just copies the two stripes from the canvas above at half
-    -- size into the centre. These small stripes should always match the larger
-    -- ones, regardless of the setting of `linear` in this canvas (which will
-    -- swap every second), because images are rendered to match the source not
-    -- the destination:
-    !canvas translate=SIZE/4 scale=1/2 linear=beat//1%2
-        !image fill=SIZE texture_id=:lineartest
+    !record filename=OUTPUT
+        -- This OpenGL implemented gradient will always be in linear color space:
+        !shader fragment=COLORBARS
+        -- The two overlay stripes in this canvas will render differently depending
+        -- on the `linear` setting (which will swap every 2 seconds):
+        let linear=beat//2%2
+            text="Linear" if linear else "Non-linear"
+        !canvas id=:lineartest antialias=false linear=linear stroke_width=2/max(SIZE) font_family='Arial'
+            !group scale=SIZE
+                !path
+                    !gradient start=0;0 end=1;0
+                        !stop color=0;1;0
+                        !stop color=1;0;0
+                    !rect point=0;1/6 size=1;1/6
+                    !fill
+                    !stroke color=0
+                -- Do the yellow stripe as a series of rectangles to demonstrate that
+                -- `color` operates the same outside of a `!gradient`:
+                let n=16
+                for i in ..n
+                    !rect point=i/n;4/6 size=1/n;1/6 color=i/n;i/n;0 fill=true
+                !rect point=0;4/6 size=1;1/6 color=0 stroke=true
+            !group color=0
+                !text point=(1/2;3/12)*SIZE font_size=32 text=text
+                !text point=(1/2;9/12)*SIZE font_size=32 text=text
+        -- This canvas just copies the two stripes from the canvas above at half
+        -- size into the centre. These small stripes should always match the larger
+        -- ones, regardless of the setting of `linear` in this canvas (which will
+        -- swap every second), because images are rendered to match the source not
+        -- the destination:
+        !canvas translate=SIZE/4 scale=1/2 linear=beat//1%2
+            !image fill=SIZE texture_id=:lineartest

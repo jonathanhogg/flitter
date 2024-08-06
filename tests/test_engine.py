@@ -128,7 +128,7 @@ class ScriptTest(unittest.TestCase):
         asyncio.run(controller.run())
         output = PIL.Image.open(output_path)
         self.assertEqual(reference.size, output.size, msg="Size mismatch")
-        self.assertLess(image_diff(reference, output), 0.005, msg="Output differs from reference image")
+        self.assertLess(image_diff(reference, output), 0.004, msg="Output differs from reference image")
 
     def assertAllScriptOutputsMatchesImages(self, scripts, suffix='.png', target_fps=1, run_time=1, **kwargs):
         for i, script in enumerate(scripts):
@@ -189,14 +189,35 @@ class TestExamples(ScriptTest):
     def test_bauble(self):
         self.assertScriptOutputMatchesImage(self.EXAMPLES / 'bauble.fl')
 
+    def test_bounce(self):
+        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'bounce.fl', target_fps=10)
+
     def test_canvas3d(self):
         self.assertScriptOutputMatchesImage(self.EXAMPLES / 'canvas3d.fl')
+
+    def test_dots(self):
+        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'dots.fl', target_fps=10)
+
+    def test_hoops(self):
+        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'hoops.fl', target_fps=10)
+
+    def test_linear(self):
+        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'linear.fl')
 
     def test_linelight(self):
         self.assertScriptOutputMatchesImage(self.EXAMPLES / 'linelight.fl')
 
+    def test_physics(self):
+        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'physics.fl', target_fps=10)
+
+    def test_smoke(self):
+        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'smoke.fl', target_fps=10)
+
     def test_solidgeometry(self):
         self.assertScriptOutputMatchesImage(self.EXAMPLES / 'solidgeometry.fl')
+
+    def test_sphere(self):
+        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'sphere.fl')
 
     def test_teaset(self):
         self.assertScriptOutputMatchesImage(self.EXAMPLES / 'teaset.fl')
@@ -210,24 +231,13 @@ class TestExamples(ScriptTest):
     def test_video(self):
         self.assertScriptOutputMatchesImage(self.EXAMPLES / 'video.fl')
 
-    def test_bounce(self):
-        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'bounce.fl', target_fps=10)
-
-    def test_dots(self):
-        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'dots.fl', target_fps=10)
-
-    def test_hoops(self):
-        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'hoops.fl', target_fps=10)
-
-    def test_physics(self):
-        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'physics.fl', target_fps=10)
-
-    def test_smoke(self):
-        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'smoke.fl', target_fps=10)
-
     @unittest.skipIf(sys.platform != 'linux', 'OpenGL ES only available on Linux')
     def test_bauble_opengl_es(self):
         self.assertScriptOutputMatchesImage(self.EXAMPLES / 'bauble.fl', opengl_es=True, suffix='.es.png')
+
+    @unittest.skipIf(sys.platform != 'linux', 'OpenGL ES only available on Linux')
+    def test_bounce_opengl_es(self):
+        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'bounce.fl', target_fps=10, opengl_es=True, suffix='.es.png')
 
     @unittest.skipIf(sys.platform != 'linux', 'OpenGL ES only available on Linux')
     def test_canvas3d_opengl_es(self):
@@ -236,6 +246,10 @@ class TestExamples(ScriptTest):
     @unittest.skipIf(sys.platform != 'linux', 'OpenGL ES only available on Linux')
     def test_linelight_opengl_es(self):
         self.assertScriptOutputMatchesImage(self.EXAMPLES / 'linelight.fl', opengl_es=True, suffix='.es.png')
+
+    @unittest.skipIf(sys.platform != 'linux', 'OpenGL ES only available on Linux')
+    def test_physics_opengl_es(self):
+        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'physics.fl', target_fps=10, opengl_es=True, suffix='.es.png')
 
     @unittest.skipIf(sys.platform != 'linux', 'OpenGL ES only available on Linux')
     def test_solidgeometry_opengl_es(self):
@@ -252,11 +266,3 @@ class TestExamples(ScriptTest):
     @unittest.skipIf(sys.platform != 'linux', 'OpenGL ES only available on Linux')
     def test_translucency_opengl_es(self):
         self.assertScriptOutputMatchesImage(self.EXAMPLES / 'translucency.fl', opengl_es=True, suffix='.es.png')
-
-    @unittest.skipIf(sys.platform != 'linux', 'OpenGL ES only available on Linux')
-    def test_bounce_opengl_es(self):
-        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'bounce.fl', target_fps=10, opengl_es=True, suffix='.es.png')
-
-    @unittest.skipIf(sys.platform != 'linux', 'OpenGL ES only available on Linux')
-    def test_physics_opengl_es(self):
-        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'physics.fl', target_fps=10, opengl_es=True, suffix='.es.png')

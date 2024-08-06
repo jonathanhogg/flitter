@@ -1,0 +1,34 @@
+
+%pragma tempo 60
+
+func axes(_, size=1)
+    let s=size*0.95 r1=hypot(size)/200 r2=r1*3
+    !material emissive=1;0;0
+        !cylinder start=0 end=s[0];0;0 radius=r1
+        !cone start=s[0];0;0 end=size[0];0;0 radius=r2
+    !material emissive=0;1;0
+        !cylinder start=0 end=0;s[1];0 radius=r1
+        !cone start=0;s[1];0 end=0;size[1];0 radius=r2
+    !material emissive=0;0;1
+        !cylinder start=0 end=0;0;s[2] radius=r1
+        !cone start=0;0;s[2] end=0;0;size[2] radius=r2
+
+let t=13+beat
+
+!window size=(1920;1080)
+    !shader id=:map size=2400;1200 hidden=true composite=:difference
+        !image id=:earth filename='assets/earth.jpg'
+        !canvas id=:canvas antialias=false
+            for x in (..2400|50)+0.5
+                !line points=x;0;x;1200
+            for y in (..1200|50)+0.5
+                !line points=0;y;2400;y
+            !stroke color=1 stroke_width=1
+    !record filename=OUTPUT
+        !canvas3d viewpoint=0;-600;0 up=0;0;1 fov_ref=:narrow
+            !light color=0.1
+            !light color=0.9 direction=0;1;-1
+            !transform rotate_x=sin(t/40)*0.15 rotate_z=t/25
+                !material roughness=0.5 texture_id=:map
+                    !sphere size=300 flat=false segments=128
+                @axes size=400
