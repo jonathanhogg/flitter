@@ -682,10 +682,16 @@ UV space.
 `!sphere`
 : This model represents a unit-radius sphere (strictly speaking, the surface is
 made up of triangular faces with vertices on this sphere). The sphere is
-constructed from eight octants with overlapping seams. UV coordinates use the
-[Equirectangular projection](https://en.wikipedia.org/wiki/Equirectangular_projection)
-with the model positive $z$ direction being "North" and the 0 longitude arc
-aligned to the model $x$ axis.
+constructed from eight, subdivided octants with overlapping seams. UV
+coordinates use the [Equirectangular
+projection](https://en.wikipedia.org/wiki/Equirectangular_projection)
+with the model positive $z$ direction being "North" and the left edge of the
+texture aligned to the model $x$ axis and then wrapped anti-clockwise. If the
+zero longitude line is in the centre of the image (common for maps) then this
+will end up aligned to the negative *x* axis. This projection is common for
+planetary mapping, but breaks down further from the equator towards the poles.
+In particular, lines of longitude will visibly kink at lower triangle counts
+(see `segments` attribute below).
 
 `!cylinder`
 : This is a unit-radius and unit-height cylinder with its axis of rotational
@@ -703,8 +709,8 @@ The nodes `!sphere`, `!cylinder` and `!cone` all support an additional
 attribute:
 
 `segments=` *N*
-: This specifies the number of segments to be generated in the model. For a
-cylinder this will be the number of rectangular faces making up the sides and
+: This specifies the number of segments the model should be generated with. For
+a cylinder this will be the number of rectangular faces making up the sides and
 the number of triangles making up the top and bottom. Cones are similar except
 that the sides are also made up of triangles. For spheres, the value gives the
 number of edges at the equator. The default in all primitives is `64`. The
@@ -715,13 +721,13 @@ octants, `segments` is constrained to be a multiple of 4 and will be rounded
 *down* to the nearest multiple.
 
 :::{warning}
-The number of model vertices and faces scales linearly or quadratically (in the
-case of spheres) with the number of `segments` and so this should be no greater
+The number of model vertices and faces scales linearly, or quadratically in the
+case of spheres, with the number of `segments` and so this should be no greater
 than that necessary to eliminate obvious visual artefacts.
 
 That said, when rendering large numbers of a particular kind of primitive, it
-is best to keep them all at the same value for `segments`, as this results in
-the instances sharing the same underlying model and allows the engine to
+is better to use the same value for `segments` for all of them, as this results
+in the instances sharing the same underlying model and allows the engine to
 dispatch them for rendering simultaneously.
 :::
 
