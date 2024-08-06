@@ -660,7 +660,7 @@ cdef class Sphere(PrimitiveModel):
                         r, z = cos(th), sin(th)
                     for col in range(row + 1):
                         if row == 0:
-                            u = (side + 0.125) / 4
+                            u = (side + 0.5) / 4
                             x = y = 0
                         elif col == 0:
                             u = side / 4.0
