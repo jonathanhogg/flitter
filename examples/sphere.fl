@@ -1,5 +1,14 @@
 
+-- Adjust the number of faces of the sphere by changing SEGMENTS to see how
+-- this affects the triangularization and texture mapping. SEGMENTS must be a
+-- multiple of 4. There will be 8 * (SEGMENTS / 4)**2 faces in the model.
+--
+-- As the poles are formed from 4 triangles, triangular sections of the texture
+-- at the very top and bottom are omitted from the final mapping.
+
 %pragma tempo 60
+
+let SEGMENTS=20
 
 func axes(_, size=1)
     let s=size*0.95 r1=hypot(size)/200 r2=r1*3
@@ -13,7 +22,7 @@ func axes(_, size=1)
         !cylinder start=0 end=0;0;s[2] radius=r1
         !cone start=0;0;s[2] end=0;0;size[2] radius=r2
 
-let t=13+beat
+let t=15+beat
 
 !window size=(1920;1080)
     !shader id=:map size=2400;1200 hidden=true composite=:difference
@@ -25,10 +34,10 @@ let t=13+beat
                 !line points=0;y;2400;y
             !stroke color=1 stroke_width=1
     !record filename=OUTPUT
-        !canvas3d viewpoint=0;-600;0 up=0;0;1 fov_ref=:narrow
-            !light color=0.1
-            !light color=0.9 direction=0;1;-1
+        !canvas3d viewpoint=0;-600;0 focus=0;0;25 up=0;0;1 fov_ref=:narrow
+            !light color=1 direction=-1;2;-2
+            !light color=1 direction=2;1;2
             !transform rotate_x=sin(t/40)*0.15 rotate_z=t/25
-                !material roughness=0.5 texture_id=:map
-                    !sphere size=300 flat=false segments=128
-                @axes size=400
+                !material roughness=0.4 texture_id=:map translucency=150
+                    !sphere size=350 flat=true segments=SEGMENTS
+                @axes size=450
