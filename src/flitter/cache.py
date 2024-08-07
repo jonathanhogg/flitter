@@ -367,6 +367,7 @@ class CachePath:
             if quality:
                 options['quality'] = quality
             try:
+                self._path.parent.mkdir(parents=True, exist_ok=True)
                 image.save(self._path, **options)
             except Exception as exc:
                 logger.opt(exception=exc).error("Unable to save image to: {}", self._path)
@@ -402,6 +403,7 @@ class CachePath:
                     raise ValueError(f"'{codec}' not a video codec")
                 if av_codec.name == 'hevc_videotoolbox' and alpha:
                     options['alpha_quality'] = '1'
+                self._path.parent.mkdir(parents=True, exist_ok=True)
                 container = av.open(str(self._path), mode='w')
                 stream = container.add_stream(av_codec, rate=fps, options=options)
             except Exception as exc:
