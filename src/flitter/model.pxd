@@ -87,6 +87,7 @@ cdef class Matrix33(Vector):
     cdef Vector vmul(self, Vector b)
     cpdef Matrix33 inverse(self)
     cpdef Matrix33 transpose(self)
+    cpdef Matrix44 matrix44(self)
 
 
 cdef class Matrix44(Vector):

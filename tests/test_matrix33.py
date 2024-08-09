@@ -7,7 +7,7 @@ import unittest
 
 import numpy as np
 
-from flitter.model import Matrix33
+from flitter.model import Matrix33, Matrix44
 
 
 def all_isclose(xs, ys, rel_tol=1e-9, abs_tol=0):
@@ -99,6 +99,10 @@ class TestMatrix33(unittest.TestCase):
     def test_transpose(self):
         self.assertEqual(Matrix33().transpose(), Matrix33())
         self.assertEqual(Matrix33(range(9)).transpose(), [0, 3, 6, 1, 4, 7, 2, 5, 8])
+
+    def test_matrix44(self):
+        self.assertEqual(Matrix33().matrix44(), Matrix44())
+        self.assertEqual(Matrix33(range(9)).matrix44(), [0, 1, 2, 0, 3, 4, 5, 0, 6, 7, 8, 0, 0, 0, 0, 1])
 
     def test_repr(self):
         self.assertEqual(repr(Matrix33()), """|   1.000   0.000   0.000 |

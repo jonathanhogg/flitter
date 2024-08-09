@@ -1318,6 +1318,19 @@ cdef class Matrix33(Vector):
         result.length = 9
         return result
 
+    cpdef Matrix44 matrix44(self):
+        cdef double* numbers = self.numbers
+        cdef Matrix44 result = Matrix44.__new__(Matrix44)
+        cdef double* result_numbers = result._numbers
+        cdef int64_t i, j
+        for i in range(4):
+            for j in range(4):
+                result_numbers[4*i+j] = 0 if i == 3 or j == 3 else numbers[3*i+j]
+        result_numbers[15] = 1
+        result.numbers = result_numbers
+        result.length = 16
+        return result
+
     def __repr__(self):
         cdef list rows = []
         cdef double* numbers = self.numbers
