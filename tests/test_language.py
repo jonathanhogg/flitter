@@ -2,7 +2,6 @@
 Flitter language integration tests
 """
 
-import math
 from pathlib import Path
 import unittest
 
@@ -11,6 +10,8 @@ from flitter.language.tree import Literal, Let, Sequence, Export, Binding, Top
 from flitter.language.parser import parse, ParseError
 from flitter.language.vm import Function
 from flitter.model import Vector, Node, Context, StateDict, DummyStateDict, null
+
+from . import utils
 
 
 configure_logger('WARNING')
@@ -353,7 +354,7 @@ func map(f, xs)
             """, with_errors={'Error calling hsv: hsv() takes exactly 1 positional argument (0 given)'})
 
 
-class ScriptTest(unittest.TestCase):
+class ScriptTest(utils.TestCase):
     """
     Run a Flitter script under three different conditions and test that the generated root nodes
     and exported values match:
@@ -366,12 +367,6 @@ class ScriptTest(unittest.TestCase):
     In the third case, all state lookups will be statically evaluated to literal nulls by the
     simplifier. The idea is to exercise the simplifier as much as possible.
     """
-
-    def assertAllAlmostEqual(self, xs, ys, msg=None):
-        for x, y in zip(xs, ys):
-            self.assertEqual(math.isnan(x), math.isnan(y), msg=msg)
-            if not (math.isnan(x) or math.isnan(y)):
-                self.assertAlmostEqual(x, y, msg=msg)
 
     def assertExportsMatch(self, exports1, exports2, msg=None):
         self.assertEqual(exports1.keys(), exports2.keys())

@@ -4,11 +4,12 @@ Tests of the model.Vector class
 
 import pickle
 import math
-import unittest
 
 import numpy
 
 from flitter.model import Vector, true, false, null, Node, initialize_numbers_cache, empty_numbers_cache, numbers_cache_counts
+
+from . import utils
 
 
 FOO_SYMBOL_NUMBER = float.fromhex('-0x1.dcb27518fed9dp+1023')
@@ -23,16 +24,10 @@ class test_class:
         return 0
 
 
-class TestVector(unittest.TestCase):
+class TestVector(utils.TestCase):
     """
     Tests of the Vector class
     """
-
-    def assertAllAlmostEqual(self, xs, ys):
-        for x, y in zip(xs, ys):
-            self.assertEqual(math.isnan(x), math.isnan(y), "nan mismatch")
-            if not (math.isnan(x) or math.isnan(y)):
-                self.assertAlmostEqual(x, y)
 
     def test_construct(self):
         """Test constructor and coerce method"""

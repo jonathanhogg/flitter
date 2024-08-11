@@ -3,7 +3,7 @@
 import cython
 import numpy as np
 
-from libc.math cimport isnan, floor as c_floor, ceil as c_ceil, abs as c_abs, sqrt, sin, cos, isnan
+from libc.math cimport isnan, floor as c_floor, ceil as c_ceil, abs as c_abs, round as c_round, sqrt, sin, cos, isnan
 from cpython.object cimport PyObject
 from cpython.ref cimport Py_INCREF
 from cpython.bool cimport PyBool_FromLong
@@ -729,6 +729,19 @@ cdef class Vector:
             for i in range(result.allocate_numbers(n)):
                 result.numbers[i] = self.numbers[i] - c_floor(self.numbers[i])
         return result
+
+    cdef Vector round(self, int64_t ndigits):
+        if self.numbers == NULL:
+            return null_
+        cdef int64_t i
+        cdef Vector result = Vector.__new__(Vector)
+        cdef double exponent = 10 ** ndigits
+        for i in range(result.allocate_numbers(self.length)):
+            result.numbers[i] = c_round(self.numbers[i] * exponent) / exponent
+        return result
+
+    def __round__(self, ndigits=None):
+        return self.round(ndigits=ndigits if ndigits is not None else 0)
 
     def __add__(self, other):
         return self.add(Vector._coerce(other))

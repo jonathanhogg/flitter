@@ -4,7 +4,6 @@ Tests of the flitter language built-in functions
 
 import math
 import struct
-import unittest
 import zlib
 
 from flitter.model import Vector, null
@@ -15,21 +14,13 @@ from flitter.language.functions import (uniform, normal, beta,
                                         split, ordv, chrv)
 from flitter.language.noise import noise, octnoise
 
+from . import utils
+
 
 Tau = 2*math.pi
 
 
-class MathsTest(unittest.TestCase):
-    def assertIsClose(self, x, y, rel_tol=1e-9, abs_tol=1e-9):
-        self.assertTrue(math.isclose(x, y, rel_tol=rel_tol, abs_tol=abs_tol), f"{x} !~= {y}")
-
-    def assertAllClose(self, xs, ys, rel_tol=1e-9, abs_tol=1e-9):
-        self.assertEqual(len(xs), len(ys), f"Collection length mismatch: {len(xs)} != {len(ys)}")
-        for x, y in zip(xs, ys):
-            self.assertIsClose(x, y, rel_tol=rel_tol, abs_tol=abs_tol)
-
-
-class TestUniform(MathsTest):
+class TestUniform(utils.TestCase):
     FACTORY = uniform
     DISTRIBUTION = ('uniform',)
     LOWER = 0
@@ -126,7 +117,7 @@ class TestNormal(TestUniform):
     LOWER = -UPPER
 
 
-class TestNoise(MathsTest):
+class TestNoise(utils.TestCase):
     def test_zero_behaviour(self):
         self.assertEqual(noise(Vector.symbol('seed'), Vector(0)), Vector(0))
         self.assertEqual(noise(Vector.symbol('seed'), Vector(0), Vector(0)), Vector(0))
@@ -147,10 +138,10 @@ class TestNoise(MathsTest):
         self.assertEqual(octnoise(Vector.symbol('seed'), Vector(1), Vector(0.5), Vector(0), Vector(0), null), null)
 
     def test_reproducability(self):
-        self.assertIsClose(noise(null, Vector(0.49)), 0.498956342)
-        self.assertIsClose(noise(null, Vector(0.49), Vector(0.49)), 0.167789989)
-        self.assertIsClose(noise(null, Vector(0.49), Vector(0.49), Vector(0.49)), -0.219814457)
-        self.assertIsClose(noise(null, Vector(0.49), Vector(0.49), Vector(0.49), Vector(0.49)), 0.119003482)
+        self.assertAlmostEqual(noise(null, Vector(0.49)), 0.498956342)
+        self.assertAlmostEqual(noise(null, Vector(0.49), Vector(0.49)), 0.167789989)
+        self.assertAlmostEqual(noise(null, Vector(0.49), Vector(0.49), Vector(0.49)), -0.219814457)
+        self.assertAlmostEqual(noise(null, Vector(0.49), Vector(0.49), Vector(0.49), Vector(0.49)), 0.119003482)
 
     def test_noise_1(self):
         seed1 = Vector.symbol('seed').concat(Vector(1))
@@ -322,7 +313,7 @@ class TestNoise(MathsTest):
         self.assertEqual(values1, values2)
 
 
-class TestBasicVectorFunctions(MathsTest):
+class TestBasicVectorFunctions(utils.TestCase):
     def test_len(self):
         self.assertEqual(lenv(null), 0)
         self.assertEqual(lenv(Vector(1)), 1)
@@ -439,14 +430,14 @@ class TestBasicVectorFunctions(MathsTest):
         self.assertEqual(count(Vector(['a', 1]), Vector(['a', 'b', 1, 2, 3, 1])), [1, 2])
 
 
-class TestUnaryMathFunctions(MathsTest):
-    def assertMatchesUnaryFunc(self, vfunc, func, xs=None, rel_tol=1e-9, abs_tol=0):
+class TestUnaryMathFunctions(utils.TestCase):
+    def assertMatchesUnaryFunc(self, vfunc, func, xs=None, places=None, delta=None):
         self.assertEqual(vfunc(null), null)
         self.assertEqual(vfunc(Vector('hello')), null)
         xs = Vector.range(-10, 10, 0.2) if xs is None else xs
         ys = [func(x) for x in xs]
-        self.assertAllClose([vfunc(Vector(x)) for x in xs], ys, rel_tol=rel_tol, abs_tol=abs_tol)
-        self.assertAllClose(vfunc(xs), ys, rel_tol=rel_tol, abs_tol=abs_tol)
+        self.assertAllAlmostEqual([float(vfunc(xs.item(i))) for i in range(len(xs))], ys, places=places, delta=delta)
+        self.assertAllAlmostEqual(vfunc(xs), ys, places=places, delta=delta)
 
     def test_round(self):
         self.assertMatchesUnaryFunc(roundv, round)
@@ -479,7 +470,7 @@ class TestUnaryMathFunctions(MathsTest):
         self.assertMatchesUnaryFunc(fract, lambda x: x % 1)
 
 
-class TestTrig(MathsTest):
+class TestTrig(utils.TestCase):
     def setUp(self):
         self.a = Vector([1, 2, 3, 4])
         self.b = Vector([4, 5, 6, 7])
@@ -501,7 +492,7 @@ class TestTrig(MathsTest):
         values = [math.acos(x)/Tau for x in xs]
         for i in range(len(values)):
             self.assertEqual(acosv(xs.item(i)), values[i])
-        self.assertAllClose(acosv(xs), values)
+        self.assertAllAlmostEqual(acosv(xs), values)
 
     def test_sin(self):
         self.assertEqual(sinv(null), null)
@@ -519,7 +510,7 @@ class TestTrig(MathsTest):
         values = [math.asin(x)/Tau for x in xs]
         for i in range(len(values)):
             self.assertEqual(asinv(xs.item(i)), values[i])
-        self.assertAllClose(asinv(xs), values)
+        self.assertAllAlmostEqual(asinv(xs), values)
 
     def test_tan(self):
         self.assertEqual(tanv(null), null)
@@ -536,10 +527,10 @@ class TestTrig(MathsTest):
         self.assertEqual(hypot(self.a, null), null)
         self.assertEqual(hypot(Vector([3, 4])), Vector(5))
         self.assertEqual(hypot(Vector([3, 4, 5])), Vector(math.sqrt(50)))
-        self.assertAllClose(hypot(self.a, self.b), Vector([math.sqrt(17), math.sqrt(29), math.sqrt(45), math.sqrt(65)]))
-        self.assertAllClose(hypot(self.a, self.c), Vector([math.sqrt(5), math.sqrt(8), math.sqrt(13), math.sqrt(20)]))
-        self.assertAllClose(hypot(self.a, self.b, self.c),
-                            Vector([math.sqrt(21), math.sqrt(33), math.sqrt(49), math.sqrt(69)]))
+        self.assertAllAlmostEqual(hypot(self.a, self.b), Vector([math.sqrt(17), math.sqrt(29), math.sqrt(45), math.sqrt(65)]))
+        self.assertAllAlmostEqual(hypot(self.a, self.c), Vector([math.sqrt(5), math.sqrt(8), math.sqrt(13), math.sqrt(20)]))
+        self.assertAllAlmostEqual(hypot(self.a, self.b, self.c),
+                                  Vector([math.sqrt(21), math.sqrt(33), math.sqrt(49), math.sqrt(69)]))
 
     def test_normalize(self):
         self.assertEqual(normalize(null), null)
@@ -557,26 +548,26 @@ class TestTrig(MathsTest):
 
     def test_angle(self):
         self.assertEqual(angle(null), null)
-        self.assertAllClose(angle(self.a), Vector([math.atan2(2, 1)/Tau, math.atan2(4, 3)/Tau]))
+        self.assertAllAlmostEqual(angle(self.a), Vector([math.atan2(2, 1)/Tau, math.atan2(4, 3)/Tau]))
         self.assertEqual(angle(self.a, null), null)
         self.assertEqual(angle(null, self.a), null)
-        self.assertAllClose(angle(self.a, self.b),
-                            Vector([math.atan2(4, 1)/Tau, math.atan2(5, 2)/Tau, math.atan2(6, 3)/Tau, math.atan2(7, 4)/Tau]))
-        self.assertAllClose(angle(self.a, self.c),
-                            Vector([math.atan2(2, 1)/Tau, math.atan2(2, 2)/Tau, math.atan2(2, 3)/Tau, math.atan2(2, 4)/Tau]))
+        self.assertAllAlmostEqual(angle(self.a, self.b),
+                                  Vector([math.atan2(4, 1)/Tau, math.atan2(5, 2)/Tau, math.atan2(6, 3)/Tau, math.atan2(7, 4)/Tau]))
+        self.assertAllAlmostEqual(angle(self.a, self.c),
+                                  Vector([math.atan2(2, 1)/Tau, math.atan2(2, 2)/Tau, math.atan2(2, 3)/Tau, math.atan2(2, 4)/Tau]))
 
     def test_length(self):
         self.assertEqual(length(null), null)
-        self.assertAllClose(length(self.a), Vector([math.sqrt(5), 5]))
+        self.assertAllAlmostEqual(length(self.a), Vector([math.sqrt(5), 5]))
         self.assertEqual(length(self.a, null), null)
         self.assertEqual(length(null, self.a), null)
-        self.assertAllClose(length(self.a, self.b),
-                            Vector([math.sqrt(17), math.sqrt(29), math.sqrt(45), math.sqrt(65)]))
-        self.assertAllClose(length(self.a, self.c),
-                            Vector([math.sqrt(5), math.sqrt(8), math.sqrt(13), math.sqrt(20)]))
+        self.assertAllAlmostEqual(length(self.a, self.b),
+                                  Vector([math.sqrt(17), math.sqrt(29), math.sqrt(45), math.sqrt(65)]))
+        self.assertAllAlmostEqual(length(self.a, self.c),
+                                  Vector([math.sqrt(5), math.sqrt(8), math.sqrt(13), math.sqrt(20)]))
 
 
-class TestStringFuncs(MathsTest):
+class TestStringFuncs(utils.TestCase):
     def test_ord(self):
         self.assertEqual(ordv(null), null)
         self.assertEqual(ordv(Vector('A')), Vector([65]))

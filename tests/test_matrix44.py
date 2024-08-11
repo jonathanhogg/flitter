@@ -3,25 +3,20 @@ Tests of the model.Matrix44 class
 """
 
 import math
-import unittest
 
 import numpy as np
 
 from flitter.model import Matrix44, Matrix33
 
+from . import utils
 
-class TestMatrix44(unittest.TestCase):
+
+class TestMatrix44(utils.TestCase):
     """
     Tests of the Matrix44 class
 
     Note that matrices are column-major as per OpenGL.
     """
-
-    def assertAllAlmostEqual(self, xs, ys):
-        for x, y in zip(xs, ys):
-            self.assertEqual(math.isnan(x), math.isnan(y), "nan mismatch")
-            if not (math.isnan(x) or math.isnan(y)):
-                self.assertAlmostEqual(x, y)
 
     def test_construct(self):
         self.assertEqual(Matrix44(), [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1])

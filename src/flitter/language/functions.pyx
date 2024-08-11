@@ -6,7 +6,7 @@ Flitter language functions
 
 import cython
 
-from libc.math cimport floor, round, sin, cos, tan, asin, acos, sqrt, exp, atan2, log, log2, log10
+from libc.math cimport floor, sin, cos, tan, asin, acos, sqrt, exp, atan2, log, log2, log10
 from libc.stdint cimport int64_t, uint64_t
 from cpython.object cimport PyObject
 from cpython.ref cimport Py_INCREF
@@ -579,16 +579,10 @@ cpdef shuffle(uniform source, Vector xs):
     return xs
 
 
-def roundv(Vector xs not None):
-    if xs.numbers == NULL:
+def roundv(Vector xs not None, Vector ys=false_):
+    if ys.numbers == NULL or ys.length != 1:
         return null_
-    cdef Vector ys = Vector.__new__(Vector)
-    cdef double x, y
-    for i in range(ys.allocate_numbers(xs.length)):
-        x = xs.numbers[i]
-        y = round(x)
-        ys.numbers[i] = y
-    return ys
+    return xs.round(<int64_t>floor(ys.numbers[0]))
 
 
 def ceilv(Vector xs not None):

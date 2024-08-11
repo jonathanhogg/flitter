@@ -3,21 +3,15 @@ Tests of the model.Matrix33 class
 """
 
 import math
-import unittest
 
 import numpy as np
 
 from flitter.model import Matrix33, Matrix44
 
-
-def all_isclose(xs, ys, rel_tol=1e-9, abs_tol=0):
-    for x, y in zip(xs, ys):
-        if not math.isclose(x, y, rel_tol=rel_tol, abs_tol=abs_tol):
-            return False
-    return True
+from . import utils
 
 
-class TestMatrix33(unittest.TestCase):
+class TestMatrix33(utils.TestCase):
     """
     Tests of the Matrix33 class
 
@@ -65,8 +59,8 @@ class TestMatrix33(unittest.TestCase):
     def test_rotate(self):
         self.assertIsNone(Matrix33.rotate(math.nan))
         self.assertEqual(Matrix33.rotate(0), Matrix33())
-        self.assertTrue(all_isclose(Matrix33.rotate(1), Matrix33(), abs_tol=1e-12))
-        self.assertTrue(all_isclose(Matrix33.rotate(0.5), [-1, 0, 0, 0, -1, 0, 0, 0, 1], abs_tol=1e-12))
+        self.assertAllAlmostEqual(Matrix33.rotate(1), Matrix33(), places=None, delta=1e-12)
+        self.assertAllAlmostEqual(Matrix33.rotate(0.5), [-1, 0, 0, 0, -1, 0, 0, 0, 1], places=None, delta=1e-12)
 
     def test_mmul(self):
         self.assertEqual(Matrix33() @ Matrix33(), Matrix33())
@@ -91,10 +85,10 @@ class TestMatrix33(unittest.TestCase):
         a = Matrix33.scale([2, 3])
         b = Matrix33.rotate(0.25)
         c = Matrix33.translate([7, 9])
-        self.assertTrue(all_isclose(a.inverse() @ a, Matrix33()))
-        self.assertTrue(all_isclose(b.inverse() @ b, Matrix33()))
-        self.assertTrue(all_isclose(b.inverse() @ (a.inverse() @ (a @ (b @ c))), c, abs_tol=1e-12))
-        self.assertTrue(all_isclose((((b.inverse() @ a.inverse()) @ a) @ b) @ c, c))
+        self.assertAllAlmostEqual(a.inverse() @ a, Matrix33())
+        self.assertAllAlmostEqual(b.inverse() @ b, Matrix33())
+        self.assertAllAlmostEqual(b.inverse() @ (a.inverse() @ (a @ (b @ c))), c, places=None, delta=1e-12)
+        self.assertAllAlmostEqual((((b.inverse() @ a.inverse()) @ a) @ b) @ c, c)
 
     def test_transpose(self):
         self.assertEqual(Matrix33().transpose(), Matrix33())
