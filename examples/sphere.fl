@@ -1,7 +1,12 @@
 
 -- Adjust the number of faces of the sphere by changing SEGMENTS to see how
--- this affects the triangularization and texture mapping. SEGMENTS must be a
--- multiple of 4. There will be 8 * (SEGMENTS / 4)**2 faces in the model.
+-- this affects the triangularization and texture mapping.
+--
+-- SEGMENTS represents the number of edges around the equator and around the
+-- 0/0.5 and 0.25/0.75 lines of longitude. These lines split the sphere into
+-- eight spherical triangle octants, which are each subdivided into
+-- (SEGMENTS // 4)**2 triangular faces. The model is flat shaded to make these
+-- triangles more apparent.
 --
 -- As the poles are formed from 4 triangles, triangular sections of the texture
 -- at the very top and bottom are omitted from the final mapping.
