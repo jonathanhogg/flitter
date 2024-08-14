@@ -10,9 +10,9 @@
 -- The relative sizes and orbit timings are roughly correct, but the moon is
 -- not really anywhere near this close to Earth.
 --
--- The star sphere is inverted so that that inside surface of it is rendered.
--- It is also placed in a separate group so that it can be lit with a single
--- ambient light.
+-- The stars sphere is inverted so that that inside surface of it is rendered.
+-- The Earth and Moon spheres are placed in a separate group with their lights
+-- so that the star sphere isn't affected by them.
 
 %pragma tempo 60
 
@@ -32,9 +32,7 @@ let SIZE=1920;1080
     !record filename=(OUTPUT if frame == run_time * fps - 1)
         !bloom radius=hypot(SIZE)/100
             !canvas3d samples=4 viewpoint=0;-25;0 up=0;0;1 near=1 far=150
-                !group
-                    !light color=1
-                    !sphere size=100 invert=true texture_id=:stars rotation=0;0;days/365.256
+                !sphere size=100 invert=true emissive_texture_id=:stars rotation=0;0;days/365.256
                 !group
                     !light color=0.01
                     !transform rotate_z=days/365.256
