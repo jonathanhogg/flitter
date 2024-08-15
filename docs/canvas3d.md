@@ -56,6 +56,10 @@ $tZ$ turns around the $z$-axis, then $tY$ turns around the $y$-axis and then
 $tX$ turns around the $x$-axis. Rotates equally around all axes if given as a
 single item vector.
 
+`rotate=`*qW*`;`*qX*`;`*qY*`;`*qZ*
+: Adds a rotation step into the local transformation matrix described by a
+unit quaternion. See [Quaternion functions](builtins.md#quaternion-functions).
+
 `rotate_x`=*tX*
 : Add a rotation step around the $x$-axis alone.
 

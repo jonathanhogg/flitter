@@ -128,6 +128,28 @@ to `y*x + (1-y)*z` (including in n-vector semantics).
 `tan(` *x* `)`
 : Return the tangent of *x* (with *x* expressed in *turns*).
 
+## Quaternion functions
+
+Quaternions are 4-vectors, *w;x;y;z*, that can be used to describe an arbitrary
+rotation in 3-dimensional Cartesian space. The identity quaternion is `1;0;0;0`.
+
+`quaternion(` *axis*, *turns* `)`
+: Return a Euler-rotation unit-quaternion representing a *turns* rotation
+around the *axis* vector (clockwise looking in the direction of the vector).
+
+`qmul(` *p*, *q* `)`
+: Return the product of the quaternion *p* and the quaternion *q*, which is
+equivalent to the rotation *q* **followed by** the rotation *p*.
+
+`slerp(` *t*, *p*, *q* `)`
+: Return the [quaternion spherical linear
+interpolation](https://en.wikipedia.org/wiki/Slerp) between *p* and *q* with
+*t=0* representing *p* and *t=1* representing *q*. Values of *t* in the range
+*[0,1]* will smoothly interpolate between the rotations *p* and *q* – equivalent
+to sweeping the arc between the points *p* and *q* on a sphere. Values of *t*
+outside of this range will continue along this arc beyond *p* and *q*,
+eventually circling round to rejoin the arc from the other side.
+
 ## Waveform functions
 
 All of the waveform functions return a repeating wave in the *y* range [0,1]
