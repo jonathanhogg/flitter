@@ -471,6 +471,15 @@ cdef class Vector:
             return self.numbers[0]
         return NaN
 
+    def __int__(self):
+        return self.as_integer()
+
+    cdef int64_t as_integer(self) noexcept:
+        cdef double f
+        if self.length == 1 and self.objects is None and -(1 << 63) <= (f := self.numbers[0]) < (1 << 63):
+            return <int64_t>c_floor(f)
+        return 0
+
     def __str__(self):
         return self.as_string()
 

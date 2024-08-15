@@ -28,6 +28,7 @@ cdef class Vector:
     cpdef bint isinstance(self, t) noexcept
     cdef bint as_bool(self)
     cdef double as_double(self) noexcept
+    cdef int64_t as_integer(self) noexcept
     cdef str as_string(self)
     cpdef int64_t hash(self, bint floor_floats)
     cpdef object match(self, int64_t n=?, type t=?, default=?)

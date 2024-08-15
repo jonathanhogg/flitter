@@ -290,6 +290,20 @@ class TestVector(utils.TestCase):
         foo = Vector.symbol('foo')
         self.assertEqual(float(foo), foo[0])
 
+    def test_as_integer(self):
+        self.assertEqual(int(Vector(0)), 0)
+        self.assertEqual(int(Vector(1)), 1)
+        self.assertEqual(int(Vector(0.1)), 0)
+        self.assertEqual(int(Vector(1.5)), 1)
+        self.assertEqual(int(Vector(-1e99)), 0)
+        self.assertEqual(int(Vector(math.inf)), 0)
+        self.assertEqual(int(true), 1)
+        self.assertEqual(int(false), 0)
+        self.assertEqual(int(null), 0)
+        self.assertEqual(int(Vector([1, 2, 3])), 0)
+        self.assertEqual(int(Vector("Hello world!")), 0)
+        self.assertEqual(int(Vector.symbol('foo')), 0)
+
     def test_as_string(self):
         TESTS = [
             (null, ""),
