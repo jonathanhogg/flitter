@@ -2138,27 +2138,6 @@ cdef class Quaternion(Vector):
         return other.mmul(self.inverse()).exponent(t).mmul(self)
 
     @cython.cdivision(True)
-    cpdef Matrix33 matrix33(self):
-        cdef double* numbers = self.numbers
-        cdef double w=numbers[0], x=numbers[1], y=numbers[2], z=numbers[3]
-        cdef double ww=w*w, wx=w*x, wy=w*y, wz=w*z, xx=x*x, xy=x*y, xz=x*z, yy=y*y, yz=y*z, zz=z*z
-        cdef double k = 2 / sqrt(ww + xx + yy + zz)
-        cdef Matrix33 result = Matrix33.__new__(Matrix33)
-        cdef double* result_numbers = result._numbers
-        result_numbers[0] = 1 - k*(yy + zz)
-        result_numbers[1] = k*(xy + wz)
-        result_numbers[2] = k*(xz - wy)
-        result_numbers[3] = k*(xy - wz)
-        result_numbers[4] = 1 - k*(xx + zz)
-        result_numbers[5] = k*(yz + wx)
-        result_numbers[6] = k*(xz + wy)
-        result_numbers[7] = k*(yz - wx)
-        result_numbers[8] = 1 - k*(xx + yy)
-        result.numbers = result_numbers
-        result.length = 9
-        return result
-
-    @cython.cdivision(True)
     cpdef Matrix44 matrix44(self):
         cdef double* numbers = self.numbers
         cdef double w=numbers[0], x=numbers[1], y=numbers[2], z=numbers[3]

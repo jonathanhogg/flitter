@@ -6,7 +6,7 @@ import math
 
 import numpy as np
 
-from flitter.model import Vector, Quaternion, Matrix33, Matrix44
+from flitter.model import Vector, Quaternion, Matrix44
 
 from . import utils
 
@@ -168,11 +168,6 @@ class TestQuaternion(utils.TestCase):
         self.assertAllAlmostEqual(qx.slerp(qy, 2), qy @ qx.inverse() @ qy)
         self.assertAllAlmostEqual(qx.slerp(qx, 0), qx)
         self.assertAllAlmostEqual(qx.slerp(qx, 1), qx)
-
-    def test_matrix33(self):
-        self.assertAllAlmostEqual(Quaternion.euler([1, 0, 0], 0.125).matrix33(), Matrix44.rotate_x(0.125).matrix33())
-        self.assertAllAlmostEqual(Quaternion.euler([0, 1, 0], 0.125).matrix33(), Matrix44.rotate_y(0.125).matrix33())
-        self.assertAllAlmostEqual(Quaternion.euler([0, 0, 1], 0.125).matrix33(), Matrix44.rotate_z(0.125).matrix33())
 
     def test_matrix44(self):
         self.assertAllAlmostEqual(Quaternion.euler([1, 0, 0], 0.125).matrix44(), Matrix44.rotate_x(0.125))

@@ -158,7 +158,6 @@ cdef class Quaternion(Vector):
     cpdef Quaternion inverse(self)
     cpdef Quaternion exponent(self, double t)
     cpdef Quaternion slerp(self, Quaternion other, double t)
-    cpdef Matrix33 matrix33(self)
     cpdef Matrix44 matrix44(self)
 
 
