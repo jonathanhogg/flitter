@@ -141,6 +141,27 @@ cdef class Matrix44(Vector):
     cpdef Matrix33 matrix33(self)
 
 
+cdef class Quaternion(Vector):
+    @staticmethod
+    cdef Quaternion _coerce(other)
+
+    @staticmethod
+    cdef Quaternion _euler(Vector axis, double rotation)
+
+    @staticmethod
+    cdef Quaternion _between(Vector a, Vector b)
+
+    cpdef Quaternion copy(self)
+    cdef Quaternion mmul(self, Quaternion b)
+    cpdef Vector conjugate(self, Vector v)
+    cpdef Quaternion normalize(self)
+    cpdef Quaternion inverse(self)
+    cpdef Quaternion exponent(self, double t)
+    cpdef Quaternion slerp(self, Quaternion other, double t)
+    cpdef Matrix33 matrix33(self)
+    cpdef Matrix44 matrix44(self)
+
+
 cdef class Node:
     cdef readonly str kind
     cdef set _tags

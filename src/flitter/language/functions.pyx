@@ -13,7 +13,7 @@ from cpython.ref cimport Py_INCREF
 from cpython.tuple cimport PyTuple_New, PyTuple_GET_ITEM, PyTuple_SET_ITEM
 
 from ..cache import SharedCache
-from ..model cimport Vector, Matrix44, Context, null_, true_, false_
+from ..model cimport Vector, Matrix44, Quaternion, Context, null_, true_, false_
 
 
 cdef double Pi = 3.141592653589793115997963468544185161590576171875
@@ -804,6 +804,24 @@ def normalize(Vector xs not None):
     return xs.normalize()
 
 
+def quaternion(Vector axis not None, Vector angle not None):
+    if axis.numbers == NULL or axis.length != 3 or angle.numbers == NULL or angle.length != 1:
+        return null_
+    return Quaternion._euler(axis, angle.numbers[0])
+
+
+def qmul(Vector a not None, Vector b not None):
+    if a.numbers == NULL or a.length != 4 or a.numbers == NULL or a.length != 4:
+        return null_
+    return Quaternion._coerce(a) @ Quaternion._coerce(b)
+
+
+def slerp(Vector t not None, Vector a not None, Vector b not None):
+    if t.numbers == NULL or t.length != 1 or a.numbers == NULL or a.length != 4 or a.numbers == NULL or a.length != 4:
+        return null_
+    return Quaternion._coerce(a).slerp(Quaternion._coerce(b), t.numbers[0])
+
+
 @cython.cdivision(True)
 def mapv(Vector xs not None, Vector ys not None, Vector zs not None):
     if xs.numbers == NULL or ys.numbers == NULL or zs.numbers == NULL:
@@ -1011,13 +1029,16 @@ STATIC_FUNCTIONS = {
     'ord': Vector(ordv),
     'point_towards': Vector(point_towards),
     'polar': Vector(polar),
+    'qmul': Vector(qmul),
     'quad': Vector(quad),
+    'quaternion': Vector(quaternion),
     'round': Vector(roundv),
     'sawtooth': Vector(sawtooth),
     'sharkfin': Vector(sharkfin),
     'shuffle': Vector(shuffle),
     'sin': Vector(sinv),
     'sine': Vector(sine),
+    'slerp': Vector(slerp),
     'snap': Vector(snap),
     'split': Vector(split),
     'sqrt': Vector(sqrtv),

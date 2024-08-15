@@ -18,7 +18,7 @@ from cpython.object cimport PyObject
 from . import WindowNode, COLOR_FORMATS, set_uniform_vector
 from ... import name_patch
 from ...clock import system_clock
-from ...model cimport Node, Vector, Matrix44, Matrix33, null_, true_, false_
+from ...model cimport Node, Vector, Matrix44, Matrix33, Quaternion, null_, true_, false_
 from .glsl import TemplateLoader
 from .models cimport Model, DefaultSnapAngle
 
@@ -31,6 +31,7 @@ cdef Vector Greyscale = Vector((0.299, 0.587, 0.114))
 cdef Vector One3 = Vector((1, 1, 1))
 cdef Vector Xaxis = Vector((1, 0, 0))
 cdef Vector Yaxis = Vector((0, 1, 0))
+cdef Vector Zaxis = Vector((0, 0, 1))
 cdef Vector DefaultFalloff = Vector((0, 0, 1, 0))
 cdef Matrix44 IdentityTransform = Matrix44._identity()
 cdef int DEFAULT_MAX_LIGHTS = 50
@@ -39,7 +40,7 @@ cdef set MaterialAttributes = {'color', 'metal', 'roughness', 'shininess', 'occl
                                'texture_id', 'metal_texture_id', 'roughness_texture_id', 'occlusion_texture_id',
                                'emissive_texture_id', 'transparency_texture_id'}
 cdef set GroupAttributes = set(MaterialAttributes)
-GroupAttributes.update(('translate', 'scale', 'rotate', 'rotate_x', 'rotate_y', 'rotate_z', 'shear_x', 'shear_y', 'shear_z'))
+GroupAttributes.update(('translate', 'scale', 'rotate', 'rotate_q', 'rotate_x', 'rotate_y', 'rotate_z', 'shear_x', 'shear_y', 'shear_z'))
 GroupAttributes.update(('max_lights', 'depth_sort', 'depth_test', 'face_cull', 'cull_face', 'composite', 'vertex', 'fragment'))
 
 cdef object StandardVertexTemplate = TemplateLoader.get_template("standard_lighting.vert")
@@ -284,7 +285,10 @@ cdef Matrix44 update_transform_matrix(Node node, Matrix44 transform_matrix):
             elif attribute is 'scale':
                 transform_matrix.immul(Matrix44._scale(vector))
             elif attribute is 'rotate':
-                transform_matrix.immul(Matrix44._rotate(vector))
+                if vector.length == 4:
+                    transform_matrix.immul(Quaternion._coerce(vector).matrix44())
+                else:
+                    transform_matrix.immul(Matrix44._rotate(vector))
             elif attribute is 'rotate_x':
                 if vector.numbers != NULL and vector.length == 1:
                     transform_matrix.immul(Matrix44._rotate_x(vector.numbers[0]))
@@ -310,7 +314,6 @@ cdef Matrix44 instance_start_end_matrix(Vector start, Vector end, double radius)
     cdef double length = sqrt(direction.squared_sum())
     if length == 0 or radius <= 0:
         return None
-    cdef Vector up = Xaxis if direction.numbers[0] == 0 and direction.numbers[2] == 0 else Yaxis
     cdef Vector middle = Vector.__new__(Vector)
     middle.allocate_numbers(3)
     middle.numbers[0] = (start.numbers[0] + end.numbers[0]) / 2
@@ -321,7 +324,10 @@ cdef Matrix44 instance_start_end_matrix(Vector start, Vector end, double radius)
     size.numbers[0] = radius
     size.numbers[1] = radius
     size.numbers[2] = length
-    return Matrix44._look(middle, start, up).inverse().mmul(Matrix44._scale(size))
+    cdef Matrix44 matrix = Matrix44._translate(middle)
+    matrix.immul(Quaternion._between(Zaxis, direction).matrix44())
+    matrix.immul(Matrix44._scale(size))
+    return matrix
 
 
 cdef Matrix44 get_model_transform(Node node, Matrix44 transform_matrix):

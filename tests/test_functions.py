@@ -11,6 +11,7 @@ from flitter.language.functions import (uniform, normal, beta,
                                         lenv, sumv, accumulate, minv, maxv, minindex, maxindex, mapv, clamp, zipv, count,
                                         roundv, absv, expv, sqrtv, logv, log2v, log10v, ceilv, floorv, fract,
                                         cosv, acosv, sinv, asinv, tanv, hypot, normalize, polar, angle, length,
+                                        quaternion, qmul, slerp,
                                         split, ordv, chrv)
 from flitter.language.noise import noise, octnoise
 
@@ -565,6 +566,54 @@ class TestTrig(utils.TestCase):
                                   Vector([math.sqrt(17), math.sqrt(29), math.sqrt(45), math.sqrt(65)]))
         self.assertAllAlmostEqual(length(self.a, self.c),
                                   Vector([math.sqrt(5), math.sqrt(8), math.sqrt(13), math.sqrt(20)]))
+
+
+class TestQuaternions(utils.TestCase):
+    def test_quaternion(self):
+        self.assertEqual(quaternion(Vector([1, 0, 0]), Vector(0)), [1, 0, 0, 0])
+        self.assertEqual(quaternion(Vector([0, 1, 0]), Vector(0)), [1, 0, 0, 0])
+        self.assertEqual(quaternion(Vector([0, 0, 1]), Vector(0)), [1, 0, 0, 0])
+        c, s = math.cos(math.pi*0.25), math.sin(math.pi*0.25)
+        self.assertEqual(quaternion(Vector([1, 0, 0]), Vector(0.25)), [c, s, 0, 0])
+        self.assertEqual(quaternion(Vector([0, 1, 0]), Vector(0.25)), [c, 0, s, 0])
+        self.assertEqual(quaternion(Vector([0, 0, 1]), Vector(0.25)), [c, 0, 0, s])
+        self.assertAllAlmostEqual(quaternion(Vector([1, 0, 0]), Vector(0.5)), [0, 1, 0, 0])
+        self.assertAllAlmostEqual(quaternion(Vector([0, 1, 0]), Vector(0.5)), [0, 0, 1, 0])
+        self.assertAllAlmostEqual(quaternion(Vector([0, 0, 1]), Vector(0.5)), [0, 0, 0, 1])
+        c, s = math.cos(math.pi/3), math.sin(math.pi/3)
+        self.assertEqual(quaternion(Vector([1, 0, 0]), Vector(1/3)), [c, s, 0, 0])
+        self.assertEqual(quaternion(Vector([0, 1, 0]), Vector(1/3)), [c, 0, s, 0])
+        self.assertEqual(quaternion(Vector([0, 0, 1]), Vector(1/3)), [c, 0, 0, s])
+        self.assertAllAlmostEqual(quaternion(Vector([1, 0, 0]), Vector(1)), Vector([-1, 0, 0, 0]))
+        self.assertAllAlmostEqual(quaternion(Vector([0, 1, 0]), Vector(1)), Vector([-1, 0, 0, 0]))
+        self.assertAllAlmostEqual(quaternion(Vector([0, 0, 1]), Vector(1)), Vector([-1, 0, 0, 0]))
+
+    def test_qmul(self):
+        qx = quaternion(Vector([1, 0, 0]), Vector(0.125))
+        qy = quaternion(Vector([0, 1, 0]), Vector(0.125))
+        qz = quaternion(Vector([0, 0, 1]), Vector(0.125))
+        self.assertAllAlmostEqual(qmul(qx, qx), quaternion(Vector([1, 0, 0]), Vector(0.25)))
+        self.assertAllAlmostEqual(qmul(qy, qy), quaternion(Vector([0, 1, 0]), Vector(0.25)))
+        self.assertAllAlmostEqual(qmul(qz, qz), quaternion(Vector([0, 0, 1]), Vector(0.25)))
+        self.assertAllAlmostEqual(qmul(qx, quaternion(Vector([1, 0, 0]), Vector(-0.125))), [1, 0, 0, 0])
+        self.assertAllAlmostEqual(qmul(qy, quaternion(Vector([0, 1, 0]), Vector(-0.125))), [1, 0, 0, 0])
+        self.assertAllAlmostEqual(qmul(qz, quaternion(Vector([0, 0, 1]), Vector(-0.125))), [1, 0, 0, 0])
+        self.assertNotAllAlmostEqual(qmul(qx, qy), qmul(qy, qx))
+        self.assertNotAllAlmostEqual(qmul(qx, qz), qmul(qz, qx))
+        self.assertNotAllAlmostEqual(qmul(qy, qz), qmul(qz, qy))
+        q = quaternion(Vector([1, 1, 1]), Vector(1/3))
+        self.assertAllAlmostEqual(qmul(qmul(q, q), q), [-1, 0, 0, 0])
+        self.assertAllAlmostEqual(qmul(qmul(qmul(q, q), q), qmul(qmul(q, q), q)), [1, 0, 0, 0])
+
+    def test_slerp(self):
+        qx = quaternion(Vector([1, 0, 0]), Vector(0.25))
+        qy = quaternion(Vector([0, 1, 0]), Vector(0.25))
+        self.assertAllAlmostEqual(slerp(Vector(0), qx, qy), qx)
+        self.assertAllAlmostEqual(slerp(Vector(1), qx, qy), qy)
+        self.assertAllAlmostEqual(slerp(Vector(-1), qx, qx), qx)
+        self.assertAllAlmostEqual(slerp(Vector(0), qx, qx), qx)
+        self.assertAllAlmostEqual(slerp(Vector(1), qx, qx), qx)
+        self.assertAllAlmostEqual(slerp(Vector(2), qx, qx), qx)
 
 
 class TestStringFuncs(utils.TestCase):

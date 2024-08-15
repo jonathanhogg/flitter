@@ -1,4 +1,4 @@
-
+--
 -- Adjust the number of faces of the sphere by changing SEGMENTS to see how
 -- this affects the triangularization and texture mapping.
 --
@@ -10,6 +10,16 @@
 --
 -- As the poles are formed from 4 triangles, triangular sections of the texture
 -- at the very top and bottom are omitted from the final mapping.
+--
+-- Texture wrapping begins at the X axis and proceeds (anticlockwise) around
+-- the Z axis. Maps commonly have the 0 longitude point in the middle of the
+-- image, which will end up aligned to the negative X axis. We add a 0.25
+-- rotation around the Z axis to align the 0 longitude point with the viewer
+-- (negative Y axis).
+--
+-- This example also uses quaternions to describe spherical coordinates and to
+-- do spherical interpolation (slerp) between them.
+--
 
 %pragma tempo 60
 
@@ -27,7 +37,14 @@ func axes(_, size=1)
         !cylinder start=0 end=0;0;s[2] radius=r1
         !cone start=0;0;s[2] end=0;0;size[2] radius=r2
 
-let t=15+beat
+func rotate_to(lat, lon)
+    -- Construct a quaternion to represent a location by rotating around the
+    -- Z axis by the longitude and then around the X axis by the latitude
+    qmul(quaternion(1;0;0, lat/360), quaternion(0;0;1, lon/360))
+
+let t=0.5+beat/10
+    london=rotate_to(51.50335, 0.07940)
+    sydney=rotate_to(-33.87271, -151.20569)
 
 !window size=(1920;1080)
     !shader id=:map size=2400;1200 hidden=true composite=:difference
@@ -42,7 +59,7 @@ let t=15+beat
         !canvas3d viewpoint=0;-600;0 focus=0;0;25 up=0;0;1 fov_ref=:narrow
             !light color=1 direction=-1;2;-2
             !light color=1 direction=2;1;2
-            !transform rotate_x=sin(t/40)*0.15 rotate_z=t/25
+            !transform rotate=slerp(t, london, sydney) rotate_z=0.25
                 !material roughness=0.4 texture_id=:map translucency=150
                     !sphere size=350 flat=true segments=SEGMENTS
                 @axes size=450

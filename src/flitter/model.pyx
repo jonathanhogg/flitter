@@ -3,7 +3,7 @@
 import cython
 import numpy as np
 
-from libc.math cimport isnan, floor as c_floor, ceil as c_ceil, abs as c_abs, round as c_round, sqrt, sin, cos, isnan
+from libc.math cimport isnan, floor as c_floor, ceil as c_ceil, abs as c_abs, round as c_round, sqrt, sin, cos, acos, isnan
 from cpython.object cimport PyObject
 from cpython.ref cimport Py_INCREF
 from cpython.bool cimport PyBool_FromLong
@@ -1910,6 +1910,290 @@ cdef class Matrix44(Vector):
         for i in range(4):
             rows.append(f"| {numbers[i]:7.3f} {numbers[i+4]:7.3f} {numbers[i+8]:7.3f} {numbers[i+12]:7.3f} |")
         return '\n'.join(rows)
+
+
+cdef class Quaternion(Vector):
+    @staticmethod
+    cdef Quaternion _coerce(other):
+        if isinstance(other, Quaternion):
+            return <Quaternion>other
+        return Quaternion(other)
+
+    @staticmethod
+    def coerce(other):
+        return Quaternion._coerce(other)
+
+    @staticmethod
+    @cython.cdivision(True)
+    cdef Quaternion _euler(Vector axis, double rotation):
+        if axis is None or axis.numbers == NULL or axis.length != 3:
+            raise ValueError("Axis must be a numeric 3-vector")
+        cdef double x=axis.numbers[0], y=axis.numbers[1], z=axis.numbers[2]
+        cdef double half_theta = rotation * Pi
+        cdef double k = sin(half_theta) / sqrt(x*x + y*y + z*z)
+        cdef Quaternion result = Quaternion.__new__(Quaternion)
+        cdef double* numbers = result._numbers
+        numbers[0] = cos(half_theta)
+        numbers[1] = k * x
+        numbers[2] = k * y
+        numbers[3] = k * z
+        result.numbers = numbers
+        result.length = 4
+        return result
+
+    @staticmethod
+    def euler(axis, rotation):
+        return Quaternion._euler(Vector._coerce(axis), float(rotation))
+
+    @staticmethod
+    @cython.cdivision(True)
+    cdef Quaternion _between(Vector a, Vector b):
+        if a is None or a.numbers == NULL or a.length != 3:
+            raise ValueError("First argument must be a numeric 3-vector")
+        if b is None or b.numbers == NULL or b.length != 3:
+            raise ValueError("Second argument must be a numeric 3-vector")
+        cdef double ax=a.numbers[0], ay=a.numbers[1], az=a.numbers[2]
+        cdef double s = 1 / sqrt(ax*ax + ay*ay + az*az)
+        ax *= s
+        ay *= s
+        az *= s
+        cdef double bx=b.numbers[0], by=b.numbers[1], bz=b.numbers[2]
+        s = 1 / sqrt(bx*bx + by*by + bz*bz)
+        bx *= s
+        by *= s
+        bz *= s
+        cdef double cth = ax*bx + ay*by + az*bz
+        cdef double x, y, z, k
+        cdef Quaternion result = Quaternion.__new__(Quaternion)
+        cdef double* numbers = result._numbers
+        s = sqrt((1 + cth) * 2)
+        if s != 0:
+            x = ay*bz - az*by
+            y = az*bx - ax*bz
+            z = ax*by - ay*bx
+            k = 1 / s
+            numbers[0] = s / 2
+            numbers[1] = x * k
+            numbers[2] = y * k
+            numbers[3] = z * k
+        else:
+            if ax != 0 or ay != 0:
+                x = -ay
+                y = ax
+                z = 0
+            else:
+                x = 0
+                y = -az
+                z = ay
+            s = 1 / sqrt(x*x + y*y + z*z)
+            numbers[0] = 0
+            numbers[1] = x * s
+            numbers[2] = y * s
+            numbers[3] = z * s
+        result.numbers = numbers
+        result.length = 4
+        return result
+
+    @staticmethod
+    def between(a, b):
+        return Quaternion._between(Vector._coerce(a), Vector._coerce(b))
+
+    def __init__(self, value=None):
+        cdef int64_t i
+        cdef double k
+        cdef const double[:] arr
+        if type(value) is ndarray:
+            arr = value.astype(*AstypeArgs)
+            if arr.shape[1] != 4:
+                raise ValueError("Argument must be a float or a sequence of 4 floats")
+            self.numbers = self._numbers
+            for i in range(4):
+                self.numbers[i] = arr[i]
+            self.length = 4
+        elif isinstance(value, (list, tuple, bytes, set, dict, Vector)):
+            if len(value) != 4:
+                raise ValueError("Argument must be a float or a sequence of 4 floats")
+            try:
+                self.numbers = self._numbers
+                for i, v in enumerate(value):
+                    self.numbers[i] = v
+                self.length = 4
+            except TypeError:
+                raise ValueError("Argument must be a float or a sequence of 4 floats")
+        elif value is None or isinstance(value, (float, int)):
+            k = 1 if value is None else value
+            self.numbers = self._numbers
+            for i in range(4):
+                self.numbers[i] = 0 if i else k
+            self.length = 4
+        elif isinstance(value, (range, slice)):
+            self.length = 0
+            self.fill_range(Vector._coerce(value.start), Vector._coerce(value.stop), Vector._coerce(value.step))
+            if self.length != 4:
+                raise ValueError("Argument must be a float or a sequence of 4 floats")
+        else:
+            raise ValueError("Argument must be a float or a sequence of 4 floats")
+
+    cpdef Quaternion copy(self):
+        cdef double* self_numbers = self.numbers
+        cdef Quaternion result = Quaternion.__new__(Quaternion)
+        cdef double* numbers = result._numbers
+        numbers[0] = self_numbers[0]
+        numbers[1] = self_numbers[1]
+        numbers[2] = self_numbers[2]
+        numbers[3] = self_numbers[3]
+        result.numbers = numbers
+        result.length = 4
+        return result
+
+    cdef Quaternion mmul(self, Quaternion b):
+        cdef double* a_numbers = self.numbers
+        cdef double* b_numbers = b.numbers
+        cdef double aw=a_numbers[0], ax=a_numbers[1], ay=a_numbers[2], az=a_numbers[3]
+        cdef double bw=b_numbers[0], bx=b_numbers[1], by=b_numbers[2], bz=b_numbers[3]
+        cdef Quaternion result = Quaternion.__new__(Quaternion)
+        cdef double* numbers = result._numbers
+        numbers[0] = aw*bw - ax*bx - ay*by - az*bz
+        numbers[1] = aw*bx + ax*bw + ay*bz - az*by
+        numbers[2] = aw*by + ay*bw + az*bx - ax*bz
+        numbers[3] = aw*bz + az*bw + ax*by - ay*bx
+        result.numbers = numbers
+        result.length = 4
+        return result
+
+    @cython.cdivision(True)
+    cpdef Vector conjugate(self, Vector v):
+        if v is None or v.numbers == NULL or v.length != 3:
+            raise ValueError("Can only conjugate a numeric 3-vector")
+        cdef double x=v.numbers[0], y=v.numbers[1], z=v.numbers[2]
+        cdef double* a_numbers = self.numbers
+        cdef double aw=a_numbers[0], ax=a_numbers[1], ay=a_numbers[2], az=a_numbers[3]
+        cdef double bw = -ax*x - ay*y - az*z
+        cdef double bx = aw*x + ay*z - az*y
+        cdef double by = aw*y + az*x - ax*z
+        cdef double bz = aw*z + ax*y - ay*x
+        cdef double s = 1 / (ax*ax + ay*ay + az*az + aw*aw)
+        aw *= s
+        ax *= -s
+        ay *= -s
+        az *= -s
+        cdef Vector result = Vector.__new__(Vector)
+        cdef double* numbers=result._numbers
+        numbers[0] = bw*ax + bx*aw + by*az - bz*ay
+        numbers[1] = bw*ay + by*aw + bz*ax - bx*az
+        numbers[2] = bw*az + bz*aw + bx*ay - by*ax
+        result.numbers = numbers
+        result.length = 3
+        return result
+
+    def __matmul__(self, other):
+        if isinstance(other, Quaternion):
+            return self.mmul(<Quaternion>other)
+        return self.conjugate(Vector._coerce(other))
+
+    @cython.cdivision(True)
+    cpdef Quaternion normalize(self):
+        cdef double ax=self.numbers[1], ay=self.numbers[2], az=self.numbers[3], aw=self.numbers[0]
+        cdef double k = sqrt(ax*ax + ay*ay + az*az + aw*aw)
+        cdef Quaternion result = Quaternion.__new__(Quaternion)
+        cdef double* numbers = result._numbers
+        numbers[0] = aw / k
+        numbers[1] = ax / k
+        numbers[2] = ay / k
+        numbers[3] = az / k
+        result.numbers = numbers
+        result.length = 4
+        return result
+
+    @cython.cdivision(True)
+    cpdef Quaternion inverse(self):
+        cdef double aw=self.numbers[0], ax=self.numbers[1], ay=self.numbers[2], az=self.numbers[3]
+        cdef double s = 1 / (ax*ax + ay*ay + az*az + aw*aw)
+        cdef Quaternion result = Quaternion.__new__(Quaternion)
+        cdef double* numbers=result._numbers
+        numbers[0] = aw * s
+        numbers[1] = -ax * s
+        numbers[2] = -ay * s
+        numbers[3] = -az * s
+        result.numbers = numbers
+        result.length = 4
+        return result
+
+    @cython.cdivision(True)
+    cpdef Quaternion exponent(self, double t):
+        cdef double th=acos(self.numbers[0]), sth=sin(th)
+        cdef Quaternion result = Quaternion.__new__(Quaternion)
+        cdef double* numbers = result._numbers
+        th *= t
+        sth = sin(th) / sth if sth != 0 else 0
+        numbers[1] = self.numbers[1] * sth
+        numbers[2] = self.numbers[2] * sth
+        numbers[3] = self.numbers[3] * sth
+        numbers[0] = cos(th)
+        result.numbers = numbers
+        result.length = 4
+        return result
+
+    cpdef Quaternion slerp(self, Quaternion other, double t):
+        return other.mmul(self.inverse()).exponent(t).mmul(self)
+
+    @cython.cdivision(True)
+    cpdef Matrix33 matrix33(self):
+        cdef double* numbers = self.numbers
+        cdef double w=numbers[0], x=numbers[1], y=numbers[2], z=numbers[3]
+        cdef double ww=w*w, wx=w*x, wy=w*y, wz=w*z, xx=x*x, xy=x*y, xz=x*z, yy=y*y, yz=y*z, zz=z*z
+        cdef double k = 2 / sqrt(ww + xx + yy + zz)
+        cdef Matrix33 result = Matrix33.__new__(Matrix33)
+        cdef double* result_numbers = result._numbers
+        result_numbers[0] = 1 - k*(yy + zz)
+        result_numbers[1] = k*(xy + wz)
+        result_numbers[2] = k*(xz - wy)
+        result_numbers[3] = k*(xy - wz)
+        result_numbers[4] = 1 - k*(xx + zz)
+        result_numbers[5] = k*(yz + wx)
+        result_numbers[6] = k*(xz + wy)
+        result_numbers[7] = k*(yz - wx)
+        result_numbers[8] = 1 - k*(xx + yy)
+        result.numbers = result_numbers
+        result.length = 9
+        return result
+
+    @cython.cdivision(True)
+    cpdef Matrix44 matrix44(self):
+        cdef double* numbers = self.numbers
+        cdef double w=numbers[0], x=numbers[1], y=numbers[2], z=numbers[3]
+        cdef double xx=x*x, xy=x*y, xz=x*z, xw=x*w, yy=y*y, yz=y*z, yw=y*w, zz=z*z, zw=z*w, ww=w*w
+        cdef double k = 2 / sqrt(ww + xx + yy + zz)
+        cdef Matrix44 result = Matrix44.__new__(Matrix44)
+        cdef double* result_numbers = result._numbers
+        result_numbers[0] = 1 - k*(yy + zz)
+        result_numbers[1] = k*(xy + zw)
+        result_numbers[2] = k*(xz - yw)
+        result_numbers[3] = 0
+        result_numbers[4] = k*(xy - zw)
+        result_numbers[5] = 1 - k*(xx + zz)
+        result_numbers[6] = k*(yz + xw)
+        result_numbers[7] = 0
+        result_numbers[8] = k*(xz + yw)
+        result_numbers[9] = k*(yz - xw)
+        result_numbers[10] = 1 - k*(xx + yy)
+        result_numbers[11] = 0
+        result_numbers[12] = 0
+        result_numbers[13] = 0
+        result_numbers[14] = 0
+        result_numbers[15] = 1
+        result.numbers = result_numbers
+        result.length = 16
+        return result
+
+    def __repr__(self):
+        cdef double* numbers = self.numbers
+        cdef double w=numbers[0], x=numbers[1], y=numbers[2], z=numbers[3]
+        cdef str text = "nan" if isnan(w) else f"{w:g}" if abs(w) >= 1e-9 else "0"
+        text += "﹢nan𝒊" if isnan(x) else f"﹣{-x:g}𝒊" if x <= -1e-9 else f"﹢{x:g}𝒊" if x >= 1e-9 else "﹢0𝒊"
+        text += "﹢nan𝒋" if isnan(y) else f"﹣{-y:g}𝒋" if y <= -1e-9 else f"﹢{y:g}𝒋" if y >= 1e-9 else "﹢0𝒋"
+        text += "﹢nan𝒌" if isnan(z) else f"﹣{-z:g}𝒌" if z <= -1e-9 else f"﹢{z:g}𝒌" if z >= 1e-9 else "﹢0𝒌"
+        return text
 
 
 @cython.final
