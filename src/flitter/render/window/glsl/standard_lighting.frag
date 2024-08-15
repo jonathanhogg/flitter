@@ -130,11 +130,12 @@ void main() {
                     passes = 2;
                     attenuation = clamp(1.0 - (light_radius / light_distance), 0.0, 1.0);
                     if (pass == 0) {
-                        light_distance = max(0.0, light_distance - light_radius*0.99);
+                        light_distance -= min(light_radius, light_distance*0.99);
                     } else {
                         vec3 R = reflect(V, N);
                         vec3 l = dot(L, R) * R - L;
                         L += l * min(0.99, light_radius/length(l));
+                        light_distance = length(L);
                     }
                 }
                 L = normalize(L);
