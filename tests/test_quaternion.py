@@ -4,7 +4,9 @@ Tests of the model.Quaternion class
 
 import math
 
-from flitter.model import Vector, Quaternion
+import numpy as np
+
+from flitter.model import Vector, Quaternion, Matrix33, Matrix44
 
 from . import utils
 
@@ -26,10 +28,18 @@ class TestQuaternion(utils.TestCase):
         q = Quaternion([1, 2, 3, 4])
         self.assertEqual(len(q), 4)
         self.assertEqual(q, [1, 2, 3, 4])
+        self.assertEqual(Quaternion(range(1, 5)), [1, 2, 3, 4])
+        self.assertEqual(Quaternion(np.arange(1, 5)), [1, 2, 3, 4])
         with self.assertRaises(ValueError):
             q = Quaternion("Hello world!")
         with self.assertRaises(ValueError):
             q = Quaternion([1, 2, 3])
+        with self.assertRaises(ValueError):
+            q = Quaternion([1, 2, 3, "four"])
+        with self.assertRaises(ValueError):
+            q = Quaternion(range(5))
+        with self.assertRaises(ValueError):
+            q = Quaternion(np.arange(5))
 
     def test_coerce(self):
         q1 = Quaternion()
@@ -108,6 +118,11 @@ class TestQuaternion(utils.TestCase):
         self.assertAlmostEqual(q.inverse() @ q, Quaternion())
         self.assertAlmostEqual(q @ q.inverse() @ q, q)
 
+    def test_normalize(self):
+        self.assertAlmostEqual(Quaternion([0.5, 0.5, 0.5, 0.5]).normalize(), [0.5, 0.5, 0.5, 0.5])
+        self.assertAlmostEqual(Quaternion([1, 1, 1, 1]).normalize(), [0.5, 0.5, 0.5, 0.5])
+        self.assertAlmostEqual(Quaternion(10).normalize(), Quaternion(1))
+
     def test_conjugate(self):
         qx = Quaternion.euler([1, 0, 0], 0.25)
         self.assertAllAlmostEqual(qx @ [1, 0, 0], [1, 0, 0])
@@ -121,6 +136,14 @@ class TestQuaternion(utils.TestCase):
         self.assertAllAlmostEqual(qz @ [1, 0, 0], [0, 1, 0])
         self.assertAllAlmostEqual(qz @ [0, 1, 0], [-1, 0, 0])
         self.assertAllAlmostEqual(qz @ [0, 0, 1], [0, 0, 1])
+        with self.assertRaises(ValueError):
+            qx @ None
+        with self.assertRaises(ValueError):
+            qx @ "Hello"
+        with self.assertRaises(ValueError):
+            qx @ [1, 0]
+        with self.assertRaises(ValueError):
+            qx @ [1, 0, 0, 0]
 
     def test_exponent(self):
         q = Quaternion.euler([1, 1, 1], 1/3)
@@ -145,6 +168,16 @@ class TestQuaternion(utils.TestCase):
         self.assertAllAlmostEqual(qx.slerp(qy, 2), qy @ qx.inverse() @ qy)
         self.assertAllAlmostEqual(qx.slerp(qx, 0), qx)
         self.assertAllAlmostEqual(qx.slerp(qx, 1), qx)
+
+    def test_matrix33(self):
+        self.assertAllAlmostEqual(Quaternion.euler([1, 0, 0], 0.125).matrix33(), Matrix44.rotate_x(0.125).matrix33())
+        self.assertAllAlmostEqual(Quaternion.euler([0, 1, 0], 0.125).matrix33(), Matrix44.rotate_y(0.125).matrix33())
+        self.assertAllAlmostEqual(Quaternion.euler([0, 0, 1], 0.125).matrix33(), Matrix44.rotate_z(0.125).matrix33())
+
+    def test_matrix44(self):
+        self.assertAllAlmostEqual(Quaternion.euler([1, 0, 0], 0.125).matrix44(), Matrix44.rotate_x(0.125))
+        self.assertAllAlmostEqual(Quaternion.euler([0, 1, 0], 0.125).matrix44(), Matrix44.rotate_y(0.125))
+        self.assertAllAlmostEqual(Quaternion.euler([0, 0, 1], 0.125).matrix44(), Matrix44.rotate_z(0.125))
 
     def test_repr(self):
         self.assertEqual(repr(Quaternion(0)), "0﹢0𝒊﹢0𝒋﹢0𝒌")

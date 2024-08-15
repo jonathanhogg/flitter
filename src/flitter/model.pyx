@@ -2004,7 +2004,7 @@ cdef class Quaternion(Vector):
         cdef const double[:] arr
         if type(value) is ndarray:
             arr = value.astype(*AstypeArgs)
-            if arr.shape[1] != 4:
+            if arr.shape[0] != 4:
                 raise ValueError("Argument must be a float or a sequence of 4 floats")
             self.numbers = self._numbers
             for i in range(4):
