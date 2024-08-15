@@ -662,7 +662,7 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
             material = instance.material
             if material.translucency > 0:
                 translucent_objects.append((-zs[i] if depth_sorted else 0, model, instance))
-            elif (material.transparency > 0 or has_transparency_texture) and render_group.depth_test:
+            elif (material.transparency > 0 or has_transparency_texture):
                 transparent_objects.append((-zs[i] if depth_sorted else 0, model, instance))
             else:
                 src = instance.model_matrix.numbers
