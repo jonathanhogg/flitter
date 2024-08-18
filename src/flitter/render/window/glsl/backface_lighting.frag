@@ -69,7 +69,7 @@ void main() {
             L = light_position - world_position;
             light_distance = length(L);
             if (light_radius > 0.0) {
-                attenuation = clamp(1.0 - (light_radius / light_distance), 0.0, 1.0);
+                attenuation = clamp(1.0 - (light_radius / light_distance), 0.005, 1.0);
                 light_distance -= min(light_radius, light_distance*0.99);
             }
             L = normalize(L);

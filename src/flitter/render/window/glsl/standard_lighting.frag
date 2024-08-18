@@ -128,7 +128,7 @@ void main() {
                 light_distance = length(L);
                 if (light_radius > 0.0) {
                     passes = 2;
-                    attenuation = clamp(1.0 - (light_radius / light_distance), 0.0, 1.0);
+                    attenuation = clamp(1.0 - (light_radius / light_distance), 0.005, 1.0);
                     if (pass == 0) {
                         light_distance -= min(light_radius, light_distance*0.99);
                     } else {
@@ -223,7 +223,7 @@ void main() {
             float thickness = backface_distance - view_distance;
             float s = min(thickness / translucency, 2.0);
             float k = thickness * s / 6.0;
-            int n = int(25.0 * s);
+            int n = int(50.0 * s);
             int count = 1;
             vec3 p = vec3(screen_coord, 0.0);
             for (int i = 0; i < n; i++) {
