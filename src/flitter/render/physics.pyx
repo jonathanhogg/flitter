@@ -11,6 +11,7 @@ from .. import name_patch
 from ..model cimport Vector, Node, StateDict, null_
 from ..language.functions cimport normal, uniform
 
+import cython
 from libc.math cimport sqrt, isinf, isnan, abs, floor
 from libc.stdint cimport uint64_t, int64_t
 from cpython cimport PyObject
@@ -64,6 +65,7 @@ cdef class Particle:
     cdef double charge
     cdef double ease
 
+    @cython.profile(False)
     def __cinit__(self, Node node, Vector id, Vector zero, Vector prefix, StateDict state):
         self.id = id
         self.position_state_key = prefix.concat(self.id).intern()
@@ -85,6 +87,7 @@ cdef class Particle:
         self.charge = node.get_float('charge', 1)
         self.ease = node.get_float('ease', 0)
 
+    @cython.profile(False)
     cdef void update(self, double speed_of_light, double clock, double delta) noexcept nogil:
         cdef double speed, d, k
         cdef int64_t i, n=self.force.length
@@ -113,10 +116,12 @@ cdef class Particle:
 
 
 cdef class Anchor(Particle):
+    @cython.profile(False)
     def __cinit__(self, Node node, Vector id, Vector zero, Vector prefix, StateDict state):
         self.position = node.get_fvec('position', zero.length, zero)
         self.velocity = zero.copy()
 
+    @cython.profile(False)
     cdef void update(self, double speed_of_light, double clock, double delta) noexcept nogil:
         pass
 
@@ -126,11 +131,13 @@ cdef class Barrier:
     cdef Vector normal
     cdef double restitution
 
+    @cython.profile(False)
     def __cinit__(self, Node node, Vector zero):
         self.position = node.get_fvec('position', zero.length, zero)
         self.normal = node.get_fvec('normal', zero.length, zero).normalize()
         self.restitution = node.get_float('restitution', 1)
 
+    @cython.profile(False)
     cdef void apply(self, Particle particle, double delta) noexcept nogil:
         if self.normal.length == 0:
             return
@@ -153,16 +160,19 @@ cdef class Barrier:
 cdef class ForceApplier:
     cdef double strength
 
+    @cython.profile(False)
     def __cinit__(self, Node node, double strength, Vector zero):
         self.strength = strength
 
 
 cdef class PairForceApplier(ForceApplier):
+    @cython.profile(False)
     cdef void apply(self, Particle from_particle, Particle to_particle, Vector direction, double distance, double distance_squared) noexcept nogil:
         raise NotImplementedError()
 
 
 cdef class ParticleForceApplier(ForceApplier):
+    @cython.profile(False)
     cdef void apply(self, Particle particle, double delta) noexcept nogil:
         raise NotImplementedError()
 
@@ -170,6 +180,7 @@ cdef class ParticleForceApplier(ForceApplier):
 cdef class MatrixPairForceApplier(PairForceApplier):
     cdef double max_distance_squared
 
+    @cython.profile(False)
     def __cinit__(self, Node node, double strength, Vector zero):
         self.max_distance_squared = max(0, node.get_float('max_distance', 0)) ** 2
 
@@ -180,6 +191,7 @@ cdef class SpecificPairForceApplier(PairForceApplier):
     cdef int64_t from_index
     cdef int64_t to_index
 
+    @cython.profile(False)
     def __cinit__(self, Node node, double strength, Vector zero):
         self.from_particle_id = <Vector>node._attributes.get('from') if node._attributes else None
         self.to_particle_id = <Vector>node._attributes.get('to') if node._attributes else None
@@ -190,6 +202,7 @@ cdef class DistanceForceApplier(SpecificPairForceApplier):
     cdef double minimum
     cdef double maximum
 
+    @cython.profile(False)
     def __cinit__(self, Node node, double strength, Vector zero):
         self.power = max(0, node.get_float('power', 1))
         cdef double fixed
@@ -200,6 +213,7 @@ cdef class DistanceForceApplier(SpecificPairForceApplier):
             self.minimum = node.get_float('min', 0)
             self.maximum = node.get_float('max', 0)
 
+    @cython.profile(False)
     cdef void apply(self, Particle from_particle, Particle to_particle, Vector direction, double distance, double distance_squared) noexcept nogil:
         cdef double f, k
         cdef int64_t i
@@ -218,6 +232,7 @@ cdef class DistanceForceApplier(SpecificPairForceApplier):
 
 
 cdef class DragForceApplier(ParticleForceApplier):
+    @cython.profile(False)
     cdef void apply(self, Particle particle, double delta) noexcept nogil:
         cdef double speed_squared=0, v, k
         cdef int64_t i
@@ -234,6 +249,7 @@ cdef class BuoyancyForceApplier(ParticleForceApplier):
     cdef double density
     cdef Vector gravity
 
+    @cython.profile(False)
     def __cinit__(self, Node node, double strength, Vector zero):
         self.density = node.get_float('density', 1)
         self.gravity = node.get_fvec('gravity', zero.length, zero)
@@ -241,6 +257,7 @@ cdef class BuoyancyForceApplier(ParticleForceApplier):
             self.gravity = self.gravity.copy()
             self.gravity.numbers[zero.length-1] = -1
 
+    @cython.profile(False)
     cdef void apply(self, Particle particle, double delta) noexcept nogil:
         cdef double displaced_mass, k
         cdef int64_t i
@@ -255,10 +272,12 @@ cdef class ConstantForceApplier(ParticleForceApplier):
     cdef Vector force
     cdef Vector acceleration
 
+    @cython.profile(False)
     def __cinit__(self, Node node, double strength, Vector zero):
         self.force = node.get_fvec('force', zero.length, zero)
         self.acceleration = node.get_fvec('acceleration', zero.length, zero)
 
+    @cython.profile(False)
     cdef void apply(self, Particle particle, double delta) noexcept nogil:
         cdef int64_t i
         for i in range(self.force.length):
@@ -267,6 +286,7 @@ cdef class ConstantForceApplier(ParticleForceApplier):
 
 
 cdef class RandomForceApplier(ParticleForceApplier):
+    @cython.profile(False)
     cdef void apply(self, Particle particle, double delta) noexcept nogil:
         global RandomIndex
         cdef int64_t i
@@ -277,9 +297,11 @@ cdef class RandomForceApplier(ParticleForceApplier):
 cdef class CollisionForceApplier(MatrixPairForceApplier):
     cdef double power
 
+    @cython.profile(False)
     def __cinit__(self, Node node, double strength, Vector zero):
         self.power = max(0, node.get_float('power', 1))
 
+    @cython.profile(False)
     cdef void apply(self, Particle from_particle, Particle to_particle, Vector direction, double distance, double distance_squared) noexcept nogil:
         cdef double min_distance, f, k
         cdef int64_t i
@@ -294,6 +316,7 @@ cdef class CollisionForceApplier(MatrixPairForceApplier):
 
 
 cdef class GravityForceApplier(MatrixPairForceApplier):
+    @cython.profile(False)
     cdef void apply(self, Particle from_particle, Particle to_particle, Vector direction, double distance, double distance_squared) noexcept nogil:
         cdef double f, k
         cdef int64_t i
@@ -306,6 +329,7 @@ cdef class GravityForceApplier(MatrixPairForceApplier):
 
 
 cdef class ElectrostaticForceApplier(MatrixPairForceApplier):
+    @cython.profile(False)
     cdef void apply(self, Particle from_particle, Particle to_particle, Vector direction, double distance, double distance_squared) noexcept nogil:
         cdef double f, k
         cdef int64_t i
@@ -320,9 +344,11 @@ cdef class ElectrostaticForceApplier(MatrixPairForceApplier):
 cdef class AdhesionForceApplier(MatrixPairForceApplier):
     cdef double overlap
 
+    @cython.profile(False)
     def __cinit__(self, Node node, double strength, Vector zero):
         self.overlap = min(max(0, node.get_float('overlap', 0.25)), 1)
 
+    @cython.profile(False)
     cdef void apply(self, Particle from_particle, Particle to_particle, Vector direction, double distance, double distance_squared) noexcept nogil:
         cdef double min_distance, max_distance, overlap_distance, adhesion_distance, f, k
         cdef int64_t i
@@ -399,12 +425,36 @@ cdef class PhysicsSystem:
         run_vector.allocate_numbers(1)
         run_vector.numbers[0] = run
         state.set_item(state_prefix.concat(RUN), run_vector)
-        cdef Vector zero = Vector.__new__(Vector)
-        zero.allocate_numbers(self.dimensions)
-        cdef int64_t i
-        for i in range(self.dimensions):
-            zero.numbers[i] = 0
         cdef list particles=[], non_anchors=[], particle_forces=[], matrix_forces=[], specific_forces=[], barriers=[]
+        self.collect(node, state, state_prefix, clock, particles, non_anchors, particle_forces, matrix_forces, specific_forces, barriers)
+        time_vector = state.get_item(state_prefix)
+        if time_vector.length != 1 or time_vector.numbers == NULL:
+            logger.debug("New {}D physics {!r} with {} particles and {} forces", self.dimensions, state_prefix, len(particles),
+                         len(particle_forces) + len(matrix_forces) + len(specific_forces))
+            time_vector = Vector.__new__(Vector)
+            time_vector.allocate_numbers(1)
+            time_vector.numbers[0] = time
+            state.set_item(state_prefix, time_vector)
+        cdef bint extra = performance > 1.5
+        cdef tuple objects
+        cdef Particle particle
+        if time > last_time:
+            objects = particles, non_anchors, particle_forces, matrix_forces, specific_forces, barriers
+            clock = await asyncio.to_thread(self.calculate, objects, engine.realtime, extra, time, last_time, clock)
+            for particle in particles:
+                state.set_item(particle.position_state_key, particle.position)
+                state.set_item(particle.velocity_state_key, particle.velocity)
+        time_vector = Vector.__new__(Vector)
+        time_vector.allocate_numbers(1)
+        time_vector.numbers[0] = time
+        state.set_item(state_prefix.concat(LAST), time_vector)
+        time_vector = Vector.__new__(Vector)
+        time_vector.allocate_numbers(1)
+        time_vector.numbers[0] = clock
+        state.set_item(state_prefix.concat(CLOCK), time_vector)
+
+    cdef void collect(self, Node node, StateDict state, Vector state_prefix, double clock,
+                      list particles, list non_anchors, list particle_forces, list matrix_forces, list specific_forces, list barriers):
         cdef Node child
         cdef Vector id
         cdef double strength, ease
@@ -413,6 +463,11 @@ cdef class PhysicsSystem:
         cdef Barrier barrier
         cdef set old_state_keys = self.state_keys
         cdef set new_state_keys = set()
+        cdef Vector zero = Vector.__new__(Vector)
+        zero.allocate_numbers(self.dimensions)
+        cdef int64_t i
+        for i in range(self.dimensions):
+            zero.numbers[i] = 0
         for child in node._children:
             if child.kind is 'particle':
                 id = <Vector>child._attributes.get('id')
@@ -465,30 +520,6 @@ cdef class PhysicsSystem:
         for specific_force in specific_forces:
             specific_force.from_index = particles_by_id.get(specific_force.from_particle_id, -1)
             specific_force.to_index = particles_by_id.get(specific_force.to_particle_id, -1)
-        time_vector = state.get_item(state_prefix)
-        if time_vector.length != 1 or time_vector.numbers == NULL:
-            logger.debug("New {}D physics {!r} with {} particles and {} forces", self.dimensions, state_prefix, len(particles),
-                         len(particle_forces) + len(matrix_forces) + len(specific_forces))
-            time_vector = Vector.__new__(Vector)
-            time_vector.allocate_numbers(1)
-            time_vector.numbers[0] = time
-            state.set_item(state_prefix, time_vector)
-        cdef bint extra = performance > 1.5
-        cdef tuple objects
-        if time > last_time:
-            objects = particles, non_anchors, particle_forces, matrix_forces, specific_forces, barriers
-            clock = await asyncio.to_thread(self.calculate, objects, engine.realtime, extra, time, last_time, clock)
-            for particle in particles:
-                state.set_item(particle.position_state_key, particle.position)
-                state.set_item(particle.velocity_state_key, particle.velocity)
-        time_vector = Vector.__new__(Vector)
-        time_vector.allocate_numbers(1)
-        time_vector.numbers[0] = time
-        state.set_item(state_prefix.concat(LAST), time_vector)
-        time_vector = Vector.__new__(Vector)
-        time_vector.allocate_numbers(1)
-        time_vector.numbers[0] = clock
-        state.set_item(state_prefix.concat(CLOCK), time_vector)
         for state_key in old_state_keys:
             state.set_item(state_key, null_)
         self.state_keys = new_state_keys
