@@ -442,6 +442,8 @@ dictionary:
 - *prefix*`;:last` - the last value of `time`
 - *prefix*`;:clock` - the (zero-based) internal simulation clock
 - *prefix*`;:run` - the last run number (as an integer value)
+- *prefix*`;:iteration` - the number of the last simulation iteration for this
+run (an integer counting from `0`)
 - *prefix*`;`*id* - the last position of the particle
 - *prefix*`;`*id*`;:velocity` - the last velocity of the particle
 

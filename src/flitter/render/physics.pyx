@@ -9,7 +9,7 @@ from loguru import logger
 
 from .. import name_patch
 from ..model cimport Vector, Node, StateDict, null_
-from ..language.functions cimport normal, uniform
+from ..language.functions cimport normal
 
 import cython
 from libc.math cimport sqrt, isinf, isnan, abs, floor
@@ -30,26 +30,7 @@ cdef Vector VELOCITY = Vector._symbol('velocity')
 cdef Vector LAST = Vector._symbol('last')
 cdef Vector CLOCK = Vector._symbol('clock')
 cdef Vector RUN = Vector._symbol('run')
-
-cdef normal NormalRandomSource = normal(Vector.symbol('_physics_normal'))
-cdef uint64_t NormalRandomIndex = 0
-
-cdef uniform UniformRandomSource = uniform(Vector.symbol('_physics_uniform'))
-cdef uint64_t UniformRandomIndex = 0
-
-
-cdef inline double random_normal() nogil:
-    global NormalRandomSource, NormalRandomIndex
-    cdef double d = NormalRandomSource._item(NormalRandomIndex)
-    NormalRandomIndex += 1
-    return d
-
-
-cdef inline double random_uniform() nogil:
-    global UniformRandomSource, UniformRandomIndex
-    cdef double d = UniformRandomSource._item(UniformRandomIndex)
-    UniformRandomIndex += 1
-    return d
+cdef Vector ITERATION = Vector._symbol('iteration')
 
 
 cdef class Particle:
@@ -313,12 +294,19 @@ cdef class ConstantForceApplier(ParticleForceApplier):
 
 
 cdef class RandomForceApplier(ParticleForceApplier):
+    cdef normal random_source
+    cdef uint64_t index
+
+    @cython.profile(False)
+    def __cinit__(self, Node node, double strength, Vector zero):
+        self.index = 0
+
     @cython.profile(False)
     cdef void apply(self, Particle particle, double delta) noexcept nogil:
-        global RandomIndex
         cdef int64_t i
         for i in range(particle.force.length):
-            particle.force.numbers[i] = particle.force.numbers[i] + self.strength * random_normal()
+            particle.force.numbers[i] = particle.force.numbers[i] + self.strength * self.random_source._item(self.index)
+            self.index = self.index + 1
 
 
 cdef class CollisionForceApplier(MatrixPairForceApplier):
@@ -438,6 +426,12 @@ cdef class PhysicsSystem:
             last_run = <int64_t>floor(last_run_vector.numbers[0])
         else:
             last_run = run
+        cdef Vector iteration_vector = state.get_item(state_prefix.concat(ITERATION))
+        cdef int64_t iteration
+        if iteration_vector.length == 1 and iteration_vector.numbers != NULL:
+            iteration = <int64_t>floor(iteration_vector.numbers[0]) + 1
+        else:
+            iteration = 0
         cdef Vector state_key
         if run != last_run:
             logger.debug("Reset physics system {!r} for run {}", state_prefix, run)
@@ -449,12 +443,18 @@ cdef class PhysicsSystem:
             time_vector.numbers[0] = time
             state.set_item(state_prefix, time_vector)
             clock = 0
+            iteration = 0
         cdef Vector run_vector = Vector.__new__(Vector)
         run_vector.allocate_numbers(1)
         run_vector.numbers[0] = run
         state.set_item(state_prefix.concat(RUN), run_vector)
+        iteration_vector = Vector.__new__(Vector)
+        iteration_vector.allocate_numbers(1)
+        iteration_vector.numbers[0] = iteration
+        state.set_item(state_prefix.concat(ITERATION), iteration_vector)
+        cdef Vector seed = state_prefix.concat(run_vector).concat(iteration_vector)
         cdef list particles=[], non_anchors=[], particle_forces=[], matrix_forces=[], specific_forces=[], barriers=[]
-        self.collect(node, state, state_prefix, clock, particles, non_anchors, particle_forces, matrix_forces, specific_forces, barriers)
+        self.collect(node, state, state_prefix, clock, seed, particles, non_anchors, particle_forces, matrix_forces, specific_forces, barriers)
         time_vector = state.get_item(state_prefix)
         if time_vector.length != 1 or time_vector.numbers == NULL:
             logger.debug("New {}D physics {!r} with {} particles and {} forces", self.dimensions, state_prefix, len(particles),
@@ -483,13 +483,14 @@ cdef class PhysicsSystem:
         time_vector.numbers[0] = clock
         state.set_item(state_prefix.concat(CLOCK), time_vector)
 
-    cdef void collect(self, Node node, StateDict state, Vector state_prefix, double clock,
+    cdef void collect(self, Node node, StateDict state, Vector state_prefix, double clock, Vector seed,
                       list particles, list non_anchors, list particle_forces, list matrix_forces, list specific_forces, list barriers):
         cdef Node child
         cdef Vector id
         cdef double strength, ease
         cdef dict particles_by_id = {}
         cdef Particle particle
+        cdef ParticleForceApplier particle_force
         cdef Barrier barrier
         cdef set old_state_keys = self.state_keys
         cdef set new_state_keys = set()
@@ -537,7 +538,9 @@ cdef class PhysicsSystem:
                 elif child.kind is 'constant':
                     particle_forces.append(ConstantForceApplier.__new__(ConstantForceApplier, child, strength, zero))
                 elif child.kind is 'random':
-                    particle_forces.append(RandomForceApplier.__new__(RandomForceApplier, child, strength, zero))
+                    particle_force = RandomForceApplier.__new__(RandomForceApplier, child, strength, zero)
+                    (<RandomForceApplier>particle_force).random_source = normal(seed)
+                    particle_forces.append(particle_force)
                 elif child.kind is 'collision':
                     matrix_forces.append(CollisionForceApplier.__new__(CollisionForceApplier, child, strength, zero))
                 elif child.kind is 'gravity':
