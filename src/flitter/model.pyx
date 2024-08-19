@@ -3,7 +3,7 @@
 import cython
 import numpy as np
 
-from libc.math cimport isnan, floor as c_floor, ceil as c_ceil, abs as c_abs, round as c_round, sqrt, sin, cos, acos, isnan
+from libc.math cimport isnan, isinf, floor as c_floor, ceil as c_ceil, abs as c_abs, round as c_round, sqrt, sin, cos, acos, isnan
 from cpython.object cimport PyObject
 from cpython.ref cimport Py_INCREF
 from cpython.bool cimport PyBool_FromLong
@@ -435,6 +435,17 @@ cdef class Vector:
             return True
         else:
             return issubclass(float, t)
+
+    cpdef bint is_finite(self) noexcept:
+        cdef int64_t i, n=self.length
+        if self.objects is not None:
+            return False
+        if n == 0:
+            return True
+        for i in range(n):
+            if isnan(self.numbers[i]) or isinf(self.numbers[i]):
+                return False
+        return True
 
     def __bool__(self):
         return self.as_bool()

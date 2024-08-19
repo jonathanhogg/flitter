@@ -259,6 +259,16 @@ class TestVector(utils.TestCase):
                     if t2 is not None and t2 is not t:
                         self.assertFalse(vector.isinstance(t2))
 
+    def test_is_finite(self):
+        self.assertTrue(null.is_finite())
+        self.assertFalse(Vector("Hello world!").is_finite())
+        self.assertTrue(Vector(1).is_finite())
+        self.assertFalse(Vector(math.inf).is_finite())
+        self.assertFalse(Vector(math.nan).is_finite())
+        self.assertFalse((Vector(1) / Vector(0)).is_finite())
+        self.assertFalse(Vector([0, -math.inf]).is_finite())
+        self.assertFalse(Vector([1, math.nan]).is_finite())
+
     def test_as_bool(self):
         self.assertFalse(null)
         self.assertFalse(false)

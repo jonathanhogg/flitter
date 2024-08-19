@@ -26,6 +26,7 @@ cdef class Vector:
     cpdef Vector intern(self)
     cdef void fill_range(self, Vector startv, Vector stopv, Vector stepv)
     cpdef bint isinstance(self, t) noexcept
+    cpdef bint is_finite(self) noexcept
     cdef bint as_bool(self)
     cdef double as_double(self) noexcept
     cdef int64_t as_integer(self) noexcept

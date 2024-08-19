@@ -58,6 +58,7 @@ cdef class Particle:
     cdef Vector position
     cdef Vector velocity_state_key
     cdef Vector velocity
+    cdef Vector acceleration
     cdef Vector initial_force
     cdef Vector force
     cdef double radius
@@ -82,15 +83,18 @@ cdef class Particle:
             self.velocity = node.get_fvec('velocity', zero.length, zero).copy()
         self.initial_force = node.get_fvec('force', zero.length, zero)
         self.force = self.initial_force.copy()
+        self.acceleration = zero.copy()
         self.radius = max(0, node.get_float('radius', 1))
         self.mass = max(0, node.get_float('mass', 1))
         self.charge = node.get_float('charge', 1)
         self.ease = node.get_float('ease', 0)
 
     @cython.profile(False)
-    cdef void update(self, double speed_of_light, double clock, double delta) noexcept nogil:
-        cdef double speed, d, k
+    cdef void step(self, double speed_of_light, double clock, double delta) noexcept nogil:
+        cdef double speed_squared, v, k
         cdef int64_t i, n=self.force.length
+        for i in range(n):
+            self.acceleration.numbers[i] = self.velocity.numbers[i]
         if self.mass:
             for i in range(n):
                 if isinf(self.force.numbers[i]) or isnan(self.force.numbers[i]):
@@ -99,19 +103,25 @@ cdef class Particle:
                 k = delta / self.mass
                 if self.ease > 0 and clock < self.ease:
                     k *= clock / self.ease
+                speed_squared = 0
                 for i in range(n):
-                    self.velocity.numbers[i] = self.velocity.numbers[i] + self.force.numbers[i] * k
-                if speed_of_light > 0:
-                    speed = 0
+                    v = self.velocity.numbers[i] + self.force.numbers[i] * k
+                    self.velocity.numbers[i] = v
+                    speed_squared += v * v
+                if speed_of_light > 0 and speed_squared > speed_of_light * speed_of_light:
+                    k = speed_of_light / sqrt(speed_squared)
                     for i in range(n):
-                        d = self.velocity.numbers[i]
-                        speed += d * d
-                    if speed > speed_of_light * speed_of_light:
-                        k = speed_of_light / sqrt(speed)
-                        for i in range(n):
-                            self.velocity.numbers[i] = self.velocity.numbers[i] * k
+                        self.velocity.numbers[i] = self.velocity.numbers[i] * k
         for i in range(n):
-            self.position.numbers[i] = self.position.numbers[i] + self.velocity.numbers[i] * delta
+            v = self.acceleration.numbers[i]
+            self.acceleration.numbers[i] = (self.velocity.numbers[i] - v) / delta
+            v = (v + self.velocity.numbers[i]) / 2
+            self.position.numbers[i] = self.position.numbers[i] + v * delta
+
+    @cython.profile(False)
+    cdef void reset_force(self) noexcept nogil:
+        cdef int64_t i, n=self.force.length
+        for i in range(n):
             self.force.numbers[i] = self.initial_force.numbers[i]
 
 
@@ -122,7 +132,7 @@ cdef class Anchor(Particle):
         self.velocity = zero.copy()
 
     @cython.profile(False)
-    cdef void update(self, double speed_of_light, double clock, double delta) noexcept nogil:
+    cdef void step(self, double speed_of_light, double clock, double delta) noexcept nogil:
         pass
 
 
@@ -135,26 +145,42 @@ cdef class Barrier:
     def __cinit__(self, Node node, Vector zero):
         self.position = node.get_fvec('position', zero.length, zero)
         self.normal = node.get_fvec('normal', zero.length, zero).normalize()
-        self.restitution = node.get_float('restitution', 1)
+        self.restitution = min(max(0, node.get_float('restitution', 1)), 1)
 
     @cython.profile(False)
-    cdef void apply(self, Particle particle, double delta) noexcept nogil:
+    cdef void apply(self, Particle particle, double speed_of_light, double clock, double delta) noexcept nogil:
         if self.normal.length == 0:
             return
         cdef int i, dimensions=self.position.length
-        cdef double d
-        d = -particle.radius
+        cdef double n, velocity=0, distance=-particle.radius, acceleration=0
         for i in range(dimensions):
-            d = d + (particle.position.numbers[i] - self.position.numbers[i]) * self.normal.numbers[i]
-        if d >= 0:
+            n = self.normal.numbers[i]
+            distance = distance + (particle.position.numbers[i] - self.position.numbers[i]) * n
+            velocity = velocity + particle.velocity.numbers[i] * n
+            acceleration = acceleration + particle.acceleration.numbers[i] * n
+        if distance >= 0:
             return
+        cdef double vv=velocity*velocity, ad2=2*acceleration*distance, k=distance/velocity
+        cdef double rewind_t = (velocity + sqrt(vv - ad2)) / acceleration if acceleration and ad2 < vv else k
+        if velocity >= 0 or rewind_t > delta:
+            for i in range(dimensions):
+                particle.position.numbers[i] = particle.position.numbers[i] - distance * self.normal.numbers[i]
+            return
+        cdef double v
+        velocity = 0
         for i in range(dimensions):
-            particle.position.numbers[i] = particle.position.numbers[i] - d*self.normal.numbers[i]
-        d = 0
+            particle.position.numbers[i] = particle.position.numbers[i] - k * particle.velocity.numbers[i]
+            v = (particle.velocity.numbers[i] - rewind_t * particle.acceleration.numbers[i]) * self.restitution
+            particle.velocity.numbers[i] = v
+            velocity = velocity + v * self.normal.numbers[i]
         for i in range(dimensions):
-            d = d + particle.velocity.numbers[i] * self.normal.numbers[i]
-        for i in range(dimensions):
-            particle.velocity.numbers[i] = (particle.velocity.numbers[i] - 2*d*self.normal.numbers[i]) * self.restitution
+            n = self.normal.numbers[i]
+            particle.velocity.numbers[i] = particle.velocity.numbers[i] - 2 * velocity * n
+        velocity = -velocity
+        cdef double t
+        if acceleration < 0 and (t := 2 * velocity / -acceleration) < t:
+            rewind_t = t
+        particle.step(speed_of_light, clock, rewind_t)
 
 
 cdef class ForceApplier:
@@ -280,9 +306,10 @@ cdef class ConstantForceApplier(ParticleForceApplier):
     @cython.profile(False)
     cdef void apply(self, Particle particle, double delta) noexcept nogil:
         cdef int64_t i
+        cdef double f
         for i in range(self.force.length):
-            particle.force.numbers[i] = particle.force.numbers[i] + self.force.numbers[i]*self.strength
-            particle.velocity.numbers[i] = particle.velocity.numbers[i] + self.acceleration.numbers[i]*self.strength*delta
+            f = self.force.numbers[i] + self.acceleration.numbers[i] * particle.mass
+            particle.force.numbers[i] = particle.force.numbers[i] + f*self.strength
 
 
 cdef class RandomForceApplier(ParticleForceApplier):
@@ -421,6 +448,7 @@ cdef class PhysicsSystem:
             time_vector.allocate_numbers(1)
             time_vector.numbers[0] = time
             state.set_item(state_prefix, time_vector)
+            clock = 0
         cdef Vector run_vector = Vector.__new__(Vector)
         run_vector.allocate_numbers(1)
         run_vector.numbers[0] = run
@@ -442,8 +470,10 @@ cdef class PhysicsSystem:
             objects = particles, non_anchors, particle_forces, matrix_forces, specific_forces, barriers
             clock = await asyncio.to_thread(self.calculate, objects, engine.realtime, extra, time, last_time, clock)
             for particle in particles:
-                state.set_item(particle.position_state_key, particle.position)
-                state.set_item(particle.velocity_state_key, particle.velocity)
+                if particle.position.is_finite():
+                    state.set_item(particle.position_state_key, particle.position)
+                if particle.velocity.is_finite():
+                    state.set_item(particle.velocity_state_key, particle.velocity)
         time_vector = Vector.__new__(Vector)
         time_vector.allocate_numbers(1)
         time_vector.numbers[0] = time
@@ -580,17 +610,20 @@ cdef class PhysicsSystem:
                                             direction.numbers[ii] /= distance
                                     (<MatrixPairForceApplier>force).apply(<Particle>from_particle, <Particle>to_particle,
                                                                           direction, distance, distance_squared)
-                for i in range(n):
-                    (<Particle>PyList_GET_ITEM(particles, i)).update(self.speed_of_light, clock, delta)
+                for i in range(o):
+                    (<Particle>PyList_GET_ITEM(non_anchors, i)).step(self.speed_of_light, clock, delta)
                 m = PyList_GET_SIZE(barriers)
                 for i in range(m):
                     barrier = PyList_GET_ITEM(barriers, i)
                     for j in range(o):
                         to_particle = PyList_GET_ITEM(non_anchors, j)
-                        (<Barrier>barrier).apply(<Particle>to_particle, delta)
+                        (<Barrier>barrier).apply(<Particle>to_particle, self.speed_of_light, clock, delta)
                 last_time += delta
                 clock += delta
                 if last_time >= time or (realtime and not extra):
                     break
                 extra = False
+                for j in range(o):
+                    to_particle = PyList_GET_ITEM(non_anchors, j)
+                    (<Particle>to_particle).reset_force()
         return clock

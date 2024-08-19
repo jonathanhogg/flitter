@@ -18,19 +18,18 @@ let SIZE=1080;1080
 -- round out the simulation.
 --
 !physics dimensions=3 state=:balls run=RUN time=$(:time) or 0
-    let start=(uniform(:pos;RUN)[..3*NBALLS]-(0.5;0.5;0))*100
-        velocity=normal(:xy;RUN)[..3*NBALLS]*50
     for i in ..NBALLS
-        !particle id=i radius=RADII[i] mass=RADII[i]**2/10 position=start[i*3..i*3+3] velocity=velocity[i*3..i*3+3]
-    !drag strength=50u
-    !barrier position=0;0;0 normal=0;0;1 restitution=0.95
-    !barrier position=0;0;100 normal=0;0;-1 restitution=0.95
-    !barrier position=-50;0;0 normal=1;0;0 restitution=0.95
-    !barrier position=50;0;0 normal=-1;0;0 restitution=0.95
-    !barrier position=0;-50;0 normal=0;1;0 restitution=0.95
-    !barrier position=0;50;0 normal=0;-1;0 restitution=0.95
-    !constant acceleration=0;0;-200
-    !collision strength=500 power=2
+        let r=RADII[i] pos=(uniform(:pos;i)[..3]-(0.5;0.5;0))*(100-r*2)+(0;0;r) vel=normal(:vel;i)[..3]*100
+        !particle id=i radius=r mass=r**2/10 position=pos velocity=vel
+    !drag strength=1m
+    !barrier position=0;0;0 normal=0;0;1 restitution=0.9
+    !barrier position=0;0;100 normal=0;0;-1 restitution=0.9
+    !barrier position=-50;0;0 normal=1;0;0 restitution=0.9
+    !barrier position=50;0;0 normal=-1;0;0 restitution=0.9
+    !barrier position=0;-50;0 normal=0;1;0 restitution=0.9
+    !barrier position=0;50;0 normal=0;-1;0 restitution=0.9
+    !constant acceleration=0;0;-300
+    !collision strength=200 power=2
 
 !window size=SIZE colorbits=16
     !record filename=(OUTPUT if frame == run_time * fps - 1)

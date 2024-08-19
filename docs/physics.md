@@ -122,7 +122,7 @@ position updated based on this.
 ```
 
 ```{math}
-\vec{p}_{t+\Delta t} = \vec{p}_t + \vec{v}_{t+\Delta t} \cdot \Delta t
+\vec{p}_{t+\Delta t} = \vec{p}_t + {{\vec{v}_t + \vec{v}_{t+\Delta t}} \over 2} \cdot \Delta t
 ```
 
 The attributes that specify properties of the particle are:
@@ -142,7 +142,7 @@ force vector (does nothing if `force` is not specified)
 in collision detection and when calculating drag force (defaults to 1 and will
 be clamped to zero if negative)
 - `mass` - specifies a value to be used both as the inertial component of
-converting forces into accelleration and as the mass for computing gravitic
+converting forces into acceleration and as the mass for computing gravitic
 attraction (defaults to 1 and will be clamped to zero if negative)
 - `charge` - specifies a value to be used for calculating electrostatic force
 (defaults to 1)
@@ -171,17 +171,17 @@ for the purposes of calculating attraction due to gravity.
 A `!barrier` constrains all particles to be on one side of it. In the case of
 a system with 3 dimensions, this will be an infinite plane; with 2 dimensions,
 a line; and with 1 dimension, a point. Particles that hit a barrier will
-"bounce" by reflecting the velocity.
+"bounce" by reflecting their velocity using the normal of the barrier.
 
 - `position` - specifies the origin for the barrier
 - `normal` - specifies the orientation of the barrier; particles are
 constrained to be on the side of the barrier in the direction of this vector
 - `restitution` - the coefficient of restitution (default is `1`)
 
-Particles bouncing off a barrier will have reflected speed in proportion to
-their original speed multiplied by the coefficient of restitution: a value of
-`1` will result in a perfectly elastic collision, whereas `0` would mean all of
-the particle's velocity is absorbed.
+Particles bouncing off a barrier will have reflected speed equal to the speed
+at which they hit the barrier multiplied by the coefficient of restitution: a
+value of `1` will result in a perfectly elastic collision, whereas `0` would
+mean all of the particle's velocity is absorbed.
 
 ### `!constant`
 
