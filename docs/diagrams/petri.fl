@@ -1,0 +1,32 @@
+
+%pragma tempo 60
+
+let SIZE=1080;1080
+    NCELLS=200
+    RADIUS=15
+    DISH=500
+
+!physics state=:cells dimensions=2 time=beat resolution=tempo/60/fps
+    !anchor id=:middle position=0;0
+    for i in ..NCELLS
+        let start=(DISH-RADIUS)*beta(:r)[i]*polar(uniform(:th)[i])
+            charge=normal(:charge)[i]
+        !particle id=i charge=charge radius=RADIUS position=start
+        !distance strength=1000 max=DISH-RADIUS from=i to=:middle
+    !electrostatic strength=200 ease=10
+    !collision ease=10
+    !drag strength=0.001
+    !random strength=10
+
+!window size=SIZE
+    !canvas id=:top color=1 translate=SIZE/2
+        !path
+            for i in ..NCELLS
+                !ellipse point=$(:cells;i) radius=RADIUS
+            !fill color=0;0.5;0
+        !path
+            !ellipse point=$(:cells;:middle) radius=DISH
+            !stroke stroke_width=10
+
+    !record filename=OUTPUT if frame == run_time*fps - 1
+        !reference id=:top

@@ -460,6 +460,8 @@ that contain strings - stick to symbols when possible.
 
 ## Example
 
+![Petri dish diagram](diagrams/petri.png)
+
 This example creates a "petri dish" of cell particles with normally-distributed
 random charges. An `!electrostatic` force applier makes the cells drift together
 or apart, clumping up into different shapes. Chains of cells with alternating
@@ -476,35 +478,10 @@ The `beat` clock is used as the simulation time, allowing the simulation to be
 sped up or slowed down by altering the tempo. `resolution` is calculated to
 match the current tempo to the target frame-rate.
 
-```flitter
-%pragma tempo 60
-
-let SIZE=1080;1080
-    NCELLS=200
-    RADIUS=15
-    DISH=500
-
-!physics state=:cells dimensions=2 time=beat resolution=tempo/60/fps
-    !anchor id=:middle position=0;0
-    for i in ..NCELLS
-        let start=(DISH-RADIUS)*beta(:r)[i]*polar(uniform(:th)[i])
-            charge=normal(:charge)[i]
-        !particle id=i charge=charge radius=RADIUS position=start
-        !distance strength=1000 max=DISH-RADIUS from=i to=:middle
-    !electrostatic strength=200 ease=10
-    !collision ease=10
-    !drag strength=0.001
-    !random strength=10
-
-!window size=SIZE
-    !canvas color=1 translate=SIZE/2
-        !path
-            for i in ..NCELLS
-                !ellipse point=$(:cells;i) radius=RADIUS
-            !fill color=0;0.5;0
-        !path
-            !ellipse point=$(:cells;:middle) radius=DISH
-            !stroke stroke_width=10
+```{literalinclude} diagrams/petri.fl
+   :language: flitter
+   :lines: 1-30
+   :emphasize-lines: 8-18
 ```
 
 Note that the `strength` coefficients for the `!electrostatic` and `!collision`

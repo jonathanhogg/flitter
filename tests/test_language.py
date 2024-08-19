@@ -438,6 +438,9 @@ class TestDocumentationDiagrams(ScriptTest):
     def test_waveforms(self):
         self.assertSimplifierDoesntChangeBehaviour(self.DIAGRAMS / 'waveforms.fl')
 
+    def test_petri(self):
+        self.assertSimplifierDoesntChangeBehaviour(self.DIAGRAMS / 'petri.fl')
+
 
 class TestDocumentationTutorial(ScriptTest):
     """

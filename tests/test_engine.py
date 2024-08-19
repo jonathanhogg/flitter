@@ -152,6 +152,9 @@ class TestDocumentationDiagrams(ScriptTest):
     def test_waveforms(self):
         self.assertScriptOutputMatchesImage(self.DIAGRAMS / 'waveforms.fl')
 
+    def test_petri(self):
+        self.assertScriptOutputMatchesImage(self.DIAGRAMS / 'petri.fl', target_fps=10, run_time=10)
+
 
 class TestDocumentationTutorial(ScriptTest):
     """
