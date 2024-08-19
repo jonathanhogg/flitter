@@ -70,4 +70,4 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: test_images-${{ matrix.os }}-${{ matrix.python-version }}
-        path: build/test_images/
+        path: build/test_images.*/

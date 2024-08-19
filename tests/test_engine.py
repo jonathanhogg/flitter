@@ -5,6 +5,7 @@ Flitter engine functional tests
 import asyncio
 from pathlib import Path
 import sys
+import sysconfig
 import tempfile
 import unittest
 
@@ -20,12 +21,8 @@ def image_diff(ref, img):
     return PIL.ImageStat.Stat(PIL.ImageChops.difference(ref, img).convert('L')).sum[0] / (img.width * img.height * 255)
 
 
-TEST_IMAGES_DIR = Path(__file__).parent.parent / 'build/test_images'
+TEST_IMAGES_DIR = Path(__file__).parent.parent / f'build/test_images.{sysconfig.get_platform()}-{sys.implementation.cache_tag}'
 TEST_IMAGES_DIR.mkdir(mode=0o775, parents=True, exist_ok=True)
-
-for path in TEST_IMAGES_DIR.iterdir():
-    if path.is_file():
-        path.unlink(missing_ok=True)
 
 
 class TestRendering(unittest.TestCase):
@@ -121,6 +118,8 @@ class TestRendering(unittest.TestCase):
 class ScriptTest(unittest.TestCase):
     def assertScriptOutputMatchesImage(self, script, suffix='.png', target_fps=1, run_time=1, **kwargs):
         output_path = TEST_IMAGES_DIR / script.with_suffix(suffix).name
+        if output_path.exists():
+            output_path.unlink()
         reference = PIL.Image.open(script.with_suffix('.png'))
         controller = EngineController(realtime=False, offscreen=True, defined_names={'OUTPUT': str(output_path)},
                                       target_fps=target_fps, run_time=run_time, **kwargs)
