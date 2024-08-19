@@ -285,15 +285,15 @@ an optimization feature that allows running the simulation slightly faster by
 skipping over particle pairings where they are far apart and will have only a
 minimal effect on each other.
 
-Gravitational forces are ignored between particles whose centres are within
-each other's radii, i.e., the minimum distance over which gravity will be
-calculated is the maximum of the `radius` of each particle. This is to avoid
-the wild instability caused by massive forces when the distance is very small.
+The distance value $l$ is constrained to be no smaller than the sum of the two
+particles' radii, i.e., overlapping particles experience a *constant* attractive
+force. This is to avoid wild instability caused by two particles being crushed
+together.
 
 ### `!electrostatic`
 
-`!electrostatic` creates an attractive force that applies to all pairs of
-particles in proportion to the *signed* product of their `charge` attributes and
+`!electrostatic` creates a repulsive force that applies to all pairs of
+particles in proportion to the product of their `charge` attributes and
 inversely proportional to the square of the distance between the particles.
 Particles with zero `charge` will be ignored. Particles with the same sign
 charge will repel each other and particles with oppositely signed charges will
@@ -306,19 +306,20 @@ attract each other.
 
 ```{math}
 \vec{F} = \textbf{strength} \cdot \vec{d} \cdot
-{ | \textbf{charge}_{from} | \cdot \textbf{charge}_{to} \over l^2}
+{\textbf{charge}_{from} \cdot \textbf{charge}_{to} \over l^2}
 ```
 
 ```{math}
-\vec{F}_{from} = \vec{F}
+\vec{F}_{from} = -\vec{F}
 ```
 
 ```{math}
-\vec{F}_{to} = -\vec{F}
+\vec{F}_{to} = \vec{F}
 ```
 
-Except for the ability to have negative charges, electrostatic force operates
-in the same way as gravity – including being ignored for overlapping particles.
+Except for being reversed and the ability to have negative charges,
+electrostatic force operates in the same way as gravity – including the rule
+for overlapping particles.
 
 ### `!adhesion`
 

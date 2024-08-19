@@ -345,10 +345,10 @@ cdef class CollisionForceApplier(MatrixPairForceApplier):
 cdef class GravityForceApplier(MatrixPairForceApplier):
     @cython.profile(False)
     cdef void apply(self, Particle from_particle, Particle to_particle, Vector direction, double distance, double distance_squared) noexcept nogil:
-        cdef double f, k
+        cdef double f, k, d=from_particle.radius + to_particle.radius
         cdef int64_t i
-        if from_particle.mass and to_particle.mass and distance > max(from_particle.radius, to_particle.radius):
-            k = self.strength * from_particle.mass * to_particle.mass / distance_squared
+        if from_particle.mass and to_particle.mass:
+            k = self.strength * from_particle.mass * to_particle.mass / max(distance_squared, d*d)
             for i in range(direction.length):
                 f = direction.numbers[i] * k
                 from_particle.force.numbers[i] = from_particle.force.numbers[i] + f
@@ -358,14 +358,14 @@ cdef class GravityForceApplier(MatrixPairForceApplier):
 cdef class ElectrostaticForceApplier(MatrixPairForceApplier):
     @cython.profile(False)
     cdef void apply(self, Particle from_particle, Particle to_particle, Vector direction, double distance, double distance_squared) noexcept nogil:
-        cdef double f, k
+        cdef double f, k, d=from_particle.radius + to_particle.radius
         cdef int64_t i
-        if from_particle.charge and to_particle.charge and distance > max(from_particle.radius, to_particle.radius):
-            k = self.strength * -from_particle.charge * to_particle.charge / distance_squared
+        if from_particle.charge and to_particle.charge:
+            k = self.strength * from_particle.charge * to_particle.charge / max(distance_squared, d*d)
             for i in range(direction.length):
                 f = direction.numbers[i] * k
-                from_particle.force.numbers[i] = from_particle.force.numbers[i] + f
-                to_particle.force.numbers[i] = to_particle.force.numbers[i] - f
+                from_particle.force.numbers[i] = from_particle.force.numbers[i] - f
+                to_particle.force.numbers[i] = to_particle.force.numbers[i] + f
 
 
 cdef class AdhesionForceApplier(MatrixPairForceApplier):
