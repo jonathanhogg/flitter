@@ -36,8 +36,8 @@ cdef Vector DefaultFalloff = Vector((0, 0, 1, 0))
 cdef Matrix44 IdentityTransform = Matrix44._identity()
 cdef int DEFAULT_MAX_LIGHTS = 50
 cdef double Pi = 3.141592653589793115997963468544185161590576171875
-cdef set MaterialAttributes = {'color', 'metal', 'roughness', 'shininess', 'occlusion', 'emissive', 'transparency',
-                               'texture_id', 'metal_texture_id', 'roughness_texture_id', 'occlusion_texture_id',
+cdef set MaterialAttributes = {'color', 'metal', 'roughness', 'shininess', 'ao', 'emissive', 'transparency',
+                               'texture_id', 'metal_texture_id', 'roughness_texture_id', 'ao_texture_id',
                                'emissive_texture_id', 'transparency_texture_id'}
 cdef set GroupAttributes = set(MaterialAttributes)
 GroupAttributes.update(('translate', 'scale', 'rotate', 'rotate_q', 'rotate_x', 'rotate_y', 'rotate_z', 'shear_x', 'shear_y', 'shear_z'))
@@ -70,7 +70,7 @@ cdef class Textures:
     cdef str albedo_id
     cdef str metal_id
     cdef str roughness_id
-    cdef str occlusion_id
+    cdef str ao_id
     cdef str emissive_id
     cdef str transparency_id
 
@@ -78,12 +78,12 @@ cdef class Textures:
         return other.albedo_id == self.albedo_id and \
                other.metal_id == self.metal_id and \
                other.roughness_id == self.roughness_id and \
-               other.occlusion_id == self.occlusion_id and \
+               other.ao_id == self.ao_id and \
                other.emissive_id == self.emissive_id and \
                other.transparency_id == self.transparency_id
 
     def __hash__(self):
-        return (hash(self.albedo_id) ^ hash(self.metal_id) ^ hash(self.roughness_id) ^ hash(self.occlusion_id) ^
+        return (hash(self.albedo_id) ^ hash(self.metal_id) ^ hash(self.roughness_id) ^ hash(self.ao_id) ^
                 hash(self.emissive_id) ^ hash(self.transparency_id))
 
 
@@ -92,7 +92,7 @@ cdef class Material:
     cdef double ior
     cdef double metal
     cdef double roughness
-    cdef double occlusion
+    cdef double ao
     cdef Vector emissive
     cdef double transparency
     cdef double translucency
@@ -106,7 +106,7 @@ cdef class Material:
         material.ior = max(1, node.get_float('ior', self.ior))
         material.roughness = min(max(1e-6, node.get_float('roughness', 1)), self.roughness)
         material.metal = min(max(0, node.get_float('metal', self.metal)), 1)
-        material.occlusion = min(max(0, node.get_float('occlusion', self.occlusion)), 1)
+        material.ao = min(max(0, node.get_float('ao', self.ao)), 1)
         material.emissive = node.get_fvec('emissive', 3, self.emissive)
         material.transparency = min(max(0, node.get_float('transparency', self.transparency)), 1)
         material.translucency = max(0, node.get_float('translucency', self.translucency))
@@ -114,24 +114,24 @@ cdef class Material:
             albedo_id = node.get_str('texture_id', self.textures.albedo_id)
             metal_id = node.get_str('metal_texture_id', self.textures.metal_id)
             roughness_id = node.get_str('roughness_texture_id', self.textures.roughness_id)
-            occlusion_id = node.get_str('occlusion_texture_id', self.textures.occlusion_id)
+            ao_id = node.get_str('ao_texture_id', self.textures.ao_id)
             emissive_id = node.get_str('emissive_texture_id', self.textures.emissive_id)
             transparency_id = node.get_str('transparency_texture_id', self.textures.transparency_id)
         else:
             albedo_id = node.get_str('texture_id', None)
             metal_id = node.get_str('metal_texture_id', None)
             roughness_id = node.get_str('roughness_texture_id', None)
-            occlusion_id = node.get_str('occlusion_texture_id', None)
+            ao_id = node.get_str('ao_texture_id', None)
             emissive_id = node.get_str('emissive_texture_id', None)
             transparency_id = node.get_str('transparency_texture_id', None)
         cdef Textures textures
-        if (albedo_id is not None or metal_id is not None or roughness_id is not None or occlusion_id is not None or
+        if (albedo_id is not None or metal_id is not None or roughness_id is not None or ao_id is not None or
                 emissive_id is not None or transparency_id is not None):
             textures = Textures.__new__(Textures)
             textures.albedo_id = albedo_id
             textures.metal_id = metal_id
             textures.roughness_id = roughness_id
-            textures.occlusion_id = occlusion_id
+            textures.ao_id = ao_id
             textures.emissive_id = emissive_id
             textures.transparency_id = transparency_id
             material.textures = textures
@@ -691,7 +691,7 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
                 dest[8] = material.ior
                 dest[9] = material.metal
                 dest[10] = material.roughness
-                dest[11] = material.occlusion
+                dest[11] = material.ao
                 k += 1
         dispatch_instances(glctx, objects, shader, model, k, instances_data, textures, references, base_unit_id)
 
@@ -737,7 +737,7 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
                 dest[8] = material.ior
                 dest[9] = material.metal
                 dest[10] = material.roughness
-                dest[11] = material.occlusion
+                dest[11] = material.ao
                 k += 1
                 if i == n-1 or (<tuple>translucent_objects[i+1])[1] is not model:
                     dispatch_instances(glctx, objects, backface_shader, model, k, instances_data, material.textures, references, base_unit_id)
@@ -814,7 +814,7 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
             dest[8] = material.ior
             dest[9] = material.metal
             dest[10] = material.roughness
-            dest[11] = material.occlusion
+            dest[11] = material.ao
             k += 1
             if i == n-1 or (<tuple>transparent_objects[i+1])[1] is not model:
                 dispatch_instances(glctx, objects, shader, model, k, instances_data, material.textures, references, base_unit_id)
@@ -875,21 +875,21 @@ cdef list configure_textures(glctx, shader, Textures textures, dict references, 
             shader['roughness_texture'] = unit_id
         else:
             shader['use_roughness_texture'] = False
-    if 'use_occlusion_texture' in shader:
-        if have_textures and (ref := references.get(textures.occlusion_id)) is not None and hasattr(ref, 'texture') and ref.texture is not None:
-            if textures.occlusion_id in unit_ids:
-                unit_id = unit_ids[textures.occlusion_id]
+    if 'use_ao_texture' in shader:
+        if have_textures and (ref := references.get(textures.ao_id)) is not None and hasattr(ref, 'texture') and ref.texture is not None:
+            if textures.ao_id in unit_ids:
+                unit_id = unit_ids[textures.ao_id]
             else:
                 unit_id = base_unit_id
-                unit_ids[textures.occlusion_id] = unit_id
+                unit_ids[textures.ao_id] = unit_id
                 sampler = glctx.sampler(texture=ref.texture, filter=(moderngl.LINEAR, moderngl.LINEAR))
                 sampler.use(unit_id)
                 samplers.append(sampler)
                 base_unit_id += 1
-            shader['use_occlusion_texture'] = True
-            shader['occlusion_texture'] = unit_id
+            shader['use_ao_texture'] = True
+            shader['ao_texture'] = unit_id
         else:
-            shader['use_occlusion_texture'] = False
+            shader['use_ao_texture'] = False
     if 'use_emissive_texture' in shader:
         if have_textures and (ref := references.get(textures.emissive_id)) is not None and hasattr(ref, 'texture') and ref.texture is not None:
             if textures.emissive_id in unit_ids:
@@ -1133,7 +1133,7 @@ class Canvas3D(WindowNode):
         cdef Material material = Material.__new__(Material)
         material.albedo = Zero3
         material.roughness = 1
-        material.occlusion = 1
+        material.ao = 1
         material.emissive = Zero3
         material.ior = 1.5
         cdef list render_groups = []

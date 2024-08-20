@@ -32,14 +32,14 @@ uniform sampler2D backface_data;
 uniform bool use_albedo_texture;
 uniform bool use_metal_texture;
 uniform bool use_roughness_texture;
-uniform bool use_occlusion_texture;
+uniform bool use_ao_texture;
 uniform bool use_emissive_texture;
 uniform bool use_transparency_texture;
 
 uniform sampler2D albedo_texture;
 uniform sampler2D metal_texture;
 uniform sampler2D roughness_texture;
-uniform sampler2D occlusion_texture;
+uniform sampler2D ao_texture;
 uniform sampler2D emissive_texture;
 uniform sampler2D transparency_texture;
 
@@ -95,11 +95,11 @@ void main() {
         float mono = clamp(dot(texture_color.rgb, greyscale), 0.0, 1.0);
         roughness = roughness * (1.0 - clamp(texture_color.a, 0.0, 1.0)) + mono;
     }
-    float occlusion = fragment_properties.w;
-    if (use_occlusion_texture) {
-        vec4 texture_color = texture(occlusion_texture, texture_uv);
+    float ao = fragment_properties.w;
+    if (use_ao_texture) {
+        vec4 texture_color = texture(ao_texture, texture_uv);
         float mono = clamp(dot(texture_color.rgb, greyscale), 0.0, 1.0);
-        occlusion = occlusion * (1.0 - clamp(texture_color.a, 0.0, 1.0)) + mono;
+        ao = ao * (1.0 - clamp(texture_color.a, 0.0, 1.0)) + mono;
     }
     vec3 diffuse_color = vec3(0.0);
     vec3 specular_color = emissive;
@@ -188,7 +188,7 @@ void main() {
                 vec3 light_direction = light[2].xyz;
                 L = -light_direction;
             } else { // (light_type == ${Ambient})
-                diffuse_color += (1.0 - F0) * (1.0 - metal) * albedo * light_color * occlusion;
+                diffuse_color += (1.0 - F0) * (1.0 - metal) * albedo * light_color * ao;
                 break;
             }
             vec4 light_falloff = light[3];

@@ -544,7 +544,7 @@ value for most solid materials.
 : Specifies the roughness of the material, where `0` is a perfectly shiny
 surface and `1` is completely matt.
 
-`occlusion=` `0`…`1`
+`ao=` `0`…`1`
 : Specifies an ambient occlusion level for the material. Ambient lights will be
 multiplied by this value when being applied. This is really only useful when
 this property is [texture mapped](#texture-mapping), where it allows for parts
@@ -597,8 +597,8 @@ in the main repo for how to do this.
 `roughness_texture_id=` *ID*
 : Specifies the *ID* of a node to use for the material `roughness` property.
 
-`occlusion_texture_id=` *ID*
-: Specifies the *ID* of a node to use for the material `occlusion` property.
+`ao_texture_id=` *ID*
+: Specifies the *ID* of a node to use for the material `ao` property.
 
 `emissive_texture_id=` *ID*
 : Specifies the *ID* of a node to use for the material `emissive` property.
