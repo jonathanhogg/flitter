@@ -669,7 +669,8 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
             instance = instances[i]
             material = instance.material
             if material.translucency > 0:
-                translucent_objects.append((-zs[i] if depth_sorted else 0, model, instance))
+                translucent_objects.append((zs[i] if depth_sorted else 0, model, instance))
+                transparent_objects.append((-zs[i] if depth_sorted else 0, model, instance))
             elif (material.transparency > 0 or has_transparency_texture):
                 transparent_objects.append((-zs[i] if depth_sorted else 0, model, instance))
             else:
@@ -754,38 +755,10 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
             samplers.append(sampler)
         else:
             shader['backface_data'] = 0
-        k = 0
-        for i, translucent_object in enumerate(translucent_objects):
-            model = translucent_object[1]
-            instance = translucent_object[2]
-            material = instance.material
-            src = instance.model_matrix.numbers
-            dest = &instances_data[k, 0]
-            for j in range(16):
-                dest[j] = src[j]
-            normal_matrix = instance.model_matrix.inverse_transpose_matrix33()
-            src = normal_matrix.numbers
-            dest = &instances_data[k, 16]
-            for j in range(9):
-                dest[j] = src[j]
-            dest = &instances_data[k, 25]
-            for j in range(3):
-                dest[j] = material.albedo.numbers[j]
-                dest[j+4] = material.emissive.numbers[j]
-            dest[3] = material.transparency
-            dest[7] = material.translucency
-            dest[8] = material.ior
-            dest[9] = material.metal
-            dest[10] = material.roughness
-            dest[11] = material.occlusion
-            k += 1
-            if i == n-1 or (<tuple>translucent_objects[i+1])[1] is not model:
-                dispatch_instances(glctx, objects, shader, model, k, instances_data, material.textures, references, base_unit_id)
-                k = 0
+    elif 'backface_data' in shader:
+        shader['backface_data'] = 0
 
     if transparent_objects:
-        if 'backface_data' in shader:
-            shader['backface_data'] = 0
         render_target.depth_write(False)
         n = len(transparent_objects)
         if render_group.depth_sort and render_group.depth_test:

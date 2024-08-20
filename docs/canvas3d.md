@@ -161,8 +161,8 @@ which faces of the models to cull. The default is `:back`, but specifying
 :::{note}
 Setting `cull_face=:front` is similar to, but **not** the same as inverting all
 of the models in a render group. Inverting a model reverses the face winding
-*and* the normal direction of each vertex, and thus makes all of the back-faces
-into front-faces and vice versa.
+*and* the normal direction of each vertex, and thus makes all of the back faces
+into front faces and vice versa.
 :::
 
 `vertex=`*TEXT*
@@ -197,11 +197,11 @@ that have no transparency or translucency are sorted from front-to-back before
 being dispatched. This allows the OpenGL early depth-testing to immediately
 discard fragments of objects that are hidden by a nearer object.
 
-After non-transparent instances have been dispatched, all instances with
-translucency are collected together and rendered in back-to-front
-depth order, followed by all instances with transparency in back-to-front
-depth order. Using translucency forces an additional render pass for the
-translucent objects to build up a backface depth/normal buffer.
+After non-transparent instances have been rendered, all instances with
+translucency are collected together in front-to-back order and rendered into
+auxiliary buffers to collect back-face lighting and depth data. All instances
+with either transparency or translucency are then rendered in back-to-front
+depth order.
 
 Depth-buffer *writing* is turned **off** when rendering instances with
 transparency. This means that all transparent objects will be rendered fully
@@ -566,7 +566,7 @@ from the surface, specular reflections will be calculated as normal.
 
 `translucency=` *TRANSLUCENCY*
 : Specifies how translucent this material is as a distance (in the world
-coordinate system) over which half of the light falling on the backfaces of the
+coordinate system) over which half of the light falling on the back faces of the
 object will pass through it. The default is `0`, meaning no translucency. At low
 levels of translucency, light will be scattered and will glow through the
 edges/thin-parts of objects. At higher levels of translucency light will be
