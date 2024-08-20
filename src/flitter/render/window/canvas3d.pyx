@@ -507,18 +507,26 @@ def fst(tuple ab):
 cdef object get_shader(object glctx, dict shaders, dict names, object vertex_shader_template, object fragment_shader_template):
     cdef str vertex_shader = vertex_shader_template.render(**names)
     cdef str fragment_shader = fragment_shader_template.render(**names)
-    cdef tuple source = (vertex_shader, fragment_shader)
-    shader = shaders.get(source, False)
+    cdef tuple source_pair = (vertex_shader, fragment_shader)
+    cdef list error
+    cdef str source, line
+    cdef int64_t i
+    shader = shaders.get(source_pair, False)
     if shader is not False:
         return shader
     try:
         shader = glctx.program(vertex_shader=vertex_shader, fragment_shader=fragment_shader)
     except Exception as exc:
-        logger.error("Group shader compile failed:\n{}", '\n'.join(str(exc).strip().split('\n')[4:]))
+        error = str(exc).strip().split('\n')
+        logger.error("Group shader program compile failed: {}", error[-1])
+        logger.trace("Full error: \n{}", str(exc))
+        source = fragment_shader if 'fragment_shader' in error else vertex_shader
+        source = '\n'.join(f'{i+1:3d}|{line}' for i, line in enumerate(source.split('\n')))
+        logger.trace("Failing source:\n{}", source)
         shader = None
     else:
-        logger.debug("Compiled shader program")
-    shaders[source] = shader
+        logger.debug("Compiled group shader program")
+    shaders[source_pair] = shader
     return shader
 
 
