@@ -18,9 +18,10 @@ from cpython.object cimport PyObject
 from . import WindowNode, COLOR_FORMATS, set_uniform_vector
 from ... import name_patch
 from ...clock import system_clock
-from ...model cimport Node, Vector, Matrix44, Matrix33, Quaternion, null_, true_, false_
 from .glsl import TemplateLoader
-from .models cimport Model, DefaultSnapAngle
+from ...model cimport Node, Vector, Matrix44, Matrix33, Quaternion, null_, true_, false_
+from .models cimport Model, DefaultSegments, DefaultSnapAngle
+from ...plugins import get_plugin
 
 
 logger = name_patch(logger, __name__)
@@ -346,46 +347,50 @@ cdef Model get_model(Node node, bint top):
     cdef Node child
     cdef Model model = None
     cdef Vector origin, normal
-    cdef double snap_angle, minimum_area
+    cdef double snap_angle
+    cdef str mapping
     if node.kind is 'box':
-        model = Model.get_box(node)
+        model = Model._box()
     elif node.kind is 'sphere':
-        model = Model.get_sphere(node)
+        model = Model._sphere(node.get_int('segments', DefaultSegments))
     elif node.kind is 'cylinder':
-        model = Model.get_cylinder(node)
+        model = Model._cylinder(node.get_int('segments', DefaultSegments))
     elif node.kind is 'cone':
-        model = Model.get_cone(node)
+        model = Model._cone(node.get_int('segments', DefaultSegments))
     elif node.kind is 'model':
-        model = Model.get_external(node)
+        model = Model._external(node.get_str('filename', None))
         if model is not None and node.get_bool('repair', False):
             model = model.repair()
     elif not top and node.kind is 'transform':
         transform_matrix = update_transform_matrix(node, IdentityTransform)
-        model = Model.union([get_model(child, False).transform(transform_matrix) for child in node._children])
+        model = Model._union([get_model(child, False)._transform(transform_matrix) for child in node._children])
     elif node.kind is 'intersect':
-        model = Model.intersect([get_model(child, False) for child in node._children])
+        model = Model._intersect([get_model(child, False) for child in node._children])
     elif node.kind is 'union':
-        model = Model.union([get_model(child, False) for child in node._children])
+        model = Model._union([get_model(child, False) for child in node._children])
     elif node.kind is 'difference':
-        model = Model.difference([get_model(child, False) for child in node._children])
+        model = Model._difference([get_model(child, False) for child in node._children])
     elif node.kind is 'slice':
         normal = node.get_fvec('normal', 3, null_)
         origin = node.get_fvec('origin', 3, Zero3)
-        model = Model.union([get_model(child, False) for child in node._children])
+        model = Model._union([get_model(child, False) for child in node._children])
         if model is not None and normal.as_bool():
-            model = model.slice(origin, normal)
+            model = model._slice(origin, normal)
+    elif (cls := get_plugin('flitter.render.window.models', node.kind)) is not None:
+        model = cls.get(node)
     if model is not None:
         if top:
             if node.get_bool('flat', False):
                 model = model.flatten()
-            elif (snap_angle := min(max(0, node.get_float('snap_edges', DefaultSnapAngle if model.is_manifold() else 0.5)), 0.5)) < 0.5:
-                minimum_area = min(max(0, node.get_float('minimum_area', 0)), 1)
-                model = model.snap(snap_angle, minimum_area)
+            elif (snap_angle := node.get_float('snap_edges', DefaultSnapAngle if model.is_manifold() else 0.5)) < 0.5:
+                model = model._snap_edges(snap_angle, node.get_float('minimum_area', 0))
             if node.get_bool('invert', False):
                 model = model.invert()
+            if (mapping := node.get_str('uv_remap', None)) is not None:
+                model = model._uv_remap(mapping)
         elif node.kind != 'transform':
             if (transform_matrix := get_model_transform(node, IdentityTransform)) is not IdentityTransform:
-                model = model.transform(transform_matrix)
+                model = model._transform(transform_matrix)
     return model
 
 
@@ -411,21 +416,6 @@ cdef void collect(Node node, Matrix44 transform_matrix, Material material, Rende
         material = material.update(node)
         for child in node._children:
             collect(child, transform_matrix, material, render_group, render_groups, default_camera, cameras, max_samples)
-
-    elif (model := get_model(node, True)) is not None:
-        instance = Instance.__new__(Instance)
-        instance.model_matrix = get_model_transform(node, transform_matrix)
-        instance.material = material
-        if node._attributes is not None:
-            for attr in node._attributes:
-                if attr in MaterialAttributes:
-                    instance.material = material.update(node)
-                    break
-        model_textures = (model, instance.material.textures)
-        if (instances := PyDict_GetItem(render_group.instances, model_textures)) != NULL:
-            (<list>instances).append(instance)
-        else:
-            render_group.instances[model_textures] = [instance]
 
     elif node.kind is 'light':
         color = node.get_fvec('color', 3, null_)
@@ -498,6 +488,21 @@ cdef void collect(Node node, Matrix44 transform_matrix, Material material, Rende
         render_groups.append(new_render_group)
         for child in node._children:
             collect(child, transform_matrix, material, new_render_group, render_groups, default_camera, cameras, max_samples)
+
+    elif (model := get_model(node, True)) is not None:
+        instance = Instance.__new__(Instance)
+        instance.model_matrix = get_model_transform(node, transform_matrix)
+        instance.material = material
+        if node._attributes is not None:
+            for attr in node._attributes:
+                if attr in MaterialAttributes:
+                    instance.material = material.update(node)
+                    break
+        model_textures = (model, instance.material.textures)
+        if (instances := PyDict_GetItem(render_group.instances, model_textures)) != NULL:
+            (<list>instances).append(instance)
+        else:
+            render_group.instances[model_textures] = [instance]
 
 
 def fst(tuple ab):
@@ -651,12 +656,15 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
     render_group.set_blend(glctx)
     render_target.use_main_buffer()
     for (model, textures), instances in render_group.instances.items():
+        model.check_for_changes()
+        bounds = model.get_bounds()
+        if bounds.length != 6 or bounds.numbers == NULL:
+            continue
         has_transparency_texture = textures is not None and textures.transparency_id is not None
         n = len(instances)
         instances_data = view.array((n, 37), 4, 'f')
         k = 0
-        bounds = model.get_bounds()
-        depth_sorted = render_group.depth_sort and render_group.depth_test and bounds.length == 6
+        depth_sorted = render_group.depth_sort and render_group.depth_test
         if depth_sorted:
             zs_array = np.empty(n)
             zs = zs_array

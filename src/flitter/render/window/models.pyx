@@ -5,7 +5,7 @@ import manifold3d
 import numpy as np
 import trimesh
 
-from libc.math cimport cos, sin, sqrt
+from libc.math cimport cos, sin, sqrt, atan2
 from libc.stdint cimport int32_t, int64_t
 
 from ... import name_patch
@@ -24,25 +24,76 @@ cdef Matrix44 IdentityTransform = Matrix44._identity()
 
 
 cdef class Model:
+    @staticmethod
+    def by_name(str name):
+        return ModelCache.get(name)
+
+    @staticmethod
+    def get(Node node):
+        raise NotImplementedError()
+
+    def __init__(self, name=None):
+        if name is None:
+            raise ValueError("Name cannot be None")
+        name = str(name)
+        if name in ModelCache:
+            raise ValueError(f"Model already exists with name: '{name}'")
+        self.name = name
+        ModelCache[name] = self
+
     def __hash__(self):
         return <Py_hash_t>(<void*>self)
 
     def __eq__(self, other):
         return self is other
 
-    cdef bint is_manifold(self):
+    def __str__(self):
+        return self.name
+
+    def __repr__(self):
+        return f'<Model: {self.name}>'
+
+    cpdef bint is_manifold(self):
         raise NotImplementedError()
 
-    cdef bint check_valid(self):
+    cpdef void check_for_changes(self):
         raise NotImplementedError()
 
-    cdef void build_trimesh_model(self):
+    cpdef object build_trimesh(self):
         raise NotImplementedError()
 
-    cdef Vector get_bounds(self):
-        if self.check_valid() and self.bounds is not None:
+    cpdef void add_dependent(self, Model model):
+        if self.dependents is None:
+            self.dependents = set()
+        self.dependents.add(model)
+
+    cpdef void invalidate(self):
+        cdef Model model
+        cdef dict cache
+        if self.valid:
+            self.trimesh_model = None
+            self.bounds = None
+            self.valid = False
+            if self.dependents is not None:
+                for model in self.dependents:
+                    model.invalidate()
+            if self.buffer_caches is not None:
+                for cache in self.buffer_caches:
+                    if self.name in cache:
+                        del cache[self.name]
+
+    cpdef object get_trimesh(self):
+        if not self.valid:
+            self.trimesh_model = self.build_trimesh()
+            self.valid = True
+        return self.trimesh_model
+
+    cpdef Vector get_bounds(self):
+        if not self.valid:
+            self.trimesh_model = self.build_trimesh()
+            self.valid = True
+        elif self.bounds is not None:
             return self.bounds
-        self.build_trimesh_model()
         self.bounds = Vector.__new__(Vector)
         cdef const double[:, :] bounds
         cdef int64_t i, j
@@ -56,99 +107,147 @@ cdef class Model:
 
     cdef tuple get_buffers(self, object glctx, dict objects):
         cdef str name = self.name
-        if self.check_valid():
-            if name in objects:
-                return objects[name]
-        else:
-            self.build_trimesh_model()
-        trimesh_model = self.trimesh_model
-        if trimesh_model is None:
-            if name in objects:
-                del objects[name]
-            return None, None
+        if not self.valid:
+            self.trimesh_model = self.build_trimesh()
+            self.valid = True
+        elif name in objects:
+            return objects[name]
         cdef tuple buffers
-        cdef bint has_uv = trimesh_model.visual is not None and isinstance(trimesh_model.visual, trimesh.visual.texture.TextureVisuals) and \
-            trimesh_model.visual.uv is not None
-        vertex_uvs = trimesh_model.visual.uv if has_uv else np.zeros((len(trimesh_model.vertices), 2))
-        vertex_data = np.hstack((trimesh_model.vertices, trimesh_model.vertex_normals, vertex_uvs)).astype('f4')
-        index_data = trimesh_model.faces.astype('i4')
+        if self.buffer_caches is None:
+            self.buffer_caches = []
+        self.buffer_caches.append(objects)
+        if self.trimesh_model is None:
+            buffers = None, None
+            objects[name] = buffers
+            return buffers
+        if (visual := self.trimesh_model.visual) is not None and isinstance(visual, trimesh.visual.texture.TextureVisuals) and visual.uv is not None:
+            vertex_uvs = visual.uv
+        else:
+            vertex_uvs = np.zeros((len(self.trimesh_model.vertices), 2))
+        vertex_data = np.hstack((self.trimesh_model.vertices, self.trimesh_model.vertex_normals, vertex_uvs)).astype('f4')
+        index_data = self.trimesh_model.faces.astype('i4')
         buffers = (glctx.buffer(vertex_data), glctx.buffer(index_data))
-        logger.trace("Prepared model {} with {} vertices and {} faces", name, len(trimesh_model.vertices), len(trimesh_model.faces))
+        logger.trace("Prepared model {} with {} vertices and {} faces", name, len(vertex_data), len(index_data))
         objects[name] = buffers
         return buffers
 
-    cdef Model manifold(self):
-        return Manifold.get(self)
+    cpdef Model manifold(self):
+        return Manifold._get(self)
 
-    cdef Model flatten(self):
-        return Flatten.get(self)
+    cpdef Model flatten(self):
+        return Flatten._get(self)
 
-    cdef Model invert(self):
-        return Invert.get(self)
+    cpdef Model invert(self):
+        return Invert._get(self)
 
-    cdef Model repair(self):
-        return Repair.get(self)
+    cpdef Model repair(self):
+        return Repair._get(self)
 
-    cdef Model snap(self, double snap_angle, double minimum_area):
-        return SnappedEdgesModel.get(self, snap_angle, minimum_area)
+    cdef Model _snap_edges(self, double snap_angle, double minimum_area):
+        if snap_angle <= 0:
+            return Flatten._get(self)
+        return SnapEdges._get(self, snap_angle, minimum_area)
 
-    cdef Model transform(self, Matrix44 transform_matrix):
-        return Transform.get(self, transform_matrix)
+    def snap_edges(self, snap_angle=DefaultSnapAngle, minimum_area=0):
+        return self._snap_edges(float(snap_angle), float(minimum_area))
 
-    cdef Model slice(self, Vector origin, Vector normal):
-        return Slice.get(self, origin, normal)
+    cdef Model _transform(self, Matrix44 transform_matrix):
+        return Transform._get(self, transform_matrix)
 
-    @staticmethod
-    cdef Model intersect(list models):
-        return BooleanOperation.get('intersection', models)
+    def transform(self, transform_matrix):
+        return self._transform(Matrix44._coerce(transform_matrix))
 
-    @staticmethod
-    cdef Model union(list models):
-        return BooleanOperation.get('union', models)
+    cdef Model _uv_remap(self, str mapping):
+        return UVRemap._get(self, mapping)
 
-    @staticmethod
-    cdef Model difference(list models):
-        return BooleanOperation.get('difference', models)
+    def uv_remap(self, mapping):
+        return self._uv_remap(str(mapping))
 
-    @staticmethod
-    cdef Model get_box(Node node):
-        return Box.get(node)
+    cdef Model _slice(self, Vector origin, Vector normal):
+        return Slice._get(self, origin, normal)
 
-    @staticmethod
-    cdef Model get_sphere(Node node):
-        return Sphere.get(node)
+    def slice(self, origin, normal):
+        return self._slice(Vector._coerce(origin), Vector._coerce(normal))
 
     @staticmethod
-    cdef Model get_cylinder(Node node):
-        return Cylinder.get(node)
+    cdef Model _intersect(list models):
+        return BooleanOperation._get('intersection', models)
 
     @staticmethod
-    cdef Model get_cone(Node node):
-        return Cone.get(node)
+    def intersect(*models):
+        return Model._intersect(list(models))
 
     @staticmethod
-    cdef Model get_external(Node node):
-        return ExternalModel.get(node)
+    cdef Model _union(list models):
+        return BooleanOperation._get('union', models)
+
+    @staticmethod
+    def union(*models):
+        return Model._union(list(models))
+
+    @staticmethod
+    cdef Model _difference(list models):
+        return BooleanOperation._get('difference', models)
+
+    @staticmethod
+    def difference(*models):
+        return Model._difference(list(models))
+
+    @staticmethod
+    cdef Model _box():
+        return Box._get()
+
+    @staticmethod
+    def box():
+        return Box._get()
+
+    @staticmethod
+    cdef Model _sphere(int64_t segments):
+        return Sphere._get(segments)
+
+    @staticmethod
+    def sphere(segments=DefaultSegments):
+        return Sphere._get(int(segments))
+
+    @staticmethod
+    cdef Model _cylinder(int64_t segments):
+        return Cylinder._get(segments)
+
+    @staticmethod
+    def cylinder(segments=DefaultSegments):
+        return Cylinder._get(int(segments))
+
+    @staticmethod
+    cdef Model _cone(int64_t segments):
+        return Cone._get(segments)
+
+    @staticmethod
+    def cone(segments=DefaultSegments):
+        return Cone._get(int(segments))
+
+    @staticmethod
+    cdef Model _external(str filename):
+        return ExternalModel._get(filename)
+
+    @staticmethod
+    def external(filename):
+        return ExternalModel._get(str(filename))
 
 
 cdef class UnaryOperation(Model):
     cdef Model original
 
-    cdef bint is_manifold(self):
+    cpdef bint is_manifold(self):
         return self.original.is_manifold()
 
-    cdef bint check_valid(self):
-        if not self.valid:
-            return False
-        if self.original.check_valid():
-            return True
-        self.valid = False
-        return False
+    cpdef void check_for_changes(self):
+        if self.valid:
+            self.original.check_for_changes()
 
 
 cdef class Manifold(UnaryOperation):
     @staticmethod
-    cdef Manifold get(Model original):
+    cdef Manifold _get(Model original):
         assert not isinstance(original, Manifold)
         cdef str name = f'manifold({original.name})'
         cdef Manifold model = <Manifold>ModelCache.get(name, None)
@@ -156,29 +255,28 @@ cdef class Manifold(UnaryOperation):
             model = Manifold.__new__(Manifold)
             model.name = name
             model.original = original
+            model.original.add_dependent(model)
             ModelCache[name] = model
         return model
 
-    cdef bint is_manifold(self):
+    cpdef bint is_manifold(self):
         return True
 
-    cdef Model manifold(self):
+    cpdef Model manifold(self):
         return self
 
-    cdef Model flatten(self):
+    cpdef Model flatten(self):
         return self.original.flatten()
 
-    cdef Model repair(self):
+    cpdef Model repair(self):
         return self
 
-    cdef Model snap(self, double snap_angle, double minimum_area):
-        return self.original.snap(snap_angle, minimum_area)
+    cdef Model _snap_edges(self, double snap_angle, double minimum_area):
+        return self.original._snap_edges(snap_angle, minimum_area)
 
-    cdef void build_trimesh_model(self):
-        if not self.original.check_valid():
-            self.original.build_trimesh_model()
+    cpdef object build_trimesh(self):
         cdef bint merged=False, filled=False, hull=False
-        trimesh_model = self.original.trimesh_model
+        trimesh_model = self.original.get_trimesh()
         if trimesh_model is not None:
             if not trimesh_model.is_watertight:
                 trimesh_model = trimesh_model.copy()
@@ -199,165 +297,160 @@ cdef class Manifold(UnaryOperation):
                 logger.debug("Filled holes in non-manifold mesh: {}", self.original.name)
             elif merged:
                 logger.trace("Merged vertices of non-manifold mesh: {}", self.original.name)
-        self.trimesh_model = trimesh_model
-        self.valid = True
+        return trimesh_model
 
 
 cdef class Flatten(UnaryOperation):
     @staticmethod
-    cdef Flatten get(Model original):
-        cdef str name = f'flat({original.name})'
+    cdef Flatten _get(Model original):
+        cdef str name = f'flatten({original.name})'
         cdef Flatten model = <Flatten>ModelCache.get(name, None)
         if model is None:
             model = Flatten.__new__(Flatten)
             model.name = name
             model.original = original
+            model.original.add_dependent(model)
             ModelCache[name] = model
         return model
 
-    cdef bint is_manifold(self):
+    cpdef bint is_manifold(self):
         return False
 
-    cdef Model manifold(self):
+    cpdef Model manifold(self):
         return self.original.manifold()
 
-    cdef Model flatten(self):
+    cpdef Model flatten(self):
         return self
 
-    cdef Model snap(self, double snap_angle, double minimum_area):
+    cdef Model _snap_edges(self, double snap_angle, double minimum_area):
         return self
 
-    cdef void build_trimesh_model(self):
-        if not self.original.check_valid():
-            self.original.build_trimesh_model()
-        trimesh_model = self.original.trimesh_model.copy()
-        trimesh_model.unmerge_vertices()
-        self.trimesh_model = trimesh_model
-        self.valid = True
+    cpdef object build_trimesh(self):
+        trimesh_model = self.original.get_trimesh()
+        if trimesh_model is not None:
+            trimesh_model = trimesh_model.copy()
+            trimesh_model.unmerge_vertices()
+        return trimesh_model
 
 
 cdef class Invert(UnaryOperation):
     @staticmethod
-    cdef Invert get(Model original):
+    cdef Invert _get(Model original):
         cdef str name = f'invert({original.name})'
         cdef Invert model = <Invert>ModelCache.get(name, None)
         if model is None:
             model = Invert.__new__(Invert)
             model.name = name
             model.original = original
+            model.original.add_dependent(model)
             ModelCache[name] = model
         return model
 
-    cdef Model manifold(self):
+    cpdef Model manifold(self):
         return self.original.manifold().invert()
 
-    cdef Model invert(self):
+    cpdef Model invert(self):
         return self.original
 
-    cdef Model repair(self):
+    cpdef Model repair(self):
         return self.original.repair().invert()
 
-    cdef Model snap(self, double snap_angle, double minimum_area):
-        return self.original.snap(snap_angle, minimum_area).invert()
+    cdef Model _snap_edges(self, double snap_angle, double minimum_area):
+        return self.original._snap_edges(snap_angle, minimum_area).invert()
 
-    cdef Model transform(self, Matrix44 transform_matrix):
-        return self.original.transform(transform_matrix).invert()
+    cdef Model _transform(self, Matrix44 transform_matrix):
+        return self.original._transform(transform_matrix).invert()
 
-    cdef void build_trimesh_model(self):
-        if not self.original.check_valid():
-            self.original.build_trimesh_model()
-        trimesh_model = self.original.trimesh_model
-        self.trimesh_model = trimesh.base.Trimesh(vertices=trimesh_model.vertices,
-                                                  vertex_normals=-trimesh_model.vertex_normals,
-                                                  faces=trimesh_model.faces[:, ::-1],
-                                                  visual=trimesh_model.visual)
-        self.valid = True
+    cpdef object build_trimesh(self):
+        trimesh_model = self.original.get_trimesh()
+        if trimesh_model is not None:
+            trimesh_model = trimesh.base.Trimesh(vertices=trimesh_model.vertices,
+                                                 vertex_normals=-trimesh_model.vertex_normals,
+                                                 faces=trimesh_model.faces[:, ::-1],
+                                                 visual=trimesh_model.visual)
+        return trimesh_model
 
 
 cdef class Repair(UnaryOperation):
     @staticmethod
-    cdef Repair get(Model original):
+    cdef Repair _get(Model original):
         cdef str name = f'repair({original.name})'
         cdef Repair model = <Repair>ModelCache.get(name, None)
         if model is None:
             model = Repair.__new__(Repair)
             model.name = name
             model.original = original
+            model.original.add_dependent(model)
             ModelCache[name] = model
         return model
 
-    cdef Model manifold(self):
+    cpdef Model manifold(self):
         return self.original.manifold()
 
-    cdef Model repair(self):
+    cpdef Model repair(self):
         return self
 
-    cdef void build_trimesh_model(self):
-        if not self.original.check_valid():
-            self.original.build_trimesh_model()
-        trimesh_model = self.original.trimesh_model
+    cpdef object build_trimesh(self):
+        trimesh_model = self.original.get_trimesh()
         if trimesh_model is not None:
             trimesh_model = trimesh_model.copy()
             trimesh_model.process(validate=True, merge_tex=True, merge_norm=True)
             trimesh_model.remove_unreferenced_vertices()
             trimesh_model.fill_holes()
             trimesh_model.fix_normals()
-            self.trimesh_model = trimesh_model
-        else:
-            self.trimesh_model = None
-        self.valid = True
+        return trimesh_model
 
 
-cdef class SnappedEdgesModel(UnaryOperation):
+cdef class SnapEdges(UnaryOperation):
     cdef double snap_angle
     cdef double minimum_area
 
     @staticmethod
-    cdef SnappedEdgesModel get(Model original, double snap_angle, double minimum_area):
-        cdef str name = 'snap(' + original.name
+    cdef SnapEdges _get(Model original, double snap_angle, double minimum_area):
+        snap_angle = min(max(0, snap_angle), 0.5)
+        minimum_area = min(max(0, minimum_area), 1)
+        cdef str name = 'snap_edges(' + original.name
         if snap_angle != DefaultSnapAngle:
             name += f', {snap_angle:g}'
         if minimum_area:
             name += f', {minimum_area:g}'
         name += ')'
-        cdef SnappedEdgesModel model = <SnappedEdgesModel>ModelCache.get(name, None)
+        cdef SnapEdges model = <SnapEdges>ModelCache.get(name, None)
         if model is None:
-            model = SnappedEdgesModel.__new__(SnappedEdgesModel)
+            model = SnapEdges.__new__(SnapEdges)
             model.name = name
             model.original = original
+            model.original.add_dependent(model)
             model.snap_angle = snap_angle
             model.minimum_area = minimum_area
             ModelCache[name] = model
         return model
 
-    cdef Model manifold(self):
+    cpdef Model manifold(self):
         return self.original.manifold()
 
-    cdef Model flatten(self):
+    cpdef Model flatten(self):
         return self.original.flatten()
 
-    cdef Model repair(self):
-        return self.original.repair().snap(self.snap_angle, self.minimum_area)
+    cpdef Model repair(self):
+        return self.original.repair()._snap_edges(self.snap_angle, self.minimum_area)
 
-    cdef Model snap(self, double snap_angle, double minimum_area):
-        return self.original.snap(self.snap_angle, self.minimum_area)
+    cdef Model _snap_edges(self, double snap_angle, double minimum_area):
+        return self.original._snap_edges(snap_angle, minimum_area)
 
-    cdef void build_trimesh_model(self):
-        if not self.original.check_valid():
-            self.original.build_trimesh_model()
-        if self.original.trimesh_model is not None:
-            self.trimesh_model = trimesh.graph.smooth_shade(self.original.trimesh_model, angle=self.snap_angle*Tau,
-                                                            facet_minarea=1/self.minimum_area if self.minimum_area else None)
-        else:
-            self.trimesh_model = None
-        self.valid = True
+    cpdef object build_trimesh(self):
+        trimesh_model = self.original.get_trimesh()
+        if trimesh_model is not None:
+            trimesh_model = trimesh.graph.smooth_shade(trimesh_model, angle=self.snap_angle*Tau,
+                                                       facet_minarea=1/self.minimum_area if self.minimum_area else None)
+        return trimesh_model
 
 
 cdef class Transform(UnaryOperation):
     cdef Matrix44 transform_matrix
 
     @staticmethod
-    cdef Model get(Model original, Matrix44 transform_matrix):
+    cdef Model _get(Model original, Matrix44 transform_matrix):
         if transform_matrix.eq(IdentityTransform) is true_:
             return original
         cdef str name = f'{original.name}@{hex(transform_matrix.hash(False))[3:]}'
@@ -366,29 +459,68 @@ cdef class Transform(UnaryOperation):
             model = Transform.__new__(Transform)
             model.name = name
             model.original = original
+            model.original.add_dependent(model)
             model.transform_matrix = transform_matrix
             ModelCache[name] = model
         return model
 
-    cdef Model manifold(self):
-        return self.original.manifold().transform(self.transform_matrix)
+    cpdef Model manifold(self):
+        return self.original.manifold()._transform(self.transform_matrix)
 
-    cdef Model repair(self):
-        return self.original.repair().transform(self.transform_matrix)
+    cpdef Model repair(self):
+        return self.original.repair()._transform(self.transform_matrix)
 
-    cdef Model transform(self, Matrix44 transform_matrix):
-        return self.original.transform(transform_matrix.mmul(self.transform_matrix))
+    cdef Model _transform(self, Matrix44 transform_matrix):
+        return self.original._transform(transform_matrix.mmul(self.transform_matrix))
 
-    cdef void build_trimesh_model(self):
-        if not self.original.check_valid():
-            self.original.build_trimesh_model()
-        if self.original.trimesh_model is not None:
+    cpdef object build_trimesh(self):
+        trimesh_model = self.original.get_trimesh()
+        if trimesh_model is not None:
             transform_array = np.array(self.transform_matrix, dtype='float64').reshape((4, 4)).transpose()
-            trimesh_model = self.original.trimesh_model.copy().apply_transform(transform_array)
-            self.trimesh_model = trimesh_model if len(trimesh_model.vertices) and len(trimesh_model.faces) else None
-        else:
-            self.trimesh_model = None
-        self.valid = True
+            trimesh_model = trimesh_model.copy().apply_transform(transform_array)
+            trimesh_model = trimesh_model if len(trimesh_model.vertices) and len(trimesh_model.faces) else None
+        return trimesh_model
+
+
+cdef class UVRemap(UnaryOperation):
+    cdef str mapping
+
+    @staticmethod
+    cdef UVRemap _get(Model original, str mapping):
+        cdef str name = f'uvremap({original.name}, {mapping})'
+        cdef UVRemap model = <UVRemap>ModelCache.get(name, None)
+        if model is None:
+            model = UVRemap.__new__(UVRemap)
+            model.name = name
+            model.original = original
+            model.original.add_dependent(model)
+            model.mapping = mapping
+            ModelCache[name] = model
+        return model
+
+    cdef object remap_sphere(self, trimesh_model):
+        cdef const double[:, :] vertices
+        cdef object vertex_uv_array
+        cdef double[:, :] vertex_uv
+        cdef int64_t i, n
+        cdef double x, y, z
+        n = len(trimesh_model.vertices)
+        vertices = trimesh_model.vertices.astype('float64')
+        vertex_uv_array = np.zeros((n, 2), dtype='float64')
+        vertex_uv = vertex_uv_array
+        for i in range(n):
+            x, y, z = vertices[i][0], vertices[i][1], vertices[i][2]
+            vertex_uv[i][0] = atan2(x, y) / Tau
+            vertex_uv[i][1] = atan2(z, sqrt(x*x + y*y)) / Tau * 2 + 0.5
+        visual = trimesh.visual.texture.TextureVisuals(uv=vertex_uv_array)
+        return trimesh.base.Trimesh(vertices=trimesh_model.vertices, vertex_normals=trimesh_model.vertex_normals, faces=trimesh_model.faces, visual=visual)
+
+    cpdef object build_trimesh(self):
+        trimesh_model = self.original.get_trimesh()
+        if trimesh_model is not None:
+            if self.mapping is 'sphere':
+                trimesh_model = self.remap_sphere(trimesh_model)
+        return trimesh_model
 
 
 cdef class Slice(UnaryOperation):
@@ -396,7 +528,9 @@ cdef class Slice(UnaryOperation):
     cdef Vector normal
 
     @staticmethod
-    cdef Slice get(Model original, Vector origin, Vector normal):
+    cdef Slice _get(Model original, Vector origin, Vector normal):
+        if origin.numbers == NULL or origin.length != 3 or normal.numbers == NULL or normal.length != 3:
+            return None
         original = original.manifold()
         cdef str name = f'slice({original.name}, {hex(origin.hash(False) ^ normal.hash(False))[3:]})'
         cdef Slice model = <Slice>ModelCache.get(name, None)
@@ -404,42 +538,39 @@ cdef class Slice(UnaryOperation):
             model = Slice.__new__(Slice)
             model.name = name
             model.original = original
+            model.original.add_dependent(model)
             model.origin = origin
             model.normal = normal.normalize()
             ModelCache[name] = model
         return model
 
-    cdef bint is_manifold(self):
+    cpdef bint is_manifold(self):
         return True
 
-    cdef Model manifold(self):
+    cpdef Model manifold(self):
         return self
 
-    cdef Model repair(self):
+    cpdef Model repair(self):
         return self
 
-    cdef Model transform(self, Matrix44 transform_matrix):
+    cdef Model _transform(self, Matrix44 transform_matrix):
         cdef Vector origin = transform_matrix.vmul(self.origin)
         cdef Vector normal = transform_matrix.inverse_transpose_matrix33().vmul(self.normal).normalize()
-        return self.original.transform(transform_matrix).slice(origin, normal)
+        return self.original._transform(transform_matrix)._slice(origin, normal)
 
-    cdef void build_trimesh_model(self):
-        if not self.original.check_valid():
-            self.original.build_trimesh_model()
-        if self.original.trimesh_model is not None:
-            trimesh_model = self.original.trimesh_model
+    cpdef object build_trimesh(self):
+        trimesh_model = self.original.get_trimesh()
+        if trimesh_model is not None:
             manifold = manifold3d.Manifold(mesh=manifold3d.Mesh(vert_properties=np.array(trimesh_model.vertices, dtype=np.float32),
                                                                 tri_verts=np.array(trimesh_model.faces, dtype=np.uint32)))
             normal = self.normal.neg()
             mesh = manifold.trim_by_plane(normal=tuple(normal), origin_offset=self.origin.dot(normal)).to_mesh()
             if len(mesh.vert_properties) and len(mesh.tri_verts):
-                self.trimesh_model = trimesh.base.Trimesh(vertices=mesh.vert_properties, faces=mesh.tri_verts)
+                trimesh_model = trimesh.base.Trimesh(vertices=mesh.vert_properties, faces=mesh.tri_verts)
             else:
-                self.trimesh_model = None
+                trimesh_model = None
                 logger.warning("Result of slice was empty mesh: {}", self.name)
-        else:
-            self.trimesh_model = None
-        self.valid = True
+        return trimesh_model
 
 
 cdef class BooleanOperation(Model):
@@ -447,124 +578,108 @@ cdef class BooleanOperation(Model):
     cdef list models
 
     @staticmethod
-    cdef Model get(str operation, list models):
-        cdef Model child_model, first
-        cdef list collected_models
-        if len(models) == 0:
-            return None
-        if len(models) == 1:
-            return models[0]
-        collected_models = []
-        for child_model in models:
-            if operation is 'union' and isinstance(child_model, BooleanOperation) and (<BooleanOperation>child_model).operation is 'union':
-                collected_models.extend((<BooleanOperation>child_model).models)
-            elif child_model is not None:
-                collected_models.append(child_model)
-        models = collected_models
-        cdef set existing
-        if len(models) > 1:
-            first = models[0]
-            existing = {first}
-            collected_models = [first]
-            for child_model in models[1:]:
-                child_model = child_model
-                if operation is 'difference' and child_model is first:
-                    return None
-                if child_model in existing:
-                    continue
-                existing.add(child_model)
-                collected_models.append(child_model)
-            models = collected_models
-        if len(models) == 0:
-            return None
-        if len(models) == 1:
-            return models[0]
+    cdef Model _get(str operation, list models):
+        cdef Model child_model, first=None
+        cdef set existing = set()
+        models = list(models)
+        models.reverse()
+        cdef list collected_models = []
         cdef str name = operation + '('
-        cdef int64_t i
-        for i, child_model in enumerate(models):
+        while models:
+            child_model = models.pop()
+            if child_model is None:
+                continue
+            if operation is 'union' and isinstance(child_model, BooleanOperation) and (<BooleanOperation>child_model).operation is 'union':
+                models.extend(reversed((<BooleanOperation>child_model).models))
+                continue
             child_model = child_model.manifold()
-            models[i] = child_model
-            if i:
+            if first is None:
+                first = child_model
+            elif operation is 'difference' and child_model is first:
+                return None
+            elif child_model in existing:
+                continue
+            else:
                 name += ', '
             name += child_model.name
+            existing.add(child_model)
+            collected_models.append(child_model)
+        if len(collected_models) == 0:
+            return None
+        if len(collected_models) == 1:
+            return collected_models[0]
         name += ')'
         cdef BooleanOperation model = <BooleanOperation>ModelCache.get(name, None)
         if model is None:
             model = BooleanOperation.__new__(BooleanOperation)
             model.name = name
             model.operation = operation
-            model.models = models
+            model.models = collected_models
+            for child_model in collected_models:
+                child_model.add_dependent(model)
             ModelCache[name] = model
         return model
 
-    cdef bint is_manifold(self):
+    cpdef bint is_manifold(self):
         return True
 
-    cdef Model manifold(self):
+    cpdef void check_for_changes(self):
+        cdef Model model
+        if self.valid:
+            for model in self.models:
+                model.check_for_changes()
+
+    cpdef Model manifold(self):
         return self
 
-    cdef Model repair(self):
+    cpdef Model repair(self):
         return self
 
-    cdef Model transform(self, Matrix44 transform_matrix):
+    cdef Model _transform(self, Matrix44 transform_matrix):
         cdef Model model
         cdef list models = []
         for model in self.models:
-            models.append(model.transform(transform_matrix))
-        return BooleanOperation.get(self.operation, models)
+            models.append(model._transform(transform_matrix))
+        return BooleanOperation._get(self.operation, models)
 
-    cdef Model slice(self, Vector origin, Vector normal):
+    cdef Model _slice(self, Vector origin, Vector normal):
         cdef Model model
         cdef list models = []
         cdef int64_t i
         for i, model in enumerate(self.models):
             if i == 0 or self.operation is 'union':
-                models.append(model.slice(origin, normal))
+                models.append(model._slice(origin, normal))
             else:
                 models.append(model)
-        return BooleanOperation.get(self.operation, models)
+        return BooleanOperation._get(self.operation, models)
 
-    cdef bint check_valid(self):
-        if not self.valid:
-            return False
-        cdef Model model
-        for model in self.models:
-            if not model.check_valid():
-                break
-        else:
-            return True
-        self.valid = False
-        return False
-
-    cdef void build_trimesh_model(self):
+    cpdef object build_trimesh(self):
         cdef list trimesh_models = []
         cdef Model model
         for model in self.models:
-            if not model.check_valid():
-                model.build_trimesh_model()
-            if model.trimesh_model is not None:
-                trimesh_models.append(model.trimesh_model)
+            trimesh_model = model.get_trimesh()
+            if trimesh_model is not None:
+                trimesh_models.append(trimesh_model)
+        if not trimesh_models:
+            return None
         if len(trimesh_models) == 1:
-            self.trimesh_model = trimesh_models[0]
-        elif trimesh_models:
-            if self.operation is 'difference' and len(trimesh_models) > 2:
-                union_models = trimesh.boolean.boolean_manifold(trimesh_models[1:], 'union')
-                trimesh_model = trimesh.boolean.boolean_manifold([trimesh_models[0], union_models], 'difference')
-            else:
-                trimesh_model = trimesh.boolean.boolean_manifold(trimesh_models, self.operation)
-            if len(trimesh_model.vertices) and len(trimesh_model.faces):
-                self.trimesh_model = trimesh_model
-            else:
-                logger.warning("Result of {} was empty mesh: {}", self.operation, self.name)
-                self.trimesh_model = None
-        self.valid = True
+            return trimesh_models[0]
+        if self.operation is 'difference' and len(trimesh_models) > 2:
+            union_models = trimesh.boolean.boolean_manifold(trimesh_models[1:], 'union')
+            trimesh_model = trimesh.boolean.boolean_manifold([trimesh_models[0], union_models], 'difference')
+        else:
+            trimesh_model = trimesh.boolean.boolean_manifold(trimesh_models, self.operation)
+        if len(trimesh_model.vertices) and len(trimesh_model.faces):
+            return trimesh_model
+        logger.warning("Result of {} was empty mesh: {}", self.operation, self.name)
+        return None
 
 
 cdef class PrimitiveModel(Model):
-    cdef bint check_valid(self):
-        return self.valid
+    cpdef void check_for_changes(self):
+        pass
 
-    cdef bint is_manifold(self):
+    cpdef bint is_manifold(self):
         return False
 
 
@@ -603,41 +718,39 @@ cdef class Box(PrimitiveModel):
     ], dtype='i4')
 
     @staticmethod
-    cdef Box get(Node node):
+    cdef Box _get():
         cdef str name = '!box'
-        cdef Box model = <Box>ModelCache.pop(name, None)
+        cdef Box model = <Box>ModelCache.get(name, None)
         if model is None:
             model = Box.__new__(Box)
             model.name = name
             model.trimesh_model = None
-        ModelCache[name] = model
+            ModelCache[name] = model
         return model
 
-    cdef void build_trimesh_model(self):
+    cpdef object build_trimesh(self):
         visual = trimesh.visual.texture.TextureVisuals(uv=Box.VertexUV)
-        self.trimesh_model = trimesh.base.Trimesh(vertices=Box.Vertices, vertex_normals=Box.VertexNormals, faces=Box.Faces, visual=visual)
-        self.valid = True
+        return trimesh.base.Trimesh(vertices=Box.Vertices, vertex_normals=Box.VertexNormals, faces=Box.Faces, visual=visual)
 
 
 cdef class Sphere(PrimitiveModel):
     cdef int64_t segments
 
     @staticmethod
-    cdef Sphere get(Node node):
-        cdef int64_t segments = max(4, node.get_int('segments', DefaultSegments) // 4 * 4)
+    cdef Sphere _get(int64_t segments):
+        segments = max(4, segments // 4 * 4)
         cdef str name = f'!sphere-{segments}' if segments != DefaultSegments else '!sphere'
         cdef Sphere model = <Sphere>ModelCache.get(name, None)
         if model is None:
             model = Sphere.__new__(Sphere)
             model.name = name
             model.segments = segments
-            model.trimesh_model = None
             ModelCache[name] = model
         return model
 
     @cython.cdivision(True)
     @cython.boundscheck(False)
-    cdef void build_trimesh_model(self):
+    cpdef object build_trimesh(self):
         cdef int64_t nrows = self.segments / 4, nvertices = (nrows + 1) * (nrows + 2) * 4, nfaces = nrows * nrows * 8
         cdef object vertices_array = np.empty((nvertices, 3), dtype='f4')
         cdef float[:, :] vertices = vertices_array
@@ -692,30 +805,28 @@ cdef class Sphere(PrimitiveModel):
                                 j += 1
                         i += 1
         visual = trimesh.visual.texture.TextureVisuals(uv=vertex_uv_array)
-        self.trimesh_model = trimesh.base.Trimesh(vertices=vertices_array, vertex_normals=vertices_array, faces=faces_array, visual=visual)
-        self.valid = True
+        return trimesh.base.Trimesh(vertices=vertices_array, vertex_normals=vertices_array, faces=faces_array, visual=visual)
 
 
 cdef class Cylinder(PrimitiveModel):
     cdef int64_t segments
 
     @staticmethod
-    cdef Cylinder get(Node node):
-        cdef int64_t segments = max(2, node.get_int('segments', DefaultSegments))
+    cdef Cylinder _get(int64_t segments):
+        segments = max(2, segments)
         cdef str name = f'!cylinder-{segments}' if segments != DefaultSegments else '!cylinder'
         cdef Cylinder model = <Cylinder>ModelCache.get(name, None)
         if model is None:
             model = Cylinder.__new__(Cylinder)
             model.name = name
             model.segments = segments
-            model.trimesh_model = None
             ModelCache[name] = model
         return model
 
     @cython.cdivision(True)
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    cdef void build_trimesh_model(self):
+    cpdef object build_trimesh(self):
         cdef int64_t i, j, k, n = self.segments, m = (n+1)*6
         cdef object vertices_array = np.empty((m, 3), dtype='f4')
         cdef float[:, :] vertices = vertices_array
@@ -778,29 +889,27 @@ cdef class Cylinder(PrimitiveModel):
                 # top face
                 faces[j, 0], faces[j, 1], faces[j, 2] = k+5, k+4, k+4+6
         visual = trimesh.visual.texture.TextureVisuals(uv=vertex_uv_array)
-        self.trimesh_model = trimesh.base.Trimesh(vertices=vertices_array, vertex_normals=vertex_normals_array, faces=faces_array, visual=visual)
-        self.valid = True
+        return trimesh.base.Trimesh(vertices=vertices_array, vertex_normals=vertex_normals_array, faces=faces_array, visual=visual)
 
 
 cdef class Cone(PrimitiveModel):
     cdef int64_t segments
 
     @staticmethod
-    cdef Cone get(Node node):
-        cdef int64_t segments = max(2, node.get_int('segments', DefaultSegments))
+    cdef Cone _get(int64_t segments):
+        segments = max(2, segments)
         cdef str name = f'!cone-{segments}' if segments != DefaultSegments else '!cone'
         cdef Cone model = <Cone>ModelCache.get(name, None)
         if model is None:
             model = Cone.__new__(Cone)
             model.name = name
             model.segments = segments
-            model.trimesh_model = None
             ModelCache[name] = model
         return model
 
     @cython.cdivision(True)
     @cython.boundscheck(False)
-    cdef void build_trimesh_model(self):
+    cpdef object build_trimesh(self):
         cdef int64_t i, j, k, n = self.segments, m = (n+1)*4
         cdef object vertices_array = np.empty((m, 3), dtype='f4')
         cdef float[:, :] vertices = vertices_array
@@ -848,33 +957,30 @@ cdef class Cone(PrimitiveModel):
                 # side face
                 faces[j, 0], faces[j, 1], faces[j, 2] = k+3, k+2, k+2+4
         visual = trimesh.visual.texture.TextureVisuals(uv=vertex_uv_array)
-        self.trimesh_model = trimesh.base.Trimesh(vertices=vertices_array, vertex_normals=vertex_normals_array, faces=faces_array, visual=visual)
-        self.valid = True
+        return trimesh.base.Trimesh(vertices=vertices_array, vertex_normals=vertex_normals_array, faces=faces_array, visual=visual)
 
 
 cdef class ExternalModel(Model):
     cdef object cache_path
 
     @staticmethod
-    cdef ExternalModel get(Node node):
-        cdef str name = node.get_str('filename', None)
-        if not name:
+    cdef ExternalModel _get(str filename):
+        if filename is None:
             return None
-        cdef ExternalModel model = <ExternalModel>ModelCache.get(name, None)
+        cdef ExternalModel model = <ExternalModel>ModelCache.get(filename, None)
         if model is None:
             model = ExternalModel.__new__(ExternalModel)
-            model.name = name
-            model.cache_path = SharedCache[name]
-            model.trimesh_model = None
-            ModelCache[name] = model
+            model.name = filename
+            model.cache_path = SharedCache[filename]
+            ModelCache[filename] = model
         return model
 
-    cdef bint is_manifold(self):
+    cpdef bint is_manifold(self):
         return False
 
-    cdef bint check_valid(self):
-        return self.trimesh_model is self.cache_path.read_trimesh_model()
+    cpdef void check_for_changes(self):
+        if self.valid and self.trimesh_model is not self.cache_path.read_trimesh_model():
+            self.invalidate()
 
-    cdef void build_trimesh_model(self):
-        self.trimesh_model = self.cache_path.read_trimesh_model()
-        self.valid = True
+    cpdef object build_trimesh(self):
+        return self.cache_path.read_trimesh_model()

@@ -805,6 +805,28 @@ used to render specular reflections on the back faces of transparent objects
 (by rendering the object twice: normal and inverted) or to create environments
 (e.g., by texture-mapping a large inverted sphere that encloses the scene).
 
+If the texture-mapping UV coordinates for a model are missing or incorrect,
+then a new set can be calculated automatically.
+
+`uv_remap=` *MAPPING*
+: Setting this attribute will replace the UV coordinates for the model with a
+new computed mapping.
+
+The supported mappings are:
+
+`:sphere`
+: This notionally draws a ray from the origin of the model through each vertex
+and projects this ray onto a sphere. The Equirectangular projection coordinates
+of that point on the sphere will be used as the UV for the vertex. This matches
+the projection used by the `!sphere` primitive.
+
+:::{note}
+Note that the `:sphere` mapping requires a seam on the 0 longitude line where
+the texture wraps around from the right to the left side. Any faces that span
+this line will show clear visual distortions as the mapping algorithm will not
+create this seam.
+:::
+
 As with all models, the results of these operations are cached.
 
 ## Constructive Solid Geometry
@@ -920,3 +942,8 @@ boundaries. For this reason, constructed models automatically have [edge
 snapping](#model-shading) applied with the snap angle set to 0.05 turns (18°).
 This can be controlled by adding an explicit `snap_edges` attribute to the top
 node in the model construction tree.
+
+Generally speaking, CSG operations on models will discard (or corrupt) any
+existing texture-mapping UV coordinates. The `uv_remap` attribute (described
+above in [Controlling Model Shading](#controlling-model-shading)) can be used
+to calculate new UVs.
