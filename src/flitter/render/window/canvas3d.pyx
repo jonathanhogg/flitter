@@ -377,7 +377,7 @@ cdef Model get_model(Node node, bint top):
         if model is not None and normal.as_bool():
             model = model._slice(origin, normal)
     elif (cls := get_plugin('flitter.render.window.models', node.kind)) is not None:
-        model = cls.get(node)
+        model = cls.from_node(node)
     if model is not None:
         if top:
             if node.get_bool('flat', False):

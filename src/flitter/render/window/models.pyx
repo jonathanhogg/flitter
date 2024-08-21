@@ -29,7 +29,7 @@ cdef class Model:
         return ModelCache.get(name)
 
     @staticmethod
-    def get(Node node):
+    def from_node(Node node):
         raise NotImplementedError()
 
     def __init__(self, name=None):
@@ -510,7 +510,7 @@ cdef class UVRemap(UnaryOperation):
         vertex_uv = vertex_uv_array
         for i in range(n):
             x, y, z = vertices[i][0], vertices[i][1], vertices[i][2]
-            vertex_uv[i][0] = atan2(x, y) / Tau
+            vertex_uv[i][0] = atan2(x, y) / Tau % 1
             vertex_uv[i][1] = atan2(z, sqrt(x*x + y*y)) / Tau * 2 + 0.5
         visual = trimesh.visual.texture.TextureVisuals(uv=vertex_uv_array)
         return trimesh.base.Trimesh(vertices=trimesh_model.vertices, vertex_normals=trimesh_model.vertex_normals, faces=trimesh_model.faces, visual=visual)
