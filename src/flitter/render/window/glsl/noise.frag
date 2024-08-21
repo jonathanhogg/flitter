@@ -82,18 +82,20 @@ void main() {
     hashes[1] = permute(hashes[0] + 1.0);
     hashes[2] = permute(hashes[1] + 1.0);
     hashes[3] = permute(hashes[2] + 1.0);
-    vec3 sum = vec3(0.0);
+    vec4 sum = vec4(0.0);
     float multiplier = 1.0;
     float weight = 0.0;
     for (int i = 0; i < octaves; i++) {
         vec3 p = orthonormalMap * point / multiplier;
+        vec4 c = vec4(1.0);
         for (int j = 0; j < components; j++) {
             float result = openSimplex2SDerivativesPart(hashes[j], p) + openSimplex2SDerivativesPart(hashes[j], p + 144.5);
-            sum[j] += result * multiplier;
+            c[j] = result * multiplier;
         }
+        sum += c;
         weight += multiplier;
         multiplier *= roughness;
     }
-    vec4 merged = vec4(sum/weight*0.5 + 0.5, 1.0);
+    vec4 merged = clamp(vec4(sum/weight) * 0.5 + 0.5, 0.0, 1.0);
     color = gamma == 1.0 ? merged * alpha : pow(merged * alpha, vec4(gamma));
 }

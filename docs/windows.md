@@ -743,7 +743,8 @@ to the null vector if not supplied.
 
 `components=` *1..4*
 : Specify how many distinct noise planes to create, default `1`. Each will
-be assigned to one channel of the output image (in the order R, G, B, A).
+be assigned to one channel of the output image (in the order R, G, B, A). The
+unused channels will be set to `1`.
 
 `octaves=` *OCTAVES*
 : Specify how many octaves of noise to generate, default `1`.
