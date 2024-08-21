@@ -7,6 +7,7 @@ uniform float gamma;
 uniform float exposure;
 uniform float contrast;
 uniform float brightness;
+uniform mat3 color_matrix;
 % for name in child_textures:
 uniform sampler2D ${name};
 % endfor
@@ -23,6 +24,7 @@ void main() {
     merged = composite_${composite}(texture(${name}, coord), merged);
 %         endif
 %     endfor
+    merged.rgb = color_matrix * merged.rgb;
     merged = filter_adjust(merged, exposure, contrast, brightness);
     color = gamma == 1.0 ? merged * alpha : pow(merged * alpha, vec4(gamma));
 % else:

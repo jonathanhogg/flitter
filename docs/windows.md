@@ -621,8 +621,8 @@ fade-out will occur, default `0.25`.
 
 ### `!adjust`
 
-The `!adjust` node allows for basic lightness adjustments and takes the
-following attributes:
+The `!adjust` node allows for basic color adjustments and takes the following
+attributes:
 
 `exposure=` *STOPS*
 : Specifies an exposure adjustment in stops. This defaults to `0`. An exposure
@@ -640,6 +640,10 @@ range around 0.5.
 : Specifies an exposure adjustment in stops. This defaults to `0`. An exposure
 adjustment of `1` will double the color value of each pixel, an adjustment of
 `-1` will half the value of each pixel.
+
+`color_matrix=` *MATRIX*
+: Specifies a 3x3 matrix as a 9-vector (column major order) to multiply by each
+color value.
 
 These adjustments may be combined (e.g., adjusting contrast and brightness
 together). Note that color values may become greater than 1 with these

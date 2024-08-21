@@ -70,7 +70,7 @@ class Adjust(Shader):
     DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('adjust.frag')
 
     def render(self, node, **kwargs):
-        super().render(node, exposure=0, contrast=1, brightness=0, **kwargs)
+        super().render(node, exposure=0, contrast=1, brightness=0, color_matrix=(1, 0, 0, 0, 1, 0, 0, 0, 1), **kwargs)
 
 
 class Blur(Shader):
