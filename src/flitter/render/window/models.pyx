@@ -127,7 +127,7 @@ cdef class Model:
         vertex_data = np.hstack((self.trimesh_model.vertices, self.trimesh_model.vertex_normals, vertex_uvs)).astype('f4')
         index_data = self.trimesh_model.faces.astype('i4')
         buffers = (glctx.buffer(vertex_data), glctx.buffer(index_data))
-        logger.trace("Prepared model {} with {} vertices and {} faces", name, len(vertex_data), len(index_data))
+        logger.debug("Prepared model {} with {} vertices and {} faces", name, len(vertex_data), len(index_data))
         objects[name] = buffers
         return buffers
 
