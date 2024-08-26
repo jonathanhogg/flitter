@@ -561,7 +561,7 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
     cdef Instance instance
     cdef Matrix33 normal_matrix
     cdef Vector bounds
-    cdef bint has_transparency_texture
+    cdef bint has_transparency_texture, depth_write
     cdef tuple transparent_object, translucent_object
     cdef list transparent_objects = []
     cdef list translucent_objects = []
@@ -767,16 +767,17 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
         shader['backface_data'] = 0
 
     if transparent_objects:
-        render_target.depth_write(False)
         n = len(transparent_objects)
         if render_group.depth_sort and render_group.depth_test:
             transparent_objects.sort(key=fst)
         instances_data = view.array((n, 37), 4, 'f')
-        k = 0
-        for i, transparent_object in enumerate(transparent_objects):
+        i = k = 0
+        transparent_object = transparent_objects[0]
+        while i < n:
             model = transparent_object[1]
             instance = transparent_object[2]
             material = instance.material
+            depth_write = material.translucency > 0
             src = instance.model_matrix.numbers
             dest = &instances_data[k, 0]
             for j in range(16):
@@ -797,10 +798,14 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
             dest[10] = material.roughness
             dest[11] = material.ao
             k += 1
-            if i == n-1 or (<tuple>transparent_objects[i+1])[1] is not model:
+            i += 1
+            transparent_object = transparent_objects[i] if i < n else None
+            if i == n or transparent_object[1] is not model or ((<Material>transparent_object[2]).translucency > 0) != depth_write:
+                render_target.depth_write(depth_write)
                 dispatch_instances(glctx, objects, shader, model, k, instances_data, material.textures, references, base_unit_id)
                 k = 0
         render_target.depth_write(True)
+
     glctx.disable(flags)
     for sampler in samplers:
         sampler.clear()
