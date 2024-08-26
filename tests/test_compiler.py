@@ -513,15 +513,30 @@ class TestTop(CompilerTestCase):
 
 class TestOptimizations(CompilerTestCase):
     def test_nested_sequences(self):
+        """Compose instructions should be gathered"""
         self.assertCompilesTo(Sequence((Sequence((Literal(1), Literal(2))), Sequence((Literal(3), Literal(4))))),
                               Program().literal(1).literal(2).literal(3).literal(4).compose(4))
 
     def test_append_sequence(self):
+        """Compose and Append instructions should be combined"""
         self.assertCompilesTo(Append(Literal(Node('a')), Sequence((Literal(Node('b')), Literal(Node('c'))))),
                               Program().literal(Node('a')).literal(Node('b')).literal(Node('c')).append(2))
 
-    def test_literal_null_append(self):
+    def test_literal_append_null(self):
+        """Append and Literal instructions should be discarded"""
         self.assertCompilesTo(Append(Literal(Node('a')), Literal(null)), Program().literal(Node('a')))
 
-    def test_mul_add(self):
+    def test_nested_lets(self):
+        """LocalDrop instructions should be combined"""
+        self.assertCompilesTo(Let((PolyBinding(('x',), Literal(1)),), Let((PolyBinding(('y',), Literal(2)),), Add(Name('x'), Name('y')))),
+                              Program().literal(1).local_push(1).literal(2).local_push(1).local_load(1).local_load(0).add().local_drop(2))
+        self.assertCompilesTo(Import(('x',), Literal('foo.fl'), Let((PolyBinding(('y',), Literal(2)),), Add(Name('x'), Name('y')))),
+                              Program().literal('foo.fl').import_(('x',)).literal(2).local_push(1).local_load(1).local_load(0).add().local_drop(2))
+
+    def test_add_multiply(self):
+        """Mul and Add instructions should be combined into a MulAdd"""
         self.assertCompilesTo(Add(Literal(1), Multiply(Literal(2), Literal(3))), Program().literal(1).literal(2).literal(3).mul_add())
+
+    def test_power_of_2(self):
+        """Literal and Pow instructions should be replaced with a Dup and a Mul"""
+        self.assertCompilesTo(Power(Literal(1), Literal(2)), Program().literal(1).dup().mul())

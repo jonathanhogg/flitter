@@ -168,7 +168,12 @@ cdef class Import(Expression):
         self.filename._compile(program, lnames)
         program.import_(self.names)
         self.expr._compile(program, lnames + list(self.names))
-        program.local_drop(len(self.names))
+        cdef Instruction instr = program.last_instruction()
+        if instr.code == OpCode.LocalDrop:
+            program.pop_instruction()
+            program.local_drop((<InstructionInt>instr).value + len(self.names))
+        else:
+            program.local_drop(len(self.names))
 
     cdef Expression _simplify(self, Context context):
         cdef str name
@@ -1127,12 +1132,17 @@ cdef class Let(Expression):
             program.local_push(len(binding.names))
             lnames.extend(binding.names)
         self.body._compile(program, lnames)
-        cdef Instruction instr = None
+        cdef Instruction instr, compose=None
         if program.last_instruction().code == OpCode.Compose:
-            instr = program.pop_instruction()
-        program.local_drop(len(lnames) - n)
-        if instr is not None:
-            program.push_instruction(instr)
+            compose = program.pop_instruction()
+        instr = program.last_instruction()
+        if instr.code == OpCode.LocalDrop:
+            program.pop_instruction()
+            program.local_drop((<InstructionInt>instr).value + len(lnames) - n)
+        else:
+            program.local_drop(len(lnames) - n)
+        if compose is not None:
+            program.push_instruction(compose)
         while len(lnames) > n:
             lnames.pop()
 
