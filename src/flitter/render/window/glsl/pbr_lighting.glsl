@@ -110,7 +110,7 @@ void compute_pbr_lighting(vec3 world_position, vec3 world_normal, vec3 view_dire
             vec3 F = F0 + (1.0 - F0) * pow(1.0 - HdotV, 5.0);
             vec3 radiance = light_color * attenuation * NdotL;
             if (pass == 0) {
-                transmission_color += radiance * (1.0 - F0) * (1.0 - metal);
+                transmission_color += radiance * (1.0 - F0) * (1.0 - metal) * (1.0 + albedo) * 0.5;
                 diffuse_color += radiance * (1.0 - F) * (1.0 - metal) * albedo;
             }
             if (pass == passes-1) {
@@ -165,9 +165,8 @@ void compute_translucency(vec3 world_position, vec3 view_direction, float view_d
         backface /= float(count);
         thickness = backface.w - view_distance;
         k = thickness / translucency;
-        float transmission = clamp(pow(0.5, k), 0.0, 1.0);
-        vec3 transmission_color = pow(albedo / 2.0, vec3(k));
-        color += backface.rgb * transmission_color * (1.0 - transmission);
+        float transmission = pow(0.5, k);
+        color += backface.rgb * albedo * transmission * (1.0 - transmission);
         opacity *= 1.0 - pow(transmission, 2.5);
     } else {
         opacity = 0.0;
