@@ -25,7 +25,6 @@ class TestProgramMethods(unittest.TestCase):
         program.local_load(0)
         program.attributes(('a',))
         program.append()
-        program.optimize()
         program.link()
         context = program.run(Context(state=StateDict(), names={'a': Vector(5)}))
         self.assertEqual(context.root, Node('root', children=(Node('foo', attributes={'a': Vector(5)}),)))
@@ -71,7 +70,6 @@ class TestProgramMethods(unittest.TestCase):
         program.local_load(0)
         program.call(1)
         program.call_fast(lambda x: x+1, 1)
-        program.optimize()
         program.link()
         stack = program.execute(context, lnames=[lambda x: x+1], record_stats=True)
         self.assertEqual(stack, [5])
@@ -1013,57 +1011,6 @@ let y=10
         stack = self.program.execute(self.context)
         self.assertEqual(stack, [5, 10])
         self.assertEqual(self.context.errors, {f"Circular import of '{self.circular_module_a}'"})
-
-
-class TestOptimizations(unittest.TestCase):
-    def test_paired_compose(self):
-        program = Program()
-        program.literal(0)
-        program.literal(1)
-        program.literal(2)
-        program.compose(2)
-        program.compose(2)
-        program.optimize()
-        self.assertEqual(str(program), "Literal 0\nLiteral 1\nLiteral 2\nCompose 3")
-
-    def test_compose_append(self):
-        program = Program()
-        program.literal(Node('a'))
-        program.literal(Node('b'))
-        program.literal(Node('c'))
-        program.compose(3)
-        program.append()
-        program.optimize()
-        self.assertEqual(str(program), "LiteralNode !a\nLiteralNode !b\nLiteralNode !c\nAppend 3")
-
-    def test_literal_null_append(self):
-        program = Program()
-        program.literal(Node('a'))
-        program.literal(null)
-        program.append()
-        program.optimize()
-        self.assertEqual(str(program), "LiteralNode !a")
-
-    def test_mul_add(self):
-        program = Program()
-        program.literal(0)
-        program.literal(1)
-        program.literal(2)
-        program.mul()
-        program.add()
-        program.optimize()
-        self.assertEqual(str(program), "Literal 0\nLiteral 1\nLiteral 2\nMulAdd")
-
-    def test_paired_local_drop(self):
-        program = Program()
-        program.literal(1)
-        program.local_push(1)
-        program.literal(2)
-        program.local_push(1)
-        program.local_drop(1)
-        program.local_drop(1)
-        program.optimize()
-        self.assertEqual(str(program), "Literal 1\nLocalPush 1\nLiteral 2\nLocalPush 1\nLocalDrop 2")
 
 
 class TestStackExhaustion(unittest.TestCase):

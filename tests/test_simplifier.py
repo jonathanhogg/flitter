@@ -261,6 +261,12 @@ class TestAdd(SimplifierTestCase):
         self.assertSimplifiesTo(Add(Name('x'), Negative(Name('y'))), Subtract(Name('x'), Name('y')), dynamic={'x', 'y'})
         self.assertSimplifiesTo(Add(Negative(Name('x')), Name('y')), Subtract(Name('y'), Name('x')), dynamic={'x', 'y'})
 
+    def test_multiply_swap(self):
+        """Multiply is swapped to right-hand side (for MulAdd instruction optimization)"""
+        self.assertSimplifiesTo(Add(Multiply(Name('x'), Name('y')), Name('z')), Add(Name('z'), Multiply(Name('x'), Name('y'))), dynamic={'x', 'y', 'z'})
+        self.assertSimplifiesTo(Add(Multiply(Name('x'), Name('y')), Multiply(Name('z'), Name('w'))),
+                                Add(Multiply(Name('x'), Name('y')), Multiply(Name('z'), Name('w'))), dynamic={'x', 'y', 'z', 'w'})
+
 
 class TestSubtract(SimplifierTestCase):
     def test_dynamic(self):
@@ -315,8 +321,8 @@ class TestMultiply(SimplifierTestCase):
 
     def test_add_propogation(self):
         """Multiplying a half-literal Add by a literal propogates constant"""
-        self.assertSimplifiesTo(Multiply(Add(Name('x'), Literal(5)), Literal(10)), Add(Multiply(Literal(10), Name('x')), Literal(50)), dynamic={'x'})
-        self.assertSimplifiesTo(Multiply(Literal(10), Add(Name('x'), Literal(5))), Add(Multiply(Literal(10), Name('x')), Literal(50)), dynamic={'x'})
+        self.assertSimplifiesTo(Multiply(Add(Name('x'), Literal(5)), Literal(10)), Add(Literal(50), Multiply(Literal(10), Name('x'))), dynamic={'x'})
+        self.assertSimplifiesTo(Multiply(Literal(10), Add(Name('x'), Literal(5))), Add(Literal(50), Multiply(Literal(10), Name('x'))), dynamic={'x'})
 
     def test_subtract_propogation(self):
         """Multiplying a half-literal Subtract by a literal propogates constant"""

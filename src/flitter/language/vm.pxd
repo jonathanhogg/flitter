@@ -3,7 +3,7 @@ from cpython cimport PyObject
 
 from libc.stdint cimport int64_t
 
-from ..model cimport Vector, Context
+from ..model cimport Vector, Node, Context
 
 
 cdef dict static_builtins
@@ -31,6 +31,111 @@ cdef class VectorStack:
     cpdef void poke_at(self, int64_t offset, Vector vector)
 
 
+cdef enum OpCode:
+    Add
+    Append
+    Attributes
+    BeginFor
+    BranchFalse
+    BranchTrue
+    Call
+    CallFast
+    Ceil
+    Compose
+    Drop
+    Dup
+    EndFor
+    Eq
+    Floor
+    FloorDiv
+    Fract
+    Func
+    Exit
+    Ge
+    Gt
+    Import
+    IndexLiteral
+    Jump
+    Label
+    Le
+    Literal
+    LiteralNode
+    LiteralNodes
+    LocalDrop
+    LocalLoad
+    LocalPush
+    Lookup
+    LookupLiteral
+    Lt
+    Mod
+    Mul
+    MulAdd
+    Ne
+    Neg
+    Next
+    Not
+    Pos
+    Pow
+    Range
+    Slice
+    SliceLiteral
+    Export
+    Sub
+    Tag
+    TrueDiv
+    Xor
+    MAX
+
+
+cdef class Instruction:
+    cdef readonly OpCode code
+
+
+cdef class InstructionVector(Instruction):
+    cdef readonly Vector value
+
+
+cdef class InstructionNode(Instruction):
+    cdef readonly Node value
+
+
+cdef class InstructionStr(Instruction):
+    cdef readonly str value
+
+
+cdef class InstructionTuple(Instruction):
+    cdef readonly tuple value
+
+
+cdef class InstructionInt(Instruction):
+    cdef readonly int64_t value
+
+
+cdef class InstructionIntTuple(Instruction):
+    cdef readonly int64_t ivalue
+    cdef readonly tuple tvalue
+
+
+cdef class InstructionLabel(Instruction):
+    cdef readonly int64_t label
+
+
+cdef class InstructionJump(Instruction):
+    cdef readonly int64_t label
+    cdef readonly int64_t offset
+
+
+cdef class InstructionFunc(InstructionJump):
+    cdef readonly str name
+    cdef readonly tuple parameters
+    cdef readonly int64_t ncaptures
+
+
+cdef class InstructionObjectInt(Instruction):
+    cdef readonly object obj
+    cdef readonly int64_t value
+
+
 cdef class Program:
     cdef readonly dict pragmas
     cdef readonly list instructions
@@ -44,8 +149,10 @@ cdef class Program:
     cdef readonly bint simplify
     cdef int64_t next_label
 
+    cdef Instruction last_instruction(self)
+    cdef Instruction pop_instruction(self)
+    cdef Program push_instruction(self, Instruction instruction)
     cpdef Program link(self)
-    cpdef Program optimize(self)
     cpdef void use_simplifier(self, bint simplify)
     cpdef int64_t new_label(self)
     cpdef Program dup(self)

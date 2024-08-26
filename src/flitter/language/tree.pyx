@@ -13,7 +13,7 @@ from libc.stdint cimport int64_t
 
 from .. import name_patch
 from ..model cimport Vector, Node, Context, StateDict, null_, true_, false_, minusone_
-from .vm cimport Program, static_builtins, dynamic_builtins
+from .vm cimport Program, Instruction, InstructionInt, InstructionVector, OpCode, static_builtins, dynamic_builtins
 
 
 logger = name_patch(logger, __name__)
@@ -49,7 +49,6 @@ cdef class Expression:
     def compile(self, tuple initial_lnames=(), bint log_errors=True):
         cdef Program program = Program.__new__(Program, initial_lnames)
         self._compile(program, list(initial_lnames))
-        program.optimize()
         program.link()
         if log_errors:
             for error in program.compiler_errors:
@@ -98,7 +97,14 @@ cdef class Top(Expression):
         for binding in self.pragmas:
             program.set_pragma(binding.name, (<Literal>binding.expr).value)
         self.body._compile(program, lnames)
-        program.append(1)
+        cdef Instruction instr = program.last_instruction()
+        if instr.code == OpCode.Compose:
+            instr = program.pop_instruction()
+            program.append((<InstructionInt>instr).value)
+        elif instr.code == OpCode.Literal and (<InstructionVector>instr).value.length == 0:
+            program.pop_instruction()
+        else:
+            program.append()
 
     cdef Expression _simplify(self, Context context):
         cdef Expression body = self.body._simplify(context)
@@ -188,10 +194,14 @@ cdef class Sequence(Expression):
 
     cdef void _compile(self, Program program, list lnames):
         cdef Expression expr
+        cdef InstructionInt instr = None
         cdef int64_t n=len(self.expressions)
         if n:
             for expr in self.expressions:
                 expr._compile(program, lnames)
+                if program.last_instruction().code == OpCode.Compose:
+                    instr = program.pop_instruction()
+                    n += instr.value - 1
             if n > 1:
                 program.compose(n)
         else:
@@ -528,7 +538,11 @@ cdef class Add(MathsBinaryOperation):
         return left.add(right)
 
     cdef void _compile_op(self, Program program):
-        program.add()
+        if program.last_instruction().code == OpCode.Mul:
+            program.pop_instruction()
+            program.mul_add()
+        else:
+            program.add()
 
     cdef Expression constant_left(self, Vector left, Expression right):
         if left.eq(false_):
@@ -538,6 +552,8 @@ cdef class Add(MathsBinaryOperation):
         return self.constant_left(right, left)
 
     cdef Expression additional_rules(self, Expression left, Expression right):
+        if not isinstance(right, Multiply) and isinstance(left, Multiply):
+            return Add(right, left)
         if isinstance(right, Negative):
             return Subtract(left, (<Negative>right).expr)
         if isinstance(left, Negative):
@@ -641,7 +657,13 @@ cdef class Power(MathsBinaryOperation):
         return left.pow(right)
 
     cdef void _compile_op(self, Program program):
-        program.pow()
+        cdef Instruction instr = program.last_instruction()
+        if instr.code == OpCode.Literal and (<InstructionVector>instr).value.eq(Vector(2)):
+            program.pop_instruction()
+            program.dup()
+            program.mul()
+        else:
+            program.pow()
 
     cdef Expression constant_right(self, Expression left, Vector right):
         if right.eq(true_):
@@ -1019,7 +1041,14 @@ cdef class Append(NodeModifier):
     cdef void _compile(self, Program program, list lnames):
         self.node._compile(program, lnames)
         self.children._compile(program, lnames)
-        program.append()
+        cdef Instruction instr = program.last_instruction()
+        if instr.code == OpCode.Compose:
+            instr = program.pop_instruction()
+            program.append((<InstructionInt>instr).value)
+        elif instr.code == OpCode.Literal and (<InstructionVector>instr).value.length == 0:
+            program.pop_instruction()
+        else:
+            program.append()
 
     cdef Expression _simplify(self, Context context):
         cdef Expression node = self.node._simplify(context)
@@ -1098,7 +1127,12 @@ cdef class Let(Expression):
             program.local_push(len(binding.names))
             lnames.extend(binding.names)
         self.body._compile(program, lnames)
+        cdef Instruction instr = None
+        if program.last_instruction().code == OpCode.Compose:
+            instr = program.pop_instruction()
         program.local_drop(len(lnames) - n)
+        if instr is not None:
+            program.push_instruction(instr)
         while len(lnames) > n:
             lnames.pop()
 

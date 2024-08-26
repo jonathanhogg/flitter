@@ -21,7 +21,6 @@ from flitter.language.vm import Program
 
 class CompilerTestCase(unittest.TestCase):
     def assertCompilesTo(self, expr, program, lnames=(), with_errors=None):
-        program.optimize()
         program.link()
         compiled = expr.compile(initial_lnames=lnames, log_errors=False)
         self.assertEqual(str(compiled), str(program))
@@ -502,7 +501,7 @@ class TestExport(CompilerTestCase):
 
 class TestTop(CompilerTestCase):
     def test_empty(self):
-        self.assertCompilesTo(Top((), Sequence(())), Program().literal(null).append())
+        self.assertCompilesTo(Top((), Sequence(())), Program())
 
     def test_literal_node(self):
         self.assertCompilesTo(Top((), Literal(Node('window'))), Program().literal(Node('window')).append())
@@ -510,3 +509,19 @@ class TestTop(CompilerTestCase):
     def test_pragma(self):
         self.assertCompilesTo(Top((Binding('tempo', Literal(60)),), Literal(Node('window'))),
                               Program().set_pragma('tempo', Vector(60)).literal(Node('window')).append())
+
+
+class TestOptimizations(CompilerTestCase):
+    def test_nested_sequences(self):
+        self.assertCompilesTo(Sequence((Sequence((Literal(1), Literal(2))), Sequence((Literal(3), Literal(4))))),
+                              Program().literal(1).literal(2).literal(3).literal(4).compose(4))
+
+    def test_append_sequence(self):
+        self.assertCompilesTo(Append(Literal(Node('a')), Sequence((Literal(Node('b')), Literal(Node('c'))))),
+                              Program().literal(Node('a')).literal(Node('b')).literal(Node('c')).append(2))
+
+    def test_literal_null_append(self):
+        self.assertCompilesTo(Append(Literal(Node('a')), Literal(null)), Program().literal(Node('a')))
+
+    def test_mul_add(self):
+        self.assertCompilesTo(Add(Literal(1), Multiply(Literal(2), Literal(3))), Program().literal(1).literal(2).literal(3).mul_add())

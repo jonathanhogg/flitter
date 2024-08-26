@@ -9,7 +9,7 @@ from loguru import logger
 from .. import name_patch
 from ..cache import SharedCache
 from .functions import STATIC_FUNCTIONS, DYNAMIC_FUNCTIONS
-from ..model cimport Vector, Node, Context, StateDict, null_, true_, false_
+from ..model cimport StateDict, null_, true_, false_
 from .noise import NOISE_FUNCTIONS
 
 from libc.math cimport floor as c_floor
@@ -61,60 +61,6 @@ cdef double* StatsDuration = NULL
 cdef double CallOutDuration = 0
 cdef int64_t CallOutCount = 0
 
-cdef enum OpCode:
-    Add
-    Append
-    Attributes
-    BeginFor
-    BranchFalse
-    BranchTrue
-    Call
-    CallFast
-    Ceil
-    Compose
-    Drop
-    Dup
-    EndFor
-    Eq
-    Floor
-    FloorDiv
-    Fract
-    Func
-    Exit
-    Ge
-    Gt
-    Import
-    IndexLiteral
-    Jump
-    Label
-    Le
-    Literal
-    LiteralNode
-    LiteralNodes
-    LocalDrop
-    LocalLoad
-    LocalPush
-    Lookup
-    LookupLiteral
-    Lt
-    Mod
-    Mul
-    MulAdd
-    Ne
-    Neg
-    Next
-    Not
-    Pos
-    Pow
-    Range
-    Slice
-    SliceLiteral
-    Export
-    Sub
-    Tag
-    TrueDiv
-    Xor
-    MAX
 
 cdef dict OpCodeNames = {
     OpCode.Add: 'Add',
@@ -186,8 +132,6 @@ initialize_stats()
 
 
 cdef class Instruction:
-    cdef readonly OpCode code
-
     def __init__(self, OpCode code):
         self.code = code
 
@@ -196,8 +140,6 @@ cdef class Instruction:
 
 
 cdef class InstructionVector(Instruction):
-    cdef readonly Vector value
-
     def __init__(self, OpCode code, Vector value):
         super().__init__(code)
         self.value = value
@@ -207,8 +149,6 @@ cdef class InstructionVector(Instruction):
 
 
 cdef class InstructionNode(Instruction):
-    cdef readonly Node value
-
     def __init__(self, OpCode code, Node value):
         super().__init__(code)
         self.value = value
@@ -218,8 +158,6 @@ cdef class InstructionNode(Instruction):
 
 
 cdef class InstructionStr(Instruction):
-    cdef readonly str value
-
     def __init__(self, OpCode code, str value):
         super().__init__(code)
         self.value = value
@@ -229,8 +167,6 @@ cdef class InstructionStr(Instruction):
 
 
 cdef class InstructionTuple(Instruction):
-    cdef readonly tuple value
-
     def __init__(self, OpCode code, tuple value):
         super().__init__(code)
         self.value = value
@@ -240,8 +176,6 @@ cdef class InstructionTuple(Instruction):
 
 
 cdef class InstructionInt(Instruction):
-    cdef readonly int64_t value
-
     def __init__(self, OpCode code, int64_t value):
         super().__init__(code)
         self.value = value
@@ -251,9 +185,6 @@ cdef class InstructionInt(Instruction):
 
 
 cdef class InstructionIntTuple(Instruction):
-    cdef readonly int64_t ivalue
-    cdef readonly tuple tvalue
-
     def __init__(self, OpCode code, int64_t ivalue, tuple tvalue):
         super().__init__(code)
         self.ivalue = ivalue
@@ -264,8 +195,6 @@ cdef class InstructionIntTuple(Instruction):
 
 
 cdef class InstructionLabel(Instruction):
-    cdef readonly int64_t label
-
     def __init__(self, int64_t label):
         super().__init__(OpCode.Label)
         self.label = label
@@ -275,9 +204,6 @@ cdef class InstructionLabel(Instruction):
 
 
 cdef class InstructionJump(Instruction):
-    cdef readonly int64_t label
-    cdef readonly int64_t offset
-
     def __init__(self, OpCode code, int64_t label):
         super().__init__(code)
         self.label = label
@@ -289,10 +215,6 @@ cdef class InstructionJump(Instruction):
 
 
 cdef class InstructionFunc(InstructionJump):
-    cdef readonly str name
-    cdef readonly tuple parameters
-    cdef readonly int64_t ncaptures
-
     def __init__(self, OpCode code, int64_t label, str name, tuple parameters, int64_t ncaptures):
         super().__init__(code, label)
         self.name = name
@@ -304,9 +226,6 @@ cdef class InstructionFunc(InstructionJump):
 
 
 cdef class InstructionObjectInt(Instruction):
-    cdef readonly object obj
-    cdef readonly int64_t value
-
     def __init__(self, OpCode code, object obj, int64_t value):
         super().__init__(code)
         self.obj = obj
@@ -346,6 +265,13 @@ cdef class VectorStack:
 
     def __len__(self):
         return self.top + 1
+
+    def __str__(self):
+        cdef list items = []
+        cdef int64_t i
+        for i in range(self.top+1):
+            items.append(f"#{self.top+1-i}: {<Vector>self.vectors[i]!r}")
+        return '\n'.join(items)
 
     cpdef VectorStack copy(self):
         cdef VectorStack new_stack = VectorStack.__new__(VectorStack, self.size)
@@ -852,6 +778,17 @@ cdef class Program:
     def __str__(self):
         return '\n'.join(str(instruction) for instruction in self.instructions)
 
+    cdef Instruction last_instruction(self):
+        cdef int64_t n=len(self.instructions)
+        return self.instructions[n-1]
+
+    cdef Instruction pop_instruction(self):
+        return self.instructions.pop()
+
+    cdef Program push_instruction(self, Instruction instruction):
+        self.instructions.append(instruction)
+        return self
+
     def set_path(self, object path):
         self.path = path
 
@@ -930,55 +867,6 @@ cdef class Program:
                 jump = self.instructions[address]
                 jump.offset = target - address
         self.linked = True
-        return self
-
-    cpdef Program optimize(self):
-        cdef Instruction current, last=None
-        cdef list processed=[], injection_stack=[]
-        cdef int64_t i=0, n=len(self.instructions), m
-        assert not self.linked, "Cannot optimize a linked program"
-        while i < n or injection_stack:
-            if injection_stack:
-                current = injection_stack.pop()
-            else:
-                current = self.instructions[i]
-                i += 1
-            if processed:
-                last = processed[len(processed)-1]
-                if last.code == OpCode.Compose:
-                    if current.code == OpCode.Compose:
-                        logger.trace("VM instruction optimizer: combine ({}) and ({})", last, current)
-                        processed.pop()
-                        m = (<InstructionInt>current).value - 1 + (<InstructionInt>last).value
-                        current = InstructionInt(OpCode.Compose, m)
-                    elif current.code == OpCode.Append:
-                        logger.trace("VM instruction optimizer: combine ({}) and ({})", last, current)
-                        processed.pop()
-                        m = (<InstructionInt>current).value - 1 + (<InstructionInt>last).value
-                        current = InstructionInt(OpCode.Append, m)
-                    elif current.code == OpCode.LocalDrop:
-                        logger.trace("VM instruction optimizer: swap ({}) and ({})", last, current)
-                        processed.pop()
-                        injection_stack.append(last)
-                        injection_stack.append(current)
-                        continue
-                elif last.code == OpCode.Mul:
-                    if current.code == OpCode.Add:
-                        logger.trace("VM instruction optimizer: combine ({}) and ({})", last, current)
-                        processed.pop()
-                        current = Instruction(OpCode.MulAdd)
-                elif last.code == OpCode.Literal:
-                    if (<InstructionVector>last).value.length == 0 and current.code == OpCode.Append and (<InstructionInt>current).value == 1:
-                        logger.trace("VM instruction optimizer: discard {} and {}", last, current)
-                        processed.pop()
-                        continue
-                elif last.code == OpCode.LocalDrop:
-                    if current.code == OpCode.LocalDrop:
-                        logger.trace("VM instruction optimizer: combine ({}) and ({})", last, current)
-                        processed.pop()
-                        current = InstructionInt(OpCode.LocalDrop, (<InstructionInt>current).value + (<InstructionInt>last).value)
-            processed.append(current)
-        self.instructions = processed
         return self
 
     cpdef void use_simplifier(self, bint simplify):
