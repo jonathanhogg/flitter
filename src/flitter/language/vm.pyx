@@ -968,7 +968,8 @@ cdef class Program:
                         processed.pop()
                         current = Instruction(OpCode.MulAdd)
                 elif last.code == OpCode.Literal:
-                    if (<InstructionVector>last).value.length == 0 and current.code == OpCode.Append:
+                    if (<InstructionVector>last).value.length == 0 and current.code == OpCode.Append and (<InstructionInt>current).value == 1:
+                        logger.trace("VM instruction optimizer: discard {} and {}", last, current)
                         processed.pop()
                         continue
                 elif last.code == OpCode.LocalDrop:
