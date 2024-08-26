@@ -188,6 +188,7 @@ cdef class MatrixPairForceApplier(PairForceApplier):
     cdef double max_distance_squared
 
     @cython.profile(False)
+    @cython.cpow(True)
     def __cinit__(self, Node node, double strength, Vector zero):
         self.max_distance_squared = max(0, node.get_float('max_distance', 0)) ** 2
 
@@ -221,6 +222,7 @@ cdef class DistanceForceApplier(SpecificPairForceApplier):
             self.maximum = node.get_float('max', 0)
 
     @cython.profile(False)
+    @cython.cpow(True)
     cdef void apply(self, Particle from_particle, Particle to_particle, Vector direction, double distance, double distance_squared) noexcept nogil:
         cdef double f, k
         cdef int64_t i
@@ -240,6 +242,7 @@ cdef class DistanceForceApplier(SpecificPairForceApplier):
 
 cdef class DragForceApplier(ParticleForceApplier):
     @cython.profile(False)
+    @cython.cpow(True)
     cdef void apply(self, Particle particle, double delta) noexcept nogil:
         cdef double speed_squared=0, v, k
         cdef int64_t i
@@ -265,6 +268,7 @@ cdef class BuoyancyForceApplier(ParticleForceApplier):
             self.gravity.numbers[zero.length-1] = -1
 
     @cython.profile(False)
+    @cython.cpow(True)
     cdef void apply(self, Particle particle, double delta) noexcept nogil:
         cdef double displaced_mass, k
         cdef int64_t i
@@ -317,6 +321,7 @@ cdef class CollisionForceApplier(MatrixPairForceApplier):
         self.power = max(0, node.get_float('power', 1))
 
     @cython.profile(False)
+    @cython.cpow(True)
     cdef void apply(self, Particle from_particle, Particle to_particle, Vector direction, double distance, double distance_squared) noexcept nogil:
         cdef double min_distance, f, k
         cdef int64_t i

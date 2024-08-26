@@ -954,6 +954,7 @@ def hsv(Vector color):
 
 
 @cython.cdivision(True)
+@cython.cpow(True)
 def colortemp(Vector t):
     if t.numbers == NULL:
         return null_

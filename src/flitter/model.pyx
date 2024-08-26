@@ -750,6 +750,8 @@ cdef class Vector:
                 result.numbers[i] = self.numbers[i] - c_floor(self.numbers[i])
         return result
 
+    @cython.cpow(True)
+    @cython.cdivision(True)
     cdef Vector round(self, int64_t ndigits):
         if self.numbers == NULL:
             return null_
