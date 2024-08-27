@@ -432,6 +432,40 @@ m = \textbf{density} \cdot \textbf{radius}^\textbf{dimensions}
 \vec{F} = \textbf{strength} \cdot  \vec{gravity} \cdot  ( \textbf{mass} - m )
 ```
 
+## Groups
+
+A `!physics` system may contain one or more nested `!group` nodes. Each begins
+a new semi-isolated group of particles and forces. The `!physics` node counts
+as the outermost group. Particle (and anchor) `id`s must be unique across the
+entire system.
+
+Forces are applied to particles according to the following rules:
+
+`!distance`
+: As distance forces reference a specific pair of particles (or a particle and
+an anchor), they are applied to the referenced particles regardless of which
+group they or the particles are declared in.
+
+`!constant`, `!drag`, `!buoyancy`
+: These forces apply to particles within the group in which the force is
+declared and to particles in all sub-groups within that group. Declaring any of
+these at the top level of the `!physics` system applies them to all particles.
+
+`!barrier`
+: Barriers apply to particles within the group in which they are declared,
+and to particles in all sub-groups below that group.
+
+`!collision`, `!electrostatic`, `!gravity`, `!adhesion`
+: These pair-wise forces apply to pairs of particles within the group in which
+the force is declared, within sub-groups of that group, and pairs of particles
+between sub-groups and all of their parent groups leading up to the group in
+which the force was declared. These forces do not, however, apply between
+sibling sub-groups.
+
+As the latter forces apply to all pairs of particles, they are the most
+expensive to compute. Therefore, limiting them to not apply across sub-groups
+allows for fine-grained control over which pairs the forces should apply.
+
 ## State interaction
 
 For a `!physics` system with `state` set to *prefix*, and a particle with `id`
