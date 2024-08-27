@@ -395,16 +395,21 @@ proportion to the square of the speed and the particle cross-sectional size
 very useful for taking energy out of a simulation, otherwise particles will
 tend to bounce around forever. Particles with zero `radius` will be ignored.
 
+- `flow` - specifies the velocity of the medium (default is `0`)
 - `strength` - force magnitude coefficient
 - `ease` - specifies an amount of simulation time over which to ramp up
 `strength`
 
 ```{math}
-{speed} = |\vec{v}_t|
+\vec{v'}_t = \vec{v}_t - \vec{\textbf{flow}}
 ```
 
 ```{math}
-\vec{d} = { \vec{v}_t \over {speed} }
+{speed} = |\vec{v'}_t|
+```
+
+```{math}
+\vec{d} = { \vec{v'}_t \over {speed} }
 ```
 
 ```{math}
@@ -412,10 +417,14 @@ tend to bounce around forever. Particles with zero `radius` will be ignored.
 \textbf{radius}^{\textbf{dimensions} - 1}
 ```
 
-As drag scales with the square the speed and the particle cross-sectional area,
-`strength` should normally be a *very* small number. This force applier is
-limited to ensure that simulation granularity issues cannot cause a particle to
-reverse direction.
+The `flow` attribute allows simulation of a moving medium, such as a river or
+a breeze. If `flow` is a non-zero vector then the `!drag` force will accelerate
+particles until they are motionless with respect to the medium.
+
+As drag scales with the square of the speed and the particle cross-sectional
+area, the `strength` coefficient should normally be a *very* small number. This
+force applier is limited to ensure that simulation granularity issues cannot
+cause a particle to reverse direction (with respect to the medium).
 
 ### `!buoyancy`
 

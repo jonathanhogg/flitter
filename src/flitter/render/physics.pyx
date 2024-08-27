@@ -256,17 +256,23 @@ cdef class DistanceForceApplier(SpecificPairForceApplier):
 
 
 cdef class DragForceApplier(ParticleForceApplier):
+    cdef Vector flow
+
+    @cython.profile(False)
+    def __cinit__(self, Node node, double strength, Vector zero):
+        self.flow = node.get_fvec('flow', zero.length, zero)
+
     @cython.profile(False)
     cdef void apply(self, Particle particle, double delta) noexcept nogil:
         cdef double speed_squared=0, v, k
         cdef int64_t i
         if particle.radius:
             for i in range(particle.velocity.length):
-                v = particle.velocity.numbers[i]
+                v = particle.velocity.numbers[i] - self.flow.numbers[i]
                 speed_squared += v * v
             k = min(self.strength * sqrt(speed_squared) * particle.radius**(particle.force.length-1), particle.mass / delta)
             for i in range(particle.velocity.length):
-                particle.force.numbers[i] = particle.force.numbers[i] - particle.velocity.numbers[i] * k
+                particle.force.numbers[i] = particle.force.numbers[i] - (particle.velocity.numbers[i] - self.flow.numbers[i]) * k
 
 
 cdef class BuoyancyForceApplier(ParticleForceApplier):
