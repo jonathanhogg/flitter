@@ -209,6 +209,26 @@ simulation step.
 - `ease` - specifies an amount of simulation time over which to ramp up
 `strength`
 
+### `!field`
+
+`!field` creates a uniformly oriented force that will apply to all particles
+in proportion to their `charge` attribute. Positively-charged particles will be
+accelerated in the direction of the field and negatively-charged particles will
+be accelerated in the opposite direction to the field.
+
+- `direction` - a vector specifying the direction of the electric field
+- `strength` - force magnitude coefficient
+- `ease` - specifies an amount of simulation time over which to ramp up
+`strength`
+
+`direction` does not need to be a unit vector – and will not be normalized. Any
+magnitude of the vector will be combined with `strength` to specify the field
+strength.
+
+```{math}
+\vec{F} = \textbf{strength} \cdot \vec{\textbf{direction}} \cdot \textbf{charge}
+```
+
 ### `!distance`
 
 Specifies a force to be applied between two specific particles that scales with
@@ -468,7 +488,7 @@ Forces are applied to particles according to the following rules:
 an anchor), they are applied to the referenced particles regardless of which
 group they or the particles are declared in.
 
-`!constant`, `!random`, `!drag`, `!buoyancy`
+`!constant`, `!random`, `!field`, `!drag`, `!buoyancy`
 : These forces apply to particles within the group in which the force is
 declared and to particles in all sub-groups within that group. Declaring any of
 these at the top level of the `!physics` system applies them to all particles.
@@ -530,7 +550,7 @@ A `!collision` force applier stops them from overlapping with each other and a
 by setting a maximum distance for each from an anchor in the middle. A `!drag`
 force applier slows the particles as if they are moving through a liquid.
 Without any external forces, the drag will cause this system to come to a static
-equilibrium, so a `!random` Brownian motion force is applied to each particle.
+equilibrium, so a `!random` force is applied to each particle.
 
 The `beat` clock is used as the simulation time, allowing the simulation to be
 sped up or slowed down by altering the tempo. `resolution` is calculated to

@@ -332,6 +332,20 @@ cdef class RandomForceApplier(ParticleForceApplier):
             self.index = self.index + 1
 
 
+cdef class FieldForceApplier(ParticleForceApplier):
+    cdef Vector direction
+
+    @cython.profile(False)
+    def __cinit__(self, Node node, double strength, Vector zero):
+        self.direction = node.get_fvec('direction', zero.length, zero)
+
+    @cython.profile(False)
+    cdef void apply(self, Particle particle, double delta) noexcept nogil:
+        cdef int64_t i
+        for i in range(particle.force.length):
+            particle.force.numbers[i] = particle.force.numbers[i] + self.strength * self.direction.numbers[i]
+
+
 cdef class CollisionForceApplier(MatrixPairForceApplier):
     cdef double power
 
@@ -580,6 +594,8 @@ cdef class PhysicsSystem:
                     particle_force = RandomForceApplier.__new__(RandomForceApplier, child, strength, zero)
                     (<RandomForceApplier>particle_force).random_source = normal(seed)
                     group.particle_forces.append(particle_force)
+                elif child.kind is 'field':
+                    group.particle_forces.append(FieldForceApplier.__new__(FieldForceApplier, child, strength, zero))
                 elif child.kind is 'collision':
                     group.matrix_forces.append(CollisionForceApplier.__new__(CollisionForceApplier, child, strength, zero))
                 elif child.kind is 'gravity':
