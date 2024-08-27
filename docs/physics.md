@@ -196,6 +196,16 @@ gravity)
 - `ease` - specifies an amount of simulation time over which to ramp up
 `strength`
 
+### `!random`
+
+Specifies a random, "Brownian motion", force to be applied to all particles.
+This consists of a normal variate, per-particle, force that varies on each
+simulation step.
+
+- `strength` - force magnitude coefficient (default is `1`)
+- `ease` - specifies an amount of simulation time over which to ramp up
+`strength`
+
 ### `!distance`
 
 Specifies a force to be applied between two specific particles that scales with
@@ -446,7 +456,7 @@ Forces are applied to particles according to the following rules:
 an anchor), they are applied to the referenced particles regardless of which
 group they or the particles are declared in.
 
-`!constant`, `!drag`, `!buoyancy`
+`!constant`, `!random`, `!drag`, `!buoyancy`
 : These forces apply to particles within the group in which the force is
 declared and to particles in all sub-groups within that group. Declaring any of
 these at the top level of the `!physics` system applies them to all particles.
