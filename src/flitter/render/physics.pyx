@@ -616,6 +616,7 @@ cdef class PhysicsSystem:
         cdef PyObject* to_particle
         cdef PyObject* force
         cdef PyObject* barrier
+        cdef PyObject* groupptr
         cdef PhysicsGroup group
         cdef SpecificPairForceApplier specific_force
         while True:
@@ -643,17 +644,14 @@ cdef class PhysicsSystem:
                     all_particles = group.particles
                     particle_forces = group.particle_forces
                     matrix_forces = group.matrix_forces
-                    barriers = group.barriers
                 else:
-                    all_particles = group.particles.copy()
-                    particle_forces = group.particle_forces.copy()
-                    matrix_forces = group.matrix_forces.copy()
-                    barriers = group.barriers.copy()
+                    all_particles = list(group.particles)
+                    particle_forces = list(group.particle_forces)
+                    matrix_forces = list(group.matrix_forces)
                     while (group := group.parent) is not None:
                         all_particles.extend(group.particles)
                         particle_forces.extend(group.particle_forces)
                         matrix_forces.extend(group.matrix_forces)
-                        barriers.extend(group.barriers)
                 with nogil:
                     n = PyList_GET_SIZE(all_particles)
                     o = PyList_GET_SIZE(non_anchors)
@@ -661,8 +659,9 @@ cdef class PhysicsSystem:
                     m = PyList_GET_SIZE(particle_forces)
                     if m and o:
                         for i in range(m):
+                            force = PyList_GET_ITEM(particle_forces, i)
                             for j in range(o):
-                                (<ParticleForceApplier>PyList_GET_ITEM(particle_forces, i)).apply((<Particle>PyList_GET_ITEM(non_anchors, j)), delta)
+                                (<ParticleForceApplier>force).apply(<Particle>PyList_GET_ITEM(non_anchors, j), delta)
                     m = PyList_GET_SIZE(matrix_forces)
                     if m and p:
                         for i in range(p):
@@ -683,25 +682,36 @@ cdef class PhysicsSystem:
                                             distance_squared < (<MatrixPairForceApplier>force).max_distance_squared:
                                         (<MatrixPairForceApplier>force).apply(<Particle>from_particle, <Particle>to_particle,
                                                                               direction, distance, distance_squared)
-                    if o:
-                        for i in range(o):
-                            (<Particle>PyList_GET_ITEM(non_anchors, i)).step(self.speed_of_light, clock, delta)
-                        m = PyList_GET_SIZE(barriers)
-                        if m:
-                            for i in range(m):
-                                barrier = PyList_GET_ITEM(barriers, i)
-                                for j in range(o):
-                                    to_particle = PyList_GET_ITEM(non_anchors, j)
-                                    (<Barrier>barrier).apply(<Particle>to_particle, self.speed_of_light, clock, delta)
+            for group in groups:
+                non_anchors = group.non_anchors
+                o = len(non_anchors)
+                if o == 0:
+                    continue
+                if group.parent is None:
+                    barriers = group.barriers
+                else:
+                    barriers = list(group.barriers)
+                    while (group := group.parent) is not None:
+                        barriers.extend(group.barriers)
+                with nogil:
+                    for i in range(o):
+                        (<Particle>PyList_GET_ITEM(non_anchors, i)).step(self.speed_of_light, clock, delta)
+                    m = PyList_GET_SIZE(barriers)
+                    if m:
+                        for i in range(m):
+                            barrier = PyList_GET_ITEM(barriers, i)
+                            for j in range(o):
+                                (<Barrier>barrier).apply(<Particle>PyList_GET_ITEM(non_anchors, j), self.speed_of_light, clock, delta)
             last_time += delta
             clock += delta
             if last_time >= time or (realtime and not extra):
                 break
             extra = False
-            for group in groups:
-                non_anchors = group.non_anchors
-                with nogil:
+            with nogil:
+                m = PyList_GET_SIZE(groups)
+                for i in range(m):
+                    groupptr = PyList_GET_ITEM(groups, i)
                     for j in range(o):
-                        to_particle = PyList_GET_ITEM(non_anchors, j)
+                        to_particle = PyList_GET_ITEM((<PhysicsGroup>groupptr).non_anchors, j)
                         (<Particle>to_particle).reset_force()
         return clock
