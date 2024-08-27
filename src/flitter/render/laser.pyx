@@ -332,7 +332,7 @@ cdef class Laser:
             self.driver = None
 
     async def update(self, engine, model.Node node, **kwargs):
-        driver = node.get('driver', 1, str, '').lower()
+        driver = node.get('driver', 1, str, '')
         cls = {'lasercube': LaserCubeDriver}.get(driver)
         if cls is not None:
             id = node.get('id', 1, str)

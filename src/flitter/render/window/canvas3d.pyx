@@ -388,7 +388,7 @@ cdef Model get_model(Node node, bint top):
                 model = model.invert()
             if (mapping := node.get_str('uv_remap', None)) is not None:
                 model = model._uv_remap(mapping)
-        elif node.kind != 'transform':
+        elif node.kind is not 'transform':
             if (transform_matrix := get_model_transform(node, IdentityTransform)) is not IdentityTransform:
                 model = model._transform(transform_matrix)
     return model
