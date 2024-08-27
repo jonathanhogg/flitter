@@ -159,7 +159,7 @@ An `!anchor` is a particle that is considered for the purposes of calculating
 forces, but will not be affected by any force – including a `force`
 attribute. The attributes are otherwise the same as for `!particle`, with the
 added difference that `position` specifies the *current* position of the object
-rather than an initial value. Thus an `!anchor` may be arbitrarily moved around.
+rather than an initial value, so an `!anchor` may be arbitrarily moved around.
 
 While a zero-mass particle is similar to an anchor, a zero-mass particle cannot
 be moved once the simulation has started. An anchor can usefully have zero mass,
@@ -186,15 +186,18 @@ mean all of the particle's velocity is absorbed.
 ### `!constant`
 
 Specifies a constant force or acceleration to be applied to all particles. This
-is useful for simulating global forces such as fields, winds, or gravity.
+is useful for simulating global forces, such as large-body gravity.
 
-- `force` - specifies a constant force vector (such as an electric field)
-- `acceleration` - specifies a constant acceleration vector (such as large-body
-gravity)
+- `force` - specifies a constant force vector
+- `acceleration` - specifies a constant acceleration vector
 - `strength` - specifies a multiplier for `force`/`acceleration` vector
 (default is `1`)
 - `ease` - specifies an amount of simulation time over which to ramp up
 `strength`
+
+Both `force` and `acceleration` may be specified and will apply separately. If
+`acceleration` is specified then it is converted into an equivalent force by
+multiplying by the particle `mass`.
 
 ### `!random`
 
@@ -382,8 +385,8 @@ together with `!collision`.
 
 :::{note}
 The `!collision`, `!gravity`, `!electrostatic` and `!adhesion` force appliers
-are all compute-intensive as they have to consider all particle *pairings*
-and thus have $O(n^2)$ time-complexity.
+are all compute-intensive as they have to consider all particle *pairs* and
+so have $O(n^2)$ time-complexity.
 :::
 
 ### `!drag`
