@@ -65,7 +65,7 @@ cdef inline uint64_t HASH_STRING(str value):
 cdef inline int64_t vector_compare(Vector left, Vector right) noexcept:
     if left is right:
         return 0
-    cdef int64_t i, n = left.length, m = right.length
+    cdef int64_t i, n=left.length, m=right.length
     if n == 0 and m == 0:
         return 0
     cdef double x, y
@@ -84,11 +84,14 @@ cdef inline int64_t vector_compare(Vector left, Vector right) noexcept:
         for i in range(min(n, m)):
             a = PyTuple_GET_ITEM(leftobj, i)
             b = PyTuple_GET_ITEM(rightobj, i)
-            if PyObject_RichCompareBool(<object>a, <object>b, Py_EQ):
-                continue
-            if PyObject_RichCompareBool(<object>a, <object>b, Py_LT):
-                return -1
-            return 1
+            try:
+                if PyObject_RichCompareBool(<object>a, <object>b, Py_EQ):
+                    continue
+                if PyObject_RichCompareBool(<object>a, <object>b, Py_LT):
+                    return -1
+                return 1
+            except TypeError:
+                return -2
     elif n == 0:
         return -1
     elif m == 0:

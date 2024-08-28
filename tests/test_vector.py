@@ -604,6 +604,7 @@ class TestVector(utils.TestCase):
         self.assertFalse(Vector(["Hello ", "you!"]) == Vector(["Hello ", "world!"]))
         self.assertTrue(Vector.symbol('foo') == Vector(FOO_SYMBOL_NUMBER))
         self.assertTrue(Vector.symbol('foo') == Vector.symbol('foo'))
+        self.assertFalse(Vector(['a', 'b']) == Vector(['a', 2]))
 
     def test_ne(self):
         self.assertFalse(null != null)
@@ -616,6 +617,7 @@ class TestVector(utils.TestCase):
         self.assertTrue(Vector(["Hello ", "world!"]) != Vector(["Hello world!"]))
         self.assertTrue(Vector(["Hello ", "you!"]) != Vector(["Hello ", "world!"]))
         self.assertTrue(Vector.symbol('foo') != Vector.symbol('bar'))
+        self.assertTrue(Vector(['a', 'b']) != Vector(['a', 2]))
 
     def test_gt(self):
         self.assertTrue(Vector(1) > null)
@@ -628,6 +630,8 @@ class TestVector(utils.TestCase):
         self.assertTrue(Vector(["Z"]) > Vector(["Hello world!"]))
         with self.assertRaises(TypeError):
             Vector('a') > Vector(1)
+        with self.assertRaises(TypeError):
+            Vector(['a', 'b']) > Vector(['a', 2])
 
     def test_ge(self):
         self.assertTrue(null >= null)
@@ -644,6 +648,8 @@ class TestVector(utils.TestCase):
         self.assertTrue(x >= x)
         with self.assertRaises(TypeError):
             Vector('a') >= Vector(1)
+        with self.assertRaises(TypeError):
+            Vector(['a', 'b']) >= Vector(['a', 2])
 
     def test_lt(self):
         self.assertTrue(null < Vector(1))
@@ -655,6 +661,8 @@ class TestVector(utils.TestCase):
         self.assertTrue(Vector(["Hello world!"]) < Vector(["Z"]))
         with self.assertRaises(TypeError):
             Vector('a') < Vector(1)
+        with self.assertRaises(TypeError):
+            Vector(['a', 'b']) < Vector(['a', 2])
 
     def test_le(self):
         self.assertTrue(null <= null)
@@ -669,6 +677,8 @@ class TestVector(utils.TestCase):
         self.assertTrue(Vector(["Hello world!"]) <= Vector(["Z"]))
         with self.assertRaises(TypeError):
             Vector('a') <= Vector(1)
+        with self.assertRaises(TypeError):
+            Vector(['a', 'b']) <= Vector(['a', 2])
 
     def test_getitem(self):
         x = Vector.range(100)

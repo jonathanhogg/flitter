@@ -348,10 +348,10 @@ The rules for indexing/slicing an *n*-element vector, *src*, are:
 - All matching elements are composed together into a new vector
 
 [Ranges](#ranges) are a convenient way to create indices for slicing a vector,
-e.g., `xs[..5]` will extract the first 5 elements of `xs` – if `xs` has fewer
-than 5 elements then it just evaluates to `xs`. Indices do not need to be
-contiguous or in any specific order. It is perfectly valid to use `x[1;6;0]`
-to extract the 2nd, 7th and 1st items, in that order.
+e.g., `xs[..5]` will extract the first 5 elements of `xs` (assuming `xs` has
+5 or more elements). Indices do not need to be contiguous or in any specific
+order. It is perfectly valid to use `x[1;6;0]` to extract the 2nd, 7th and 1st
+items, in that order.
 
 As indices are used modulo the length of the source vector, indices past the
 end of the vector will wrap around to the beginning and negative indices will
@@ -373,7 +373,11 @@ for extracting individual characters or ranges of characters.
 ## Operators
 
 **Flitter** supports the usual range of operators, with a lean towards the
-syntax and semantics of Python. The binary mathematical operators are:
+syntax and semantics of Python.
+
+### Mathematical operators
+
+The binary vector mathematical operators are:
 
 - *x* `+` *y* - addition
 - *x* `-` *y* - subtraction
@@ -420,14 +424,50 @@ All of the mathematical operators return `null` if either *x* or *y* is an
 empty or non-numeric vector. Therefore, unary `+x` will return `x` iff `x` is
 numeric and `null` otherwise.
 
-Logical operators:
+### Comparison operators
+
+The binary vector comparison operators are:
+
+- *x* `==` *y* - equality
+- *x* `!=` *y* - inequality
+- *x* `<` *y* - less than
+- *x* `>` *y* - greater than
+- *x* `<=` *y* - less than or equal
+- *x* `>=` *y* - greater than or equal
+
+Complete vectors are compared and a single truth value returned. The vectors
+*x* and *y* are equal iff they are of the same length and each element of *x*
+is identical to the corresponding element of *y*. Logical *true* is indicated
+by a result of `1` and *false* with a result of `0`. The built-in names `true`
+and `false` evaluate to the same values.
+
+The lesser/greater comparison operators compare vectors an element at a time
+until an element of *x* is less/greater than the corresponding element in *y*.
+If one vector runs out of elements before the other then the shorter one is
+lesser. If an element pair cannot be compared because they are not of the same
+type, e.g., an attempt to compare a Unicode string with a number, then the
+result of the operator is the `null` vector.
+
+### Logical operators
+
+Flitter also supports the usual short-cutting logical operators:
 
 - *x* `or` *y* - short-circuiting *or*: returns *x* if *x* is true, *y* otherwise
 - *x* `and` *y* - short-circuiting *and*: returns *x* if *x* is false, *y*
   otherwise
+
+In addition, it provides a non-shortcutting exclusive-or operator:
+
 - *x* `xor` *y* - *exclusive or*: returns *y* if *x* is false, *x* if *y* is
   false, `false` otherwise
+
+And the usual logical inverse operator:
+
 - `not` *x* - logical inverse: returns `false` if *x* is true, `true` otherwise
+
+For the purposes of all of these operators, a vector is considered to *false*
+if it is zero-length (i.e., `null`) or each element is either `0` or an empty
+Unicode string. All other vectors are considered to be *true*.
 
 ## Let Expressions
 
