@@ -113,10 +113,8 @@ cdef class Particle:
                     for i in range(n):
                         self.velocity.numbers[i] = self.velocity.numbers[i] * k
         for i in range(n):
-            v = self.acceleration.numbers[i]
-            self.acceleration.numbers[i] = (self.velocity.numbers[i] - v) / delta
-            v = (v + self.velocity.numbers[i]) / 2
-            self.position.numbers[i] = self.position.numbers[i] + v * delta
+            self.acceleration.numbers[i] = (self.velocity.numbers[i] - self.acceleration.numbers[i]) / delta
+            self.position.numbers[i] = self.position.numbers[i] + self.velocity.numbers[i] * delta
 
     @cython.profile(False)
     cdef void reset_force(self) noexcept nogil:
@@ -160,8 +158,7 @@ cdef class Barrier:
             acceleration = acceleration + particle.acceleration.numbers[i] * n
         if distance >= 0:
             return
-        cdef double vv=velocity*velocity, ad2=2*acceleration*distance, k=distance/velocity
-        cdef double rewind_t = (velocity + sqrt(vv - ad2)) / acceleration if acceleration and ad2 < vv else k
+        cdef double rewind_t = distance/velocity
         if velocity >= 0 or rewind_t > delta:
             for i in range(dimensions):
                 particle.position.numbers[i] = particle.position.numbers[i] - distance * self.normal.numbers[i]
@@ -169,16 +166,15 @@ cdef class Barrier:
         cdef double v
         velocity = 0
         for i in range(dimensions):
-            particle.position.numbers[i] = particle.position.numbers[i] - k * particle.velocity.numbers[i]
+            particle.position.numbers[i] = particle.position.numbers[i] - rewind_t * particle.velocity.numbers[i]
             v = (particle.velocity.numbers[i] - rewind_t * particle.acceleration.numbers[i]) * self.restitution
             particle.velocity.numbers[i] = v
             velocity = velocity + v * self.normal.numbers[i]
         for i in range(dimensions):
             n = self.normal.numbers[i]
             particle.velocity.numbers[i] = particle.velocity.numbers[i] - 2 * velocity * n
-        velocity = -velocity
         cdef double t
-        if acceleration < 0 and (t := 2 * velocity / -acceleration) < t:
+        if acceleration < 0 and (t := velocity / acceleration) < rewind_t:
             rewind_t = t
         particle.step(speed_of_light, clock, rewind_t)
 
