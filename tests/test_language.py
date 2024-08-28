@@ -496,6 +496,9 @@ class TestExamples(ScriptTest):
     def test_linelight(self):
         self.assertSimplifierDoesntChangeBehaviour(self.EXAMPLES / 'linelight.fl')
 
+    def test_oklch(self):
+        self.assertSimplifierDoesntChangeBehaviour(self.EXAMPLES / 'oklch.fl')
+
     def test_physics(self):
         self.assertSimplifierDoesntChangeBehaviour(self.EXAMPLES / 'physics.fl')
 

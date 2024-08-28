@@ -12,7 +12,8 @@ from flitter.language.functions import (uniform, normal, beta,
                                         roundv, absv, expv, sqrtv, logv, log2v, log10v, ceilv, floorv, fract,
                                         cosv, acosv, sinv, asinv, tanv, hypot, normalize, polar, angle, length,
                                         quaternion, qmul, qbetween, slerp,
-                                        split, ordv, chrv)
+                                        split, ordv, chrv,
+                                        colortemp, oklab, oklch)
 from flitter.language.noise import noise, octnoise
 
 from . import utils
@@ -647,3 +648,25 @@ class TestStringFuncs(utils.TestCase):
         self.assertEqual(split(Vector(['Hello\nworld!'])), Vector(['Hello', 'world!']))
         self.assertEqual(split(Vector(['Hello\nworld!\n'])), Vector(['Hello', 'world!']))
         self.assertEqual(split(Vector(['Hello\n\nworld!\n'])), Vector(['Hello', '', 'world!']))
+
+
+class TestColorFuncs(utils.TestCase):
+    def test_colortemp(self):
+        self.assertAllAlmostEqual(colortemp(Vector(6503.5)), Vector([1, 1, 1]), places=None, delta=0.05)
+
+    def test_oklab(self):
+        self.assertAllAlmostEqual(oklab(Vector([0, 0, 0])), Vector([0, 0, 0]), places=2)
+        self.assertAllAlmostEqual(oklab(Vector([1, 0, 0])), Vector([1, 1, 1]), places=2)
+        self.assertAllAlmostEqual(oklab(Vector([0.5, +0.4, 0])), Vector([0.87, -0.15, 0.1]), places=2)
+        self.assertAllAlmostEqual(oklab(Vector([0.5, -0.4, 0])), Vector([-0.33, 0.31, 0.15]), places=2)
+        self.assertAllAlmostEqual(oklab(Vector([0.5, 0, +0.4])), Vector([0.47, 0.02, -0.08]), places=2)
+        self.assertAllAlmostEqual(oklab(Vector([0.5, 0, -0.4])), Vector([0.05, -0.07, 1.69]), places=2)
+
+    def test_oklch(self):
+        self.assertAllAlmostEqual(oklch(Vector([0, 0, 0])), Vector([0, 0, 0]), places=2)
+        self.assertAllAlmostEqual(oklch(Vector([1, 0, 0])), Vector([1, 1, 1]), places=2)
+        self.assertAllAlmostEqual(oklch(Vector([0.5, 0.4, 0])), Vector([0.87, -0.15, 0.1]), places=2)
+        self.assertAllAlmostEqual(oklch(Vector([0.5, 0.4, 1/3])), Vector([0.09, 0.17, -0.09]), places=2)
+        self.assertAllAlmostEqual(oklch(Vector([0.5, 0.4, 2/3])), Vector([-0.15, 0.06, 1.42]), places=2)
+        self.assertAllAlmostEqual(oklch(Vector([0.5, 0.4, 1])), Vector([0.87, -0.15, 0.1]), places=2)
+        self.assertAllAlmostEqual(oklch(Vector([0.5, 0.4, -1])), Vector([0.87, -0.15, 0.1]), places=2)

@@ -381,6 +381,20 @@ hue, saturation and lightness (also in the range *[0,1]*).
 : Return a 3-vector of *R*, *G* and *B* in the range *[0,1]* from a 3-vector of
 hue, saturation and value (also in the range *[0,1]*).
 
+`oklab(` *L* `;` *a* `;` *b* `)`
+: Return a 3-vector of *R*, *G* and *B* **linear sRGB** values converted from
+[Oklab](https://en.wikipedia.org/wiki/Oklab_color_space) *L*, *a* and *b*
+values. Lightness *L* is a value in the range *[0,1]*. The *a* and *b*
+coordinates are notionally unbounded but generally have a useful range of
+*(-0.4,+0.4)*. The *R*, *G* and *B* values returned may be less that `0` or
+greater than `1` for colors that are not representable in linear sRGB.
+
+`oklch(` *L* `;` *C* `;` *h* `)`
+: Return a 3-vector of *R*, *G* and *B* **linear sRGB** values converted from
+the [Oklab](https://en.wikipedia.org/wiki/Oklab_color_space) cylindrical
+coordinates *L*, *C* and *h*. Hue *h* is in *turns*, i.e., is in the range
+*[0,1)* and wraps around. This function is equivalent to `oklab(L;C*polar(h))`.
+
 ## Text functions
 
 `chr(` *o* `)`

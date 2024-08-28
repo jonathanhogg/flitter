@@ -26,6 +26,9 @@ linear.png: linear.fl
 linelight.png: linelight.fl
 	flitter --offscreen --lockstep --fps=1 --runtime=1 --define "OUTPUT=$@" $<
 
+oklch.png: oklch.fl
+	flitter --offscreen --lockstep --fps=1 --runtime=1 --define "OUTPUT=$@" $<
+
 physics.png: physics.fl
 	flitter --offscreen --lockstep --fps=10 --runtime=1 --define "OUTPUT=$@" $<
 

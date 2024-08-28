@@ -209,6 +209,9 @@ class TestExamples(ScriptTest):
     def test_linelight(self):
         self.assertScriptOutputMatchesImage(self.EXAMPLES / 'linelight.fl')
 
+    def test_oklch(self):
+        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'oklch.fl')
+
     def test_physics(self):
         self.assertScriptOutputMatchesImage(self.EXAMPLES / 'physics.fl', target_fps=10)
 
@@ -248,6 +251,10 @@ class TestExamples(ScriptTest):
     @unittest.skipIf(sys.platform != 'linux', 'OpenGL ES only available on Linux')
     def test_linelight_opengl_es(self):
         self.assertScriptOutputMatchesImage(self.EXAMPLES / 'linelight.fl', opengl_es=True, suffix='.es.png')
+
+    @unittest.skipIf(sys.platform != 'linux', 'OpenGL ES only available on Linux')
+    def test_oklch_opengl_es(self):
+        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'oklch.fl', opengl_es=True, suffix='.es.png')
 
     @unittest.skipIf(sys.platform != 'linux', 'OpenGL ES only available on Linux')
     def test_physics_opengl_es(self):

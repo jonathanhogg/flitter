@@ -13,7 +13,7 @@ from cpython.ref cimport Py_INCREF
 from cpython.tuple cimport PyTuple_New, PyTuple_GET_ITEM, PyTuple_SET_ITEM
 
 from ..cache import SharedCache
-from ..model cimport Vector, Matrix44, Quaternion, Context, null_, true_, false_
+from ..model cimport Vector, Matrix33, Matrix44, Quaternion, Context, null_, true_, false_
 
 
 cdef double Pi = 3.141592653589793115997963468544185161590576171875
@@ -991,6 +991,36 @@ def colortemp(Vector t):
     return rgb
 
 
+cdef Matrix33 OKLab_M1_inv = Matrix33([0.8189330101, 0.0329845436, 0.0482003018,
+                                       0.3618667424, 0.9293118715, 0.2643662691,
+                                       -0.1288597137, 0.0361456387, 0.6338517070]).inverse()
+cdef Matrix33 OKLab_M2_inv = Matrix33([0.2104542553, 1.9779984951, 0.0259040371,
+                                       0.7936177850, -2.4285922050, 0.7827717662,
+                                       -0.0040720468, 0.4505937099, -0.8086757660]).inverse()
+cdef Matrix33 XYZ_to_sRGB = Matrix33([3.2406, -0.9689, 0.0557,
+                                      -1.5372, 1.8758, -0.2040,
+                                      -0.4986, 0.0415, 1.0570])
+cdef Vector Three = Vector(3)
+
+
+def oklab(Vector lab):
+    if lab.length != 3 or lab.objects is not None:
+        return null_
+    return XYZ_to_sRGB.vmul(OKLab_M1_inv.vmul(OKLab_M2_inv.vmul(lab).pow(Three)))
+
+
+def oklch(Vector lch):
+    if lch.length != 3 or lch.objects is not None:
+        return null_
+    cdef Vector lab = Vector.__new__(Vector)
+    cdef double L=lch.numbers[0], C=lch.numbers[1], h=lch.numbers[2]*Tau
+    lab.allocate_numbers(3)
+    lab.numbers[0] = L
+    lab.numbers[1] = C * cos(h)
+    lab.numbers[2] = C * sin(h)
+    return XYZ_to_sRGB.vmul(OKLab_M1_inv.vmul(OKLab_M2_inv.vmul(lab).pow(Three)))
+
+
 def point_towards(Vector direction, Vector up):
     cdef Matrix44 matrix = Matrix44._look(Vector([0, 0, 0]), direction, up)
     if matrix is not None:
@@ -1033,6 +1063,8 @@ STATIC_FUNCTIONS = {
     'minindex': Vector(minindex),
     'normal': Vector(normal),
     'normalize': Vector(normalize),
+    'oklab': Vector(oklab),
+    'oklch': Vector(oklch),
     'ord': Vector(ordv),
     'point_towards': Vector(point_towards),
     'polar': Vector(polar),
