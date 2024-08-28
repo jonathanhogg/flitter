@@ -229,9 +229,8 @@ The pseudo-random streams can be indexed with a range vector to generate a
 vector of numbers, e.g.: `uniform(:some_seed)[..100]` will generate a 100-vector
 of uniformly distributed numbers. The streams are arbitrarily long and are
 unit-cost to call, so indexing the billionth number takes the same amount of
-time as the 0th. Unlike normal vectors, the streams also extend into negative
-indices (which actually wrap around to the end of the 64-bit unsigned integer
-index range).
+time as the 0th. Negative indices wrap around to the end of the 64-bit unsigned
+integer index range.
 
 For example:
 
@@ -251,10 +250,11 @@ let SIZE=1280;720
 This will create 10 circles distributed uniformly around the window with
 different radii clustered around 50 pixels and different uniformly picked hues.
 Every beat, the circles will be drawn in different places and with different
-sizes and hues. Note the use of symbols (`:x`, `:y`, etc.) combined with the
-index of the circle to create unique seeds. This code will draw exactly the
-same sequence of circles *every* time it is run as the pseudo-random functions
-are stable on their seed argument. There is no mechanism for generating true
+sizes and hues. Note the use of symbols (`:x`, `:y`, etc.) combined with `beat`
+to create unique seeds and then indexing with the `i` counter to generate
+individual items from these streams. This code will draw exactly the same
+sequence of circles *every* time it is run, as the pseudo-random functions are
+stable on their seed argument. There is no mechanism for generating true
 random numbers in **Flitter**.
 
 Pseudo-random streams may be bound to a name list in a `let` expression to
