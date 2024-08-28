@@ -6,12 +6,12 @@ import math
 import struct
 import zlib
 
-from flitter.model import Vector, null
+from flitter.model import Vector, Quaternion, null
 from flitter.language.functions import (uniform, normal, beta,
                                         lenv, sumv, accumulate, minv, maxv, minindex, maxindex, mapv, clamp, zipv, count,
                                         roundv, absv, expv, sqrtv, logv, log2v, log10v, ceilv, floorv, fract,
                                         cosv, acosv, sinv, asinv, tanv, hypot, normalize, polar, angle, length,
-                                        quaternion, qmul, slerp,
+                                        quaternion, qmul, qbetween, slerp,
                                         split, ordv, chrv)
 from flitter.language.noise import noise, octnoise
 
@@ -604,6 +604,17 @@ class TestQuaternions(utils.TestCase):
         q = quaternion(Vector([1, 1, 1]), Vector(1/3))
         self.assertAllAlmostEqual(qmul(qmul(q, q), q), [-1, 0, 0, 0])
         self.assertAllAlmostEqual(qmul(qmul(qmul(q, q), q), qmul(qmul(q, q), q)), [1, 0, 0, 0])
+
+    def test_qbetween(self):
+        self.assertAllAlmostEqual(qbetween(Vector([1, 0, 0]), Vector([0, 1, 0])), Quaternion.euler([0, 0, 1], 0.25))
+        self.assertAllAlmostEqual(qbetween(Vector([0, 0, 1]), Vector([1, 0, 0])), Quaternion.euler([0, 1, 0], 0.25))
+        self.assertAllAlmostEqual(qbetween(Vector([0, 1, 0]), Vector([0, 0, 1])), Quaternion.euler([1, 0, 0], 0.25))
+        self.assertAllAlmostEqual(qbetween(Vector([1, 0, 0]), Vector([1, 1, 0])), Quaternion.euler([0, 0, 1], 0.125))
+        self.assertAllAlmostEqual(qbetween(Vector([0, 0, 1]), Vector([1, 0, 1])), Quaternion.euler([0, 1, 0], 0.125))
+        self.assertAllAlmostEqual(qbetween(Vector([0, 1, 0]), Vector([0, 1, 1])), Quaternion.euler([1, 0, 0], 0.125))
+        self.assertAllAlmostEqual(qbetween(Vector([1, 0, 0]), Vector([-1, 0, 0])), Quaternion.euler([0, 1, 0], 0.5))
+        self.assertAllAlmostEqual(qbetween(Vector([0, 1, 0]), Vector([0, -1, 0])), Quaternion.euler([-1, 0, 0], 0.5))
+        self.assertAllAlmostEqual(qbetween(Vector([0, 0, 1]), Vector([0, 0, -1])), Quaternion.euler([0, -1, 0], 0.5))
 
     def test_slerp(self):
         qx = quaternion(Vector([1, 0, 0]), Vector(0.25))

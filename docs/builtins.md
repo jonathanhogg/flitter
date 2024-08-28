@@ -141,6 +141,10 @@ around the *axis* vector (clockwise looking in the direction of the vector).
 : Return the product of the quaternion *p* and the quaternion *q*, which is
 equivalent to the rotation *q* **followed by** the rotation *p*.
 
+`qbetween(` *u*, *v* `)`
+: Return the quaternion representing a rotation of the vector *u* to point
+in the direction of the vector *v*.
+
 `slerp(` *t*, *p*, *q* `)`
 : Return the [quaternion spherical linear
 interpolation](https://en.wikipedia.org/wiki/Slerp) between *p* and *q* with

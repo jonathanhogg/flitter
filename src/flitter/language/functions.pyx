@@ -816,6 +816,12 @@ def qmul(Vector a not None, Vector b not None):
     return Quaternion._coerce(a) @ Quaternion._coerce(b)
 
 
+def qbetween(Vector a not None, Vector b not None):
+    if a.numbers == NULL or a.length != 3 or a.numbers == NULL or a.length != 3:
+        return null_
+    return Quaternion._between(a, b)
+
+
 def slerp(Vector t not None, Vector a not None, Vector b not None):
     if t.numbers == NULL or t.length != 1 or a.numbers == NULL or a.length != 4 or a.numbers == NULL or a.length != 4:
         return null_
@@ -1030,6 +1036,7 @@ STATIC_FUNCTIONS = {
     'ord': Vector(ordv),
     'point_towards': Vector(point_towards),
     'polar': Vector(polar),
+    'qbetween': Vector(qbetween),
     'qmul': Vector(qmul),
     'quad': Vector(quad),
     'quaternion': Vector(quaternion),
