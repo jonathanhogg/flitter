@@ -1325,13 +1325,10 @@ cdef class Matrix33(Vector):
     @cython.cdivision(True)
     cpdef Matrix33 inverse(self):
         cdef double* numbers = self.numbers
-        cdef double s0 = numbers[0]*numbers[4]*numbers[8]
-        cdef double s1 = numbers[7]*numbers[5]
-        cdef double s2 = numbers[1]*numbers[3]*numbers[8]
-        cdef double s3 = numbers[5]*numbers[6]
-        cdef double s4 = numbers[2]*numbers[3]*numbers[7]
-        cdef double s5 = numbers[4]*numbers[6]
-        cdef double invdet = 1 / (s0 - s1 - s2 - s3 + s4 - s5)
+        cdef double s0 = numbers[0] * (numbers[4]*numbers[8] - numbers[7]*numbers[5])
+        cdef double s1 = numbers[3] * (numbers[7]*numbers[2] - numbers[1]*numbers[8])
+        cdef double s2 = numbers[6] * (numbers[1]*numbers[5] - numbers[4]*numbers[2])
+        cdef double invdet = 1 / (s0 + s1 + s2)
         cdef Matrix33 result = Matrix33.__new__(Matrix33)
         cdef double* result_numbers = result._numbers
         result_numbers[0] = (numbers[4]*numbers[8] - numbers[7]*numbers[5]) * invdet
