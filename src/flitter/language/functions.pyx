@@ -811,19 +811,19 @@ def quaternion(Vector axis not None, Vector angle not None):
 
 
 def qmul(Vector a not None, Vector b not None):
-    if a.numbers == NULL or a.length != 4 or a.numbers == NULL or a.length != 4:
+    if a.numbers == NULL or a.length != 4 or b.numbers == NULL or b.length != 4:
         return null_
     return Quaternion._coerce(a) @ Quaternion._coerce(b)
 
 
 def qbetween(Vector a not None, Vector b not None):
-    if a.numbers == NULL or a.length != 3 or a.numbers == NULL or a.length != 3:
+    if a.numbers == NULL or a.length != 3 or b.numbers == NULL or b.length != 3:
         return null_
     return Quaternion._between(a, b)
 
 
 def slerp(Vector t not None, Vector a not None, Vector b not None):
-    if t.numbers == NULL or t.length != 1 or a.numbers == NULL or a.length != 4 or a.numbers == NULL or a.length != 4:
+    if t.numbers == NULL or t.length != 1 or a.numbers == NULL or a.length != 4 or b.numbers == NULL or b.length != 4:
         return null_
     return Quaternion._coerce(a).slerp(Quaternion._coerce(b), t.numbers[0])
 
