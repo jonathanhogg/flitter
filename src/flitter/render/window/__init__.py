@@ -474,6 +474,17 @@ class Window(ProgramNode):
             self.window = glfw.create_window(self.width, self.height, title, None, Window.Windows[0].window if Window.Windows else None)
             Window.Windows.append(self)
             new_window = True
+            if self._visible and hasattr(glfw, 'get_cocoa_window'):
+                try:
+                    import objc
+                    import Cocoa
+                    nswindow = objc.objc_object(c_void_p=ctypes.c_void_p(glfw.get_cocoa_window(self.window)))
+                    nswindow.setColorSpace_(Cocoa.NSColorSpace.sRGBColorSpace())
+                    logger.debug("Set macOS window to sRGB colorspace")
+                except ImportError:
+                    pass
+                except Exception:
+                    logger.exception("Failed to set macOS window to sRGB colorspace")
         if self._visible and resizable != self._resizable:
             glfw.set_window_attrib(self.window, glfw.RESIZABLE, glfw.TRUE if resizable else glfw.FALSE)
             self._resizable = resizable

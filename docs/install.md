@@ -3,10 +3,10 @@
 
 **Flitter** is implemented in a mix of Python and Cython and requires at least
 OpenGL 3.3 (Core Profile) or OpenGL ES 3.0. At least Python 3.10 is also
-required as the code uses `match`/`case` syntax.
-
-It is developed exclusively on Intel macOS, but is tested and supported on Apple
-Silicon macOS, x86_64 Linux and x86_64 Windows.
+required as the code uses `match`/`case` syntax. It is supported and tested on
+Apple Silicon macOS, Intel macOS, x86_64 Linux and x86_64 Windows. It is also
+known to build and run on AArch64 Linux, but no pre-built packages exist. It
+will probably work on AArch64 Windows, but this has never been tested.
 
 **Flitter** is a command-line tool. It is assumed that you are comfortable using
 the command line on your OS of choice. You will also obviously need to be able
@@ -59,6 +59,27 @@ during install) then you can also run **Flitter** as a Python package with:
 $ pip3 install --user flitter-lang
 ```
 
+### macOS and sRGB
+
+**Flitter** assumes that OpenGL windows are in the sRGB colorspace. However,
+modern Macs generally have displays that support the wider Display-P3
+colorspace, and macOS OpenGL windows will default to this where possible.
+
+This results in colors on macOS appearing more vivid than on other platforms.
+Colors in windows will not match output saved to image and video files (which
+are always tagged as being in the sRGB colorspace), and loaded images or video
+will not display accurately. Colors calculated from calibrated color functions
+(like `colortemp()` or `oklch()`) will also not be displayed accurately.
+
+**Flitter** is capable of telling macOS to change the window colorspace to
+sRGB, but will only do so if the optional, macOS-only libraries `pyobjc` and
+`pyobjc-framework-Cocoa` are installed. You can install these manually, or
+automatically if you install **Flitter** with:
+
+```console
+$ pip3 install "flitter-lang[macos]"
+```
+
 ### Installing from the source package
 
 As **Flitter** uses Cython under-the-hood, you'll need a working build
@@ -81,22 +102,6 @@ head of the `main` branch with:
 
 ```console
 $ pip3 install https://github.com/jonathanhogg/flitter/archive/main.zip
-```
-
-However, if you clone the repo instead, then you can just install from the top
-level directory:
-
-```console
-$ git clone https://github.com/jonathanhogg/flitter.git
-$ cd flitter
-$ pip3 install .
-```
-
-Then you can keep up-to-date with developments and have direct access to the
-example programs:
-
-```console
-$ flitter examples/hoops.fl
 ```
 
 ## Running Flitter
@@ -237,18 +242,22 @@ start with `--gamma 2.2`. As usual, you can control this per-window with the
 
 ## Developing Flitter
 
-If you want to edit the **Flitter** code, ensure that `cython` and `setuptools`
-are installed in your runtime environment, then do an *editable* package
-deployment and throw away the generated object files:
+If you want to edit the **Flitter** code – or just want to keep up-to-date with
+current developments – ensure that `cython` and `setuptools` are installed in
+your runtime environment, clone the repo, do an *editable* package deployment
+directly from the clone directory, and then throw away the compiled files:
 
 ```console
 $ pip3 install cython setuptools
+$ git clone https://github.com/jonathanhogg/flitter.git
+$ cd flitter
 $ pip3 install --editable .
 $ rm src/**/*.c src/**/*.so
 ```
 
 **Flitter** automatically makes use of `pyximport` to (re)compile Cython code
-on-the-fly as it runs.
+on-the-fly as it runs. This allows you to edit the code (or pull a new version
+from the repo) and just re-run `flitter` to pick up changes.
 
 The code is linted with `flake8` and `cython-lint`:
 
@@ -268,7 +277,7 @@ $ pytest
 ### Checking code coverage
 
 If you want to run code coverage analysis, then you will need to do a special
-in-place build with coverage enabled (Cython line tracing):
+in-place build with coverage enabled (Cython line-tracing):
 
 ```console
 $ env FLITTER_BUILD_COVERAGE=1 python3 setup.py build_ext --inplace
@@ -276,10 +285,12 @@ $ env FLITTER_BUILD_COVERAGE=1 python3 setup.py build_ext --inplace
 
 Importantly, this **will not work on Python 3.12**. This version introduced a
 change in the profiling API that Cython is not compatible with. If you are
-using Python 3.12, then you will need to do a parallel install of 3.11 and
-create a second virtual environment in which to do coverage analysis.
+using Python 3.12, then you will need to do a parallel install of either 3.11
+or 3.10 and create a second virtual environment in which to do coverage
+analysis.
 
-You can then generate a code coverage report for the test suite with:
+Once you have a coverage-enabled build, you can generate a code coverage report
+for the test suite with:
 
 ```console
 $ pip3 install coverage
@@ -300,30 +311,31 @@ combined with `--lockstep` and `--runtime=N` to run for exactly *N* seconds of
 frame time. At the end of execution (including a keyboard interrupt), the
 standard Python profiler output will be printed, ordered by `tottime`.
 
-By default, the Cython modules are *not* compiled with profiling support. This
-means that only pure Python functions will be listed in the profiler, with all
-time spent inside Cython code aggregated into those functions' runtime. All
-of the Cython modules can be compiled with profiling by setting the
-`FLITTER_BUILD_PROFILE` environment variable to `1` and running `setup.py`:
+However, by default, the Cython modules are *not* compiled with profiling
+support. This means that only pure Python functions will be listed in the
+profiler, with all time spent inside Cython code aggregated into those
+functions' runtime. All of the Cython modules can be compiled with profiling by
+setting the `FLITTER_BUILD_PROFILE` environment variable to `1` and running
+`setup.py`:
 
 ```console
 $ env FLITTER_BUILD_COVERAGE=1 python3 setup.py build_ext --inplace
 ```
 
-However, this may not be the best thing to do as the overhead of adding
-profiling support to Cython is quite high and the results will be skewed by
-the cost of the profiling. It is probably better to *only* compile the
-module(s) that you are considering with profiling support. This can be done
-with `cythonize`:
+As for compiling with code coverage, profiling Cython code is currently **not
+supported on Python 3.12**. You will need to use 3.11 or 3.10 to run profiling
+tests.
+
+Recompiling all Cython modules with profiling enabled may not be the best thing
+to do as the overhead of adding profiling support to Cython is quite high and
+the results will be skewed by the cost of the profiling. It is probably better
+to *only* compile the module(s) that you are considering with profiling support.
+This can be done with `cythonize`:
 
 ```console
 $ cythonize --build --inplace --force -3 --annotate -X profile=True \
     src/flitter/render/window/canvas3d.pyx
 ```
-
-Note that as for compiling with code coverage, profiling Cython code is
-currently **not supported on Python 3.12**. You will need to use 3.11 to run
-profiling tests.
 
 ### Generating the documentation
 

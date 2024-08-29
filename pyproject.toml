@@ -52,6 +52,12 @@ dependencies = [
     "trimesh",
 ]
 
+[project.optional-dependencies]
+macos = [
+    "pyobjc-core",
+    "pyobjc-framework-Cocoa",
+]
+
 [project.urls]
 Documentation = "https://flitter.readthedocs.io/"
 Repository = "https://github.com/jonathanhogg/flitter.git"
