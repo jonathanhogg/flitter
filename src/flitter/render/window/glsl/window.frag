@@ -9,18 +9,7 @@ uniform sampler2D ${name};
 % endfor
 
 <%include file="composite_functions.glsl"/>
-
-float srgb(float c) {
-     if (isnan(c))
-         return 0.0;
-     if (c > 1.0)
-         return 1.0;
-     if (c < 0.0)
-         return 0.0;
-     if (c < 0.0031308)
-         return 12.92 * c;
-     return 1.055 * pow(c, 0.41666) - 0.055;
-}
+<%include file="colorspace_functions.glsl"/>
 
 void main() {
 % if child_textures:
@@ -32,7 +21,7 @@ void main() {
 %         endif
 %     endfor
     merged = gamma == 1.0 ? merged * alpha : pow(merged * alpha, vec4(gamma));
-    color = vec4(srgb(merged.r), srgb(merged.g), srgb(merged.b), 1);
+    color = vec4(srgb_transfer(merged.rgb), 1.0);
 % else:
     color = vec4(0.0, 0.0, 0.0, 1.0);
 % endif
