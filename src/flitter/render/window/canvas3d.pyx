@@ -10,12 +10,12 @@ from mako.template import Template
 import moderngl
 import numpy as np
 
-from libc.math cimport cos, log2, sqrt, tan
-from libc.stdint cimport int64_t
+from libc.math cimport cos, log2, sqrt, tan, floor
+from libc.stdint cimport int32_t, int64_t
 from cpython.dict cimport PyDict_GetItem
 from cpython.object cimport PyObject
 
-from . import WindowNode, COLOR_FORMATS, set_uniform_vector
+from . import WindowNode, COLOR_FORMATS
 from ... import name_patch
 from ...clock import system_clock
 from .glsl import TemplateLoader
@@ -47,6 +47,57 @@ GroupAttributes.update(('max_lights', 'depth_sort', 'depth_test', 'face_cull', '
 cdef object StandardVertexTemplate = TemplateLoader.get_template("standard_lighting.vert")
 cdef object StandardFragmentTemplate = TemplateLoader.get_template("standard_lighting.frag")
 cdef object BackfaceFragmentTemplate = TemplateLoader.get_template("backface_lighting.frag")
+
+
+@cython.cdivision(True)
+@cython.boundscheck(False)
+cdef bint set_uniform_vector(uniform, Vector vector):
+    cdef str fmt = uniform.fmt
+    cdef str dtype = fmt[-1]
+    cdef int64_t n=uniform.array_length, m=uniform.dimension, o=n*m, p=vector.length, i, j, k
+    if vector.numbers == NULL or (p != o and p != m and p != 1):
+        return False
+    cdef float[:] float_values
+    if dtype == 'f':
+        float_values = view.array((o,), 4, 'f')
+        i = 0
+        for j in range(n):
+            for k in range(m):
+                float_values[i] = <float>vector.numbers[i % p]
+                i += 1
+        uniform.write(float_values)
+        return True
+    cdef double[:] double_values
+    if dtype == 'd':
+        double_values = view.array((o,), 8, 'f')
+        i = 0
+        for j in range(n):
+            for k in range(m):
+                double_values[i] = vector.numbers[i % p]
+                i += 1
+        uniform.write(double_values)
+        return True
+    cdef int32_t[:] int32_values
+    if dtype == 'i':
+        int32_values = view.array((o,), 4, 'i')
+        i = 0
+        for j in range(n):
+            for k in range(m):
+                int32_values[i] = <int32_t>floor(vector.numbers[i % p])
+                i += 1
+        uniform.write(int32_values)
+        return True
+    cdef int64_t[:] int64_values
+    if dtype == 'I':
+        int64_values = view.array((o,), 8, 'i')
+        i = 0
+        for j in range(n):
+            for k in range(m):
+                int64_values[i] = <int64_t>floor(vector.numbers[i % p])
+                i += 1
+        uniform.write(int64_values)
+        return True
+    return False
 
 
 cdef enum LightType:
@@ -596,16 +647,16 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
                 samplers.append(sampler)
             elif not set_uniform_vector(member, value):
                 set_uniform_vector(member, false_)
-    shader['pv_matrix'] = camera.pv_matrix
+    set_uniform_vector(shader['pv_matrix'], camera.pv_matrix)
     shader['orthographic'] = camera.orthographic
     if (member := shader.get('monochrome', None)) is not None:
         member.value = camera.monochrome
     if (member := shader.get('tint', None)) is not None:
         member.value = camera.tint
-    shader['view_position'] = camera.position
-    shader['view_focus'] = camera.focus
+    set_uniform_vector(shader['view_position'], camera.position)
+    set_uniform_vector(shader['view_focus'], camera.focus)
     if (member := shader.get('fog_color', None)) is not None:
-        member.value = camera.fog_color
+        set_uniform_vector(member, camera.fog_color)
         shader['fog_min'] = camera.fog_min
         shader['fog_max'] = camera.fog_max
         shader['fog_curve'] = camera.fog_curve
@@ -707,10 +758,10 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
     if translucent_objects:
         if backface_data is not None:
             backface_shader = get_shader(glctx, shaders, names, StandardVertexTemplate, BackfaceFragmentTemplate)
-            backface_shader['pv_matrix'] = camera.pv_matrix
+            set_uniform_vector(backface_shader['pv_matrix'], camera.pv_matrix)
             backface_shader['orthographic'] = camera.orthographic
-            backface_shader['view_position'] = camera.position
-            backface_shader['view_focus'] = camera.focus
+            set_uniform_vector(backface_shader['view_position'], camera.position)
+            set_uniform_vector(backface_shader['view_focus'], camera.focus)
             backface_shader['nlights'] = nlights
             backface_shader['lights_data'].binding = 1
             glctx.disable(flags)
