@@ -9,10 +9,13 @@ float srgb_luminance(vec3 c) {
 }
 
 vec3 tonemap_reinhard(vec3 c, float whitepoint) {
-    float l = srgb_luminance(c);
-    float ld = l / (1.0 + l);
-    if (whitepoint > 0.0) {
-        ld *= (1.0 + l / (whitepoint*whitepoint));
+    vec3 cd = c / (1.0 + c);
+    if (whitepoint > 1.0) {
+        cd *= (1.0 + c / (whitepoint * whitepoint));
     }
-    return c * vec3(ld);
+    return cd;
+}
+
+vec3 tonemap_aces(vec3 c) {
+    return c * (2.51 * c + 0.03) / (c * (2.43 * c + 0.59) + 0.14);
 }

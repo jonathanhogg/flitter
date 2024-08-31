@@ -68,7 +68,7 @@ class Vignette(Shader):
 
 class Adjust(Shader):
     DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('adjust.frag')
-    TONEMAP_FUNCTIONS = {'reinhard'}
+    TONEMAP_FUNCTIONS = {'reinhard', 'aces'}
 
     def render(self, node, **kwargs):
         tonemap = node.get('tonemap', 1, str)

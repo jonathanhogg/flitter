@@ -37,6 +37,8 @@ void main() {
 %     endif
 %     if tonemap_function == 'reinhard':
     col = tonemap_reinhard(col, whitepoint);
+%     elif tonemap_function:
+    col = tonemap_${tonemap_function}(col);
 %     endif
     color = vec4(col * merged.a, merged.a) * alpha;
 % else:

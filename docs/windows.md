@@ -641,19 +641,20 @@ of each pixel. Default is `0`.
 adjustments, Values less than 1 will lighten the output image and values
 greater than 1 will darken it.
 
-`tonemap=` [ `:reinhard` ]
+`tonemap=` [ `:aces` | `:reinhard` ]
 : If specified, then a tone-mapping function will be applied to map high
-luminance range images into the $[0,1]$ range. Currently, only the Reinhard
-curve is supported. Default is no tone-mapping.
+dynamic range images into the $[0,1]$ range. The supported tone-mapping
+functions are: (an approximation of) the ACES filmic curve, and the Reinhard
+curve. Default is no tone-mapping.
 
 If `tonemap=:reinhard` then an additional attribute is supported:
 
 `whitepoint=` *LUMINANCE*
-: The Reinhard curve has an infinite upper limit for input luminance and so no
-input luminance is able to result in a white output. If `whitepoint` is
-greater than `0` then tone-mapping will use a modified Reinhard curve that maps
-luminance values of `whitepoint` to a luminance of $1$. Default is `0`, i.e.,
-no curve modification.
+: If `whitepoint` is greater than `1` then the Reinhard curve will be modified
+to map input values at `whitepoint` to an output value of $1$. Input values
+greater than `whitepoint` will saturate. Values close to `1` will result in
+no tone-mapping, large values will result in the standard Reinhard curve.
+Default is `0`, i.e., no curve modification.
 
 The `!adjust` filter works in the following order:
 
