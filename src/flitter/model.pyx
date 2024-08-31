@@ -1146,10 +1146,14 @@ cdef Vector null_ = Vector()
 cdef Vector true_ = Vector(1)
 cdef Vector false_ = Vector(0)
 cdef Vector minusone_ = Vector(-1)
+cdef Vector inf_ = Vector(np.inf)
+cdef Vector nan_ = Vector(np.nan)
 
 null = null_
 true = true_
 false = false_
+inf = inf_
+nan = nan_
 
 
 cdef class Matrix33(Vector):

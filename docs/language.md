@@ -140,6 +140,23 @@ x;y+1 == x;(y+1)
 (x;y)+1 == (x+1);(y+1)
 ```
 
+### Named values
+
+`null`
+: The empty vector
+
+`true`
+: The value `1`
+
+`false`
+: The value `0`
+
+`inf`
+: The IEEE-754 floating-point infinity value
+
+`nan`
+: The IEEE-754 floating-point "not a number" value
+
 ### SI Prefixes
 
 **Flitter** supports adding an SI prefix to the end of a number. This is

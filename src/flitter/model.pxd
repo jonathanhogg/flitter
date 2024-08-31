@@ -70,6 +70,8 @@ cdef Vector null_
 cdef Vector true_
 cdef Vector false_
 cdef Vector minusone_
+cdef Vector inf_
+cdef Vector nan_
 
 
 cdef class Matrix33(Vector):

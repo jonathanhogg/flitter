@@ -144,6 +144,16 @@ let y=1 y''=y+1 y'''=y''+1
 !node' x'=3 y=:y'''' z='prime'
             """)
 
+    def test_named_values(self):
+        self.assertCodeOutput(
+            """
+!node values=null;true;false;inf;-inf;nan
+            """,
+            """
+!node values=1;0;inf;-inf;nan
+            """
+        )
+
     def test_let_only(self):
         self.assertCodeOutput("let x=5", "")
 

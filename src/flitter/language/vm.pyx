@@ -9,7 +9,7 @@ from loguru import logger
 from .. import name_patch
 from ..cache import SharedCache
 from .functions import STATIC_FUNCTIONS, DYNAMIC_FUNCTIONS
-from ..model cimport StateDict, null_, true_, false_
+from ..model cimport StateDict, null_, true_, false_, inf_, nan_
 from .noise import NOISE_FUNCTIONS
 
 from libc.math cimport floor as c_floor
@@ -48,6 +48,8 @@ cdef dict static_builtins = {
     'true': true_,
     'false': false_,
     'null': null_,
+    'inf': inf_,
+    'nan': nan_,
 }
 static_builtins.update(STATIC_FUNCTIONS)
 static_builtins.update(NOISE_FUNCTIONS)
