@@ -1,7 +1,5 @@
 ${HEADER}
 
-const vec3 greyscale = vec3(0.299, 0.587, 0.114);
-
 in vec3 world_position;
 in vec3 world_normal;
 in vec2 texture_uv;
@@ -38,7 +36,8 @@ uniform sampler2D ao_texture;
 uniform sampler2D emissive_texture;
 uniform sampler2D transparency_texture;
 
-<%include file="pbr_lighting.glsl"/>
+<%include file="color_functions.glsl"/>
+<%include file="lighting_functions.glsl"/>
 
 
 void main() {
@@ -61,7 +60,7 @@ void main() {
     float transparency = fragment_albedo.a;
     if (use_transparency_texture) {
         vec4 texture_color = texture(transparency_texture, texture_uv);
-        float mono = clamp(dot(texture_color.rgb, greyscale), 0.0, 1.0);
+        float mono = clamp(srgb_luminance(texture_color.rgb), 0.0, 1.0);
         transparency = transparency * (1.0 - clamp(texture_color.a, 0.0, 1.0)) + mono;
     }
     vec3 emissive = fragment_emissive.rgb;
@@ -74,19 +73,19 @@ void main() {
     float metal = fragment_properties.y;
     if (use_metal_texture) {
         vec4 texture_color = texture(metal_texture, texture_uv);
-        float mono = clamp(dot(texture_color.rgb, greyscale), 0.0, 1.0);
+        float mono = clamp(srgb_luminance(texture_color.rgb), 0.0, 1.0);
         metal = metal * (1.0 - clamp(texture_color.a, 0.0, 1.0)) + mono;
     }
     float roughness = fragment_properties.z;
     if (use_roughness_texture) {
         vec4 texture_color = texture(roughness_texture, texture_uv);
-        float mono = clamp(dot(texture_color.rgb, greyscale), 0.0, 1.0);
+        float mono = clamp(srgb_luminance(texture_color.rgb), 0.0, 1.0);
         roughness = roughness * (1.0 - clamp(texture_color.a, 0.0, 1.0)) + mono;
     }
     float ao = fragment_properties.w;
     if (use_ao_texture) {
         vec4 texture_color = texture(ao_texture, texture_uv);
-        float mono = clamp(dot(texture_color.rgb, greyscale), 0.0, 1.0);
+        float mono = clamp(srgb_luminance(texture_color.rgb), 0.0, 1.0);
         ao = ao * (1.0 - clamp(texture_color.a, 0.0, 1.0)) + mono;
     }
 
@@ -102,8 +101,7 @@ void main() {
     }
     vec3 final_color = mix(diffuse_color, fog_color, fog_alpha) * opacity + specular_color * (1.0 - fog_alpha);
     if (monochrome) {
-        float grey = dot(final_color, greyscale);
-        final_color = vec3(grey);
+        final_color = vec3(srgb_luminance(final_color.rgb));
     }
     fragment_color = vec4(final_color * tint, opacity);
 }

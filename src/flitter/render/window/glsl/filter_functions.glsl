@@ -16,7 +16,7 @@ vec4 filter_blur(sampler2D tex, vec2 coord, int radius, float sigma, vec2 delta)
     return color_sum / weight_sum;
 }
 
-vec4 filter_adjust(vec4 color, float exposure, float contrast, float brightness) {
+vec3 filter_adjust(vec3 color, float exposure, float contrast, float brightness) {
     float offset = brightness + (1.0 - contrast) / 2.0;
-    return vec4(max((color.rgb / color.a * pow(2.0, exposure) * contrast + offset) * color.a, 0.0), color.a);
+    return color * pow(2.0, exposure) * contrast + offset;
 }

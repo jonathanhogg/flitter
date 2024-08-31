@@ -40,7 +40,10 @@ void main() {
         }
 %     endif
         case ${passes - 4}: {
-            color = filter_adjust(texture(${'last' if passes == 5 else 'texture0'}, coord), exposure, contrast, brightness);
+            vec4 merged = texture(${'last' if passes == 5 else 'texture0'}, coord);
+            vec3 col = merged.a > 0.0 ? merged.rgb / merged.a : vec3(0.0);
+            col = filter_adjust(col, exposure, contrast, brightness);
+            color = vec4(col * merged.a, merged.a);
             break;
         }
         case ${passes - 3}: {

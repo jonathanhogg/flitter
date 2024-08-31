@@ -6,8 +6,8 @@ out vec4 color;
 uniform sampler2D ${name};
 % endfor
 
+<%include file="color_functions.glsl"/>
 <%include file="composite_functions.glsl"/>
-<%include file="colorspace_functions.glsl"/>
 
 void main() {
 % if child_textures:

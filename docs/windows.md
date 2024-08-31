@@ -292,10 +292,9 @@ the previous pass otherwise.
 
 `uniform sampler2D first`
 : If specified, this sampler allows access to the output of the *first pass* of
-the shader (`pass` equal to `0`). In the first pass this sampler is undefined,
-for the second pass it will be identical to `last`. Its utility comes in
-shaders with more than 2 passes, where it allows later passes to refer to the
-results of an initial processing step.
+the shader (`pass` equal to `0`). During the first pass, `first` will contain
+the output of the shader first pass from the last frame. Therefore, the `first`
+texture can be used to retain state between frames.
 
 In addition to these, the shader program may declare arbitrary numeric uniforms
 that can be set using attributes with matching names on the shader node.
@@ -611,13 +610,19 @@ fade-out will occur, default `0.25`.
 
 ### `!adjust`
 
-The `!adjust` node allows for basic color adjustments and takes the following
-attributes:
+The `!adjust` node applies color and luminance adjustments to the composited
+input. It supports the following attributes:
 
-`exposure=` *STOPS*
-: Specifies an exposure adjustment in stops. This defaults to `0`. An exposure
-adjustment of `1` will double the color value of each pixel, an adjustment of
-`-1` will half the value of each pixel.
+`color_matrix=` *MATRIX*
+: Specifies a 3x3 matrix as a 9-vector to multiply each pixel by. The matrix
+is given in column-major order, so the first 3 values are multiplied by the red
+channel, the second 3 by the green channel and the last 3 values by the blue
+channel. The resulting color will be the vector sum of the results. Default is
+the matrix `1;0;0;0;1;0;0;0;1`, i.e., no adjustment.
+
+`brightness=` *LEVEL*
+: Specifies a brightness adjustment to be added to the color channels of each
+pixel. Default is `0`.
 
 `contrast=` *MULTIPLIER*
 : Specifies a contrast adjustment as a multiplier. This defaults to `1`. A
@@ -626,18 +631,40 @@ midpoint, i.e., channels above 0.5 will become brighter and channels below 0.5
 will become darker. A contrast adjustment below 1 will compress the dynamic
 range around 0.5.
 
-`brightness=` *LEVEL*
-: Specifies an exposure adjustment in stops. This defaults to `0`. An exposure
-adjustment of `1` will double the color value of each pixel, an adjustment of
-`-1` will half the value of each pixel.
+`exposure=` *STOPS*
+: Specifies an exposure adjustment in stops. An exposure adjustment of `1` will
+double the color value of each pixel, an adjustment of `-1` will half the value
+of each pixel. Default is `0`.
 
-`color_matrix=` *MATRIX*
-: Specifies a 3x3 matrix as a 9-vector (column major order) to multiply by each
-color value.
+`gamma=` *GAMMA*
+: Specifies a gamma curve correction to be applied after other color
+adjustments, Values less than 1 will lighten the output image and values
+greater than 1 will darken it.
 
-These adjustments may be combined (e.g., adjusting contrast and brightness
-together). Note that color values may become greater than 1 with these
-adjustments, but will be clamped to zero to avoid negative values.
+`tonemap=` [ `:reinhard` ]
+: If specified, then a tone-mapping function will be applied to map high
+luminance range images into the $[0,1]$ range. Currently, only the Reinhard
+curve is supported. Default is no tone-mapping.
+
+If `tonemap=:reinhard` then an additional attribute is supported:
+
+`whitepoint=` *LUMINANCE*
+: The Reinhard curve has an infinite upper limit for input luminance and so no
+input luminance is able to result in a white output. If `whitepoint` is
+greater than `0` then tone-mapping will use a modified Reinhard curve that maps
+luminance values of `whitepoint` to a luminance of $1$. Default is `0`, i.e.,
+no curve modification.
+
+The `!adjust` filter works in the following order:
+
+- un-premultiply alpha
+- apply `color_matrix`
+- apply `exposure`
+- apply `brightness` and `contrast`
+- clamp negative values to zero
+- apply `gamma`
+- apply `tonemap`
+- pre-multiply alpha
 
 ### `!blur`
 
@@ -663,13 +690,14 @@ resource required to compute the blur.
 
 A `!bloom` filter creates a soft glow around bright parts of the image to
 recreate the bloom effect commonly produced by camera lenses. It works by
-applying a lightness adjustment to darken the entire image, then applies a
+applying an exposure adjustment to darken the entire image, then applies a
 Gaussian blur and finally composites this together with the original image
 with a *lighten* blend function.
 
-The filter supports the same attributes as [`!adjust`](#adjust) – except with
-`exposure` defaulting to `-1` – and [`!blur`](#blur). The `radius` attribute
-must be specified and greater than zero for a bloom to be applied.
+The filter supports the same `contrast`, `brightness` and `exposure` attributes
+as [`!adjust`](#adjust) – except with `exposure` defaulting to `-1` - and the
+same `radius` attribute as [`!blur`](#blur). The `radius` attribute must be
+specified and be greater than zero for any bloom to be applied.
 
 The default settings of the `!bloom` node assume that the input will contain
 high dynamic range values, i.e., pixels with channel values much larger than 1.

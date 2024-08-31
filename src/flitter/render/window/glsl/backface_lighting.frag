@@ -1,7 +1,5 @@
 ${HEADER}
 
-const vec3 greyscale = vec3(0.299, 0.587, 0.114);
-
 in vec3 world_position;
 in vec3 world_normal;
 in vec2 texture_uv;
@@ -24,7 +22,8 @@ uniform sampler2D albedo_texture;
 uniform sampler2D metal_texture;
 uniform sampler2D roughness_texture;
 
-<%include file="pbr_lighting.glsl"/>
+<%include file="color_functions.glsl"/>
+<%include file="lighting_functions.glsl"/>
 
 
 void main() {
@@ -49,13 +48,13 @@ void main() {
     float metal = fragment_properties.y;
     if (use_metal_texture) {
         vec4 texture_color = texture(metal_texture, texture_uv);
-        float mono = clamp(dot(texture_color.rgb, greyscale), 0.0, 1.0);
+        float mono = clamp(srgb_luminance(texture_color.rgb), 0.0, 1.0);
         metal = metal * (1.0 - clamp(texture_color.a, 0.0, 1.0)) + mono;
     }
     float roughness = fragment_properties.z;
     if (use_roughness_texture) {
         vec4 texture_color = texture(roughness_texture, texture_uv);
-        float mono = clamp(dot(texture_color.rgb, greyscale), 0.0, 1.0);
+        float mono = clamp(srgb_luminance(texture_color.rgb), 0.0, 1.0);
         roughness = roughness * (1.0 - clamp(texture_color.a, 0.0, 1.0)) + mono;
     }
 

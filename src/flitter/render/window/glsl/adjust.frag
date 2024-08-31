@@ -8,10 +8,14 @@ uniform float exposure;
 uniform float contrast;
 uniform float brightness;
 uniform mat3 color_matrix;
+% if tonemap_function == 'reinhard':
+uniform float whitepoint;
+% endif
 % for name in child_textures:
 uniform sampler2D ${name};
 % endfor
 
+<%include file="color_functions.glsl"/>
 <%include file="composite_functions.glsl"/>
 <%include file="filter_functions.glsl"/>
 
@@ -24,9 +28,17 @@ void main() {
     merged = composite_${composite}(texture(${name}, coord), merged);
 %         endif
 %     endfor
-    merged.rgb = color_matrix * merged.rgb;
-    merged = filter_adjust(merged, exposure, contrast, brightness);
-    color = gamma == 1.0 ? merged * alpha : pow(merged * alpha, vec4(gamma));
+    vec3 col = merged.a > 0.0 ? merged.rgb / merged.a : vec3(0.0);
+    col = color_matrix * col;
+    col = filter_adjust(col, exposure, contrast, brightness);
+    col = max(vec3(0.0), col);
+%     if gamma != 1:
+    col = pow(col, vec3(gamma));
+%     endif
+%     if tonemap_function == 'reinhard':
+    col = tonemap_reinhard(col, whitepoint);
+%     endif
+    color = vec4(col * merged.a, merged.a) * alpha;
 % else:
     color = vec4(0.0);
 % endif
