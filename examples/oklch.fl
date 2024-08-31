@@ -5,11 +5,12 @@ let M=50
 
 !window size=1080
     !record filename=OUTPUT
-        !canvas3d
-            !light color=0.5 direction=0;0;-1
-            !transform rotate_x=t/30 rotate_z=-t/12 scale=2.5
-                for c in ..M
-                    !transform translate=0;0;200*c/M-100
-                        for h in ..N
-                            !transform rotate_z=-h/N translate=0;50;0
-                                !sphere size=25 color=oklch(1;0.4*c/M;h/N)
+        !adjust tonemap=:aces
+            !canvas3d
+                !light color=1 direction=0;0;-1
+                !transform rotate_x=t/30 rotate_z=-t/12 scale=2.5
+                    for c in ..M
+                        !transform translate=0;0;200*c/M-100
+                            for h in ..N
+                                !transform rotate_z=-h/N translate=0;50;0
+                                    !sphere size=25 color=oklch(1;0.4*c/M;h/N)
