@@ -9,7 +9,6 @@ uniform vec2 translate;
 uniform float rotate;
 uniform vec2 size;
 uniform float alpha;
-uniform float gamma;
 uniform bool flip_x;
 uniform bool flip_y;
 % for name in child_textures:
@@ -31,7 +30,7 @@ void main() {
     merged = composite_${composite}(texture(${name}, point), merged);
 %         endif
 %     endfor
-    color = gamma == 1.0 ? merged * alpha : pow(merged * alpha, vec4(gamma));
+    color = merged * alpha;
 % else:
     color = vec4(0.0);
 % endif

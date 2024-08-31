@@ -5,7 +5,6 @@ const float Tau = 6.283185307179586231995926937088370323181152343750;
 in vec2 coord;
 out vec4 color;
 uniform float alpha;
-uniform float gamma;
 uniform vec2 size;
 uniform float delta;
 uniform float mixer;
@@ -37,7 +36,7 @@ void main() {
     last_coord -= translate * vec2(t, -t);
     float k = mixer > 0.0 ? pow(1.0/mixer, -t) : 0.0;
     merged = mix(merged * (1.0 + glow), clamp(texture(last, last_coord / size + 0.5), 0.0, 1.0), k);
-    color = gamma == 1.0 ? merged * alpha : pow(merged * alpha, vec4(gamma));
+    color = merged * alpha;
 % else:
     color = vec4(0.0);
 % endif

@@ -22,7 +22,7 @@ class EngineController:
 
     def __init__(self, target_fps=60, screen=0, fullscreen=False, vsync=False, state_file=None,
                  reset_on_switch=False, state_simplify_wait=0, realtime=True, defined_names=None, vm_stats=False,
-                 run_time=None, offscreen=False, window_gamma=1, disable_simplifier=False, opengl_es=False):
+                 run_time=None, offscreen=False, disable_simplifier=False, opengl_es=False):
         self.default_fps = target_fps
         self.target_fps = target_fps
         self.realtime = realtime
@@ -30,7 +30,6 @@ class EngineController:
         self.fullscreen = fullscreen
         self.vsync = vsync
         self.offscreen = offscreen
-        self.window_gamma = window_gamma
         self.opengl_es = opengl_es
         self.reset_on_switch = reset_on_switch
         self.disable_simplifier = disable_simplifier
@@ -172,7 +171,7 @@ class EngineController:
             run_program = current_program = errors = logs = None
             simplify_state_time = system_clock() + self.state_simplify_wait
             static = dict(self.defined_names)
-            static.update({'realtime': self.realtime, 'window_gamma': self.window_gamma, 'screen': self.screen, 'fullscreen': self.fullscreen,
+            static.update({'realtime': self.realtime, 'screen': self.screen, 'fullscreen': self.fullscreen,
                            'vsync': self.vsync, 'offscreen': self.offscreen, 'opengl_es': self.opengl_es, 'run_time': self.run_time})
             gc.disable()
             while self.run_time is None or int(round((frame_time - start_time) * self.target_fps)) < int(round(self.run_time * self.target_fps)):

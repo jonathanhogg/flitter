@@ -17,7 +17,7 @@ import numpy as np
 from ...clock import system_clock
 from .glconstants import GL_RGBA8, GL_RGBA16F, GL_RGBA32F
 from .glsl import TemplateLoader
-from ...model import Vector, false
+from ...model import Vector, true, false
 from ...plugins import get_plugin
 
 
@@ -313,8 +313,8 @@ class ProgramNode(WindowNode):
                         pass
                     elif name in kwargs and set_uniform_vector(member, Vector.coerce(kwargs[name])):
                         pass
-                    elif name in ('alpha', 'gamma'):
-                        member.value = 1
+                    elif name in 'alpha':
+                        set_uniform_vector(member, true)
                     else:
                         logger.trace("Unbound uniform: {}", name)
                         set_uniform_vector(member, false)
@@ -620,9 +620,8 @@ class Window(ProgramNode):
                 logger.debug("{} resized to {}x{}", self.name, width, height)
             self._last = None
 
-    def render(self, node, window_gamma=1, beat=None, **kwargs):
-        gamma = node.get('gamma', 1, float, window_gamma)
-        super().render(node, gamma=gamma, **kwargs)
+    def render(self, node, beat=None, **kwargs):
+        super().render(node, **kwargs)
         if self._visible:
             vsync = node.get('vsync', 1, bool, self.default_vsync)
             glfw.swap_interval(1 if vsync else 0)

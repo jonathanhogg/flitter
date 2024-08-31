@@ -225,11 +225,6 @@ all child nodes. It can be controlled with the following attributes:
 `composite=` [ `:over` | `:dest_over` | `:lighten` | `:darken` | `:add` | `:difference` | `:multiply` ]
 : Specifies the blend function to use, default `:over`.
 
-`gamma=` *ALPHA*
-: Specifies a gamma curve correction to be applied after compositing, default
-`1` (i.e., no correction). Values less than 1 will lighten the output image and
-values greater than 1 will darken it.
-
 `alpha=` *ALPHA*
 : Specifies a final alpha value to be applied to the entire shader output,
 default `1`.
@@ -284,11 +279,6 @@ to hit the target frame-rate.
 
 `uniform float alpha`
 : The value of the `alpha` attribute on the node or a default value of `1`.
-This is *not* automatically applied to the output of custom fragment shaders
-and must be implemented in the code if desired.
-
-`uniform float gamma`
-: The value of the `gamma` attribute on the node or a default value of `1`.
 This is *not* automatically applied to the output of custom fragment shaders
 and must be implemented in the code if desired.
 

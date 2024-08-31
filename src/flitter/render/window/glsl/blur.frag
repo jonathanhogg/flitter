@@ -3,7 +3,6 @@ ${HEADER}
 in vec2 coord;
 out vec4 color;
 uniform float alpha;
-uniform float gamma;
 uniform vec2 size;
 uniform int pass;
 uniform ivec2 radius;
@@ -40,7 +39,7 @@ void main() {
         }
         case ${passes - 1}: {
             vec4 blurred = filter_blur(last, coord, radius.y, float(radius.y) * sigma.y, vec2(0.0, 1.0) / size);
-            color = gamma == 1.0 ? blurred * alpha : pow(blurred * alpha, vec4(gamma));
+            color = blurred * alpha;
             break;
         }
     }

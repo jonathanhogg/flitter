@@ -3,7 +3,6 @@ ${HEADER}
 in vec2 coord;
 out vec4 color;
 uniform float alpha;
-uniform float gamma;
 uniform vec2 size;
 uniform int pass;
 uniform ivec2 radius;
@@ -54,7 +53,7 @@ void main() {
         }
         case ${passes - 1}: {
             vec4 merged = composite_lighten(texture(${'first' if passes == 5 else 'texture0'}, coord), texture(last, coord));
-            color = gamma == 1.0 ? merged * alpha : pow(merged * alpha, vec4(gamma));
+            color = merged * alpha;
             break;
         }
     }
