@@ -103,5 +103,10 @@ void main() {
     if (monochrome) {
         final_color = vec3(srgb_luminance(final_color.rgb));
     }
-    fragment_color = vec4(final_color * tint, opacity);
+    final_color *= tint;
+    if (any(isinf(final_color)) || any(isnan(final_color))) {
+        fragment_color = vec4(0.0);
+    } else {
+        fragment_color = vec4(final_color * tint, opacity);
+    }
 }
