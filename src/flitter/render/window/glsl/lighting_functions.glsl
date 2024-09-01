@@ -122,13 +122,25 @@ void compute_pbr_lighting(vec3 world_position, vec3 world_normal, vec3 view_dire
 
 
 const float Tau = 6.283185307179586231995926937088370323181152343750;
-const vec3 RANDOM_SCALE = vec3(443.897, 441.423, 0.0973);
 
-vec3 random3(vec3 p) {
-    p = fract(p * RANDOM_SCALE);
-    p += dot(p, p.yxz + 19.19);
-    return fract((p.xxy + p.yzz) * p.zyx);
+uint hash(uint state)
+{
+  state = state * 747796405u + 2891336453u;
+  state = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
+  return (state >> 22u) ^ state;
 }
+
+float random(inout uint state)
+{
+  state = hash(state);
+  return float(state) * uintBitsToFloat(0x2f800004u);
+}
+
+vec3 random3(inout uint state) {
+    return vec3(random(state), random(state), random(state));
+}
+
+const float MaxTranslucencySamples = 500.0;
 
 void compute_translucency(vec3 world_position, vec3 view_direction, float view_distance, mat4 pv_matrix, sampler2D backface_data,
                           vec3 albedo, float translucency, inout float opacity, inout vec3 color) {
@@ -139,16 +151,16 @@ void compute_translucency(vec3 world_position, vec3 view_direction, float view_d
     if (backface_distance > view_distance) {
         vec3 backface_position = view_position + view_direction*backface_distance;
         float thickness = backface_distance - view_distance;
-        float s = clamp(thickness / (translucency * 6.0), 0.0, 1.0);
+        float s = clamp(thickness / (translucency * 5.0), 0.05, 0.95);
         float k = thickness * s;
-        int n = 25 + int(300.0 * s * (1.0 - s));  // n = 25-100  =>  50-200 samples
+        int n = int(round(MaxTranslucencySamples * 2.0 * s * (1.0 - s)));
         int count = 1;
-        vec3 p = vec3(screen_coord, 0.0);
+        uvec2 size = uvec2(textureSize(backface_data, 0));
+        uvec2 p = uvec2(screen_coord * vec2(size));
+        uint seed = p.y * size.x + p.x;
         for (int i = 0; i < n; i++) {
-            vec3 radius = sqrt(-2.0 * log(random3(p))) * k;
-            p.z += 1.0;
-            vec3 theta = Tau * random3(p);
-            p.y += 1.0;
+            vec3 radius = sqrt(-2.0 * log(random3(seed))) * k;
+            vec3 theta = Tau * random3(seed);
             vec4 pos = pv_matrix * vec4(backface_position + sin(theta) * radius, 1.0);
             vec4 backface_sample = texture(backface_data, (pos.xy / pos.w + 1.0) / 2.0);
             if (backface_sample.w > view_distance) {
@@ -167,7 +179,7 @@ void compute_translucency(vec3 world_position, vec3 view_direction, float view_d
         k = thickness / translucency;
         float transmission = pow(0.5, k);
         color += backface.rgb * albedo * transmission * (1.0 - transmission);
-        opacity *= 1.0 - pow(transmission, 2.5);
+        opacity *= 1.0 - pow(transmission, 5.0);
     } else {
         opacity = 0.0;
     }
