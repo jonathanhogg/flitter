@@ -537,7 +537,7 @@ class Window(ProgramNode):
         self.glctx.extra['colorbits'] = colorbits
         self.glctx.extra['size'] = self.width, self.height
         if opengl_es:
-            self.glctx.extra['HEADER'] = "#version 300 es\nprecision highp float;\n"
+            self.glctx.extra['HEADER'] = "#version 300 es\nprecision highp float;\nprecision highp int;\n"
         else:
             self.glctx.extra['HEADER'] = "#version 330\n"
 
