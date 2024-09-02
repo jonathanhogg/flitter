@@ -98,9 +98,9 @@ class Bloom(Shader):
     def render(self, node, **kwargs):
         child_textures = self.child_textures
         if len(child_textures) > 1:
-            passes = 5
-        elif child_textures:
             passes = 4
+        elif child_textures:
+            passes = 3
         else:
             passes = 1
         super().render(node, passes=passes, radius=0, sigma=0.3, exposure=-1, contrast=1, brightness=0, repeat=(False, False), **kwargs)
@@ -112,9 +112,9 @@ class Edges(Shader):
     def render(self, node, **kwargs):
         child_textures = self.child_textures
         if len(child_textures) > 1:
-            passes = 4
-        elif child_textures:
             passes = 3
+        elif child_textures:
+            passes = 2
         else:
             passes = 1
         super().render(node, passes=passes, radius=0, sigma=0.3, repeat=(False, False), **kwargs)

@@ -26,7 +26,7 @@ uniform sampler2D ${name};
 void main() {
 % if passes > 1:
     switch (pass) {
-%     if passes == 5:
+%     if passes == 4:
         case 0: {
 %         for name in child_textures:
 %             if loop.index == 0:
@@ -39,23 +39,20 @@ void main() {
             break;
         }
 %     endif
-        case ${passes - 4}: {
+        case ${passes - 3}: {
             vec4 merged = texture(${'last' if passes == 5 else 'texture0'}, coord);
             vec3 col = merged.a > 0.0 ? merged.rgb / merged.a : vec3(0.0);
             col = filter_adjust(col, exposure, contrast, brightness);
             color = vec4(col * merged.a, merged.a);
             break;
         }
-        case ${passes - 3}: {
+        case ${passes - 2}: {
             color = filter_blur(last, coord, radius.x, float(radius.x) * sigma.x, vec2(1.0, 0.0) / size);
             break;
         }
-        case ${passes - 2}: {
-            color = filter_blur(last, coord, radius.y, float(radius.y) * sigma.y, vec2(0.0, 1.0) / size);
-            break;
-        }
         case ${passes - 1}: {
-            vec4 merged = composite_lighten(texture(${'first' if passes == 5 else 'texture0'}, coord), texture(last, coord));
+            vec4 blurred = filter_blur(last, coord, radius.y, float(radius.y) * sigma.y, vec2(0.0, 1.0) / size);
+            vec4 merged = composite_lighten(texture(${'first' if passes == 5 else 'texture0'}, coord), blurred);
             color = merged * alpha;
             break;
         }
