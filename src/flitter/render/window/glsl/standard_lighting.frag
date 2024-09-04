@@ -91,7 +91,9 @@ void main() {
 
     vec3 transmission_color = vec3(0.0);
     vec3 diffuse_color = vec3(0.0);
-    vec3 specular_color = emissive;
+    vec3 specular_color = vec3(0.0);
+
+    compute_emissive_lighting(world_normal, view_direction, emissive, specular_color);
     compute_pbr_lighting(world_position, world_normal, view_direction, ior, roughness, metal, ao, albedo, transmission_color, diffuse_color, specular_color);
 
     float opacity = 1.0 - transparency;
@@ -99,6 +101,7 @@ void main() {
         vec4 position = pv_matrix * vec4(world_position, 1);
         compute_translucency(world_position, view_direction, view_distance, pv_matrix, backface_data, albedo, translucency, opacity, specular_color);
     }
+
     vec3 final_color = mix(diffuse_color, fog_color, fog_alpha) * opacity + specular_color * (1.0 - fog_alpha);
     if (monochrome) {
         final_color = vec3(srgb_luminance(final_color.rgb));

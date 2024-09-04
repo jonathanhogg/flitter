@@ -542,7 +542,8 @@ value for most solid materials.
 
 `roughness=` `0`…`1`
 : Specifies the roughness of the material, where `0` is a perfectly shiny
-surface and `1` is completely matt.
+surface and `1` is completely matt. In practice, roughness values below about
+$0.25$ will result in *very* bright reflections.
 
 `ao=` `0`…`1`
 : Specifies an ambient occlusion level for the material. Ambient lights will be
@@ -562,7 +563,8 @@ transparent at all and `1` meaning fully transparent. **Flitter** does **not**
 support refraction, so objects will not appear realistically "glassy". Any
 transparency value greater than `0` will affect the [model render
 order](#instance-ordering). Transparency applies only to diffuse light scattered
-from the surface, specular reflections will be calculated as normal.
+from the surface, emissive lighting and specular reflections will be calculated
+as normal.
 
 `translucency=` *TRANSLUCENCY*
 : Specifies how translucent this material is as a distance (in the world
@@ -570,10 +572,31 @@ coordinate system) over which half of the light falling on the back faces of the
 object will pass through it. The default is `0`, meaning no translucency. At low
 levels of translucency, light will be scattered and will glow through the
 edges/thin-parts of objects. At higher levels of translucency light will be
-scattered less and the object will become more transparent. Setting this to
-non-zero both affects the [model render order](#instance-ordering) and also
-forces an additional render pass to determine the thickness of the object and
-the light falling on the back faces.
+scattered less and the object will become increasingly transparent. Setting this
+to non-zero both affects the [model render order](#instance-ordering) and forces
+an additional render pass to determine the thickness of the object and the light
+falling on the back faces.
+
+:::{note}
+For `emissive=`$c$, surface normal $\vec{N}$ and viewer direction $\vec{V}$,
+the surface emissive lighting color $e$ will be calculated with the formula:
+
+```{math}
+L = \textbf{luminosity}(c)
+```
+
+```{math}
+e = \begin{cases}
+c & L \le 1 \\
+{c \over L} + \left( {\vec{N} \cdot \vec{V}} \right)
+\left( {c - {c \over L}} \right) & L > 1
+\end{cases}
+```
+
+The intent is to introduce a directional component to emissive lighting that
+ensures bright surfaces retain some definition – rather than being uniformly
+lit – while still coloring the entire surface.
+:::
 
 ### Texture Mapping
 

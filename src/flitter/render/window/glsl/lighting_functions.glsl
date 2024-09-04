@@ -4,6 +4,18 @@ uniform lights_data {
     mat4 lights[${max_lights}];
 };
 
+void compute_emissive_lighting(vec3 world_normal, vec3 view_direction, vec3 emissive, inout vec3 specular_color) {
+    vec3 N = normalize(world_normal);
+    vec3 V = normalize(view_direction);
+    float l = srgb_luminance(emissive);
+    if (l > 1.0) {
+        vec3 base = emissive / l;
+        specular_color += base + (emissive - base) * dot(N, V);
+    } else {
+        specular_color += emissive;
+    }
+}
+
 void compute_pbr_lighting(vec3 world_position, vec3 world_normal, vec3 view_direction,
                           float ior, float roughness, float metal, float ao, vec3 albedo,
                           inout vec3 transmission_color, inout vec3 diffuse_color, inout vec3 specular_color) {
