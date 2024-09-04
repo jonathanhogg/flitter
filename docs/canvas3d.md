@@ -149,14 +149,14 @@ sorting. Generally this is only useful when combined with a blend function
 like `:add` or `:lighten`.
 
 `face_cull=` [ `true` | `false` ]
-: Turn off OpenGL face-culling for this render group if set to `true`, the
-default is `false`. All faces of models will be fed into the shader program in
-an arbitrary order.
+: Turn off OpenGL face-culling for this render group if set to `false`, the
+default is `true`. Model faces will be fed into the shader program in an
+arbitrary order.
 
 `cull_face=` [ `:back` | `:front` ]
-: Assuming face-culling is enabled with the attribute above, this specifies
-which faces of the models to cull. The default is `:back`, but specifying
-`:front` can be useful for special effects or for use with custom shaders.
+: Assuming face-culling is enabled, this specifies which faces of the models to
+cull. The default is `:back`, but specifying `:front` can be useful for special
+effects or for use with custom shaders.
 
 :::{note}
 Setting `cull_face=:front` is similar to, but **not** the same as inverting all
