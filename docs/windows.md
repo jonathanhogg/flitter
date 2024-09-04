@@ -706,6 +706,45 @@ This is common when lighting 3D scenes, but unusual in 2D drawings. For the
 latter it may be better to set `exposure=0` and use `contrast` values greater
 than *1* instead.
 
+### `!flare`
+
+A `!flare` filter attempts to emulate the tendency of optical lenses to produce
+artefacts in the image, including "starbursts" and "ghosts". The filter requires
+a high dynamic range input (such as output by `!canvas3d`). The filter accepts
+the following attributes:
+
+`upright_length=` *LENGTH*
+The length of the vertical/horizontal star lines from bright points, expressed
+as a multiple of half of the diagonal length of `size`. Larger values are more
+expensive to compute. Default is `0.5`.
+
+`diagonal_length=` *LENGTH*
+The length of the diagonal star lines from bright points, expressed as a
+multiple of half of the diagonal length of `size`. Larger values are more
+expensive to compute. Default is `0.25`.
+
+`threshold=` *L*
+A luminosity threshold over which a pixel is deemed to be "bright". Default is
+`1`.
+
+`ghosts=` *N*
+The number of lens ghosts to add, between `0` and `6`. The size, location and
+distortion of each ghost has been individually designed.
+
+`attenuation=` *ATTENUATION*
+How much to attenuate the ghosts from the brightness of the source. This is
+expressed as a power-of-2, so `1` means half the (linear) luminosity and `2`
+means one-quarter the luminosity. Default is `2`.
+
+`aberration=` *RATIO*
+How much chromatic aberration (separation into spectrum lines) the ghosts will
+exhibit. This is expressed as a multiple of an internally-defined reasonable
+value. The default is `1`, which will result in the designed amount of
+chromatic aberration. Values below `1` will result in tighter ghosts and `0`
+will turn off aberration completely (which has a slight performance benefit).
+Values above `1` may exhibit gaps forming between the 6 separate colors used
+to emulate true chromatic aberration.
+
 ### `!edges`
 
 The `!edges` node applies a simple edge-detection filter by blurring the input

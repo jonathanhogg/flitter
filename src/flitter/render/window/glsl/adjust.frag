@@ -15,7 +15,6 @@ uniform float whitepoint;
 uniform sampler2D ${name};
 % endfor
 
-<%include file="color_functions.glsl"/>
 <%include file="composite_functions.glsl"/>
 <%include file="filter_functions.glsl"/>
 

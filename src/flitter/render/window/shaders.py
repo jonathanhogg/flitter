@@ -127,6 +127,21 @@ class Feedback(Shader):
         super().render(node, mixer=0, timebase=1, glow=0, translate=0, scale=1, rotate=0, repeat=(False, False), **kwargs)
 
 
+class Flare(Shader):
+    DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('flare.frag')
+
+    def render(self, node, **kwargs):
+        child_textures = self.child_textures
+        if len(child_textures) > 1:
+            passes = 4
+        elif child_textures:
+            passes = 3
+        else:
+            passes = 1
+        super().render(node, passes=passes, upright_length=0.5, diagonal_length=0.25, ghosts=6,
+                       threshold=1, attenuation=2, aberration=1, **kwargs)
+
+
 class Noise(Shader):
     DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('noise.frag')
 
