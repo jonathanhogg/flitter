@@ -194,7 +194,7 @@ class ProgramNode(WindowNode):
         self._fragment_source = None
 
     def parent_finished(self):
-        if self.node_id is None and not self._retain_target and self._target is not None:
+        if not self._retain_target and self._target is not None:
             self._target.release()
             self._target = None
 
@@ -280,7 +280,7 @@ class ProgramNode(WindowNode):
         first_member = None
         size_member = None
         downsample_member = None
-        self._retain_target = False
+        self._retain_target = self.node_id is not None
         for name in self._program:
             member = self._program[name]
             if isinstance(member, moderngl.Uniform):
