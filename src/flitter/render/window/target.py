@@ -5,6 +5,7 @@ Flitter render targets
 from collections import namedtuple
 
 from loguru import logger
+import numpy as np
 
 from ...clock import system_clock
 from .glconstants import GL_RGBA8, GL_SRGB8_ALPHA8, GL_RGBA16F, GL_RGBA32F, GL_FRAMEBUFFER_SRGB
@@ -50,6 +51,7 @@ class RenderTarget:
         self.srgb = srgb
         self.has_depth = has_depth
         self.samples = samples
+        self._texture_data = None
         self._release_time = None
         format = COLOR_FORMATS[self.colorbits]
         gl_format = format.srgb_gl_format if self.srgb else format.gl_format
@@ -93,6 +95,14 @@ class RenderTarget:
         return self._image_texture
 
     @property
+    def texture_data(self):
+        if self._release_time is not None:
+            return None
+        if self._texture_data is None:
+            self._texture_data = np.ndarray((self.height, self.width, 4), 'float32', self._image_framebuffer.read(components=4, dtype='f4'))
+        return self._texture_data
+
+    @property
     def framebuffer(self):
         if self._release_time is not None:
             return None
@@ -111,6 +121,7 @@ class RenderTarget:
             self._glctx.disable_direct(GL_FRAMEBUFFER_SRGB)
         if self._image_framebuffer is not None:
             self._glctx.copy_framebuffer(self._image_framebuffer, self._render_framebuffer)
+        self._texture_data = None
 
     def depth_write(self, enabled):
         self._render_framebuffer.depth_mask = enabled
