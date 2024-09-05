@@ -1112,23 +1112,21 @@ class Canvas3D(WindowNode):
             for render_group in render_groups:
                 if render_group.instances:
                     render(self._primary_render_target, render_group, primary_camera, self.glctx, objects, references)
+        if primary_camera.id:
+            references[primary_camera.id] = self._primary_render_target
         cdef Camera camera
         while self._secondary_render_targets:
             self._secondary_render_targets.pop().release()
-        if references is not None:
-            for camera in cameras.values():
-                if camera.secondary and camera.id:
-                    if camera is not primary_camera:
-                        secondary_render_target = RenderTarget.get(self.glctx, camera.width, camera.height, camera.colorbits,
-                                                                   has_depth=True, samples=camera.samples)
-                        self._secondary_render_targets.append(secondary_render_target)
-                        with secondary_render_target:
-                            secondary_render_target.clear(camera.get_clear_color())
-                            for render_group in render_groups:
-                                if render_group.instances:
-                                    render(secondary_render_target, render_group, camera, self.glctx, objects, references)
-                        references[camera.id] = secondary_render_target
-                    else:
-                        references[camera.id] = self._primary_render_target
+        for camera in cameras.values():
+            if camera.secondary and camera.id and camera is not primary_camera:
+                secondary_render_target = RenderTarget.get(self.glctx, camera.width, camera.height, camera.colorbits,
+                                                           has_depth=True, samples=camera.samples)
+                self._secondary_render_targets.append(secondary_render_target)
+                with secondary_render_target:
+                    secondary_render_target.clear(camera.get_clear_color())
+                    for render_group in render_groups:
+                        if render_group.instances:
+                            render(secondary_render_target, render_group, camera, self.glctx, objects, references)
+                references[camera.id] = secondary_render_target
         self._total_duration += system_clock()
         self._total_count += 1
