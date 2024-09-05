@@ -4,17 +4,16 @@ Video window node
 
 from av.video.reformatter import VideoReformatter
 
-from . import COLOR_FORMATS
+from . import ProgramNode
 from ...cache import SharedCache
 from .glconstants import GL_SRGB8_ALPHA8
 from .glsl import TemplateLoader
-from .shaders import Shader
 
 
 Reformatter = VideoReformatter()
 
 
-class Video(Shader):
+class Video(ProgramNode):
     DEFAULT_VERTEX_SOURCE = TemplateLoader.get_template('video.vert')
     DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('video.frag')
 
@@ -26,7 +25,6 @@ class Video(Shader):
         self._frame1 = None
         self._frame0_texture = None
         self._frame1_texture = None
-        self._colorbits = None
 
     def release(self):
         if self._filename is not None:
@@ -37,7 +35,6 @@ class Video(Shader):
         self._frame1_texture = None
         self._frame0 = None
         self._frame1 = None
-        self._colorbits = None
         super().release()
 
     @property
@@ -47,11 +44,11 @@ class Video(Shader):
     def similar_to(self, node):
         return super().similar_to(node) and node.get('filename', 1, str) == self._filename
 
-    async def descend(self, engine, node, **kwargs):
+    async def descend(self, engine, node, references, **kwargs):
         # A video is a leaf node from the perspective of the OpenGL world
         pass
 
-    def render(self, node, **kwargs):
+    def render(self, node, references, **kwargs):
         self._filename = node.get('filename', 1, str)
         position = node.get('position', 1, float, 0)
         loop = node.get('loop', 1, bool, False)
@@ -64,9 +61,6 @@ class Video(Shader):
                                                                                   trim_start=trim_start, trim_end=trim_end, threading=self._threading)
         else:
             ratio, frame0, frame1 = 0, None, None
-        colorbits = node.get('colorbits', 1, int, self.glctx.extra['colorbits'])
-        if colorbits not in COLOR_FORMATS:
-            colorbits = self.glctx.extra['colorbits']
         if self._frame0_texture is not None and (frame0 is None or (frame0.width, frame0.height) != self._frame0_texture.size):
             self._frame0_texture = None
             self._frame1_texture = None
@@ -97,4 +91,4 @@ class Video(Shader):
             self._frame1_texture.write(memoryview(data))
             self._frame1 = frame1
         interpolate = node.get('interpolate', 1, bool, False)
-        super().render(node, frame_size=frame_size, aspect_mode=aspect, ratio=ratio if interpolate else 0, **kwargs)
+        super().render(node, references, frame_size=frame_size, aspect_mode=aspect, ratio=ratio if interpolate else 0, **kwargs)

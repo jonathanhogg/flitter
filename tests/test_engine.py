@@ -91,7 +91,7 @@ class TestRendering(unittest.TestCase):
                             in vec2 coord;
                             out vec4 color;
                             void main() {
-                                color = vec4(0, 1, 0, 1);
+                                color = vec4(0.0, 1.0, 0.0, 1.0);
                             }'''
 """, encoding='utf8', newline='\n')
         self.controller.load_page(self.script_path)

@@ -15,12 +15,13 @@ from libc.stdint cimport int32_t, int64_t
 from cpython.dict cimport PyDict_GetItem
 from cpython.object cimport PyObject
 
-from . import WindowNode, COLOR_FORMATS
+from . import WindowNode
 from ... import name_patch
 from ...clock import system_clock
 from .glsl import TemplateLoader
 from ...model cimport Node, Vector, Matrix44, Matrix33, Quaternion, null_, true_, false_
 from .models cimport Model, DefaultSegments, DefaultSnapAngle
+from .target import RenderTarget, COLOR_FORMATS
 from ...plugins import get_plugin
 
 
@@ -327,6 +328,17 @@ cdef class Camera:
         camera.pv_matrix = projection_matrix.mmul(camera.view_matrix)
         return camera
 
+    cdef Vector get_clear_color(self):
+        cdef Vector color
+        if self.fog_max > self.fog_min:
+            color = self.fog_color
+            if self.monochrome:
+                color = color.dot(Greyscale)
+            color = color.mul(self.tint).concat(true_)
+        else:
+            color = Zero4
+        return color
+
 
 cdef Matrix44 update_transform_matrix(Node node, Matrix44 transform_matrix):
     cdef str attribute
@@ -601,7 +613,7 @@ cdef inline double nearest_corner(Vector bounds, Matrix44 view_model_matrix):
     return min_d
 
 
-cdef void render(RenderTarget render_target, RenderGroup render_group, Camera camera, glctx, dict objects, dict references):
+cdef void render(render_target, RenderGroup render_group, Camera camera, glctx, dict objects, dict references):
     cdef list instances
     cdef cython.float[:, :] instances_data, lights_data
     cdef Material material
@@ -705,7 +717,6 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
         glctx.cull_face = 'front' if render_group.cull_front_face else 'back'
     glctx.enable(flags)
     render_group.set_blend(glctx)
-    render_target.use_main_buffer()
     for (model, textures), instances in render_group.instances.items():
         model.check_for_changes()
         bounds = model.get_bounds()
@@ -755,6 +766,7 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
                 k += 1
         dispatch_instances(glctx, objects, shader, model, k, instances_data, textures, references, base_unit_id)
 
+    cdef object backface_target = None
     if translucent_objects:
         if backface_data is not None:
             backface_shader = get_shader(glctx, shaders, names, StandardVertexTemplate, BackfaceFragmentTemplate)
@@ -769,7 +781,9 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
             glctx.cull_face = 'front'
             glctx.blend_equation = moderngl.FUNC_ADD
             glctx.blend_func = moderngl.ONE, moderngl.ZERO
-            render_target.use_auxiliary_buffer(glctx)
+            backface_target = RenderTarget.get(glctx, camera.width, camera.height, 16, has_depth=True)
+            backface_target.use()
+            backface_target.clear(Zero4)
             n = len(translucent_objects)
             if render_group.depth_sort and render_group.depth_test:
                 translucent_objects.sort(key=fst)
@@ -806,8 +820,9 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
             glctx.enable(flags)
             glctx.cull_face = 'front' if render_group.cull_front_face else 'back'
             render_group.set_blend(glctx)
-            render_target.use_main_buffer()
-            sampler = glctx.sampler(texture=render_target.auxiliary_image_texture, filter=(moderngl.NEAREST, moderngl.NEAREST))
+            backface_target.finish()
+            render_target.use()
+            sampler = glctx.sampler(texture=backface_target.texture, filter=(moderngl.NEAREST, moderngl.NEAREST))
             sampler.use(base_unit_id)
             backface_data.value = base_unit_id
             base_unit_id += 1
@@ -857,6 +872,8 @@ cdef void render(RenderTarget render_target, RenderGroup render_group, Camera ca
                 k = 0
         render_target.depth_write(True)
 
+    if backface_target is not None:
+        backface_target.release()
     glctx.disable(flags)
     for sampler in samplers:
         sampler.clear()
@@ -1018,125 +1035,24 @@ cdef void dispatch_instances(glctx, dict objects, shader, Model model, int count
         sampler.clear()
 
 
-cdef class RenderTarget:
-    cdef int width
-    cdef int height
-    cdef int colorbits
-    cdef int samples
-    cdef object image_texture
-    cdef object image_framebuffer
-    cdef object image_texture_data
-    cdef object color_renderbuffer
-    cdef object depth_renderbuffer
-    cdef object render_framebuffer
-    cdef object auxiliary_image_texture
-    cdef object auxiliary_depth_renderbuffer
-    cdef object auxiliary_framebuffer
-
-    @property
-    def framebuffer(self):
-        return self.image_framebuffer
-
-    @property
-    def texture(self):
-        return self.image_texture
-
-    @property
-    def texture_data(self):
-        if self.image_texture_data is None:
-            framebuffer = self.image_framebuffer or self.render_framebuffer
-            self.image_texture_data = np.ndarray((self.height, self.width, 4), 'float32', framebuffer.read(components=4, dtype='f4'))
-        return self.image_texture_data
-
-    cpdef void release(self):
-        self.width = 0
-        self.height = 0
-        self.colorbits = 0
-        self.samples = 0
-        self.image_texture = None
-        self.image_framebuffer = None
-        self.image_texture_data = None
-        self.color_renderbuffer = None
-        self.depth_renderbuffer = None
-        self.render_framebuffer = None
-        self.auxiliary_image_texture = None
-        self.auxiliary_depth_renderbuffer = None
-        self.auxiliary_framebuffer = None
-
-    cdef void prepare(self, glctx, Camera camera):
-        if self.render_framebuffer is None or self.width != camera.width or self.height != camera.height \
-                or self.colorbits != camera.colorbits or self.samples != camera.samples:
-            self.width = camera.width
-            self.height = camera.height
-            self.colorbits = camera.colorbits
-            self.samples = camera.samples
-            format = COLOR_FORMATS[self.colorbits]
-            self.image_texture = glctx.texture((self.width, self.height), 4, dtype=format.moderngl_dtype)
-            self.depth_renderbuffer = glctx.depth_renderbuffer((self.width, self.height), samples=self.samples)
-            if self.samples:
-                self.color_renderbuffer = glctx.renderbuffer((self.width, self.height), 4, samples=self.samples, dtype=format.moderngl_dtype)
-                self.render_framebuffer = glctx.framebuffer(color_attachments=(self.color_renderbuffer,), depth_attachment=self.depth_renderbuffer)
-                self.image_framebuffer = glctx.framebuffer(self.image_texture)
-                logger.debug("Created canvas3d {}x{} {}-bit render targets with {}x sampling", self.width, self.height, self.colorbits, self.samples)
-            else:
-                self.render_framebuffer = glctx.framebuffer(color_attachments=(self.image_texture,), depth_attachment=self.depth_renderbuffer)
-                logger.debug("Created canvas3d {}x{} {}-bit render targets", self.width, self.height, self.colorbits)
-            self.auxiliary_image_texture = None
-            self.auxiliary_depth_renderbuffer = None
-            self.auxiliary_framebuffer = None
-        cdef Vector clear_color
-        if camera.fog_max > camera.fog_min:
-            clear_color = camera.fog_color
-            if camera.monochrome:
-                clear_color = clear_color.dot(Greyscale)
-            clear_color = clear_color.mul(camera.tint).concat(true_)
-        else:
-            clear_color = Zero4
-        self.render_framebuffer.clear(*tuple(clear_color))
-        self.image_texture_data = None
-        glctx.extra['zero'].use(0)
-
-    cdef void use_main_buffer(self):
-        self.render_framebuffer.use()
-
-    cdef void use_auxiliary_buffer(self, glctx):
-        if self.auxiliary_framebuffer is None:
-            self.auxiliary_image_texture = glctx.texture((self.width, self.height), 4, dtype='f2')
-            self.auxiliary_depth_renderbuffer = glctx.depth_renderbuffer((self.width, self.height))
-            self.auxiliary_framebuffer = glctx.framebuffer(color_attachments=(self.auxiliary_image_texture,),
-                                                           depth_attachment=self.auxiliary_depth_renderbuffer)
-            logger.debug("Created canvas3d {}x{} auxiliary render target", self.width, self.height)
-        self.auxiliary_framebuffer.clear()
-        self.auxiliary_framebuffer.use()
-
-    cdef void finalize(self, glctx):
-        if self.image_framebuffer is not None:
-            glctx.copy_framebuffer(self.image_framebuffer, self.render_framebuffer)
-
-    cdef void depth_write(self, bint enabled):
-        self.render_framebuffer.depth_mask = enabled
-
-
 class Canvas3D(WindowNode):
     def __init__(self, glctx):
         super().__init__(glctx)
         self._primary_render_target = None
-        self._secondary_render_targets = {}
+        self._secondary_render_targets = []
         self._total_duration = 0
         self._total_count = 0
 
     @property
     def texture(self):
-        return (<RenderTarget>self._primary_render_target).texture if self._primary_render_target is not None else None
+        return self._primary_render_target.texture if self._primary_render_target is not None else None
 
     def release(self):
         if self._primary_render_target is not None:
             self._primary_render_target.release()
             self._primary_render_target = None
-        cdef RenderTarget render_target
-        for render_target in self._secondary_render_targets.values():
-            render_target.release()
-        self._secondary_render_targets = {}
+        while self._secondary_render_targets:
+            self._secondary_render_targets.pop().release()
 
     def purge(self):
         logger.info("{} draw stats - {:d} x {:.1f}ms = {:.1f}s", self.name, self._total_count,
@@ -1144,11 +1060,11 @@ class Canvas3D(WindowNode):
         self._total_duration = 0
         self._total_count = 0
 
-    async def descend(self, engine, node, **kwargs):
+    async def descend(self, engine, node, references, **kwargs):
         # A canvas3d is a leaf node from the perspective of the OpenGL world
         pass
 
-    def render(self, Node node, dict references=None, **kwargs):
+    def render(self, Node node, dict references, **kwargs):
         self._total_duration -= system_clock()
         cdef int width = self.width, height = self.height
         cdef dict objects = self.glctx.extra.setdefault('canvas3d_objects', {})
@@ -1186,39 +1102,33 @@ class Canvas3D(WindowNode):
         cameras[default_camera.id] = default_camera
         collect(node, transform_matrix, material, None, render_groups, default_camera, cameras, max_samples)
         cdef Camera primary_camera = cameras.get(node.get_str('camera_id', default_camera.id), default_camera)
-        if self._primary_render_target is None:
-            self._primary_render_target = RenderTarget.__new__(RenderTarget)
-        cdef RenderTarget primary_render_target = self._primary_render_target
-        primary_render_target.prepare(self.glctx, primary_camera)
+        if self._primary_render_target is not None:
+            self._primary_render_target.release()
+        self._primary_render_target = RenderTarget.get(self.glctx, primary_camera.width, primary_camera.height, primary_camera.colorbits,
+                                                       has_depth=True, samples=primary_camera.samples)
         cdef RenderGroup render_group
-        for render_group in render_groups:
-            if render_group.instances:
-                render(primary_render_target, render_group, primary_camera, self.glctx, objects, references)
-        primary_render_target.finalize(self.glctx)
+        with self._primary_render_target:
+            self._primary_render_target.clear(primary_camera.get_clear_color())
+            for render_group in render_groups:
+                if render_group.instances:
+                    render(self._primary_render_target, render_group, primary_camera, self.glctx, objects, references)
         cdef Camera camera
-        cdef RenderTarget secondary_render_target
-        cdef set unused_targets = set(self._secondary_render_targets)
+        while self._secondary_render_targets:
+            self._secondary_render_targets.pop().release()
         if references is not None:
             for camera in cameras.values():
                 if camera.secondary and camera.id:
                     if camera is not primary_camera:
-                        secondary_render_target = self._secondary_render_targets.get(camera.id)
-                        if secondary_render_target is None:
-                            secondary_render_target = RenderTarget.__new__(RenderTarget)
-                            self._secondary_render_targets[camera.id] = secondary_render_target
-                        else:
-                            unused_targets.remove(camera.id)
-                        secondary_render_target.prepare(self.glctx, camera)
-                        for render_group in render_groups:
-                            if render_group.instances:
-                                render(secondary_render_target, render_group, camera, self.glctx, objects, references)
-                        secondary_render_target.finalize(self.glctx)
+                        secondary_render_target = RenderTarget.get(self.glctx, camera.width, camera.height, camera.colorbits,
+                                                                   has_depth=True, samples=camera.samples)
+                        self._secondary_render_targets.append(secondary_render_target)
+                        with secondary_render_target:
+                            secondary_render_target.clear(camera.get_clear_color())
+                            for render_group in render_groups:
+                                if render_group.instances:
+                                    render(secondary_render_target, render_group, camera, self.glctx, objects, references)
                         references[camera.id] = secondary_render_target
                     else:
-                        references[camera.id] = primary_render_target
-        for camera_id in unused_targets:
-            secondary_render_target = self._secondary_render_targets[camera_id]
-            secondary_render_target.release()
-            del self._secondary_render_targets[camera_id]
+                        references[camera.id] = self._primary_render_target
         self._total_duration += system_clock()
         self._total_count += 1

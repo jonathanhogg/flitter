@@ -359,7 +359,7 @@ class CachePath:
             self.cleanup()
             if self._path.exists():
                 logger.warning("Existing image file will be overwritten: {}", self._path)
-            image = PIL.Image.frombytes('RGBA', (framebuffer.width, framebuffer.height), framebuffer.read(components=4))
+            image = PIL.Image.frombytes('RGBA', (framebuffer.width, framebuffer.height), framebuffer.read(components=4)).transpose(PIL.Image.FLIP_TOP_BOTTOM)
             encoder = registered_extensions[suffix]
             if not alpha or encoder not in ('PNG', 'TIFF', 'GIF', 'JPEG2000', 'WEBP'):
                 image = image.convert('RGB')
@@ -378,6 +378,7 @@ class CachePath:
     def write_video_frame(self, framebuffer, timestamp, codec='h264', pixfmt='yuv420p', fps=60, realtime=False,
                           crf=None, preset=None, limit=None, alpha=False):
         import av
+        import PIL.Image
         self._touched = system_clock()
         width, height = framebuffer.width, framebuffer.height
         key = 'video_output', width, height, alpha, codec, pixfmt, fps, crf, preset, limit
@@ -429,16 +430,8 @@ class CachePath:
                 writer.join()
                 self._cache[key] = None, None, start
                 return
-            frame = av.VideoFrame(width, height, 'rgba')
-            line_size = frame.planes[0].line_size
-            if line_size != width:
-                import numpy as np
-                data = np.ndarray((height, width*4), dtype='uint8', buffer=framebuffer.read(components=4))
-                array = np.empty((height, line_size), dtype='uint8')
-                array[:, :width*4] = data
-                frame.planes[0].update(array.data)
-            else:
-                frame.planes[0].update(framebuffer.read(components=4))
+            image = PIL.Image.frombytes('RGBA', (framebuffer.width, framebuffer.height), framebuffer.read(components=4)).transpose(PIL.Image.FLIP_TOP_BOTTOM)
+            frame = av.VideoFrame.from_image(image)
             frame.pts = frame_time
             try:
                 queue.put(frame, block=not realtime)

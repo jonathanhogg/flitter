@@ -58,7 +58,7 @@ vec3 filter_lens_ghost(sampler2D tex, vec2 coord, vec2 size, float distort, floa
 vec3 filter_lens_flare(sampler2D tex, vec2 coord, vec2 size, float threshold, float upright_length, float diagonal_length) {
     vec2 p = (coord - 0.5) * size;
     float th = atan(p.y, p.x);
-    float l = length(size) * 0.5;
+    float l = min(size.x, size.y) * 0.5;
     vec3 upright_color = vec3(0.0);
     float n = upright_length * l;
     if (n > 0.0) {

@@ -7,7 +7,7 @@ import PIL.Image
 
 from . import WindowNode
 from ...cache import SharedCache
-from .glconstants import GL_SRGB8_ALPHA8
+from .target import RenderTarget
 
 
 class Image(WindowNode):
@@ -15,21 +15,30 @@ class Image(WindowNode):
         super().__init__(glctx)
         self._filename = None
         self._image = None
-        self._texture = None
+        self._target = None
 
     def release(self):
+        self.width = None
+        self.height = None
         self._filename = None
         self._image = None
-        self._texture = None
+        if self._target is not None:
+            print('release')
+            self._target.release()
+            self._target = None
 
     @property
     def texture(self):
-        return self._texture
+        return self._target.texture if self._target is not None else None
 
-    async def update(self, engine, node, default_size=(512, 512), **kwargs):
-        references = kwargs.setdefault('references', {})
-        if node_id := node.get('id', 1, str):
-            references[node_id] = self
+    @property
+    def texture_data(self):
+        return self._target.texture_data if self._target is not None else None
+
+    async def update(self, engine, node, references, **kwargs):
+        self.node_id = node.get('id', 1, str)
+        if self.node_id is not None:
+            references[self.node_id] = self
         self.hidden = node.get('hidden', 1, bool, False)
         self.tags = node.tags
         filename = node.get('filename', 1, str)
@@ -41,19 +50,26 @@ class Image(WindowNode):
         if filename != self._filename or (size and size != [self.width, self.height]):
             self.release()
             self._filename = filename
-            self.width = None
-            self.height = None
         if self._filename is not None:
             image = SharedCache[filename].read_pil_image()
             if image is not self._image:
                 self._image = image
-                if size and size != [image.width, image.height]:
-                    image = image.resize(size, PIL.Image.Resampling.BILINEAR)
-                    logger.debug("Resized {} to {}x{}", self._filename, *size)
-                self.width = image.width
-                self.height = image.height
-                self._texture = self.glctx.texture((self.width, self.height), 4, internal_format=GL_SRGB8_ALPHA8)
-                self._texture.write(image.transpose(PIL.Image.FLIP_TOP_BOTTOM).convert('RGBA').convert('RGBa').tobytes())
+                if self._target is not None:
+                    self._target.release()
+                    self._target = None
+                if image is not None:
+                    if size and size != [image.width, image.height]:
+                        image = image.resize(size, PIL.Image.Resampling.BILINEAR)
+                        logger.debug("Resized {} to {}x{}", self._filename, *size)
+                    self.width = image.width
+                    self.height = image.height
+                    image = image.transpose(PIL.Image.FLIP_TOP_BOTTOM).convert('RGBA').convert('RGBa')
+                    self._target = RenderTarget.get(self.glctx, self.width, self.height, 8, srgb=True)
+                    self._target.texture.write(image.tobytes())
+
+    async def descend(self, engine, node, references, **kwargs):
+        # An image is a leaf node from the perspective of the OpenGL world
+        pass
 
     def similar_to(self, node):
-        return super().similar_to(node) and node.get('filename', 1, str) == self._filename
+        return super().similar_to(node) and (node.get('filename', 1, str) == self._filename or node.get('id', 1, str) == self.node_id)

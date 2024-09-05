@@ -4,7 +4,6 @@ Flitter window management
 
 import array
 import ctypes
-from collections import namedtuple
 import os
 import sys
 
@@ -12,11 +11,10 @@ import glfw
 from loguru import logger
 from mako.template import Template
 import moderngl
-import numpy as np
 
 from ...clock import system_clock
-from .glconstants import GL_RGBA8, GL_RGBA16F, GL_RGBA32F
 from .glsl import TemplateLoader
+from .target import RenderTarget, COLOR_FORMATS
 from ...model import Vector, true, false
 from ...plugins import get_plugin
 
@@ -38,14 +36,6 @@ def set_uniform_vector(uniform, vector):
     return False
 
 
-ColorFormat = namedtuple('ColorFormat', ('moderngl_dtype', 'gl_format'))
-
-COLOR_FORMATS = {
-    8: ColorFormat('f1', GL_RGBA8),
-    16: ColorFormat('f2', GL_RGBA16F),
-    32: ColorFormat('f4', GL_RGBA32F)
-}
-
 RESERVED_NAMES = {'fragment', 'vertex', 'loop', 'context', 'UNDEFINED'}
 DEFAULT_LINEAR = False
 DEFAULT_COLORBITS = 16
@@ -61,11 +51,12 @@ class WindowNode:
     def __init__(self, glctx):
         self.glctx = glctx
         self.children = []
+        self.node_id = None
         self.width = None
         self.height = None
         self.tags = set()
         self.hidden = False
-        self._texture_data = None
+        self._target = None
 
     @property
     def name(self):
@@ -77,13 +68,11 @@ class WindowNode:
 
     @property
     def texture(self):
-        raise None
+        raise NotImplementedError()
 
     @property
     def texture_data(self):
-        if self._texture_data is None and (framebuffer := self.framebuffer) is not None:
-            self._texture_data = np.ndarray((framebuffer.height, framebuffer.width, 4), 'float32', framebuffer.read(components=4, dtype='f4'))
-        return self._texture_data
+        raise NotImplementedError()
 
     @property
     def child_textures(self):
@@ -104,11 +93,10 @@ class WindowNode:
         while self.children:
             self.children.pop().destroy()
 
-    async def update(self, engine, node, default_size=(512, 512), **kwargs):
-        self._texture_data = None
-        references = kwargs.setdefault('references', {})
-        if node_id := node.get('id', 1, str):
-            references[node_id] = self
+    async def update(self, engine, node, references, *, default_size=(512, 512), **kwargs):
+        self.node_id = node.get('id', 1, str)
+        if self.node_id is not None:
+            references[self.node_id] = self
         self.hidden = node.get('hidden', 1, bool, False)
         resized = False
         width, height = node.get('size', 2, int, default_size)
@@ -117,14 +105,16 @@ class WindowNode:
             self.height = height
             resized = True
         self.tags = node.tags
-        self.create(engine, node, resized, **kwargs)
-        await self.descend(engine, node, **kwargs)
-        self.render(node, **kwargs)
+        self.create(engine, node, resized, default_size=(self.width, self.height), **kwargs)
+        await self.descend(engine, node, references, default_size=(self.width, self.height), **kwargs)
+        self.render(node, references, **kwargs)
+        for child in self.children:
+            child.parent_finished()
 
     def similar_to(self, node):
         return node.tags == self.tags
 
-    async def descend(self, engine, node, **kwargs):
+    async def descend(self, engine, node, references, **kwargs):
         existing = self.children
         updated = []
         for child in node.children:
@@ -138,7 +128,7 @@ class WindowNode:
                         break
                 else:
                     scene_node = cls(self.glctx)
-                await scene_node.update(engine, child, default_size=(self.width, self.height), **kwargs)
+                await scene_node.update(engine, child, references, **kwargs)
                 updated.append(scene_node)
         while existing:
             existing.pop().destroy()
@@ -150,11 +140,14 @@ class WindowNode:
     def create(self, engine, node, resized, **kwargs):
         pass
 
-    def render(self, node, **kwargs):
+    def render(self, node, references, **kwargs):
         raise NotImplementedError()
 
+    def parent_finished(self):
+        pass
+
     def release(self):
-        raise NotImplementedError()
+        pass
 
 
 class Reference(WindowNode):
@@ -170,9 +163,9 @@ class Reference(WindowNode):
     def texture(self):
         return self._reference.texture if self._reference is not None else None
 
-    async def update(self, engine, node, references=None, **kwargs):
+    async def update(self, engine, node, references, **kwargs):
         node_id = node.get('id', 1, str)
-        self._reference = references.get(node_id) if references is not None and node_id else None
+        self._reference = references.get(node_id) if node_id else None
 
     def destroy(self):
         self._reference = None
@@ -181,7 +174,6 @@ class Reference(WindowNode):
 class ProgramNode(WindowNode):
     DEFAULT_VERTEX_SOURCE = TemplateLoader.get_template('default.vert')
     DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('default.frag')
-    CLEAR_COLOR = (0, 0, 0, 0)
 
     def __init__(self, glctx):
         super().__init__(glctx)
@@ -189,30 +181,34 @@ class ProgramNode(WindowNode):
         self._rectangle = None
         self._vertex_source = None
         self._fragment_source = None
-        self._last = None
-        self._first = None
-        self._last_framebuffer = None
-        self._first_framebuffer = None
+        self._target = None
+        self._retain_target = False
 
     def release(self):
+        if self._target is not None:
+            self._target.release()
+        self._target = None
         self._program = None
         self._rectangle = None
         self._vertex_source = None
         self._fragment_source = None
-        self._last = None
-        self._first = None
-        self._last_framebuffer = None
-        self._first_framebuffer = None
+
+    def parent_finished(self):
+        if self.node_id is None and not self._retain_target and self._target is not None:
+            self._target.release()
+            self._target = None
 
     @property
     def size(self):
-        return self.framebuffer.size
+        return self.width, self.height
 
-    def create(self, engine, node, resized, **kwargs):
-        super().create(engine, node, resized, **kwargs)
-        if resized and (self._last is not None or self._first is not None):
-            self._last = None
-            self._first = None
+    @property
+    def texture(self):
+        return self._target.texture if self._target is not None else None
+
+    @property
+    def texture_data(self):
+        return self._target.texture_data if self._target is not None else None
 
     def get_vertex_source(self, node, **defaults):
         vertex = Template(node.get('vertex', 1, str), lookup=TemplateLoader) if 'vertex' in node else self.DEFAULT_VERTEX_SOURCE
@@ -233,9 +229,6 @@ class ProgramNode(WindowNode):
         names['child_textures'] = list(self.child_textures)
         names['HEADER'] = self.glctx.extra['HEADER']
         return fragment.render(**names).strip()
-
-    def make_secondary_texture(self):
-        raise NotImplementedError()
 
     def compile(self, node, **kwargs):
         vertex_source = self.get_vertex_source(node, **kwargs)
@@ -260,79 +253,110 @@ class ProgramNode(WindowNode):
                 end = system_clock()
                 logger.debug("{} GL program compiled in {:.1f}ms", self.name, 1000 * (end - start))
 
-    def render(self, node, composite='over', passes=1, border=None, repeat=None, **kwargs):
+    def render(self, node, references, *, srgb=False, colorbits=None, composite='over', passes=1, downsample=2, downsample_passes=(),
+               border=None, repeat=None, **kwargs):
         composite = node.get('composite', 1, str, node.get('blend', 1, str, composite))
         passes = max(1, node.get('passes', 1, int, passes))
+        downsample = max(1, node.get('downsample', 1, int, downsample))
+        downsample_passes = set(node.get('downsample_passes', 0, int, downsample_passes))
+        colorbits = node.get('colorbits', 1, int, self.glctx.extra['colorbits'] if colorbits is None else colorbits)
         self.compile(node, passes=passes, composite=composite, **kwargs)
-        if self._rectangle is not None:
-            border = node.get('border', 4, float, border)
-            repeat = node.get('repeat', 2, bool, repeat)
-            if border is not None:
-                sampler_args = {'border_color': tuple(border)}
-            elif repeat is not None:
-                sampler_args = {'repeat_x': repeat[0], 'repeat_y': repeat[1]}
+        if self._rectangle is None:
+            return
+        border = node.get('border', 4, float, border)
+        repeat = node.get('repeat', 2, bool, repeat)
+        if border is not None:
+            sampler_args = {'border_color': tuple(border)}
+        elif repeat is not None:
+            sampler_args = {'repeat_x': repeat[0], 'repeat_y': repeat[1]}
+        else:
+            sampler_args = {'border_color': (0, 0, 0, 0)}
+        child_textures = self.child_textures
+        samplers = []
+        self.glctx.extra['zero'].use(0)
+        unit = 1
+        pass_member = None
+        last_member = None
+        first_member = None
+        size_member = None
+        downsample_member = None
+        self._retain_target = False
+        for name in self._program:
+            member = self._program[name]
+            if isinstance(member, moderngl.Uniform):
+                if name == 'last':
+                    self._retain_target = True
+                    last_member = member
+                    last_member.value = 0
+                elif name == 'first':
+                    first_member = member
+                    first_member.value = 0
+                elif name == 'pass':
+                    pass_member = member
+                elif name == 'size':
+                    size_member = member
+                elif name == 'downsample':
+                    downsample_member = member
+                elif name in child_textures:
+                    sampler = self.glctx.sampler(texture=child_textures[name], **sampler_args)
+                    sampler.use(location=unit)
+                    samplers.append(sampler)
+                    member.value = unit
+                    unit += 1
+                elif name in node and set_uniform_vector(member, node[name]):
+                    pass
+                elif name in kwargs and set_uniform_vector(member, Vector.coerce(kwargs[name])):
+                    pass
+                elif name in 'alpha':
+                    set_uniform_vector(member, true)
+                else:
+                    logger.trace("Unbound uniform: {}", name)
+                    set_uniform_vector(member, false)
+        self.glctx.enable(moderngl.BLEND)
+        self.glctx.blend_func = moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA
+        last = self._target
+        last_sampler = None
+        first_sampler = None
+        first = None
+        for pass_number in range(passes):
+            if pass_member is not None:
+                pass_member.value = pass_number
+            if last_member is not None and last is not None:
+                last_sampler = self.glctx.sampler(texture=last.texture, **sampler_args)
+                last_sampler.use(location=unit)
+                last_member.value = unit
+            if first_member is not None and pass_number == 1:
+                first_sampler = self.glctx.sampler(texture=first.texture, **sampler_args)
+                first_sampler.use(location=unit+1)
+                first_member.value = unit+1
+            if pass_number in downsample_passes:
+                target = RenderTarget.get(self.glctx, self.width//downsample, self.height//downsample, colorbits, srgb=srgb)
+                if downsample_member is not None:
+                    downsample_member.value = downsample
             else:
-                sampler_args = {'border_color': (0, 0, 0, 0)}
-            child_textures = self.child_textures
-            samplers = []
-            self.glctx.extra['zero'].use(0)
-            unit = 1
-            pass_member = None
-            for name in self._program:
-                member = self._program[name]
-                if isinstance(member, moderngl.Uniform):
-                    if name == 'last':
-                        if self._last is None:
-                            self._last = self.make_secondary_texture()
-                            self._last_framebuffer = self.glctx.framebuffer(color_attachments=(self._last,))
-                        sampler = self.glctx.sampler(texture=self._last, **sampler_args)
-                        sampler.use(location=unit)
-                        samplers.append(sampler)
-                        member.value = unit
-                        unit += 1
-                    elif name == 'first':
-                        if self._first is None:
-                            self._first = self.make_secondary_texture()
-                            self._first_framebuffer = self.glctx.framebuffer(color_attachments=(self._first,))
-                        sampler = self.glctx.sampler(texture=self._first, **sampler_args)
-                        sampler.use(location=unit)
-                        samplers.append(sampler)
-                        member.value = unit
-                        unit += 1
-                    elif name in child_textures:
-                        sampler = self.glctx.sampler(texture=child_textures[name], **sampler_args)
-                        sampler.use(location=unit)
-                        samplers.append(sampler)
-                        member.value = unit
-                        unit += 1
-                    elif name == 'size':
-                        member.value = self.size
-                    elif name == 'pass':
-                        pass_member = member
-                    elif name in node and set_uniform_vector(member, node[name]):
-                        pass
-                    elif name in kwargs and set_uniform_vector(member, Vector.coerce(kwargs[name])):
-                        pass
-                    elif name in 'alpha':
-                        set_uniform_vector(member, true)
-                    else:
-                        logger.trace("Unbound uniform: {}", name)
-                        set_uniform_vector(member, false)
-            self.glctx.enable(moderngl.BLEND)
-            self.glctx.blend_func = moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA
-            self.framebuffer.use()
-            for pass_number in range(passes):
-                if self._last is not None:
-                    self.glctx.copy_framebuffer(self._last_framebuffer, self.framebuffer)
-                if self._first is not None and pass_number == 1:
-                    self.glctx.copy_framebuffer(self._first_framebuffer, self.framebuffer)
-                if pass_member is not None:
-                    pass_member.value = pass_number
-                self.framebuffer.clear(*self.CLEAR_COLOR)
+                target = RenderTarget.get(self.glctx, self.width, self.height, colorbits, srgb=srgb)
+                if downsample_member is not None:
+                    downsample_member.value = 1
+            if size_member is not None:
+                size_member.value = target.size
+            with target:
+                target.clear()
                 self._rectangle.render()
-            self.glctx.disable(moderngl.BLEND)
-            for sampler in samplers:
-                sampler.clear()
+            if first_member is not None and pass_number == 0:
+                first = target
+            if last is not None and last is not first:
+                last.release()
+            last = target
+            if last_sampler is not None:
+                last_sampler.clear()
+        if first_sampler is not None:
+            first_sampler.clear()
+        self._target = last
+        if first is not None and first is not last:
+            first.release()
+        for sampler in samplers:
+            sampler.clear()
+        self.glctx.disable(moderngl.BLEND)
 
 
 class GLFWLoader:
@@ -395,8 +419,7 @@ class GLFWLoader:
 
 
 class Window(ProgramNode):
-    DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('window.frag')
-    CLEAR_COLOR = (0, 0, 0, 1)
+    WINDOW_FRAGMENT_SOURCE = TemplateLoader.get_template('window.frag')
     Windows = []
 
     def __init__(self, screen=0, fullscreen=False, vsync=False, offscreen=False, **kwargs):
@@ -414,8 +437,10 @@ class Window(ProgramNode):
         self._beat = None
 
     def release(self):
+        super().release()
         if self.glctx is not None:
             self.glctx.finish()
+            RenderTarget.empty_pool(self.glctx)
             self.glctx.extra.clear()
             if count := self.glctx.gc():
                 logger.trace("Window release collected {} OpenGL objects", count)
@@ -429,22 +454,9 @@ class Window(ProgramNode):
             logger.debug("{} closed", self.name)
             self.window = None
         self.engine = None
-        super().release()
 
-    @property
-    def texture(self):
-        return None
-
-    @property
-    def framebuffer(self):
-        return self.glctx.screen
-
-    @property
-    def size(self):
-        return self.glctx.screen.viewport[2:]
-
-    def create(self, engine, node, resized, opengl_es, **kwargs):
-        super().create(engine, node, resized)
+    def create(self, engine, node, resized, *, opengl_es=False, **kwargs):
+        super().create(engine, node, resized, opengl_es=opengl_es, **kwargs)
         new_window = False
         screen = node.get('screen', 1, int, self.default_screen)
         fullscreen = node.get('fullscreen', 1, bool, self.default_fullscreen) if self._visible else False
@@ -527,19 +539,23 @@ class Window(ProgramNode):
                 glfw.set_mouse_button_callback(self.window, self.pointer_button_callback)
             zero = self.glctx.texture((1, 1), 4, dtype='f1')
             zero.write(bytes([0, 0, 0, 0]))
-            self.glctx.extra = {'zero': zero}
+            if opengl_es:
+                header = "#version 300 es\nprecision highp float;\nprecision highp int;\n"
+            else:
+                header = "#version 330\n"
+            self.glctx.extra = {'zero': zero, 'HEADER': header}
+            vertex_source = self.DEFAULT_VERTEX_SOURCE.render(HEADER=header)
+            fragment_source = self.WINDOW_FRAGMENT_SOURCE.render(HEADER=header)
+            self._window_program = self.glctx.program(vertex_shader=vertex_source, fragment_shader=fragment_source)
+            vertices = self.glctx.buffer(array.array('f', [-1, 1, -1, -1, 1, 1, 1, -1]))
+            self._window_rectangle = self.glctx.vertex_array(self._window_program, [(vertices, '2f', 'position')], mode=moderngl.TRIANGLE_STRIP)
         if self._visible:
             self.recalculate_viewport(new_window)
-        self.glctx.extra['linear'] = node.get('linear', 1, bool, DEFAULT_LINEAR)
         colorbits = node.get('colorbits', 1, int, DEFAULT_COLORBITS)
         if colorbits not in COLOR_FORMATS:
             colorbits = DEFAULT_COLORBITS
         self.glctx.extra['colorbits'] = colorbits
         self.glctx.extra['size'] = self.width, self.height
-        if opengl_es:
-            self.glctx.extra['HEADER'] = "#version 300 es\nprecision highp float;\nprecision highp int;\n"
-        else:
-            self.glctx.extra['HEADER'] = "#version 330\n"
 
     def key_callback(self, window, key, scancode, action, mods):
         if key in self._keys:
@@ -620,14 +636,21 @@ class Window(ProgramNode):
                 logger.debug("{} resized to {}x{}", self.name, width, height)
             self._last = None
 
-    def render(self, node, beat=None, **kwargs):
-        super().render(node, **kwargs)
+    def render(self, node, references, beat=None, **kwargs):
+        super().render(node, references, **kwargs)
         if self._visible:
+            self.glctx.screen.use()
+            self.glctx.screen.clear(0, 0, 0, 1)
+            self._target.texture.use(1)
+            self._window_program['target'] = 1
+            self._window_rectangle.render()
             vsync = node.get('vsync', 1, bool, self.default_vsync)
             glfw.swap_interval(1 if vsync else 0)
             glfw.swap_buffers(self.window)
+            self.parent_finished()
         self._beat = beat
         glfw.poll_events()
+        RenderTarget.empty_pool(self.glctx, 1)
         if count := self.glctx.gc():
             logger.trace("Collected {} OpenGL objects", count)
 
@@ -639,6 +662,3 @@ class Window(ProgramNode):
 class Offscreen(Window):
     def __init__(self, offscreen=False, **kwargs):
         super().__init__(offscreen=True, **kwargs)
-
-    def render(self, node, **kwargs):
-        pass

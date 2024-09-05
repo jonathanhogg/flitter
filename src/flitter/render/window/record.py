@@ -4,43 +4,12 @@ Record window node
 
 from . import ProgramNode
 from ...cache import SharedCache
-from .glconstants import GL_SRGB8_ALPHA8, GL_FRAMEBUFFER_SRGB
-from .glsl import TemplateLoader
 
 
 class Record(ProgramNode):
-    DEFAULT_VERTEX_SOURCE = TemplateLoader.get_template('video.vert')
-
-    def __init__(self, glctx):
-        super().__init__(glctx)
-        self._framebuffer = None
-        self._texture = None
-
-    @property
-    def texture(self):
-        return self.children[0].texture if len(self.children) == 1 else None
-
-    @property
-    def framebuffer(self):
-        return self._framebuffer
-
-    def release(self):
-        self._framebuffer = None
-        self._texture = None
-        super().release()
-
-    def create(self, engine, node, resized, **kwargs):
-        super().create(engine, node, resized, **kwargs)
-        if self._framebuffer is None or self._texture is None or resized:
-            self._last = None
-            self._texture = self.glctx.texture((self.width, self.height), 4, dtype='f1', internal_format=GL_SRGB8_ALPHA8)
-            self._framebuffer = self.glctx.framebuffer(color_attachments=(self._texture,))
-
-    def render(self, node, time, fps, realtime, **kwargs):
+    def render(self, node, references, *, time=None, fps=None, realtime=None, **kwargs):
+        super().render(node, references, srgb=True, colorbits=8, **kwargs)
         if filename := node.get('filename', 1, str):
-            self.glctx.enable_direct(GL_FRAMEBUFFER_SRGB)
-            super().render(node, **kwargs)
-            self.glctx.disable_direct(GL_FRAMEBUFFER_SRGB)
             path = SharedCache[filename]
             ext = path.suffix.lower()
             codec = node.get('codec', 1, str, 'h264')
@@ -50,8 +19,8 @@ class Record(ProgramNode):
                 crf = node.get('crf', 1, int)
                 preset = node.get('preset', 1, str)
                 limit = node.get('limit', 1, float)
-                path.write_video_frame(self._framebuffer, time, fps=int(fps), realtime=realtime, codec=codec,
+                path.write_video_frame(self._target.framebuffer, time, fps=int(fps), realtime=realtime, codec=codec,
                                        pixfmt=pixfmt, crf=crf, preset=preset, limit=limit, alpha=keep_alpha)
             else:
                 quality = node.get('quality', 1, int)
-                path.write_image(self._framebuffer, quality=quality, alpha=keep_alpha)
+                path.write_image(self._target.framebuffer, quality=quality, alpha=keep_alpha)

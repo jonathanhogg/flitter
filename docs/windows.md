@@ -113,17 +113,12 @@ to behave as `!offscreen` nodes with the `--offscreen` [command-line
 option](install,md#running-flitter). This can be useful for running tests
 or for saving output to files without opening a window.
 
-`!window` and `!offscreen` nodes support the following specific attributes:
-
-`linear=` [ `true` | `false` ]
-: This specifies the whether linear or logarithmic color-handling is desired.
-This only affects the behaviour of [`!canvas` 2D drawing](canvas.md#canvases)
-nodes. All other color processing in the pipeline assumes linear color-handling.
+`!window` and `!offscreen` nodes support the following specific attribute:
 
 `colorbits=` [ `8` | `16` | `32` ]
 : This specifies the default bit depth of output texture color channels for the
 window rendering tree. If not specified, it defaults to `16` bits. The color
-depth of `!window` and `!offscreen` frame-buffers cannot be controlled and is
+depth of the actual `!window` screen frame-buffer cannot be controlled and is
 OS-defined.
 
 The default shader program behaviour for `!window` and `!offscreen` is the same
@@ -192,15 +187,24 @@ The `!shader` node allows insertion of an arbitrary OpenGL shader program into
 the window render tree. `!shader` nodes (and all other program nodes) support
 the following attributes:
 
+`colorbits=` [ `8` | `16` | `32` ]
+: This overrides the default color channel bit depth for this node's output
+texture.
+
 `passes=` *PASSES*
 : This specifies how many times the shader should be executed in succession for
 each frame. Defaults to `1` if not specified. Specifying a number greater than
 `1` should be accompanied with use of the `pass` and `last` uniforms described
 below.
 
-`colorbits=` [ `8` | `16` | `32` ]
-: This overrides the default color channel bit depth for this node's output
-texture.
+`downsample_passes=` *PASS_NUMBERS*
+: This specifies which (if any) passes to render with a smaller frame-buffer.
+It is specified as a vector of pass numbers, with the first pass being `0`.
+Default is `null`, i.e., all passes will be rendered with a `size` buffer.
+
+`downsample=` *DIVISOR*
+: This specifies how much to reduce the size of the render frame-buffer for
+down-sampled passes. It is specified as a divisor of `size`. Default is `2`.
 
 Shader programs can access the texture backing of all child nodes declared
 within the `!shader` node. These textures are sampled with samplers controlled
@@ -252,7 +256,12 @@ specified by the `passes` attribute or `1` if not specified.
 `uniform vec2 size`
 : Will be set to the the pixel-size of the node's output frame-buffer, the
 `coord` UV coordinates can be multiplied by this to get actual pixel
-coordinates in the fragment shader.
+coordinates in the fragment shader. For down-sampled passes, this will be the
+size of the reduced frame-buffer.
+
+`uniform int downsample`
+: Will be set to the value of `downsample` for down-sampled passes and `1` for
+normal passes.
 
 `uniform float beat`
 : The current beat counter.
@@ -706,6 +715,10 @@ This is common when lighting 3D scenes, but unusual in 2D drawings. For the
 latter it may be better to set `exposure=0` and use `contrast` values greater
 than *1* instead.
 
+The blur phases of this filter are run as down-sampled phases. By default
+this frame-buffer will be half the width and height of `size`, but this can
+be controlled with the `downsample` attribute.
+
 ### `!flare`
 
 A `!flare` filter attempts to emulate the tendency of optical lenses to produce
@@ -715,12 +728,12 @@ the following attributes:
 
 `upright_length=` *LENGTH*
 The length of the vertical/horizontal star lines from bright points, expressed
-as a multiple of half of the diagonal length of `size`. Larger values are more
-expensive to compute. Default is `0.5`.
+as a multiple the shorter of the filter width and height. Larger values are
+more expensive to compute. Default is `0.5`.
 
 `diagonal_length=` *LENGTH*
 The length of the diagonal star lines from bright points, expressed as a
-multiple of half of the diagonal length of `size`. Larger values are more
+multiple of the shorter of the filter width and height. Larger values are more
 expensive to compute. Default is `0.25`.
 
 `threshold=` *L*
@@ -745,12 +758,20 @@ will turn off aberration completely (which has a slight performance benefit).
 Values above `1` may exhibit gaps forming between the 6 separate colors used
 to emulate true chromatic aberration.
 
+The lens flare phases of this filter are run as down-sampled phases. By default
+this frame-buffer will be half the width and height of `size`, but this can
+be controlled with the `downsample` attribute.
+
 ### `!edges`
 
 The `!edges` node applies a simple edge-detection filter by blurring the input
 and then blending this with the original image with a *difference* blend
 function. It supports the same attributes as [`!blur`](#blur) and, again,
 `radius` must be greater than zero or the output will be blank.
+
+The blur phases of this filter are run as down-sampled phases. By default
+this frame-buffer will be half the width and height of `size`, but this can
+be controlled with the `downsample` attribute.
 
 ### `!feedback`
 
