@@ -109,7 +109,7 @@ class Flare(ProgramNode):
             passes = 1
             downsample_passes = ()
         super().render(node, references, passes=passes, downsample_passes=downsample_passes,
-                       upright_length=0.5, diagonal_length=0.25, ghosts=6, threshold=1, attenuation=2, aberration=1, **kwargs)
+                       upright_length=0.25, diagonal_length=0.125, ghosts=6, threshold=1, attenuation=2, aberration=1, **kwargs)
 
 
 class Noise(ProgramNode):

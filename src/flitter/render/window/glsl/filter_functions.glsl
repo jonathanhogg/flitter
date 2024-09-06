@@ -25,11 +25,11 @@ vec3 filter_adjust(vec3 color, float exposure, float contrast, float brightness)
 
 const int SpectrumSize = 6;
 const vec3[SpectrumSize] SpectrumWeights = vec3[](vec3(0.05, 0.0, 0.3),
-                               vec3(0.0, 0.0, 0.5),
-                               vec3(0.0, 0.25, 0.2),
-                               vec3(0.0, 0.5, 0.0),
-                               vec3(0.25, 0.25, 0.0),
-                               vec3(0.5, 0.0, 0.0));
+                                                  vec3(0.0, 0.0, 0.5),
+                                                  vec3(0.0, 0.25, 0.2),
+                                                  vec3(0.0, 0.5, 0.0),
+                                                  vec3(0.25, 0.25, 0.0),
+                                                  vec3(0.5, 0.0, 0.0));
 
 vec3 filter_lens_ghost(sampler2D tex, vec2 coord, vec2 size, float distort, float scale, float threshold, float attenuation, float aberration) {
     vec2 p = (coord - 0.5) * size;
@@ -50,12 +50,10 @@ vec3 filter_lens_ghost(sampler2D tex, vec2 coord, vec2 size, float distort, floa
     } else {
         color += texture(tex, q / size + 0.5).rgb;
     }
-    // float k = clamp(dot(color, vec3(1.0)) / 3.0 - threshold, 0.0, 1.0);
-    float k = clamp(srgb_luminance(color) - threshold, 0.0, 1.0);
-    return color * k / pow(2.0, attenuation) * w;
+    return color * smoothstep(0.0, 1.0, srgb_luminance(color) - threshold) * pow(0.5, attenuation) * w;
 }
 
-vec3 filter_lens_flare(sampler2D tex, vec2 coord, vec2 size, float threshold, float upright_length, float diagonal_length) {
+vec3 filter_lens_flare(sampler2D tex, vec2 coord, vec2 size, float threshold, float upright_length, float diagonal_length, float attenuation) {
     vec2 p = (coord - 0.5) * size;
     float th = atan(p.y, p.x);
     float l = min(size.x, size.y) * 0.5;
@@ -66,37 +64,34 @@ vec3 filter_lens_flare(sampler2D tex, vec2 coord, vec2 size, float threshold, fl
         vec2 E = vec2(1.0, 0.0) / size;
         vec2 S = vec2(0.0, -1.0) / size;
         vec2 W = vec2(-1.0, 0.0) / size;
-        float k = 0.25 / n;
         for (float i = 0.0; i < n; i += 1.0) {
+            vec3 col = texture(tex, coord + i * N).rgb;
+            col = max(col, texture(tex, coord + i * E).rgb);
+            col = max(col, texture(tex, coord + i * S).rgb);
+            col = max(col, texture(tex, coord + i * W).rgb);
             float w = 1.0 - i / n;
             w *= w;
-            vec3 col = texture(tex, coord + i * N).rgb;
-            col += texture(tex, coord + i * E).rgb;
-            col += texture(tex, coord + i * S).rgb;
-            col += texture(tex, coord + i * W).rgb;
-            w *= clamp(dot(col, vec3(1.0)) / 12.0 - threshold, 0.0, 1.0);
-            upright_color += col * k * w;
+            upright_color += col * smoothstep(0.0, 1.0, srgb_luminance(col) - threshold) * w;
         }
+        upright_color /= n;
     }
     vec3 diagonal_color = vec3(0.0);
-    n = diagonal_length * l;
+    n = diagonal_length * l * sqrt(2.0) / 2.0;
     if (n > 0.0) {
-        vec2 NE = vec2(0.7071, 0.7071) / size;
-        vec2 SE = vec2(0.7071, -0.7071) / size;
-        vec2 SW = vec2(-0.7071, -0.7071) / size;
-        vec2 NW = vec2(-0.7071, 0.7071) / size;
-        float k = 0.25 / n;
+        vec2 NE = vec2(1.0, 1.0) / size;
+        vec2 SE = vec2(1.0, -1.0) / size;
+        vec2 SW = vec2(-1.0, -1.0) / size;
+        vec2 NW = vec2(-1.0, 1.0) / size;
         for (float i = 0.0; i < n; i += 1.0) {
+            vec3 col = texture(tex, coord + i * NE).rgb;
+            col = max(col, texture(tex, coord + i * SE).rgb);
+            col = max(col, texture(tex, coord + i * SW).rgb);
+            col = max(col, texture(tex, coord + i * NW).rgb);
             float w = 1.0 - i / n;
             w *= w;
-            vec3 col = texture(tex, coord + i * NE).rgb;
-            col += texture(tex, coord + i * SE).rgb;
-            col += texture(tex, coord + i * SW).rgb;
-            col += texture(tex, coord + i * NW).rgb;
-            w *= clamp(dot(col, vec3(1.0)) / 12.0 - threshold, 0.0, 1.0);
-            diagonal_color += col * k * w;
-
+            diagonal_color += col * smoothstep(0.0, 1.0, srgb_luminance(col) - threshold) * w;
         }
+        diagonal_color /= n;
     }
-    return max(upright_color, diagonal_color);
+    return max(upright_color, diagonal_color) * pow(0.5, attenuation);
 }
