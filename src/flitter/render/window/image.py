@@ -23,7 +23,6 @@ class Image(WindowNode):
         self._filename = None
         self._image = None
         if self._target is not None:
-            print('release')
             self._target.release()
             self._target = None
 

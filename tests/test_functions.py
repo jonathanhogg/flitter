@@ -178,8 +178,6 @@ class TestNoise(utils.TestCase):
             self.assertTrue(-1 <= n1 <= 1, f"Noise value bounds failure: {n1}")
             n2 = float(noise(seed2, Vector(x), Vector(y)))
             self.assertTrue(-1 <= n2 <= 1, f"Noise value bounds failure: {n2}")
-            if n1 == n2:
-                print(x, y)
             self.assertNotEqual(n1, n2)
             self.assertLess(abs(n1 - last_n1), 0.05)
             last_n1 = n1
