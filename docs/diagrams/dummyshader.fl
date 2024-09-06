@@ -1,0 +1,4 @@
+
+!window id=:top
+    !record filename=OUTPUT
+        !shader fragment=read('dummyshader.frag')

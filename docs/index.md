@@ -27,6 +27,7 @@ tutorial.md
 language.md
 builtins.md
 windows.md
+shaders.md
 canvas.md
 canvas3d.md
 counters.md

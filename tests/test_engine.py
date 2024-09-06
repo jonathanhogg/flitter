@@ -142,17 +142,20 @@ class TestDocumentationDiagrams(ScriptTest):
 
     DIAGRAMS = Path(__file__).parent.parent / 'docs/diagrams'
 
+    def test_dummyshader(self):
+        self.assertScriptOutputMatchesImage(self.DIAGRAMS / 'dummyshader.fl')
+
     def test_easings(self):
         self.assertScriptOutputMatchesImage(self.DIAGRAMS / 'easings.fl')
+
+    def test_petri(self):
+        self.assertScriptOutputMatchesImage(self.DIAGRAMS / 'petri.fl', target_fps=10, run_time=10)
 
     def test_pseudorandoms(self):
         self.assertScriptOutputMatchesImage(self.DIAGRAMS / 'pseudorandoms.fl')
 
     def test_waveforms(self):
         self.assertScriptOutputMatchesImage(self.DIAGRAMS / 'waveforms.fl')
-
-    def test_petri(self):
-        self.assertScriptOutputMatchesImage(self.DIAGRAMS / 'petri.fl', target_fps=10, run_time=10)
 
 
 class TestDocumentationTutorial(ScriptTest):

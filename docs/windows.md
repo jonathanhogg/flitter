@@ -23,11 +23,6 @@ It may have multiple child nodes.
 : An off-screen window. This is always a top-level node in a **Flitter**
 program.
 
-`!shader`
-: An OpenGL shader program. This may appear as a child node anywhere in the
-window rendering tree. It may have multiple child nodes. A number of built-in
-shaders are available – see [Filters](#filters) below.
-
 `!image`
 : Loads an image from an external file. This may appear as a child node anywhere
 in the window rendering tree.
@@ -53,6 +48,14 @@ multiple child nodes.
 : Allows the output of a named window rendering node to be used elsewhere in the
 tree.
 
+`!shader`
+: An OpenGL shader program. This may appear as a child node anywhere in the
+window rendering tree and may have multiple child nodes. See
+[Shaders](shaders.md).
+
+A number of built-in filters are also available. See [Built-in image filters
+and generators](shaders.md#built-in-image-filters-and-generators).
+
 ## Common attributes
 
 All window rendering nodes share a common structure and so they share some
@@ -73,11 +76,11 @@ a [texture map](canvas3d,md#texture-mapping) on a 3D model, or as an
 : This is valid on any child node (i.e., not on `!window` or `!offscreen`).
 Setting this attribute to `true` will cause the parent node to ignore this node
 as a child. The output will still be rendered, which means it can still be
-referenced.
+referenced via an `id`.
 
-In addition, `!window`, `!offscreen`, `!shader`, `!video` and `!record` are all
+In addition, `!window`, `!offscreen`, `!video`, `!record` and `!shader` are all
 *program nodes* that run an OpenGL shader program. These programs can be changed
-with the following attributes:
+with the attributes:
 
 `vertex=` *STRING*
 : Specifies an override vertex shader as a text string containing the GLSL code.
@@ -94,7 +97,7 @@ shader will be used.
 The shader program for `!video` has a specific function related to the rendering
 of video frames and so changing this shader is not advised unless you know what
 you are doing. However, the other nodes follow a standard scheme that is
-described below for [`!shader`](#shader).
+described in the [Shaders](shaders.md) documentation.
 
 :::{warning}
 Although the `!canvas3d` node supports `vertex` and `fragment` shader
@@ -108,21 +111,37 @@ specialised program and writing a new one is a more complicated endeavour.
 The `!window` and `!offscreen` nodes are largely identical except for the
 latter not opening on-screen. `!offscreen` nodes are primarily intended to
 collect window rendering nodes that are to be used as references rather than
-through direct rendering into a window. However, all `!window` nodes can be made
-to behave as `!offscreen` nodes with the `--offscreen` [command-line
-option](install,md#running-flitter). This can be useful for running tests
-or for saving output to files without opening a window.
+through direct rendering into a window. However, all `!window` nodes can be
+made to behave as `!offscreen` nodes with the `--offscreen` [command-line
+option](install,md#running-flitter). This can be useful for saving output to
+a file (with a [`!record`](#record) node) without opening a window.
 
 `!window` and `!offscreen` nodes support the following specific attribute:
 
 `colorbits=` [ `8` | `16` | `32` ]
 : This specifies the default bit depth of output texture color channels for the
 window rendering tree. If not specified, it defaults to `16` bits. The color
-depth of the actual `!window` screen frame-buffer cannot be controlled and is
-OS-defined.
+depth of the actual `!window` on-screen frame-buffer cannot be controlled and
+is OS-defined.
 
-The default shader program behaviour for `!window` and `!offscreen` is the same
-as that for [`!shader` below](#shader).
+The default shader program used for `!window` and `!offscreen` nodes is a
+single-pass shader that composites together the output textures of all child
+nodes. It can be controlled with the following additional attributes:
+
+`composite=` [ `:over` | `:dest_over` | `:lighten` | `:darken` | `:add` | `:difference` | `:multiply` ]
+: Specifies the blend function to use, default `:over`.
+
+`alpha=` *ALPHA*
+: Specifies a final alpha value to be applied to the entire shader output,
+default `1`.
+
+:::{note}
+By default, `!shader` nodes run the same simple compositing shader program as
+`!window`. Therefore a "bare" `!shader` node (one without a custom program
+specified with the `fragment` and/or `vertex` attributes) can be used to
+composite together child nodes. This is most useful where a blend function
+different to the default `:over` function is required.
+:::
 
 ### `!key` and `!pointer`
 
@@ -180,173 +199,6 @@ these is "left" or "right" is OS dependent. The state value will be `true` if
 the pointer button is currently pressed, `false` if it is released or `null` if
 the state is not currently known (for instance the window has just opened and
 no pointer events have been processed).
-
-## `!shader`
-
-The `!shader` node allows insertion of an arbitrary OpenGL shader program into
-the window render tree. `!shader` nodes (and all other program nodes) support
-the following attributes:
-
-`colorbits=` [ `8` | `16` | `32` ]
-: This overrides the default color channel bit depth for this node's output
-texture.
-
-`passes=` *PASSES*
-: This specifies how many times the shader should be executed in succession for
-each frame. Defaults to `1` if not specified. Specifying a number greater than
-`1` should be accompanied with use of the `pass` and `last` uniforms described
-below.
-
-`downsample_passes=` *PASS_NUMBERS*
-: This specifies which (if any) passes to render with a smaller frame-buffer.
-It is specified as a vector of pass numbers, with the first pass being `0`.
-Default is `null`, i.e., all passes will be rendered with a `size` buffer.
-
-`downsample=` *DIVISOR*
-: This specifies how much to reduce the size of the render frame-buffer for
-down-sampled passes. It is specified as a divisor of `size`. Default is `2`.
-
-Shader programs can access the texture backing of all child nodes declared
-within the `!shader` node. These textures are sampled with samplers controlled
-by the following attributes:
-
-`border=` *R*`;`*G*`;`*B*`;`*A*
-: Specifies a color that will be returned for any coordinates outside of the
-texture.
-
-`repeat=` *RX*`;`*RY*
-: Specifies whether to wrap around (and therefore repeat) the texture in the
-X and Y axes, if *RX* or *RY* is `true`, or to return the color at the edge of
-the image, if *RY* or *RX* is `false`.
-
-If neither `border` nor `repeat` is specified then the default is to return
-transparent.
-
-The default shader program (and that also used for `!window`, `!offscreen`
-nodes) is a single-pass shader that composites together the output textures of
-all child nodes. It can be controlled with the following attributes:
-
-`composite=` [ `:over` | `:dest_over` | `:lighten` | `:darken` | `:add` | `:difference` | `:multiply` ]
-: Specifies the blend function to use, default `:over`.
-
-`alpha=` *ALPHA*
-: Specifies a final alpha value to be applied to the entire shader output,
-default `1`.
-
-If more specialised behaviour is required then a custom shader program can be
-specified. The rendering approach is as follows:
-
-- The $[-1,1]$ screen-space vertices of a single quad covering the whole output
-frame-buffer is passed to the vertex shader as an `in vec2`
-- The default vertex shader passes standardized $[0,1]$ UV coordinates to the
-fragment shader via an `out vec2`
-- The fragment shader is expected to declare an `out vec4` fragment color that
-will be written to the node's texture
-
-The vertex and fragment shaders have a number of available uniforms that
-will be automatically set if declared:
-
-`uniform int passes`
-: Will be set to the number of times that this shader will be executed as
-specified by the `passes` attribute or `1` if not specified.
-
-`uniform int pass`
-: Will be set to the pass number of this execution, counting from `0`.
-
-`uniform vec2 size`
-: Will be set to the the pixel-size of the node's output frame-buffer, the
-`coord` UV coordinates can be multiplied by this to get actual pixel
-coordinates in the fragment shader. For down-sampled passes, this will be the
-size of the reduced frame-buffer.
-
-`uniform int downsample`
-: Will be set to the value of `downsample` for down-sampled passes and `1` for
-normal passes.
-
-`uniform float beat`
-: The current beat counter.
-
-`uniform float quantum`
-: The current quantum.
-
-`uniform float tempo`
-: The current tempo.
-
-`uniform float delta`
-: The difference between the current beat counter and the its value on the last
-frame.
-
-`uniform float clock`
-: The current frame time in seconds.
-
-`uniform int fps`
-: The target frame-rate.
-
-`uniform float performance`
-: A value in the range $[0.5,2]$ that indicates how well the engine is managing
-to hit the target frame-rate.
-
-`uniform float alpha`
-: The value of the `alpha` attribute on the node or a default value of `1`.
-This is *not* automatically applied to the output of custom fragment shaders
-and must be implemented in the code if desired.
-
-`uniform sampler2D` [ `texture0` | `texture1` | … ]
-: These will be bound to the texture of each child node in turn.
-
-`uniform sampler2D last`
-: If specified, this sampler allows access to the final output of the shader
-from the previous frame, if this is the first (or only) pass, or the output of
-the previous pass otherwise.
-
-`uniform sampler2D first`
-: If specified, this sampler allows access to the output of the *first pass* of
-the shader (`pass` equal to `0`). During the first pass, `first` will contain
-the output of the shader first pass from the last frame. Therefore, the `first`
-texture can be used to retain state between frames.
-
-In addition to these, the shader program may declare arbitrary numeric uniforms
-that can be set using attributes with matching names on the shader node.
-`float`, `vec2`, `vec3`, `vec4`, `mat3` and `mat4` uniforms expect 1-, 2- , 3-,
-4-, 9- and 16-item numeric vectors, respectively; arrays of these types expect
-vectors with an appropriate multiple of these sizes. `int`s, `double`s and
-`bool`s, plus their `vec` and `mat` variants are also supported. If an
-attribute matching the uniform is not provided (or is of an incorrect type)
-then the uniform will be set to 0 (or the type-appropriate variant of this).
-
-### Shader templating
-
-**Flitter** uses [Mako templates](https://www.makotemplates.org) internally to
-allow shaders to adapt to different uses. Shader code will be evaluated using
-this before being compiled. All of the uniform names described above (except
-`pass`), including any custom attributes on the `!shader` node, are available
-as values to the template logic. In addition, the following special names are
-defined:
-
-`HEADER`
-: Will be set to either the standard OpenGL 3.3 version header or an OpenGL ES
-3.0 version header, depending on whether the engine is runnning in ES mode or
-not. Shader code that is compatible with both of these versions (which includes
-all of the internal **Flitter** GLSL code) can include `${HEADER}` as the first
-line to automatically adapt.
-
-`child_textures`
-: Will be set to a list of strings representing the uniform name for each of
-the sub-nodes of this shader, e.g., `texture0`. If the shader has no children
-then this list will be empty. A shader can use template `<% for %/>` loops to
-declare the correct sampler uniforms and process multiple input textures.
-
-Note that if a shader is templated on a value, then it will be automatically
-recompiled if that value changes (or, to be precise, the changed value causes
-a change in the evaluated source text). This will cause severe rendering
-performance problems if if occurs frequently. So, while templating on the value
-of `passes` or perhaps `size` would be a reasonable thing to do, templating
-on the value of `beat` would be a bad idea.
-
-The current value of `pass` is *not* provided to the template engine – the same
-shader program is always used for every pass of a multi-pass shader. Shader
-programs must use the `pass` uniform and switch behaviour in code for different
-passes.
 
 ## `!image`
 
@@ -465,19 +317,18 @@ video file types (including animated GIF files).
 
 ## `!record`
 
-The `!record` node expects a single child node which will be written to an
-image or video file and then passed through untouched as the output texture
-of the `!record` node. If a number of children need to be composited together
-for output, then place a [`!shader`](#shader) node between them and `!record`.
+The `!record` node expects one or more child nodes, which will be composited
+together as necessary and written to an image or video file. Whether to write
+an image or a video is (in general) selected automatically based on the
+filename extension (e.g., `.jpg` will write a JPEG image file).
 
 `!record` supports the following attributes:
 
 `filename=` *PATH*
 : Specifies the path of the image or video file to write to, with respect to the
-location of the running **Flitter** program. Whether the output is an image or
-a video depends on the extension of the filename. If `filename` is `null`, then
+location of the running **Flitter** program. If `filename` is `null`, then
 the `!record` node will do nothing – this is a simple way to delay output until
-when a particular condition holds.
+a particular condition holds.
 
 `quality=` *Q*
 : Specifies a quality setting for image formats that support it (such as JPEG).
@@ -506,10 +357,18 @@ the file. Otherwise, the video output will continue for as long as `filename` is
 valid and the program is running.
 
 Filenames with an `.mp4`, `.mov`, `.m4v`, `.mkv`, `.webm` or `.ogg` extension
-are assumed to be video outputs with the appropriate container type. In
-addition, if the extension is `.gif` and `codec=:gif` is *also* supplied, then
-an animated GIF file will be written with the video output path. Otherwise a
-static GIF image will be written.
+are assumed to be video outputs with the appropriate container type. For video
+output, the specific codec should be selected with the `codec` attribute
+described below.
+
+If the extension is `.gif` then a static GIF image file will be written by
+default. However if `codec=:gif` is *also* supplied, then video output is
+assumed and an animated GIF file will be written.
+
+The output that will be written to the file is also passed through as the
+output of the node, therefore a `!record` node can be inserted at any point
+in the window hierarchy. Multiple `!record` nodes can be used in the same
+hierarchy to record different outputs at the same time.
 
 A particular image file will be written once per run of a **Flitter** program,
 i.e., once an image has been written to a particular file, the `!record` node
@@ -525,15 +384,15 @@ new JPEG snapshot into the `output` folder on every frame:
 ```
 
 :::{note}
-If the **Flitter** engine is running in realtime mode, `!record` can will
-attempt to record a "live" video. The frame rate of the output video will be
-variable and will depend on how fast the encoder can run.
+If the **Flitter** engine is running in realtime mode, `!record` will attempt
+to record a "live" video. The frame rate of the output video will be variable
+and will depend on how fast the encoder can run.
 
 The video encoding runs on a background thread with a 1-second frame buffer.
-With a fast hardware accelerated encoder (such as `:hevc_videotoolbox` on a
-Mac), this can be used to record a decent video of a live performance. However,
-if the encoder is unable to keep up with the running frame rate of the engine,
-then live frames will be dropped and the output video will contain stutters.
+On a fast computer, this can be used to record a decent video of a live
+performance. However, if the encoder is unable to keep up with the running
+frame rate of the engine, then live frames will be dropped and the output video
+will contain stutters.
 
 To record clean videos with a fixed frame rate, the engine should be run in
 non-realtime mode with the `--lockstep` command-line option.
@@ -576,287 +435,3 @@ A `!reference` to a node *outside* of the enclosing `!window` (or `!offscreen`)
 is also valid only after the first frame and will return the rendered texture
 from *either the current or previous frame*. No guarantees are made about the
 render order of top-level nodes.
-
-## Filters
-
-In addition to the nodes above, a set of useful filters are provided, each of
-which is implemented as an OpenGL shader program. Each of these nodes, in common
-with the default [`!shader` program](#shader), accepts one or more child nodes
-which will be composited together with the blend function controlled with
-the `composite` attribute (default `:over`). All of the filters also support
-the standard shader `gamma` and `alpha` attributes.
-
-### `!transform`
-
-Composites its input nodes and then scales, rotates and translates its output.
-This is similar to the `!translate` node in `!canvas` and `!canvas3d` with the
-exception that the order of operations is fixed: scale, rotate, translate. The
-origin for all of these operations is the *centre* of the image.
-
-`scale=` *SX*`;`*SY*
-: Specifies an amount to scale the image on the X and Y axes, default `1`.
-Negative scales will flip the image on the X and/or Y axis.
-
-`rotate=` *TURNS*
-: Specifies a clockwise rotation in *turns*, default `0`.
-
-`translate=` *X*`;`*Y*
-: Specifies an amount to translate the image on the X and Y axes specified in
-*pixels*, with the Y axis pointing up, default `0`.
-
-Areas "outside" the transformed image will be transparent by default. This can
-be controlled with the `border` and `repeat` attributes described above for
-[`!shader`](#shader).
-
-### `!vignette`
-
-A *very* simple vignette filter that (alpha-) fades out the edges of its output.
-It is controlled with the single attribute:
-
-`inset=` *(0,0.5)*
-: Specifies the inset as a proportion of the height and width at which the
-fade-out will occur, default `0.25`.
-
-### `!adjust`
-
-The `!adjust` node applies color and luminance adjustments to the composited
-input. It supports the following attributes:
-
-`color_matrix=` *MATRIX*
-: Specifies a 3x3 matrix as a 9-vector to multiply each pixel by. The matrix
-is given in column-major order, so the first 3 values are multiplied by the red
-channel, the second 3 by the green channel and the last 3 values by the blue
-channel. The resulting color will be the vector sum of the results. Default is
-the matrix `1;0;0;0;1;0;0;0;1`, i.e., no adjustment.
-
-`brightness=` *LEVEL*
-: Specifies a brightness adjustment to be added to the color channels of each
-pixel. Default is `0`.
-
-`contrast=` *MULTIPLIER*
-: Specifies a contrast adjustment as a multiplier. This defaults to `1`. A
-contrast adjustment above 1 multiplies the value of each pixel around the
-midpoint, i.e., channels above 0.5 will become brighter and channels below 0.5
-will become darker. A contrast adjustment below 1 will compress the dynamic
-range around 0.5.
-
-`exposure=` *STOPS*
-: Specifies an exposure adjustment in stops. An exposure adjustment of `1` will
-double the color value of each pixel, an adjustment of `-1` will half the value
-of each pixel. Default is `0`.
-
-`shadows=` *STOPS*
-: Specifies an exposure adjustment to apply to the darker parts of the input
-image (luminance < $0.25$).
-
-`highlights=` *STOPS*
-: Specifies an exposure adjustment to apply to the lighter parts of the input
-image (luminance > $0.5$).
-
-`gamma=` *GAMMA*
-: Specifies a gamma curve correction to be applied after other color
-adjustments, Values less than 1 will lighten the output image and values
-greater than 1 will darken it.
-
-`tonemap=` [ `:reinhard` | `:aces` ]
-: If specified, then a tone-mapping function will be applied to map high
-dynamic range images into the $[0,1]$ range. The supported tone-mapping
-functions are: the Reinhard curve function, and a (close approximation of) the
-ACES filmic function. Default is no tone-mapping.
-
-If `tonemap=:reinhard` then an additional attribute is supported:
-
-`whitepoint=` *LUMINANCE*
-: If `whitepoint` is greater than `1` then the Reinhard curve will be modified
-to map input values at `whitepoint` to an output value of $1$. Input values
-greater than `whitepoint` will saturate. Values close to `1` will result in
-no tone-mapping, large values will result in the standard Reinhard curve.
-Default is `0`, i.e., no curve modification.
-
-The `!adjust` filter works in the following order:
-
-- un-premultiply alpha
-- apply `color_matrix`
-- apply `exposure`
-- apply `brightness` and `contrast`
-- apply `shadows` and `highlights`
-- clamp negative values to zero
-- apply `gamma`
-- apply `tonemap`
-- pre-multiply alpha
-
-### `!blur`
-
-The `!blur` node applies a blur using a 2-pass (horizontal and vertical), 1D,
-normalized Gaussian filter. It is controlled with the attributes:
-
-`radius=` *PIXELS*
-: Specifies the size of the blur to be applied as a number of pixels in each
-direction. A value of `0` will result in no blur being applied, which is the
-default if `radius` is not specified.
-
-`sigma=` *SIGMA*
-: Specifies the sigma value for the Gaussian filter as a multiple of the
-`radius`. This defaults to `0.3` and controls how quickly the blur will fall
-off.
-
-If visible square edges form around bright spots then it may be necessary to
-increase the value of `radius` and decrease the value of `sigma`. However, note
-that the larger the value of `radius`, the greater the GPU computational
-resource required to compute the blur.
-
-### `!bloom`
-
-A `!bloom` filter creates a soft glow around bright parts of the image to
-recreate the bloom effect commonly produced by camera lenses. It works by
-applying an exposure adjustment to darken the entire image, then applies a
-Gaussian blur and finally composites this together with the original image
-with a *lighten* blend function.
-
-The filter supports the same `contrast`, `brightness` and `exposure` attributes
-as [`!adjust`](#adjust) – except with `exposure` defaulting to `-1` - and the
-same `radius` attribute as [`!blur`](#blur). The `radius` attribute must be
-specified and be greater than zero for any bloom to be applied.
-
-The default settings of the `!bloom` node assume that the input will contain
-high dynamic range values, i.e., pixels with channel values much larger than 1.
-This is common when lighting 3D scenes, but unusual in 2D drawings. For the
-latter it may be better to set `exposure=0` and use `contrast` values greater
-than *1* instead.
-
-The blur phases of this filter are run as down-sampled phases. By default
-this frame-buffer will be half the width and height of `size`, but this can
-be controlled with the `downsample` attribute.
-
-### `!flare`
-
-A `!flare` filter attempts to emulate the tendency of optical lenses to produce
-artefacts in the image, including "starbursts" and "ghosts". The filter requires
-a high dynamic range input (such as output by `!canvas3d`). The filter accepts
-the following attributes:
-
-`upright_length=` *LENGTH*
-The length of the vertical/horizontal star lines, expressed as a multiple of
-the shorter of the filter width and height. Larger values are more expensive to
-compute. Default is `0.25`.
-
-`diagonal_length=` *LENGTH*
-The length of the diagonal star lines, expressed as a multiple of the shorter
-of the filter width and height. Larger values are more expensive to compute.
-Default is `0.125`.
-
-`threshold=` *L*
-A luminosity threshold over which a pixel is deemed to be "bright". Default is
-`1`.
-
-`ghosts=` *N*
-The number of lens ghosts to add, between `0` and `6`. The size, location and
-distortion of each ghost has been individually designed.
-
-`attenuation=` *ATTENUATION*
-How much to attenuate the flares from the brightness of the source. This is
-expressed as a power-of-2, so `1` means half the (linear) luminosity and `2`
-means one-quarter the luminosity. Default is `2`.
-
-`aberration=` *RATIO*
-How much chromatic aberration (separation into spectrum lines) the ghosts will
-exhibit. This is expressed as a multiple of an internally-defined reasonable
-value. The default is `1`, which will result in the designed amount of
-chromatic aberration. Values below `1` will result in tighter ghosts and `0`
-will turn off aberration completely (which has a slight performance benefit).
-Values above `1` may exhibit gaps forming between the 6 separate colors used
-to emulate true chromatic aberration.
-
-The lens flare phases of this filter are run as down-sampled phases. By default
-this frame-buffer will be half the width and height of `size`, but this can
-be controlled with the `downsample` attribute.
-
-### `!edges`
-
-The `!edges` node applies a simple edge-detection filter by blurring the input
-and then blending this with the original image with a *difference* blend
-function. It supports the same attributes as [`!blur`](#blur) and, again,
-`radius` must be greater than zero or the output will be blank.
-
-The blur phases of this filter are run as down-sampled phases. By default
-this frame-buffer will be half the width and height of `size`, but this can
-be controlled with the `downsample` attribute.
-
-### `!feedback`
-
-The `!feedback` node simulates the effect of the analogue video feedback loop
-formed by pointing a camera at a screen and mixing this with this input signal.
-The following attributes control this mixing and the transformation applied to
-the feedback signal:
-
-`timebase=` *BEATS*
-: Specifies a number of ticks of the beat counter that controls the application
-of the other attributes. This defaults to `1` beat.
-
-`mixer=` *AMOUNT*
-: Specifies the mix between the feedback signal and the input signal over
-`timebase` beats.
-
-`translate=` *X*`;`*Y*
-: Specifies how far the decaying feedback signal will move in pixels per
-`timebase` beats using the canvas coordinate system (i.e., origin in the top
-left). Defaults to `0`.
-
-`scale=` *SX*`;`*SY*
-: Specifies how much the decaying feedback signal will be scaled as a multiple
-over `timebase` beats. Defaults to `1`.
-
-`rotate=` *TURNS*
-: Specifies how much the decaying feedback signal will be rotated clockwise as
-a number of full turns per `timebase` beats. Defaults to `0`.
-
-:::{note}
-The `!blur`, `!bloom`, `!edges` and `!feedback` shader programs use samplers
-that default to sampling the edge color for pixels beyond the edge of the image
-as this produces the best results for those programs. This can be controlled
-with the `border` and `repeat` attributes as described above for
-[the `!shader` node](#shader).
-:::
-
-### `!noise`
-
-The `!noise` node is primarily an image generator that generates 2D slices
-through [OpenSimplex 2S](https://github.com/KdotJPG/OpenSimplex2) 3D ("improved
-XY") noise. It is controlled with the following attributes:
-
-`seed=` *SEED*
-: `!noise` generates reproducible output with the same input values. Supply a
-unique vector with the `seed` attribute to generate different outputs, defaults
-to the null vector if not supplied.
-
-`components=` *1..4*
-: Specify how many distinct noise planes to create, default `1`. Each will
-be assigned to one channel of the output image (in the order R, G, B, A). The
-unused channels will be set to `1`.
-
-`octaves=` *OCTAVES*
-: Specify how many octaves of noise to generate, default `1`.
-
-`roughness=` *ROUGHNESS*
-: Each additional octave of noise has its input coordinate space and output
-value scaled by `roughness`, default `0.5`.
-
-`scale=` *SX*`;`*SY*`;`*SZ*
-: Specifies a scaling vector to be applied to the X, Y and Z coordinates
-passed into the noise function, default `1`.
-
-`origin=` *X*`;`*Y*
-: Specifies an offset for the *pre-scaled* X and Y input values, default `0`.
-The pre-scaled X and Y coordinates are in pixels from the top left.
-
-`z=` *Z*
-: Specifies a *pre-scaled* Z coordinate for the plane to be calculated,
-default `0`.
-
-If one or more child textures are defined within the `!noise` node then they
-will be composited together and the resulting R, G, and B values passed into
-the noise function as X, Y and Z offsets, controlled with the attribute:
-
-`tscale=` *TX*`;`*TY*`;`*TZ*
-: Specifies a scaling factor for the RGB values read from the input image into
-offsets that will be added to the pre-`scale`d noise coordinates, default `1`.
