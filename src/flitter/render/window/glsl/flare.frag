@@ -71,7 +71,7 @@ void main() {
         case ${passes-2}: {
             int radius = int(min(size.x, size.y) * 0.05);
             vec4 merged = filter_blur(last, coord, radius, float(radius) * 0.3, vec2(0.0, 1.0) / size);
-            merged.rgb += filter_lens_flare(${'first' if passes == 5 else 'texture0'}, coord, size, threshold, upright_length, diagonal_length, attenuation);
+            merged.rgb += filter_lens_flare(${'first' if passes == 5 else 'texture0'}, coord, size, upright_length, diagonal_length, threshold, attenuation);
             color = merged;
             break;
         }
