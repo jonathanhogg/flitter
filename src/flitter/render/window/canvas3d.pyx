@@ -646,6 +646,7 @@ cdef void render(render_target, RenderGroup render_group, Camera camera, glctx, 
         shader = get_shader(glctx, shaders, names, StandardVertexTemplate, StandardFragmentTemplate)
     cdef str name
     cdef Vector value
+    glctx.extra['zero'].use(0)
     cdef int base_unit_id = 1
     cdef list samplers = []
     for name, value in render_group.names.items():
