@@ -18,9 +18,13 @@ vec4 filter_blur(sampler2D tex, vec2 coord, int radius, float sigma, vec2 delta)
     return color_sum / weight_sum;
 }
 
-vec3 filter_adjust(vec3 color, float exposure, float contrast, float brightness) {
+vec3 filter_adjust(vec3 color, float exposure, float contrast, float brightness, float shadows, float highlights) {
     float offset = brightness + (1.0 - contrast) / 2.0;
-    return color * pow(2.0, exposure) * contrast + offset;
+    color = color * pow(2.0, exposure) * contrast + offset;
+    float l = srgb_luminance(color);
+    color *= pow(2.0, shadows * clamp(4.0 * (0.25 - l), 0.0, 1.0));
+    color *= pow(2.0, highlights * clamp(2.0 * (l - 0.5), 0.0, 1.0));
+    return color;
 }
 
 const int SpectrumSize = 6;

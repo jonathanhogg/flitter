@@ -645,6 +645,14 @@ range around 0.5.
 double the color value of each pixel, an adjustment of `-1` will half the value
 of each pixel. Default is `0`.
 
+`shadows=` *STOPS*
+: Specifies an exposure adjustment to apply to the darker parts of the input
+image (luminance < $0.25$).
+
+`highlights=` *STOPS*
+: Specifies an exposure adjustment to apply to the lighter parts of the input
+image (luminance > $0.5$).
+
 `gamma=` *GAMMA*
 : Specifies a gamma curve correction to be applied after other color
 adjustments, Values less than 1 will lighten the output image and values
@@ -671,6 +679,7 @@ The `!adjust` filter works in the following order:
 - apply `color_matrix`
 - apply `exposure`
 - apply `brightness` and `contrast`
+- apply `shadows` and `highlights`
 - clamp negative values to zero
 - apply `gamma`
 - apply `tonemap`

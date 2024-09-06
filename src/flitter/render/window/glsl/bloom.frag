@@ -11,6 +11,8 @@ uniform vec2 sigma;
 uniform float exposure;
 uniform float contrast;
 uniform float brightness;
+uniform float shadows;
+uniform float highlights;
 % if passes == 5:
 uniform sampler2D first;
 % endif
@@ -43,7 +45,7 @@ void main() {
         case ${passes - 4}: {
             vec4 merged = texture(${'last' if passes == 5 else 'texture0'}, coord);
             vec3 col = merged.a > 0.0 ? merged.rgb / merged.a : vec3(0.0);
-            col = filter_adjust(col, exposure, contrast, brightness);
+            col = filter_adjust(col, exposure, contrast, brightness, shadows, highlights);
             color = vec4(col * merged.a, merged.a);
             break;
         }

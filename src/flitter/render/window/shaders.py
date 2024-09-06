@@ -33,7 +33,8 @@ class Adjust(ProgramNode):
         tonemap = node.get('tonemap', 1, str)
         if tonemap not in self.TONEMAP_FUNCTIONS:
             tonemap = None
-        super().render(node, references, exposure=0, contrast=1, brightness=0, color_matrix=(1, 0, 0, 0, 1, 0, 0, 0, 1),
+        super().render(node, references, exposure=0, contrast=1, brightness=0, shadows=0, highlights=0,
+                       color_matrix=(1, 0, 0, 0, 1, 0, 0, 0, 1),
                        gamma=1, tonemap_function=tonemap, **kwargs)
 
 
@@ -66,7 +67,8 @@ class Bloom(ProgramNode):
             passes = 1
             downsample_passes = ()
         super().render(node, references, passes=passes, downsample_passes=downsample_passes,
-                       radius=0, sigma=0.3, exposure=-1, contrast=1, brightness=0, repeat=(False, False), **kwargs)
+                       radius=0, sigma=0.3, exposure=-1, contrast=1, brightness=0, shadows=0, highlights=0,
+                       repeat=(False, False), **kwargs)
 
 
 class Edges(ProgramNode):

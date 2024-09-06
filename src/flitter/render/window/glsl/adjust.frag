@@ -7,6 +7,8 @@ uniform float gamma;
 uniform float exposure;
 uniform float contrast;
 uniform float brightness;
+uniform float shadows;
+uniform float highlights;
 uniform mat3 color_matrix;
 % if tonemap_function == 'reinhard':
 uniform float whitepoint;
@@ -29,7 +31,7 @@ void main() {
 %     endfor
     vec3 col = merged.a > 0.0 ? merged.rgb / merged.a : vec3(0.0);
     col = color_matrix * col;
-    col = filter_adjust(col, exposure, contrast, brightness);
+    col = filter_adjust(col, exposure, contrast, brightness, shadows, highlights);
     col = max(vec3(0.0), col);
 %     if gamma != 1:
     col = pow(col, vec3(gamma));
