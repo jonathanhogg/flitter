@@ -155,8 +155,8 @@ if not specified.
 `downsample_passes=` *PASS_NUMBERS*
 : This specifies which (if any) passes to render with a smaller frame-buffer.
 It is specified as a vector of pass numbers, with the first pass being `0`.
-For example `1;2` would specify that the second and third pass. Default is
-`null`, i.e., all passes will be rendered with a `size` frame-buffer.
+For example `1;2` would specify the second and third pass. Default is `null`,
+i.e., all passes will be rendered with a `size` frame-buffer.
 
 `downsample=` *DIVISOR*
 : This specifies how much to reduce the size of the output frame-buffer for
@@ -254,13 +254,12 @@ which is implemented as a shader program. Each of these nodes, in common
 with the default [`!shader` program](#shader), accepts one or more child nodes
 which will be composited together with the blend function controlled with
 the `composite` attribute (default `:over`). All of the filters also support
-the standard shader `gamma` and `alpha` attributes.
+the standard shader `alpha` attribute.
 
 ### `!transform`
 
 Composites its input nodes and then scales, rotates and translates its output.
-This is similar to the `!translate` node in `!canvas` and `!canvas3d` with the
-exception that the order of operations is fixed: scale, rotate, translate. The
+This is similar to the `!translate` node in `!canvas` and `!canvas3d`. The
 origin for all of these operations is the *centre* of the image.
 
 `scale=` *SX*`;`*SY*
@@ -277,6 +276,9 @@ Negative scales will flip the image on the X and/or Y axis.
 Areas "outside" the transformed image will be transparent by default. This can
 be controlled with the `border` and `repeat` attributes described above for
 [`!shader`](#shader).
+
+The order that the attributes are specified is important. Transforms are
+applied from the rightmost attribute (last) to the leftmost (first).
 
 ### `!vignette`
 

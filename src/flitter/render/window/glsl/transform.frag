@@ -4,9 +4,7 @@ const float Tau = 6.283185307179586231995926937088370323181152343750;
 
 in vec2 coord;
 out vec4 color;
-uniform vec2 scale;
-uniform vec2 translate;
-uniform float rotate;
+uniform mat3 transform_matrix;
 uniform vec2 size;
 uniform float alpha;
 uniform bool flip_x;
@@ -19,10 +17,7 @@ uniform sampler2D ${name};
 
 void main() {
 % if child_textures:
-    float th = -rotate * Tau;
-    float cth = cos(th);
-    float sth = sin(th);
-    vec2 point = ((coord - 0.5) * size - translate) * mat2(cth, sth, -sth, cth) / scale / size + 0.5;
+    vec2 point = (transform_matrix * vec3((coord - 0.5) * size, 1.0)).xy / size + 0.5;
 %     for name in child_textures:
 %         if loop.index == 0:
     vec4 merged = texture(${name}, point);

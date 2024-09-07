@@ -4,14 +4,22 @@ Flitter built-in filter shaders
 
 from . import ProgramNode
 from .glsl import TemplateLoader
-from ...model import null
+from ...model import null, Matrix33
 
 
 class Transform(ProgramNode):
     DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('transform.frag')
 
     def render(self, node, references, **kwargs):
-        super().render(node, references, scale=1, translate=0, rotate=0, **kwargs)
+        transform_matrix = Matrix33.identity()
+        for name, value in node.items():
+            if name == 'scale' and (matrix := Matrix33.scale(value)) is not None:
+                transform_matrix @= matrix
+            elif name == 'translate' and (matrix := Matrix33.translate(value)) is not None:
+                transform_matrix @= matrix
+            elif name == 'rotate' and (matrix := Matrix33.rotate(value)) is not None:
+                transform_matrix @= matrix
+        super().render(node, references, transform_matrix=transform_matrix.inverse(), **kwargs)
 
 
 class Vignette(ProgramNode):
