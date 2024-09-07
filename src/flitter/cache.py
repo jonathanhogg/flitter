@@ -254,7 +254,8 @@ class CachePath:
         if container is not None:
             if position is None:
                 logger.debug("Closing video: {}", self._path)
-                decoder.close()
+                if decoder is not None:
+                    decoder.close()
                 container.close()
                 container = decoder = None
                 frames = []

@@ -67,7 +67,9 @@ class Video(ProgramNode):
             self._frame0 = None
             self._frame1 = None
         if frame0 is None:
-            self.framebuffer.clear()
+            if self._target is not None:
+                self._target.release()
+                self._target = None
             return
         frame_size = frame0.width, frame0.height
         if self._frame0_texture is None:
