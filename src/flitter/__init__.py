@@ -20,7 +20,7 @@ except ImportError:
         pass
 
 
-__version__ = "1.0.0b17"
+__version__ = "1.0.0b18"
 
 LOGGING_LEVEL = "SUCCESS"
 LOGGING_FORMAT = "{time:HH:mm:ss.SSS} {process}:{extra[shortname]:16s} | <level>{level}: {message}</level>"
