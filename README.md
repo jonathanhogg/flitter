@@ -9,15 +9,20 @@ with trails moving outwards from the centre of the screen.](https://github.com/j
 [![docs](https://readthedocs.org/projects/flitter/badge/?version=latest)](https://flitter.readthedocs.io/en/latest/?badge=latest)
 
 **Flitter** is a functional programming language and declarative system for
-describing 2D and 3D visuals. [The
-language](https://flitter.readthedocs.io/en/latest/language.html) is designed
-to encourage an iterative, explorative, play-based approach to constructing
-visuals.
+describing 2D and 3D visuals. It is designed to encourage an iterative,
+explorative, play-based approach to constructing visuals.
 
-The engine is able to live reload all code and assets (including shaders,
+[The language](https://flitter.readthedocs.io/en/latest/language.html) supports
+the basic range of functional language features: first-class recursive and
+anonymous functions, comprehensions, let/where, conditional expressions, lists
+("vectors"). However, unusually, all values are vectors and all operators are
+element-wise, and the language is built around constructing trees of attributed
+nodes. The language is designed to be familiar to Python programmers.
+
+The engine is able to live reload all code and assets (including any shaders,
 images, videos, models, etc.) while retaining the current system state - thus
 supporting live-coding. It also has support for interacting with running
-programs via MIDI surfaces.
+programs via MIDI surfaces (plus basic pointer and keyboard support).
 
 **Flitter** is implemented in a mix of Python and Cython and requires at least
 OpenGL 3.3 (Core Profile) or OpenGL ES 3.0. At least Python 3.10 is also
@@ -28,7 +33,8 @@ raw performance, but is fast enough to be able to do interesting things.
 
 The engine that runs the language is capable of:
 
-- 2D drawing (loosely based on an HTML canvas/SVG model)
+- [2D drawing](https://flitter.readthedocs.io/en/latest/canvas.html) (loosely
+  based on an HTML canvas/SVG model)
 - [3D rendering](https://flitter.readthedocs.io/en/latest/canvas3d.html),
   including:
   - primitive box, sphere, cylinder and cone shapes
@@ -49,13 +55,18 @@ The engine that runs the language is capable of:
 - simulating [physical particle
   systems](https://flitter.readthedocs.io/en/latest/physics.html), including
   spring/rod/rubber-band constraints, gravity, electrostatic charge, adhesion,
-  buoyancy, inertia, drag, barriers and particle collisions
+  buoyancy, inertia, drag (including in flowing media), Brownian motion,
+  uniform electric fields, barriers and particle collisions
 - [playing videos](https://flitter.readthedocs.io/en/latest/windows.html#video)
   at arbitrary speeds (including in reverse)
 - running [GLSL
-  shaders](https://flitter.readthedocs.io/en/latest/windows.html#shader) as
+  shaders](https://flitter.readthedocs.io/en/latest/shaders.html) as
   stacked image filters and generators, with per-frame control of arbitrary
-  uniforms
+  uniforms, and support for multi-pass and downsampling
+- built-in filters for: scaling/translating/rotating, Gaussian blurring, bloom,
+  edge detection, vignetting, video feedback, lens flares, color and exposure
+  adjustments, tone-mapping with the Reinhard and ACES Filmic functions, and 2D
+  noise-map generation
 - compositing all of the above and rendering to one or more windows
 - [saving rendered
   output](https://flitter.readthedocs.io/en/latest/windows.html#record) to
@@ -66,6 +77,10 @@ The engine that runs the language is capable of:
 - driving arbitrary DMX fixtures via an Entec-compatible USB DMX interface
 - driving a LaserCube plugged in over USB (other lasers probably easy-ish to
   support)
+
+**Flitter** also has a plug-in architecture that allows extension with new
+image and 3D mesh generators, MIDI and DMX interfaces, or completely novel
+input and output systems.
 
 ## Installation
 

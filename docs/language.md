@@ -4,7 +4,7 @@
 ## Quick introduction
 
 **Flitter** is a declarative tree-construction language. All values are vectors,
-delimited with semicolons, and all maths is piece-wise. Short vectors are
+delimited with semicolons, and all maths is element-wise. Short vectors are
 repeated as necessary in binary operations, i.e., `(1;2;3;4) * 2` is `2;4;6;8`.
 The `null` value is an empty vector and most expressions evaluate to this in
 the event of an error. In particular, all maths expressions involving a `null`
