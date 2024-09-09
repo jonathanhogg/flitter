@@ -867,7 +867,8 @@ cdef void render(render_target, RenderGroup render_group, Camera camera, glctx, 
             k += 1
             i += 1
             transparent_object = transparent_objects[i] if i < n else None
-            if i == n or transparent_object[1] is not model or ((<Instance>transparent_object[2]).material.translucency > 0) != depth_write:
+            if i == n or transparent_object[1] is not model or (<Instance>transparent_object[2]).material.textures != material.textures \
+                    or ((<Instance>transparent_object[2]).material.translucency > 0) != depth_write:
                 render_target.depth_write(depth_write)
                 dispatch_instances(glctx, objects, shader, model, k, instances_data, material.textures, references, base_unit_id)
                 k = 0
