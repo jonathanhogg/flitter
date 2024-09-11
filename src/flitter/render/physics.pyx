@@ -707,6 +707,7 @@ cdef class PhysicsSystem:
                 m = PyList_GET_SIZE(groups)
                 for i in range(m):
                     groupptr = PyList_GET_ITEM(groups, i)
+                    o = PyList_GET_SIZE((<PhysicsGroup>groupptr).non_anchors)
                     for j in range(o):
                         to_particle = PyList_GET_ITEM((<PhysicsGroup>groupptr).non_anchors, j)
                         (<Particle>to_particle).reset_force()
