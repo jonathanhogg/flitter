@@ -25,7 +25,7 @@ def get_plugin(group, name):
     else:
         entry_points = importlib.metadata.entry_points(group=group)
         if entry_points.names:
-            logger.debug("Available {} plugins: {}", group, ', '.join(entry_points.names))
+            logger.debug("Available {} plugins: {}", group, ', '.join(sorted(entry_points.names)))
         PluginEntryPoints[group] = entry_points
     if name in entry_points.names:
         try:

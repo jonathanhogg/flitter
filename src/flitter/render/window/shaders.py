@@ -7,7 +7,11 @@ from .glsl import TemplateLoader
 from ...model import null, Matrix33
 
 
-class Transform(ProgramNode):
+class Shader(ProgramNode):
+    pass
+
+
+class Transform(Shader):
     DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('transform.frag')
 
     def render(self, node, references, **kwargs):
@@ -22,7 +26,7 @@ class Transform(ProgramNode):
         super().render(node, references, transform_matrix=transform_matrix.inverse(), **kwargs)
 
 
-class Vignette(ProgramNode):
+class Vignette(Shader):
     DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('vignette.frag')
     EASE_FUNCTIONS = {'linear', 'quad', 'cubic'}
 
@@ -33,7 +37,7 @@ class Vignette(ProgramNode):
         super().render(node, references, inset=0.25, ease=ease, **kwargs)
 
 
-class Adjust(ProgramNode):
+class Adjust(Shader):
     DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('adjust.frag')
     TONEMAP_FUNCTIONS = {'reinhard', 'aces'}
 
@@ -46,7 +50,7 @@ class Adjust(ProgramNode):
                        gamma=1, tonemap_function=tonemap, **kwargs)
 
 
-class Blur(ProgramNode):
+class Blur(Shader):
     DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('blur.frag')
 
     def render(self, node, references, **kwargs):
@@ -60,7 +64,7 @@ class Blur(ProgramNode):
         super().render(node, references, passes=passes, radius=0, sigma=0.3, repeat=(False, False), **kwargs)
 
 
-class Bloom(ProgramNode):
+class Bloom(Shader):
     DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('bloom.frag')
 
     def render(self, node, references, **kwargs):
@@ -79,7 +83,7 @@ class Bloom(ProgramNode):
                        repeat=(False, False), **kwargs)
 
 
-class Edges(ProgramNode):
+class Edges(Shader):
     DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('edges.frag')
 
     def render(self, node, references, **kwargs):
@@ -97,14 +101,14 @@ class Edges(ProgramNode):
                        radius=0, sigma=0.3, repeat=(False, False), **kwargs)
 
 
-class Feedback(ProgramNode):
+class Feedback(Shader):
     DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('feedback.frag')
 
     def render(self, node, references, **kwargs):
         super().render(node, references, mixer=0, timebase=1, glow=0, translate=0, scale=1, rotate=0, repeat=(False, False), **kwargs)
 
 
-class Flare(ProgramNode):
+class Flare(Shader):
     DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('flare.frag')
 
     def render(self, node, references, **kwargs):
@@ -122,7 +126,7 @@ class Flare(ProgramNode):
                        upright_length=0.25, diagonal_length=0.125, ghosts=6, threshold=1, attenuation=2, aberration=1, **kwargs)
 
 
-class Noise(ProgramNode):
+class Noise(Shader):
     DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('noise.frag')
 
     def render(self, node, references, **kwargs):

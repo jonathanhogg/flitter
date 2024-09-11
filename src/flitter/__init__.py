@@ -23,7 +23,7 @@ except ImportError:
 __version__ = "1.0.0b18"
 
 LOGGING_LEVEL = "SUCCESS"
-LOGGING_FORMAT = "{time:HH:mm:ss.SSS} {process}:{extra[shortname]:16s} | <level>{level}: {message}</level>"
+LOGGING_FORMAT = "{time:HH:mm:ss.SSS} {extra[shortname]:25} | <level>{level}: {message}</level>"
 
 
 class LoguruInterceptHandler(logging.Handler):
@@ -48,6 +48,22 @@ class LoguruInterceptHandler(logging.Handler):
         logger.opt(depth=depth, exception=record.exc_info).log(level, record.getMessage())
 
 
+def shorten_name(pkg_name, n=25):
+    if len(pkg_name) <= n:
+        return pkg_name
+    over = len(pkg_name) - n
+    parts = pkg_name.split('.')
+    for i in range(len(parts)-1):
+        part = parts[i]
+        if len(part) > 2:
+            over -= len(part) - 2
+            part = part[0] + '-'
+            parts[i] = part
+            if over <= 0:
+                break
+    return '.'.join(parts)
+
+
 def configure_logger(level=None):
     global LOGGING_LEVEL
     if level is None:
@@ -55,11 +71,11 @@ def configure_logger(level=None):
     else:
         LOGGING_LEVEL = level
     logger.configure(handlers=[dict(sink=sys.stderr, format=LOGGING_FORMAT, level=level)],
-                     patcher=lambda record: record['extra'].update(shortname=record['name'].removeprefix('flitter.')))
+                     patcher=lambda record: record['extra'].update(shortname=shorten_name(record['name'])))
     LoguruInterceptHandler.install()
     return logger
 
 
 def name_patch(logger, name):
     return logger.patch(lambda record, name=name: (record.update(name=name),
-                                                   record['extra'].update(shortname=name.removeprefix('flitter.'))))
+                                                   record['extra'].update(shortname=shorten_name(name))))

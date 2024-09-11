@@ -11,6 +11,7 @@ cdef int64_t DefaultSegments
 cdef class Model:
     cdef readonly str name
     cdef readonly object trimesh_model
+    cdef readonly bint created
     cdef readonly bint valid
     cdef Vector bounds
     cdef set dependents
