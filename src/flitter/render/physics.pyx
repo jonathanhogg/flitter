@@ -84,9 +84,9 @@ cdef class Particle:
         self.initial_force = node.get_fvec('force', zero.length, zero)
         self.force = self.initial_force.copy()
         self.acceleration = zero.copy()
-        self.radius = max(0, node.get_float('radius', 1))
+        self.radius = max(0, node.get_float('radius', 0))
         self.mass = max(0, node.get_float('mass', 1))
-        self.charge = node.get_float('charge', 1)
+        self.charge = node.get_float('charge', 0)
         self.ease = node.get_float('ease', 0)
 
     @cython.profile(False)

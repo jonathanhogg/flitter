@@ -131,27 +131,34 @@ The attributes that specify properties of the particle are:
 combined with the `!physics`' `state_prefix` value to produce keys against
 which the current state of the particle will be stored in the state dictionary
 - `position` - specifies an initial position vector to use for the particle at
-the first simulation step (defaults to zero)
-- `velocity` - specifies an initial velocity vector (defaults to zero)
-- `force` - specifies a constant force vector to be applied to the particle,
-this may be changed at any point during the simulation to create custom forces,
-e.g., thrust from an engine (defaults to zero)
+the first simulation step (defaults to `0`)
+- `velocity` - specifies an initial velocity vector (defaults to `0`)
+- `force` - specifies an instantaneous force vector to be applied to the
+particle, this may be changed at any point during the simulation to create
+custom forces, e.g., thrust from an engine (defaults to `0`)
 - `ease` - specifies an amount of simulation time over which to ramp up the
 force vector (does nothing if `force` is not specified)
-- `radius` - specifies a radius for a spherical particle, this is used both
-in collision detection and when calculating drag force (defaults to 1 and will
-be clamped to zero if negative)
-- `mass` - specifies a value to be used both as the inertial component of
-converting forces into acceleration and as the mass for computing gravitic
-attraction (defaults to 1 and will be clamped to zero if negative)
-- `charge` - specifies a value to be used for calculating electrostatic force
-(defaults to 1)
+- `radius` - specifies the radius of the particle, this defines the outer edge
+of the particle as a distance from the current position in all dimensions
+(defaults to `0` and will be clamped to `0` if negative)
+- `mass` - specifies the inertial and gravitational mass of the particle
+(defaults to `1` and will be clamped to `0` if negative)
+- `charge` - specifies the electrical charge of the particle (defaults to `0`)
 
 As `mass` is used when calculating acceleration, particles with zero mass
 cannot be the subject of a force, meaning they will always continue travelling
 at their initial velocity (or remain fixed at their initial position).
 However, particles with zero mass will still be considered when computing
 forces on other particles.
+
+The `position`, `velocity` and `force` attributes should be $n$-element
+vectors, where $n$ is the value of the `!physics` `dimensions` attribute. The
+`ease`, `radius`, `mass` and `charge` attributes should all be a single element
+vector value. The `radius` of a particle represents a Euclidian distance from
+the particle's position. For a 1-dimensional system this describes a line
+through the position on the axis, for a 2-dimensional system it describes a
+circle around the position and for a 3-dimensional system it describes a sphere
+centred on the position.
 
 ### `!anchor`
 
@@ -217,7 +224,7 @@ accelerated in the direction of the field and negatively-charged particles will
 be accelerated in the opposite direction to the field.
 
 - `direction` - a vector specifying the direction of the electric field
-- `strength` - force magnitude coefficient
+- `strength` - force magnitude coefficient (default is `1`)
 - `ease` - specifies an amount of simulation time over which to ramp up
 `strength`
 
@@ -241,7 +248,7 @@ various tethers, rubber bands and springs.
 - `max` - a maximum distance that the two objects can be apart
 - `fixed` - a shortcut for setting both `min` and `max` to the same value
 - `power` - the power to which the displacement will be raised (default is `1`)
-- `strength` - force magnitude coefficient
+- `strength` - force magnitude coefficient (default is `1`)
 - `ease` - specifies an amount of simulation time over which to ramp up
 `strength`
 
@@ -277,7 +284,7 @@ particles, with `min` set to the sum of the `radius` attributes of each
 particle. Particles with zero `radius` will be ignored.
 
 - `power` - the power to which the displacement will be raised (default is `1`)
-- `strength` - force magnitude coefficient
+- `strength` - force magnitude coefficient (default is `1`)
 - `ease` - specifies an amount of simulation time over which to ramp up
 `strength`
 
@@ -294,7 +301,7 @@ in proportion to the product of their `mass` attributes and inversely
 proportional to the square of the distance between the particles. Particles
 with zero `mass` will be ignored.
 
-- `strength` - force magnitude coefficient
+- `strength` - force magnitude coefficient (default is `1`)
 - `ease` - specifies an amount of simulation time over which to ramp up
 `strength`
 - `max_distance` - pairs of particles further apart than this will be ignored
@@ -356,13 +363,11 @@ for overlapping particles.
 
 ### `!adhesion`
 
-`!adhesion` creates an attractive/repulsive force that applies to all pairs of
-particles that overlap. It is proportional to the amount of the overlap times
-the particle pair distance minus an "adhesion distance". The result is that two
-particles that touch will draw towards each other until they reach the adhesion
-distance and then will begin to repel each other.
+`!adhesion` creates a combined attractive/repulsive force that applies to all
+pairs of particles that touch. The force acts to maintain an *adhesion
+distance* between pairs of particles while they are in contact.
 
-The adhesion distance is determined by the `overlap` attribute which should be
+The adhesion distance is determined by the `overlap` attribute, which should be
 between `0` and `1`. At `0`, no overlap is tolerated (resulting in the
 equivalent of a `!collision` force with `power=2`) and at `1`, the smaller
 particle will be drawn completely within the larger.
@@ -389,7 +394,7 @@ l_{overlap} = max( 0, l_{max} - l )
 ```
 
 ```{math}
-\vec{F} = \textbf{strength} \cdot \vec{d} \cdot l_{overlap}^2 \cdot (l - l_{adhesion})
+\vec{F} = \textbf{strength} \cdot \vec{d} \cdot l_{overlap} \cdot (l - l_{adhesion})
 ```
 
 ```{math}
@@ -458,7 +463,7 @@ surrounding fluid (i.e., the volume of the particle multiplied by the density
 of the fluid) multiplied by the gravity vector.
 
 - `gravity` - vector specifying the direction and magnitude of gravity (default
-is a vector with the last dimension equal to `-1`)
+is a vector with the last dimension equal to $-1$)
 - `density` - the density coefficient of the surrounding fluid (default is `1`)
 - `strength` - force magnitude coefficient
 - `ease` - specifies an amount of simulation time over which to ramp up
