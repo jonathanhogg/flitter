@@ -37,7 +37,6 @@ cdef Vector ITERATION = Vector._symbol('iteration')
 cdef class PhysicsGroup:
     cdef PhysicsGroup parent
     cdef list particles
-    cdef list non_anchors
     cdef list particle_forces
     cdef list matrix_forces
     cdef list specific_forces
@@ -45,7 +44,6 @@ cdef class PhysicsGroup:
 
     def __cinit__(self):
         self.particles = []
-        self.non_anchors = []
         self.particle_forces = []
         self.matrix_forces = []
         self.specific_forces = []
@@ -54,6 +52,7 @@ cdef class PhysicsGroup:
 
 cdef class Particle:
     cdef Vector id
+    cdef bint non_anchor
     cdef Vector position_state_key
     cdef Vector position
     cdef Vector velocity_state_key
@@ -70,17 +69,18 @@ cdef class Particle:
     def __cinit__(self, Node node, Vector id, Vector zero, Vector prefix, StateDict state):
         self.id = id
         self.position_state_key = prefix.concat(self.id).intern()
-        cdef Vector position = state.get_item(self.position_state_key)
-        if position.length == zero.length and position.numbers != NULL:
-            self.position = position.copy()
-        else:
-            self.position = node.get_fvec('position', zero.length, zero).copy()
         self.velocity_state_key = self.position_state_key.concat(VELOCITY).intern()
-        cdef Vector velocity = state.get_item(self.velocity_state_key)
-        if velocity.length == zero.length and velocity.numbers != NULL:
-            self.velocity = velocity.copy()
-        else:
-            self.velocity = node.get_fvec('velocity', zero.length, zero).copy()
+        self.position = node.get_fvec('position', zero.length, zero).copy()
+        self.velocity = node.get_fvec('velocity', zero.length, zero).copy()
+        cdef Vector position, velocity
+        self.non_anchor = node.kind is 'particle'
+        if self.non_anchor:
+            position = state.get_item(self.position_state_key)
+            if position.length == zero.length and position.numbers != NULL:
+                self.position = position.copy()
+            velocity = state.get_item(self.velocity_state_key)
+            if velocity.length == zero.length and velocity.numbers != NULL:
+                self.velocity = velocity.copy()
         self.initial_force = node.get_fvec('force', zero.length, zero)
         self.force = self.initial_force.copy()
         self.acceleration = zero.copy()
@@ -121,17 +121,6 @@ cdef class Particle:
         cdef int64_t i, n=self.force.length
         for i in range(n):
             self.force.numbers[i] = self.initial_force.numbers[i]
-
-
-cdef class Anchor(Particle):
-    @cython.profile(False)
-    def __cinit__(self, Node node, Vector id, Vector zero, Vector prefix, StateDict state):
-        self.position = node.get_fvec('position', zero.length, zero)
-        self.velocity = zero.copy()
-
-    @cython.profile(False)
-    cdef void step(self, double speed_of_light, double clock, double delta) noexcept nogil:
-        pass
 
 
 cdef class Barrier:
@@ -544,21 +533,10 @@ cdef class PhysicsSystem:
         for i in range(self.dimensions):
             zero.numbers[i] = 0
         for child in node._children:
-            if child.kind is 'particle':
+            if child.kind is 'particle' or child.kind is 'anchor':
                 id = <Vector>child._attributes.get('id')
                 if id is not None:
                     particle = Particle.__new__(Particle, child, id, zero, state_prefix, state)
-                    particles_by_id[id] = particle
-                    group.particles.append(particle)
-                    group.non_anchors.append(particle)
-                    new_state_keys.add(particle.position_state_key)
-                    old_state_keys.discard(particle.position_state_key)
-                    new_state_keys.add(particle.velocity_state_key)
-                    old_state_keys.discard(particle.velocity_state_key)
-            elif child.kind is 'anchor':
-                id = <Vector>child._attributes.get('id')
-                if id is not None:
-                    particle = Anchor.__new__(Anchor, child, id, zero, state_prefix, state)
                     particles_by_id[id] = particle
                     group.particles.append(particle)
                     new_state_keys.add(particle.position_state_key)
@@ -602,8 +580,8 @@ cdef class PhysicsSystem:
                     group.matrix_forces.append(AdhesionForceApplier.__new__(AdhesionForceApplier, child, strength, zero))
 
     cpdef double calculate(self, list groups, dict particles_by_id, bint realtime, bint extra, double time, double last_time, double clock):
-        cdef list all_particles, particles, non_anchors, particle_forces, matrix_forces, barriers
-        cdef int64_t i, j, k, m, n, o, p
+        cdef list all_particles, particles, particle_forces, matrix_forces, barriers
+        cdef int64_t i, j, k, m, n, p
         cdef double delta
         cdef Vector direction = Vector.__new__(Vector)
         direction.allocate_numbers(self.dimensions)
@@ -635,7 +613,6 @@ cdef class PhysicsSystem:
                         direction.numbers[k] /= distance
                     specific_force.apply(<Particle>from_particle, <Particle>to_particle, direction, distance, distance_squared)
                 particles = group.particles
-                non_anchors = group.non_anchors
                 if group.parent is None:
                     all_particles = group.particles
                     particle_forces = group.particle_forces
@@ -650,14 +627,15 @@ cdef class PhysicsSystem:
                         matrix_forces.extend(group.matrix_forces)
                 with nogil:
                     n = PyList_GET_SIZE(all_particles)
-                    o = PyList_GET_SIZE(non_anchors)
                     p = PyList_GET_SIZE(particles)
                     m = PyList_GET_SIZE(particle_forces)
-                    if m and o:
+                    if m and p:
                         for i in range(m):
                             force = PyList_GET_ITEM(particle_forces, i)
-                            for j in range(o):
-                                (<ParticleForceApplier>force).apply(<Particle>PyList_GET_ITEM(non_anchors, j), delta)
+                            for j in range(p):
+                                to_particle = PyList_GET_ITEM(particles, j)
+                                if (<Particle>to_particle).non_anchor:
+                                    (<ParticleForceApplier>force).apply(<Particle>to_particle, delta)
                     m = PyList_GET_SIZE(matrix_forces)
                     if m and p:
                         for i in range(p):
@@ -679,9 +657,9 @@ cdef class PhysicsSystem:
                                         (<MatrixPairForceApplier>force).apply(<Particle>from_particle, <Particle>to_particle,
                                                                               direction, distance, distance_squared)
             for group in groups:
-                non_anchors = group.non_anchors
-                o = len(non_anchors)
-                if o == 0:
+                particles = group.particles
+                p = len(particles)
+                if p == 0:
                     continue
                 if group.parent is None:
                     barriers = group.barriers
@@ -690,14 +668,18 @@ cdef class PhysicsSystem:
                     while (group := group.parent) is not None:
                         barriers.extend(group.barriers)
                 with nogil:
-                    for i in range(o):
-                        (<Particle>PyList_GET_ITEM(non_anchors, i)).step(self.speed_of_light, clock, delta)
+                    for i in range(p):
+                        to_particle = PyList_GET_ITEM(particles, i)
+                        if (<Particle>to_particle).non_anchor:
+                            (<Particle>to_particle).step(self.speed_of_light, clock, delta)
                     m = PyList_GET_SIZE(barriers)
                     if m:
                         for i in range(m):
                             barrier = PyList_GET_ITEM(barriers, i)
-                            for j in range(o):
-                                (<Barrier>barrier).apply(<Particle>PyList_GET_ITEM(non_anchors, j), self.speed_of_light, clock, delta)
+                            for j in range(p):
+                                to_particle = PyList_GET_ITEM(particles, j)
+                                if (<Particle>to_particle).non_anchor:
+                                    (<Barrier>barrier).apply(<Particle>to_particle, self.speed_of_light, clock, delta)
             last_time += delta
             clock += delta
             if last_time >= time or (realtime and not extra):
@@ -707,8 +689,8 @@ cdef class PhysicsSystem:
                 m = PyList_GET_SIZE(groups)
                 for i in range(m):
                     groupptr = PyList_GET_ITEM(groups, i)
-                    o = PyList_GET_SIZE((<PhysicsGroup>groupptr).non_anchors)
-                    for j in range(o):
-                        to_particle = PyList_GET_ITEM((<PhysicsGroup>groupptr).non_anchors, j)
+                    p = PyList_GET_SIZE((<PhysicsGroup>groupptr).particles)
+                    for j in range(p):
+                        to_particle = PyList_GET_ITEM((<PhysicsGroup>groupptr).particles, j)
                         (<Particle>to_particle).reset_force()
         return clock
