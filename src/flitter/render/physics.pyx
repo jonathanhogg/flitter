@@ -615,27 +615,16 @@ cdef class PhysicsSystem:
                 particles = group.particles
                 if group.parent is None:
                     all_particles = group.particles
-                    particle_forces = group.particle_forces
                     matrix_forces = group.matrix_forces
                 else:
                     all_particles = list(group.particles)
-                    particle_forces = list(group.particle_forces)
                     matrix_forces = list(group.matrix_forces)
                     while (group := group.parent) is not None:
                         all_particles.extend(group.particles)
-                        particle_forces.extend(group.particle_forces)
                         matrix_forces.extend(group.matrix_forces)
                 with nogil:
                     n = PyList_GET_SIZE(all_particles)
                     p = PyList_GET_SIZE(particles)
-                    m = PyList_GET_SIZE(particle_forces)
-                    if m and p:
-                        for i in range(m):
-                            force = PyList_GET_ITEM(particle_forces, i)
-                            for j in range(p):
-                                to_particle = PyList_GET_ITEM(particles, j)
-                                if (<Particle>to_particle).non_anchor:
-                                    (<ParticleForceApplier>force).apply(<Particle>to_particle, delta)
                     m = PyList_GET_SIZE(matrix_forces)
                     if m and p:
                         for i in range(p):
@@ -662,12 +651,23 @@ cdef class PhysicsSystem:
                 if p == 0:
                     continue
                 if group.parent is None:
+                    particle_forces = group.particle_forces
                     barriers = group.barriers
                 else:
+                    particle_forces = list(group.particle_forces)
                     barriers = list(group.barriers)
                     while (group := group.parent) is not None:
+                        particle_forces.extend(group.particle_forces)
                         barriers.extend(group.barriers)
                 with nogil:
+                    m = PyList_GET_SIZE(particle_forces)
+                    if m and p:
+                        for i in range(m):
+                            force = PyList_GET_ITEM(particle_forces, i)
+                            for j in range(p):
+                                to_particle = PyList_GET_ITEM(particles, j)
+                                if (<Particle>to_particle).non_anchor:
+                                    (<ParticleForceApplier>force).apply(<Particle>to_particle, delta)
                     for i in range(p):
                         to_particle = PyList_GET_ITEM(particles, i)
                         if (<Particle>to_particle).non_anchor:
