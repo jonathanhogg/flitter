@@ -189,11 +189,11 @@ cdef class ParticleForceApplier(ForceApplier):
 
 
 cdef class MatrixPairForceApplier(PairForceApplier):
-    cdef double max_distance_squared
+    cdef double max_distance
 
     @cython.profile(False)
     def __cinit__(self, Node node, double strength, Vector zero):
-        self.max_distance_squared = max(0, node.get_float('max_distance', 0)) ** 2
+        self.max_distance = max(0, node.get_float('max_distance', 0))
 
 
 cdef class SpecificPairForceApplier(PairForceApplier):
@@ -589,12 +589,13 @@ cdef class PhysicsSystem:
         cdef PyObject* from_particle
         cdef PyObject* to_particle
         cdef PyObject* force
-        cdef PyObject* barrier
-        cdef PyObject* groupptr
         cdef PhysicsGroup group
         cdef SpecificPairForceApplier specific_force
+        cdef bint more
         while True:
             delta = min(self.resolution, time-last_time)
+            last_time += delta
+            more = last_time < time and (not realtime or extra)
             for group in groups:
                 for specific_force in group.specific_forces:
                     from_particle = PyDict_GetItem(particles_by_id, specific_force.from_particle_id)
@@ -613,20 +614,19 @@ cdef class PhysicsSystem:
                         direction.numbers[k] /= distance
                     specific_force.apply(<Particle>from_particle, <Particle>to_particle, direction, distance, distance_squared)
                 particles = group.particles
-                if group.parent is None:
-                    all_particles = group.particles
-                    matrix_forces = group.matrix_forces
-                else:
-                    all_particles = list(group.particles)
-                    matrix_forces = list(group.matrix_forces)
-                    while (group := group.parent) is not None:
-                        all_particles.extend(group.particles)
-                        matrix_forces.extend(group.matrix_forces)
-                with nogil:
+                p = PyList_GET_SIZE(particles)
+                if not p:
+                    continue
+                all_particles = []
+                while group is not None:
+                    all_particles.extend(group.particles)
                     n = PyList_GET_SIZE(all_particles)
-                    p = PyList_GET_SIZE(particles)
+                    matrix_forces = group.matrix_forces
                     m = PyList_GET_SIZE(matrix_forces)
-                    if m and p:
+                    group = group.parent
+                    if not m:
+                        continue
+                    with nogil:
                         for i in range(p):
                             from_particle = PyList_GET_ITEM(all_particles, i)
                             for j in range(i+1, n):
@@ -641,13 +641,12 @@ cdef class PhysicsSystem:
                                     direction.numbers[k] /= distance
                                 for k in range(m):
                                     force = PyList_GET_ITEM(matrix_forces, k)
-                                    if not (<MatrixPairForceApplier>force).max_distance_squared or \
-                                            distance_squared < (<MatrixPairForceApplier>force).max_distance_squared:
+                                    if not (<MatrixPairForceApplier>force).max_distance or distance < (<MatrixPairForceApplier>force).max_distance:
                                         (<MatrixPairForceApplier>force).apply(<Particle>from_particle, <Particle>to_particle,
                                                                               direction, distance, distance_squared)
             for group in groups:
                 particles = group.particles
-                p = len(particles)
+                p = PyList_GET_SIZE(particles)
                 if p == 0:
                     continue
                 if group.parent is None:
@@ -661,36 +660,19 @@ cdef class PhysicsSystem:
                         barriers.extend(group.barriers)
                 with nogil:
                     m = PyList_GET_SIZE(particle_forces)
-                    if m and p:
-                        for i in range(m):
-                            force = PyList_GET_ITEM(particle_forces, i)
-                            for j in range(p):
-                                to_particle = PyList_GET_ITEM(particles, j)
-                                if (<Particle>to_particle).non_anchor:
-                                    (<ParticleForceApplier>force).apply(<Particle>to_particle, delta)
+                    n = PyList_GET_SIZE(barriers)
                     for i in range(p):
                         to_particle = PyList_GET_ITEM(particles, i)
                         if (<Particle>to_particle).non_anchor:
+                            for j in range(m):
+                                (<ParticleForceApplier>PyList_GET_ITEM(particle_forces, j)).apply(<Particle>to_particle, delta)
                             (<Particle>to_particle).step(self.speed_of_light, clock, delta)
-                    m = PyList_GET_SIZE(barriers)
-                    if m:
-                        for i in range(m):
-                            barrier = PyList_GET_ITEM(barriers, i)
-                            for j in range(p):
-                                to_particle = PyList_GET_ITEM(particles, j)
-                                if (<Particle>to_particle).non_anchor:
-                                    (<Barrier>barrier).apply(<Particle>to_particle, self.speed_of_light, clock, delta)
-            last_time += delta
+                            for j in range(n):
+                                (<Barrier>PyList_GET_ITEM(barriers, j)).apply(<Particle>to_particle, self.speed_of_light, clock, delta)
+                            if more:
+                                (<Particle>to_particle).reset_force()
             clock += delta
-            if last_time >= time or (realtime and not extra):
+            if not more:
                 break
             extra = False
-            with nogil:
-                m = PyList_GET_SIZE(groups)
-                for i in range(m):
-                    groupptr = PyList_GET_ITEM(groups, i)
-                    p = PyList_GET_SIZE((<PhysicsGroup>groupptr).particles)
-                    for j in range(p):
-                        to_particle = PyList_GET_ITEM((<PhysicsGroup>groupptr).particles, j)
-                        (<Particle>to_particle).reset_force()
         return clock

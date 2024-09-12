@@ -486,32 +486,20 @@ a new semi-isolated group of particles and forces. The `!physics` node counts
 as the outermost group. Particle (and anchor) `id`s must be unique across the
 entire system.
 
-Forces are applied to particles according to the following rules:
+Forces (and barriers) declared in a group apply to all particles declared in
+that group, and all particles declared in sub-groups of that group. Forces
+declared at the top level of a `!physics` system apply to *all* particle
+within the system.
 
-`!distance`
-: As distance forces reference a specific pair of particles (or a particle and
-an anchor), they are applied to the referenced particles regardless of which
-group they or the particles are declared in.
+For forces that apply between pairs of particles, particles are only able to
+"see" other particles in the same group, in sub-groups and in parent groups,
+but not particles in sibling groups – with the exception of particles
+referenced explicitly by `id`.
 
-`!constant`, `!random`, `!field`, `!drag`, `!buoyancy`
-: These forces apply to particles within the group in which the force is
-declared and to particles in all sub-groups within that group. Declaring any of
-these at the top level of the `!physics` system applies them to all particles.
-
-`!barrier`
-: Barriers apply to particles within the group in which they are declared,
-and to particles in all sub-groups below that group.
-
-`!collision`, `!electrostatic`, `!gravity`, `!adhesion`
-: These pair-wise forces apply to pairs of particles within the group in which
-the force is declared, within sub-groups of that group, and pairs of particles
-between sub-groups and all of their parent groups leading up to the group in
-which the force was declared. These forces do not, however, apply between
-sibling sub-groups.
-
-As the latter forces apply to all pairs of particles, they are the most
-expensive to compute. Therefore, limiting them to not apply across sub-groups
-allows for fine-grained control over which pairs the forces should apply.
+To restrict a force to apply to only a specific set of particles, declare the
+force and the particles within a `!group`. To make specific particles visible
+between two groups, declare the force and those particles in the parent of the
+two groups.
 
 ## State interaction
 
