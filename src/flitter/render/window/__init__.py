@@ -658,6 +658,8 @@ class Window(ProgramNode):
             vsync = node.get('vsync', 1, bool, self.default_vsync)
             glfw.swap_interval(1 if vsync else 0)
             glfw.swap_buffers(self.window)
+        else:
+            self.glctx.finish()
         self._beat = beat
         glfw.poll_events()
         RenderTarget.empty_pool(self.glctx, 1)
