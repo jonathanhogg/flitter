@@ -648,7 +648,8 @@ class Window(ProgramNode):
             self._last = None
 
     def render(self, node, references, beat=None, **kwargs):
-        super().render(node, references, **kwargs)
+        if self._visible or self.node_id is not None:
+            super().render(node, references, **kwargs)
         if self._visible:
             self.glctx.screen.use()
             self.glctx.screen.clear(0, 0, 0, 1)
