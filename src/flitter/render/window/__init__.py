@@ -465,6 +465,8 @@ class Window(ProgramNode):
 
     def create(self, engine, node, resized, *, opengl_es=False, **kwargs):
         super().create(engine, node, resized, opengl_es=opengl_es, **kwargs)
+        self._keys = {}
+        self._pointer_state = None
         new_window = False
         screen = node.get('screen', 1, int, self.default_screen)
         fullscreen = node.get('fullscreen', 1, bool, self.default_fullscreen) if self._visible else False
@@ -492,6 +494,9 @@ class Window(ProgramNode):
                 glfw.window_hint(glfw.CENTER_CURSOR, glfw.FALSE)
                 glfw.window_hint(glfw.SCALE_TO_MONITOR, glfw.TRUE)
             self.window = glfw.create_window(self.width, self.height, title, None, Window.Windows[0].window if Window.Windows else None)
+            glfw.set_key_callback(self.window, self.key_callback)
+            glfw.set_cursor_pos_callback(self.window, self.pointer_movement_callback)
+            glfw.set_mouse_button_callback(self.window, self.pointer_button_callback)
             self._title = title
             Window.Windows.append(self)
             new_window = True
@@ -534,21 +539,15 @@ class Window(ProgramNode):
             glfw.set_window_title(self.window, title)
             self._title = title
         glfw.make_context_current(self.window)
-        self._keys = {}
-        self._pointer_state = None
         if new_window:
-            self.glctx = moderngl.create_context(require=300 if opengl_es else 330, context=GLFWLoader)
-            self.glctx.gc_mode = 'context_gc'
             if self._visible:
                 logger.debug("{} opened on screen {}", self.name, screen)
             else:
                 logger.debug("{} opened off-screen", self.name)
+            self.glctx = moderngl.create_context(require=300 if opengl_es else 330, context=GLFWLoader)
+            self.glctx.gc_mode = 'context_gc'
             logger.debug("OpenGL info: {GL_RENDERER} {GL_VERSION}", **self.glctx.info)
             logger.trace("{!r}", self.glctx.info)
-            if self._visible:
-                glfw.set_key_callback(self.window, self.key_callback)
-                glfw.set_cursor_pos_callback(self.window, self.pointer_movement_callback)
-                glfw.set_mouse_button_callback(self.window, self.pointer_button_callback)
             zero = self.glctx.texture((1, 1), 4, dtype='f1')
             zero.write(bytes([0, 0, 0, 0]))
             if opengl_es:
