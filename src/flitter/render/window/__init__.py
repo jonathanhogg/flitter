@@ -71,7 +71,7 @@ class WindowNode:
         raise NotImplementedError()
 
     @property
-    def texture_data(self):
+    def array(self):
         raise NotImplementedError()
 
     @property
@@ -207,8 +207,8 @@ class ProgramNode(WindowNode):
         return self._target.texture if self._target is not None else None
 
     @property
-    def texture_data(self):
-        return self._target.texture_data if self._target is not None else None
+    def array(self):
+        return self._target.array if self._target is not None else None
 
     def get_vertex_source(self, node, **defaults):
         vertex = Template(node.get('vertex', 1, str), lookup=TemplateLoader) if 'vertex' in node else self.DEFAULT_VERTEX_SOURCE

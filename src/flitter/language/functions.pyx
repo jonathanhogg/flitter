@@ -37,7 +37,7 @@ def sample(Context context, Vector texture_id, Vector coord, Vector default=null
     cdef const float[:, :, :] data
     if coord.numbers == NULL \
             or (scene_node := context.references.get(texture_id.as_string())) is None \
-            or not hasattr(scene_node, 'texture_data') or (data := scene_node.texture_data) is None:
+            or not hasattr(scene_node, 'array') or (data := scene_node.array) is None:
         return default
     cdef int64_t x, y, height=data.shape[0], width=data.shape[1]
     cdef const float[:] color

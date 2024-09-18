@@ -345,7 +345,7 @@ class CachePath:
         self._cache[key] = trimesh_model
         return trimesh_model
 
-    def write_image(self, framebuffer, quality=None, alpha=False):
+    def write_image(self, image, quality=None, alpha=False):
         import PIL.Image
         import PIL.ImageCms
         self._touched = system_clock()
@@ -360,7 +360,6 @@ class CachePath:
             self.cleanup()
             if self._path.exists():
                 logger.warning("Existing image file will be overwritten: {}", self._path)
-            image = PIL.Image.frombytes('RGBA', (framebuffer.width, framebuffer.height), framebuffer.read(components=4)).transpose(PIL.Image.FLIP_TOP_BOTTOM)
             encoder = registered_extensions[suffix]
             if not alpha or encoder not in ('PNG', 'TIFF', 'GIF', 'JPEG2000', 'WEBP'):
                 image = image.convert('RGB')
@@ -376,12 +375,11 @@ class CachePath:
                 logger.success("Saved image to file: {}", self._path)
         self._cache[key] = True
 
-    def write_video_frame(self, framebuffer, timestamp, codec='h264', pixfmt='yuv420p', fps=60, realtime=False,
+    def write_video_frame(self, frame, timestamp, codec='h264', pixfmt='yuv420p', fps=60, realtime=False,
                           crf=None, preset=None, limit=None, alpha=False):
         import av
-        import PIL.Image
         self._touched = system_clock()
-        width, height = framebuffer.width, framebuffer.height
+        width, height = frame.width, frame.height
         key = 'video_output', width, height, alpha, codec, pixfmt, fps, crf, preset, limit
         writer, queue, start = self._cache.get(key, (None, None, None))
         if start is None:
@@ -431,9 +429,8 @@ class CachePath:
                 writer.join()
                 self._cache[key] = None, None, start
                 return
-            image = PIL.Image.frombytes('RGBA', (framebuffer.width, framebuffer.height), framebuffer.read(components=4)).transpose(PIL.Image.FLIP_TOP_BOTTOM)
-            frame = av.VideoFrame.from_image(image)
             frame.pts = frame_time
+            frame.time_base = fractions.Fraction(1, fps)
             try:
                 queue.put(frame, block=not realtime)
             except Full:

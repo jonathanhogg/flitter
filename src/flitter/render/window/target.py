@@ -4,8 +4,10 @@ Flitter render targets
 
 from collections import namedtuple
 
+import av
 from loguru import logger
 import numpy as np
+import PIL.Image
 
 from ...clock import system_clock
 from .glconstants import GL_RGBA8, GL_SRGB8_ALPHA8, GL_RGBA16F, GL_RGBA32F, GL_FRAMEBUFFER_SRGB
@@ -51,7 +53,9 @@ class RenderTarget:
         self.srgb = srgb
         self.has_depth = has_depth
         self.samples = samples
-        self._texture_data = None
+        self._array = None
+        self._image = None
+        self._video_frame = None
         self._release_time = None
         format = COLOR_FORMATS[self.colorbits]
         gl_format = format.srgb_gl_format if self.srgb else format.gl_format
@@ -95,12 +99,29 @@ class RenderTarget:
         return self._image_texture
 
     @property
-    def texture_data(self):
+    def array(self):
         if self._release_time is not None:
             return None
-        if self._texture_data is None:
-            self._texture_data = np.ndarray((self.height, self.width, 4), 'float32', self._image_framebuffer.read(components=4, dtype='f4'))
-        return self._texture_data
+        if self._array is None:
+            self._array = np.ndarray((self.height, self.width, 4), 'float32', self._image_framebuffer.read(components=4, dtype='f4'))
+        return self._array
+
+    @property
+    def image(self):
+        if self._release_time is not None:
+            return None
+        if self._image is None:
+            data = self._image_framebuffer.read(components=4, dtype='f1')
+            self._image = PIL.Image.frombytes('RGBA', (self.width, self.height), data).transpose(PIL.Image.FLIP_TOP_BOTTOM)
+        return self._image
+
+    @property
+    def video_frame(self):
+        if self._release_time is not None:
+            return None
+        if self._video_frame is None:
+            self._video_frame = av.VideoFrame.from_image(self.image)
+        return self._video_frame
 
     @property
     def framebuffer(self):
@@ -119,9 +140,11 @@ class RenderTarget:
     def finish(self):
         if self.srgb:
             self._glctx.disable_direct(GL_FRAMEBUFFER_SRGB)
-        if self._image_framebuffer is not None:
+        if self._image_framebuffer is not self._render_framebuffer:
             self._glctx.copy_framebuffer(self._image_framebuffer, self._render_framebuffer)
-        self._texture_data = None
+        self._array = None
+        self._image = None
+        self._video_frame = None
 
     def depth_write(self, enabled):
         self._render_framebuffer.depth_mask = enabled

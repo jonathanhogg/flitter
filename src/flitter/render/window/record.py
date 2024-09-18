@@ -19,8 +19,8 @@ class Record(ProgramNode):
                 crf = node.get('crf', 1, int)
                 preset = node.get('preset', 1, str)
                 limit = node.get('limit', 1, float)
-                path.write_video_frame(self._target.framebuffer, time, fps=int(fps), realtime=realtime, codec=codec,
+                path.write_video_frame(self._target.video_frame, time, fps=int(fps), realtime=realtime, codec=codec,
                                        pixfmt=pixfmt, crf=crf, preset=preset, limit=limit, alpha=keep_alpha)
             else:
                 quality = node.get('quality', 1, int)
-                path.write_image(self._target.framebuffer, quality=quality, alpha=keep_alpha)
+                path.write_image(self._target.image, quality=quality, alpha=keep_alpha)

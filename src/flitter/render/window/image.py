@@ -31,8 +31,8 @@ class Image(WindowNode):
         return self._target.texture if self._target is not None else None
 
     @property
-    def texture_data(self):
-        return self._target.texture_data if self._target is not None else None
+    def array(self):
+        return self._target.array if self._target is not None else None
 
     async def update(self, engine, node, references, **kwargs):
         self.node_id = node.get('id', 1, str)
