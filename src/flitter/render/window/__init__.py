@@ -57,7 +57,6 @@ class WindowNode:
         self.height = None
         self.tags = set()
         self.hidden = False
-        self._target = None
 
     @property
     def name(self):
