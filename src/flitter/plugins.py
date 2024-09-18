@@ -11,7 +11,7 @@ PluginEntryPoints = {}
 PluginObjectCache = {}
 
 
-def get_plugin(group, name):
+def get_plugin(group, name, quiet=False):
     global PluginEntryPoints, PluginObjectCache
     if group in PluginObjectCache:
         cache = PluginObjectCache[group]
@@ -34,7 +34,8 @@ def get_plugin(group, name):
             logger.exception("Unable to load {} plugin: {}", group, name)
             plugin = None
     else:
-        logger.warning("No {} plugin found for: {}", group, name)
+        if not quiet:
+            logger.warning("No {} plugin found for: {}", group, name)
         plugin = None
     cache[name] = plugin
     return plugin
