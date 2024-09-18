@@ -15,13 +15,13 @@ class Renderer:
         """
         pass
 
-    def purge(self):
+    async def purge(self):
         """
         `purge()`` should wipe any local state ready for a complete redefinition.
         """
         raise NotImplementedError()
 
-    def destroy(self):
+    async def destroy(self):
         """
         `destroy()`` should tear down the renderer itself.
         """

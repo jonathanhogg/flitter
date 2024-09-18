@@ -29,16 +29,16 @@ class Controller:
         self.controls = {}
         self.unknown = set()
 
-    def purge(self):
+    async def purge(self):
         while self.controls:
             key, control = self.controls.popitem()
             control.reset()
             control.update_representation()
 
-    def destroy(self):
+    async def destroy(self):
         if self.driver is not None:
-            self.purge()
-            asyncio.create_task(self.driver.stop())
+            await self.purge()
+            await self.driver.stop()
             self.driver = None
 
     async def update(self, engine, node, time, **kwargs):

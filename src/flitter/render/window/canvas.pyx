@@ -873,8 +873,8 @@ class Canvas(WindowNode):
         return self._target.texture if self._target is not None else None
 
     @property
-    def texture_data(self):
-        return self._target.texture_data if self._target is not None else None
+    def array(self):
+        return self._target.array if self._target is not None else None
 
     def release(self):
         self._colorspace = None
@@ -918,7 +918,7 @@ class Canvas(WindowNode):
         # A canvas is a leaf node from the perspective of the OpenGL world
         pass
 
-    def purge(self):
+    async def purge(self):
         if 'canvas' in self._stats:
             total_count = self._stats['canvas'][0]
             logger.info("{} render stats - {:d} x {:.1f}ms = {:.1f}s", self.name, total_count,

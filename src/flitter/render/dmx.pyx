@@ -217,10 +217,10 @@ cdef class DMX:
     def __init__(self, **kwargs):
         self.driver = None
 
-    def purge(self):
+    async def purge(self):
         pass
 
-    def destroy(self):
+    async def destroy(self):
         if self.driver is not None:
             self.driver.close()
             self.driver = None

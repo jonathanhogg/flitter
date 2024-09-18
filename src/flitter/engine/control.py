@@ -94,9 +94,6 @@ class EngineController:
                 logger.info("Restore counter at beat {:.1f}, tempo {:.1f}, quantum {}", self.counter.beat, self.counter.tempo, self.counter.quantum)
             else:
                 self.counter.reset()
-            for renderers in self.renderers.values():
-                for renderer in renderers:
-                    renderer.purge()
             setproctitle(f'flitter {self.current_path}')
 
     def has_next_page(self):
@@ -133,11 +130,11 @@ class EngineController:
                     updated_references.append(references)
                     count += 1
                 while len(renderers) > count:
-                    renderers.pop().destroy()
+                    await renderers.pop().destroy()
         for kind in list(self.renderers):
             if kind not in nodes_by_kind:
                 for renderer in self.renderers.pop(kind):
-                    renderer.destroy()
+                    await renderer.destroy()
         try:
             await asyncio.gather(*tasks)
         except Exception:
@@ -294,6 +291,9 @@ class EngineController:
                     performance = 1
                     count = gc.collect(2)
                     logger.trace("Collected {} objects (full collection)", count)
+                    for renderers in self.renderers.values():
+                        for renderer in renderers:
+                            await renderer.purge()
 
                 elif count := gc.collect(0):
                     logger.trace("Collected {} objects", count)
@@ -338,7 +338,7 @@ class EngineController:
             SharedCache.clean(0)
             for renderers in self.renderers.values():
                 while renderers:
-                    renderers.pop().destroy()
+                    await renderers.pop().destroy()
             if self.vm_stats:
                 log_vm_stats()
             count = gc.collect(2)

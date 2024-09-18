@@ -3,6 +3,7 @@ Flitter window management
 """
 
 import array
+import asyncio
 import ctypes
 import os
 import sys
@@ -84,14 +85,19 @@ class WindowNode:
                 i += 1
         return textures
 
-    def destroy(self):
-        self.purge()
-        self.release()
+    async def destroy(self):
+        await self.purge()
+        result = self.release()
+        if asyncio.coroutines.iscoroutine(result):
+            await result
         self.glctx = None
 
-    def purge(self):
+    async def purge(self):
         while self.children:
-            self.children.pop().destroy()
+            await self.children.pop().destroy()
+
+    def release(self):
+        pass
 
     async def update(self, engine, node, references, *, default_size=(512, 512), **kwargs):
         self.node_id = node.get('id', 1, str)
@@ -105,20 +111,32 @@ class WindowNode:
             self.height = height
             resized = True
         self.tags = node.tags
-        self.create(engine, node, resized, default_size=(self.width, self.height), **kwargs)
+        result = self.create(engine, node, resized, default_size=(self.width, self.height), **kwargs)
+        if asyncio.coroutines.iscoroutine(result):
+            await result
         await self.descend(engine, node, references, default_size=(self.width, self.height), **kwargs)
-        self.render(node, references, **kwargs)
+        result = self.render(node, references, **kwargs)
+        if asyncio.coroutines.iscoroutine(result):
+            await result
         for child in self.children:
-            child.parent_finished()
+            result = child.parent_finished()
+            if asyncio.coroutines.iscoroutine(result):
+                await result
 
     def similar_to(self, node):
         return node.tags == self.tags
+
+    def create(self, engine, node, resized, **kwargs):
+        pass
 
     async def descend(self, engine, node, references, **kwargs):
         existing = self.children
         updated = []
         for child in node.children:
-            if self.handle_node(engine, child, **kwargs):
+            result = self.handle_node(engine, child, **kwargs)
+            if asyncio.coroutines.iscoroutine(result):
+                result = await result
+            if result:
                 continue
             cls = get_plugin('flitter.render.window', child.kind)
             if cls is not None:
@@ -131,14 +149,8 @@ class WindowNode:
                 await scene_node.update(engine, child, references, **kwargs)
                 updated.append(scene_node)
         while existing:
-            existing.pop().destroy()
+            await existing.pop().destroy()
         self.children = updated
-
-    def handle_node(self, engine, node, **kwargs):
-        return False
-
-    def create(self, engine, node, resized, **kwargs):
-        pass
 
     def render(self, node, references, **kwargs):
         raise NotImplementedError()
@@ -146,13 +158,16 @@ class WindowNode:
     def parent_finished(self):
         pass
 
-    def release(self):
-        pass
+    def handle_node(self, engine, node, **kwargs):
+        return False
 
 
 class Reference(WindowNode):
     def __init__(self, glctx):
         super().__init__(glctx)
+        self._reference = None
+
+    def release(self):
         self._reference = None
 
     @property
@@ -166,9 +181,6 @@ class Reference(WindowNode):
     async def update(self, engine, node, references, **kwargs):
         node_id = node.get('id', 1, str)
         self._reference = references.get(node_id) if node_id else None
-
-    def destroy(self):
-        self._reference = None
 
 
 class ProgramNode(WindowNode):

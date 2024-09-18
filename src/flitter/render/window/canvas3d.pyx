@@ -1056,7 +1056,7 @@ class Canvas3D(WindowNode):
         while self._secondary_render_targets:
             self._secondary_render_targets.pop().release()
 
-    def purge(self):
+    async def purge(self):
         logger.info("{} draw stats - {:d} x {:.1f}ms = {:.1f}s", self.name, self._total_count,
                     1e3 * self._total_duration / self._total_count, self._total_duration)
         self._total_duration = 0

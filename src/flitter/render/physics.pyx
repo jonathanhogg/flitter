@@ -411,10 +411,10 @@ cdef class PhysicsSystem:
     def __init__(self, **kwargs):
         self.state_keys = set()
 
-    def destroy(self):
+    async def destroy(self):
         pass
 
-    def purge(self):
+    async def purge(self):
         pass
 
     async def update(self, engine, Node node, double time, double performance, **kwargs):
