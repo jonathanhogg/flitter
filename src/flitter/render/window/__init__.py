@@ -571,7 +571,6 @@ class Window(ProgramNode):
         if colorbits not in COLOR_FORMATS:
             colorbits = DEFAULT_COLORBITS
         self.glctx.extra['colorbits'] = colorbits
-        self.glctx.extra['size'] = self.width, self.height
 
     def key_callback(self, window, key, scancode, action, mods):
         if key in self._keys:
