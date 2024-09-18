@@ -434,6 +434,7 @@ class Window(ProgramNode):
         self._screen = None
         self._fullscreen = None
         self._resizable = None
+        self._title = None
         self._beat = None
 
     def release(self):
@@ -461,9 +462,9 @@ class Window(ProgramNode):
         screen = node.get('screen', 1, int, self.default_screen)
         fullscreen = node.get('fullscreen', 1, bool, self.default_fullscreen) if self._visible else False
         resizable = node.get('resizable', 1, bool, True) if self._visible else False
+        title = node.get('title', 1, str, "Flitter")
         if self.window is None:
             self.engine = engine
-            title = node.get('title', 1, str, "Flitter")
             if not Window.Windows:
                 ok = glfw.init()
                 if not ok:
@@ -484,6 +485,7 @@ class Window(ProgramNode):
                 glfw.window_hint(glfw.CENTER_CURSOR, glfw.FALSE)
                 glfw.window_hint(glfw.SCALE_TO_MONITOR, glfw.TRUE)
             self.window = glfw.create_window(self.width, self.height, title, None, Window.Windows[0].window if Window.Windows else None)
+            self._title = title
             Window.Windows.append(self)
             new_window = True
             if self._visible and hasattr(glfw, 'get_cocoa_window'):
@@ -521,6 +523,9 @@ class Window(ProgramNode):
                 glfw.set_window_size(self.window, width, height)
             self._screen = screen
             self._fullscreen = fullscreen
+        if title != self._title:
+            glfw.set_window_title(self.window, title)
+            self._title = title
         glfw.make_context_current(self.window)
         self._keys = {}
         self._pointer_state = None
