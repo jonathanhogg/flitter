@@ -63,10 +63,6 @@ class WindowNode:
         return '#'.join((self.__class__.__name__.lower(), *self.tags))
 
     @property
-    def framebuffer(self):
-        return None
-
-    @property
     def texture(self):
         raise NotImplementedError()
 
@@ -170,12 +166,12 @@ class Reference(WindowNode):
         self._reference = None
 
     @property
-    def framebuffer(self):
-        return self._reference.framebuffer if self._reference is not None else None
-
-    @property
     def texture(self):
         return self._reference.texture if self._reference is not None else None
+
+    @property
+    def array(self):
+        return self._reference.array if self._reference is not None else None
 
     async def update(self, engine, node, references, **kwargs):
         node_id = node.get('id', 1, str)
