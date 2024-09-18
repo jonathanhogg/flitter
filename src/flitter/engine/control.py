@@ -6,6 +6,7 @@ import asyncio
 import gc
 from pathlib import Path
 import pickle
+import time
 
 from loguru import logger
 
@@ -181,7 +182,8 @@ class EngineController:
                 delta = beat - last
                 last = beat
                 dynamic = {'beat': beat, 'quantum': self.counter.quantum, 'tempo': self.counter.tempo, 'fps': self.target_fps,
-                           'delta': delta, 'time': frame_time, 'frame': frame_count, 'performance': performance, 'slow_frame': slow_frame}
+                           'delta': delta, 'time': frame_time, 'frame': frame_count, 'performance': performance, 'slow_frame': slow_frame,
+                           'clock': time.time()}
                 names = dict(static)
                 names.update(dynamic)
 

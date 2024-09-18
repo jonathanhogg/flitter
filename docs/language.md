@@ -78,6 +78,7 @@ The engine-supplied global values are:
 - `time` - the current frame time (derived from Python's `perf_counter()`
     usually, though increasing by exactly `1/fps` per frame in non-realtime
     mode)
+- `clock` - the current UTC time as a seconds-since-UNIX-epoch value
 - `frame` - the current frame number, counting from 0 and increasing by one
     for each rendered frame (this will increase by exactly 1 on each program
     execution when running in non-realtime mode)
