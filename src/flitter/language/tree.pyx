@@ -12,6 +12,7 @@ from loguru import logger
 from libc.stdint cimport int64_t
 
 from .. import name_patch
+from ..cache import SharedCache
 from ..model cimport Vector, Node, Context, StateDict, null_, true_, false_, minusone_
 from .vm cimport Program, Instruction, InstructionInt, InstructionVector, OpCode, static_builtins, dynamic_builtins
 
@@ -46,8 +47,10 @@ cdef bint sequence_pack(list expressions):
 
 
 cdef class Expression:
-    def compile(self, tuple initial_lnames=(), bint log_errors=True):
+    def compile(self, tuple initial_lnames=(), set initial_errors=None, bint log_errors=True):
         cdef Program program = Program.__new__(Program, initial_lnames)
+        if initial_errors:
+            program.compiler_errors.update(initial_errors)
         self._compile(program, list(initial_lnames))
         program.link()
         if log_errors:
@@ -55,7 +58,7 @@ cdef class Expression:
                 logger.warning("Compiler error: {}", error)
         return program
 
-    def simplify(self, StateDict state=None, dict static=None, dynamic=None, bint return_context=False):
+    def simplify(self, StateDict state=None, dict static=None, dynamic=None, Context parent=None, path=None, bint return_context=False):
         cdef dict context_vars = {}
         cdef str key
         if static is not None:
@@ -65,6 +68,8 @@ cdef class Expression:
             for key in dynamic:
                 context_vars[key] = None
         cdef Context context = Context(state=state, names=context_vars)
+        context.path = path
+        context.parent = parent
         cdef Expression expr = self
         try:
             expr = expr._simplify(context)
@@ -74,7 +79,7 @@ cdef class Expression:
             return expr, context
         else:
             for error in context.errors:
-                logger.warning("Simplification error: {}", error)
+                logger.warning("Simplifier error: {}", error)
         return expr
 
     cdef void _compile(self, Program program, list lnames):
@@ -87,10 +92,12 @@ cdef class Expression:
 cdef class Top(Expression):
     cdef readonly tuple pragmas
     cdef readonly Expression body
+    cdef readonly set dependencies
 
-    def __init__(self, tuple pragmas, Expression body):
+    def __init__(self, tuple pragmas, Expression body, set dependencies=None):
         self.pragmas = pragmas
         self.body = body
+        self.dependencies = dependencies if dependencies is not None else set()
 
     cdef void _compile(self, Program program, list lnames):
         cdef Binding binding
@@ -108,12 +115,12 @@ cdef class Top(Expression):
 
     cdef Expression _simplify(self, Context context):
         cdef Expression body = self.body._simplify(context)
-        if body is self.body:
+        if body is self.body and context.dependencies == self.dependencies:
             return self
-        return Top(self.pragmas, body)
+        return Top(self.pragmas, body, self.dependencies ^ context.dependencies)
 
     def __repr__(self):
-        return f'Top({self.pragmas!r}, {self.body!r})'
+        return f'Top({self.pragmas!r}, {self.body!r}, {self.dependencies!r})'
 
 
 cdef class Export(Expression):
@@ -143,6 +150,8 @@ cdef class Export(Expression):
         cdef dict static_exports = dict(self.static_exports) if self.static_exports else {}
         cdef bint touched = False
         for name, value in context.names.items():
+            if value is not None:
+                context.exports[name] = value
             if isinstance(value, Vector) and (name not in static_exports or value != static_exports[name]):
                 static_exports[name] = value
                 touched = True
@@ -178,14 +187,44 @@ cdef class Import(Expression):
     cdef Expression _simplify(self, Context context):
         cdef str name
         cdef Expression filename = self.filename._simplify(context)
+        cdef Top top
+        cdef Context import_context
+        cdef dict import_static_names = None
+        if isinstance(filename, Literal) and context.path is not None:
+            name = (<Literal>filename).value.as_string()
+            path = SharedCache.get_with_root(name, context.path)
+            import_context = context.parent
+            while import_context is not None:
+                if import_context.path is path:
+                    context.errors.add(f"Circular import of '{name}'")
+                    import_static_names = {name: null_ for name in self.names}
+                    break
+                import_context = import_context.parent
+            else:
+                if (top := path.read_flitter_top()) is not None:
+                    top, import_context = top.simplify(path=path, parent=context, return_context=True)
+                    import_static_names = import_context.exports
+                    context.errors.update(import_context.errors)
+        cdef dict let_names = {}
         cdef dict saved = dict(context.names)
+        cdef list remaining = []
         for name in self.names:
-            context.names[name] = None
-        expr = self.expr._simplify(context)
+            if import_static_names is not None and name in import_static_names:
+                let_names[name] = import_static_names[name]
+                context.dependencies.add(path)
+            else:
+                context.names[name] = None
+                remaining.append(name)
+        cdef Expression expr = self.expr
+        if let_names:
+            expr = Let(tuple(PolyBinding((name,), value if isinstance(value, Function) else Literal(value)) for name, value in let_names.items()), expr)
+        expr = expr._simplify(context)
         context.names = saved
+        if not remaining:
+            return expr
         if filename is self.filename and expr is self.expr:
             return self
-        return Import(self.names, filename, expr)
+        return Import(tuple(remaining), filename, expr)
 
     def __repr__(self):
         return f'Import({self.names!r}, {self.filename!r}, {self.expr!r})'

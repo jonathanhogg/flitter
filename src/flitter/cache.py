@@ -100,11 +100,42 @@ class CachePath:
         self._cache[key] = data
         return data
 
+    def read_flitter_top(self):
+        key = 'flitter_top'
+        current_top = self._cache.get(key, False)
+        if self.check_unmodified() and current_top is not False:
+            return current_top
+        top = None
+        if self._mtime is None:
+            if current_top is False:
+                logger.warning("Program not found: {}", self._path)
+            elif current_top is not None:
+                logger.error("Program disappeared: {}", self._path)
+        else:
+            from .language.parser import parse, ParseError
+            try:
+                parse_time = -system_clock()
+                source = self._path.read_text(encoding='utf8')
+                top = parse(source)
+                parse_time += system_clock()
+                logger.debug("Parsed '{}' in {:.1f}ms", self._path, parse_time*1000)
+            except ParseError as exc:
+                logger.error("Error parsing {} at line {} column {}:\n{}",
+                             self._path.name, exc.line, exc.column, exc.context)
+            except Exception as exc:
+                logger.opt(exception=exc).error("Error reading program: {}", self._path)
+        self._cache[key] = top
+        return top
+
     def read_flitter_program(self, static=None, dynamic=None, simplify=True):
-        key = 'flitter', tuple(sorted(static.items())) if static else None, tuple(dynamic) if dynamic else (), simplify
+        key = 'flitter_program', tuple(sorted(static.items())) if static else None, tuple(dynamic) if dynamic else (), simplify
         current_program = self._cache.get(key, False)
         if self.check_unmodified() and current_program is not False:
-            return current_program
+            for path in current_program.top.dependencies if current_program is not None else ():
+                if not path.check_unmodified():
+                    break
+            else:
+                return current_program
         if self._mtime is None:
             if current_program is False:
                 logger.warning("Program not found: {}", self._path)
@@ -123,18 +154,17 @@ class CachePath:
                 now = system_clock()
                 parse_time += now
                 simplify_time = -now
-                top = initial_top.simplify(static=static, dynamic=dynamic) if simplify else initial_top
+                top, context = initial_top.simplify(static=static, dynamic=dynamic, path=self, return_context=True) if simplify else (initial_top, None)
                 now = system_clock()
                 simplify_time += now
                 compile_time = -now
-                program = top.compile(initial_lnames=tuple(dynamic) if dynamic else ())
+                program = top.compile(initial_lnames=tuple(dynamic) if dynamic else (), initial_errors=context.errors if simplify else None)
                 program.set_top(top)
                 program.set_path(self)
                 program.use_simplifier(simplify)
                 compile_time += system_clock()
-                logger.debug("Read program: {}", self._path)
-                logger.debug("Compiled to {} instructions in {:.1f}/{:.1f}/{:.1f}ms",
-                             len(program), parse_time*1000, simplify_time*1000, compile_time*1000)
+                logger.debug("Compiled '{}' to {} instructions in {:.1f}/{:.1f}/{:.1f}ms",
+                             self._path, len(program), parse_time*1000, simplify_time*1000, compile_time*1000)
             except ParseError as exc:
                 if current_program is None:
                     logger.error("Error parsing {} at line {} column {}:\n{}",

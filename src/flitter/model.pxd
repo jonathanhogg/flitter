@@ -204,10 +204,10 @@ cdef class Context:
     cdef readonly Node root
     cdef readonly object path
     cdef readonly Context parent
-    cdef readonly dict modules
     cdef readonly dict exports
     cdef readonly set errors
     cdef readonly set logs
     cdef readonly dict references
     cdef readonly object stack
     cdef readonly object lnames
+    cdef readonly set dependencies

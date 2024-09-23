@@ -61,7 +61,6 @@ class EngineController:
         self.current_page = None
         self.current_path = None
         self._references = {}
-        self._modules = {}
 
     def load_page(self, filename):
         page_number = len(self.pages)
@@ -190,8 +189,7 @@ class EngineController:
                     logger.log(level, "Loaded page {}: {}", self.current_page, self.current_path)
                     run_program = current_program = program
                     self.handle_pragmas(program.pragmas, frame_time)
-                    errors = set()
-                    logs = set()
+                    errors = logs = None
                     self.state_generation0 ^= self.state_generation1
                     self.state_generation1 = self.state_generation2
                     self.state_generation2 = set()
@@ -203,7 +201,7 @@ class EngineController:
 
                 if run_program is not None:
                     context = Context(names={key: Vector.coerce(value) for key, value in dynamic.items()},
-                                      state=self.state, references=self._references, modules=self._modules)
+                                      state=self.state, references=self._references)
                     run_program.run(context, record_stats=self.vm_stats)
                 else:
                     context = Context()

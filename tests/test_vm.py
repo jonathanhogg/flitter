@@ -941,11 +941,11 @@ let x=5 y=10
         self.circular_module_b = Path(tempfile.mktemp('.fl'))
         module_a = f"""
 import y from {str(self.circular_module_b)!r}
-let x=5
+let x=5 + y
 """
         module_b = f"""
 import x from {str(self.circular_module_a)!r}
-let y=10
+let y=10 + x
 """
         self.circular_module_a.write_text(module_a, encoding='utf8')
         self.circular_module_b.write_text(module_b, encoding='utf8')
@@ -964,7 +964,6 @@ let y=10
         self.program.local_load(0)
         stack = self.program.execute(self.context)
         self.assertEqual(stack, [5])
-        self.assertEqual(len(self.context.modules), 1)
 
     def test_import_two_names(self):
         self.program.literal(str(self.test_module))
@@ -973,7 +972,6 @@ let y=10
         self.program.local_load(0)
         stack = self.program.execute(self.context)
         self.assertEqual(stack, [5, 10])
-        self.assertEqual(len(self.context.modules), 1)
 
     def test_import_twice(self):
         self.program.literal(str(self.test_module))
@@ -984,7 +982,6 @@ let y=10
         self.program.local_load(0)
         stack = self.program.execute(self.context)
         self.assertEqual(stack, [5, 10])
-        self.assertEqual(len(self.context.modules), 1)
 
     def test_import_bad_name(self):
         self.program.literal(str(self.test_module))
@@ -992,7 +989,6 @@ let y=10
         self.program.local_load(0)
         stack = self.program.execute(self.context)
         self.assertEqual(stack, [null])
-        self.assertEqual(len(self.context.modules), 1)
         self.assertEqual(self.context.errors, {f"Unable to import 'z' from '{self.test_module}'"})
 
     def test_import_missing_module(self):
@@ -1009,7 +1005,7 @@ let y=10
         self.program.local_load(1)
         self.program.local_load(0)
         stack = self.program.execute(self.context)
-        self.assertEqual(stack, [5, 10])
+        self.assertEqual(stack, [null, null])
         self.assertEqual(self.context.errors, {f"Circular import of '{self.circular_module_a}'"})
 
 

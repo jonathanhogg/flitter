@@ -618,13 +618,11 @@ cdef inline dict import_module(Context context, str filename, bint record_stats,
             PySet_Add(context.errors, f"Circular import of '{filename}'")
             return None
         import_context = import_context.parent
-    if program in context.modules:
-        return context.modules[program]
+    context.errors.update(program.compiler_errors)
     cdef VectorStack stack=context.stack, lnames=context.lnames
     cdef int64_t stack_top=stack.top, lnames_top=lnames.top
     import_context = Context.__new__(Context)
     import_context.parent = context
-    import_context.modules = context.modules
     import_context.errors = context.errors
     import_context.logs = context.logs
     import_context.state = StateDict()
@@ -642,7 +640,6 @@ cdef inline dict import_module(Context context, str filename, bint record_stats,
     drop(stack, 1)
     assert stack.top == stack_top, "Bad stack"
     assert lnames.top == lnames_top, "Bad lnames"
-    context.modules[program] = import_context.exports
     return import_context.exports
 
 

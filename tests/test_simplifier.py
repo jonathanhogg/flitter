@@ -2,6 +2,8 @@
 Flitter language simplifier unit tests
 """
 
+from pathlib import Path
+import tempfile
 import unittest
 import unittest.mock
 
@@ -20,18 +22,18 @@ from flitter.language.tree import (Literal, Name, Sequence,
 
 class SimplifierTestCase(unittest.TestCase):
     def assertSimplifiesTo(self, x, y, state=None, dynamic=None, static=None, with_errors=None):
-        xx, context = x.simplify(state=state, dynamic=dynamic, static=static, return_context=True)
+        xx, context = x.simplify(state=state, dynamic=dynamic, static=static, path='test.fl', return_context=True)
         xxx = xx.simplify(state=state, dynamic=dynamic, static=static)
-        self.assertIs(xxx, xx, msg="Simplification not complete")
+        self.assertIs(xxx, xx, msg="Simplification not complete in one step")
         self.assertEqual(repr(xx), repr(y))
         self.assertEqual(context.errors, set() if with_errors is None else with_errors)
         if with_errors:
             with unittest.mock.patch('flitter.language.tree.logger') as mock_logger:
-                x.simplify(state=state, dynamic=dynamic, static=static)
+                x.simplify(state=state, dynamic=dynamic, static=static, path='test.fl')
                 errors = set()
                 for name, args, kwargs in mock_logger.warning.mock_calls:
                     self.assertEqual(len(args), 2)
-                    self.assertEqual(args[0], "Simplification error: {}")
+                    self.assertEqual(args[0], "Simplifier error: {}")
                     errors.add(args[1])
                 self.assertEqual(errors, with_errors)
         if static is not None:
@@ -1089,10 +1091,47 @@ class TestIfElse(SimplifierTestCase):
 
 
 class TestImport(SimplifierTestCase):
-    def test_recursive(self):
-        """Imports are left alone except for the sub-expression being simplified"""
-        self.assertSimplifiesTo(Import(('x', 'y'), Name('m'), Name('z')), Import(('x', 'y'), Literal('module.fl'), Literal(5)),
-                                static={'m': 'module.fl', 'z': 5})
+    def setUp(self):
+        self.test_module = Path(tempfile.mktemp('.fl'))
+        self.test_module.write_text("""
+let x=5 y=10
+""", encoding='utf8')
+        self.circular_module_a = Path(tempfile.mktemp('.fl'))
+        self.circular_module_b = Path(tempfile.mktemp('.fl'))
+        module_a = f"""
+import y from {str(self.circular_module_b)!r}
+let x=5
+"""
+        module_b = f"""
+import x from {str(self.circular_module_a)!r}
+let y=10+(x or 3)
+"""
+        self.circular_module_a.write_text(module_a, encoding='utf8')
+        self.circular_module_b.write_text(module_b, encoding='utf8')
+
+    def tearDown(self):
+        if self.test_module.exists():
+            self.test_module.unlink()
+        if self.circular_module_a.exists():
+            self.circular_module_a.unlink()
+        if self.circular_module_b.exists():
+            self.circular_module_b.unlink()
+
+    def test_dynamic(self):
+        """Import module name and sub-expression are simplified"""
+        self.assertSimplifiesTo(Import(('x', 'y'), Name('m'), Name('z')), Import(('x', 'y'), Name("m'"), Literal(5)),
+                                static={'m': Name("m'"), 'z': 5}, dynamic={"m'"})
+
+    def test_static(self):
+        with unittest.mock.patch('flitter.cache.logger'):
+            self.assertSimplifiesTo(Import(('x', 'y'), Literal(str(self.test_module)), Add(Name('x'), Name('y'))), Literal(15))
+
+    def test_recursive_import(self):
+        with unittest.mock.patch('flitter.cache.logger'):
+            self.assertSimplifiesTo(Import(('x', 'y'), Literal(str(self.circular_module_a)), Add(Name('x'), Name('y'))), Literal(18),
+                                    with_errors={f"Circular import of '{self.circular_module_a}'"})
+            self.assertSimplifiesTo(Import(('x', 'y'), Literal(str(self.circular_module_b)), Add(Name('x'), Name('y'))), Literal(20),
+                                    with_errors={f"Circular import of '{self.circular_module_b}'"})
 
 
 class TestFunction(SimplifierTestCase):
