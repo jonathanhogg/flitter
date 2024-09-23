@@ -952,9 +952,10 @@ If a function in a module is called from the main program, and this function
 makes use of any file built-ins – such as `read()` – then these will load files
 relative to the *module* file.
 
-Modules may import from other modules, provided that a cycle is not created.
-As module execution has no access to any dynamic values, the result of executing
-a module is cached until that file changes.
+Modules may import from other modules, provided that a cycle is not created: if
+a module attempts to import a module further up the current import chain, then
+an error will be output to the console and all of the names for the failing
+import will be bound to `null`.
 
 ## Parsing
 
@@ -996,11 +997,18 @@ evaluate conditionals with constant tests, call functions with constant
 arguments (including creating pseudo-random streams), inline functions that
 contain only local names, replace `let` names with literal values, evaluate
 mathematical expressions (including some rearranging where necessary to achieve
-this) and generally reduces as much of the expression tree as possible to
+this) and generally reduce as much of the expression tree as possible to
 constant values.
 
-Known global names (like `beat`) are always dynamic and so generally any
-expressions that include these will be dynamic. However, unbound names are
+The simplifier is also able to evaluate imported modules and pull static names
+directly out of them - including inline-able functions. As imports are always
+evaluated statically (see [Imports](#imports)), this means module imports can
+usually be entirely collapsed at compile-time. The engine will maintain a set of
+file dependencies when this happens and will re-compile the running program if
+the source of an imported module changes.
+
+Known global names (like `beat`) are always dynamic and so any expressions that
+include these will, generally, be dynamic. However, unbound names are
 interpreted as null values, therefore the simplifier will simply replace these
 with static `null`s, issuing a warning as it does so. It is sometimes useful to
 leave unbound names in a program in order to allow behaviour to be switched at
@@ -1010,9 +1018,9 @@ performance and such uses can be considered similar to `#if` preprocessor
 instructions in other languages.
 
 After the simplifier has partially-evaluated the tree (and note that thanks to
-loop unrolling, "simpler" doesn't necessarily mean "smaller"), the tree is
-compiled into instructions for a stack-based virtual machine. These instructions
-are interpreted to run the program.
+loop unrolling and function inlining, "simpler" most often doesn't mean
+"smaller"), the tree is compiled into instructions for a stack-based virtual
+machine. These instructions are interpreted to run the program.
 
 The simplifier and compiler can run again incorporating any state that has been
 stable for a period of time (configurable with the `--evalstate` command-line
