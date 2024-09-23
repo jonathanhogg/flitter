@@ -257,7 +257,7 @@ class EngineController:
                             self.state_generation2 ^= self.state_generation1
                             simplify_state = self.state.with_keys(self.state_generation2)
                             simplify_time = -system_clock()
-                            top = current_program.top.simplify(state=simplify_state, dynamic=dynamic)
+                            top = current_program.top.simplify(state=simplify_state, dynamic=dynamic, path=current_program.path)
                             now = system_clock()
                             simplify_time += now
                             if top is current_program.top:
