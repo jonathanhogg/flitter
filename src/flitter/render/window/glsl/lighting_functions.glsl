@@ -163,9 +163,10 @@ void compute_translucency(vec3 world_position, vec3 view_direction, float view_d
     if (backface_distance > view_distance) {
         vec3 backface_position = view_position + view_direction*backface_distance;
         float thickness = backface_distance - view_distance;
-        float s = clamp(thickness / (translucency * 5.0), 0.05, 0.95);
+        float s = thickness / (translucency * 5.0);
+        float cs = clamp(s, 0.01, 0.99);
         float k = thickness * s;
-        int n = int(round(MaxTranslucencySamples * 2.0 * s * (1.0 - s)));
+        int n = int(round(MaxTranslucencySamples * 2.0 * cs * (1.0 - cs)));
         int count = 1;
         uvec2 size = uvec2(textureSize(backface_data, 0));
         uvec2 p = uvec2(screen_coord * vec2(size));
