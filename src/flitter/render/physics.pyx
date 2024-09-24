@@ -534,8 +534,7 @@ cdef class PhysicsSystem:
             zero.numbers[i] = 0
         for child in node._children:
             if child.kind is 'particle' or child.kind is 'anchor':
-                id = <Vector>child._attributes.get('id')
-                if id is not None:
+                if child._attributes is not None and (id := <Vector>child._attributes.get('id')) is not None:
                     particle = Particle.__new__(Particle, child, id, zero, state_prefix, state)
                     particles_by_id[id] = particle
                     group.particles.append(particle)
