@@ -257,7 +257,7 @@ cdef object line_path(object path, Vector points, double curve, bint closed):
 
 
 cdef object get_color(Node node, default=None):
-    cdef Vector v = node._attributes.get('color') if node._attributes else None
+    cdef Vector v = node.get_vec('color', None)
     cdef double r, g, b, a
     if v is not None and v.numbers != NULL:
         if v.length == 1:
@@ -731,7 +731,7 @@ cpdef object _draw(Node node, Node parent, ctx, paint, font, path, dict stats, d
                 ctx.drawPath(path, draw_paint)
 
     elif kind is 'line':
-        if node._attributes and (points := node._attributes.get('points')) is not None and points.numbers is not NULL:
+        if (points := node.get_vec('points', None)) is not None and points.numbers is not NULL:
             curve = node.get('curve', 1, float, 0)
             close = node.get('close', 1, bool, False)
             if (fill := node.get_bool('fill', False)) or (stroke := node.get_bool('stroke', False)):
