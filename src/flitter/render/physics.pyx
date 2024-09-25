@@ -67,30 +67,6 @@ cdef class Particle:
     cdef double ease
 
     @cython.profile(False)
-    def __cinit__(self, Node node, Vector particle_id, Vector zero, Vector prefix, StateDict state):
-        self.id = particle_id.intern()
-        self.position_state_key = prefix.concat(particle_id).intern()
-        self.velocity_state_key = self.position_state_key.concat(VELOCITY).intern()
-        self.position = node.get_fvec('position', zero.length, zero).copy()
-        self.velocity = node.get_fvec('velocity', zero.length, zero).copy()
-        cdef Vector position, velocity
-        self.non_anchor = node.kind is 'particle'
-        if self.non_anchor:
-            position = state.get_item(self.position_state_key)
-            if position.length == zero.length and position.numbers != NULL:
-                self.position = position.copy()
-            velocity = state.get_item(self.velocity_state_key)
-            if velocity.length == zero.length and velocity.numbers != NULL:
-                self.velocity = velocity.copy()
-        self.initial_force = node.get_fvec('force', zero.length, zero)
-        self.force = self.initial_force.copy()
-        self.acceleration = zero.copy()
-        self.radius = max(0, node.get_float('radius', 0))
-        self.mass = max(0, node.get_float('mass', 1))
-        self.charge = node.get_float('charge', 0)
-        self.ease = node.get_float('ease', 0)
-
-    @cython.profile(False)
     cdef void step(self, double speed_of_light, double clock, double delta) noexcept nogil:
         cdef double speed_squared, v, k
         cdef int64_t i, n=self.force.length
@@ -198,20 +174,6 @@ cdef class DistanceForceApplier:
     cdef double power
     cdef double minimum
     cdef double maximum
-
-    @cython.profile(False)
-    def __cinit__(self, Node node, double strength, Vector zero):
-        self.strength = strength
-        self.from_particle_id = node.get_vec('from', None)
-        self.to_particle_id = node.get_vec('to', None)
-        self.power = max(0, node.get_float('power', 1))
-        cdef double fixed
-        if (fixed := node.get_float('fixed', 0)) != 0:
-            self.minimum = fixed
-            self.maximum = fixed
-        else:
-            self.minimum = node.get_float('min', 0)
-            self.maximum = node.get_float('max', 0)
 
     @cython.profile(False)
     cdef void apply(self, Particle from_particle, Particle to_particle, Vector direction, double distance) noexcept nogil:
@@ -523,10 +485,11 @@ cdef class PhysicsSystem:
     cdef void collect(self, list groups, PhysicsGroup group, Node node, dict particles_by_id, set old_state_keys, set new_state_keys,
                       StateDict state, Vector state_prefix, double clock, Vector seed):
         cdef Node child
-        cdef Vector particle_id
+        cdef Vector particle_id, from_particle_id, to_particle_id
         cdef double strength, ease
         cdef Particle particle
         cdef ParticleForceApplier particle_force
+        cdef DistanceForceApplier distance_force
         cdef Barrier barrier
         cdef PhysicsGroup child_group
         cdef Vector zero = Vector.__new__(Vector)
@@ -534,10 +497,37 @@ cdef class PhysicsSystem:
         cdef int64_t i
         for i in range(self.dimensions):
             zero.numbers[i] = 0
+        cdef Vector position, velocity
+        cdef double fixed
         for child in node._children:
             if child.kind is 'particle' or child.kind is 'anchor':
                 if (particle_id := child.get_vec('id', None)) is not None:
-                    particle = Particle.__new__(Particle, child, particle_id, zero, state_prefix, state)
+                    particle = Particle.__new__(Particle)
+                    particle.id = particle_id.intern()
+                    particle.position_state_key = state_prefix.concat(particle_id).intern()
+                    particle.velocity_state_key = particle.position_state_key.concat(VELOCITY).intern()
+                    particle.non_anchor = child.kind is 'particle'
+                    if particle.non_anchor:
+                        position = state.get_item(particle.position_state_key)
+                        if position.length == zero.length and position.numbers != NULL:
+                            particle.position = position.copy()
+                        else:
+                            particle.position = child.get_fvec('position', zero.length, zero).copy()
+                        velocity = state.get_item(particle.velocity_state_key)
+                        if velocity.length == zero.length and velocity.numbers != NULL:
+                            particle.velocity = velocity.copy()
+                        else:
+                            particle.velocity = child.get_fvec('velocity', zero.length, zero).copy()
+                    else:
+                        particle.position = child.get_fvec('position', zero.length, zero).copy()
+                        particle.velocity = child.get_fvec('velocity', zero.length, zero).copy()
+                    particle.initial_force = child.get_fvec('force', zero.length, zero)
+                    particle.force = particle.initial_force.copy()
+                    particle.acceleration = zero.copy()
+                    particle.radius = max(0, child.get_float('radius', 0))
+                    particle.mass = max(0, child.get_float('mass', 1))
+                    particle.charge = child.get_float('charge', 0)
+                    particle.ease = child.get_float('ease', 0)
                     particles_by_id[particle.id] = particle
                     group.particles.append(particle)
                     new_state_keys.add(particle.position_state_key)
@@ -557,8 +547,20 @@ cdef class PhysicsSystem:
                 ease = child.get_float('ease', 0)
                 if ease > 0 and ease < clock:
                     strength *= clock/ease
-                if child.kind is 'distance':
-                    group.distance_forces.append(DistanceForceApplier.__new__(DistanceForceApplier, child, strength, zero))
+                if child.kind is 'distance' and (from_particle_id := child.get_vec('from', None)) is not None \
+                        and (to_particle_id := child.get_vec('to', None)) is not None:
+                    distance_force = DistanceForceApplier.__new__(DistanceForceApplier)
+                    distance_force.strength = strength
+                    distance_force.from_particle_id = from_particle_id.intern()
+                    distance_force.to_particle_id = to_particle_id.intern()
+                    distance_force.power = max(0, child.get_float('power', 1))
+                    if (fixed := child.get_float('fixed', 0)) != 0:
+                        distance_force.minimum = fixed
+                        distance_force.maximum = fixed
+                    else:
+                        distance_force.minimum = child.get_float('min', 0)
+                        distance_force.maximum = child.get_float('max', 0)
+                    group.distance_forces.append(distance_force)
                 elif child.kind is 'drag':
                     group.particle_forces.append(DragForceApplier.__new__(DragForceApplier, child, strength, zero))
                 elif child.kind is 'buoyancy':
