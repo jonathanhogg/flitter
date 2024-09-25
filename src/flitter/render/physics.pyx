@@ -178,7 +178,7 @@ cdef class ForceApplier:
 
 cdef class PairForceApplier(ForceApplier):
     @cython.profile(False)
-    cdef void apply(self, Particle from_particle, Particle to_particle, Vector direction, double distance, double distance_squared) noexcept nogil:
+    cdef void apply(self, Particle from_particle, Particle to_particle, Vector direction, double distance) noexcept nogil:
         raise NotImplementedError()
 
 
@@ -223,17 +223,23 @@ cdef class DistanceForceApplier(SpecificPairForceApplier):
             self.maximum = node.get_float('max', 0)
 
     @cython.profile(False)
-    cdef void apply(self, Particle from_particle, Particle to_particle, Vector direction, double distance, double distance_squared) noexcept nogil:
+    cdef void apply(self, Particle from_particle, Particle to_particle, Vector direction, double distance) noexcept nogil:
         cdef double f, k
         cdef int64_t i
         if self.minimum and distance < self.minimum:
-            k = self.strength * (self.minimum - distance) ** self.power
+            k = self.minimum - distance
+            if self.power != 1:
+                k **= self.power
+            k *= self.strength
             for i in range(direction.length):
                 f = direction.numbers[i] * k
                 from_particle.force.numbers[i] = from_particle.force.numbers[i] - f
                 to_particle.force.numbers[i] = to_particle.force.numbers[i] + f
         elif self.maximum and distance > self.maximum:
-            k = self.strength * (distance - self.maximum) ** self.power
+            k = distance - self.maximum
+            if self.power != 1:
+                k **= self.power
+            k *= self.strength
             for i in range(direction.length):
                 f = direction.numbers[i] * k
                 from_particle.force.numbers[i] = from_particle.force.numbers[i] + f
@@ -339,13 +345,16 @@ cdef class CollisionForceApplier(MatrixPairForceApplier):
         self.power = max(0, node.get_float('power', 1))
 
     @cython.profile(False)
-    cdef void apply(self, Particle from_particle, Particle to_particle, Vector direction, double distance, double distance_squared) noexcept nogil:
+    cdef void apply(self, Particle from_particle, Particle to_particle, Vector direction, double distance) noexcept nogil:
         cdef double min_distance, f, k
         cdef int64_t i
         if from_particle.radius and to_particle.radius:
             min_distance = from_particle.radius + to_particle.radius
             if distance < min_distance:
-                k = self.strength * (min_distance - distance) ** self.power
+                k = min_distance - distance
+                if self.power != 1:
+                    k **= self.power
+                k *= self.strength
                 for i in range(direction.length):
                     f = direction.numbers[i] * k
                     from_particle.force.numbers[i] = from_particle.force.numbers[i] - f
@@ -354,11 +363,12 @@ cdef class CollisionForceApplier(MatrixPairForceApplier):
 
 cdef class GravityForceApplier(MatrixPairForceApplier):
     @cython.profile(False)
-    cdef void apply(self, Particle from_particle, Particle to_particle, Vector direction, double distance, double distance_squared) noexcept nogil:
+    cdef void apply(self, Particle from_particle, Particle to_particle, Vector direction, double distance) noexcept nogil:
         cdef double f, k, d=from_particle.radius + to_particle.radius
         cdef int64_t i
         if from_particle.mass and to_particle.mass:
-            k = self.strength * from_particle.mass * to_particle.mass / max(distance_squared, d*d)
+            d = max(d, distance)
+            k = self.strength * from_particle.mass * to_particle.mass / (d * d)
             for i in range(direction.length):
                 f = direction.numbers[i] * k
                 from_particle.force.numbers[i] = from_particle.force.numbers[i] + f
@@ -367,11 +377,12 @@ cdef class GravityForceApplier(MatrixPairForceApplier):
 
 cdef class ElectrostaticForceApplier(MatrixPairForceApplier):
     @cython.profile(False)
-    cdef void apply(self, Particle from_particle, Particle to_particle, Vector direction, double distance, double distance_squared) noexcept nogil:
+    cdef void apply(self, Particle from_particle, Particle to_particle, Vector direction, double distance) noexcept nogil:
         cdef double f, k, d=from_particle.radius + to_particle.radius
         cdef int64_t i
         if from_particle.charge and to_particle.charge:
-            k = self.strength * from_particle.charge * to_particle.charge / max(distance_squared, d*d)
+            d = max(d, distance)
+            k = self.strength * from_particle.charge * to_particle.charge / (d * d)
             for i in range(direction.length):
                 f = direction.numbers[i] * k
                 from_particle.force.numbers[i] = from_particle.force.numbers[i] - f
@@ -386,7 +397,7 @@ cdef class AdhesionForceApplier(MatrixPairForceApplier):
         self.overlap = min(max(0, node.get_float('overlap', 0.25)), 1)
 
     @cython.profile(False)
-    cdef void apply(self, Particle from_particle, Particle to_particle, Vector direction, double distance, double distance_squared) noexcept nogil:
+    cdef void apply(self, Particle from_particle, Particle to_particle, Vector direction, double distance) noexcept nogil:
         cdef double min_distance, max_distance, overlap_distance, adhesion_distance, f, k
         cdef int64_t i
         if from_particle.radius and to_particle.radius:
@@ -584,7 +595,7 @@ cdef class PhysicsSystem:
         cdef double delta
         cdef Vector direction = Vector.__new__(Vector)
         direction.allocate_numbers(self.dimensions)
-        cdef double d, distance, distance_squared
+        cdef double d, distance, inv_distance
         cdef PyObject* from_particle
         cdef PyObject* to_particle
         cdef PyObject* force
@@ -603,15 +614,16 @@ cdef class PhysicsSystem:
                     to_particle = PyDict_GetItem(particles_by_id, specific_force.to_particle_id)
                     if to_particle == NULL:
                         continue
-                    distance_squared = 0
+                    distance = 0
                     for k in range(self.dimensions):
                         d = (<Particle>to_particle).position.numbers[k] - (<Particle>from_particle).position.numbers[k]
                         direction.numbers[k] = d
-                        distance_squared += d * d
-                    distance = sqrt(distance_squared)
+                        distance += d * d
+                    distance = sqrt(distance)
+                    inv_distance = 1 / distance
                     for k in range(self.dimensions):
-                        direction.numbers[k] /= distance
-                    specific_force.apply(<Particle>from_particle, <Particle>to_particle, direction, distance, distance_squared)
+                        direction.numbers[k] *= inv_distance
+                    specific_force.apply(<Particle>from_particle, <Particle>to_particle, direction, distance)
                 particles = group.particles
                 p = PyList_GET_SIZE(particles)
                 if not p:
@@ -630,19 +642,19 @@ cdef class PhysicsSystem:
                             from_particle = PyList_GET_ITEM(all_particles, i)
                             for j in range(i+1, n):
                                 to_particle = PyList_GET_ITEM(all_particles, j)
-                                distance_squared = 0
+                                distance = 0
                                 for k in range(self.dimensions):
                                     d = (<Particle>to_particle).position.numbers[k] - (<Particle>from_particle).position.numbers[k]
                                     direction.numbers[k] = d
-                                    distance_squared += d * d
-                                distance = sqrt(distance_squared)
+                                    distance += d * d
+                                distance = sqrt(distance)
+                                inv_distance = 1 / distance
                                 for k in range(self.dimensions):
-                                    direction.numbers[k] /= distance
+                                    direction.numbers[k] *= inv_distance
                                 for k in range(m):
                                     force = PyList_GET_ITEM(matrix_forces, k)
                                     if not (<MatrixPairForceApplier>force).max_distance or distance < (<MatrixPairForceApplier>force).max_distance:
-                                        (<MatrixPairForceApplier>force).apply(<Particle>from_particle, <Particle>to_particle,
-                                                                              direction, distance, distance_squared)
+                                        (<MatrixPairForceApplier>force).apply(<Particle>from_particle, <Particle>to_particle, direction, distance)
             for group in groups:
                 particles = group.particles
                 p = PyList_GET_SIZE(particles)
