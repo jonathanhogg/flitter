@@ -180,6 +180,7 @@ cdef class Node:
     cpdef void append_vector(self, Vector nodes)
     cdef bint _equals(self, Node other)
     cpdef object get(self, str name, int n=?, type t=?, object default=?)
+    cdef Vector get_vec(self, str name, Vector default)
     cdef Vector get_fvec(self, str name, int n, Vector default)
     cdef double get_float(self, str name, double default)
     cdef int64_t get_int(self, str name, int64_t default)

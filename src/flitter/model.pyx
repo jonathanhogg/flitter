@@ -2359,6 +2359,14 @@ cdef class Node:
                 return value.as_string()
         return value.match(n, t, default)
 
+    cdef Vector get_vec(self, str name, Vector default):
+        if self._attributes is None:
+            return default
+        cdef PyObject* objptr = PyDict_GetItem(self._attributes, name)
+        if objptr == NULL:
+            return default
+        return <Vector>objptr
+
     cdef Vector get_fvec(self, str name, int n, Vector default):
         if self._attributes is None:
             return default
