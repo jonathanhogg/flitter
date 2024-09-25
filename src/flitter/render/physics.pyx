@@ -117,12 +117,6 @@ cdef class Particle:
             self.acceleration.numbers[i] = (self.velocity.numbers[i] - self.acceleration.numbers[i]) / delta
             self.position.numbers[i] = self.position.numbers[i] + self.velocity.numbers[i] * delta
 
-    @cython.profile(False)
-    cdef void reset_force(self) noexcept nogil:
-        cdef int64_t i, n=self.force.length
-        for i in range(n):
-            self.force.numbers[i] = self.initial_force.numbers[i]
-
 
 @cython.final
 cdef class Barrier:
@@ -681,7 +675,8 @@ cdef class PhysicsSystem:
                             for j in range(n):
                                 (<Barrier>PyList_GET_ITEM(barriers, j)).apply(<Particle>to_particle, self.speed_of_light, clock, delta)
                             if more:
-                                (<Particle>to_particle).reset_force()
+                                for j in range(self.dimensions):
+                                    (<Particle>to_particle).force.numbers[j] = (<Particle>to_particle).initial_force.numbers[j]
             clock += delta
             if not more:
                 break
