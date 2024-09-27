@@ -482,7 +482,9 @@ cdef class Transform(UnaryOperation):
         if trimesh_model is not None:
             transform_array = np.array(self.transform_matrix, dtype='float64').reshape((4, 4)).transpose()
             trimesh_model = trimesh_model.copy().apply_transform(transform_array)
-            trimesh_model = trimesh_model if len(trimesh_model.vertices) and len(trimesh_model.faces) else None
+            if self.original.is_manifold() and not trimesh_model.is_volume:
+                logger.warning("Result of transform is no longer a volume: {}", self.name)
+                return None
         return trimesh_model
 
 
