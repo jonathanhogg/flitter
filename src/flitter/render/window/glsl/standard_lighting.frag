@@ -22,13 +22,6 @@ uniform float fog_curve;
 uniform mat4 pv_matrix;
 uniform sampler2D backface_data;
 
-uniform bool use_albedo_texture;
-uniform bool use_metal_texture;
-uniform bool use_roughness_texture;
-uniform bool use_ao_texture;
-uniform bool use_emissive_texture;
-uniform bool use_transparency_texture;
-
 uniform sampler2D albedo_texture;
 uniform sampler2D metal_texture;
 uniform sampler2D roughness_texture;
@@ -52,32 +45,22 @@ void main() {
         view_direction /= view_distance;
     }
     float fog_alpha = (fog_max > fog_min) && (fog_curve > 0.0) ? pow(clamp((view_distance - fog_min) / (fog_max - fog_min), 0.0, 1.0), 1.0/fog_curve) : 0.0;
+
     vec3 albedo = fragment_albedo.rgb;
-    if (use_albedo_texture) {
-        overlay_color_texture(albedo_texture, texture_uv, albedo);
-    }
     float transparency = fragment_albedo.a;
-    if (use_transparency_texture) {
-        overlay_luminance_texture(transparency_texture, texture_uv, transparency);
-    }
     vec3 emissive = fragment_emissive.rgb;
-    if (use_emissive_texture) {
-        overlay_color_texture(emissive_texture, texture_uv, emissive);
-    }
     float translucency = fragment_emissive.a;
     float ior = fragment_properties.x;
     float metal = fragment_properties.y;
-    if (use_metal_texture) {
-        overlay_luminance_texture(metal_texture, texture_uv, metal);
-    }
     float roughness = fragment_properties.z;
-    if (use_roughness_texture) {
-        overlay_luminance_texture(roughness_texture, texture_uv, roughness);
-    }
     float ao = fragment_properties.w;
-    if (use_ao_texture) {
-        overlay_luminance_texture(ao_texture, texture_uv, ao);
-    }
+
+    overlay_color_texture(albedo_texture, texture_uv, albedo);
+    overlay_luminance_texture(transparency_texture, texture_uv, transparency);
+    overlay_color_texture(emissive_texture, texture_uv, emissive);
+    overlay_luminance_texture(metal_texture, texture_uv, metal);
+    overlay_luminance_texture(roughness_texture, texture_uv, roughness);
+    overlay_luminance_texture(ao_texture, texture_uv, ao);
 
     vec3 transmission_color = vec3(0.0);
     vec3 diffuse_color = vec3(0.0);
