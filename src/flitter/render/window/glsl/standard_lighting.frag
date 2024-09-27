@@ -54,39 +54,29 @@ void main() {
     float fog_alpha = (fog_max > fog_min) && (fog_curve > 0.0) ? pow(clamp((view_distance - fog_min) / (fog_max - fog_min), 0.0, 1.0), 1.0/fog_curve) : 0.0;
     vec3 albedo = fragment_albedo.rgb;
     if (use_albedo_texture) {
-        vec4 texture_color = texture(albedo_texture, texture_uv);
-        albedo = albedo * (1.0 - clamp(texture_color.a, 0.0, 1.0)) + texture_color.rgb;
+        overlay_color_texture(albedo_texture, texture_uv, albedo);
     }
     float transparency = fragment_albedo.a;
     if (use_transparency_texture) {
-        vec4 texture_color = texture(transparency_texture, texture_uv);
-        float mono = clamp(srgb_luminance(texture_color.rgb), 0.0, 1.0);
-        transparency = transparency * (1.0 - clamp(texture_color.a, 0.0, 1.0)) + mono;
+        overlay_luminance_texture(transparency_texture, texture_uv, transparency);
     }
     vec3 emissive = fragment_emissive.rgb;
     if (use_emissive_texture) {
-        vec4 emissive_texture_color = texture(emissive_texture, texture_uv);
-        emissive = emissive * (1.0 - clamp(emissive_texture_color.a, 0.0, 1.0)) + emissive_texture_color.rgb;
+        overlay_color_texture(emissive_texture, texture_uv, emissive);
     }
     float translucency = fragment_emissive.a;
     float ior = fragment_properties.x;
     float metal = fragment_properties.y;
     if (use_metal_texture) {
-        vec4 texture_color = texture(metal_texture, texture_uv);
-        float mono = clamp(srgb_luminance(texture_color.rgb), 0.0, 1.0);
-        metal = metal * (1.0 - clamp(texture_color.a, 0.0, 1.0)) + mono;
+        overlay_luminance_texture(metal_texture, texture_uv, metal);
     }
     float roughness = fragment_properties.z;
     if (use_roughness_texture) {
-        vec4 texture_color = texture(roughness_texture, texture_uv);
-        float mono = clamp(srgb_luminance(texture_color.rgb), 0.0, 1.0);
-        roughness = roughness * (1.0 - clamp(texture_color.a, 0.0, 1.0)) + mono;
+        overlay_luminance_texture(roughness_texture, texture_uv, roughness);
     }
     float ao = fragment_properties.w;
     if (use_ao_texture) {
-        vec4 texture_color = texture(ao_texture, texture_uv);
-        float mono = clamp(srgb_luminance(texture_color.rgb), 0.0, 1.0);
-        ao = ao * (1.0 - clamp(texture_color.a, 0.0, 1.0)) + mono;
+        overlay_luminance_texture(ao_texture, texture_uv, ao);
     }
 
     vec3 transmission_color = vec3(0.0);

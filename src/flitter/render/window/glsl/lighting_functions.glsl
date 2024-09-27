@@ -4,6 +4,19 @@ uniform lights_data {
     mat4 lights[${max_lights}];
 };
 
+
+void overlay_color_texture(sampler2D tex, vec2 coord, inout vec3 color) {
+    vec4 texture_color = texture(tex, coord);
+    color = color * (1.0 - clamp(texture_color.a, 0.0, 1.0)) + texture_color.rgb;
+}
+
+void overlay_luminance_texture(sampler2D tex, vec2 coord, inout float luminance) {
+    vec4 texture_color = texture(tex, coord);
+    float mono = clamp(srgb_luminance(texture_color.rgb), 0.0, 1.0);
+    luminance = luminance * (1.0 - clamp(texture_color.a, 0.0, 1.0)) + mono;
+}
+
+
 void compute_emissive_lighting(vec3 world_normal, vec3 view_direction, vec3 emissive, inout vec3 specular_color) {
     vec3 N = normalize(world_normal);
     vec3 V = normalize(view_direction);
@@ -15,6 +28,7 @@ void compute_emissive_lighting(vec3 world_normal, vec3 view_direction, vec3 emis
         specular_color += emissive;
     }
 }
+
 
 void compute_pbr_lighting(vec3 world_position, vec3 world_normal, vec3 view_direction,
                           float ior, float roughness, float metal, float ao, vec3 albedo,
