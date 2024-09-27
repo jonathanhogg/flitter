@@ -669,9 +669,8 @@ cdef class BooleanOperation(Model):
         if len(trimesh_models) == 1:
             return trimesh_models[0]
         if self.operation is 'difference' and len(trimesh_models) > 2:
-            trimesh_model = trimesh_models[0]
-            for difference_model in trimesh_models[1:]:
-                trimesh_model = trimesh.boolean.boolean_manifold([trimesh_model, difference_model], 'difference')
+            unioned_models = trimesh.boolean.boolean_manifold(trimesh_models[1:], 'union')
+            trimesh_model = trimesh.boolean.boolean_manifold([trimesh_models[0], unioned_models], 'difference')
         else:
             trimesh_model = trimesh.boolean.boolean_manifold(trimesh_models, self.operation)
         if len(trimesh_model.vertices) and len(trimesh_model.faces):
