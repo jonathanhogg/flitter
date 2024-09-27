@@ -841,13 +841,14 @@ The supported mappings are:
 : This notionally draws a ray from the origin of the model through each vertex
 and projects this ray onto a sphere. The Equirectangular projection coordinates
 of that point on the sphere will be used as the UV for the vertex. This matches
-the projection used by the `!sphere` primitive.
+the projection used by the `!sphere` primitive. You should not expect this to
+produce sensible results for a non-convex shape.
 
 :::{note}
-Note that the `:sphere` mapping requires a seam on the 0 longitude line where
-the texture wraps around from the right to the left side. Any faces that span
-this line will show clear visual distortions as the mapping algorithm will not
-create this seam.
+Note that correct spherical mapping requires a seam on the 0 longitude line
+where the texture wraps around from the right to the left side. Any faces that
+span this line will show clear visual distortions as the `:sphere` mapping
+algorithm will *not* create this seam.
 :::
 
 As with all models, the results of these operations are cached.
