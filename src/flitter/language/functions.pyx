@@ -333,6 +333,10 @@ def length(Vector xy not None, Vector ys=None):
     return d
 
 
+def sort(Vector xs not None):
+    return Vector(sorted(xs))
+
+
 def absv(Vector xs not None):
     if xs.numbers == NULL:
         return null_
@@ -1074,6 +1078,7 @@ STATIC_FUNCTIONS = {
     'quaternion': Vector(quaternion),
     'round': Vector(roundv),
     'sawtooth': Vector(sawtooth),
+    'sort': Vector(sort),
     'sharkfin': Vector(sharkfin),
     'shuffle': Vector(shuffle),
     'sin': Vector(sinv),
