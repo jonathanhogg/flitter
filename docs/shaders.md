@@ -525,6 +525,21 @@ The pre-scaled X and Y coordinates are in pixels from the top left.
 : Specifies a *pre-scaled* Z coordinate for the plane to be calculated,
 default `0`.
 
+`multiplier=` *MULTIPLIER*
+: Specifies a multiplier for the final noise value, default `0.5`.
+
+`offset=` *OFFSET*
+: Specifies an offset to be added to the multiplied noise value before writing
+to the output image, default `0.5`.
+
+Noise values are normally in the range $(-1,1)$. The default values for
+`multiplier` and `offset` are designed to adjust the noise range into the
+standard $(0,1)$ range for color values. However, with an HDR image format
+(i.e., the default `colorbits=16`) there is no particular need to restrict the
+noise values to this range – particularly if they are subsequently being used
+as the input to another shader. Setting `multiplier=1` and `offset=0` will
+return unmodified noise values.
+
 If one or more child textures are defined within the `!noise` node then they
 will be composited together and the resulting R, G, and B values passed into
 the noise function as X, Y and Z offsets, controlled with the attribute:

@@ -16,6 +16,8 @@ uniform vec2 origin;
 uniform float z;
 uniform vec3 scale;
 uniform vec3 tscale;
+uniform float offset;
+uniform float multiplier;
 uniform float alpha;
 % for name in child_textures:
 uniform sampler2D ${name};
@@ -82,19 +84,22 @@ void main() {
     hashes[2] = permute(hashes[1] + 1.0);
     hashes[3] = permute(hashes[2] + 1.0);
     vec4 sum = vec4(0.0);
-    float multiplier = 1.0;
+    float k = 1.0;
     float weight = 0.0;
     for (int i = 0; i < octaves; i++) {
-        vec3 p = orthonormalMap * point / multiplier;
+        vec3 p = orthonormalMap * point / k;
         vec4 c = vec4(1.0);
         for (int j = 0; j < components; j++) {
             float result = openSimplex2SDerivativesPart(hashes[j], p) + openSimplex2SDerivativesPart(hashes[j], p + 144.5);
             c[j] = result * multiplier;
         }
         sum += c;
-        weight += multiplier;
-        multiplier *= roughness;
+        weight += k;
+        k *= roughness;
     }
-    vec4 merged = clamp(vec4(sum/weight) * 0.5 + 0.5, 0.0, 1.0);
+    vec4 merged = sum / weight;
+    for (int i = 0; i < components; i++) {
+        merged[i] = merged[i] * multiplier + offset;
+    }
     color = merged * alpha;
 }

@@ -131,4 +131,5 @@ class Noise(Shader):
 
     def render(self, node, references, **kwargs):
         seed_hash = hash(node['seed'] if 'seed' in node else null) / (1 << 48)
-        super().render(node, references, seed_hash=seed_hash, components=1, octaves=1, roughness=0.5, origin=0, z=0, scale=1, tscale=1, **kwargs)
+        super().render(node, references, seed_hash=seed_hash, components=1, octaves=1, roughness=0.5, origin=0, z=0,
+                       scale=1, tscale=1, multiplier=0.5, offset=0.5, **kwargs)
