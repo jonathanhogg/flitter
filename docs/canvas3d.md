@@ -639,6 +639,20 @@ the `!material` node (or the default). This allows, for example, a generic
 "corrosion" or "dirt" texture with alpha transparency to be applied over
 multiple instances of a model with different base `color`s.
 
+The behaviour of the texture samplers can be controlled with the attributes:
+
+`border=` *COLOR*
+: Specifies a 4-vector color to be returned for texture coordinates outside of
+the $[0,1)$ range.
+
+`repeat=` *REPEAT*
+: Specifies a 2-vector of boolean values (i.e., `false`/`0` or `true`/`1`) for
+whether to repeat the texture on the $U$ or $V$ axis (respectively) or to clamp
+to the edge color of the texture.
+
+The default is to clamp to the edge color, i.e., `repeat=false`. Specifying
+the `border` attribute will override any setting for `repeat`.
+
 ## Models
 
 Actual renderable objects are placed in the scene with model nodes. There are

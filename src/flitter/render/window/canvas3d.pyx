@@ -11,7 +11,7 @@ import moderngl
 import numpy as np
 
 from libc.math cimport cos, log2, sqrt, tan, floor
-from libc.stdint cimport int32_t, int64_t
+from libc.stdint cimport int32_t, int64_t, uint64_t
 from cpython.dict cimport PyDict_GetItem
 from cpython.object cimport PyObject
 
@@ -19,7 +19,7 @@ from . import WindowNode
 from ... import name_patch
 from ...clock import system_clock
 from .glsl import TemplateLoader
-from ...model cimport Node, Vector, Matrix44, Matrix33, Quaternion, null_, true_, false_
+from ...model cimport Node, Vector, Matrix44, Matrix33, Quaternion, null_, true_, false_, HASH_START, HASH_UPDATE, HASH_STRING
 from .models cimport Model, DefaultSegments, DefaultSnapAngle
 from .target import RenderTarget, COLOR_FORMATS
 from ...plugins import get_plugin
@@ -120,12 +120,16 @@ cdef class Light:
 
 
 cdef class Textures:
+    cdef int64_t _hash
     cdef str albedo_id
     cdef str metal_id
     cdef str roughness_id
     cdef str ao_id
     cdef str emissive_id
     cdef str transparency_id
+    cdef Vector border_color
+    cdef bint repeat_x
+    cdef bint repeat_y
 
     def __eq__(self, Textures other):
         return other.albedo_id == self.albedo_id and \
@@ -133,11 +137,26 @@ cdef class Textures:
                other.roughness_id == self.roughness_id and \
                other.ao_id == self.ao_id and \
                other.emissive_id == self.emissive_id and \
-               other.transparency_id == self.transparency_id
+               other.transparency_id == self.transparency_id and \
+               other.border_color == self.border_color and \
+               other.repeat_x == self.repeat_x and \
+               other.repeat_y == self.repeat_y
 
     def __hash__(self):
-        return (hash(self.albedo_id) ^ hash(self.metal_id) ^ hash(self.roughness_id) ^ hash(self.ao_id) ^
-                hash(self.emissive_id) ^ hash(self.transparency_id))
+        if self._hash:
+            return self._hash
+        cdef uint64_t _hash = HASH_START
+        _hash = HASH_UPDATE(_hash, HASH_STRING(self.albedo_id) if self.albedo_id is not None else 0)
+        _hash = HASH_UPDATE(_hash, HASH_STRING(self.metal_id) if self.metal_id is not None else 0)
+        _hash = HASH_UPDATE(_hash, HASH_STRING(self.roughness_id) if self.roughness_id is not None else 0)
+        _hash = HASH_UPDATE(_hash, HASH_STRING(self.ao_id) if self.ao_id is not None else 0)
+        _hash = HASH_UPDATE(_hash, HASH_STRING(self.emissive_id) if self.emissive_id is not None else 0)
+        _hash = HASH_UPDATE(_hash, HASH_STRING(self.transparency_id) if self.transparency_id is not None else 0)
+        _hash = HASH_UPDATE(_hash, <uint64_t>self.border_color.hash(False) if self.border_color is not None else 0)
+        _hash = HASH_UPDATE(_hash, <uint64_t>self.repeat_x)
+        _hash = HASH_UPDATE(_hash, <uint64_t>self.repeat_y)
+        self._hash = _hash
+        return _hash
 
 
 cdef class Material:
@@ -155,6 +174,7 @@ cdef class Material:
         if node._attributes is None:
             return self
         cdef Material material = Material.__new__(Material)
+        cdef Vector border_color, repeat
         material.albedo = node.get_fvec('color', 3, self.albedo)
         material.ior = max(1, node.get_float('ior', self.ior))
         material.roughness = min(max(1e-6, node.get_float('roughness', 1)), self.roughness)
@@ -163,31 +183,45 @@ cdef class Material:
         material.emissive = node.get_fvec('emissive', 3, self.emissive)
         material.transparency = min(max(0, node.get_float('transparency', self.transparency)), 1)
         material.translucency = max(0, node.get_float('translucency', self.translucency))
-        if self.textures is not None:
-            albedo_id = node.get_str('texture_id', self.textures.albedo_id)
-            metal_id = node.get_str('metal_texture_id', self.textures.metal_id)
-            roughness_id = node.get_str('roughness_texture_id', self.textures.roughness_id)
-            ao_id = node.get_str('ao_texture_id', self.textures.ao_id)
-            emissive_id = node.get_str('emissive_texture_id', self.textures.emissive_id)
-            transparency_id = node.get_str('transparency_texture_id', self.textures.transparency_id)
+        albedo_id = node.get_str('texture_id', None)
+        metal_id = node.get_str('metal_texture_id', None)
+        roughness_id = node.get_str('roughness_texture_id', None)
+        ao_id = node.get_str('ao_texture_id', None)
+        emissive_id = node.get_str('emissive_texture_id', None)
+        transparency_id = node.get_str('transparency_texture_id', None)
+        border_color = node.get_fvec('border', 3, None)
+        if border_color is not None:
+            border_color = border_color.concat(true_)
         else:
-            albedo_id = node.get_str('texture_id', None)
-            metal_id = node.get_str('metal_texture_id', None)
-            roughness_id = node.get_str('roughness_texture_id', None)
-            ao_id = node.get_str('ao_texture_id', None)
-            emissive_id = node.get_str('emissive_texture_id', None)
-            transparency_id = node.get_str('transparency_texture_id', None)
+            border_color = node.get_fvec('border', 4, None)
+        repeat = node.get_fvec('repeat', 2, None)
         cdef Textures textures
-        if (albedo_id is not None or metal_id is not None or roughness_id is not None or ao_id is not None or
-                emissive_id is not None or transparency_id is not None):
+        if albedo_id is not None or metal_id is not None or roughness_id is not None or ao_id is not None \
+                or emissive_id is not None or transparency_id is not None or border_color is not None or repeat is not None:
             textures = Textures.__new__(Textures)
-            textures.albedo_id = albedo_id
-            textures.metal_id = metal_id
-            textures.roughness_id = roughness_id
-            textures.ao_id = ao_id
-            textures.emissive_id = emissive_id
-            textures.transparency_id = transparency_id
+            if self.textures is not None:
+                textures.albedo_id = albedo_id or self.textures.albedo_id
+                textures.metal_id = metal_id or self.textures.metal_id
+                textures.roughness_id = roughness_id or self.textures.roughness_id
+                textures.ao_id = ao_id or self.textures.ao_id
+                textures.emissive_id = emissive_id or self.textures.emissive_id
+                textures.transparency_id = transparency_id or self.textures.transparency_id
+                textures.border_color = border_color or self.textures.border_color
+                textures.repeat_x = repeat.numbers[0] != 0 if repeat is not None else self.textures.repeat_x
+                textures.repeat_y = repeat.numbers[1] != 0 if repeat is not None else self.textures.repeat_y
+            else:
+                textures.albedo_id = albedo_id
+                textures.metal_id = metal_id
+                textures.roughness_id = roughness_id
+                textures.ao_id = ao_id
+                textures.emissive_id = emissive_id
+                textures.transparency_id = transparency_id
+                textures.border_color = border_color
+                textures.repeat_x = repeat.numbers[0] != 0 if repeat is not None else False
+                textures.repeat_y = repeat.numbers[1] != 0 if repeat is not None else False
             material.textures = textures
+        else:
+            material.textures = self.textures
         return material
 
 
@@ -887,7 +921,7 @@ cdef void render(render_target, RenderGroup render_group, Camera camera, glctx, 
         sampler.clear()
 
 
-cdef inline int linear_sampler(glctx, str texture_id, dict references, list samplers, dict texture_unit_ids):
+cdef inline int linear_sampler(glctx, str texture_id, dict sampler_args, dict references, list samplers, dict texture_unit_ids):
     cdef int unit_id = 0
     if texture_id:
         if texture_id in texture_unit_ids:
@@ -895,7 +929,7 @@ cdef inline int linear_sampler(glctx, str texture_id, dict references, list samp
         elif (ref := references.get(texture_id)) is not None and hasattr(ref, 'texture') and (texture := ref.texture) is not None:
             unit_id = len(texture_unit_ids)
             texture_unit_ids[texture_id] = unit_id
-            sampler = glctx.sampler(texture=texture, filter=(moderngl.LINEAR, moderngl.LINEAR))
+            sampler = glctx.sampler(texture=texture, **sampler_args)
             sampler.use(unit_id)
             samplers.append(sampler)
     return unit_id
@@ -903,20 +937,26 @@ cdef inline int linear_sampler(glctx, str texture_id, dict references, list samp
 
 cdef inline list configure_textures(glctx, shader, Textures textures, dict references, dict texture_unit_ids):
     cdef list samplers = []
+    cdef dict sampler_args = {'filter': (moderngl.LINEAR, moderngl.LINEAR)}
     if textures is not None:
+        if textures.border_color is not None:
+            sampler_args['border_color'] = tuple(textures.border_color)
+        else:
+            sampler_args['repeat_x'] = textures.repeat_x
+            sampler_args['repeat_y'] = textures.repeat_y
         texture_unit_ids = texture_unit_ids.copy()
         if (texture_uniform := shader.get('albedo_texture', None)) is not None:
-            texture_uniform.value = linear_sampler(glctx, textures.albedo_id, references, samplers, texture_unit_ids)
+            texture_uniform.value = linear_sampler(glctx, textures.albedo_id, sampler_args, references, samplers, texture_unit_ids)
         if (texture_uniform := shader.get('metal_texture', None)) is not None:
-            texture_uniform.value = linear_sampler(glctx, textures.metal_id, references, samplers, texture_unit_ids)
+            texture_uniform.value = linear_sampler(glctx, textures.metal_id, sampler_args, references, samplers, texture_unit_ids)
         if (texture_uniform := shader.get('roughness_texture', None)) is not None:
-            texture_uniform.value = linear_sampler(glctx, textures.roughness_id, references, samplers, texture_unit_ids)
+            texture_uniform.value = linear_sampler(glctx, textures.roughness_id, sampler_args, references, samplers, texture_unit_ids)
         if (texture_uniform := shader.get('ao_texture', None)) is not None:
-            texture_uniform.value = linear_sampler(glctx, textures.ao_id, references, samplers, texture_unit_ids)
+            texture_uniform.value = linear_sampler(glctx, textures.ao_id, sampler_args, references, samplers, texture_unit_ids)
         if (texture_uniform := shader.get('emissive_texture', None)) is not None:
-            texture_uniform.value = linear_sampler(glctx, textures.emissive_id, references, samplers, texture_unit_ids)
+            texture_uniform.value = linear_sampler(glctx, textures.emissive_id, sampler_args, references, samplers, texture_unit_ids)
         if (texture_uniform := shader.get('transparency_texture', None)) is not None:
-            texture_uniform.value = linear_sampler(glctx, textures.transparency_id, references, samplers, texture_unit_ids)
+            texture_uniform.value = linear_sampler(glctx, textures.transparency_id, sampler_args, references, samplers, texture_unit_ids)
     else:
         if (texture_uniform := shader.get('albedo_texture', None)) is not None:
             texture_uniform.value = 0
