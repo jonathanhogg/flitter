@@ -38,7 +38,8 @@ cdef Vector DefaultFalloff = Vector((0, 0, 1, 0))
 cdef Matrix44 IdentityTransform = Matrix44._identity()
 cdef int DEFAULT_MAX_LIGHTS = 50
 cdef double Pi = 3.141592653589793115997963468544185161590576171875
-cdef set MaterialAttributes = {'color', 'metal', 'roughness', 'shininess', 'ao', 'emissive', 'transparency',
+cdef set MaterialAttributes = {'color', 'metal', 'roughness', 'ao', 'emissive', 'transparency',
+                               'color_id', 'metal_id', 'roughness_id', 'ao_id', 'emissive_id', 'transparency_id',
                                'texture_id', 'metal_texture_id', 'roughness_texture_id', 'ao_texture_id',
                                'emissive_texture_id', 'transparency_texture_id'}
 cdef set GroupAttributes = set(MaterialAttributes)
@@ -183,12 +184,12 @@ cdef class Material:
         material.emissive = node.get_fvec('emissive', 3, self.emissive)
         material.transparency = min(max(0, node.get_float('transparency', self.transparency)), 1)
         material.translucency = max(0, node.get_float('translucency', self.translucency))
-        albedo_id = node.get_str('texture_id', None)
-        metal_id = node.get_str('metal_texture_id', None)
-        roughness_id = node.get_str('roughness_texture_id', None)
-        ao_id = node.get_str('ao_texture_id', None)
-        emissive_id = node.get_str('emissive_texture_id', None)
-        transparency_id = node.get_str('transparency_texture_id', None)
+        albedo_id = node.get_str('color_id', node.get_str('texture_id', None))
+        metal_id = node.get_str('metal_id', node.get_str('metal_texture_id', None))
+        roughness_id = node.get_str('roughness_id', node.get_str('roughness_texture_id', None))
+        ao_id = node.get_str('ao_id', node.get_str('ao_texture_id', None))
+        emissive_id = node.get_str('emissive_id', node.get_str('emissive_texture_id', None))
+        transparency_id = node.get_str('transparency_id', node.get_str('transparency_texture_id', None))
         border_color = node.get_fvec('border', 3, None)
         if border_color is not None:
             border_color = border_color.concat(true_)

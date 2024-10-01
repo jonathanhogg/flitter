@@ -606,28 +606,37 @@ of these attributes takes a string or symbol value identifying a node elsewhere
 in the [window rendering tree](windows.md) that will be used as the input
 texture (including the output of [secondary cameras](#cameras)).
 
-The simplest way to load a bunch of images to use as textures is to place
+The simplest way to load a collection of images to use as textures is to place
 `!image` nodes in an `!offscreen`. See the [textures
 example](https://github.com/jonathanhogg/flitter/blob/main/examples/textures.fl)
 in the main repo for how to do this.
 
-`texture_id=` *ID*
-: Specifies the *ID* of a node to use for the material `color` property.
+`color_id=` *ID*
+: Specifies the *ID* of a node to use for the material `color` property. (May
+also be specified as `texture_id=` for compatibility with an older version.)
 
-`metal_texture_id=` *ID*
-: Specifies the *ID* of a node to use for the material `metal` property.
+`metal_id=` *ID*
+: Specifies the *ID* of a node to use for the material `metal` property. (May
+also be specified as `metal_texture_id=` for compatibility with an older
+version.)
 
-`roughness_texture_id=` *ID*
+`roughness_id=` *ID*
 : Specifies the *ID* of a node to use for the material `roughness` property.
+(May also be specified as `roughness_texture_id=` for compatibility with an
+older version.)
 
-`ao_texture_id=` *ID*
-: Specifies the *ID* of a node to use for the material `ao` property.
+`ao_id=` *ID*
+: Specifies the *ID* of a node to use for the material `ao` property. (May also
+be specified as `ao_texture_id=` for compatibility with an older version.)
 
-`emissive_texture_id=` *ID*
-: Specifies the *ID* of a node to use for the material `emissive` property.
+`emissive_id=` *ID*
+: Specifies the *ID* of a node to use for the material `emissive` property. (May
+also be specified as `emissive_texture_id=` for compatibility with an older version.)
 
-`transparency_texture_id=` *ID*
+`transparency_id=` *ID*
 : Specifies the *ID* of a node to use for the material `transparency` property.
+(May also be specified as `transparency_texture_id=` for compatibility with an
+older version.)
 
 For color properties, the color is read directly from the texture. For non-color
 properties, the texture color is converted into a luminance value in the range
