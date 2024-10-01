@@ -15,9 +15,9 @@ from cpython.mem cimport PyMem_Malloc, PyMem_Free
 from cpython.object cimport PyObject_RichCompareBool, Py_NE, Py_EQ, Py_LT
 from cpython.set cimport PySet_Add
 from cpython.tuple cimport PyTuple_New, PyTuple_GET_SIZE, PyTuple_GET_ITEM, PyTuple_SET_ITEM, PyTuple_Pack
-from cpython.unicode cimport PyUnicode_DATA, PyUnicode_GET_LENGTH, PyUnicode_KIND, PyUnicode_READ
 
 
+cdef uint64_t HASH_START = 0xe220a8397b1dcdaf
 cdef double Pi = 3.141592653589793115997963468544185161590576171875
 cdef double Tau = 6.283185307179586231995926937088370323181152343750
 cdef double NaN = float("nan")
@@ -33,33 +33,6 @@ cdef dict ReverseSymbolTable = {}
 cdef union double_long:
     double f
     uint64_t l
-
-
-# SplitMix64 algorithm [http://xoshiro.di.unimi.it/splitmix64.c]
-#
-cdef uint64_t HASH_START = 0xe220a8397b1dcdaf
-
-cdef inline uint64_t HASH_UPDATE(uint64_t _hash, uint64_t y) noexcept:
-    _hash ^= y
-    _hash += <uint64_t>(0x9e3779b97f4a7c15)
-    _hash ^= _hash >> 30
-    _hash *= <uint64_t>(0xbf58476d1ce4e5b9)
-    _hash ^= _hash >> 27
-    _hash *= <uint64_t>(0x94d049bb133111eb)
-    _hash ^= _hash >> 31
-    return _hash
-
-
-# FNV-1a hash algorithm [https://en.wikipedia.org/wiki/Fowler–Noll–Vo_hash_function#FNV-1a_hash]
-cdef inline uint64_t HASH_STRING(str value):
-    cdef void* data = PyUnicode_DATA(value)
-    cdef uint64_t i, n=PyUnicode_GET_LENGTH(value), kind=PyUnicode_KIND(value)
-    cdef Py_UCS4 c
-    cdef uint64_t y = <uint64_t>(0xcbf29ce484222325)
-    for i in range(n):
-        c = PyUnicode_READ(kind, data, i)
-        y = (y ^ <uint64_t>c) * <uint64_t>(0x100000001b3)
-    return y
 
 
 cdef inline int64_t vector_compare(Vector left, Vector right) noexcept:

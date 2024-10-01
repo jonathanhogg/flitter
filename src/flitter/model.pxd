@@ -2,6 +2,34 @@
 import cython
 
 from libc.stdint cimport int64_t, uint64_t
+from cpython.unicode cimport PyUnicode_DATA, PyUnicode_GET_LENGTH, PyUnicode_KIND, PyUnicode_READ
+
+
+# SplitMix64 algorithm [http://xoshiro.di.unimi.it/splitmix64.c]
+#
+cdef uint64_t HASH_START
+
+cdef inline uint64_t HASH_UPDATE(uint64_t _hash, uint64_t y) noexcept:
+    _hash ^= y
+    _hash += <uint64_t>(0x9e3779b97f4a7c15)
+    _hash ^= _hash >> 30
+    _hash *= <uint64_t>(0xbf58476d1ce4e5b9)
+    _hash ^= _hash >> 27
+    _hash *= <uint64_t>(0x94d049bb133111eb)
+    _hash ^= _hash >> 31
+    return _hash
+
+
+# FNV-1a hash algorithm [https://en.wikipedia.org/wiki/Fowler–Noll–Vo_hash_function#FNV-1a_hash]
+cdef inline uint64_t HASH_STRING(str value):
+    cdef void* data = PyUnicode_DATA(value)
+    cdef uint64_t i, n=PyUnicode_GET_LENGTH(value), kind=PyUnicode_KIND(value)
+    cdef Py_UCS4 c
+    cdef uint64_t y = <uint64_t>(0xcbf29ce484222325)
+    for i in range(n):
+        c = PyUnicode_READ(kind, data, i)
+        y = (y ^ <uint64_t>c) * <uint64_t>(0x100000001b3)
+    return y
 
 
 cdef class Vector:
