@@ -160,30 +160,30 @@ i.e., all passes will be rendered with a `size` frame-buffer.
 
 `downsample=` *DIVISOR*
 : This specifies how much to reduce the size of the output frame-buffer for
-down-sampled passes. It is specified as a divisor of `size`. Default is `2`,
-i.e., the frame-buffer will be half the width and height of `size`, and
-therefore contain a quarter of the pixels.
+down-sampled passes. It is specified as a divisor of the shader `size`
+attribute. Default is `2`, i.e., the frame-buffer will be half the width and
+height, and therefore contain a quarter of the pixels. The value of the `size`
+uniform (if declared) will be the current pass' output frame-buffer size.
 
-For multi-pass shaders, the following addition uniforms are available:
+For multi-pass shaders, the `last` sampler uniform provides access to the output
+image of the previous frame *only* during the first pass (`pass` is $0$). For
+subsequent passes, this sampler will access the output of the previous pass.
+
+The following additional uniforms are available:
 
 `uniform int passes`
 : Will be set to the number of times that this shader will be executed, as
 specified by the `passes` attribute.
 
 `uniform int pass`
-: Will be set to the pass number of the current execution, counting from `0`.
+: Will be set to the number of the current pass, counting from `0`.
 
 `uniform int downsample`
 : Will be set to the value of `downsample` for down-sampled passes and `1` for
 normal passes.
 
-`uniform sampler2D last`
-: For multi-pass shaders, the `last` uniform provides access to the output
-image of the previous frame only during the first pass (`pass` is $0$). For
-subsequent passes, this will contain the output of the previous pass.
-
 `uniform sampler2D first`
-: If specified, this sampler allows access to the output of the *first pass* of
+: If declared, this sampler allows access to the output of the *first pass* of
 the shader in the second and subsequent passes. During the first pass, `first`
 will be a "zero" texture returning transparent for any coordinate.
 
