@@ -130,7 +130,7 @@ applied in the code if desired.
 definition (and excluding any node that has a `hidden=true` attribute).
 
 `uniform sampler2D last`
-: If specified, this sampler allows access to the final output of the shader
+: If declared, this sampler allows access to the final output of the shader
 from the previous frame. This allows for feedback loops to be constructed.
 
 In addition to these, the shader program may declare arbitrary numeric uniforms
