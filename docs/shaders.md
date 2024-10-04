@@ -408,30 +408,30 @@ a high dynamic range input (such as output by `!canvas3d`). The filter accepts
 the following attributes:
 
 `upright_length=` *LENGTH*
-The length of the vertical/horizontal star lines, expressed as a multiple of
+: The length of the vertical/horizontal star lines, expressed as a multiple of
 the shorter of the filter width and height. Larger values are more expensive to
 compute. Default is `0.25`.
 
 `diagonal_length=` *LENGTH*
-The length of the diagonal star lines, expressed as a multiple of the shorter
+: The length of the diagonal star lines, expressed as a multiple of the shorter
 of the filter width and height. Larger values are more expensive to compute.
 Default is `0.125`.
 
 `threshold=` *L*
-A luminosity threshold over which a pixel is deemed to be "bright". Default is
+: A luminosity threshold over which a pixel is deemed to be "bright". Default is
 `1`.
 
 `ghosts=` *N*
-The number of lens ghosts to add, between `0` and `6`. The size, location and
+: The number of lens ghosts to add, between `0` and `6`. The size, location and
 distortion of each ghost has been individually designed.
 
 `attenuation=` *ATTENUATION*
-How much to attenuate the flares from the brightness of the source. This is
+: How much to attenuate the flares from the brightness of the source. This is
 expressed as a power-of-2, so `1` means half the (linear) luminosity and `2`
 means one-quarter the luminosity. Default is `2`.
 
 `aberration=` *RATIO*
-How much chromatic aberration (separation into spectrum lines) the ghosts will
+: How much chromatic aberration (separation into spectrum lines) the ghosts will
 exhibit. This is expressed as a multiple of an internally-defined reasonable
 value. The default is `1`, which will result in the designed amount of
 chromatic aberration. Values below `1` will result in tighter ghosts and `0`

@@ -160,6 +160,12 @@ through the position on the axis, for a 2-dimensional system it describes a
 circle around the position and for a 3-dimensional system it describes a sphere
 centred on the position.
 
+:::{note}
+As `radius` and `charge` default to `0`, you will need to set these to sensible
+values for all particles that are to respond to forces that depend on these
+properties, such as `!drag` and `!electrostatic`.
+:::
+
 ### `!anchor`
 
 An `!anchor` is a particle that is considered for the purposes of calculating
@@ -291,8 +297,8 @@ particle. Particles with zero `radius` will be ignored.
 The `strength` attribute is inversely proportional to the elasticity of the
 particles: lower values mean the particles can overlap more before bouncing
 apart. Setting this value too high can cause wild instability – especially if
-random starting positions are chosen that might cause particles to
-overlap each other.
+random starting positions are chosen that might cause particles to overlap each
+other.
 
 ### `!gravity`
 
