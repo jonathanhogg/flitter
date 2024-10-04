@@ -96,7 +96,7 @@ have to document for `!canvas`.
 
 `filename=`
 
-`texture_id=`
+`image_id=`
 
 ## Shaders
 
