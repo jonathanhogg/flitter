@@ -296,9 +296,6 @@ class EngineController:
                 elif count := gc.collect(0):
                     logger.trace("Collected {} objects", count)
 
-                now = system_clock()
-                housekeeping += now
-
                 frame_count += 1
                 frames.append(frame_time if self.realtime else now)
                 frame_period = now - frame_time
@@ -310,12 +307,16 @@ class EngineController:
                     wait_time = 0.001
                 if wait_time >= 0.001:
                     slow_frame = False
+                    housekeeping -= wait_time - 0.001
                     await asyncio.sleep(wait_time - 0.001)
                 else:
                     slow_frame = True
                     logger.trace("Slow frame - {:.0f}ms", frame_period * 1000)
                     await asyncio.sleep(0)
                     frame_time = system_clock()
+
+                now = system_clock()
+                housekeeping += now
 
                 if len(frames) > 1 and frames[-1] - frames[0] > 5:
                     nframes = len(frames) - 1
