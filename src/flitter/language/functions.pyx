@@ -804,6 +804,14 @@ def hypot(*args):
     return ys
 
 
+def cross(Vector xs not None, Vector ys not None):
+    return xs.cross(ys)
+
+
+def dot(Vector xs not None, Vector ys not None):
+    return xs.dot(ys)
+
+
 def normalize(Vector xs not None):
     return xs.normalize()
 
@@ -815,9 +823,9 @@ def quaternion(Vector axis not None, Vector angle not None):
 
 
 def qmul(Vector a not None, Vector b not None):
-    if a.numbers == NULL or a.length != 4 or b.numbers == NULL or b.length != 4:
+    if a.numbers == NULL or a.length != 4 or b.numbers == NULL or b.length not in (3, 4):
         return null_
-    return Quaternion._coerce(a) @ Quaternion._coerce(b)
+    return Quaternion._coerce(a) @ (Quaternion._coerce(b) if b.length == 4 else b)
 
 
 def qbetween(Vector a not None, Vector b not None):
@@ -1046,7 +1054,9 @@ STATIC_FUNCTIONS = {
     'colortemp': Vector(colortemp),
     'cos': Vector(cosv),
     'count': Vector(count),
+    'cross': Vector(cross),
     'cubic': Vector(cubic),
+    'dot': Vector(dot),
     'exp': Vector(expv),
     'floor': Vector(floorv),
     'fract': Vector(fract),

@@ -10,7 +10,7 @@ from flitter.model import Vector, Quaternion, null
 from flitter.language.functions import (uniform, normal, beta,
                                         lenv, sumv, accumulate, minv, maxv, minindex, maxindex, mapv, clamp, zipv, count,
                                         roundv, absv, expv, sqrtv, logv, log2v, log10v, ceilv, floorv, fract,
-                                        cosv, acosv, sinv, asinv, tanv, hypot, normalize, polar, angle, length,
+                                        cosv, acosv, sinv, asinv, tanv, hypot, normalize, polar, angle, length, cross, dot,
                                         quaternion, qmul, qbetween, slerp,
                                         split, ordv, chrv,
                                         colortemp, oklab, oklch)
@@ -536,6 +536,21 @@ class TestTrig(utils.TestCase):
         self.assertEqual(normalize(null), null)
         self.assertEqual(normalize(Vector([3, 4])), Vector([3, 4]) / Vector(5))
         self.assertEqual(normalize(Vector([3, 4, 5])), Vector([3, 4, 5]) / Vector(math.sqrt(50)))
+
+    def test_cross(self):
+        self.assertEqual(cross(null, null), null)
+        self.assertEqual(cross(Vector([3, 4]), Vector([3, 4, 5])), null)
+        self.assertEqual(cross(Vector([3, 4, 5]), Vector([3, 4])), null)
+        self.assertEqual(cross(Vector([3, 4, 5]), Vector([3, 4, 5])), Vector([0, 0, 0]))
+        self.assertEqual(cross(Vector([1, 0, 0]), Vector([0, 1, 0])), Vector([0, 0, 1]))
+        self.assertEqual(cross(Vector([0, 1, 0]), Vector([0, 0, 1])), Vector([1, 0, 0]))
+        self.assertEqual(cross(Vector([0, 0, 1]), Vector([1, 0, 0])), Vector([0, 1, 0]))
+
+    def test_dot(self):
+        self.assertEqual(dot(null, null), null)
+        self.assertEqual(dot(Vector([3, 4]), Vector([3, 4, 5])), Vector(3*3 + 4*4 + 3*5))
+        self.assertEqual(dot(Vector([3, 4, 5]), Vector([3, 4])), Vector(3*3 + 4*4 + 5*3))
+        self.assertEqual(dot(Vector([3, 4, 5]), Vector([5, 4, 3])), Vector(3*5 + 4*4 + 5*3))
 
     def test_polar(self):
         self.assertEqual(polar(null), null)

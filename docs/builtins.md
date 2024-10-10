@@ -71,8 +71,15 @@ the length of the longest vector; short arguments will repeat, so
 generalises to n-vectors, returning a vector the length of the longest of
 *x*, *y* and *z*, and repeating items from any of the vectors as necessary.
 
+`cross(` *x*, *y* `)`
+: Compute the cross product of two 3-vectors.
+
 `cos(` *x* `)`
 : Return cosine of *x* (with *x* expressed in *turns*).
+
+`dot(` *x*, *y* `)`
+: Compute the dot product of two n-vectors. This is the equivalent of
+`sum(x * y)`.
 
 `exp(` *x* `)`
 : Return $e$ raised to the power of *x*.
