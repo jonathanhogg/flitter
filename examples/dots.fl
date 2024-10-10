@@ -20,12 +20,12 @@ let SIZE=1080
     let rot=(3+beat)/30
     !canvas3d size=SIDE orthographic=true far=R*2 width=R*2 fog_max=R*2 samples=4 color=1 camera_id=:view;0 hidden=true
         !transform rotate=rot scale=R
-            !camera id=:view;0 position=0;0;+1 up=0;+1;0 secondary=true
-            !camera id=:view;1 position=0;+1;0 up=0;0;-1 secondary=true
-            !camera id=:view;2 position=+1;0;0 up=0;0;-1 secondary=true
-            !camera id=:view;3 position=0;0;-1 up=-1;0;0 secondary=true
-            !camera id=:view;4 position=-1;0;0 up=0;0;+1 secondary=true
-            !camera id=:view;5 position=0;-1;0 up=0;0;+1 secondary=true
+            !camera id=:view;0 position=+1;0;0 up=0;+1;0 secondary=true
+            !camera id=:view;1 position=-1;0;0 up=0;+1;0 secondary=true
+            !camera id=:view;2 position=0;+1;0 up=0;0;-1 secondary=true
+            !camera id=:view;3 position=0;-1;0 up=0;0;+1 secondary=true
+            !camera id=:view;4 position=0;0;+1 up=0;+1;0 secondary=true
+            !camera id=:view;5 position=0;0;-1 up=0;+1;0 secondary=true
         !light color=1 direction=0;0;-1
         for i in ..N
             let a=$(:dot;i)

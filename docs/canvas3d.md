@@ -726,34 +726,20 @@ the centre of their bounding box.
 `!box`
 : This model represents a unit-edge cube, i.e, the corners are at
 $(±0.5, ±0.5, ±0.5)$. This model has UV coordinates for [texture
-mapping](#texture-mapping) that map each face to a $1/6$ vertical slice of the
-UV space.
+mapping](#texture-mapping) that map
 
 `!sphere`
 : This model represents a unit-radius sphere (strictly speaking, the surface is
 made up of triangular faces with vertices on this sphere). The sphere is
-constructed from eight, subdivided octants with overlapping seams. UV
-coordinates use the [Equirectangular
-projection](https://en.wikipedia.org/wiki/Equirectangular_projection)
-with the model positive $z$ direction being "North" and the left edge of the
-texture aligned to the model $x$ axis and then wrapped anti-clockwise. If the
-zero longitude line is in the centre of the image (common for maps) then this
-will end up aligned to the negative *x* axis. This projection is common for
-planetary mapping, but breaks down further from the equator towards the poles.
-In particular, lines of longitude will visibly kink at lower triangle counts
-(see `segments` attribute below).
+constructed from eight, subdivided octants with overlapping seams.
 
 `!cylinder`
 : This is a unit-radius and unit-height cylinder with its axis of rotational
-symmetry in the $z$ direction. UV coordinates are similar to an Equirectangular
-projection, with the bottom circle mapped to the lower $1/4$ of the UV space,
-the top to the top $1/4$, and the middle $1/2$ wrapped around the sides of the
-cylinder.
+symmetry in the $z$ direction.
 
 `!cone`
 : This is a unit-radius and unit-height cone with its axis of rotational
-symmetry in the $z$ direction. UV coordinates are similar to `!cylinder` except
-that the upper $3/4$ of the UV space are wrapped around the sides of the cone.
+symmetry in the $z$ direction.
 
 The nodes `!sphere`, `!cylinder` and `!cone` all support an additional
 attribute:
@@ -768,7 +754,7 @@ minimum number of segments for a `!cylinder` or `!cone` is `2` (resulting in a
 flat double-sided rectangle or triangle respectively) and the minimum for a
 `!sphere` is `4` (resulting in an octahedron). As a `!sphere` is made up of
 octants, `segments` is constrained to be a multiple of 4 and will be rounded
-*down* to the nearest multiple.
+*up* to the nearest multiple.
 
 :::{warning}
 The number of model vertices and faces scales linearly, or quadratically in the
@@ -780,6 +766,52 @@ is better to use the same value for `segments` for all of them, as this results
 in the instances sharing the same underlying model and allows the engine to
 dispatch them for rendering simultaneously.
 :::
+
+#### Primitive model texture mapping
+
+The primitive models are all designed for [texture
+mapping](#texture-mapping). The UV mapping schemes are as follows:
+
+`!box uv_map=:standard`
+: Each face of the box is mapped to a $1/6$ vertical slice of the UV space.
+From left-to-right, the mapped faces are **+X**, **-X**, **+Y**, **-Y**, **+Z**
+nd **-Z** – all as viewed from the outside of a cube in a right-hand coordinate
+system. The **+X**, **-X**, **+Z** and **-Z** faces have their "up" direction
+as the $+y$ axis, the **+Y** face up is the $-z$ axis and the **-Y** face up is
+the $+z$ axis. This is the default mapping for `!box`.
+
+`!box uv_map=:repeat`
+: The faces (and their "up" directions) are as for `uv_map=:standard` above,
+but the UV coordinates map each face to the full $[0,1]$ UV space, repeating
+the same texture on each face.
+
+`!sphere`
+: UV coordinates use the [Equirectangular
+projection](https://en.wikipedia.org/wiki/Equirectangular_projection) with the
+model $+z$ axis being "North" and the left edge of the texture aligned to the
+model $+x$ axis and then wrapped anti-clockwise. If the zero longitude line is
+in the centre of the image (common for maps) then this line will end up aligned
+to the *-x* axis. This projection is common for planetary mapping and 360°
+photography. The latitudinal strips at the poles are each made up of four
+triangular faces with their tips meeting at the pole. This means that there are
+four opposing triangular sections of the map missing at both poles. The other
+latitudinal strips are complete but, as the number of triangles decreases
+towards the poles, the mapping is not even and lines of longitude will tend to
+kink further from the edges of the octants. Both of these issues will be more
+apparent at lower segment counts.
+
+`!cylinder`
+: UV coordinates are similar to an Equirectangular projection, with the bottom
+circle mapped to the lower $1/4$ of the UV space, the top to the top $1/4$, and
+the middle $1/2$ wrapped around the sides of the cylinder. The sides are made
+up of triangularized quads that cover the entirety of the middle half UV space,
+but the top and bottom use triangular faces and so half of each of the top and
+bottom quarter spaces is excluded from the map.
+
+`!cone`
+: UV coordinates are similar to `!cylinder` except that the upper $3/4$ of the
+UV space are wrapped around the sides of the cone and the sides also use
+triangular slices of the UV space and therefore exclude one half of the map.
 
 ### External Models
 

@@ -450,7 +450,7 @@ cdef Model get_model(Node node, bint top):
     cdef double snap_angle
     cdef str mapping
     if node.kind is 'box':
-        model = Model._box()
+        model = Model._box(node.get_str('uv_map', 'standard'))
     elif node.kind is 'sphere':
         model = Model._sphere(node.get_int('segments', DefaultSegments))
     elif node.kind is 'cylinder':

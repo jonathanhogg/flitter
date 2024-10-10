@@ -5,7 +5,7 @@ import manifold3d
 import numpy as np
 import trimesh
 
-from libc.math cimport cos, sin, sqrt, atan2
+from libc.math cimport cos, sin, sqrt, atan2, ceil
 from libc.stdint cimport int32_t, int64_t
 
 from ... import name_patch
@@ -198,12 +198,12 @@ cdef class Model:
         return Model._difference(list(models))
 
     @staticmethod
-    cdef Model _box():
-        return Box._get()
+    cdef Model _box(str uv_map):
+        return Box._get(uv_map)
 
     @staticmethod
-    def box():
-        return Box._get()
+    def box(uv_map='standard'):
+        return Box._get(str(uv_map))
 
     @staticmethod
     cdef Model _sphere(int64_t segments):
@@ -690,30 +690,42 @@ cdef class PrimitiveModel(Model):
 
 
 cdef class Box(PrimitiveModel):
+    cdef str uv_map
+
     Vertices = np.array([
-        (-.5, -.5, +.5), (+.5, -.5, +.5), (+.5, +.5, +.5), (-.5, +.5, +.5),
-        (-.5, +.5, +.5), (+.5, +.5, +.5), (+.5, +.5, -.5), (-.5, +.5, -.5),
-        (+.5, +.5, +.5), (+.5, -.5, +.5), (+.5, -.5, -.5), (+.5, +.5, -.5),
-        (+.5, +.5, -.5), (+.5, -.5, -.5), (-.5, -.5, -.5), (-.5, +.5, -.5),
-        (-.5, +.5, -.5), (-.5, -.5, -.5), (-.5, -.5, +.5), (-.5, +.5, +.5),
-        (-.5, -.5, -.5), (+.5, -.5, -.5), (+.5, -.5, +.5), (-.5, -.5, +.5),
+        (+.5, +.5, -.5), (+.5, +.5, +.5), (+.5, -.5, +.5), (+.5, -.5, -.5),  # +X
+        (-.5, +.5, +.5), (-.5, +.5, -.5), (-.5, -.5, -.5), (-.5, -.5, +.5),  # -X
+        (+.5, +.5, -.5), (-.5, +.5, -.5), (-.5, +.5, +.5), (+.5, +.5, +.5),  # +Y
+        (+.5, -.5, +.5), (-.5, -.5, +.5), (-.5, -.5, -.5), (+.5, -.5, -.5),  # -Y
+        (+.5, +.5, +.5), (-.5, +.5, +.5), (-.5, -.5, +.5), (+.5, -.5, +.5),  # +Z
+        (-.5, +.5, -.5), (+.5, +.5, -.5), (+.5, -.5, -.5), (-.5, -.5, -.5),  # -Z
     ], dtype='f4')
     VertexNormals = np.array([
-        (0, 0, 1), (0, 0, 1), (0, 0, 1), (0, 0, 1),
-        (0, 1, 0), (0, 1, 0), (0, 1, 0), (0, 1, 0),
         (1, 0, 0), (1, 0, 0), (1, 0, 0), (1, 0, 0),
-        (0, 0, -1), (0, 0, -1), (0, 0, -1), (0, 0, -1),
         (-1, 0, 0), (-1, 0, 0), (-1, 0, 0), (-1, 0, 0),
+        (0, 1, 0), (0, 1, 0), (0, 1, 0), (0, 1, 0),
         (0, -1, 0), (0, -1, 0), (0, -1, 0), (0, -1, 0),
+        (0, 0, 1), (0, 0, 1), (0, 0, 1), (0, 0, 1),
+        (0, 0, -1), (0, 0, -1), (0, 0, -1), (0, 0, -1),
     ], dtype='f4')
-    VertexUV = np.array([
-        (0, 0), (1/6, 0), (1/6, 1), (0, 1),
-        (1/6, 0), (2/6, 0), (2/6, 1), (1/6, 1),
-        (2/6, 0), (3/6, 0), (3/6, 1), (2/6, 1),
-        (3/6, 0), (4/6, 0), (4/6, 1), (3/6, 1),
-        (4/6, 0), (5/6, 0), (5/6, 1), (4/6, 1),
-        (5/6, 0), (6/6, 0), (6/6, 1), (5/6, 1),
-    ], dtype='f4')
+    VertexUV = {
+        'standard': np.array([
+            (1/6, 1), (0/6, 1), (0/6, 0), (1/6, 0),
+            (2/6, 1), (1/6, 1), (1/6, 0), (2/6, 0),
+            (3/6, 1), (2/6, 1), (2/6, 0), (3/6, 0),
+            (4/6, 1), (3/6, 1), (3/6, 0), (4/6, 0),
+            (5/6, 1), (4/6, 1), (4/6, 0), (5/6, 0),
+            (6/6, 1), (5/6, 1), (5/6, 0), (6/6, 0),
+        ], dtype='f4'),
+        'repeat': np.array([
+            (1, 1), (0, 1), (0, 0), (1, 0),
+            (1, 1), (0, 1), (0, 0), (1, 0),
+            (1, 1), (0, 1), (0, 0), (1, 0),
+            (1, 1), (0, 1), (0, 0), (1, 0),
+            (1, 1), (0, 1), (0, 0), (1, 0),
+            (1, 1), (0, 1), (0, 0), (1, 0),
+        ], dtype='f4'),
+    }
     Faces = np.array([
         (0, 1, 2), (2, 3, 0),
         (4, 5, 6), (6, 7, 4),
@@ -724,18 +736,20 @@ cdef class Box(PrimitiveModel):
     ], dtype='i4')
 
     @staticmethod
-    cdef Box _get():
-        cdef str name = '!box'
+    cdef Box _get(str uv_map):
+        uv_map = uv_map if uv_map in Box.VertexUV else 'standard'
+        cdef str name = '!box' if uv_map == 'standard' else f'!box({uv_map})'
         cdef Box model = <Box>ModelCache.get(name, None)
         if model is None:
             model = Box.__new__(Box)
             model.name = name
+            model.uv_map = uv_map
             model.trimesh_model = None
             ModelCache[name] = model
         return model
 
     cpdef object build_trimesh(self):
-        visual = trimesh.visual.texture.TextureVisuals(uv=Box.VertexUV)
+        visual = trimesh.visual.texture.TextureVisuals(uv=Box.VertexUV[self.uv_map])
         return trimesh.base.Trimesh(vertices=Box.Vertices, vertex_normals=Box.VertexNormals, faces=Box.Faces, visual=visual)
 
 
@@ -744,7 +758,7 @@ cdef class Sphere(PrimitiveModel):
 
     @staticmethod
     cdef Sphere _get(int64_t segments):
-        segments = max(4, segments // 4 * 4)
+        segments = max(4, <int64_t>ceil(<double>segments / 4.0) * 4)
         cdef str name = f'!sphere-{segments}' if segments != DefaultSegments else '!sphere'
         cdef Sphere model = <Sphere>ModelCache.get(name, None)
         if model is None:

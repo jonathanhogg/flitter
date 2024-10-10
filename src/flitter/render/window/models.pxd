@@ -46,7 +46,7 @@ cdef class Model:
     cdef Model _difference(list models)
 
     @staticmethod
-    cdef Model _box()
+    cdef Model _box(str uv_map)
 
     @staticmethod
     cdef Model _sphere(int64_t segments)
