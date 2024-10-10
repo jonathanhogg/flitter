@@ -19,9 +19,9 @@ import axes from '../../examples/common/axes.fl'
                 !ellipse point=TEXTURE*(-0.5;0.5) radius=w/8 fill=true
                 !text point=TEXTURE*(-0.5;0.75) text="(0, 0)"
                 !ellipse point=TEXTURE*(-0.5+1/6;-0.5) radius=w/8 fill=true
-                !text point=TEXTURE*(-0.5+1/6;-0.75) text="(¹⁄₆, 1)"
+                !text point=TEXTURE*(-0.5+1/6;-0.75) text="(1/6, 1)"
                 !ellipse point=TEXTURE*(-0.5+5/6;0.5) radius=w/8 fill=true
-                !text point=TEXTURE*(-0.5+5/6;0.75) text="(⁵⁄₆, 0)"
+                !text point=TEXTURE*(-0.5+5/6;0.75) text="(5/6, 0)"
                 !ellipse point=TEXTURE*(0.5;-0.5) radius=w/8 fill=true
                 !text point=TEXTURE*(0.5;-0.75) text="(1, 1)"
             !group translate=SIZE*(0.5;0.75) font_size=w/2
@@ -29,7 +29,7 @@ import axes from '../../examples/common/axes.fl'
                 !text point=CUBES*(-0.25;-0.46) text="y" color=0;1;0
                 !text point=CUBES*(-0.45;0.23) text="z" color=0;0;1
         !transform translate=SIZE*(0;0.25) scale=TEXTURE/SIZE
-            !canvas id=:texture size=TEXTURE font_family='Menlo' font_weight=:bold
+            !canvas id=:texture size=TEXTURE font_family='Arial' font_weight=:bold
                 let w=TEXTURE[0]/6
                 !rect size=TEXTURE fill=true color=1
                 !group color=0 font_size=0.9*w
