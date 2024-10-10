@@ -721,17 +721,17 @@ time-stamp changes. Multiple instances of the *same* model are collated and
 ### Primitive Models
 
 These models are all generated on-the-fly and all of them have their origin at
-the centre of their bounding box.
+the centre of their bounding box. They are designed with the appropriate vertex
+normals and seams to smooth-shade correctly.
 
 `!box`
 : This model represents a unit-edge cube, i.e, the corners are at
-$(±0.5, ±0.5, ±0.5)$. This model has UV coordinates for [texture
-mapping](#texture-mapping) that map
+$(±0.5, ±0.5, ±0.5)$.
 
 `!sphere`
 : This model represents a unit-radius sphere (strictly speaking, the surface is
 made up of triangular faces with vertices on this sphere). The sphere is
-constructed from eight, subdivided octants with overlapping seams.
+constructed from eight subdivided octants with overlapping seams.
 
 `!cylinder`
 : This is a unit-radius and unit-height cylinder with its axis of rotational
