@@ -1,0 +1,46 @@
+
+let SIZE=1000;500
+    TEXTURE=600;100
+    CUBES=600;300
+
+import axes from '../../examples/common/axes.fl'
+
+!window size=SIZE
+    !canvas
+        !rect size=SIZE fill=true color=1
+    !record filename=OUTPUT keep_alpha=true
+        !canvas size=SIZE color=0 font_family='Georgia' font_slant=:italic
+            let w=SIZE[1]/9
+            !group translate=SIZE*(1/14;1/3) stroke_width=w/20 font_size=w/2
+                !line points=0;-w;0;0;w;0 stroke=true
+                !text point=0;-w*1.3 text="u"
+                !text point=w*1.3;0 text="v"
+            !group translate=SIZE*(0.5;0.25) font_size=w/2
+                !ellipse point=TEXTURE*(-0.5;0.5) radius=w/8 fill=true
+                !text point=TEXTURE*(-0.5;0.75) text="(0, 0)"
+                !ellipse point=TEXTURE*(-0.5+1/6;-0.5) radius=w/8 fill=true
+                !text point=TEXTURE*(-0.5+1/6;-0.75) text="(¹⁄₆, 1)"
+                !ellipse point=TEXTURE*(-0.5+5/6;0.5) radius=w/8 fill=true
+                !text point=TEXTURE*(-0.5+5/6;0.75) text="(⁵⁄₆, 0)"
+                !ellipse point=TEXTURE*(0.5;-0.5) radius=w/8 fill=true
+                !text point=TEXTURE*(0.5;-0.75) text="(1, 1)"
+            !group translate=SIZE*(0.5;0.75) font_size=w/2
+                !text point=CUBES*(-0.05;0.23) text="x" color=1;0;0
+                !text point=CUBES*(-0.25;-0.46) text="y" color=0;1;0
+                !text point=CUBES*(-0.45;0.23) text="z" color=0;0;1
+        !transform translate=SIZE*(0;0.25) scale=TEXTURE/SIZE
+            !canvas id=:texture size=TEXTURE font_family='Menlo' font_weight=:bold
+                let w=TEXTURE[0]/6
+                !rect size=TEXTURE fill=true color=1
+                !group color=0 font_size=0.9*w
+                    for i in ..6
+                        !rect point=(i+0.05;0.05)*w size=0.9*w stroke=true stroke_width=0.05*w
+                        !text point=(i+0.5;0.5)*w text=i
+        !transform translate=SIZE*(0;-0.25) scale=CUBES/SIZE
+            !canvas3d size=CUBES orthographic=true width=600
+                !transform translate=-150;0;0 rotate_x=1/10 rotate_y=-1/8
+                    @axes size=150 thickness=4
+                    !box size=100 emissive_id=:texture
+                !transform translate=150;0;0 rotate_z=0.5 rotate_x=6/10 rotate_y=-1/8
+                    @axes size=150 thickness=4
+                    !box size=100 emissive_id=:texture

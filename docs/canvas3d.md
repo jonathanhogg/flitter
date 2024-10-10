@@ -161,8 +161,9 @@ effects or for use with custom shaders.
 :::{note}
 Setting `cull_face=:front` is similar to, but **not** the same as inverting all
 of the models in a render group. Inverting a model reverses the face winding
-*and* the normal direction of each vertex, and thus makes all of the back faces
-into front faces and vice versa.
+*and* the normal direction of each vertex. Culling the front faces results in
+the back faces being drawn using their original normals, i.e., they will only
+be lit by lights behind the model (or ambient lighting).
 :::
 
 `vertex=`*TEXT*
@@ -720,18 +721,16 @@ time-stamp changes. Multiple instances of the *same* model are collated and
 
 ### Primitive Models
 
-These models are all generated on-the-fly and all of them have their origin at
-the centre of their bounding box. They are designed with the appropriate vertex
-normals and seams to smooth-shade correctly.
+The **Flitter** primitive models are generated on-the-fly and all of them have
+their origin at the centre of their bounding box.
 
 `!box`
-: This model represents a unit-edge cube, i.e, the corners are at
-$(±0.5, ±0.5, ±0.5)$.
+: This is a unit-edge cube, i.e, the corners are at $(±0.5, ±0.5, ±0.5)$.
 
 `!sphere`
-: This model represents a unit-radius sphere (strictly speaking, the surface is
-made up of triangular faces with vertices on this sphere). The sphere is
-constructed from eight subdivided octants with overlapping seams.
+: This is a unit-radius sphere (strictly speaking, the surface is made up of
+triangular faces with vertices on this sphere). The sphere is constructed from
+eight subdivided octants with overlapping seams.
 
 `!cylinder`
 : This is a unit-radius and unit-height cylinder with its axis of rotational
@@ -741,7 +740,7 @@ symmetry in the $z$ direction.
 : This is a unit-radius and unit-height cone with its axis of rotational
 symmetry in the $z$ direction.
 
-The nodes `!sphere`, `!cylinder` and `!cone` all support an additional
+The model nodes `!sphere`, `!cylinder` and `!cone` all support an additional
 attribute:
 
 `segments=` *N*
@@ -772,15 +771,17 @@ dispatch them for rendering simultaneously.
 The primitive models are all designed for [texture
 mapping](#texture-mapping). The UV mapping schemes are as follows:
 
-`!box uv_map=:standard`
-: Each face of the box is mapped to a $1/6$ vertical slice of the UV space.
-From left-to-right, the mapped faces are **+X**, **-X**, **+Y**, **-Y**, **+Z**
-nd **-Z** – all as viewed from the outside of a cube in a right-hand coordinate
-system. The **+X**, **-X**, **+Z** and **-Z** faces have their "up" direction
-as the $+y$ axis, the **+Y** face up is the $-z$ axis and the **-Y** face up is
-the $+z$ axis. This is the default mapping for `!box`.
+`!box` `uv_map=:standard`
+: This is the default mapping for `!box`. Each face of the box is mapped to a
+$1 \over 6$ vertical slice of the $[0,1]$ UV space. From left-to-right, the
+mapped faces are **+X**, **-X**, **+Y**, **-Y**, **+Z** and **-Z** – all as
+viewed from the outside of a cube in a right-hand coordinate system. The **+X**,
+**-X**, **+Z** and **-Z** faces have their "up" direction as the $+y$ axis, the
+**+Y** face up is the $-z$ axis and the **-Y** face up is the $+z$ axis.
 
-`!box uv_map=:repeat`
+![Box standard UV mapping](diagrams/box_uvmap.png)
+
+`!box` `uv_map=:repeat`
 : The faces (and their "up" directions) are as for `uv_map=:standard` above,
 but the UV coordinates map each face to the full $[0,1]$ UV space, repeating
 the same texture on each face.
@@ -841,9 +842,10 @@ The primitive models are all designed with seams and vertex normals so that
 they render in a sane way: flat sides are uniformly flat and curved sides have
 interpolated normals that ensure they render smoothly.
 
-You can *probably* assume that any external model you load is designed sensibly,
-but there are a couple of model shading controls that can be used to force
-specific shading behaviour by generating a new, derived model.
+You can *probably* assume that any external model you load is designed
+similarly, but there are a few model shading controls that can be used to force
+specific shading behaviour by generating a new, derived model. As with all
+models, the results of these operations are cached.
 
 `flat=` [ `true` | `false` ]
 : Setting `flat=true` will generate a new model with *all* faces disconnected so
@@ -871,11 +873,11 @@ equivalent to specifying `flat=true`).
 algorithm. This is given as a ratio of face area to total model area. If not
 specified, then all faces will be considered.
 
-A model can also be *inverted*. This will flip all vertex normals and face
-windings.
+A model can also be *inverted* with the attribute:
 
 `invert=` [ `true` | `false` ]
-: Setting this attribute to `true` on a model node will invert the model.
+: Setting this attribute to `true` will flip all vertex normals and face
+windings.
 
 The result of inverting a model is that the insides of the back faces of the
 model will be rendered instead of the outside of the front faces. This can be
@@ -894,10 +896,10 @@ The supported mappings are:
 
 `:sphere`
 : This notionally draws a ray from the origin of the model through each vertex
-and projects this ray onto a sphere. The Equirectangular projection coordinates
-of that point on the sphere will be used as the UV for the vertex. This matches
-the projection used by the `!sphere` primitive. You should not expect this to
-produce sensible results for a non-convex shape.
+and intersects this ray with a sphere at the model origin. The Equirectangular
+projection coordinates of that point on the sphere will be used as the UV for
+the vertex. This matches the projection used by the `!sphere` primitive. You
+should not expect this to produce sensible results for a non-convex shape.
 
 :::{note}
 Note that correct spherical mapping requires a seam on the 0 longitude line
@@ -906,15 +908,12 @@ span this line will show clear visual distortions as the `:sphere` mapping
 algorithm will *not* create this seam.
 :::
 
-As with all models, the results of these operations are cached.
-
 ## Constructive Solid Geometry
 
 **Flitter** supports [Constructive Solid
 Geometry](https://en.wikipedia.org/wiki/Constructive_solid_geometry) (CSG) using
-features of the **trimesh** and **manifold3d** packages (plus a handful of other
-utility libraries). This is managed by creating trees of operation, transform
-and model nodes.
+the **manifold3d** package. This is managed by creating trees of operation,
+transform and model nodes.
 
 The basic CSG operation nodes are:
 
@@ -994,8 +993,7 @@ repeat them:
 The CSG operations require all models to be "watertight" for them to work. This
 means that there are no disconnected edges in the model and no holes. This
 might seem pretty straightforward but none of the **Flitter** primitive models
-satisfy these constraints. They are all designed to have sane normals and UV
-coordinates, which requires them to have split seams and duplicated vertices.
+satisfy these constraints.
 
 **Flitter** will check models before attempting to operate on them. If any of
 the constituent models of a CSG operation are not watertight, they will be
@@ -1006,7 +1004,7 @@ any duplicate faces
 - If the model is still not watertight, then an attempt will be made to cap
 simple holes
 - If this fails then a convex hull will be computed from the model and this used
-instead.
+instead
 
 Note that the last step, computing a convex hull, effectively shrink-wraps the
 model. This will work fine if the original model was already convex, but if not
@@ -1025,4 +1023,4 @@ node in the model construction tree.
 Generally speaking, CSG operations on models will discard (or corrupt) any
 existing texture-mapping UV coordinates. The `uv_remap` attribute (described
 above in [Controlling Model Shading](#controlling-model-shading)) can be used
-to calculate new UVs.
+on the top node of the tree to calculate new UVs.

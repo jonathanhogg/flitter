@@ -23,19 +23,9 @@
 
 %pragma tempo 60
 
-let SEGMENTS=20
+import axes from 'common/axes.fl'
 
-func axes(_, size=1)
-    let s=size*0.95 r1=hypot(size)/200 r2=r1*3
-    !material emissive=1;0;0
-        !cylinder start=0 end=s[0];0;0 radius=r1
-        !cone start=s[0];0;0 end=size[0];0;0 radius=r2
-    !material emissive=0;1;0
-        !cylinder start=0 end=0;s[1];0 radius=r1
-        !cone start=0;s[1];0 end=0;size[1];0 radius=r2
-    !material emissive=0;0;1
-        !cylinder start=0 end=0;0;s[2] radius=r1
-        !cone start=0;0;s[2] end=0;0;size[2] radius=r2
+let SEGMENTS=20
 
 func rotate_to(lat, lon)
     -- Construct a quaternion to represent a location by rotating around the

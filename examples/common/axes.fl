@@ -1,0 +1,12 @@
+
+func axes(_, size=1, thickness)
+    let r1=(thickness/2 if thickness else hypot(size)/200) r2=r1*3 s=size-r2*3
+    !material emissive=1;0;0
+        !cylinder start=0 end=s[0];0;0 radius=r1
+        !cone start=s[0];0;0 end=size[0];0;0 radius=r2
+    !material emissive=0;1;0
+        !cylinder start=0 end=0;s[1];0 radius=r1
+        !cone start=0;s[1];0 end=0;size[1];0 radius=r2
+    !material emissive=0;0;1
+        !cylinder start=0 end=0;0;s[2] radius=r1
+        !cone start=0;0;s[2] end=0;0;size[2] radius=r2

@@ -439,6 +439,12 @@ class TestDocumentationDiagrams(ScriptTest):
 
     DIAGRAMS = Path(__file__).parent.parent / 'docs/diagrams'
 
+    def test_box_uvmap(self):
+        self.assertSimplifierDoesntChangeBehaviour(self.DIAGRAMS / 'box_uvmap.fl')
+
+    def test_dummyshader(self):
+        self.assertSimplifierDoesntChangeBehaviour(self.DIAGRAMS / 'dummyshader.fl')
+
     def test_easings(self):
         self.assertSimplifierDoesntChangeBehaviour(self.DIAGRAMS / 'easings.fl')
 
