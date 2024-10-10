@@ -104,8 +104,10 @@ class Edges(Shader):
 class Feedback(Shader):
     DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('feedback.frag')
 
-    def render(self, node, references, **kwargs):
-        super().render(node, references, mixer=0, timebase=1, glow=0, translate=0, scale=1, rotate=0, repeat=(False, False), **kwargs)
+    def render(self, node, references, delta=0, **kwargs):
+        if self._target is None:
+            delta = 0
+        super().render(node, references, delta=delta, mixer=0, timebase=1, glow=0, translate=0, scale=1, rotate=0, repeat=(False, False), **kwargs)
 
 
 class Flare(Shader):

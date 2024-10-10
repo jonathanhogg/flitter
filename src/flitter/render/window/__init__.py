@@ -644,7 +644,6 @@ class Window(ProgramNode):
                 logger.debug("{0} resized to {1}x{2} (viewport {5}x{6} x={3} y={4})", self.name, width, height, *viewport)
             else:
                 logger.debug("{} resized to {}x{}", self.name, width, height)
-            self._last = None
 
     def render(self, node, references, beat=None, **kwargs):
         if self._visible or self.node_id is not None:
