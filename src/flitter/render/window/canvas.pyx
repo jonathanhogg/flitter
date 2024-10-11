@@ -22,13 +22,15 @@ from .glconstants import GL_TEXTURE_2D, GL_RGBA8, GL_RGBA16F, GL_RGBA32F
 from .target import RenderTarget, COLOR_FORMATS
 
 cdef extern from "Python.h":
-    ctypedef int64_t _PyTime_t
-    _PyTime_t _PyTime_GetPerfCounter() noexcept nogil
-    double _PyTime_AsSecondsDouble(_PyTime_t t) noexcept nogil
+    ctypedef int64_t PyTime_t
+    int PyTime_PerfCounter(PyTime_t *result) noexcept nogil
+    double PyTime_AsSecondsDouble(PyTime_t t) noexcept nogil
 
 
 cdef inline double perf_counter() noexcept nogil:
-    return _PyTime_AsSecondsDouble(_PyTime_GetPerfCounter())
+    cdef int64_t result
+    PyTime_PerfCounter(&result)
+    return PyTime_AsSecondsDouble(result)
 
 
 logger = name_patch(logger, __name__)
