@@ -23,6 +23,10 @@ class Transform(Shader):
                 transform_matrix @= matrix
             elif name == 'rotate' and (matrix := Matrix33.rotate(value)) is not None:
                 transform_matrix @= matrix
+            elif name == 'keystone':
+                key_x, key_y = value.match(2, float, (0, 0))
+                matrix = Matrix33([1, 0, key_x/self.width, 0, 1, key_y/self.height, 0, 0, 1])
+                transform_matrix @= matrix
         super().render(node, references, transform_matrix=transform_matrix.inverse(), **kwargs)
 
 

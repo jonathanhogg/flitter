@@ -273,6 +273,15 @@ Negative scales will flip the image on the X and/or Y axis.
 : Specifies an amount to translate the image on the X and Y axes specified in
 *pixels*, with the Y axis pointing up, default `0`.
 
+`keystone=` *KX*`;`*KY*
+: Specifies a "keystone" adjustment to the image, as a scaling factor along the
+$x$ and $y$ axes. A positive (small) value of *KX* will expand the left side of
+the image and compress the right side; a negative value will do the reverse.
+Similarly, a positive value of *KY* will expand the bottom of the image and
+compress the top; a negative value will do the reverse. Together these can be
+used to adjust for projection onto a tilted surface. They will normally have to
+be used with `scale=` to avoid clipping of the image.
+
 Areas "outside" the transformed image will be transparent by default. This can
 be controlled with the `border` and `repeat` attributes described above for
 [`!shader`](#shader).

@@ -17,7 +17,8 @@ uniform sampler2D ${name};
 
 void main() {
 % if child_textures:
-    vec2 point = (transform_matrix * vec3((coord - 0.5) * size, 1.0)).xy / size + 0.5;
+    vec3 p = transform_matrix * vec3((coord - 0.5) * size, 1.0);
+    vec2 point = p.xy / p.z / size + 0.5;
 %     for name in child_textures:
 %         if loop.index == 0:
     vec4 merged = texture(${name}, point);
