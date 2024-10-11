@@ -10,7 +10,7 @@ import cython
 from cpython cimport array, PyObject
 from cpython.dict cimport PyDict_GetItem, PyDict_SetItem
 from libc.math cimport acos, sqrt
-from libc.stdint cimport int64_t, uint32_t
+from libc.stdint cimport uint32_t
 from loguru import logger
 import skia
 
@@ -18,19 +18,9 @@ from . import WindowNode
 from flitter import name_patch
 from ...cache import SharedCache
 from ...model cimport Vector, Node
+from ...timer cimport perf_counter
 from .glconstants import GL_TEXTURE_2D, GL_RGBA8, GL_RGBA16F, GL_RGBA32F
 from .target import RenderTarget, COLOR_FORMATS
-
-cdef extern from "Python.h":
-    ctypedef int64_t PyTime_t
-    int PyTime_PerfCounter(PyTime_t *result) noexcept nogil
-    double PyTime_AsSecondsDouble(PyTime_t t) noexcept nogil
-
-
-cdef inline double perf_counter() noexcept nogil:
-    cdef int64_t result
-    PyTime_PerfCounter(&result)
-    return PyTime_AsSecondsDouble(result)
 
 
 logger = name_patch(logger, __name__)

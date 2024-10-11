@@ -10,6 +10,7 @@ from .. import name_patch
 from ..cache import SharedCache
 from .functions import STATIC_FUNCTIONS, DYNAMIC_FUNCTIONS
 from ..model cimport StateDict, null_, true_, false_, inf_, nan_
+from ..timer cimport perf_counter
 from .noise import NOISE_FUNCTIONS
 
 from libc.math cimport floor as c_floor
@@ -25,16 +26,7 @@ from cpython.tuple cimport PyTuple_New, PyTuple_GET_ITEM, PyTuple_SET_ITEM, PyTu
 
 
 cdef extern from "Python.h":
-    ctypedef int64_t PyTime_t
-    int PyTime_PerfCounter(PyTime_t *result) noexcept nogil
-    double PyTime_AsSecondsDouble(PyTime_t t) noexcept nogil
     object PyObject_CallOneArg(object callable_object, object arg)
-
-
-cdef inline double perf_counter() noexcept nogil:
-    cdef int64_t result
-    PyTime_PerfCounter(&result)
-    return PyTime_AsSecondsDouble(result)
 
 
 logger = name_patch(logger, __name__)
