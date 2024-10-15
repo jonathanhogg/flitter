@@ -922,7 +922,7 @@ cdef void render(render_target, RenderGroup render_group, Camera camera, glctx, 
         sampler.clear()
 
 
-cdef inline int linear_sampler(glctx, str texture_id, dict sampler_args, dict references, list samplers, dict texture_unit_ids):
+cdef int linear_sampler(glctx, str texture_id, dict sampler_args, dict references, list samplers, dict texture_unit_ids):
     cdef int unit_id = 0
     if texture_id:
         if texture_id in texture_unit_ids:
@@ -936,10 +936,12 @@ cdef inline int linear_sampler(glctx, str texture_id, dict sampler_args, dict re
     return unit_id
 
 
-cdef inline list configure_textures(glctx, shader, Textures textures, dict references, dict texture_unit_ids):
+cdef list configure_textures(glctx, shader, Textures textures, dict references, dict texture_unit_ids):
     cdef list samplers = []
-    cdef dict sampler_args = {'filter': (moderngl.LINEAR, moderngl.LINEAR)}
+    cdef dict sampler_args
+    cdef int unit_id
     if textures is not None:
+        sampler_args = {'filter': (moderngl.LINEAR, moderngl.LINEAR)}
         if textures.border_color is not None:
             sampler_args['border_color'] = tuple(textures.border_color)
         else:
@@ -947,30 +949,84 @@ cdef inline list configure_textures(glctx, shader, Textures textures, dict refer
             sampler_args['repeat_y'] = textures.repeat_y
         texture_unit_ids = texture_unit_ids.copy()
         if (texture_uniform := shader.get('albedo_texture', None)) is not None:
-            texture_uniform.value = linear_sampler(glctx, textures.albedo_id, sampler_args, references, samplers, texture_unit_ids)
+            unit_id = linear_sampler(glctx, textures.albedo_id, sampler_args, references, samplers, texture_unit_ids)
+            if (use_texture_uniform := shader.get('use_albedo_texture', None)) is not None:
+                use_texture_uniform.value = unit_id != 0
+                if unit_id:
+                    texture_uniform.value = unit_id
+            else:
+                texture_uniform.value = unit_id
         if (texture_uniform := shader.get('metal_texture', None)) is not None:
-            texture_uniform.value = linear_sampler(glctx, textures.metal_id, sampler_args, references, samplers, texture_unit_ids)
+            unit_id = linear_sampler(glctx, textures.metal_id, sampler_args, references, samplers, texture_unit_ids)
+            if (use_texture_uniform := shader.get('use_metal_texture', None)) is not None:
+                use_texture_uniform.value = unit_id != 0
+                if unit_id:
+                    texture_uniform.value = unit_id
+            else:
+                texture_uniform.value = unit_id
         if (texture_uniform := shader.get('roughness_texture', None)) is not None:
-            texture_uniform.value = linear_sampler(glctx, textures.roughness_id, sampler_args, references, samplers, texture_unit_ids)
+            unit_id = linear_sampler(glctx, textures.roughness_id, sampler_args, references, samplers, texture_unit_ids)
+            if (use_texture_uniform := shader.get('use_roughness_texture', None)) is not None:
+                use_texture_uniform.value = unit_id != 0
+                if unit_id:
+                    texture_uniform.value = unit_id
+            else:
+                texture_uniform.value = unit_id
         if (texture_uniform := shader.get('ao_texture', None)) is not None:
-            texture_uniform.value = linear_sampler(glctx, textures.ao_id, sampler_args, references, samplers, texture_unit_ids)
+            unit_id = linear_sampler(glctx, textures.ao_id, sampler_args, references, samplers, texture_unit_ids)
+            if (use_texture_uniform := shader.get('use_ao_texture', None)) is not None:
+                use_texture_uniform.value = unit_id != 0
+                if unit_id:
+                    texture_uniform.value = unit_id
+            else:
+                texture_uniform.value = unit_id
         if (texture_uniform := shader.get('emissive_texture', None)) is not None:
-            texture_uniform.value = linear_sampler(glctx, textures.emissive_id, sampler_args, references, samplers, texture_unit_ids)
+            unit_id = linear_sampler(glctx, textures.emissive_id, sampler_args, references, samplers, texture_unit_ids)
+            if (use_texture_uniform := shader.get('use_emissive_texture', None)) is not None:
+                use_texture_uniform.value = unit_id != 0
+                if unit_id:
+                    texture_uniform.value = unit_id
+            else:
+                texture_uniform.value = unit_id
         if (texture_uniform := shader.get('transparency_texture', None)) is not None:
-            texture_uniform.value = linear_sampler(glctx, textures.transparency_id, sampler_args, references, samplers, texture_unit_ids)
+            unit_id = linear_sampler(glctx, textures.transparency_id, sampler_args, references, samplers, texture_unit_ids)
+            if (use_texture_uniform := shader.get('use_transparency_texture', None)) is not None:
+                use_texture_uniform.value = unit_id != 0
+                if unit_id:
+                    texture_uniform.value = unit_id
+            else:
+                texture_uniform.value = unit_id
     else:
         if (texture_uniform := shader.get('albedo_texture', None)) is not None:
-            texture_uniform.value = 0
+            if (use_texture_uniform := shader.get('use_albedo_texture', None)) is not None:
+                use_texture_uniform.value = False
+            else:
+                texture_uniform.value = 0
         if (texture_uniform := shader.get('metal_texture', None)) is not None:
-            texture_uniform.value = 0
+            if (use_texture_uniform := shader.get('use_metal_texture', None)) is not None:
+                use_texture_uniform.value = False
+            else:
+                texture_uniform.value = 0
         if (texture_uniform := shader.get('roughness_texture', None)) is not None:
-            texture_uniform.value = 0
+            if (use_texture_uniform := shader.get('use_roughness_texture', None)) is not None:
+                use_texture_uniform.value = False
+            else:
+                texture_uniform.value = 0
         if (texture_uniform := shader.get('ao_texture', None)) is not None:
-            texture_uniform.value = 0
+            if (use_texture_uniform := shader.get('use_ao_texture', None)) is not None:
+                use_texture_uniform.value = False
+            else:
+                texture_uniform.value = 0
         if (texture_uniform := shader.get('emissive_texture', None)) is not None:
-            texture_uniform.value = 0
+            if (use_texture_uniform := shader.get('use_emissive_texture', None)) is not None:
+                use_texture_uniform.value = False
+            else:
+                texture_uniform.value = 0
         if (texture_uniform := shader.get('transparency_texture', None)) is not None:
-            texture_uniform.value = 0
+            if (use_texture_uniform := shader.get('use_transparency_texture', None)) is not None:
+                use_texture_uniform.value = False
+            else:
+                texture_uniform.value = 0
     return samplers
 
 

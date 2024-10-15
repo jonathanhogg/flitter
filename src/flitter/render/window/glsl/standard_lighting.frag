@@ -22,6 +22,13 @@ uniform float fog_curve;
 uniform mat4 pv_matrix;
 uniform sampler2D backface_data;
 
+uniform bool use_albedo_texture;
+uniform bool use_metal_texture;
+uniform bool use_roughness_texture;
+uniform bool use_ao_texture;
+uniform bool use_emissive_texture;
+uniform bool use_transparency_texture;
+
 uniform sampler2D albedo_texture;
 uniform sampler2D metal_texture;
 uniform sampler2D roughness_texture;
@@ -55,12 +62,24 @@ void main() {
     float roughness = fragment_properties.z;
     float ao = fragment_properties.w;
 
-    overlay_color_texture(albedo_texture, texture_uv, albedo);
-    overlay_luminance_texture(transparency_texture, texture_uv, transparency);
-    overlay_color_texture(emissive_texture, texture_uv, emissive);
-    overlay_luminance_texture(metal_texture, texture_uv, metal);
-    overlay_luminance_texture(roughness_texture, texture_uv, roughness);
-    overlay_luminance_texture(ao_texture, texture_uv, ao);
+    if (use_albedo_texture) {
+        overlay_color_texture(albedo_texture, texture_uv, albedo);
+    }
+    if (use_transparency_texture) {
+        overlay_luminance_texture(transparency_texture, texture_uv, transparency);
+    }
+    if (use_emissive_texture) {
+        overlay_color_texture(emissive_texture, texture_uv, emissive);
+    }
+    if (use_metal_texture) {
+        overlay_luminance_texture(metal_texture, texture_uv, metal);
+    }
+    if (use_roughness_texture) {
+        overlay_luminance_texture(roughness_texture, texture_uv, roughness);
+    }
+    if (use_ao_texture) {
+        overlay_luminance_texture(ao_texture, texture_uv, ao);
+    }
 
     vec3 transmission_color = vec3(0.0);
     vec3 diffuse_color = vec3(0.0);
