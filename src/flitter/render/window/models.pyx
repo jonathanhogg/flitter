@@ -120,7 +120,8 @@ cdef class Model:
             buffers = None, None
             objects[name] = buffers
             return buffers
-        if (visual := self.trimesh_model.visual) is not None and isinstance(visual, trimesh.visual.texture.TextureVisuals) and visual.uv is not None:
+        if (visual := self.trimesh_model.visual) is not None and isinstance(visual, trimesh.visual.texture.TextureVisuals) \
+                and visual.uv is not None and len(visual.uv) == len(self.trimesh_model.vertices):
             vertex_uvs = visual.uv
         else:
             vertex_uvs = np.zeros((len(self.trimesh_model.vertices), 2))
