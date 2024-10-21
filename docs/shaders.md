@@ -416,41 +416,43 @@ artefacts in the image, including "starbursts" and "ghosts". The filter requires
 a high dynamic range input (such as output by `!canvas3d`). The filter accepts
 the following attributes:
 
-`upright_length=` *LENGTH*
-: The length of the vertical/horizontal star lines, expressed as a multiple of
-the shorter of the filter width and height. Larger values are more expensive to
-compute. Default is `0.25`.
-
-`diagonal_length=` *LENGTH*
-: The length of the diagonal star lines, expressed as a multiple of the shorter
-of the filter width and height. Larger values are more expensive to compute.
-Default is `0.125`.
-
 `threshold=` *L*
 : A luminosity threshold over which a pixel is deemed to be "bright". Default is
 `1`.
-
-`ghosts=` *N*
-: The number of lens ghosts to add, between `0` and `6`. The size, location and
-distortion of each ghost has been individually designed.
 
 `attenuation=` *ATTENUATION*
 : How much to attenuate the flares from the brightness of the source. This is
 expressed as a power-of-2, so `1` means half the (linear) luminosity and `2`
 means one-quarter the luminosity. Default is `2`.
 
+`upright_length=` *LENGTH*
+: The length of the vertical/horizontal starburst lines, expressed as a
+multiple of the shorter of the filter width or height. Larger values are more
+expensive to compute. Default is `0.25`.
+
+`diagonal_length=` *LENGTH*
+: The length of the diagonal starburst lines, expressed as a multiple of the
+shorter of the filter width or height. Larger values are more expensive to
+compute. Default is `0.125`.
+
+`ghosts=` *N*
+: The number of lens ghosts to add, between `0` and `6`. The size, location and
+distortion of each ghost has been individually designed. Default is `6`.
+Reducing the number of ghosts has a slight performance benefit.
+
 `aberration=` *RATIO*
 : How much chromatic aberration (separation into spectrum lines) the ghosts will
 exhibit. This is expressed as a multiple of an internally-defined reasonable
-value. The default is `1`, which will result in the designed amount of
-chromatic aberration. Values below `1` will result in tighter ghosts and `0`
-will turn off aberration completely (which has a slight performance benefit).
-Values above `1` may exhibit gaps forming between the 6 separate colors used
-to emulate true chromatic aberration.
+value. The default is `1`. Values below `1` will result in tighter ghosts and
+`0` will turn off aberration completely (which has a slight performance
+benefit). Values above `1` may cause gaps to form between the 6 color
+separations used to emulate true chromatic aberration.
 
 The lens flare phases of this filter are run as down-sampled phases. By default
 this frame-buffer will be half the width and height of `size`, but this can
-be controlled with the `downsample` attribute.
+be controlled with the `downsample` attribute. As this filter is very expensive
+to compute, setting `downsample=3` or `downsample=4` can make a significant
+difference to GPU load – particularly if the filter `size` is large.
 
 ### `!edges`
 
