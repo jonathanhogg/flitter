@@ -21,7 +21,7 @@ from flitter.language.tree import (Literal, Name, Sequence,
 
 
 class SimplifierTestCase(unittest.TestCase):
-    def assertSimplifiesTo(self, x, y, state=None, dynamic=None, static=None, with_errors=None):
+    def assertSimplifiesTo(self, x, y, state=None, dynamic=None, static=None, with_errors=None, with_dependencies=None):
         xx, context = x.simplify(state=state, dynamic=dynamic, static=static, path='test.fl', return_context=True)
         xxx = xx.simplify(state=state, dynamic=dynamic, static=static)
         self.assertIs(xxx, xx, msg="Simplification not complete in one step")
@@ -36,6 +36,7 @@ class SimplifierTestCase(unittest.TestCase):
                     self.assertEqual(args[0], "Simplifier error: {}")
                     errors.add(args[1])
                 self.assertEqual(errors, with_errors)
+        self.assertEqual({x._path for x in context.dependencies}, with_dependencies if with_dependencies is not None else set())
         if static is not None:
             for name in static:
                 self.assertEqual(context.names.pop(name), static[name], msg=f"{name} differs from original static value")
@@ -1124,14 +1125,17 @@ let y=10+(x or 3)
 
     def test_static(self):
         with unittest.mock.patch('flitter.cache.logger'):
-            self.assertSimplifiesTo(Import(('x', 'y'), Literal(str(self.test_module)), Add(Name('x'), Name('y'))), Literal(15))
+            self.assertSimplifiesTo(Import(('x', 'y'), Literal(str(self.test_module)), Add(Name('x'), Name('y'))), Literal(15),
+                                    with_dependencies={self.test_module})
 
     def test_recursive_import(self):
         with unittest.mock.patch('flitter.cache.logger'):
             self.assertSimplifiesTo(Import(('x', 'y'), Literal(str(self.circular_module_a)), Add(Name('x'), Name('y'))), Literal(18),
-                                    with_errors={f"Circular import of '{self.circular_module_a}'"})
+                                    with_errors={f"Circular import of '{self.circular_module_a}'"},
+                                    with_dependencies={self.circular_module_a, self.circular_module_b})
             self.assertSimplifiesTo(Import(('x', 'y'), Literal(str(self.circular_module_b)), Add(Name('x'), Name('y'))), Literal(20),
-                                    with_errors={f"Circular import of '{self.circular_module_b}'"})
+                                    with_errors={f"Circular import of '{self.circular_module_b}'"},
+                                    with_dependencies={self.circular_module_a, self.circular_module_b})
 
 
 class TestFunction(SimplifierTestCase):

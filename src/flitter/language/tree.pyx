@@ -205,6 +205,7 @@ cdef class Import(Expression):
                     top, import_context = top.simplify(path=path, parent=context, return_context=True)
                     import_static_names = import_context.exports
                     context.errors.update(import_context.errors)
+                    context.dependencies.update(import_context.dependencies)
         cdef dict let_names = {}
         cdef dict saved = dict(context.names)
         cdef list remaining = []
