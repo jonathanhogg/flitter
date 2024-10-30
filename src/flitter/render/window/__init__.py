@@ -305,11 +305,15 @@ class ProgramNode(WindowNode):
                 elif name == 'downsample':
                     downsample_member = member
                 elif name in child_textures:
-                    sampler = self.glctx.sampler(texture=child_textures[name], **sampler_args)
-                    sampler.use(location=unit)
-                    samplers.append(sampler)
-                    member.value = unit
-                    unit += 1
+                    texture = child_textures[name]
+                    if texture is not None:
+                        sampler = self.glctx.sampler(texture=child_textures[name], **sampler_args)
+                        sampler.use(location=unit)
+                        samplers.append(sampler)
+                        member.value = unit
+                        unit += 1
+                    else:
+                        member.value = 0
                 elif name in node and set_uniform_vector(member, node[name]):
                     pass
                 elif name in kwargs and set_uniform_vector(member, Vector.coerce(kwargs[name])):
@@ -662,8 +666,7 @@ class Window(ProgramNode):
         self._beat = beat
         glfw.poll_events()
         RenderTarget.empty_pool(self.glctx, 1)
-        if count := self.glctx.gc():
-            logger.trace("Collected {} OpenGL objects", count)
+        self.glctx.gc()
 
     def make_secondary_texture(self):
         width, height = self.window.get_framebuffer_size()

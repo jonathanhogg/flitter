@@ -293,8 +293,8 @@ class EngineController:
                         for renderer in renderers:
                             await renderer.purge()
 
-                elif count := gc.collect(0):
-                    logger.trace("Collected {} objects", count)
+                else:
+                    gc.collect(0)
 
                 frame_count += 1
                 frames.append(frame_time if self.realtime else now)
