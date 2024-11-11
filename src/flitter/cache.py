@@ -406,11 +406,11 @@ class CachePath:
         self._cache[key] = True
 
     def write_video_frame(self, frame, timestamp, codec='h264', pixfmt='yuv420p', fps=60, realtime=False,
-                          crf=None, preset=None, limit=None, alpha=False):
+                          crf=None, profile=None, preset=None, limit=None, alpha=False):
         import av
         self._touched = system_clock()
         width, height = frame.width, frame.height
-        key = 'video_output', width, height, alpha, codec, pixfmt, fps, crf, preset, limit
+        key = 'video_output', width, height, alpha, codec, profile, pixfmt, fps, crf, preset, limit
         writer, queue, start = self._cache.get(key, (None, None, None))
         if start is None:
             self.cleanup()
@@ -424,6 +424,8 @@ class CachePath:
                 options['crf'] = str(crf)
             if preset is not None:
                 options['preset'] = preset
+            if profile is not None:
+                options['profile'] = profile
             try:
                 codec = codec.lower()
                 if codec not in av.codecs_available:
