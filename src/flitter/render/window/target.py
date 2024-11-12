@@ -120,7 +120,8 @@ class RenderTarget:
         if self._release_time is not None:
             return None
         if self._video_frame is None:
-            self._video_frame = av.VideoFrame.from_image(self.image)
+            data = self._image_framebuffer.read(components=4, dtype='f1')
+            self._video_frame = av.VideoFrame.from_bytes(data, width=self.width, height=self.height, format='rgba', flip_vertical=True)
         return self._video_frame
 
     @property
