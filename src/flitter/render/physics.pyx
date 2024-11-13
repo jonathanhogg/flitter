@@ -99,15 +99,38 @@ cdef class Barrier:
     cdef Vector position
     cdef Vector normal
     cdef double restitution
+    cdef double strength
+    cdef double power
+    cdef double minimum
 
     @cython.profile(False)
-    def __cinit__(self, Node node, Vector zero):
+    def __cinit__(self, Node node, double strength, Vector zero):
         self.position = node.get_fvec('position', zero.length, zero)
         self.normal = node.get_fvec('normal', zero.length, zero).normalize()
         self.restitution = min(max(0, node.get_float('restitution', 1)), 1)
+        self.strength = strength
+        self.power = max(0, node.get_float('power', 1))
+        self.minimum = node.get_float('min', 0)
 
     @cython.profile(False)
-    cdef void apply(self, Particle particle, double speed_of_light, double clock, double delta) noexcept nogil:
+    cdef void apply_distance(self, Particle particle) noexcept nogil:
+        if self.normal.length == 0 or self.minimum <= 0:
+            return
+        cdef int i, dimensions=self.position.length
+        cdef double n, k, distance=0
+        for i in range(dimensions):
+            n = self.normal.numbers[i]
+            distance = distance + (particle.position.numbers[i] - self.position.numbers[i]) * n
+        if distance >= 0 and distance < self.minimum:
+            k = self.minimum - distance
+            if self.power != 1:
+                k **= self.power
+            k *= self.strength
+            for i in range(dimensions):
+                particle.force.numbers[i] = particle.force.numbers[i] + self.normal.numbers[i] * k
+
+    @cython.profile(False)
+    cdef void apply_rebound(self, Particle particle, double speed_of_light, double clock, double delta) noexcept nogil:
         if self.normal.length == 0:
             return
         cdef int i, dimensions=self.position.length
@@ -539,9 +562,6 @@ cdef class PhysicsSystem:
                 child_group.parent = group
                 groups.append(child_group)
                 self.collect(groups, child_group, child, particles_by_id, old_state_keys, new_state_keys, state, state_prefix, clock, seed)
-            elif child.kind is 'barrier':
-                barrier = Barrier.__new__(Barrier, child, zero)
-                group.barriers.append(barrier)
             else:
                 strength = child.get_float('strength', 1)
                 ease = child.get_float('ease', 0)
@@ -582,6 +602,9 @@ cdef class PhysicsSystem:
                     group.matrix_forces.append(ElectrostaticForceApplier.__new__(ElectrostaticForceApplier, child, strength, zero))
                 elif child.kind is 'adhesion':
                     group.matrix_forces.append(AdhesionForceApplier.__new__(AdhesionForceApplier, child, strength, zero))
+                elif child.kind is 'barrier':
+                    barrier = Barrier.__new__(Barrier, child, strength, zero)
+                    group.barriers.append(barrier)
 
     cpdef double calculate(self, list groups, dict particles_by_id, bint realtime, bint extra, double time, double last_time, double clock):
         cdef list all_particles, particles, forces, barriers
@@ -673,9 +696,11 @@ cdef class PhysicsSystem:
                         if (<Particle>to_particle).non_anchor:
                             for j in range(m):
                                 (<ParticleForceApplier>PyList_GET_ITEM(forces, j)).apply(<Particle>to_particle, delta)
+                            for j in range(n):
+                                (<Barrier>PyList_GET_ITEM(barriers, j)).apply_distance(<Particle>to_particle)
                             (<Particle>to_particle).step(self.speed_of_light, clock, delta)
                             for j in range(n):
-                                (<Barrier>PyList_GET_ITEM(barriers, j)).apply(<Particle>to_particle, self.speed_of_light, clock, delta)
+                                (<Barrier>PyList_GET_ITEM(barriers, j)).apply_rebound(<Particle>to_particle, self.speed_of_light, clock, delta)
                             if more:
                                 for j in range(self.dimensions):
                                     (<Particle>to_particle).force.numbers[j] = (<Particle>to_particle).initial_force.numbers[j]

@@ -179,23 +179,6 @@ be moved once the simulation has started. An anchor can usefully have zero mass,
 for example if it is to be one side of a distance force but should be ignored
 for the purposes of calculating attraction due to gravity.
 
-### `!barrier`
-
-A `!barrier` constrains all particles to be on one side of it. In the case of
-a system with 3 dimensions, this will be an infinite plane; with 2 dimensions,
-a line; and with 1 dimension, a point. Particles that hit a barrier will
-"bounce" by reflecting their velocity using the normal of the barrier.
-
-- `position` - specifies the origin for the barrier
-- `normal` - specifies the orientation of the barrier; particles are
-constrained to be on the side of the barrier in the direction of this vector
-- `restitution` - the coefficient of restitution (default is `1`)
-
-Particles bouncing off a barrier will have reflected speed equal to the speed
-at which they hit the barrier multiplied by the coefficient of restitution: a
-value of `1` will result in a perfectly elastic collision, whereas `0` would
-mean all of the particle's velocity is absorbed.
-
 ### `!constant`
 
 Specifies a constant force or acceleration to be applied to all particles. This
@@ -484,6 +467,41 @@ m = \textbf{density} \cdot \textbf{radius}^\textbf{dimensions}
 ```{math}
 \vec{F} = \textbf{strength} \cdot  \vec{gravity} \cdot  ( \textbf{mass} - m )
 ```
+
+## Barriers
+
+A `!barrier` constrains all particles to be on one side of it. In the case of
+a system with 3 dimensions, this will be an infinite plane; with 2 dimensions,
+a line; and with 1 dimension, a point.
+
+- `position` - specifies the origin for the barrier
+- `normal` - specifies the orientation of the barrier; particles are
+constrained to be on the side of the barrier in the direction of this vector
+
+If a particle's outer edge (incorporating its `radius`) crosses a barrier, it
+will "bounce" by reflecting its velocity in the normal of the barrier.
+Particles bouncing off a barrier will have reflected speed equal to the speed
+at which they hit the barrier multiplied by the coefficient of restitution: a
+value of `1` will result in a perfectly elastic collision, whereas `0` would
+mean all of the particle's velocity is absorbed.
+
+- `restitution` - the coefficient of restitution (default is `1`)
+
+The `!barrier` node also accepts the same `'min`, `power`, `strength` and
+`ease` attributes as `!distance`, which will create a minimum distance
+constraint on all particles with respect to the barrier. This can be used to
+create a "soft" boundary. The "hard" bounce condition is still applied if the
+particle crosses the barrier.
+
+- `min` - a minimum distance that particles must be from the barrier
+- `power` - the power to which the displacement will be raised (default is `1`)
+- `strength` - force magnitude coefficient (default is `1`)
+- `ease` - specifies an amount of simulation time over which to ramp up
+`strength`
+
+If `min` is specified and non-zero then the particle will have a force applied
+to it, proportional to the displacement from the minimum distance raised to
+`power` and multiplied by `strength`, in the direction of the barrier normal.
 
 ## Groups
 
