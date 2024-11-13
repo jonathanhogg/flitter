@@ -353,11 +353,8 @@ the file. Otherwise, the video output will continue for as long as `filename` is
 valid and the program is running.
 
 For video writing, any further attributes specified on the `!record` node will
-be passed to **ffmpeg** as options. Some **ffpmeg** options use dash
-characters (`-`), which are invalid in **Flitter** names – for such options use
-n-dashes (`–`, option-dash on a Mac keyboard) instead, which will be converted
-into dashes before passing to **ffmpeg**. Similarly, ellipsis characters (`…`,
-option-semicolon on a Mac keyboard) will be converted into colons (`:`).
+be passed to **ffmpeg** as options. For **ffmpeg** options that use dashes
+(`-`), replace each of these with a sequential pair of underscores (`__`).
 
 Some common, useful codec options are:
 
