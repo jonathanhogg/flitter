@@ -406,26 +406,21 @@ class CachePath:
         self._cache[key] = True
 
     def write_video_frame(self, frame, timestamp, codec='h264', pixfmt='yuv420p', fps=60, realtime=False,
-                          crf=None, profile=None, preset=None, limit=None, alpha=False):
+                          options=None, limit=None, alpha=False):
         import av
         self._touched = system_clock()
         width, height = frame.width, frame.height
-        key = 'video_output', width, height, alpha, codec, profile, pixfmt, fps, crf, preset, limit
+        options = tuple(sorted(options.items())) if options else None
+        key = 'video_output', width, height, alpha, codec, pixfmt, fps, options, limit
         writer, queue, start = self._cache.get(key, (None, None, None))
         if start is None:
             self.cleanup()
             if self._path.exists():
                 logger.warning("Existing video file will be overwritten: {}", self._path)
-            options = {}
-            options['color_primaries'] = 'bt709'
-            options['color_trc'] = 'bt709'
-            options['colorspace'] = 'bt709'
-            if crf is not None:
-                options['crf'] = str(crf)
-            if preset is not None:
-                options['preset'] = preset
-            if profile is not None:
-                options['profile'] = profile
+            options = dict(options) if options else {}
+            options.setdefault('color_primaries', 'bt709')
+            options.setdefault('color_trc', 'bt709')
+            options.setdefault('colorspace', 'bt709')
             try:
                 codec = codec.lower()
                 if codec not in av.codecs_available:
@@ -434,7 +429,7 @@ class CachePath:
                 if av_codec.type != 'video':
                     raise ValueError(f"'{codec}' not a video codec")
                 if av_codec.name == 'hevc_videotoolbox' and alpha:
-                    options['alpha_quality'] = '1'
+                    options.setdefault('alpha_quality', '1')
                 self._path.parent.mkdir(parents=True, exist_ok=True)
                 container = av.open(str(self._path), mode='w')
                 stream = container.add_stream(av_codec, rate=fps, options=options)

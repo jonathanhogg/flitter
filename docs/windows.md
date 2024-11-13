@@ -330,31 +330,58 @@ location of the running **Flitter** program. If `filename` is `null`, then
 the `!record` node will do nothing – this is a simple way to delay output until
 a particular condition holds.
 
+`keep_alpha=` *BOOLEAN*
+: Specifies whether to keep the alpha transparency layer information from the
+input when writing the image or video file. Only some image formats (such as
+PNG or JPEG2000) and a very few video codecs (such as ProRes) support
+transparency. Default is `false`.
+
 `quality=` *Q*
 : Specifies a quality setting for image formats that support it (such as JPEG).
 
 `codec=` *CODEC*
-: For generic video container outputs, this specifies the video codec to use.
-Defaults to `:h264`.
+: For video writing, this specifies the video codec to use. Defaults to `:h264`.
 
-`crf=` *CRF*
-: For video codecs that support it, this provides a "constant rate factor" that
-defines how much the codec should prioritise size over quality. Smaller values
-mean better quality and larger values mean a smaller size. A value around `25`
-is generally an acceptable compromise for the `:h264` codec. For `:h265`, this
-can often be pushed up to a higher value for smaller files while still keeping
-a decent quality encoding.
-
-`preset=` *PRESET*
-: Specifies a video codec preset if supported. This bunches up different codec
-settings. Common presets have names like `:fast` or `:slow` and the
-[**ffmpeg**](https://ffmpeg.org) documentation should be referred to for
-details.
+`pixfmt=` *PIXFMT*
+: For video writing, this specifies the video frame pixel format to be passed
+to the encoder. For most codecs the default `yuv420p` – or `yuva420p` with
+`keep_alpha=true` – will be correct.
 
 `limit=` *SECONDS*
 : Specifies a maximum number of seconds of video output to write before closing
 the file. Otherwise, the video output will continue for as long as `filename` is
 valid and the program is running.
+
+For video writing, any further attributes specified on the `!record` node will
+be passed to **ffmpeg** as options. Some **ffpmeg** options use dash
+characters (`-`), which are invalid in **Flitter** names – for such options use
+n-dashes (`–`, option-dash on a Mac keyboard) instead, which will be converted
+into dashes before passing to **ffmpeg**. Similarly, ellipsis characters (`…`,
+option-semicolon on a Mac keyboard) will be converted into colons (`:`).
+
+Some common, useful codec options are:
+
+`crf=` *CRF*
+: For `:h264` and `:hevc`, this provides a "constant rate factor" that
+defines how much the codec should prioritise size over quality. Smaller values
+mean better quality and larger values mean a smaller size. A value around `25`
+is generally an acceptable compromise for the `:h264` codec. For `:hevc`, this
+can often be pushed up to a higher value for smaller files while still keeping
+a decent quality encoding.
+
+`profile=` *PROFILE*
+: For many video codecs this controls a set of features of the codec that have
+been standardised to the capabilities of different playback devices. For
+instance, a profile may be designed for a high-end broadcast context or mobile
+phones. Common profiles have names like `:baseline`, `:main` or `:high`.
+
+`preset=` *PRESET*
+: For many video codecs this groups up different codec settings by simpler
+names. Common presets have names like `:fast` or `:slow`.
+
+The full range of per-codec options can be found in the [**ffmpeg** codec
+documentation](https://ffmpeg.org/ffmpeg-codecs.html) or by running
+`ffmpeg -h codec=`*CODEC*.
 
 Filenames with an `.mp4`, `.mov`, `.m4v`, `.mkv`, `.webm` or `.ogg` extension
 are assumed to be video outputs with the appropriate container type. For video
