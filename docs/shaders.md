@@ -525,8 +525,7 @@ to the null vector if not supplied.
 
 `components=` *1..4*
 : Specify how many distinct noise planes to create, default `1`. Each will
-be assigned to one channel of the output image (in the order R, G, B, A). The
-unused channels will be set to `1`.
+be assigned to one channel of the output image (in the order R, G, B, A).
 
 `octaves=` *OCTAVES*
 : Specify how many octaves of noise to generate, default `1`.
@@ -554,7 +553,13 @@ default `0`.
 : Specifies an offset to be added to the multiplied noise value before writing
 to the output image, default `0.5`.
 
-Noise values are normally in the range $(-1,1)$. The default values for
+`default=` *DEFAULTS*
+: Specifies the default values of the color channels as a 4-vector (in the
+order R, G, B, A). These will be used for any channels not filled-in with noise
+values (see the `components=` attribute above). The default value is `1`,
+meaning all unused channels will have the value `1`.
+
+OpenSimplex 2S noise values are in the range $(-1,1)$. The default values for
 `multiplier` and `offset` are designed to adjust the noise range into the
 standard $(0,1)$ range for color values. However, with an HDR image format
 (i.e., the default `colorbits=16`) there is no particular need to restrict the
