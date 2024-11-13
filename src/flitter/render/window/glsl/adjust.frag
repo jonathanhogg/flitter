@@ -9,6 +9,8 @@ uniform float contrast;
 uniform float brightness;
 uniform float shadows;
 uniform float highlights;
+uniform float hue;
+uniform float saturation;
 uniform mat3 color_matrix;
 % if tonemap_function == 'reinhard':
 uniform float whitepoint;
@@ -30,8 +32,10 @@ void main() {
 %         endif
 %     endfor
     vec3 col = merged.a > 0.0 ? merged.rgb / merged.a : vec3(0.0);
-    col = color_matrix * col;
-    col = filter_adjust(col, exposure, contrast, brightness, shadows, highlights);
+    vec3 hsv = rgb_to_hsv(color_matrix * col);
+    hsv.x += hue;
+    hsv.y *= saturation;
+    col = filter_adjust(hsv_to_rgb(hsv), exposure, contrast, brightness, shadows, highlights);
     col = max(vec3(0.0), col);
 %     if gamma != 1:
     col = pow(col, vec3(gamma));

@@ -50,7 +50,7 @@ class Adjust(Shader):
         if tonemap not in self.TONEMAP_FUNCTIONS:
             tonemap = None
         super().render(node, references, exposure=0, contrast=1, brightness=0, shadows=0, highlights=0,
-                       color_matrix=(1, 0, 0, 0, 1, 0, 0, 0, 1),
+                       hue=0, saturation=1, color_matrix=(1, 0, 0, 0, 1, 0, 0, 0, 1),
                        gamma=1, tonemap_function=tonemap, **kwargs)
 
 

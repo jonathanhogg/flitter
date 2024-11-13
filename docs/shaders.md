@@ -326,6 +326,16 @@ range around 0.5.
 double the color value of each pixel, an adjustment of `-1` will half the value
 of each pixel. Default is `0`.
 
+`hue=` *DELTA*
+: Specifies a positive or negative hue adjustment in the useful range
+$(-0.5,0.5)$. All colors will be rotated around the standard HSV hue cylinder
+by this amount.
+
+`saturation=` *MULTIPLIER*
+: Specifies an amount to multiple the saturation of each pixel by. Values
+less than `1` will desaturate the image and values greater than `1` will
+over-saturate it. A value of `0` will convert the image to grayscale.
+
 `shadows=` *STOPS*
 : Specifies an exposure adjustment to apply to the darker parts of the input
 image (luminance < $0.25$).
@@ -358,6 +368,7 @@ The `!adjust` filter works in the following order:
 
 - un-premultiply alpha
 - apply `color_matrix`
+- apply `hue` and `saturation`
 - apply `exposure`
 - apply `brightness` and `contrast`
 - apply `shadows` and `highlights`
