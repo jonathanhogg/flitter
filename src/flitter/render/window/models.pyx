@@ -534,11 +534,6 @@ cdef class Slice(UnaryOperation):
     cpdef Model repair(self):
         return self
 
-    cdef Model _transform(self, Matrix44 transform_matrix):
-        cdef Vector origin = transform_matrix.vmul(self.origin)
-        cdef Vector normal = transform_matrix.inverse_transpose_matrix33().vmul(self.normal).normalize()
-        return self.original._transform(transform_matrix)._slice(origin, normal)
-
     cpdef object build_trimesh(self):
         manifold = self.get_manifold()
         if manifold is not None:
@@ -614,13 +609,6 @@ cdef class BooleanOperation(Model):
 
     cpdef Model repair(self):
         return self
-
-    cdef Model _transform(self, Matrix44 transform_matrix):
-        cdef Model model
-        cdef list models = []
-        for model in self.models:
-            models.append(model._transform(transform_matrix))
-        return BooleanOperation._get(self.operation, models)
 
     cdef Model _slice(self, Vector origin, Vector normal):
         cdef Model model
