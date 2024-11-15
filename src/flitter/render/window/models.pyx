@@ -72,7 +72,31 @@ cdef class Model:
         raise NotImplementedError()
 
     cpdef object build_manifold(self):
-        raise NotImplementedError()
+        cdef bint merged=False, filled=False, hull=False
+        trimesh_model = self.get_trimesh()
+        if trimesh_model is None:
+            return None
+        if not trimesh_model.is_watertight:
+            trimesh_model = trimesh_model.copy()
+            trimesh_model.merge_vertices(merge_tex=True, merge_norm=True)
+            merged = True
+            if not trimesh_model.is_watertight:
+                if trimesh_model.fill_holes():
+                    filled = True
+                else:
+                    trimesh_model = trimesh_model.convex_hull
+                    hull = True
+        if not trimesh_model.is_volume:
+            logger.error("Mesh is not a volume: {}", self.name)
+            return None
+        elif hull:
+            logger.warning("Computed convex hull of non-manifold mesh: {}", self.name)
+        elif filled:
+            logger.debug("Filled holes in non-manifold mesh: {}", self.name)
+        elif merged:
+            logger.trace("Merged vertices of non-manifold mesh: {}", self.name)
+        return manifold3d.Manifold(mesh=manifold3d.Mesh(vert_properties=np.array(trimesh_model.vertices, dtype=np.float32),
+                                                        tri_verts=np.array(trimesh_model.faces, dtype=np.uint32)))
 
     cpdef void add_dependent(self, Model model):
         if self.dependents is None:
@@ -152,9 +176,6 @@ cdef class Model:
         logger.trace("Constructed model {} with {} vertices and {} faces", name, len(vertex_data), len(index_data))
         objects[name] = buffers
         return buffers
-
-    cpdef Model manifold(self):
-        return Manifold._get(self)
 
     cpdef Model flatten(self):
         return Flatten._get(self)
@@ -267,63 +288,6 @@ cdef class UnaryOperation(Model):
             self.original.check_for_changes()
 
 
-cdef class Manifold(UnaryOperation):
-    @staticmethod
-    cdef Manifold _get(Model original):
-        assert not isinstance(original, Manifold)
-        cdef str name = f'manifold({original.name})'
-        cdef Manifold model = <Manifold>ModelCache.get(name, None)
-        if model is None:
-            model = Manifold.__new__(Manifold)
-            model.name = name
-            model.original = original
-            model.original.add_dependent(model)
-            ModelCache[name] = model
-        return model
-
-    cpdef bint is_manifold(self):
-        return True
-
-    cpdef Model manifold(self):
-        return self
-
-    cpdef Model flatten(self):
-        return self.original.flatten()
-
-    cpdef Model repair(self):
-        return self
-
-    cdef Model _snap_edges(self, double snap_angle, double minimum_area):
-        return self.original._snap_edges(snap_angle, minimum_area)
-
-    cpdef object build_manifold(self):
-        cdef bint merged=False, filled=False, hull=False
-        trimesh_model = self.original.get_trimesh()
-        if trimesh_model is None:
-            return None
-        if not trimesh_model.is_watertight:
-            trimesh_model = trimesh_model.copy()
-            trimesh_model.merge_vertices(merge_tex=True, merge_norm=True)
-            merged = True
-            if not trimesh_model.is_watertight:
-                if trimesh_model.fill_holes():
-                    filled = True
-                else:
-                    trimesh_model = trimesh_model.convex_hull
-                    hull = True
-        if not trimesh_model.is_volume:
-            logger.error("Mesh is not a volume: {}", self.original.name)
-            return None
-        elif hull:
-            logger.warning("Computed convex hull of non-manifold mesh: {}", self.original.name)
-        elif filled:
-            logger.debug("Filled holes in non-manifold mesh: {}", self.original.name)
-        elif merged:
-            logger.trace("Merged vertices of non-manifold mesh: {}", self.original.name)
-        return manifold3d.Manifold(mesh=manifold3d.Mesh(vert_properties=np.array(trimesh_model.vertices, dtype=np.float32),
-                                                        tri_verts=np.array(trimesh_model.faces, dtype=np.uint32)))
-
-
 cdef class Flatten(UnaryOperation):
     @staticmethod
     cdef Flatten _get(Model original):
@@ -339,9 +303,6 @@ cdef class Flatten(UnaryOperation):
 
     cpdef bint is_manifold(self):
         return False
-
-    cpdef Model manifold(self):
-        return self.original.manifold()
 
     cpdef Model flatten(self):
         return self
@@ -369,9 +330,6 @@ cdef class Invert(UnaryOperation):
             model.original.add_dependent(model)
             ModelCache[name] = model
         return model
-
-    cpdef Model manifold(self):
-        return self.original.manifold().invert()
 
     cpdef Model invert(self):
         return self.original
@@ -407,9 +365,6 @@ cdef class Repair(UnaryOperation):
             model.original.add_dependent(model)
             ModelCache[name] = model
         return model
-
-    cpdef Model manifold(self):
-        return self.original.manifold()
 
     cpdef Model repair(self):
         return self
@@ -450,8 +405,8 @@ cdef class SnapEdges(UnaryOperation):
             ModelCache[name] = model
         return model
 
-    cpdef Model manifold(self):
-        return self.original.manifold()
+    cpdef bint is_manifold(self):
+        return False
 
     cpdef Model flatten(self):
         return self.original.flatten()
@@ -487,9 +442,6 @@ cdef class Transform(UnaryOperation):
             model.transform_matrix = transform_matrix
             ModelCache[name] = model
         return model
-
-    cpdef Model manifold(self):
-        return self.original.manifold()._transform(self.transform_matrix)
 
     cpdef Model repair(self):
         return self.original.repair()._transform(self.transform_matrix)
@@ -564,7 +516,6 @@ cdef class Slice(UnaryOperation):
     cdef Slice _get(Model original, Vector origin, Vector normal):
         if origin.numbers == NULL or origin.length != 3 or normal.numbers == NULL or normal.length != 3:
             return None
-        original = original.manifold()
         cdef str name = f'slice({original.name}, {hex(origin.hash(False) ^ normal.hash(False))[3:]})'
         cdef Slice model = <Slice>ModelCache.get(name, None)
         if model is None:
@@ -579,9 +530,6 @@ cdef class Slice(UnaryOperation):
 
     cpdef bint is_manifold(self):
         return True
-
-    cpdef Model manifold(self):
-        return self
 
     cpdef Model repair(self):
         return self
@@ -628,7 +576,6 @@ cdef class BooleanOperation(Model):
             if operation is 'union' and isinstance(child_model, BooleanOperation) and (<BooleanOperation>child_model).operation is 'union':
                 models.extend(reversed((<BooleanOperation>child_model).models))
                 continue
-            child_model = child_model.manifold()
             if first is None:
                 first = child_model
             elif operation is 'difference' and child_model is first:
@@ -664,9 +611,6 @@ cdef class BooleanOperation(Model):
         if self.cache:
             for model in self.models:
                 model.check_for_changes()
-
-    cpdef Model manifold(self):
-        return self
 
     cpdef Model repair(self):
         return self

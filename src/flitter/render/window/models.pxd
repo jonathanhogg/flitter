@@ -27,7 +27,6 @@ cdef class Model:
     cpdef object get_manifold(self)
     cdef tuple get_buffers(self, object glctx, dict objects)
 
-    cpdef Model manifold(self)
     cpdef Model flatten(self)
     cpdef Model invert(self)
     cpdef Model repair(self)
