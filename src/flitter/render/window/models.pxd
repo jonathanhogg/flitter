@@ -10,24 +10,23 @@ cdef int64_t DefaultSegments
 
 cdef class Model:
     cdef readonly str name
-    cdef readonly object trimesh_model
-    cdef readonly bint created
-    cdef readonly bint valid
+    cdef readonly dict cache
     cdef Vector bounds
     cdef set dependents
     cdef list buffer_caches
 
-    cpdef bint is_manifold(self)
     cpdef void check_for_changes(self)
+    cpdef bint is_manifold(self)
     cpdef object build_trimesh(self)
+    cpdef object build_manifold(self)
 
     cpdef void add_dependent(self, Model model)
     cpdef void invalidate(self)
-    cpdef object get_trimesh(self)
     cpdef Vector get_bounds(self)
+    cpdef object get_trimesh(self)
+    cpdef object get_manifold(self)
     cdef tuple get_buffers(self, object glctx, dict objects)
 
-    cpdef Model manifold(self)
     cpdef Model flatten(self)
     cpdef Model invert(self)
     cpdef Model repair(self)

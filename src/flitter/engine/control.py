@@ -16,6 +16,7 @@ from ..clock import BeatCounter, system_clock
 from ..language.vm import log_vm_stats
 from ..model import Vector, StateDict, Context, null, numbers_cache_counts, empty_numbers_cache
 from ..plugins import get_plugin
+from ..render.window.models import Model
 
 
 class EngineController:
@@ -334,6 +335,9 @@ class EngineController:
             self._references = {}
             self.pages = []
             program = run_program = current_program = context = None
+            count = Model.flush_cache()
+            if count:
+                logger.trace("Flushed {} 3D models", count)
             SharedCache.clean(0)
             for renderers in self.renderers.values():
                 while renderers:
