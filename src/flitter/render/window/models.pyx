@@ -138,14 +138,14 @@ cdef class Model:
         cdef Model model
         cdef dict cache
         if self.cache:
-            self.cache.clear()
-            if self.dependents is not None:
-                for model in self.dependents:
-                    model.invalidate()
-            if self.buffer_caches is not None:
-                for cache in self.buffer_caches:
-                    if self.name in cache:
-                        del cache[self.name]
+            self.cache = None
+        if self.dependents is not None:
+            for model in self.dependents:
+                model.invalidate()
+        if self.buffer_caches is not None:
+            for cache in self.buffer_caches:
+                if self.name in cache:
+                    del cache[self.name]
 
     cpdef object get_trimesh(self):
         self.cache_timestamp = perf_counter()
