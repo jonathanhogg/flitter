@@ -10,17 +10,20 @@ cdef int64_t DefaultSegments
 
 cdef class Model:
     cdef readonly str name
+    cdef double touch_timestamp
+    cdef double cache_timestamp
     cdef readonly dict cache
-    cdef Vector bounds
     cdef set dependents
     cdef list buffer_caches
 
+    cpdef void unload(self)
     cpdef void check_for_changes(self)
     cpdef bint is_manifold(self)
     cpdef object build_trimesh(self)
     cpdef object build_manifold(self)
 
     cpdef void add_dependent(self, Model model)
+    cpdef void remove_dependent(self, Model model)
     cpdef void invalidate(self)
     cpdef Vector get_bounds(self)
     cpdef object get_trimesh(self)

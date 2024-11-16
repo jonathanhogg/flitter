@@ -11,6 +11,7 @@ from libc.stdint cimport int32_t, int64_t
 from ... import name_patch
 from ...cache import SharedCache
 from ...model cimport true_
+from ...timer cimport perf_counter
 
 
 logger = name_patch(logger, __name__)
@@ -25,13 +26,30 @@ cdef Matrix44 IdentityTransform = Matrix44._identity()
 
 cdef class Model:
     @staticmethod
-    def flush_cache():
+    def flush_caches(double min_age=30, int64_t min_size=2000):
+        cdef double cutoff = perf_counter() - min_age
         cdef Model model
-        count = len(ModelCache)
+        cdef int64_t unload_count=0, dump_count=0
+        cdef list unloaded=[]
+        while len(ModelCache) > min_size:
+            for model in ModelCache.values():
+                if model.touch_timestamp < cutoff and not model.dependents:
+                    unloaded.append(model)
+            if not unloaded:
+                break
+            while unloaded:
+                model = unloaded.pop()
+                del ModelCache[model.name]
+                model.unload()
+                unload_count += 1
         for model in ModelCache.values():
-            model.invalidate()
-        ModelCache.clear()
-        return count
+            if model.cache_timestamp < cutoff and model.cache is not None:
+                model.cache = None
+                dump_count += 1
+        if dump_count:
+            logger.trace("Dumped sub-caches on {} models", dump_count)
+        if unload_count:
+            logger.trace("Unloaded {} models from cache, {} remaining", unload_count, len(ModelCache))
 
     @staticmethod
     def by_name(str name):
@@ -61,6 +79,16 @@ cdef class Model:
 
     def __repr__(self):
         return f'<Model: {self.name}>'
+
+    cpdef void unload(self):
+        assert not self.dependents
+        self.dependents = None
+        self.cache = None
+        if self.buffer_caches is not None:
+            for cache in self.buffer_caches:
+                if self.name in cache:
+                    del cache[self.name]
+            self.buffer_caches = None
 
     cpdef bint is_manifold(self):
         raise NotImplementedError()
@@ -103,6 +131,9 @@ cdef class Model:
             self.dependents = set()
         self.dependents.add(model)
 
+    cpdef void remove_dependent(self, Model model):
+        self.dependents.remove(model)
+
     cpdef void invalidate(self):
         cdef Model model
         cdef dict cache
@@ -117,6 +148,7 @@ cdef class Model:
                         del cache[self.name]
 
     cpdef object get_trimesh(self):
+        self.cache_timestamp = perf_counter()
         if self.cache is None:
             self.cache = {}
         elif 'trimesh' in self.cache:
@@ -126,6 +158,7 @@ cdef class Model:
         return trimesh_model
 
     cpdef object get_manifold(self):
+        self.cache_timestamp = perf_counter()
         if self.cache is None:
             self.cache = {}
         elif 'manifold' in self.cache:
@@ -135,6 +168,7 @@ cdef class Model:
         return manifold
 
     cpdef Vector get_bounds(self):
+        self.cache_timestamp = perf_counter()
         if self.cache is None:
             self.cache = {}
         elif 'bounds' in self.cache:
@@ -153,6 +187,7 @@ cdef class Model:
         return bounds_vector
 
     cdef tuple get_buffers(self, object glctx, dict objects):
+        self.cache_timestamp = perf_counter()
         cdef str name = self.name
         if name in objects:
             return objects[name]
@@ -280,6 +315,10 @@ cdef class Model:
 cdef class UnaryOperation(Model):
     cdef Model original
 
+    cpdef void unload(self):
+        self.original.remove_dependent(self)
+        super(UnaryOperation, self).unload()
+
     cpdef bint is_manifold(self):
         return self.original.is_manifold()
 
@@ -299,6 +338,7 @@ cdef class Flatten(UnaryOperation):
             model.original = original
             model.original.add_dependent(model)
             ModelCache[name] = model
+        model.touch_timestamp = perf_counter()
         return model
 
     cpdef bint is_manifold(self):
@@ -364,6 +404,7 @@ cdef class Repair(UnaryOperation):
             model.original = original
             model.original.add_dependent(model)
             ModelCache[name] = model
+        model.touch_timestamp = perf_counter()
         return model
 
     cpdef Model repair(self):
@@ -403,6 +444,7 @@ cdef class SnapEdges(UnaryOperation):
             model.snap_angle = snap_angle
             model.minimum_area = minimum_area
             ModelCache[name] = model
+        model.touch_timestamp = perf_counter()
         return model
 
     cpdef bint is_manifold(self):
@@ -441,6 +483,7 @@ cdef class Transform(UnaryOperation):
             model.original.add_dependent(model)
             model.transform_matrix = transform_matrix
             ModelCache[name] = model
+        model.touch_timestamp = perf_counter()
         return model
 
     cpdef Model repair(self):
@@ -481,6 +524,7 @@ cdef class UVRemap(UnaryOperation):
             model.original.add_dependent(model)
             model.mapping = mapping
             ModelCache[name] = model
+        model.touch_timestamp = perf_counter()
         return model
 
     cdef object remap_sphere(self, trimesh_model):
@@ -526,6 +570,7 @@ cdef class Slice(UnaryOperation):
             model.origin = origin
             model.normal = normal.normalize()
             ModelCache[name] = model
+        model.touch_timestamp = perf_counter()
         return model
 
     cpdef bint is_manifold(self):
@@ -596,7 +641,13 @@ cdef class BooleanOperation(Model):
             for child_model in collected_models:
                 child_model.add_dependent(model)
             ModelCache[name] = model
+        model.touch_timestamp = perf_counter()
         return model
+
+    cpdef void unload(self):
+        for model in self.models:
+            model.remove_dependent(self)
+        super(BooleanOperation, self).unload()
 
     cpdef bint is_manifold(self):
         return True
@@ -722,6 +773,7 @@ cdef class Box(PrimitiveModel):
             model.name = name
             model.uv_map = uv_map
             ModelCache[name] = model
+        model.touch_timestamp = perf_counter()
         return model
 
     cpdef object build_trimesh(self):
@@ -742,6 +794,7 @@ cdef class Sphere(PrimitiveModel):
             model.name = name
             model.segments = segments
             ModelCache[name] = model
+        model.touch_timestamp = perf_counter()
         return model
 
     @cython.cdivision(True)
@@ -817,6 +870,7 @@ cdef class Cylinder(PrimitiveModel):
             model.name = name
             model.segments = segments
             ModelCache[name] = model
+        model.touch_timestamp = perf_counter()
         return model
 
     @cython.cdivision(True)
@@ -901,6 +955,7 @@ cdef class Cone(PrimitiveModel):
             model.name = name
             model.segments = segments
             ModelCache[name] = model
+        model.touch_timestamp = perf_counter()
         return model
 
     @cython.cdivision(True)
@@ -969,6 +1024,7 @@ cdef class ExternalModel(Model):
             model.name = filename
             model.cache_path = SharedCache[filename]
             ModelCache[filename] = model
+        model.touch_timestamp = perf_counter()
         return model
 
     cpdef bint is_manifold(self):

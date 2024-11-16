@@ -329,15 +329,14 @@ class EngineController:
                     logger.trace("State dictionary size: {} keys", len(self.state))
                     if run_program is not None and run_program.stack is not None:
                         logger.trace("VM stack size: {:d}", run_program.stack.size)
+                    Model.flush_caches()
 
         finally:
             self.global_state = {}
             self._references = {}
             self.pages = []
             program = run_program = current_program = context = None
-            count = Model.flush_cache()
-            if count:
-                logger.trace("Flushed {} 3D models", count)
+            Model.flush_caches(0, 0)
             SharedCache.clean(0)
             for renderers in self.renderers.values():
                 while renderers:
