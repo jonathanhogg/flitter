@@ -323,8 +323,7 @@ cdef class UnaryOperation(Model):
         return self.original.is_manifold()
 
     cpdef void check_for_changes(self):
-        if self.cache:
-            self.original.check_for_changes()
+        self.original.check_for_changes()
 
 
 cdef class Flatten(UnaryOperation):
@@ -654,9 +653,8 @@ cdef class BooleanOperation(Model):
 
     cpdef void check_for_changes(self):
         cdef Model model
-        if self.cache:
-            for model in self.models:
-                model.check_for_changes()
+        for model in self.models:
+            model.check_for_changes()
 
     cpdef Model repair(self):
         return self
