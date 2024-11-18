@@ -103,7 +103,7 @@ class RenderTarget:
         if self._release_time is not None:
             return None
         if self._array is None:
-            self._array = np.ndarray((self.height, self.width, 4), 'float32', self._image_framebuffer.read(components=4, dtype='f4'))
+            self._array = np.ndarray((self.height, self.width, 4), 'f4', self._image_framebuffer.read(components=4, dtype='f4'))
         return self._array
 
     @property

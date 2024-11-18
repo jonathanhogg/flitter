@@ -123,7 +123,7 @@ cdef class Model:
             logger.debug("Filled holes in non-manifold mesh: {}", self.name)
         elif merged:
             logger.trace("Merged vertices of non-manifold mesh: {}", self.name)
-        return manifold3d.Manifold(mesh=manifold3d.Mesh(vert_properties=np.array(trimesh_model.vertices, dtype=np.float32),
+        return manifold3d.Manifold(mesh=manifold3d.Mesh(vert_properties=np.array(trimesh_model.vertices, dtype='f4'),
                                                         tri_verts=np.array(trimesh_model.faces, dtype=np.uint32)))
 
     cpdef void add_dependent(self, Model model):
@@ -205,8 +205,8 @@ cdef class Model:
             vertex_uvs = visual.uv
         else:
             vertex_uvs = np.zeros((len(trimesh_model.vertices), 2))
-        vertex_data = np.hstack((trimesh_model.vertices, trimesh_model.vertex_normals, vertex_uvs)).astype('f4')
-        index_data = trimesh_model.faces.astype('i4')
+        vertex_data = np.hstack((trimesh_model.vertices, trimesh_model.vertex_normals, vertex_uvs)).astype('f4', copy=False)
+        index_data = trimesh_model.faces.astype('i4', copy=False)
         buffers = (glctx.buffer(vertex_data), glctx.buffer(index_data))
         logger.trace("Constructed model {} with {} vertices and {} faces", name, len(vertex_data), len(index_data))
         objects[name] = buffers
@@ -494,7 +494,7 @@ cdef class Transform(UnaryOperation):
     cpdef object build_trimesh(self):
         trimesh_model = self.original.get_trimesh()
         if trimesh_model is not None:
-            transform_array = np.array(self.transform_matrix, dtype='float64').reshape((4, 4)).transpose()
+            transform_array = np.array(self.transform_matrix, dtype='f8').reshape((4, 4)).transpose()
             trimesh_model = trimesh_model.copy().apply_transform(transform_array)
             if self.original.is_manifold() and not trimesh_model.is_volume:
                 logger.warning("Result of transform is no longer a volume: {}", self.name)
@@ -504,7 +504,7 @@ cdef class Transform(UnaryOperation):
     cpdef object build_manifold(self):
         manifold = self.original.get_manifold()
         if manifold is not None:
-            transform_matrix = np.array(self.transform_matrix, dtype='float64').reshape((4, 4)).transpose()[:3].tolist()
+            transform_matrix = np.array(self.transform_matrix, dtype='f8').reshape((4, 4)).transpose()[:3].tolist()
             manifold = manifold.transform(transform_matrix)
         return manifold
 
@@ -527,14 +527,14 @@ cdef class UVRemap(UnaryOperation):
         return model
 
     cdef object remap_sphere(self, trimesh_model):
-        cdef const double[:, :] vertices
+        cdef const float[:, :] vertices
         cdef object vertex_uv_array
-        cdef double[:, :] vertex_uv
+        cdef float[:, :] vertex_uv
         cdef int64_t i, n
-        cdef double x, y, z
+        cdef float x, y, z
         n = len(trimesh_model.vertices)
-        vertices = trimesh_model.vertices.astype('float64')
-        vertex_uv_array = np.zeros((n, 2), dtype='float64')
+        vertices = trimesh_model.vertices.astype('f4', copy=False)
+        vertex_uv_array = np.zeros((n, 2), dtype='f4')
         vertex_uv = vertex_uv_array
         for i in range(n):
             x, y, z = vertices[i][0], vertices[i][1], vertices[i][2]
