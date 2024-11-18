@@ -288,14 +288,9 @@ class EngineController:
                     self.switch_page = None
                     run_program = current_program = None
                     performance = 1
-                    count = gc.collect(2)
-                    logger.trace("Collected {} objects (full collection)", count)
                     for renderers in self.renderers.values():
                         for renderer in renderers:
                             await renderer.purge()
-
-                else:
-                    gc.collect(0)
 
                 frame_count += 1
                 frames.append(frame_time if self.realtime else now)
@@ -330,6 +325,8 @@ class EngineController:
                     if run_program is not None and run_program.stack is not None:
                         logger.trace("VM stack size: {:d}", run_program.stack.size)
                     Model.flush_caches()
+                else:
+                    gc.collect(0)
 
         finally:
             self.global_state = {}

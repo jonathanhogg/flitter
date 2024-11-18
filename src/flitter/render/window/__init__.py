@@ -665,7 +665,7 @@ class Window(ProgramNode):
             self.glctx.finish()
         self._beat = beat
         glfw.poll_events()
-        RenderTarget.empty_pool(self.glctx, 1)
+        RenderTarget.empty_pool(self.glctx, 15)
         self.glctx.gc()
 
     def make_secondary_texture(self):
