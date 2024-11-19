@@ -565,7 +565,7 @@ cdef void collect(Node node, Matrix44 transform_matrix, Material material, Rende
         material = material.update(node)
         new_render_group = RenderGroup.__new__(RenderGroup)
         new_render_group.parent_group = render_group
-        new_render_group.max_lights = node.get_int('max_lights', DEFAULT_MAX_LIGHTS if render_group is None else render_group.max_lights)
+        new_render_group.max_lights = max(1, node.get_int('max_lights', DEFAULT_MAX_LIGHTS if render_group is None else render_group.max_lights))
         new_render_group.lights = []
         new_render_group.instances = {}
         new_render_group.depth_sort = node.get_bool('depth_sort', True if render_group is None else render_group.depth_sort)
