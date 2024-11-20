@@ -388,7 +388,8 @@ cdef class Invert(UnaryOperation):
             trimesh_model = trimesh.base.Trimesh(vertices=trimesh_model.vertices,
                                                  vertex_normals=-trimesh_model.vertex_normals,
                                                  faces=trimesh_model.faces[:, ::-1],
-                                                 visual=trimesh_model.visual)
+                                                 visual=trimesh_model.visual,
+                                                 process=False)
         return trimesh_model
 
 
@@ -541,7 +542,8 @@ cdef class UVRemap(UnaryOperation):
             vertex_uv[i][0] = atan2(y, x) / Tau % 1
             vertex_uv[i][1] = atan2(z, sqrt(x*x + y*y)) / Tau * 2 + 0.5
         visual = trimesh.visual.texture.TextureVisuals(uv=vertex_uv_array)
-        return trimesh.base.Trimesh(vertices=trimesh_model.vertices, vertex_normals=trimesh_model.vertex_normals, faces=trimesh_model.faces, visual=visual)
+        return trimesh.base.Trimesh(vertices=trimesh_model.vertices, vertex_normals=trimesh_model.vertex_normals,
+                                    faces=trimesh_model.faces, visual=visual, process=False)
 
     cpdef object build_trimesh(self):
         trimesh_model = self.original.get_trimesh()
@@ -675,7 +677,7 @@ cdef class BooleanOperation(Model):
         if manifold is not None:
             mesh = self.get_manifold().to_mesh()
             if len(mesh.vert_properties) and len(mesh.tri_verts):
-                return trimesh.base.Trimesh(vertices=mesh.vert_properties, faces=mesh.tri_verts)
+                return trimesh.base.Trimesh(vertices=mesh.vert_properties, faces=mesh.tri_verts, process=False)
         return None
 
     cpdef object build_manifold(self):
@@ -776,7 +778,7 @@ cdef class Box(PrimitiveModel):
 
     cpdef object build_trimesh(self):
         visual = trimesh.visual.texture.TextureVisuals(uv=Box.VertexUV[self.uv_map])
-        return trimesh.base.Trimesh(vertices=Box.Vertices, vertex_normals=Box.VertexNormals, faces=Box.Faces, visual=visual)
+        return trimesh.base.Trimesh(vertices=Box.Vertices, vertex_normals=Box.VertexNormals, faces=Box.Faces, visual=visual, process=False)
 
 
 cdef class Sphere(PrimitiveModel):
@@ -852,7 +854,7 @@ cdef class Sphere(PrimitiveModel):
                                 j += 1
                         i += 1
         visual = trimesh.visual.texture.TextureVisuals(uv=vertex_uv_array)
-        return trimesh.base.Trimesh(vertices=vertices_array, vertex_normals=vertices_array, faces=faces_array, visual=visual)
+        return trimesh.base.Trimesh(vertices=vertices_array, vertex_normals=vertices_array, faces=faces_array, visual=visual, process=False)
 
 
 cdef class Cylinder(PrimitiveModel):
@@ -937,7 +939,7 @@ cdef class Cylinder(PrimitiveModel):
                 # top face
                 faces[j, 0], faces[j, 1], faces[j, 2] = k+5, k+4, k+4+6
         visual = trimesh.visual.texture.TextureVisuals(uv=vertex_uv_array)
-        return trimesh.base.Trimesh(vertices=vertices_array, vertex_normals=vertex_normals_array, faces=faces_array, visual=visual)
+        return trimesh.base.Trimesh(vertices=vertices_array, vertex_normals=vertex_normals_array, faces=faces_array, visual=visual, process=False)
 
 
 cdef class Cone(PrimitiveModel):
@@ -1006,7 +1008,7 @@ cdef class Cone(PrimitiveModel):
                 # side face
                 faces[j, 0], faces[j, 1], faces[j, 2] = k+3, k+2, k+2+4
         visual = trimesh.visual.texture.TextureVisuals(uv=vertex_uv_array)
-        return trimesh.base.Trimesh(vertices=vertices_array, vertex_normals=vertex_normals_array, faces=faces_array, visual=visual)
+        return trimesh.base.Trimesh(vertices=vertices_array, vertex_normals=vertex_normals_array, faces=faces_array, visual=visual, process=False)
 
 
 cdef class ExternalModel(Model):

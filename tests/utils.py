@@ -9,6 +9,9 @@ class TestCase(unittest.TestCase):
             msg = f"{xs!r} unexpectedly not (almost) equal to {ys!r}"
         self.assertEqual(len(xs), len(ys), msg=msg)
         for x, y in zip(xs, ys):
+            if hasattr(x, '__len__') and hasattr(y, '__len__'):
+                self.assertAllAlmostEqual(x, y, places=places, delta=delta, msg=msg)
+                continue
             self.assertEqual(math.isnan(x), math.isnan(y), msg=msg)
             if not (math.isnan(x) and math.isnan(y)):
                 self.assertAlmostEqual(x, y, places=places, delta=delta, msg=msg)
