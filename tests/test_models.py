@@ -6,7 +6,7 @@ import math
 
 import trimesh
 
-from flitter.model import Matrix44
+from flitter.model import Vector, Matrix44
 from flitter.render.window.models import Model
 
 from . import utils
@@ -208,3 +208,69 @@ class TestCache(utils.TestCase):
         self.assertIsNot(model.get_bounds(), bounds)
         self.assertIsNot(model.get_trimesh(), mesh)
         self.assertIsNot(model.get_manifold(), manifold)
+
+
+class TestStructuring(utils.TestCase):
+    def test_flatten(self):
+        self.assertEqual(Model.box().flatten().name, 'flatten(!box)')
+        self.assertEqual(Model.box().flatten().flatten().name, 'flatten(!box)')
+        self.assertEqual(Model.box().flatten().snap_edges().name, 'flatten(!box)')
+
+    def test_invert(self):
+        self.assertEqual(Model.box().invert().name, 'invert(!box)')
+        self.assertEqual(Model.box().invert().invert().name, '!box')
+        self.assertEqual(Model.box().invert().repair().name, 'invert(repair(!box))')
+        self.assertEqual(Model.box().invert().snap_edges().name, 'invert(snap_edges(!box))')
+        M = Matrix44.translate(1)
+        self.assertEqual(Model.box().invert().transform(M).name, f'invert(!box@{hex(M.hash(False))[2:]})')
+
+    def test_repair(self):
+        self.assertEqual(Model.box().repair().name, 'repair(!box)')
+        self.assertEqual(Model.box().repair().repair().name, 'repair(!box)')
+
+    def test_snap_edges(self):
+        self.assertEqual(Model.box().snap_edges(0).name, 'flatten(!box)')
+        self.assertEqual(Model.box().snap_edges().name, 'snap_edges(!box)')
+        self.assertEqual(Model.box().snap_edges(0.05).name, 'snap_edges(!box)')
+        self.assertEqual(Model.box().snap_edges(0.25).name, 'snap_edges(!box, 0.25)')
+        self.assertEqual(Model.box().snap_edges(0.05, 0.25).name, 'snap_edges(!box, 0.05, 0.25)')
+        self.assertEqual(Model.box().snap_edges(0.25, 0.25).name, 'snap_edges(!box, 0.25, 0.25)')
+
+    def test_transform(self):
+        self.assertEqual(Model.box().transform(Matrix44()).name, '!box')
+        M = Matrix44.translate(1)
+        H = hex(M.hash(False))[2:]
+        self.assertEqual(Model.box().transform(M).name, f'!box@{H}')
+        self.assertEqual(Model.box().transform(M).repair().name, f'repair(!box)@{H}')
+        M2 = Matrix44.translate(2)
+        H2 = hex(M2.hash(False))[2:]
+        self.assertEqual(Model.box().transform(M).transform(M).name, f'!box@{H2}')
+
+    def test_uvremap(self):
+        self.assertEqual(Model.box().uv_remap('sphere').name, 'uv_remap(!box, sphere)')
+
+    def test_slice(self):
+        P = Vector((0, 0, 0))
+        N = Vector((1, 0, 0))
+        H = hex(P.hash(False) ^ N.hash(False))[2:]
+        self.assertEqual(Model.box().slice(P, N).name, f'slice(!box, {H})')
+        self.assertEqual(Model.box().slice(P, N).repair().name, f'slice(!box, {H})')
+
+    def test_union(self):
+        self.assertIsNone(Model.union())
+        self.assertEqual(Model.union(Model.box()).name, '!box')
+        self.assertEqual(Model.union(Model.box(), Model.box()).name, '!box')
+        self.assertEqual(Model.union(Model.box(), Model.sphere()).name, 'union(!box, !sphere)')
+        self.assertEqual(Model.union(Model.box(), Model.union(Model.sphere(), Model.cylinder())).name, 'union(!box, !sphere, !cylinder)')
+
+    def test_intersect(self):
+        self.assertIsNone(Model.intersect())
+        self.assertEqual(Model.intersect(Model.box()).name, '!box')
+        self.assertEqual(Model.intersect(Model.box(), Model.box()).name, '!box')
+        self.assertEqual(Model.intersect(Model.box(), Model.sphere()).name, 'intersect(!box, !sphere)')
+
+    def test_difference(self):
+        self.assertIsNone(Model.difference())
+        self.assertEqual(Model.difference(Model.box()).name, '!box')
+        self.assertIsNone(Model.difference(Model.box(), Model.box()))
+        self.assertEqual(Model.difference(Model.box(), Model.sphere()).name, 'difference(!box, !sphere)')

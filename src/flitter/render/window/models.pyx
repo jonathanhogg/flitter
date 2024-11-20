@@ -230,6 +230,8 @@ cdef class Model:
         return self._snap_edges(float(snap_angle), float(minimum_area))
 
     cdef Model _transform(self, Matrix44 transform_matrix):
+        if transform_matrix.eq(IdentityTransform) is true_:
+            return self
         return Transform._get(self, transform_matrix)
 
     def transform(self, transform_matrix):
@@ -249,7 +251,7 @@ cdef class Model:
 
     @staticmethod
     cdef Model _intersect(list models):
-        return BooleanOperation._get('intersection', models)
+        return BooleanOperation._get('intersect', models)
 
     @staticmethod
     def intersect(*models):
@@ -430,7 +432,7 @@ cdef class SnapEdges(UnaryOperation):
         snap_angle = min(max(0, snap_angle), 0.5)
         minimum_area = min(max(0, minimum_area), 1)
         cdef str name = 'snap_edges(' + original.name
-        if snap_angle != DefaultSnapAngle:
+        if minimum_area or snap_angle != DefaultSnapAngle:
             name += f', {snap_angle:g}'
         if minimum_area:
             name += f', {minimum_area:g}'
@@ -472,8 +474,6 @@ cdef class Transform(UnaryOperation):
 
     @staticmethod
     cdef Model _get(Model original, Matrix44 transform_matrix):
-        if transform_matrix.eq(IdentityTransform) is true_:
-            return original
         cdef str name = f'{original.name}@{hex(transform_matrix.hash(False))[2:]}'
         cdef Transform model = <Transform>ModelCache.get(name, None)
         if model is None:
@@ -515,7 +515,7 @@ cdef class UVRemap(UnaryOperation):
 
     @staticmethod
     cdef UVRemap _get(Model original, str mapping):
-        cdef str name = f'uvremap({original.name}, {mapping})'
+        cdef str name = f'uv_remap({original.name}, {mapping})'
         cdef UVRemap model = <UVRemap>ModelCache.get(name, None)
         if model is None:
             model = UVRemap.__new__(UVRemap)
@@ -689,7 +689,7 @@ cdef class BooleanOperation(Model):
             if manifold is None:
                 if self.operation is 'difference' and i == 0:
                     return None
-                if self.operation is 'intersection':
+                if self.operation is 'intersect':
                     return None
             else:
                 manifolds.append(manifold)
@@ -699,7 +699,7 @@ cdef class BooleanOperation(Model):
             return manifolds[0]
         if self.operation is 'union':
             manifold = manifold3d.Manifold.batch_boolean(manifolds, manifold3d.OpType.Add)
-        elif self.operation is 'intersection':
+        elif self.operation is 'intersect':
             manifold = manifold3d.Manifold.batch_boolean(manifolds, manifold3d.OpType.Intersect)
         elif self.operation is 'difference':
             manifold = manifold3d.Manifold.batch_boolean(manifolds, manifold3d.OpType.Subtract)
