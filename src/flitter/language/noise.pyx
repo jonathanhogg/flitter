@@ -33,7 +33,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 import cython
 
 from libc.math cimport floor
-from libc.stdint cimport int64_t
+from libc.stdint cimport int64_t, uint64_t
 
 from .functions cimport uniform, shuffle
 from ..model cimport Vector, null_
@@ -1643,8 +1643,8 @@ cdef Vector _noise(Vector perm, list args):
     return result
 
 
-cdef Vector get_perm(Vector seed, int64_t i):
-    cdef int64_t seed_hash = seed.hash(True) ^ <int64_t>i
+cdef Vector get_perm(Vector seed, uint64_t i):
+    cdef uint64_t seed_hash = seed.hash(True) ^ i
     cdef uniform prng
     cdef Vector perm = <Vector>PermCache.get(seed_hash)
     if perm is None:

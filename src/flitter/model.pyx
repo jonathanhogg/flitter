@@ -513,9 +513,9 @@ cdef class Vector:
                     yield self.numbers[i]
 
     def __hash__(self):
-        return self.hash(False)
+        return <int64_t>self.hash(False)
 
-    cpdef int64_t hash(self, bint floor_floats):
+    cpdef uint64_t hash(self, bint floor_floats):
         if not floor_floats and self._hash:
             return self._hash
         cdef uint64_t y, _hash = HASH_START
@@ -2186,9 +2186,9 @@ cdef class Node:
         self._children = children
 
     def __hash__(self):
-        return self.hash()
+        return <int64_t>self.hash()
 
-    cdef int64_t hash(self):
+    cdef uint64_t hash(self):
         cdef uint64_t _hash = HASH_START
         _hash = HASH_UPDATE(_hash, HASH_STRING(self.kind))
         if self._tags is not None:
@@ -2207,7 +2207,7 @@ cdef class Node:
         if self._children is not ():
             for child in self._children:
                 _hash = HASH_UPDATE(_hash, (<Node>child).hash())
-        return <int64_t>_hash
+        return _hash
 
     @property
     def children(self):

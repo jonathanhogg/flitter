@@ -474,7 +474,7 @@ cdef class Transform(UnaryOperation):
     cdef Model _get(Model original, Matrix44 transform_matrix):
         if transform_matrix.eq(IdentityTransform) is true_:
             return original
-        cdef str name = f'{original.name}@{hex(transform_matrix.hash(False))[3:]}'
+        cdef str name = f'{original.name}@{hex(transform_matrix.hash(False))[2:]}'
         cdef Transform model = <Transform>ModelCache.get(name, None)
         if model is None:
             model = Transform.__new__(Transform)
@@ -561,7 +561,7 @@ cdef class Slice(UnaryOperation):
     cdef Slice _get(Model original, Vector origin, Vector normal):
         if origin.numbers == NULL or origin.length != 3 or normal.numbers == NULL or normal.length != 3:
             return None
-        cdef str name = f'slice({original.name}, {hex(origin.hash(False) ^ normal.hash(False))[3:]})'
+        cdef str name = f'slice({original.name}, {hex(origin.hash(False) ^ normal.hash(False))[2:]})'
         cdef Slice model = <Slice>ModelCache.get(name, None)
         if model is None:
             model = Slice.__new__(Slice)

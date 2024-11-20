@@ -359,11 +359,11 @@ class TestVector(utils.TestCase):
         self.assertIsNotNone(hash(Vector(test_class)))  # just check it works, value will not be stable
 
     def test_hash_floor_floats(self):
-        self.assertEqual(null.hash(True), hash(null))
-        self.assertEqual(Vector(0.1).hash(True), hash(Vector(0)))
-        self.assertEqual(Vector("Hello world!").hash(True), hash(Vector("Hello world!")))
-        self.assertEqual(Vector(["foo", 1]).hash(True), hash(Vector(["foo", 1.0])))
-        self.assertEqual(Vector(["foo", 1.1]).hash(True), hash(Vector(["foo", 1.0])))
+        self.assertEqual(null.hash(True), null.hash(False))
+        self.assertEqual(Vector(0.1).hash(True), Vector(0).hash(True))
+        self.assertEqual(Vector("Hello world!").hash(True), Vector("Hello world!").hash(False))
+        self.assertEqual(Vector(["foo", 1]).hash(True), Vector(["foo", 1.0]).hash(True))
+        self.assertEqual(Vector(["foo", 1.1]).hash(True), Vector(["foo", 1.0]).hash(True))
 
     def test_hash_uniformity(self):
         from scipy.stats import kstest
