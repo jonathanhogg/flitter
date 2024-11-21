@@ -243,11 +243,11 @@ cdef class Model:
     def uv_remap(self, mapping):
         return self._uv_remap(str(mapping))
 
-    cdef Model _slice(self, Vector origin, Vector normal):
-        return Slice._get(self, origin, normal)
+    cdef Model _trim(self, Vector origin, Vector normal):
+        return Trim._get(self, origin, normal)
 
-    def slice(self, origin, normal):
-        return self._slice(Vector._coerce(origin), Vector._coerce(normal))
+    def trim(self, origin, normal):
+        return self._trim(Vector._coerce(origin), Vector._coerce(normal))
 
     @staticmethod
     cdef Model _intersect(list models):
@@ -470,8 +470,8 @@ cdef class SnapEdges(UnaryOperation):
     cdef Model _transform(self, Matrix44 transform_matrix):
         return self.original._transform(transform_matrix).snap_edges(self.snap_angle, self.minimum_area)
 
-    cdef Model _slice(self, Vector origin, Vector normal):
-        return self.original._slice(origin, normal)
+    cdef Model _trim(self, Vector origin, Vector normal):
+        return self.original._trim(origin, normal)
 
     cpdef object build_trimesh(self):
         trimesh_model = self.original.get_trimesh()
@@ -577,18 +577,18 @@ cdef class UVRemap(UnaryOperation):
         return self.original.get_manifold()
 
 
-cdef class Slice(UnaryOperation):
+cdef class Trim(UnaryOperation):
     cdef Vector origin
     cdef Vector normal
 
     @staticmethod
-    cdef Slice _get(Model original, Vector origin, Vector normal):
+    cdef Trim _get(Model original, Vector origin, Vector normal):
         if origin.numbers == NULL or origin.length != 3 or normal.numbers == NULL or normal.length != 3:
             return None
-        cdef str name = f'slice({original.name}, {hex(origin.hash(False) ^ normal.hash(False))[2:]})'
-        cdef Slice model = <Slice>ModelCache.get(name, None)
+        cdef str name = f'trim({original.name}, {hex(origin.hash(False) ^ normal.hash(False))[2:]})'
+        cdef Trim model = <Trim>ModelCache.get(name, None)
         if model is None:
-            model = Slice.__new__(Slice)
+            model = Trim.__new__(Trim)
             model.name = name
             model.original = original
             model.original.add_dependent(model)
@@ -602,11 +602,11 @@ cdef class Slice(UnaryOperation):
         return True
 
     cpdef Model repair(self):
-        return self.original.repair()._slice(self.origin, self.normal)
+        return self.original.repair()._trim(self.origin, self.normal)
 
     cdef Model _transform(self, Matrix44 transform_matrix):
-        return self.original._transform(transform_matrix)._slice(transform_matrix.vmul(self.origin),
-                                                                 transform_matrix.inverse_transpose_matrix33().vmul(self.normal))
+        return self.original._transform(transform_matrix)._trim(transform_matrix.vmul(self.origin),
+                                                                transform_matrix.inverse_transpose_matrix33().vmul(self.normal))
 
     cpdef object build_trimesh(self):
         manifold = self.get_manifold()
@@ -694,15 +694,15 @@ cdef class BooleanOperation(Model):
         models = [model._transform(transform_matrix) for model in self.models]
         return BooleanOperation._get(self.operation, models)
 
-    cdef Model _slice(self, Vector origin, Vector normal):
+    cdef Model _trim(self, Vector origin, Vector normal):
         if self.operation is 'union':
-            return Slice._get(self, origin, normal)
+            return Trim._get(self, origin, normal)
         cdef Model model
         cdef list models = []
         cdef int64_t i
         for i, model in enumerate(self.models):
             if i == 0:
-                models.append(model._slice(origin, normal))
+                models.append(model._trim(origin, normal))
             else:
                 models.append(model)
         return BooleanOperation._get(self.operation, models)

@@ -20,7 +20,7 @@ func stepped(x, n=100)
                     let r=2.05+0.7*stepped(sine(t/10+i/n))
                     !material color=hsv(i/n+t/30;1;1)
                         !transform rotate_y=i/n translate=0;0;10
-                            !slice origin=0;1;0 normal=0;1;1
+                            !trim origin=0;1;0 normal=0;1;1
                                 if i % 2 == 0
                                     !intersect
                                         !box size=4
@@ -30,11 +30,11 @@ func stepped(x, n=100)
                                         !box size=4
                                         !sphere segments=64 size=r
                 !union color=0.5 roughness=0.3
-                    !slice origin=0;1;0 normal=0.75;1;0
+                    !trim origin=0;1;0 normal=0.75;1;0
                         !difference
                             !box size=4;2;4
                             !transform translate=0;-0.25;0
-                                !slice origin=0;1;0 normal=0.75;1;0
+                                !trim origin=0;1;0 normal=0.75;1;0
                                     !box size=3.5;2;3.5
                         !difference
                             !cylinder size=0.75;0.75;2 rotation=0.25;0;0

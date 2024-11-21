@@ -228,7 +228,7 @@ class TestStructuring(utils.TestCase):
         self.assertEqual(Model.box().flatten().snap_edges().name, 'flatten(!box)')
         self.assertEqual(Model.box().flatten().transform(self.M).name, f'flatten(!box)@{self.M_hash}')
         self.assertEqual(Model.box().flatten().uv_remap('sphere').name, 'uv_remap(flatten(!box), sphere)')
-        self.assertEqual(Model.box().flatten().slice(self.P, self.N).name, f'slice(flatten(!box), {self.PN_hash})')
+        self.assertEqual(Model.box().flatten().trim(self.P, self.N).name, f'trim(flatten(!box), {self.PN_hash})')
 
     def test_invert(self):
         self.assertEqual(Model.box().invert().name, 'invert(!box)')
@@ -238,7 +238,7 @@ class TestStructuring(utils.TestCase):
         self.assertEqual(Model.box().invert().snap_edges().name, 'invert(snap_edges(!box))')
         self.assertEqual(Model.box().invert().transform(self.M).name, f'invert(!box@{self.M_hash})')
         self.assertEqual(Model.box().invert().uv_remap('sphere').name, 'uv_remap(invert(!box), sphere)')
-        self.assertEqual(Model.box().invert().slice(self.P, self.N).name, f'slice(invert(!box), {self.PN_hash})')
+        self.assertEqual(Model.box().invert().trim(self.P, self.N).name, f'trim(invert(!box), {self.PN_hash})')
 
     def test_repair(self):
         self.assertEqual(Model.box().repair().name, 'repair(!box)')
@@ -248,7 +248,7 @@ class TestStructuring(utils.TestCase):
         self.assertEqual(Model.box().repair().snap_edges().name, 'snap_edges(repair(!box))')
         self.assertEqual(Model.box().repair().transform(self.M).name, f'repair(!box)@{self.M_hash}')
         self.assertEqual(Model.box().repair().uv_remap('sphere').name, 'uv_remap(repair(!box), sphere)')
-        self.assertEqual(Model.box().repair().slice(self.P, self.N).name, f'slice(repair(!box), {self.PN_hash})')
+        self.assertEqual(Model.box().repair().trim(self.P, self.N).name, f'trim(repair(!box), {self.PN_hash})')
 
     def test_snap_edges(self):
         self.assertEqual(Model.box().snap_edges(0).name, 'flatten(!box)')
@@ -263,7 +263,7 @@ class TestStructuring(utils.TestCase):
         self.assertEqual(Model.box().snap_edges().snap_edges().name, 'snap_edges(!box)')
         self.assertEqual(Model.box().snap_edges().transform(self.M).name, f'snap_edges(!box@{self.M_hash})')
         self.assertEqual(Model.box().snap_edges().uv_remap('sphere').name, 'uv_remap(snap_edges(!box), sphere)')
-        self.assertEqual(Model.box().snap_edges().slice(self.P, self.N).name, f'slice(!box, {self.PN_hash})')
+        self.assertEqual(Model.box().snap_edges().trim(self.P, self.N).name, f'trim(!box, {self.PN_hash})')
 
     def test_transform(self):
         self.assertEqual(Model.box().transform(Matrix44()).name, '!box')
@@ -274,7 +274,7 @@ class TestStructuring(utils.TestCase):
         self.assertEqual(Model.box().transform(self.M).snap_edges().name, f'snap_edges(!box@{self.M_hash})')
         self.assertEqual(Model.box().transform(self.M).transform(self.M).name, f'!box@{self.M2_hash}')
         self.assertEqual(Model.box().transform(self.M).uv_remap('sphere').name, f'uv_remap(!box@{self.M_hash}, sphere)')
-        self.assertEqual(Model.box().transform(self.M).slice(self.P, self.N).name, f'slice(!box@{self.M_hash}, {self.PN_hash})')
+        self.assertEqual(Model.box().transform(self.M).trim(self.P, self.N).name, f'trim(!box@{self.M_hash}, {self.PN_hash})')
 
     def test_uvremap(self):
         self.assertEqual(Model.box().uv_remap('sphere').name, 'uv_remap(!box, sphere)')
@@ -284,18 +284,18 @@ class TestStructuring(utils.TestCase):
         self.assertEqual(Model.box().uv_remap('sphere').snap_edges().name, 'snap_edges(uv_remap(!box, sphere))')
         self.assertEqual(Model.box().uv_remap('sphere').transform(self.M).name, f'uv_remap(!box, sphere)@{self.M_hash}')
         self.assertEqual(Model.box().uv_remap('test').uv_remap('sphere').name, 'uv_remap(!box, sphere)')
-        self.assertEqual(Model.box().uv_remap('sphere').slice(self.P, self.N).name, f'slice(uv_remap(!box, sphere), {self.PN_hash})')
+        self.assertEqual(Model.box().uv_remap('sphere').trim(self.P, self.N).name, f'trim(uv_remap(!box, sphere), {self.PN_hash})')
 
-    def test_slice(self):
-        self.assertEqual(Model.box().slice(self.P, self.N).name, f'slice(!box, {self.PN_hash})')
-        self.assertEqual(Model.box().slice(self.P, self.N).flatten().name, f'flatten(slice(!box, {self.PN_hash}))')
-        self.assertEqual(Model.box().slice(self.P, self.N).invert().name, f'invert(slice(!box, {self.PN_hash}))')
-        self.assertEqual(Model.box().slice(self.P, self.N).repair().name, f'slice(repair(!box), {self.PN_hash})')
-        self.assertEqual(Model.box().slice(self.P, self.N).snap_edges().name, f'snap_edges(slice(!box, {self.PN_hash}))')
+    def test_trim(self):
+        self.assertEqual(Model.box().trim(self.P, self.N).name, f'trim(!box, {self.PN_hash})')
+        self.assertEqual(Model.box().trim(self.P, self.N).flatten().name, f'flatten(trim(!box, {self.PN_hash}))')
+        self.assertEqual(Model.box().trim(self.P, self.N).invert().name, f'invert(trim(!box, {self.PN_hash}))')
+        self.assertEqual(Model.box().trim(self.P, self.N).repair().name, f'trim(repair(!box), {self.PN_hash})')
+        self.assertEqual(Model.box().trim(self.P, self.N).snap_edges().name, f'snap_edges(trim(!box, {self.PN_hash}))')
         MPN_hash = hex((self.M @ self.P).hash(False) ^ (self.M.inverse_transpose_matrix33() @ self.N).hash(False))[2:]
-        self.assertEqual(Model.box().slice(self.P, self.N).transform(self.M).name, f'slice(!box@{self.M_hash}, {MPN_hash})')
-        self.assertEqual(Model.box().slice(self.P, self.N).uv_remap('sphere').name, f'uv_remap(slice(!box, {self.PN_hash}), sphere)')
-        self.assertEqual(Model.box().slice(self.P, self.N).slice(self.P, self.N).name, f'slice(slice(!box, {self.PN_hash}), {self.PN_hash})')
+        self.assertEqual(Model.box().trim(self.P, self.N).transform(self.M).name, f'trim(!box@{self.M_hash}, {MPN_hash})')
+        self.assertEqual(Model.box().trim(self.P, self.N).uv_remap('sphere').name, f'uv_remap(trim(!box, {self.PN_hash}), sphere)')
+        self.assertEqual(Model.box().trim(self.P, self.N).trim(self.P, self.N).name, f'trim(trim(!box, {self.PN_hash}), {self.PN_hash})')
 
     def test_union(self):
         self.assertIsNone(Model.union())
@@ -310,7 +310,7 @@ class TestStructuring(utils.TestCase):
         self.assertEqual(Model.union(Model.box(), Model.sphere()).snap_edges().name, 'snap_edges(union(!box, !sphere))')
         self.assertEqual(Model.union(Model.box(), Model.sphere()).transform(self.M).name, f'union(!box@{self.M_hash}, !sphere@{self.M_hash})')
         self.assertEqual(Model.union(Model.box(), Model.sphere()).uv_remap('sphere').name, 'uv_remap(union(!box, !sphere), sphere)')
-        self.assertEqual(Model.union(Model.box(), Model.sphere()).slice(self.P, self.N).name, f'slice(union(!box, !sphere), {self.PN_hash})')
+        self.assertEqual(Model.union(Model.box(), Model.sphere()).trim(self.P, self.N).name, f'trim(union(!box, !sphere), {self.PN_hash})')
 
     def test_intersect(self):
         self.assertIsNone(Model.intersect())
@@ -324,7 +324,7 @@ class TestStructuring(utils.TestCase):
         self.assertEqual(Model.intersect(Model.box(), Model.sphere()).snap_edges().name, 'snap_edges(intersect(!box, !sphere))')
         self.assertEqual(Model.intersect(Model.box(), Model.sphere()).transform(self.M).name, f'intersect(!box@{self.M_hash}, !sphere@{self.M_hash})')
         self.assertEqual(Model.intersect(Model.box(), Model.sphere()).uv_remap('sphere').name, 'uv_remap(intersect(!box, !sphere), sphere)')
-        self.assertEqual(Model.intersect(Model.box(), Model.sphere()).slice(self.P, self.N).name, f'intersect(slice(!box, {self.PN_hash}), !sphere)')
+        self.assertEqual(Model.intersect(Model.box(), Model.sphere()).trim(self.P, self.N).name, f'intersect(trim(!box, {self.PN_hash}), !sphere)')
 
     def test_difference(self):
         self.assertIsNone(Model.difference())
@@ -338,4 +338,4 @@ class TestStructuring(utils.TestCase):
         self.assertEqual(Model.difference(Model.box(), Model.sphere()).snap_edges().name, 'snap_edges(difference(!box, !sphere))')
         self.assertEqual(Model.difference(Model.box(), Model.sphere()).transform(self.M).name, f'difference(!box@{self.M_hash}, !sphere@{self.M_hash})')
         self.assertEqual(Model.difference(Model.box(), Model.sphere()).uv_remap('sphere').name, 'uv_remap(difference(!box, !sphere), sphere)')
-        self.assertEqual(Model.difference(Model.box(), Model.sphere()).slice(self.P, self.N).name, f'difference(slice(!box, {self.PN_hash}), !sphere)')
+        self.assertEqual(Model.difference(Model.box(), Model.sphere()).trim(self.P, self.N).name, f'difference(trim(!box, {self.PN_hash}), !sphere)')

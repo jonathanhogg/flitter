@@ -929,7 +929,7 @@ it.
 
 These take no operation-specific attributes.
 
-Additionally, there is a `!slice` node that cuts a model with a plane specified
+Additionally, there is a `!trim` node that cuts a model with a plane specified
 with the attributes:
 
 `origin=` *X*`;`*Y*`;`*Z*
@@ -938,9 +938,10 @@ with the attributes:
 `normal=` *nX*`;`*nY*`;`*nZ*
 : The normal of the cutting plane (plane "up" direction).
 
-Everything on the "up" side of the plane will be discarded. The `!slice` node
+Everything on the "up" side of the plane will be discarded. The `!trim` node
 may have multiple child nodes, in which case the result will be equivalent to a
-slice of the `!union` of the child nodes.
+trim of the `!union` of the child nodes. The `!trim` node may also be specified
+as `!slice` for legacy compatibility.
 
 A model construction tree may contain `!transform` nodes at any point. These
 differ from normal transformations in that they apply the transforms to the

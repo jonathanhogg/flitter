@@ -470,12 +470,12 @@ cdef Model get_model(Node node, bint top):
         model = Model._union([get_model(child, False) for child in node._children])
     elif node.kind is 'difference':
         model = Model._difference([get_model(child, False) for child in node._children])
-    elif node.kind is 'slice':
+    elif node.kind is 'trim' or node.kind is 'slice':
         normal = node.get_fvec('normal', 3, null_)
         origin = node.get_fvec('origin', 3, Zero3)
         model = Model._union([get_model(child, False) for child in node._children])
         if model is not None and normal.as_bool():
-            model = model._slice(origin, normal)
+            model = model._trim(origin, normal)
     elif (cls := get_plugin('flitter.render.window.models', node.kind)) is not None:
         model = cls.from_node(node)
     if model is not None:

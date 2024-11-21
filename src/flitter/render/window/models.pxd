@@ -36,7 +36,7 @@ cdef class Model:
     cdef Model _snap_edges(self, double snap_angle, double minimum_area)
     cdef Model _transform(self, Matrix44 transform_matrix)
     cdef Model _uv_remap(self, str mapping)
-    cdef Model _slice(self, Vector position, Vector normal)
+    cdef Model _trim(self, Vector position, Vector normal)
 
     @staticmethod
     cdef Model _intersect(list models)
