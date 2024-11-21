@@ -146,6 +146,7 @@ cdef class Model:
             for cache in self.buffer_caches:
                 if self.name in cache:
                     del cache[self.name]
+            self.buffer_caches = None
 
     cpdef object get_trimesh(self):
         self.cache_timestamp = perf_counter()

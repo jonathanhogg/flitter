@@ -509,3 +509,5 @@ class TestBuffers(utils.TestCase):
         index_data = glctx.buffer.mock_calls[1].args[0]
         self.assertEqual(index_data.dtype.name, 'int32')
         self.assertEqual(index_data.shape, (12, 3))
+        model.invalidate()
+        self.assertNotIn(model.name, objects)
