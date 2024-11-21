@@ -84,6 +84,68 @@ class TestPrimitives(utils.TestCase):
                     self.assertAlmostEqual(mesh.volume, math.pi/3, places=int(math.log10(segments)))
 
 
+class TestBasicFunctionality(utils.TestCase):
+    def tearDown(self):
+        Model.flush_caches(0, 0)
+
+    def test_equality(self):
+        self.assertTrue(Model.box() == Model.box())
+        self.assertFalse(Model.box() == Model.sphere())
+
+    def test_str(self):
+        self.assertEqual(str(Model.sphere(128)), '!sphere-128')
+
+    def test_repr(self):
+        self.assertEqual(repr(Model.sphere(128)), '<Model: !sphere-128>')
+
+    def test_by_name(self):
+        self.assertIsNone(Model.by_name('!sphere-104'))
+        model = Model.sphere(104)
+        self.assertIs(Model.by_name('!sphere-104'), model)
+
+
+class MyModel(Model):
+    @staticmethod
+    def get():
+        model = Model.by_name('!mymodel')
+        if model is None:
+            model = MyModel('!mymodel')
+        return model
+
+    def is_smooth(self):
+        return False
+
+    def check_for_changes(self):
+        pass
+
+    def build_trimesh(self):
+        return trimesh.Trimesh(vertices=[[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0]],
+                               faces=[[0, 1, 2], [2, 3, 0]])
+
+
+class TestSubclassing(utils.TestCase):
+    def tearDown(self):
+        Model.flush_caches(0, 0)
+
+    def test_subclass_insantiation(self):
+        model = MyModel.get()
+        self.assertIsInstance(model, MyModel)
+        self.assertEqual(model.name, '!mymodel')
+        self.assertIs(MyModel.get(), model)
+        mesh = model.get_trimesh()
+        self.assertIs(model.get_trimesh(), mesh)
+        self.assertAllAlmostEqual(mesh.vertices, [[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0]])
+        self.assertAllAlmostEqual(mesh.faces, [[0, 1, 2], [2, 3, 0]])
+        self.assertEqual(model.snap_edges().name, 'snap_edges(!mymodel)')
+
+    def test_bad_manifold(self):
+        model = MyModel.get()
+        with unittest.mock.patch('flitter.render.window.models.logger') as mock_logger:
+            manifold = model.get_manifold()
+            mock_logger.error.assert_called_with("Mesh is not a volume: {}", model.name)
+        self.assertIsNone(manifold)
+
+
 class TestManifoldPrimitives(utils.TestCase):
     def tearDown(self):
         Model.flush_caches(0, 0)
@@ -389,6 +451,10 @@ class TestTrim(utils.TestCase):
     def tearDown(self):
         Model.flush_caches(0, 0)
 
+    def test_bad_arguments(self):
+        self.assertIsNone(Model.box().trim(None, [1, 0, 0]))
+        self.assertIsNone(Model.box().trim(0, None))
+
     def test_trim_sphere_to_box(self):
         model = Model.sphere()
         for x in (-1, 1):
@@ -428,6 +494,11 @@ class TestBoolean(utils.TestCase):
 
     def tearDown(self):
         Model.flush_caches(0, 0)
+
+    def test_ignored_none(self):
+        self.assertEqual(Model.union(Model.box(), None, Model.sphere()).name, 'union(!box, !sphere)')
+        self.assertEqual(Model.intersect(Model.box(), None, Model.sphere()).name, 'intersect(!box, !sphere)')
+        self.assertEqual(Model.difference(Model.box(), None, Model.sphere()).name, 'difference(!box, !sphere)')
 
     def test_nested_box_union(self):
         model = Model.union(*self.nested_box_models)
