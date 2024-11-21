@@ -358,6 +358,9 @@ cdef class Flatten(UnaryOperation):
             trimesh_model.unmerge_vertices()
         return trimesh_model
 
+    cpdef object build_manifold(self):
+        return self.original.get_manifold()
+
 
 cdef class Invert(UnaryOperation):
     @staticmethod
@@ -393,6 +396,9 @@ cdef class Invert(UnaryOperation):
                                                  visual=trimesh_model.visual,
                                                  process=False)
         return trimesh_model
+
+    cpdef object build_manifold(self):
+        return self.original.get_manifold()
 
 
 cdef class Repair(UnaryOperation):
@@ -461,12 +467,21 @@ cdef class SnapEdges(UnaryOperation):
     cdef Model _snap_edges(self, double snap_angle, double minimum_area):
         return self.original._snap_edges(snap_angle, minimum_area)
 
+    cdef Model _transform(self, Matrix44 transform_matrix):
+        return self.original._transform(transform_matrix).snap_edges(self.snap_angle, self.minimum_area)
+
+    cdef Model _slice(self, Vector origin, Vector normal):
+        return self.original._slice(origin, normal)
+
     cpdef object build_trimesh(self):
         trimesh_model = self.original.get_trimesh()
         if trimesh_model is not None:
             trimesh_model = trimesh.graph.smooth_shade(trimesh_model, angle=self.snap_angle*Tau,
                                                        facet_minarea=1/self.minimum_area if self.minimum_area else None)
         return trimesh_model
+
+    cpdef object build_manifold(self):
+        return self.original.get_manifold()
 
 
 cdef class Transform(UnaryOperation):
@@ -527,6 +542,12 @@ cdef class UVRemap(UnaryOperation):
         model.touch_timestamp = perf_counter()
         return model
 
+    cpdef Model repair(self):
+        return self.original.repair()._uv_remap(self.mapping)
+
+    cpdef Model _uv_remap(self, str mapping):
+        return self.original._uv_remap(mapping)
+
     cdef object remap_sphere(self, trimesh_model):
         cdef const float[:, :] vertices
         cdef object vertex_uv_array
@@ -551,6 +572,9 @@ cdef class UVRemap(UnaryOperation):
             if self.mapping is 'sphere':
                 trimesh_model = self.remap_sphere(trimesh_model)
         return trimesh_model
+
+    cpdef object build_manifold(self):
+        return self.original.get_manifold()
 
 
 cdef class Slice(UnaryOperation):
@@ -578,12 +602,16 @@ cdef class Slice(UnaryOperation):
         return True
 
     cpdef Model repair(self):
-        return self
+        return self.original.repair()._slice(self.origin, self.normal)
+
+    cdef Model _transform(self, Matrix44 transform_matrix):
+        return self.original._transform(transform_matrix)._slice(transform_matrix.vmul(self.origin),
+                                                                 transform_matrix.inverse_transpose_matrix33().vmul(self.normal))
 
     cpdef object build_trimesh(self):
         manifold = self.get_manifold()
         if manifold is not None:
-            mesh = self.get_manifold().to_mesh()
+            mesh = manifold.to_mesh()
             return trimesh.base.Trimesh(vertices=mesh.vert_properties, faces=mesh.tri_verts)
         return None
 
@@ -661,12 +689,19 @@ cdef class BooleanOperation(Model):
     cpdef Model repair(self):
         return self
 
+    cdef Model _transform(self, Matrix44 transform_matrix):
+        cdef Model model
+        models = [model._transform(transform_matrix) for model in self.models]
+        return BooleanOperation._get(self.operation, models)
+
     cdef Model _slice(self, Vector origin, Vector normal):
+        if self.operation is 'union':
+            return Slice._get(self, origin, normal)
         cdef Model model
         cdef list models = []
         cdef int64_t i
         for i, model in enumerate(self.models):
-            if i == 0 or self.operation is 'union':
+            if i == 0:
                 models.append(model._slice(origin, normal))
             else:
                 models.append(model)
@@ -675,7 +710,7 @@ cdef class BooleanOperation(Model):
     cpdef object build_trimesh(self):
         manifold = self.get_manifold()
         if manifold is not None:
-            mesh = self.get_manifold().to_mesh()
+            mesh = manifold.to_mesh()
             if len(mesh.vert_properties) and len(mesh.tri_verts):
                 return trimesh.base.Trimesh(vertices=mesh.vert_properties, faces=mesh.tri_verts, process=False)
         return None
