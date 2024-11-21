@@ -28,7 +28,7 @@ cdef class Model:
     cpdef Vector get_bounds(self)
     cpdef object get_trimesh(self)
     cpdef object get_manifold(self)
-    cdef tuple get_buffers(self, object glctx, dict objects)
+    cpdef tuple get_buffers(self, object glctx, dict objects)
 
     cpdef Model flatten(self)
     cpdef Model invert(self)

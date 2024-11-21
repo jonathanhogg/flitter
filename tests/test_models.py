@@ -233,6 +233,7 @@ class TestStructuring(utils.TestCase):
     def test_flatten(self):
         self.assertEqual(Model.box().flatten().name, 'flatten(!box)')
         self.assertFalse(Model.box().flatten().is_smooth())
+        self.assertIs(Model.box().flatten().get_manifold(), Model.box().get_manifold())
         self.assertFalse(Model.union(Model.box(), Model.sphere()).flatten().is_smooth())
         self.assertEqual(Model.box().flatten().flatten().name, 'flatten(!box)')
         self.assertEqual(Model.box().flatten().invert().name, 'invert(flatten(!box))')
@@ -245,6 +246,7 @@ class TestStructuring(utils.TestCase):
     def test_invert(self):
         self.assertEqual(Model.box().invert().name, 'invert(!box)')
         self.assertFalse(Model.box().invert().is_smooth())
+        self.assertIs(Model.box().invert().get_manifold(), Model.box().get_manifold())
         self.assertTrue(Model.union(Model.box(), Model.sphere()).invert().is_smooth())
         self.assertEqual(Model.box().invert().flatten().name, 'flatten(invert(!box))')
         self.assertEqual(Model.box().invert().invert().name, '!box')
@@ -257,6 +259,7 @@ class TestStructuring(utils.TestCase):
     def test_repair(self):
         self.assertEqual(Model.box().repair().name, 'repair(!box)')
         self.assertTrue(Model.box().repair().is_smooth())
+        self.assertIsNot(Model.box().repair().get_manifold(), Model.box().get_manifold())
         self.assertEqual(Model.box().repair().flatten().name, 'flatten(repair(!box))')
         self.assertEqual(Model.box().repair().invert().name, 'invert(repair(!box))')
         self.assertEqual(Model.box().repair().repair().name, 'repair(!box)')
@@ -268,6 +271,7 @@ class TestStructuring(utils.TestCase):
     def test_snap_edges(self):
         self.assertEqual(Model.box().snap_edges(0).name, 'flatten(!box)')
         self.assertFalse(Model.box().snap_edges().is_smooth())
+        self.assertIs(Model.box().snap_edges().get_manifold(), Model.box().get_manifold())
         self.assertFalse(Model.union(Model.box(), Model.sphere()).snap_edges().is_smooth())
         self.assertEqual(Model.box().snap_edges().name, 'snap_edges(!box)')
         self.assertEqual(Model.box().snap_edges(0.05).name, 'snap_edges(!box)')
@@ -298,6 +302,7 @@ class TestStructuring(utils.TestCase):
     def test_uvremap(self):
         self.assertEqual(Model.box().uv_remap('sphere').name, 'uv_remap(!box, sphere)')
         self.assertFalse(Model.box().uv_remap('sphere').is_smooth())
+        self.assertIs(Model.box().uv_remap('sphere').get_manifold(), Model.box().get_manifold())
         self.assertTrue(Model.union(Model.box(), Model.sphere()).uv_remap('sphere').is_smooth())
         self.assertEqual(Model.box().uv_remap('sphere').flatten().name, 'flatten(uv_remap(!box, sphere))')
         self.assertEqual(Model.box().uv_remap('sphere').invert().name, 'invert(uv_remap(!box, sphere))')
@@ -485,3 +490,22 @@ class TestBoolean(utils.TestCase):
         mesh = model.get_trimesh()
         self.assertAlmostEqual(mesh.area, 4*math.pi + 4*math.pi, places=1)
         self.assertAlmostEqual(mesh.volume, 2*math.pi - 4/3*math.pi, places=1)
+
+
+class TestBuffers(utils.TestCase):
+    def tearDown(self):
+        Model.flush_caches(0, 0)
+
+    def test_box_get_buffers(self):
+        model = Model.box()
+        glctx = unittest.mock.Mock()
+        objects = {}
+        buffers = model.get_buffers(glctx, objects)
+        self.assertIn(model.name, objects)
+        self.assertIs(objects[model.name], buffers)
+        vertex_data = glctx.buffer.mock_calls[0].args[0]
+        self.assertEqual(vertex_data.dtype.name, 'float32')
+        self.assertEqual(vertex_data.shape, (24, 8))
+        index_data = glctx.buffer.mock_calls[1].args[0]
+        self.assertEqual(index_data.dtype.name, 'int32')
+        self.assertEqual(index_data.shape, (12, 3))

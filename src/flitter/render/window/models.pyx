@@ -186,7 +186,7 @@ cdef class Model:
         self.cache['bounds'] = bounds_vector
         return bounds_vector
 
-    cdef tuple get_buffers(self, object glctx, dict objects):
+    cpdef tuple get_buffers(self, object glctx, dict objects):
         self.cache_timestamp = perf_counter()
         cdef str name = self.name
         if name in objects:
