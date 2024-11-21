@@ -90,7 +90,7 @@ cdef class Model:
                     del cache[self.name]
             self.buffer_caches = None
 
-    cpdef bint is_manifold(self):
+    cpdef bint is_smooth(self):
         raise NotImplementedError()
 
     cpdef void check_for_changes(self):
@@ -321,8 +321,8 @@ cdef class UnaryOperation(Model):
         self.original.remove_dependent(self)
         super(UnaryOperation, self).unload()
 
-    cpdef bint is_manifold(self):
-        return self.original.is_manifold()
+    cpdef bint is_smooth(self):
+        return self.original.is_smooth()
 
     cpdef void check_for_changes(self):
         self.original.check_for_changes()
@@ -342,7 +342,7 @@ cdef class Flatten(UnaryOperation):
         model.touch_timestamp = perf_counter()
         return model
 
-    cpdef bint is_manifold(self):
+    cpdef bint is_smooth(self):
         return False
 
     cpdef Model flatten(self):
@@ -415,6 +415,9 @@ cdef class Repair(UnaryOperation):
         model.touch_timestamp = perf_counter()
         return model
 
+    cpdef bint is_smooth(self):
+        return True
+
     cpdef Model repair(self):
         return self
 
@@ -455,7 +458,7 @@ cdef class SnapEdges(UnaryOperation):
         model.touch_timestamp = perf_counter()
         return model
 
-    cpdef bint is_manifold(self):
+    cpdef bint is_smooth(self):
         return False
 
     cpdef Model flatten(self):
@@ -512,9 +515,6 @@ cdef class Transform(UnaryOperation):
         if trimesh_model is not None:
             transform_array = np.array(self.transform_matrix, dtype='f8').reshape((4, 4)).transpose()
             trimesh_model = trimesh_model.copy().apply_transform(transform_array)
-            if self.original.is_manifold() and not trimesh_model.is_volume:
-                logger.warning("Result of transform is no longer a volume: {}", self.name)
-                return None
         return trimesh_model
 
     cpdef object build_manifold(self):
@@ -598,7 +598,7 @@ cdef class Trim(UnaryOperation):
         model.touch_timestamp = perf_counter()
         return model
 
-    cpdef bint is_manifold(self):
+    cpdef bint is_smooth(self):
         return True
 
     cpdef Model repair(self):
@@ -621,7 +621,7 @@ cdef class Trim(UnaryOperation):
             normal = self.normal.neg()
             manifold = manifold.trim_by_plane(normal=tuple(normal), origin_offset=self.origin.dot(normal))
             if manifold.is_empty():
-                logger.warning("Result of {} was empty: {}", self.operation, self.name)
+                logger.warning("Result of trim was empty: {}", self.name)
                 manifold = None
         return manifold
 
@@ -678,7 +678,7 @@ cdef class BooleanOperation(Model):
             model.remove_dependent(self)
         super(BooleanOperation, self).unload()
 
-    cpdef bint is_manifold(self):
+    cpdef bint is_smooth(self):
         return True
 
     cpdef void check_for_changes(self):
@@ -748,7 +748,7 @@ cdef class PrimitiveModel(Model):
     cpdef void check_for_changes(self):
         pass
 
-    cpdef bint is_manifold(self):
+    cpdef bint is_smooth(self):
         return False
 
 
@@ -1062,7 +1062,7 @@ cdef class ExternalModel(Model):
         model.touch_timestamp = perf_counter()
         return model
 
-    cpdef bint is_manifold(self):
+    cpdef bint is_smooth(self):
         return False
 
     cpdef void check_for_changes(self):

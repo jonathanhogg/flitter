@@ -18,7 +18,7 @@ cdef class Model:
 
     cpdef void unload(self)
     cpdef void check_for_changes(self)
-    cpdef bint is_manifold(self)
+    cpdef bint is_smooth(self)
     cpdef object build_trimesh(self)
     cpdef object build_manifold(self)
 

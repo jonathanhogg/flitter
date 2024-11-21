@@ -3,6 +3,7 @@ Tests of flitter 3D models
 """
 
 import math
+import unittest.mock
 
 import trimesh
 
@@ -21,6 +22,7 @@ class TestPrimitives(utils.TestCase):
 
     def test_box(self):
         model = Model.box()
+        self.assertFalse(model.is_smooth())
         mesh = model.get_trimesh()
         self.assertEqual(model.name, '!box')
         self.assertEqual(mesh.bounds.tolist(), [[-0.5, -0.5, -0.5], [0.5, 0.5, 0.5]])
@@ -33,6 +35,7 @@ class TestPrimitives(utils.TestCase):
         for segments in (4, DefaultSegments, 1024):
             with self.subTest(segments=segments):
                 model = Model.sphere(segments)
+                self.assertFalse(model.is_smooth())
                 self.assertEqual(model.name, f'!sphere-{segments}' if segments != DefaultSegments else '!sphere')
                 mesh = model.get_trimesh()
                 self.assertEqual(mesh.bounds.tolist(), [[-1, -1, -1], [1, 1, 1]])
@@ -50,6 +53,7 @@ class TestPrimitives(utils.TestCase):
         for segments in (4, DefaultSegments, 1024):
             with self.subTest(segments=segments):
                 model = Model.cylinder(segments)
+                self.assertFalse(model.is_smooth())
                 self.assertEqual(model.name, f'!cylinder-{segments}' if segments != DefaultSegments else '!cylinder')
                 mesh = model.get_trimesh()
                 self.assertEqual(mesh.bounds.tolist(), [[-1, -1, -0.5], [1, 1, 0.5]])
@@ -66,6 +70,7 @@ class TestPrimitives(utils.TestCase):
         for segments in (4, DefaultSegments, 1024):
             with self.subTest(segments=segments):
                 model = Model.cone(segments)
+                self.assertFalse(model.is_smooth())
                 self.assertEqual(model.name, f'!cone-{segments}' if segments != DefaultSegments else '!cone')
                 mesh = model.get_trimesh()
                 self.assertEqual(mesh.bounds.tolist(), [[-1, -1, -0.5], [1, 1, 0.5]])
@@ -220,8 +225,13 @@ class TestStructuring(utils.TestCase):
         self.N = Vector((1, 0, 0))
         self.PN_hash = hex(self.P.hash(False) ^ self.N.hash(False))[2:]
 
+    def tearDown(self):
+        Model.flush_caches(0, 0)
+
     def test_flatten(self):
         self.assertEqual(Model.box().flatten().name, 'flatten(!box)')
+        self.assertFalse(Model.box().flatten().is_smooth())
+        self.assertFalse(Model.union(Model.box(), Model.sphere()).flatten().is_smooth())
         self.assertEqual(Model.box().flatten().flatten().name, 'flatten(!box)')
         self.assertEqual(Model.box().flatten().invert().name, 'invert(flatten(!box))')
         self.assertEqual(Model.box().flatten().repair().name, 'repair(flatten(!box))')
@@ -232,6 +242,8 @@ class TestStructuring(utils.TestCase):
 
     def test_invert(self):
         self.assertEqual(Model.box().invert().name, 'invert(!box)')
+        self.assertFalse(Model.box().invert().is_smooth())
+        self.assertTrue(Model.union(Model.box(), Model.sphere()).invert().is_smooth())
         self.assertEqual(Model.box().invert().flatten().name, 'flatten(invert(!box))')
         self.assertEqual(Model.box().invert().invert().name, '!box')
         self.assertEqual(Model.box().invert().repair().name, 'invert(repair(!box))')
@@ -242,6 +254,7 @@ class TestStructuring(utils.TestCase):
 
     def test_repair(self):
         self.assertEqual(Model.box().repair().name, 'repair(!box)')
+        self.assertTrue(Model.box().repair().is_smooth())
         self.assertEqual(Model.box().repair().flatten().name, 'flatten(repair(!box))')
         self.assertEqual(Model.box().repair().invert().name, 'invert(repair(!box))')
         self.assertEqual(Model.box().repair().repair().name, 'repair(!box)')
@@ -252,6 +265,8 @@ class TestStructuring(utils.TestCase):
 
     def test_snap_edges(self):
         self.assertEqual(Model.box().snap_edges(0).name, 'flatten(!box)')
+        self.assertFalse(Model.box().snap_edges().is_smooth())
+        self.assertFalse(Model.union(Model.box(), Model.sphere()).snap_edges().is_smooth())
         self.assertEqual(Model.box().snap_edges().name, 'snap_edges(!box)')
         self.assertEqual(Model.box().snap_edges(0.05).name, 'snap_edges(!box)')
         self.assertEqual(Model.box().snap_edges(0.25).name, 'snap_edges(!box, 0.25)')
@@ -267,6 +282,8 @@ class TestStructuring(utils.TestCase):
 
     def test_transform(self):
         self.assertEqual(Model.box().transform(Matrix44()).name, '!box')
+        self.assertFalse(Model.box().transform(self.M).is_smooth())
+        self.assertTrue(Model.union(Model.box(), Model.sphere()).transform(self.M).is_smooth())
         self.assertEqual(Model.box().transform(self.M).name, f'!box@{self.M_hash}')
         self.assertEqual(Model.box().transform(self.M).flatten().name, f'flatten(!box@{self.M_hash})')
         self.assertEqual(Model.box().transform(self.M).invert().name, f'invert(!box@{self.M_hash})')
@@ -278,6 +295,8 @@ class TestStructuring(utils.TestCase):
 
     def test_uvremap(self):
         self.assertEqual(Model.box().uv_remap('sphere').name, 'uv_remap(!box, sphere)')
+        self.assertFalse(Model.box().uv_remap('sphere').is_smooth())
+        self.assertTrue(Model.union(Model.box(), Model.sphere()).uv_remap('sphere').is_smooth())
         self.assertEqual(Model.box().uv_remap('sphere').flatten().name, 'flatten(uv_remap(!box, sphere))')
         self.assertEqual(Model.box().uv_remap('sphere').invert().name, 'invert(uv_remap(!box, sphere))')
         self.assertEqual(Model.box().uv_remap('sphere').repair().name, 'uv_remap(repair(!box), sphere)')
@@ -288,6 +307,7 @@ class TestStructuring(utils.TestCase):
 
     def test_trim(self):
         self.assertEqual(Model.box().trim(self.P, self.N).name, f'trim(!box, {self.PN_hash})')
+        self.assertTrue(Model.box().trim(self.P, self.N).is_smooth())
         self.assertEqual(Model.box().trim(self.P, self.N).flatten().name, f'flatten(trim(!box, {self.PN_hash}))')
         self.assertEqual(Model.box().trim(self.P, self.N).invert().name, f'invert(trim(!box, {self.PN_hash}))')
         self.assertEqual(Model.box().trim(self.P, self.N).repair().name, f'trim(repair(!box), {self.PN_hash})')
@@ -304,6 +324,7 @@ class TestStructuring(utils.TestCase):
         self.assertEqual(Model.union(Model.box(), Model.sphere()).name, 'union(!box, !sphere)')
         self.assertEqual(Model.union(Model.box(), Model.sphere(), Model.box()).name, 'union(!box, !sphere)')
         self.assertEqual(Model.union(Model.box(), Model.union(Model.sphere(), Model.cylinder())).name, 'union(!box, !sphere, !cylinder)')
+        self.assertTrue(Model.union(Model.box(), Model.sphere()).is_smooth())
         self.assertEqual(Model.union(Model.box(), Model.sphere()).flatten().name, 'flatten(union(!box, !sphere))')
         self.assertEqual(Model.union(Model.box(), Model.sphere()).invert().name, 'invert(union(!box, !sphere))')
         self.assertEqual(Model.union(Model.box(), Model.sphere()).repair().name, 'union(!box, !sphere)')
@@ -318,6 +339,7 @@ class TestStructuring(utils.TestCase):
         self.assertEqual(Model.intersect(Model.box(), Model.box()).name, '!box')
         self.assertEqual(Model.intersect(Model.box(), Model.sphere()).name, 'intersect(!box, !sphere)')
         self.assertEqual(Model.intersect(Model.box(), Model.sphere(), Model.box()).name, 'intersect(!box, !sphere)')
+        self.assertTrue(Model.intersect(Model.box(), Model.sphere()).is_smooth())
         self.assertEqual(Model.intersect(Model.box(), Model.sphere()).flatten().name, 'flatten(intersect(!box, !sphere))')
         self.assertEqual(Model.intersect(Model.box(), Model.sphere()).invert().name, 'invert(intersect(!box, !sphere))')
         self.assertEqual(Model.intersect(Model.box(), Model.sphere()).repair().name, 'intersect(!box, !sphere)')
@@ -332,6 +354,7 @@ class TestStructuring(utils.TestCase):
         self.assertIsNone(Model.difference(Model.box(), Model.box()))
         self.assertEqual(Model.difference(Model.box(), Model.sphere()).name, 'difference(!box, !sphere)')
         self.assertIsNone(Model.difference(Model.box(), Model.sphere(), Model.box()))
+        self.assertTrue(Model.difference(Model.box(), Model.sphere()).is_smooth())
         self.assertEqual(Model.difference(Model.box(), Model.sphere()).flatten().name, 'flatten(difference(!box, !sphere))')
         self.assertEqual(Model.difference(Model.box(), Model.sphere()).invert().name, 'invert(difference(!box, !sphere))')
         self.assertEqual(Model.difference(Model.box(), Model.sphere()).repair().name, 'difference(!box, !sphere)')
@@ -339,3 +362,48 @@ class TestStructuring(utils.TestCase):
         self.assertEqual(Model.difference(Model.box(), Model.sphere()).transform(self.M).name, f'difference(!box@{self.M_hash}, !sphere@{self.M_hash})')
         self.assertEqual(Model.difference(Model.box(), Model.sphere()).uv_remap('sphere').name, 'uv_remap(difference(!box, !sphere), sphere)')
         self.assertEqual(Model.difference(Model.box(), Model.sphere()).trim(self.P, self.N).name, f'difference(trim(!box, {self.PN_hash}), !sphere)')
+
+
+class TestUVRemapping(utils.TestCase):
+    def tearDown(self):
+        Model.flush_caches(0, 0)
+
+    def test_uv_remap_sphere(self):
+        model = Model.box()
+        mesh = model.uv_remap('sphere').get_trimesh()
+        for (x, y, z), uv in zip(mesh.vertices, mesh.visual.uv):
+            u = (math.atan2(y, x) / (2*math.pi)) % 1
+            r = math.sqrt(x*x + y*y)
+            v = (math.atan2(z, r) / math.pi + 0.5) % 1
+            self.assertAllAlmostEqual(uv, [u, v])
+
+
+class TestTrim(utils.TestCase):
+    def tearDown(self):
+        Model.flush_caches(0, 0)
+
+    def test_trim_sphere_to_box(self):
+        model = Model.sphere()
+        for x in (-1, 1):
+            model = model.trim((x/2, 0, 0), (x, 0, 0))
+        for y in (-1, 1):
+            model = model.trim((0, y/2, 0), (0, y, 0))
+        for z in (-1, 1):
+            model = model.trim((0, 0, z/2), (0, 0, z))
+        self.assertTrue(model.is_smooth())
+        mesh = model.get_trimesh()
+        self.assertEqual(mesh.bounds.tolist(), [[-0.5, -0.5, -0.5], [0.5, 0.5, 0.5]])
+        self.assertEqual(len(mesh.vertices), 8)
+        self.assertEqual(len(mesh.faces), 12)
+        self.assertAlmostEqual(mesh.area, 6)
+        self.assertAlmostEqual(mesh.volume, 1)
+
+    def test_trim_to_nothing(self):
+        model = Model.box()
+        model = model.trim((0, 0, -1), (0, 0, 1))
+        self.assertTrue(model.is_smooth())
+        with unittest.mock.patch('flitter.render.window.models.logger') as mock_logger:
+            manifold = model.get_manifold()
+            mock_logger.warning.assert_called_with("Result of trim was empty: {}", model.name)
+        self.assertIsNone(manifold)
+        self.assertIsNone(model.get_trimesh())
