@@ -201,18 +201,20 @@ class TestCache(utils.TestCase):
         self.assertIsNot(model.get_manifold(), manifold)
 
     def test_invalidate_dependency(self):
-        dependency = Model.box()
-        model = dependency.transform(Matrix44())
-        bounds = model.get_bounds()
-        mesh = model.get_trimesh()
-        manifold = model.get_manifold()
-        self.assertIs(model.get_bounds(), bounds)
-        self.assertIs(model.get_trimesh(), mesh)
-        self.assertIs(model.get_manifold(), manifold)
-        dependency.invalidate()
-        self.assertIsNot(model.get_bounds(), bounds)
-        self.assertIsNot(model.get_trimesh(), mesh)
-        self.assertIsNot(model.get_manifold(), manifold)
+        box = Model.box()
+        transformed_box = box.transform(Matrix44.scale(2))
+        self.assertIsNot(transformed_box, box)
+        self.assertIn(transformed_box, box.dependents)
+        bounds = transformed_box.get_bounds()
+        mesh = transformed_box.get_trimesh()
+        manifold = transformed_box.get_manifold()
+        self.assertIs(transformed_box.get_bounds(), bounds)
+        self.assertIs(transformed_box.get_trimesh(), mesh)
+        self.assertIs(transformed_box.get_manifold(), manifold)
+        box.invalidate()
+        self.assertIsNot(transformed_box.get_bounds(), bounds)
+        self.assertIsNot(transformed_box.get_trimesh(), mesh)
+        self.assertIsNot(transformed_box.get_manifold(), manifold)
 
 
 class TestStructuring(utils.TestCase):

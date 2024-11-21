@@ -10,11 +10,11 @@ cdef int64_t DefaultSegments
 
 cdef class Model:
     cdef readonly str name
-    cdef double touch_timestamp
-    cdef double cache_timestamp
+    cdef readonly double touch_timestamp
+    cdef readonly double cache_timestamp
     cdef readonly dict cache
-    cdef set dependents
-    cdef list buffer_caches
+    cdef readonly set dependents
+    cdef readonly list buffer_caches
 
     cpdef void unload(self)
     cpdef void check_for_changes(self)
