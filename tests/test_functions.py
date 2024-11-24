@@ -4,16 +4,20 @@ Tests of the flitter language built-in functions
 
 import math
 import struct
+import unittest.mock
 import zlib
 
-from flitter.model import Vector, Quaternion, null
+import numpy as np
+
+from flitter.model import Vector, Quaternion, null, Context
 from flitter.language.functions import (uniform, normal, beta,
                                         lenv, sumv, accumulate, minv, maxv, minindex, maxindex, mapv, clamp, zipv, count,
                                         roundv, absv, expv, sqrtv, logv, log2v, log10v, ceilv, floorv, fract,
                                         cosv, acosv, sinv, asinv, tanv, hypot, normalize, polar, angle, length, cross, dot,
                                         quaternion, qmul, qbetween, slerp,
                                         split, ordv, chrv,
-                                        colortemp, oklab, oklch)
+                                        colortemp, oklab, oklch,
+                                        sample, glob, read_text, read_csv, read_bytes)
 from flitter.language.noise import noise, octnoise
 
 from . import utils
@@ -683,3 +687,95 @@ class TestColorFuncs(utils.TestCase):
         self.assertAllAlmostEqual(oklch(Vector([0.5, 0.4, 2/3])), Vector([-0.15, 0.06, 1.42]), places=2)
         self.assertAllAlmostEqual(oklch(Vector([0.5, 0.4, 1])), Vector([0.87, -0.15, 0.1]), places=2)
         self.assertAllAlmostEqual(oklch(Vector([0.5, 0.4, -1])), Vector([0.87, -0.15, 0.1]), places=2)
+
+
+class TestSampling(utils.TestCase):
+    def test_missing_texture(self):
+        context = Context(references={})
+        color = sample(context, Vector('test'), Vector([0, 0]))
+        self.assertEqual(color, null)
+        color = sample(context, Vector('test'), Vector([0, 0]), Vector([1, 2, 3, 4]))
+        self.assertEqual(color, Vector([1, 2, 3, 4]))
+
+    def test_no_array(self):
+        reference = unittest.mock.Mock()
+        del reference.array
+        context = Context(references={'test': reference})
+        color = sample(context, Vector('test'), Vector([0, 0]), Vector([1, 2, 3, 4]))
+        self.assertEqual(color, Vector([1, 2, 3, 4]))
+
+    def test_array_is_none(self):
+        reference = unittest.mock.Mock()
+        reference.array = None
+        context = Context(references={'test': reference})
+        color = sample(context, Vector('test'), Vector([0, 0]), Vector([1, 2, 3, 4]))
+        self.assertEqual(color, Vector([1, 2, 3, 4]))
+
+    def test_array_is_empty(self):
+        reference = unittest.mock.Mock()
+        reference.array = np.array([], dtype='float32').reshape((0, 0, 3))
+        context = Context(references={'test': reference})
+        color = sample(context, Vector('test'), Vector([0, 0]), Vector([1, 2, 3, 4]))
+        self.assertEqual(color, Vector([1, 2, 3, 4]))
+
+    def test_4x4_array(self):
+        reference = unittest.mock.Mock()
+        reference.array = np.array([[[0, 0, 0, 1], [1, 0, 0, 1]], [[0, 1, 0, 1], [1, 1, 0, 1]]], dtype='float32')
+        context = Context(references={'test': reference})
+        self.assertEqual(sample(context, Vector('test'), Vector([0, 0]), Vector([1, 2, 3, 4])), Vector([0, 0, 0, 1]))
+        self.assertEqual(sample(context, Vector('test'), Vector([0.5, 0]), Vector([1, 2, 3, 4])), Vector([1, 0, 0, 1]))
+        self.assertEqual(sample(context, Vector('test'), Vector([0, 0.5]), Vector([1, 2, 3, 4])), Vector([0, 1, 0, 1]))
+        self.assertEqual(sample(context, Vector('test'), Vector([0.5, 0.5]), Vector([1, 2, 3, 4])), Vector([1, 1, 0, 1]))
+        self.assertEqual(sample(context, Vector('test'), Vector([0.5, 0]), Vector([1, 2, 3, 4])), Vector([1, 0, 0, 1]))
+        self.assertEqual(sample(context, Vector('test'), Vector([-0.5, 0]), Vector([1, 2, 3, 4])), Vector([1, 2, 3, 4]))
+        self.assertEqual(sample(context, Vector('test'), Vector([1.0, 0]), Vector([1, 2, 3, 4])), Vector([1, 2, 3, 4]))
+        self.assertEqual(sample(context, Vector('test'), Vector([0, -0.5]), Vector([1, 2, 3, 4])), Vector([1, 2, 3, 4]))
+        self.assertEqual(sample(context, Vector('test'), Vector([0, 1.0]), Vector([1, 2, 3, 4])), Vector([1, 2, 3, 4]))
+
+
+class TestFileFunctions(utils.TestCase):
+    def test_glob(self):
+        path = unittest.mock.Mock()
+        context = Context(path=path)
+        a = unittest.mock.Mock()
+        b = unittest.mock.Mock()
+        c = unittest.mock.Mock()
+        a.resolve.return_value = 'a'
+        b.resolve.return_value = 'b'
+        c.resolve.return_value = 'c'
+        path.parent.glob.return_value = [c, a, b]
+        self.assertEqual(glob(context, Vector('*')), ['a', 'b', 'c'])
+        path.parent.glob.assert_called_with('*')
+
+    def test_read_text(self):
+        path = 'world'
+        context = Context(path=path)
+        with unittest.mock.patch('flitter.language.functions.SharedCache') as cache:
+            cache_path = unittest.mock.Mock()
+            cache_path.read_text.return_value = 'Hello world!\n'
+            cache.get_with_root.return_value = cache_path
+            self.assertEqual(read_text(context, Vector('hello')), Vector('Hello world!\n'))
+            cache.get_with_root.assert_called_with('hello', 'world')
+            cache_path.read_text.assert_called_with(encoding='utf8')
+
+    def test_read_bytes(self):
+        path = 'world'
+        context = Context(path=path)
+        with unittest.mock.patch('flitter.language.functions.SharedCache') as cache:
+            cache_path = unittest.mock.Mock()
+            cache_path.read_bytes.return_value = b'Hello world!\n'
+            cache.get_with_root.return_value = cache_path
+            self.assertEqual(read_bytes(context, Vector('hello')), Vector(b'Hello world!\n'))
+            cache.get_with_root.assert_called_with('hello', 'world')
+            cache_path.read_bytes.assert_called_with()
+
+    def test_read_csv(self):
+        path = 'world'
+        context = Context(path=path)
+        with unittest.mock.patch('flitter.language.functions.SharedCache') as cache:
+            cache_path = unittest.mock.Mock()
+            cache_path.read_csv_vector.return_value = Vector(['Hello', 10])
+            cache.get_with_root.return_value = cache_path
+            self.assertEqual(read_csv(context, Vector('hello'), Vector(3)), Vector(['Hello', 10]))
+            cache.get_with_root.assert_called_with('hello', 'world')
+            cache_path.read_csv_vector.assert_called_with(3)

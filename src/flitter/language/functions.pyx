@@ -53,10 +53,10 @@ def sample(Context context, Vector texture_id, Vector coord, Vector default=null
             if n == 1:
                 return default
             if default.numbers != NULL and default.length == 4:
-                result.numbers[j] = default.nummbers[0]
-                result.numbers[j+1] = default.nummbers[1]
-                result.numbers[j+2] = default.nummbers[2]
-                result.numbers[j+3] = default.nummbers[3]
+                result.numbers[j] = default.numbers[0]
+                result.numbers[j+1] = default.numbers[1]
+                result.numbers[j+2] = default.numbers[2]
+                result.numbers[j+3] = default.numbers[3]
             else:
                 result.numbers[j] = 0
                 result.numbers[j+1] = 0
