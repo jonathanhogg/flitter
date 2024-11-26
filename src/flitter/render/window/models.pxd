@@ -40,13 +40,7 @@ cdef class Model:
     cdef Model _trim(self, Vector position, Vector normal)
 
     @staticmethod
-    cdef Model _intersect(list models)
-
-    @staticmethod
-    cdef Model _union(list models, double smooth)
-
-    @staticmethod
-    cdef Model _difference(list models)
+    cdef Model _boolean(str operation, list models, double smooth, double fillet, double chamfer)
 
     @staticmethod
     cdef Model _box(str uv_map)

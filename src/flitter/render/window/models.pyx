@@ -255,28 +255,20 @@ cdef class Model:
         return self._trim(Vector._coerce(origin), Vector._coerce(normal))
 
     @staticmethod
-    cdef Model _intersect(list models):
-        return BooleanOperation._get('intersect', models, 0)
+    cdef Model _boolean(str operation, list models, double smooth, double fillet, double chamfer):
+        return BooleanOperation._get(operation, models, smooth, fillet, chamfer)
 
     @staticmethod
-    def intersect(*models):
-        return Model._intersect(list(models))
+    def union(*models, smooth=0, fillet=0, chamfer=0):
+        return BooleanOperation._get('union', list(models), smooth, fillet, chamfer)
 
     @staticmethod
-    cdef Model _union(list models, double smooth):
-        return BooleanOperation._get('union', models, smooth)
+    def intersect(*models, smooth=0, fillet=0, chamfer=0):
+        return BooleanOperation._get('intersect', list(models), smooth, fillet, chamfer)
 
     @staticmethod
-    def union(*models, smooth=0):
-        return Model._union(list(models), smooth)
-
-    @staticmethod
-    cdef Model _difference(list models):
-        return BooleanOperation._get('difference', models, 0)
-
-    @staticmethod
-    def difference(*models):
-        return Model._difference(list(models))
+    def difference(*models, smooth=0, fillet=0, chamfer=0):
+        return BooleanOperation._get('difference', list(models), smooth, fillet, chamfer)
 
     @staticmethod
     cdef Model _box(str uv_map):
@@ -681,9 +673,11 @@ cdef class BooleanOperation(Model):
     cdef str operation
     cdef list models
     cdef double smooth
+    cdef double fillet
+    cdef double chamfer
 
     @staticmethod
-    cdef Model _get(str operation, list models, double smooth):
+    cdef Model _get(str operation, list models, double smooth, double fillet, double chamfer):
         cdef Model child_model, first=None
         cdef set existing = set()
         models = list(models)
@@ -694,8 +688,12 @@ cdef class BooleanOperation(Model):
             child_model = models.pop()
             if child_model is None:
                 continue
-            if operation is 'union' and isinstance(child_model, BooleanOperation) and (<BooleanOperation>child_model).operation is 'union' \
-                    and (<BooleanOperation>child_model).smooth == smooth:
+            if operation is 'union' \
+                    and isinstance(child_model, BooleanOperation) \
+                    and (<BooleanOperation>child_model).operation is 'union' \
+                    and (<BooleanOperation>child_model).smooth == smooth \
+                    and (<BooleanOperation>child_model).fillet == fillet \
+                    and (<BooleanOperation>child_model).chamfer == chamfer:
                 models.extend(reversed((<BooleanOperation>child_model).models))
                 continue
             if first is None:
@@ -714,7 +712,11 @@ cdef class BooleanOperation(Model):
         if len(collected_models) == 1:
             return collected_models[0]
         if smooth:
-            name += f', {smooth}'
+            name += f', smooth={smooth}'
+        elif fillet:
+            name += f', fillet={fillet}'
+        elif chamfer:
+            name += f', chamfer={chamfer}'
         name += ')'
         cdef BooleanOperation model = <BooleanOperation>ModelCache.get(name, None)
         if model is None:
@@ -723,6 +725,8 @@ cdef class BooleanOperation(Model):
             model.operation = operation
             model.models = collected_models
             model.smooth = smooth
+            model.fillet = fillet
+            model.chamfer = chamfer
             for child_model in collected_models:
                 child_model.add_dependent(model)
             ModelCache[name] = model
@@ -748,7 +752,7 @@ cdef class BooleanOperation(Model):
     cdef Model _transform(self, Matrix44 transform_matrix):
         cdef Model model
         models = [model._transform(transform_matrix) for model in self.models]
-        return BooleanOperation._get(self.operation, models, self.smooth)
+        return BooleanOperation._get(self.operation, models, self.smooth, self.fillet, self.chamfer)
 
     cdef Model _trim(self, Vector origin, Vector normal):
         if self.operation is 'union':
@@ -761,10 +765,10 @@ cdef class BooleanOperation(Model):
                 models.append(model._trim(origin, normal))
             else:
                 models.append(model)
-        return BooleanOperation._get(self.operation, models, self.smooth)
+        return BooleanOperation._get(self.operation, models, self.smooth, self.fillet, self.chamfer)
 
     cpdef double signed_distance(self, double x, double y, double z):
-        cdef double h, d, distance=(<Model>self.models[0]).signed_distance(x, y, z)
+        cdef double g, h, d, distance=(<Model>self.models[0]).signed_distance(x, y, z)
         cdef int64_t i
         for i in range(1, len(self.models)):
             d = (<Model>self.models[i]).signed_distance(x, y, z)
@@ -772,6 +776,12 @@ cdef class BooleanOperation(Model):
                 if self.smooth:
                     h = min(max(0, 0.5+0.5*(d-distance)/self.smooth), 1)
                     distance = h*d + (1-h)*distance + self.smooth*h*(1-h)
+                elif self.fillet:
+                    g = max(0, self.fillet+d)
+                    h = max(0, self.fillet+distance)
+                    distance = min(max(d, distance), -self.fillet) + sqrt(g*g + h*h)
+                elif self.chamfer:
+                    distance = -min(min(-distance, -d), (-distance - self.chamfer + -d)*sqrt(0.5))
                 else:
                     distance = max(distance, d)
             elif self.operation is 'intersect':

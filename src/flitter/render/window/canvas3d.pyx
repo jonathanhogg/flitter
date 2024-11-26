@@ -470,21 +470,20 @@ cdef Model get_model(Node node, bint top):
                 function.objects is not None and callable(f := function.objects[0]):
             model = Model._sdf(f, None, minimum, maximum, resolution)
         else:
-            model = Model._union([get_model(child, False) for child in node._children], 0)
+            model = Model._boolean('union', [get_model(child, False) for child in node._children], 0, 0, 0)
             model = Model._sdf(None, model, minimum, maximum, resolution)
     elif not top and node.kind is 'transform':
         transform_matrix = update_transform_matrix(node, IdentityTransform)
-        model = Model._union([get_model(child, False)._transform(transform_matrix) for child in node._children], 0)
-    elif node.kind is 'intersect':
-        model = Model._intersect([get_model(child, False) for child in node._children])
-    elif node.kind is 'union':
-        model = Model._union([get_model(child, False) for child in node._children], max(0, node.get_float('smooth', 0)))
-    elif node.kind is 'difference':
-        model = Model._difference([get_model(child, False) for child in node._children])
+        model = Model._boolean('union', [get_model(child, False)._transform(transform_matrix) for child in node._children], 0, 0, 0)
+    elif node.kind in ('union', 'intersect', 'difference'):
+        model = Model._boolean(node.kind, [get_model(child, False) for child in node._children],
+                               node.get_float('smooth', 0),
+                               node.get_float('fillet', 0),
+                               node.get_float('chamfer', 0))
     elif node.kind is 'trim' or node.kind is 'slice':
         normal = node.get_fvec('normal', 3, null_)
         origin = node.get_fvec('origin', 3, Zero3)
-        model = Model._union([get_model(child, False) for child in node._children], 0)
+        model = Model._boolean('union', [get_model(child, False) for child in node._children], 0, 0, 0)
         if model is not None and normal.as_bool():
             model = model._trim(origin, normal)
     elif (cls := get_plugin('flitter.render.window.models', node.kind)) is not None:
