@@ -488,6 +488,12 @@ cdef class Function:
     cdef readonly bint record_stats
     cdef readonly tuple captures
     cdef readonly int64_t call_depth
+    cdef readonly int64_t hash
+
+    def __hash__(self):
+        if self.hash == 0:
+            self.hash = id(self.program) ^ self.address ^ hash(self.defaults) ^ hash(self.captures)
+        return self.hash
 
     def __call__(self, Context context, *args, **kwargs):
         if self.call_depth == MAX_CALL_DEPTH:
@@ -496,9 +502,15 @@ cdef class Function:
         cdef int64_t i, lnames_top, stack_top, k=PyTuple_GET_SIZE(self.captures), m=PyTuple_GET_SIZE(self.parameters), n=PyTuple_GET_SIZE(args)
         cdef PyObject* objptr
         cdef object saved_path
+        if context.state is None:
+            context.state = StateDict()
         cdef VectorStack lnames = context.lnames
+        if lnames is None:
+            lnames = context.lnames = VectorStack()
         lnames_top = lnames.top
         cdef VectorStack stack = context.stack
+        if stack is None:
+            stack = context.stack = VectorStack()
         stack_top = stack.top
         for i in range(k):
             push(lnames, <Vector>PyTuple_GET_ITEM(self.captures, i))
