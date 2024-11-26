@@ -538,10 +538,10 @@ cdef class Transform(UnaryOperation):
             s = sqrt(self.transform_matrix.numbers[0]*self.transform_matrix.numbers[0] +
                      self.transform_matrix.numbers[1]*self.transform_matrix.numbers[1] +
                      self.transform_matrix.numbers[2]*self.transform_matrix.numbers[2])
-            s = max(sqrt(self.transform_matrix.numbers[4]*self.transform_matrix.numbers[4] +
+            s = min(sqrt(self.transform_matrix.numbers[4]*self.transform_matrix.numbers[4] +
                          self.transform_matrix.numbers[5]*self.transform_matrix.numbers[5] +
                          self.transform_matrix.numbers[6]*self.transform_matrix.numbers[6]), s)
-            s = max(sqrt(self.transform_matrix.numbers[8]*self.transform_matrix.numbers[8] +
+            s = min(sqrt(self.transform_matrix.numbers[8]*self.transform_matrix.numbers[8] +
                          self.transform_matrix.numbers[9]*self.transform_matrix.numbers[9] +
                          self.transform_matrix.numbers[10]*self.transform_matrix.numbers[10]), s)
             self.scale = s
