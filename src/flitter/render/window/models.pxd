@@ -19,6 +19,7 @@ cdef class Model:
     cpdef void unload(self)
     cpdef void check_for_changes(self)
     cpdef bint is_smooth(self)
+    cpdef double signed_distance(self, double x, double y, double z)
     cpdef object build_trimesh(self)
     cpdef object build_manifold(self)
 
@@ -42,7 +43,7 @@ cdef class Model:
     cdef Model _intersect(list models)
 
     @staticmethod
-    cdef Model _union(list models)
+    cdef Model _union(list models, double smooth)
 
     @staticmethod
     cdef Model _difference(list models)
@@ -61,3 +62,6 @@ cdef class Model:
 
     @staticmethod
     cdef Model _external(str filename)
+
+    @staticmethod
+    cdef Model _sdf(function, Model original, Vector minimum, Vector maximum, double resolution)

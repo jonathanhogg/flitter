@@ -30,6 +30,7 @@ logger = name_patch(logger, __name__)
 cdef Vector Zero3 = Vector((0, 0, 0))
 cdef Vector Zero4 = Vector((0, 0, 0, 0))
 cdef Vector Greyscale = Vector((0.299, 0.587, 0.114))
+cdef Vector MinusOne3 = Vector((-1, -1, -1))
 cdef Vector One3 = Vector((1, 1, 1))
 cdef Vector Xaxis = Vector((1, 0, 0))
 cdef Vector Yaxis = Vector((0, 1, 0))
@@ -446,8 +447,8 @@ cdef inline Matrix44 get_model_transform(Node node, Matrix44 transform_matrix):
 cdef Model get_model(Node node, bint top):
     cdef Node child
     cdef Model model = None
-    cdef Vector origin, normal
-    cdef double snap_angle
+    cdef Vector origin, normal, function, minimum, maximum
+    cdef double snap_angle, resolution
     cdef str mapping
     if node.kind is 'box':
         model = Model._box(node.get_str('uv_map', 'standard'))
@@ -461,19 +462,29 @@ cdef Model get_model(Node node, bint top):
         model = Model._external(node.get_str('filename', None))
         if model is not None and node.get_bool('repair', False):
             model = model.repair()
+    elif node.kind is 'sdf':
+        minimum = node.get_fvec('minimum', 3, MinusOne3)
+        maximum = node.get_fvec('maximum', 3, One3)
+        resolution = node.get_float('resolution', 0.1)
+        if 'function' in node and (function := node['function']) and function.length == 1 and \
+                function.objects is not None and callable(f := function.objects[0]):
+            model = Model._sdf(f, None, minimum, maximum, resolution)
+        else:
+            model = Model._union([get_model(child, False) for child in node._children], 0)
+            model = Model._sdf(None, model, minimum, maximum, resolution)
     elif not top and node.kind is 'transform':
         transform_matrix = update_transform_matrix(node, IdentityTransform)
-        model = Model._union([get_model(child, False)._transform(transform_matrix) for child in node._children])
+        model = Model._union([get_model(child, False)._transform(transform_matrix) for child in node._children], 0)
     elif node.kind is 'intersect':
         model = Model._intersect([get_model(child, False) for child in node._children])
     elif node.kind is 'union':
-        model = Model._union([get_model(child, False) for child in node._children])
+        model = Model._union([get_model(child, False) for child in node._children], max(0, node.get_float('smooth', 0)))
     elif node.kind is 'difference':
         model = Model._difference([get_model(child, False) for child in node._children])
     elif node.kind is 'trim' or node.kind is 'slice':
         normal = node.get_fvec('normal', 3, null_)
         origin = node.get_fvec('origin', 3, Zero3)
-        model = Model._union([get_model(child, False) for child in node._children])
+        model = Model._union([get_model(child, False) for child in node._children], 0)
         if model is not None and normal.as_bool():
             model = model._trim(origin, normal)
     elif (cls := get_plugin('flitter.render.window.models', node.kind)) is not None:
