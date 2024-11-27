@@ -94,7 +94,7 @@ cdef class Model:
     cpdef bint is_smooth(self):
         raise NotImplementedError()
 
-    cpdef double signed_distance(self, double x, double y, double z):
+    cpdef double signed_distance(self, double x, double y, double z) noexcept:
         raise NotImplementedError()
 
     cpdef void check_for_changes(self):
@@ -329,7 +329,7 @@ cdef class UnaryOperation(Model):
     cpdef bint is_smooth(self):
         return self.original.is_smooth()
 
-    cpdef double signed_distance(self, double x, double y, double z):
+    cpdef double signed_distance(self, double x, double y, double z) noexcept:
         return self.original.signed_distance(x, y, z)
 
     cpdef void check_for_changes(self):
@@ -395,7 +395,7 @@ cdef class Invert(UnaryOperation):
     cdef Model _transform(self, Matrix44 transform_matrix):
         return self.original._transform(transform_matrix).invert()
 
-    cpdef double signed_distance(self, double x, double y, double z):
+    cpdef double signed_distance(self, double x, double y, double z) noexcept:
         return -self.original.signed_distance(x, y, z)
 
     cpdef object build_trimesh(self):
@@ -523,7 +523,7 @@ cdef class Transform(UnaryOperation):
     cdef Model _transform(self, Matrix44 transform_matrix):
         return self.original._transform(transform_matrix.mmul(self.transform_matrix))
 
-    cpdef double signed_distance(self, double x, double y, double z):
+    cpdef double signed_distance(self, double x, double y, double z) noexcept:
         cdef double s
         if self.inverse_matrix is None:
             self.inverse_matrix = self.transform_matrix.inverse()
@@ -644,7 +644,7 @@ cdef class Trim(UnaryOperation):
         return self.original._transform(transform_matrix)._trim(transform_matrix.vmul(self.origin),
                                                                 transform_matrix.inverse_transpose_matrix33().vmul(self.normal))
 
-    cpdef double signed_distance(self, double x, double y, double z):
+    cpdef double signed_distance(self, double x, double y, double z) noexcept:
         cdef double d=self.original.signed_distance(x, y, z)
         x -= self.origin.numbers[0]
         y -= self.origin.numbers[1]
@@ -767,7 +767,8 @@ cdef class BooleanOperation(Model):
                 models.append(model)
         return BooleanOperation._get(self.operation, models, self.smooth, self.fillet, self.chamfer)
 
-    cpdef double signed_distance(self, double x, double y, double z):
+    @cython.cdivision(True)
+    cpdef double signed_distance(self, double x, double y, double z) noexcept:
         cdef double g, h, d, distance=(<Model>self.models[0]).signed_distance(x, y, z)
         cdef int64_t i
         for i in range(1, len(self.models)):
@@ -894,7 +895,7 @@ cdef class Box(PrimitiveModel):
         model.touch_timestamp = perf_counter()
         return model
 
-    cpdef double signed_distance(self, double x, double y, double z):
+    cpdef double signed_distance(self, double x, double y, double z) noexcept:
         cdef double xp=0.5-abs(x), yp=0.5-abs(y), zp=0.5-abs(z)
         cdef double xm=min(xp, 0), ym=min(yp, 0), zm=min(zp, 0)
         cdef double h=xm*xm + ym*ym + zm*zm
@@ -921,7 +922,7 @@ cdef class Sphere(PrimitiveModel):
         model.touch_timestamp = perf_counter()
         return model
 
-    cpdef double signed_distance(self, double x, double y, double z):
+    cpdef double signed_distance(self, double x, double y, double z) noexcept:
         return 1 - sqrt(x*x + y*y + z*z)
 
     @cython.cdivision(True)
@@ -1000,7 +1001,7 @@ cdef class Cylinder(PrimitiveModel):
         model.touch_timestamp = perf_counter()
         return model
 
-    cpdef double signed_distance(self, double x, double y, double z):
+    cpdef double signed_distance(self, double x, double y, double z) noexcept:
         return min(1-sqrt(x*x+y*y), 0.5-abs(z))
 
     @cython.cdivision(True)
@@ -1088,7 +1089,7 @@ cdef class Cone(PrimitiveModel):
         model.touch_timestamp = perf_counter()
         return model
 
-    cpdef double signed_distance(self, double x, double y, double z):
+    cpdef double signed_distance(self, double x, double y, double z) noexcept:
         return min(abs(0.5-z)-sqrt(x*x+y*y), 0.5-abs(z))
 
     @cython.cdivision(True)
@@ -1205,7 +1206,7 @@ cdef class SignedDistanceFunction(Model):
         if self.original is not None:
             self.original.check_for_changes()
 
-    cpdef double signed_distance(self, double x, double y, double z):
+    cpdef double signed_distance(self, double x, double y, double z) noexcept:
         if self.context is None:
             self.context = Context()
         cdef Vector pos = Vector.__new__(Vector)

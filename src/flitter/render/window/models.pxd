@@ -19,7 +19,7 @@ cdef class Model:
     cpdef void unload(self)
     cpdef void check_for_changes(self)
     cpdef bint is_smooth(self)
-    cpdef double signed_distance(self, double x, double y, double z)
+    cpdef double signed_distance(self, double x, double y, double z) noexcept
     cpdef object build_trimesh(self)
     cpdef object build_manifold(self)
 
