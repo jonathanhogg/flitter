@@ -97,6 +97,9 @@ cdef class Model:
     cpdef double signed_distance(self, double x, double y, double z) noexcept:
         raise NotImplementedError()
 
+    def inverse_signed_distance(self, x, y, z):
+        return -self.signed_distance(x, y, z)
+
     cpdef void check_for_changes(self):
         raise NotImplementedError()
 
@@ -649,7 +652,7 @@ cdef class Trim(UnaryOperation):
         x -= self.origin.numbers[0]
         y -= self.origin.numbers[1]
         z -= self.origin.numbers[2]
-        return min(d, -(x*self.normal.numbers[0] + y*self.normal.numbers[1] + z*self.normal.numbers[2]))
+        return max(d, (x*self.normal.numbers[0] + y*self.normal.numbers[1] + z*self.normal.numbers[2]))
 
     cpdef object build_trimesh(self):
         manifold = self.get_manifold()
@@ -776,19 +779,19 @@ cdef class BooleanOperation(Model):
             if self.operation is 'union':
                 if self.smooth:
                     h = min(max(0, 0.5+0.5*(d-distance)/self.smooth), 1)
-                    distance = h*d + (1-h)*distance + self.smooth*h*(1-h)
+                    distance = h*distance + (1-h)*d - self.smooth*h*(1-h)
                 elif self.fillet:
-                    g = max(0, self.fillet+d)
-                    h = max(0, self.fillet+distance)
-                    distance = min(max(d, distance), -self.fillet) + sqrt(g*g + h*h)
+                    g = max(0, self.fillet-d)
+                    h = max(0, self.fillet-distance)
+                    distance = max(self.fillet, min(d, distance)) - sqrt(g*g + h*h)
                 elif self.chamfer:
-                    distance = -min(min(-distance, -d), (-distance - self.chamfer + -d)*sqrt(0.5))
+                    distance = min(min(distance, d), (distance - self.chamfer + d)*sqrt(0.5))
                 else:
-                    distance = max(distance, d)
+                    distance = min(distance, d)
             elif self.operation is 'intersect':
-                distance = min(distance, d)
+                distance = max(distance, d)
             elif self.operation is 'difference':
-                distance = min(distance, -d)
+                distance = max(distance, -d)
         return distance
 
     cpdef object build_trimesh(self):
@@ -896,10 +899,10 @@ cdef class Box(PrimitiveModel):
         return model
 
     cpdef double signed_distance(self, double x, double y, double z) noexcept:
-        cdef double xp=0.5-abs(x), yp=0.5-abs(y), zp=0.5-abs(z)
-        cdef double xm=min(xp, 0), ym=min(yp, 0), zm=min(zp, 0)
+        cdef double xp=abs(x)-0.5, yp=abs(y)-0.5, zp=abs(z)-0.5
+        cdef double xm=max(xp, 0), ym=max(yp, 0), zm=max(zp, 0)
         cdef double h=xm*xm + ym*ym + zm*zm
-        return max(0, min(xp, min(yp, zp))) - sqrt(h)
+        return sqrt(h) + min(0, max(xp, max(yp, zp)))
 
     cpdef object build_trimesh(self):
         visual = trimesh.visual.texture.TextureVisuals(uv=Box.VertexUV[self.uv_map])
@@ -923,7 +926,7 @@ cdef class Sphere(PrimitiveModel):
         return model
 
     cpdef double signed_distance(self, double x, double y, double z) noexcept:
-        return 1 - sqrt(x*x + y*y + z*z)
+        return sqrt(x*x + y*y + z*z) - 1
 
     @cython.cdivision(True)
     @cython.boundscheck(False)
@@ -1002,7 +1005,7 @@ cdef class Cylinder(PrimitiveModel):
         return model
 
     cpdef double signed_distance(self, double x, double y, double z) noexcept:
-        return min(1-sqrt(x*x+y*y), 0.5-abs(z))
+        return max(sqrt(x*x+y*y)-1, abs(z)-0.5)
 
     @cython.cdivision(True)
     @cython.boundscheck(False)
@@ -1090,7 +1093,7 @@ cdef class Cone(PrimitiveModel):
         return model
 
     cpdef double signed_distance(self, double x, double y, double z) noexcept:
-        return min(abs(0.5-z)-sqrt(x*x+y*y), 0.5-abs(z))
+        return max(sqrt(x*x+y*y)-abs(0.5-z), abs(z)-0.5)
 
     @cython.cdivision(True)
     @cython.boundscheck(False)
@@ -1230,9 +1233,9 @@ cdef class SignedDistanceFunction(Model):
     cpdef object build_manifold(self):
         box = (*self.minimum, *self.maximum)
         if self.original is not None:
-            manifold = manifold3d.Manifold.level_set(self.original.signed_distance, box, self.resolution)
+            manifold = manifold3d.Manifold.level_set(self.original.inverse_signed_distance, box, self.resolution)
         else:
-            manifold = manifold3d.Manifold.level_set(self.signed_distance, box, self.resolution)
+            manifold = manifold3d.Manifold.level_set(self.inverse_signed_distance, box, self.resolution)
         if manifold.is_empty():
             logger.warning("Result of SDF was empty: {}", self.name)
             manifold = None
