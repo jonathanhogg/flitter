@@ -30,7 +30,6 @@ logger = name_patch(logger, __name__)
 cdef Vector Zero3 = Vector((0, 0, 0))
 cdef Vector Zero4 = Vector((0, 0, 0, 0))
 cdef Vector Greyscale = Vector((0.299, 0.587, 0.114))
-cdef Vector MinusOne3 = Vector((-1, -1, -1))
 cdef Vector One3 = Vector((1, 1, 1))
 cdef Vector Xaxis = Vector((1, 0, 0))
 cdef Vector Yaxis = Vector((0, 1, 0))
@@ -463,8 +462,8 @@ cdef Model get_model(Node node, bint top):
         if model is not None and node.get_bool('repair', False):
             model = model.repair()
     elif node.kind is 'sdf':
-        minimum = node.get_fvec('minimum', 3, MinusOne3)
         maximum = node.get_fvec('maximum', 3, One3)
+        minimum = node.get_fvec('minimum', 3, maximum.neg())
         resolution = node.get_float('resolution', 0.1)
         if 'function' in node and (function := node['function']) and function.length == 1 and \
                 function.objects is not None and callable(f := function.objects[0]):
