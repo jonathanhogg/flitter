@@ -745,17 +745,3 @@ class TestVector(utils.TestCase):
         self.assertTrue(math.isnan(Vector('a').squared_sum()))
         self.assertEqual(Vector(0).squared_sum(), 0)
         self.assertEqual(Vector([0, 1, 2, 3]).squared_sum(), 14)
-
-    def test_min(self):
-        self.assertTrue(math.isnan(null.min()))
-        self.assertTrue(math.isnan(Vector(["Hello", 3]).min()))
-        self.assertEqual(Vector(13.3).min(), 13.3)
-        self.assertEqual(Vector.range(10).min(), 0)
-        self.assertEqual(Vector([-4, 3, 12, 99.5, -4.1, 99, 10]).min(), -4.1)
-
-    def test_max(self):
-        self.assertTrue(math.isnan(null.max()))
-        self.assertTrue(math.isnan(Vector(["Hello", 3]).max()))
-        self.assertEqual(Vector(13.3).max(), 13.3)
-        self.assertEqual(Vector.range(10).max(), 9)
-        self.assertEqual(Vector([-4, 3, 12, 99.5, -4.1, 99, 10]).max(), 99.5)
