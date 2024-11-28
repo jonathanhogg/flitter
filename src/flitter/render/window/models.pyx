@@ -652,7 +652,8 @@ cdef class Trim(UnaryOperation):
         x -= self.origin.numbers[0]
         y -= self.origin.numbers[1]
         z -= self.origin.numbers[2]
-        return max(d, (x*self.normal.numbers[0] + y*self.normal.numbers[1] + z*self.normal.numbers[2]))
+        cdef double h=x*self.normal.numbers[0] + y*self.normal.numbers[1] + z*self.normal.numbers[2]
+        return max(d, h)
 
     cpdef object build_trimesh(self):
         manifold = self.get_manifold()
@@ -781,17 +782,37 @@ cdef class BooleanOperation(Model):
                     h = min(max(0, 0.5+0.5*(d-distance)/self.smooth), 1)
                     distance = h*distance + (1-h)*d - self.smooth*h*(1-h)
                 elif self.fillet:
-                    g = max(0, self.fillet-d)
-                    h = max(0, self.fillet-distance)
-                    distance = max(self.fillet, min(d, distance)) - sqrt(g*g + h*h)
+                    g = max(0, self.fillet-distance)
+                    h = max(0, self.fillet-d)
+                    distance = max(self.fillet, min(distance, d)) - sqrt(g*g + h*h)
                 elif self.chamfer:
                     distance = min(min(distance, d), (distance - self.chamfer + d)*sqrt(0.5))
                 else:
                     distance = min(distance, d)
             elif self.operation is 'intersect':
-                distance = max(distance, d)
+                if self.smooth:
+                    h = min(max(0, 0.5+0.5*(d-distance)/self.smooth), 1)
+                    distance = h*d + (1-h)*distance + self.smooth*h*(1-h)
+                if self.fillet:
+                    g = max(0, self.fillet+distance)
+                    h = max(0, self.fillet+d)
+                    distance = min(-self.fillet, max(distance, d)) + sqrt(g*g + h*h)
+                elif self.chamfer:
+                    distance = max(max(distance, d), (distance + self.chamfer + d)*sqrt(0.5))
+                else:
+                    distance = max(distance, d)
             elif self.operation is 'difference':
-                distance = max(distance, -d)
+                if self.smooth:
+                    h = min(max(0, 0.5+0.5*(-d-distance)/self.smooth), 1)
+                    distance = -h*d + (1-h)*distance + self.smooth*h*(1-h)
+                if self.fillet:
+                    g = max(0, self.fillet+distance)
+                    h = max(0, self.fillet-d)
+                    distance = min(-self.fillet, max(distance, -d)) + sqrt(g*g + h*h)
+                elif self.chamfer:
+                    distance = max(max(distance, -d), (distance + self.chamfer - d)*sqrt(0.5))
+                else:
+                    distance = max(distance, -d)
         return distance
 
     cpdef object build_trimesh(self):
