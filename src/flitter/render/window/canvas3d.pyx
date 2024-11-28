@@ -465,7 +465,7 @@ cdef Model get_model(Node node, bint top):
     elif node.kind is 'sdf':
         maximum = node.get_fvec('maximum', 3, One3)
         minimum = node.get_fvec('minimum', 3, maximum.neg())
-        resolution = node.get_float('resolution', (maximum.max() - minimum.min()) / 100)
+        resolution = node.get_float('resolution', (maximum.maximum() - minimum.minimum()) / 100)
         if 'function' in node and (function := node['function']) and function.length == 1 and \
                 function.objects is not None and callable(f := function.objects[0]):
             model = Model._sdf(f, None, minimum, maximum, resolution)

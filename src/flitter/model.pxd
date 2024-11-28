@@ -91,8 +91,8 @@ cdef class Vector:
     cpdef Vector dot(self, Vector other)
     cpdef Vector cross(self, Vector other)
     cpdef Vector clamp(self, Vector minimum, Vector maximum)
-    cdef double min(self) noexcept nogil
-    cdef double max(self) noexcept nogil
+    cdef double minimum(self) noexcept nogil
+    cdef double maximum(self) noexcept nogil
     cpdef Vector concat(self, Vector other)
 
 
