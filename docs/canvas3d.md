@@ -1061,15 +1061,15 @@ results in a model that is twice as detailed, it requires 8 times the
 computation and results in about 4 times the number of mesh faces.
 
 A surface can be described with the same hierarchy of nodes supported for
-constructive solid geometry, as [described above](#constructive-solid-geometry).
-This includes all primitive models and nested `!transform`, `!trim`, `!union`,
-`!intersect` and `!difference` nodes. These are evaluated as mathematical
-functions rather than mesh operations and then the final distance field is
-used to create a mesh.
+[constructive solid geometry](#constructive-solid-geometry). This includes all
+primitive models and nested `!transform`, `!trim`, `!union`, `!intersect` and
+`!difference` nodes. These are evaluated as mathematical functions rather than
+mesh operations and then the final distance field is used to create a mesh. The
+`!sdf` node is an implicit union operation on its children.
 
 When used within an `!sdf` node, `!trim`, `!union`, `!intersect` and
 `!difference` each support use of *one* of the following additional attributes
-to alter the boundaries between the combined fields (or the trim plane):
+to alter the boundaries between the combined surfaces (or with trim plane):
 
 `smooth=` *DISTANCE*
 : A distance over which to apply a linear smoothing between surfaces.
@@ -1078,7 +1078,7 @@ to alter the boundaries between the combined fields (or the trim plane):
 : The radius of a round fillet.
 
 `chamfer=` *DISTANCE*
-: An inset distance for a 45° chamfer.
+: An inset/outset distance for a 45° chamfer.
 
 The `!sdf` node also supports providing a custom SDF function with the following
 attribute:
@@ -1111,6 +1111,22 @@ If the `function` attribute is provided, then any sub-nodes are ignored. An
 node. If used in this way, the `maximum`, `minimum` and `resolution` attributes
 are ignored. Nested functions can be combined with transform and
 operation nodes.
+
+Signed distance field model hierarchies may also contain the SDF-only `!mix`
+node. This takes two or more child nodes and the following attribute:
+
+`weights=` *WEIGHTS*
+: An n-vector defining the relative weight to apply to each of the sub-models.
+Default is `1`.
+
+The `!mix` node blends together the signed distance fields of its children
+according to the value of the corresponding element of `weights`, which is
+repeated as necessary to match the number of children. The default operation
+blends all children together equally. With two children and a `weights` vector
+of `0.2;0.8`, the result would be a blend of 20% of the first SDF and 80% of
+the second. An individual weight value of zero would ignore a child completely.
+The `!mix` node can be used to create combined shapes like a partly-spheroid
+box.
 
 As with constructive solid geometry, SDF hierarchies are cached and may be
 rendered multiple times with different transforms and materials at low cost.

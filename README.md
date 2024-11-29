@@ -40,7 +40,10 @@ The engine that runs the language is capable of:
   - primitive box, sphere, cylinder and cone shapes
   - external triangular mesh models in a variety of formats including OBJ
     and STL
-  - planar slicing, union, difference and intersection of solid models
+  - planar trimming, union, difference and intersection of solid models
+  - construction of meshes from signed distance fields, including common
+    combinators and blending functions, and the ability to specify custom
+    functions
   - ambient, directional, point/sphere, line/capsule and spotlight sources
     (currently shadowless)
   - multiple (simultaneous) cameras with individual control over location,
