@@ -1346,7 +1346,7 @@ cdef class Mix(Model):
     cpdef void unload(self):
         for model in self.models:
             model.remove_dependent(self)
-        super(BooleanOperation, self).unload()
+        super(Mix, self).unload()
 
     cpdef bint is_smooth(self):
         return False
