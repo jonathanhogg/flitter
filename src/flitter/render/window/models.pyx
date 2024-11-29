@@ -251,11 +251,11 @@ cdef class Model:
     def uv_remap(self, mapping):
         return self._uv_remap(str(mapping))
 
-    cdef Model _trim(self, Vector origin, Vector normal):
-        return Trim._get(self, origin, normal)
+    cdef Model _trim(self, Vector origin, Vector normal, double smooth, double fillet, double chamfer):
+        return Trim._get(self, origin, normal, smooth, fillet, chamfer)
 
-    def trim(self, origin, normal):
-        return self._trim(Vector._coerce(origin), Vector._coerce(normal))
+    def trim(self, origin, normal, smooth, fillet, chamfer):
+        return self._trim(Vector._coerce(origin), Vector._coerce(normal), float(smooth), float(fillet), float(chamfer))
 
     @staticmethod
     cdef Model _boolean(str operation, list models, double smooth, double fillet, double chamfer):
@@ -487,8 +487,8 @@ cdef class SnapEdges(UnaryOperation):
     cdef Model _transform(self, Matrix44 transform_matrix):
         return self.original._transform(transform_matrix).snap_edges(self.snap_angle, self.minimum_area)
 
-    cdef Model _trim(self, Vector origin, Vector normal):
-        return self.original._trim(origin, normal)
+    cdef Model _trim(self, Vector origin, Vector normal, double smooth, double fillet, double chamfer):
+        return self.original._trim(origin, normal, smooth, fillet, chamfer)
 
     cpdef object build_trimesh(self):
         trimesh_model = self.original.get_trimesh()
@@ -619,12 +619,22 @@ cdef class UVRemap(UnaryOperation):
 cdef class Trim(UnaryOperation):
     cdef Vector origin
     cdef Vector normal
+    cdef double smooth
+    cdef double fillet
+    cdef double chamfer
 
     @staticmethod
-    cdef Trim _get(Model original, Vector origin, Vector normal):
+    cdef Trim _get(Model original, Vector origin, Vector normal, double smooth, double fillet, double chamfer):
         if origin.numbers == NULL or origin.length != 3 or normal.numbers == NULL or normal.length != 3:
             return None
-        cdef str name = f'trim({original.name}, {hex(origin.hash(False) ^ normal.hash(False))[2:]})'
+        cdef str name = f'trim({original.name}, {hex(origin.hash(False) ^ normal.hash(False))[2:]}'
+        if smooth:
+            name += f', smooth={smooth}'
+        elif fillet:
+            name += f', fillet={fillet}'
+        elif chamfer:
+            name += f', chamfer={chamfer}'
+        name += ')'
         cdef Trim model = <Trim>ModelCache.get(name, None)
         if model is None:
             model = Trim.__new__(Trim)
@@ -633,6 +643,9 @@ cdef class Trim(UnaryOperation):
             model.original.add_dependent(model)
             model.origin = origin
             model.normal = normal.normalize()
+            model.smooth = smooth
+            model.fillet = fillet
+            model.chamfer = chamfer
             ModelCache[name] = model
         model.touch_timestamp = perf_counter()
         return model
@@ -641,19 +654,31 @@ cdef class Trim(UnaryOperation):
         return True
 
     cpdef Model repair(self):
-        return self.original.repair()._trim(self.origin, self.normal)
+        return self.original.repair()._trim(self.origin, self.normal, self.smooth, self.fillet, self.chamfer)
 
     cdef Model _transform(self, Matrix44 transform_matrix):
         return self.original._transform(transform_matrix)._trim(transform_matrix.vmul(self.origin),
-                                                                transform_matrix.inverse_transpose_matrix33().vmul(self.normal))
+                                                                transform_matrix.inverse_transpose_matrix33().vmul(self.normal),
+                                                                self.smooth, self.fillet, self.chamfer)
 
     cpdef double signed_distance(self, double x, double y, double z) noexcept:
-        cdef double d=self.original.signed_distance(x, y, z)
+        cdef double distance=self.original.signed_distance(x, y, z)
         x -= self.origin.numbers[0]
         y -= self.origin.numbers[1]
         z -= self.origin.numbers[2]
-        cdef double h=x*self.normal.numbers[0] + y*self.normal.numbers[1] + z*self.normal.numbers[2]
-        return max(d, h)
+        cdef double h, d=x*self.normal.numbers[0] + y*self.normal.numbers[1] + z*self.normal.numbers[2]
+        if self.smooth:
+            h = min(max(0, 0.5+0.5*(d-distance)/self.smooth), 1)
+            distance = h*d + (1-h)*distance + self.smooth*h*(1-h)
+        if self.fillet:
+            g = max(0, self.fillet+distance)
+            h = max(0, self.fillet+d)
+            distance = min(-self.fillet, max(distance, d)) + sqrt(g*g + h*h)
+        elif self.chamfer:
+            distance = max(max(distance, d), (distance + self.chamfer + d)*sqrt(0.5))
+        else:
+            distance = max(distance, d)
+        return distance
 
     cpdef object build_trimesh(self):
         manifold = self.get_manifold()
@@ -758,15 +783,15 @@ cdef class BooleanOperation(Model):
         models = [model._transform(transform_matrix) for model in self.models]
         return BooleanOperation._get(self.operation, models, self.smooth, self.fillet, self.chamfer)
 
-    cdef Model _trim(self, Vector origin, Vector normal):
-        if self.operation is 'union':
-            return Trim._get(self, origin, normal)
+    cdef Model _trim(self, Vector origin, Vector normal, double smooth, double fillet, double chamfer):
+        if smooth or fillet or chamfer or self.operation is 'union' or self.smooth or self.fillet or self.chamfer:
+            return Trim._get(self, origin, normal, smooth, fillet, chamfer)
         cdef Model model
         cdef list models = []
         cdef int64_t i
         for i, model in enumerate(self.models):
             if i == 0:
-                models.append(model._trim(origin, normal))
+                models.append(model._trim(origin, normal, 0, 0, 0))
             else:
                 models.append(model)
         return BooleanOperation._get(self.operation, models, self.smooth, self.fillet, self.chamfer)

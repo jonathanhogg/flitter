@@ -485,7 +485,10 @@ cdef Model get_model(Node node, bint top):
         origin = node.get_fvec('origin', 3, Zero3)
         model = Model._boolean('union', [get_model(child, False) for child in node._children], 0, 0, 0)
         if model is not None and normal.as_bool():
-            model = model._trim(origin, normal)
+            model = model._trim(origin, normal,
+                                node.get_float('smooth', 0),
+                                node.get_float('fillet', 0),
+                                node.get_float('chamfer', 0))
     elif (cls := get_plugin('flitter.render.window.models', node.kind)) is not None:
         model = cls.from_node(node)
     if model is not None:
