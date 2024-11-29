@@ -4,6 +4,7 @@ from loguru import logger
 import manifold3d
 import numpy as np
 import trimesh
+import trimesh.proximity
 
 from libc.math cimport cos, sin, sqrt, atan2, ceil, abs
 from libc.stdint cimport int32_t, int64_t
@@ -1216,6 +1217,23 @@ cdef class ExternalModel(Model):
     cpdef void check_for_changes(self):
         if self.cache and 'trimesh' in self.cache and self.cache['trimesh'] is not self.cache_path.read_trimesh_model():
             self.invalidate()
+
+    cpdef double signed_distance(self, double x, double y, double z) noexcept:
+        if self.cache is None:
+            self.cache = {}
+        try:
+            if 'proximity_query' not in self.cache:
+                mesh = self.get_trimesh()
+                proximity_query = trimesh.proximity.ProximityQuery(mesh) if mesh else None
+                self.cache['proximity_query'] = proximity_query
+            else:
+                proximity_query = self.cache['proximity_query']
+            if proximity_query is not None:
+                return -(proximity_query.signed_distance([(x, y, z)])[0])
+        except Exception:
+            logger.exception("Unable to do SDF proximity query of mesh: {}", self.name)
+            self.cache['proximity_query'] = None
+        return NaN
 
     cpdef object build_trimesh(self):
         return self.cache_path.read_trimesh_model()
