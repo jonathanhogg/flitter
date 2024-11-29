@@ -951,8 +951,9 @@ sub-models, which will be automatically converted into equivalent transform
 nodes in the model tree.
 
 :::{note}
-A model construction tree **cannot** contain [lights](#lights) or
-[cameras](#cameras), and these nodes will be ignored if encountered.
+A model construction tree **cannot** contain [lights](#lights),
+[cameras](#cameras) or [materials](#materials) and these nodes will be ignored
+if encountered.
 :::
 
 The top node of a tree of model construction operations represents a new model.
@@ -962,34 +963,6 @@ unique sequence of operations is only carried out once. Using the same tree in
 multiple places will result in multiple instances of this model, as normal. Any
 change to the tree, including changes to trim planes or *any* transforms will
 result in a new model being generated.
-
-:::{warning}
-Animating a transform or trim operation inside a model construction tree will
-cause the model to be reconstructed repeatedly. If the construction operations
-are non-trivial to carry out, then this will slow the engine down significantly.
-It will also result in a large amount of memory being consumed as each new model
-is cached.
-
-If the animation loops, then you can take advantage of the caching by "stepping"
-the animated values so that they loop through a fixed, repeating sequence of
-values. For instance using the following code will cause a new model to be
-created on every frame, as the maths varies slightly every time.
-
-```flitter
-!difference
-    !sphere size=2
-    !cylinder size=(r;r;4) where r=0.5+sine(beat/10)
-```
-
-However, using this code will create a maximum of 50 versions of the model and
-repeat them:
-
-```flitter
-!difference
-    !sphere size=2
-    !cylinder size=(r;r;4) where r=0.5+sine(beat/10)*50//1/50
-```
-:::
 
 The CSG operations require all models to be "watertight" for them to work. This
 means that there are no disconnected edges in the model and no holes. This
@@ -1025,6 +998,34 @@ Generally speaking, CSG operations on models will discard (or corrupt) any
 existing texture-mapping UV coordinates. The `uv_remap` attribute (described
 above in [Controlling Model Shading](#controlling-model-shading)) can be used
 on the top node of the tree to calculate new UVs.
+
+### Animating CSG operations
+
+Animating a transform or trim operation inside a model construction tree will
+cause the model to be reconstructed repeatedly. If the construction operations
+are non-trivial to carry out, then this will slow the engine down significantly.
+It will also result in a large amount of memory being consumed as each new model
+is cached.
+
+If the animation loops, then you can take advantage of the caching by "stepping"
+the animated values so that they loop through a fixed, repeating sequence of
+values. For instance using the following code will cause a new model to be
+created on every frame, as the maths varies slightly every time.
+
+```flitter
+!difference
+    !sphere size=2
+    !cylinder size=(r;r;4) where r=0.5+sine(beat/10)
+```
+
+However, using this code will create a maximum of 50 versions of the model and
+repeat them:
+
+```flitter
+!difference
+    !sphere size=2
+    !cylinder size=(r;r;4) where r=0.5+sine(beat/10)*50//1/50
+```
 
 ## Signed Distance Fields
 
@@ -1126,12 +1127,26 @@ blends all children together equally. With two children and a `weights` vector
 of `0.2;0.8`, the result would be a blend of 20% of the first SDF and 80% of
 the second. An individual weight value of zero would ignore a child completely.
 The `!mix` node can be used to create combined shapes like a partly-spheroid
-box.
+box:
+
+```{literalinclude} diagrams/spheroidbox.fl
+   :language: flitter
+   :lines: 1-10
+   :emphasize-lines: 7-10
+```
+
+![Blended box and sphere diagram](diagrams/spheroidbox.png)
 
 As with constructive solid geometry, SDF hierarchies are cached and may be
 rendered multiple times with different transforms and materials at low cost.
-However, similarly, changing any attribute of an SDF node will result in a new
-mesh being calculated.
+However, as with CSG operations, changing any attribute of a node in an SDF
+hierarchy will result in a new mesh being calculated. See the note above on
+[Animating CSG operations](#animating-csg-operations) for a useful workaround.
+
+The resulting mesh of an `!sdf` node will *not* have any defined UV coordinates
+for texture mapping. The `!sdf` node supports the model `uv_remap` attribute
+(described in [Controlling Model Shading](#controlling-model-shading))
+as a mechanism to construct these.
 
 :::{note}
 The marching tetrahedra method of constructing a surface does not, in general,

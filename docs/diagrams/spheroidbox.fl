@@ -1,0 +1,13 @@
+
+!window size=720
+    !canvas3d id=:top samples=4 fov=0.1
+        !light color=1 direction=0;0;-1
+        !material color=1
+            !transform rotate_x=0.05 rotate_y=0.1 scale=100
+                !sdf
+                    !mix weights=0.6;0.4
+                        !box
+                        !sphere
+
+    !record filename=OUTPUT
+        !reference id=:top

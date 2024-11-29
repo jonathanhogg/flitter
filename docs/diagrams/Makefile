@@ -1,7 +1,7 @@
 
 .PHONY: diagrams
 
-diagrams: box_uvmap.png dummyshader.png easings.png petri.png pseudorandoms.png waveforms.png torus.png
+diagrams: box_uvmap.png dummyshader.png easings.png petri.png pseudorandoms.png spheroidbox.png torus.png waveforms.png
 
 petri.png: petri.fl
 	flitter --offscreen --lockstep --fps=10 --runtime=10 --define "OUTPUT=$@" $<

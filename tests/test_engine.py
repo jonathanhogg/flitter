@@ -157,6 +157,9 @@ class TestDocumentationDiagrams(ScriptTest):
     def test_pseudorandoms(self):
         self.assertScriptOutputMatchesImage(self.DIAGRAMS / 'pseudorandoms.fl')
 
+    def test_spheroidbox(self):
+        self.assertScriptOutputMatchesImage(self.DIAGRAMS / 'spheroidbox.fl')
+
     def test_torus(self):
         self.assertScriptOutputMatchesImage(self.DIAGRAMS / 'torus.fl')
 
