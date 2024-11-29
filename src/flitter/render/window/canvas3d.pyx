@@ -472,6 +472,8 @@ cdef Model get_model(Node node, bint top):
         else:
             model = Model._boolean('union', [get_model(child, False) for child in node._children], 0, 0, 0)
             model = Model._sdf(None, model, minimum, maximum, resolution)
+    elif node.kind is 'mix':
+        model = Model._mix([get_model(child, False) for child in node._children], node.get_fvec('weights', 0, true_))
     elif not top and node.kind is 'transform':
         transform_matrix = update_transform_matrix(node, IdentityTransform)
         model = Model._boolean('union', [get_model(child, False)._transform(transform_matrix) for child in node._children], 0, 0, 0)

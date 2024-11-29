@@ -59,3 +59,6 @@ cdef class Model:
 
     @staticmethod
     cdef Model _sdf(function, Model original, Vector minimum, Vector maximum, double resolution)
+
+    @staticmethod
+    cdef Model _mix(list models, Vector weights)

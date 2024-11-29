@@ -322,22 +322,32 @@ cdef class Model:
     def sdf(function, Model original, Vector minimum, Vector maximum, double resolution):
         return SignedDistanceFunction._get(function, original, minimum, maximum, resolution)
 
+    @staticmethod
+    cdef Model _mix(list models, Vector weights):
+        return Mix._get(models, weights)
+
+    @staticmethod
+    def mix(list models, Vector weights):
+        return Mix._get(models, weights)
+
 
 cdef class UnaryOperation(Model):
     cdef Model original
 
     cpdef void unload(self):
-        self.original.remove_dependent(self)
+        if self.original is not None:
+            self.original.remove_dependent(self)
         super(UnaryOperation, self).unload()
 
     cpdef bint is_smooth(self):
-        return self.original.is_smooth()
+        return self.original.is_smooth() if self.original is not None else False
 
     cpdef double signed_distance(self, double x, double y, double z) noexcept:
-        return self.original.signed_distance(x, y, z)
+        return self.original.signed_distance(x, y, z) if self.original is not None else NaN
 
     cpdef void check_for_changes(self):
-        self.original.check_for_changes()
+        if self.original is not None:
+            self.original.check_for_changes()
 
 
 cdef class Flatten(UnaryOperation):
@@ -1239,9 +1249,8 @@ cdef class ExternalModel(Model):
         return self.cache_path.read_trimesh_model()
 
 
-cdef class SignedDistanceFunction(Model):
+cdef class SignedDistanceFunction(UnaryOperation):
     cdef object function
-    cdef Model original
     cdef Vector minimum
     cdef Vector maximum
     cdef double resolution
@@ -1263,15 +1272,13 @@ cdef class SignedDistanceFunction(Model):
             model.maximum = maximum
             model.resolution = resolution
             ModelCache[name] = model
+            if original is not None:
+                original.add_dependent(model)
         model.touch_timestamp = perf_counter()
         return model
 
     cpdef bint is_smooth(self):
         return False
-
-    cpdef void check_for_changes(self):
-        if self.original is not None:
-            self.original.check_for_changes()
 
     cpdef double signed_distance(self, double x, double y, double z) noexcept:
         if self.context is None:
@@ -1304,3 +1311,68 @@ cdef class SignedDistanceFunction(Model):
             logger.warning("Result of SDF was empty: {}", self.name)
             manifold = None
         return manifold
+
+
+cdef class Mix(Model):
+    cdef list models
+    cdef Vector weights
+
+    @staticmethod
+    cdef Model _get(list models, Vector weights):
+        cdef Model child_model
+        cdef list collected_models = []
+        cdef str name = 'mix()'
+        for child_model in models:
+            if child_model is not None:
+                collected_models.append(child_model)
+                name += f'{child_model.name}, '
+        name += f'{weights}!r)'
+        if len(collected_models) == 0:
+            return None
+        if len(collected_models) == 1:
+            return collected_models[0]
+        cdef Mix model = <Mix>ModelCache.get(name, None)
+        if model is None:
+            model = Mix.__new__(Mix)
+            model.name = name
+            model.models = collected_models
+            model.weights = weights
+            for child_model in collected_models:
+                child_model.add_dependent(model)
+            ModelCache[name] = model
+        model.touch_timestamp = perf_counter()
+        return model
+
+    cpdef void unload(self):
+        for model in self.models:
+            model.remove_dependent(self)
+        super(BooleanOperation, self).unload()
+
+    cpdef bint is_smooth(self):
+        return False
+
+    cpdef void check_for_changes(self):
+        cdef Model model
+        for model in self.models:
+            model.check_for_changes()
+
+    @cython.cdivision(True)
+    cpdef double signed_distance(self, double x, double y, double z) noexcept:
+        cdef double distance=0, weight=0, d, w
+        cdef int64_t i
+        cdef Model model
+        for i in range(len(self.models)):
+            model = self.models[i]
+            d = model.signed_distance(x, y, z)
+            w = self.weights.numbers[i % self.weights.length]
+            distance += d * w
+            weight += w
+        return distance / weight
+
+    cpdef object build_trimesh(self):
+        logger.warning("Cannot use !mix node outside of !sdf")
+        return None
+
+    cpdef object build_manifold(self):
+        logger.warning("Cannot use !mix node outside of !sdf")
+        return None
