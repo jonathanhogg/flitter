@@ -254,7 +254,7 @@ cdef class Model:
     cdef Model _trim(self, Vector origin, Vector normal, double smooth, double fillet, double chamfer):
         return Trim._get(self, origin, normal, smooth, fillet, chamfer)
 
-    def trim(self, origin, normal, smooth, fillet, chamfer):
+    def trim(self, origin, normal, smooth=0, fillet=0, chamfer=0):
         return self._trim(Vector._coerce(origin), Vector._coerce(normal), float(smooth), float(fillet), float(chamfer))
 
     @staticmethod
