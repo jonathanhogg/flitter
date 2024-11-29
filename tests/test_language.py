@@ -518,6 +518,9 @@ class TestExamples(ScriptTest):
     def test_physics(self):
         self.assertSimplifierDoesntChangeBehaviour(self.EXAMPLES / 'physics.fl')
 
+    def test_sdf(self):
+        self.assertSimplifierDoesntChangeBehaviour(self.EXAMPLES / 'sdf.fl')
+
     def test_smoke(self):
         self.assertSimplifierDoesntChangeBehaviour(self.EXAMPLES / 'smoke.fl')
 
