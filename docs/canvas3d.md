@@ -959,12 +959,12 @@ The top node of a tree of model construction operations represents a new model.
 It therefore supports all of the standard [model](#models) and
 [material](#materials) attributes. The model will be cached so that each
 unique sequence of operations is only carried out once. Using the same tree in
-multiple places will result in multiple instances of this model as normal. Any
-change to the tree, including changes to slice planes or *any* transforms will
+multiple places will result in multiple instances of this model, as normal. Any
+change to the tree, including changes to trim planes or *any* transforms will
 result in a new model being generated.
 
 :::{warning}
-Animating a transform or slice operation inside a model construction tree will
+Animating a transform or trim operation inside a model construction tree will
 cause the model to be reconstructed repeatedly. If the construction operations
 are non-trivial to carry out, then this will slow the engine down significantly.
 It will also result in a large amount of memory being consumed as each new model
@@ -1025,3 +1025,104 @@ Generally speaking, CSG operations on models will discard (or corrupt) any
 existing texture-mapping UV coordinates. The `uv_remap` attribute (described
 above in [Controlling Model Shading](#controlling-model-shading)) can be used
 on the top node of the tree to calculate new UVs.
+
+## Signed Distance Fields
+
+In addition to the mesh-based constructive solid geometry operations above,
+**Flitter** has native support for evaluating signed distance fields (SDF) and
+creating meshes from the surfaces described by these. This is done using
+[marching tetrahedra](https://en.wikipedia.org/wiki/Marching_tetrahedra) level
+sets.
+
+A surface is created with an `!sdf` node. This node supports the following
+attributes:
+
+`maximum=` *MAX*
+: A 3-vector of the axis-oriented upper bounds of the surface, in the model
+coordinate space. Default is `1`.
+
+`minimum=` *MIN*
+: A 3-vector of the axis-oriented lower bounds of the surface. Default is
+negative *MAX*.
+
+`resolution=` *RESOLUTION*
+: A value representing the density that the field should be sampled at. Default
+is the largest axis bounds divided by 100 (i.e., `(max(MAX) - min(MIN)) / 100`).
+
+The `minimum` and `maximum` attributes define an axis-oriented box, which will
+be subdivided into cubes with a side length of `resolution`. Each of these
+cubes is then further sub-divided into four, irregular tetrahedra. The signed
+distance field is evaluated at each vertex to create the level set.
+
+To minimise cost, the `minimum` and `maximum` bounds should *just* encompass
+the described surface, and `resolution` should be the largest value that
+produces a reasonable surface. In particular, while halving `resolution`
+results in a model that is twice as detailed, it requires 8 times the
+computation and results in about 4 times the number of mesh faces.
+
+A surface can be described with the same hierarchy of nodes supported for
+constructive solid geometry, as [described above](#constructive-solid-geometry).
+This includes all primitive models and nested `!transform`, `!trim`, `!union`,
+`!intersect` and `!difference` nodes. These are evaluated as mathematical
+functions rather than mesh operations and then the final distance field is
+used to create a mesh.
+
+When used within an `!sdf` node, `!trim`, `!union`, `!intersect` and
+`!difference` each support use of *one* of the following additional attributes
+to alter the boundaries between the combined fields (or the trim plane):
+
+`smooth=` *DISTANCE*
+: A distance over which to apply a linear smoothing between surfaces.
+
+`fillet=` *RADIUS*
+: The radius of a round fillet.
+
+`chamfer=` *DISTANCE*
+: An inset distance for a 45° chamfer.
+
+The `!sdf` node also supports providing a custom SDF function with the following
+attribute:
+
+`function=` *FUNCTION*
+: A **Flitter** function taking a 3-vector position (in pre-transform model
+coordinate space) and returning a signed distance to the surface, positive
+values indicate points **outside** of the volume and negative values indicate
+points **inside**.
+
+For example, a custom function can be used to create new primitive shapes:
+
+```{literalinclude} diagrams/torus.fl
+   :language: flitter
+   :lines: 1-10
+   :emphasize-lines: 1-2,10
+```
+
+![Torus diagram](diagrams/torus.png)
+
+Note that here `torus()` is a function that *returns an [anonymous
+function](language.md#anonymous-functions)*. This anonymous function is set as
+the `function` attribute of `!sdf` and is repeatedly evaluated to create the
+surface. SDF functions may bind external names – such as `r1` and `r2` in this
+example – but any change to these values will result in a new mesh being
+created. An SDF function has no access to [state](language.md#state).
+
+If the `function` attribute is provided, then any sub-nodes are ignored. An
+`!sdf` node with a custom function can be used nested within another `!sdf`
+node. If used in this way, the `maximum`, `minimum` and `resolution` attributes
+are ignored. Nested functions can be combined with transform and
+operation nodes.
+
+As with constructive solid geometry, SDF hierarchies are cached and may be
+rendered multiple times with different transforms and materials at low cost.
+However, similarly, changing any attribute of an SDF node will result in a new
+mesh being calculated.
+
+:::{note}
+The marching tetrahedra method of constructing a surface does not, in general,
+deal well with sharp corners. If clean, sharp models are required then it is
+almost certainly a better idea to use the normal mesh-based CSG operations.
+
+Signed distance fields come into their own for creating smooth forms. They are
+best used with the `smooth`, `fillet` and `chamfer`-variants of the CSG
+operations and/or with custom functions.
+:::
