@@ -1,0 +1,13 @@
+func torus(r1, r2)
+    func(p) hypot(hypot(p[..2])-r1, p[2]) - r2
+
+!window size=720
+    !canvas3d id=:top samples=4 viewpoint=0;-500;200 fov=0.15
+        !light color=0.05
+        !light color=0.95 direction=0;0;-1
+        !material color=1
+            !transform scale=200
+                !sdf function=torus(0.75, 0.25)
+
+    !record filename=OUTPUT
+        !reference id=:top

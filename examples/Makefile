@@ -32,6 +32,9 @@ oklch.png: oklch.fl
 physics.png: physics.fl
 	flitter --offscreen --lockstep --fps=10 --runtime=1 --define "OUTPUT=$@" $<
 
+sdf.png: sdf.fl
+	flitter --offscreen --lockstep --fps=1 --runtime=1 --define "OUTPUT=$@" $<
+
 smoke.png: smoke.fl
 	flitter --offscreen --lockstep --fps=10 --runtime=1 --define "OUTPUT=$@" $<
 

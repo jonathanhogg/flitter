@@ -157,6 +157,12 @@ class TestDocumentationDiagrams(ScriptTest):
     def test_pseudorandoms(self):
         self.assertScriptOutputMatchesImage(self.DIAGRAMS / 'pseudorandoms.fl')
 
+    def test_spheroidbox(self):
+        self.assertScriptOutputMatchesImage(self.DIAGRAMS / 'spheroidbox.fl')
+
+    def test_torus(self):
+        self.assertScriptOutputMatchesImage(self.DIAGRAMS / 'torus.fl')
+
     def test_waveforms(self):
         self.assertScriptOutputMatchesImage(self.DIAGRAMS / 'waveforms.fl')
 
@@ -221,6 +227,9 @@ class TestExamples(ScriptTest):
     def test_physics(self):
         self.assertScriptOutputMatchesImage(self.EXAMPLES / 'physics.fl', target_fps=10)
 
+    def test_sdf(self):
+        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'sdf.fl')
+
     def test_smoke(self):
         self.assertScriptOutputMatchesImage(self.EXAMPLES / 'smoke.fl', target_fps=10)
 
@@ -265,6 +274,10 @@ class TestExamples(ScriptTest):
     @unittest.skipIf(sys.platform != 'linux', 'OpenGL ES only available on Linux')
     def test_physics_opengl_es(self):
         self.assertScriptOutputMatchesImage(self.EXAMPLES / 'physics.fl', target_fps=10, opengl_es=True, suffix='.es.png')
+
+    @unittest.skipIf(sys.platform != 'linux', 'OpenGL ES only available on Linux')
+    def test_sdf_opengl_es(self):
+        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'sdf.fl', opengl_es=True, suffix='.es.png')
 
     @unittest.skipIf(sys.platform != 'linux', 'OpenGL ES only available on Linux')
     def test_solidgeometry_opengl_es(self):

@@ -1072,6 +1072,26 @@ cdef class Vector:
             result.numbers[i] = d
         return result
 
+    cdef double minimum(self) noexcept nogil:
+        if self.numbers == NULL:
+            return NaN
+        cdef double f, m=self.numbers[0]
+        for i in range(1, self.length):
+            f = self.numbers[i]
+            if f < m:
+                m = f
+        return m
+
+    cdef double maximum(self) noexcept nogil:
+        if self.numbers == NULL:
+            return NaN
+        cdef double f, m=self.numbers[0]
+        for i in range(1, self.length):
+            f = self.numbers[i]
+            if f > m:
+                m = f
+        return m
+
     cpdef Vector concat(self, Vector other):
         cdef int64_t i, n = self.length, m = other.length
         if m == 0:

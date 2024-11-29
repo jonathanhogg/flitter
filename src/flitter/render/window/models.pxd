@@ -19,6 +19,7 @@ cdef class Model:
     cpdef void unload(self)
     cpdef void check_for_changes(self)
     cpdef bint is_smooth(self)
+    cpdef double signed_distance(self, double x, double y, double z) noexcept
     cpdef object build_trimesh(self)
     cpdef object build_manifold(self)
 
@@ -36,16 +37,10 @@ cdef class Model:
     cdef Model _snap_edges(self, double snap_angle, double minimum_area)
     cdef Model _transform(self, Matrix44 transform_matrix)
     cdef Model _uv_remap(self, str mapping)
-    cdef Model _trim(self, Vector position, Vector normal)
+    cdef Model _trim(self, Vector origin, Vector normal, double smooth, double fillet, double chamfer)
 
     @staticmethod
-    cdef Model _intersect(list models)
-
-    @staticmethod
-    cdef Model _union(list models)
-
-    @staticmethod
-    cdef Model _difference(list models)
+    cdef Model _boolean(str operation, list models, double smooth, double fillet, double chamfer)
 
     @staticmethod
     cdef Model _box(str uv_map)
@@ -61,3 +56,9 @@ cdef class Model:
 
     @staticmethod
     cdef Model _external(str filename)
+
+    @staticmethod
+    cdef Model _sdf(function, Model original, Vector minimum, Vector maximum, double resolution)
+
+    @staticmethod
+    cdef Model _mix(list models, Vector weights)

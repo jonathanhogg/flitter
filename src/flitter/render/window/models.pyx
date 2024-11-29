@@ -4,13 +4,14 @@ from loguru import logger
 import manifold3d
 import numpy as np
 import trimesh
+import trimesh.proximity
 
-from libc.math cimport cos, sin, sqrt, atan2, ceil
+from libc.math cimport cos, sin, sqrt, atan2, ceil, abs
 from libc.stdint cimport int32_t, int64_t
 
 from ... import name_patch
 from ...cache import SharedCache
-from ...model cimport true_
+from ...model cimport true_, Context, Vector
 from ...timer cimport perf_counter
 
 
@@ -22,6 +23,7 @@ cdef double RootHalf = sqrt(0.5)
 cdef double DefaultSnapAngle = 0.05
 cdef int64_t DefaultSegments = 64
 cdef Matrix44 IdentityTransform = Matrix44._identity()
+cdef double NaN = float("nan")
 
 
 cdef class Model:
@@ -92,6 +94,12 @@ cdef class Model:
 
     cpdef bint is_smooth(self):
         raise NotImplementedError()
+
+    cpdef double signed_distance(self, double x, double y, double z) noexcept:
+        raise NotImplementedError()
+
+    def inverse_signed_distance(self, x, y, z):
+        return -self.signed_distance(x, y, z)
 
     cpdef void check_for_changes(self):
         raise NotImplementedError()
@@ -244,35 +252,27 @@ cdef class Model:
     def uv_remap(self, mapping):
         return self._uv_remap(str(mapping))
 
-    cdef Model _trim(self, Vector origin, Vector normal):
-        return Trim._get(self, origin, normal)
+    cdef Model _trim(self, Vector origin, Vector normal, double smooth, double fillet, double chamfer):
+        return Trim._get(self, origin, normal, smooth, fillet, chamfer)
 
-    def trim(self, origin, normal):
-        return self._trim(Vector._coerce(origin), Vector._coerce(normal))
-
-    @staticmethod
-    cdef Model _intersect(list models):
-        return BooleanOperation._get('intersect', models)
+    def trim(self, origin, normal, smooth=0, fillet=0, chamfer=0):
+        return self._trim(Vector._coerce(origin), Vector._coerce(normal), float(smooth), float(fillet), float(chamfer))
 
     @staticmethod
-    def intersect(*models):
-        return Model._intersect(list(models))
+    cdef Model _boolean(str operation, list models, double smooth, double fillet, double chamfer):
+        return BooleanOperation._get(operation, models, smooth, fillet, chamfer)
 
     @staticmethod
-    cdef Model _union(list models):
-        return BooleanOperation._get('union', models)
+    def union(*models, smooth=0, fillet=0, chamfer=0):
+        return BooleanOperation._get('union', list(models), smooth, fillet, chamfer)
 
     @staticmethod
-    def union(*models):
-        return Model._union(list(models))
+    def intersect(*models, smooth=0, fillet=0, chamfer=0):
+        return BooleanOperation._get('intersect', list(models), smooth, fillet, chamfer)
 
     @staticmethod
-    cdef Model _difference(list models):
-        return BooleanOperation._get('difference', models)
-
-    @staticmethod
-    def difference(*models):
-        return Model._difference(list(models))
+    def difference(*models, smooth=0, fillet=0, chamfer=0):
+        return BooleanOperation._get('difference', list(models), smooth, fillet, chamfer)
 
     @staticmethod
     cdef Model _box(str uv_map):
@@ -314,19 +314,40 @@ cdef class Model:
     def external(filename):
         return ExternalModel._get(str(filename))
 
+    @staticmethod
+    cdef Model _sdf(function, Model original, Vector minimum, Vector maximum, double resolution):
+        return SignedDistanceFunction._get(function, original, minimum, maximum, resolution)
+
+    @staticmethod
+    def sdf(function, Model original, Vector minimum, Vector maximum, double resolution):
+        return SignedDistanceFunction._get(function, original, minimum, maximum, resolution)
+
+    @staticmethod
+    cdef Model _mix(list models, Vector weights):
+        return Mix._get(models, weights)
+
+    @staticmethod
+    def mix(list models, Vector weights):
+        return Mix._get(models, weights)
+
 
 cdef class UnaryOperation(Model):
     cdef Model original
 
     cpdef void unload(self):
-        self.original.remove_dependent(self)
+        if self.original is not None:
+            self.original.remove_dependent(self)
         super(UnaryOperation, self).unload()
 
     cpdef bint is_smooth(self):
-        return self.original.is_smooth()
+        return self.original.is_smooth() if self.original is not None else False
+
+    cpdef double signed_distance(self, double x, double y, double z) noexcept:
+        return self.original.signed_distance(x, y, z) if self.original is not None else NaN
 
     cpdef void check_for_changes(self):
-        self.original.check_for_changes()
+        if self.original is not None:
+            self.original.check_for_changes()
 
 
 cdef class Flatten(UnaryOperation):
@@ -387,6 +408,9 @@ cdef class Invert(UnaryOperation):
 
     cdef Model _transform(self, Matrix44 transform_matrix):
         return self.original._transform(transform_matrix).invert()
+
+    cpdef double signed_distance(self, double x, double y, double z) noexcept:
+        return -self.original.signed_distance(x, y, z)
 
     cpdef object build_trimesh(self):
         trimesh_model = self.original.get_trimesh()
@@ -474,8 +498,8 @@ cdef class SnapEdges(UnaryOperation):
     cdef Model _transform(self, Matrix44 transform_matrix):
         return self.original._transform(transform_matrix).snap_edges(self.snap_angle, self.minimum_area)
 
-    cdef Model _trim(self, Vector origin, Vector normal):
-        return self.original._trim(origin, normal)
+    cdef Model _trim(self, Vector origin, Vector normal, double smooth, double fillet, double chamfer):
+        return self.original._trim(origin, normal, smooth, fillet, chamfer)
 
     cpdef object build_trimesh(self):
         trimesh_model = self.original.get_trimesh()
@@ -490,6 +514,8 @@ cdef class SnapEdges(UnaryOperation):
 
 cdef class Transform(UnaryOperation):
     cdef Matrix44 transform_matrix
+    cdef Matrix44 inverse_matrix
+    cdef double scale
 
     @staticmethod
     cdef Model _get(Model original, Matrix44 transform_matrix):
@@ -510,6 +536,29 @@ cdef class Transform(UnaryOperation):
 
     cdef Model _transform(self, Matrix44 transform_matrix):
         return self.original._transform(transform_matrix.mmul(self.transform_matrix))
+
+    cpdef double signed_distance(self, double x, double y, double z) noexcept:
+        cdef double s
+        if self.inverse_matrix is None:
+            self.inverse_matrix = self.transform_matrix.inverse()
+            s = sqrt(self.transform_matrix.numbers[0]*self.transform_matrix.numbers[0] +
+                     self.transform_matrix.numbers[1]*self.transform_matrix.numbers[1] +
+                     self.transform_matrix.numbers[2]*self.transform_matrix.numbers[2])
+            s = min(sqrt(self.transform_matrix.numbers[4]*self.transform_matrix.numbers[4] +
+                         self.transform_matrix.numbers[5]*self.transform_matrix.numbers[5] +
+                         self.transform_matrix.numbers[6]*self.transform_matrix.numbers[6]), s)
+            s = min(sqrt(self.transform_matrix.numbers[8]*self.transform_matrix.numbers[8] +
+                         self.transform_matrix.numbers[9]*self.transform_matrix.numbers[9] +
+                         self.transform_matrix.numbers[10]*self.transform_matrix.numbers[10]), s)
+            self.scale = s
+        cdef Vector pos=Vector.__new__(Vector)
+        pos.allocate_numbers(3)
+        pos.numbers[0] = x
+        pos.numbers[1] = y
+        pos.numbers[2] = z
+        cdef Vector ipos=self.inverse_matrix.vmul(pos)
+        cdef double distance=self.original.signed_distance(ipos.numbers[0], ipos.numbers[1], ipos.numbers[2])
+        return distance * self.scale
 
     cpdef object build_trimesh(self):
         trimesh_model = self.original.get_trimesh()
@@ -581,12 +630,22 @@ cdef class UVRemap(UnaryOperation):
 cdef class Trim(UnaryOperation):
     cdef Vector origin
     cdef Vector normal
+    cdef double smooth
+    cdef double fillet
+    cdef double chamfer
 
     @staticmethod
-    cdef Trim _get(Model original, Vector origin, Vector normal):
+    cdef Trim _get(Model original, Vector origin, Vector normal, double smooth, double fillet, double chamfer):
         if origin.numbers == NULL or origin.length != 3 or normal.numbers == NULL or normal.length != 3:
             return None
-        cdef str name = f'trim({original.name}, {hex(origin.hash(False) ^ normal.hash(False))[2:]})'
+        cdef str name = f'trim({original.name}, {hex(origin.hash(False) ^ normal.hash(False))[2:]}'
+        if smooth:
+            name += f', smooth={smooth}'
+        elif fillet:
+            name += f', fillet={fillet}'
+        elif chamfer:
+            name += f', chamfer={chamfer}'
+        name += ')'
         cdef Trim model = <Trim>ModelCache.get(name, None)
         if model is None:
             model = Trim.__new__(Trim)
@@ -595,6 +654,9 @@ cdef class Trim(UnaryOperation):
             model.original.add_dependent(model)
             model.origin = origin
             model.normal = normal.normalize()
+            model.smooth = smooth
+            model.fillet = fillet
+            model.chamfer = chamfer
             ModelCache[name] = model
         model.touch_timestamp = perf_counter()
         return model
@@ -603,11 +665,31 @@ cdef class Trim(UnaryOperation):
         return True
 
     cpdef Model repair(self):
-        return self.original.repair()._trim(self.origin, self.normal)
+        return self.original.repair()._trim(self.origin, self.normal, self.smooth, self.fillet, self.chamfer)
 
     cdef Model _transform(self, Matrix44 transform_matrix):
         return self.original._transform(transform_matrix)._trim(transform_matrix.vmul(self.origin),
-                                                                transform_matrix.inverse_transpose_matrix33().vmul(self.normal))
+                                                                transform_matrix.inverse_transpose_matrix33().vmul(self.normal),
+                                                                self.smooth, self.fillet, self.chamfer)
+
+    cpdef double signed_distance(self, double x, double y, double z) noexcept:
+        cdef double distance=self.original.signed_distance(x, y, z)
+        x -= self.origin.numbers[0]
+        y -= self.origin.numbers[1]
+        z -= self.origin.numbers[2]
+        cdef double h, d=x*self.normal.numbers[0] + y*self.normal.numbers[1] + z*self.normal.numbers[2]
+        if self.smooth:
+            h = min(max(0, 0.5+0.5*(d-distance)/self.smooth), 1)
+            distance = h*d + (1-h)*distance + self.smooth*h*(1-h)
+        if self.fillet:
+            g = max(0, self.fillet+distance)
+            h = max(0, self.fillet+d)
+            distance = min(-self.fillet, max(distance, d)) + sqrt(g*g + h*h)
+        elif self.chamfer:
+            distance = max(max(distance, d), (distance + self.chamfer + d)*sqrt(0.5))
+        else:
+            distance = max(distance, d)
+        return distance
 
     cpdef object build_trimesh(self):
         manifold = self.get_manifold()
@@ -630,9 +712,12 @@ cdef class Trim(UnaryOperation):
 cdef class BooleanOperation(Model):
     cdef str operation
     cdef list models
+    cdef double smooth
+    cdef double fillet
+    cdef double chamfer
 
     @staticmethod
-    cdef Model _get(str operation, list models):
+    cdef Model _get(str operation, list models, double smooth, double fillet, double chamfer):
         cdef Model child_model, first=None
         cdef set existing = set()
         models = list(models)
@@ -643,7 +728,12 @@ cdef class BooleanOperation(Model):
             child_model = models.pop()
             if child_model is None:
                 continue
-            if operation is 'union' and isinstance(child_model, BooleanOperation) and (<BooleanOperation>child_model).operation is 'union':
+            if operation is 'union' \
+                    and isinstance(child_model, BooleanOperation) \
+                    and (<BooleanOperation>child_model).operation is 'union' \
+                    and (<BooleanOperation>child_model).smooth == smooth \
+                    and (<BooleanOperation>child_model).fillet == fillet \
+                    and (<BooleanOperation>child_model).chamfer == chamfer:
                 models.extend(reversed((<BooleanOperation>child_model).models))
                 continue
             if first is None:
@@ -661,6 +751,12 @@ cdef class BooleanOperation(Model):
             return None
         if len(collected_models) == 1:
             return collected_models[0]
+        if smooth:
+            name += f', smooth={smooth}'
+        elif fillet:
+            name += f', fillet={fillet}'
+        elif chamfer:
+            name += f', chamfer={chamfer}'
         name += ')'
         cdef BooleanOperation model = <BooleanOperation>ModelCache.get(name, None)
         if model is None:
@@ -668,6 +764,9 @@ cdef class BooleanOperation(Model):
             model.name = name
             model.operation = operation
             model.models = collected_models
+            model.smooth = smooth
+            model.fillet = fillet
+            model.chamfer = chamfer
             for child_model in collected_models:
                 child_model.add_dependent(model)
             ModelCache[name] = model
@@ -693,20 +792,64 @@ cdef class BooleanOperation(Model):
     cdef Model _transform(self, Matrix44 transform_matrix):
         cdef Model model
         models = [model._transform(transform_matrix) for model in self.models]
-        return BooleanOperation._get(self.operation, models)
+        return BooleanOperation._get(self.operation, models, self.smooth, self.fillet, self.chamfer)
 
-    cdef Model _trim(self, Vector origin, Vector normal):
-        if self.operation is 'union':
-            return Trim._get(self, origin, normal)
+    cdef Model _trim(self, Vector origin, Vector normal, double smooth, double fillet, double chamfer):
+        if smooth or fillet or chamfer or self.operation is 'union' or self.smooth or self.fillet or self.chamfer:
+            return Trim._get(self, origin, normal, smooth, fillet, chamfer)
         cdef Model model
         cdef list models = []
         cdef int64_t i
         for i, model in enumerate(self.models):
             if i == 0:
-                models.append(model._trim(origin, normal))
+                models.append(model._trim(origin, normal, 0, 0, 0))
             else:
                 models.append(model)
-        return BooleanOperation._get(self.operation, models)
+        return BooleanOperation._get(self.operation, models, self.smooth, self.fillet, self.chamfer)
+
+    @cython.cdivision(True)
+    cpdef double signed_distance(self, double x, double y, double z) noexcept:
+        cdef double g, h, d, distance=(<Model>self.models[0]).signed_distance(x, y, z)
+        cdef int64_t i
+        for i in range(1, len(self.models)):
+            d = (<Model>self.models[i]).signed_distance(x, y, z)
+            if self.operation is 'union':
+                if self.smooth:
+                    h = min(max(0, 0.5+0.5*(d-distance)/self.smooth), 1)
+                    distance = h*distance + (1-h)*d - self.smooth*h*(1-h)
+                elif self.fillet:
+                    g = max(0, self.fillet-distance)
+                    h = max(0, self.fillet-d)
+                    distance = max(self.fillet, min(distance, d)) - sqrt(g*g + h*h)
+                elif self.chamfer:
+                    distance = min(min(distance, d), (distance - self.chamfer + d)*sqrt(0.5))
+                else:
+                    distance = min(distance, d)
+            elif self.operation is 'intersect':
+                if self.smooth:
+                    h = min(max(0, 0.5+0.5*(d-distance)/self.smooth), 1)
+                    distance = h*d + (1-h)*distance + self.smooth*h*(1-h)
+                if self.fillet:
+                    g = max(0, self.fillet+distance)
+                    h = max(0, self.fillet+d)
+                    distance = min(-self.fillet, max(distance, d)) + sqrt(g*g + h*h)
+                elif self.chamfer:
+                    distance = max(max(distance, d), (distance + self.chamfer + d)*sqrt(0.5))
+                else:
+                    distance = max(distance, d)
+            elif self.operation is 'difference':
+                if self.smooth:
+                    h = min(max(0, 0.5+0.5*(-d-distance)/self.smooth), 1)
+                    distance = -h*d + (1-h)*distance + self.smooth*h*(1-h)
+                if self.fillet:
+                    g = max(0, self.fillet+distance)
+                    h = max(0, self.fillet-d)
+                    distance = min(-self.fillet, max(distance, -d)) + sqrt(g*g + h*h)
+                elif self.chamfer:
+                    distance = max(max(distance, -d), (distance + self.chamfer - d)*sqrt(0.5))
+                else:
+                    distance = max(distance, -d)
+        return distance
 
     cpdef object build_trimesh(self):
         manifold = self.get_manifold()
@@ -812,6 +955,12 @@ cdef class Box(PrimitiveModel):
         model.touch_timestamp = perf_counter()
         return model
 
+    cpdef double signed_distance(self, double x, double y, double z) noexcept:
+        cdef double xp=abs(x)-0.5, yp=abs(y)-0.5, zp=abs(z)-0.5
+        cdef double xm=max(xp, 0), ym=max(yp, 0), zm=max(zp, 0)
+        cdef double h=xm*xm + ym*ym + zm*zm
+        return sqrt(h) + min(0, max(xp, max(yp, zp)))
+
     cpdef object build_trimesh(self):
         visual = trimesh.visual.texture.TextureVisuals(uv=Box.VertexUV[self.uv_map])
         return trimesh.base.Trimesh(vertices=Box.Vertices, vertex_normals=Box.VertexNormals, faces=Box.Faces, visual=visual, process=False)
@@ -832,6 +981,9 @@ cdef class Sphere(PrimitiveModel):
             ModelCache[name] = model
         model.touch_timestamp = perf_counter()
         return model
+
+    cpdef double signed_distance(self, double x, double y, double z) noexcept:
+        return sqrt(x*x + y*y + z*z) - 1
 
     @cython.cdivision(True)
     @cython.boundscheck(False)
@@ -908,6 +1060,9 @@ cdef class Cylinder(PrimitiveModel):
             ModelCache[name] = model
         model.touch_timestamp = perf_counter()
         return model
+
+    cpdef double signed_distance(self, double x, double y, double z) noexcept:
+        return max(sqrt(x*x+y*y)-1, abs(z)-0.5)
 
     @cython.cdivision(True)
     @cython.boundscheck(False)
@@ -994,6 +1149,9 @@ cdef class Cone(PrimitiveModel):
         model.touch_timestamp = perf_counter()
         return model
 
+    cpdef double signed_distance(self, double x, double y, double z) noexcept:
+        return max(sqrt(x*x+y*y)-abs(0.5-z), abs(z)-0.5)
+
     @cython.cdivision(True)
     @cython.boundscheck(False)
     cpdef object build_trimesh(self):
@@ -1070,5 +1228,151 @@ cdef class ExternalModel(Model):
         if self.cache and 'trimesh' in self.cache and self.cache['trimesh'] is not self.cache_path.read_trimesh_model():
             self.invalidate()
 
+    cpdef double signed_distance(self, double x, double y, double z) noexcept:
+        if self.cache is None:
+            self.cache = {}
+        try:
+            if 'proximity_query' not in self.cache:
+                mesh = self.get_trimesh()
+                proximity_query = trimesh.proximity.ProximityQuery(mesh) if mesh else None
+                self.cache['proximity_query'] = proximity_query
+            else:
+                proximity_query = self.cache['proximity_query']
+            if proximity_query is not None:
+                return -(proximity_query.signed_distance([(x, y, z)])[0])
+        except Exception:
+            logger.exception("Unable to do SDF proximity query of mesh: {}", self.name)
+            self.cache['proximity_query'] = None
+        return NaN
+
     cpdef object build_trimesh(self):
         return self.cache_path.read_trimesh_model()
+
+
+cdef class SignedDistanceFunction(UnaryOperation):
+    cdef object function
+    cdef Vector minimum
+    cdef Vector maximum
+    cdef double resolution
+    cdef Context context
+
+    @staticmethod
+    cdef SignedDistanceFunction _get(function, Model original, Vector minimum, Vector maximum, double resolution):
+        if function is None and original is None:
+            return None
+        cdef str name = f'!sdf({hash(function)}, {minimum!r}, {maximum!r}, {resolution})' if function is not None \
+                        else f'!sdf({original.name}, {minimum!r}, {maximum!r}, {resolution})'
+        cdef SignedDistanceFunction model = <SignedDistanceFunction>ModelCache.get(name, None)
+        if model is None:
+            model = SignedDistanceFunction.__new__(SignedDistanceFunction)
+            model.name = name
+            model.function = function
+            model.original = original
+            model.minimum = minimum
+            model.maximum = maximum
+            model.resolution = resolution
+            ModelCache[name] = model
+            if original is not None:
+                original.add_dependent(model)
+        model.touch_timestamp = perf_counter()
+        return model
+
+    cpdef bint is_smooth(self):
+        return False
+
+    cpdef double signed_distance(self, double x, double y, double z) noexcept:
+        if self.context is None:
+            self.context = Context()
+        cdef Vector pos = Vector.__new__(Vector)
+        pos.allocate_numbers(3)
+        pos.numbers[0] = x
+        pos.numbers[1] = y
+        pos.numbers[2] = z
+        cdef Vector result = self.function(self.context, pos)
+        if result.length == 1 and result.numbers != NULL:
+            return result.numbers[0]
+        return NaN
+
+    cpdef object build_trimesh(self):
+        manifold = self.get_manifold()
+        if manifold is not None:
+            mesh = manifold.to_mesh()
+            if len(mesh.vert_properties) and len(mesh.tri_verts):
+                return trimesh.base.Trimesh(vertices=mesh.vert_properties, faces=mesh.tri_verts, process=False)
+        return None
+
+    cpdef object build_manifold(self):
+        box = (*self.minimum, *self.maximum)
+        if self.original is not None:
+            manifold = manifold3d.Manifold.level_set(self.original.inverse_signed_distance, box, self.resolution)
+        else:
+            manifold = manifold3d.Manifold.level_set(self.inverse_signed_distance, box, self.resolution)
+        if manifold.is_empty():
+            logger.warning("Result of SDF was empty: {}", self.name)
+            manifold = None
+        return manifold
+
+
+cdef class Mix(Model):
+    cdef list models
+    cdef Vector weights
+
+    @staticmethod
+    cdef Model _get(list models, Vector weights):
+        cdef Model child_model
+        cdef list collected_models = []
+        cdef str name = 'mix()'
+        for child_model in models:
+            if child_model is not None:
+                collected_models.append(child_model)
+                name += f'{child_model.name}, '
+        name += f'{weights}!r)'
+        if len(collected_models) == 0:
+            return None
+        if len(collected_models) == 1:
+            return collected_models[0]
+        cdef Mix model = <Mix>ModelCache.get(name, None)
+        if model is None:
+            model = Mix.__new__(Mix)
+            model.name = name
+            model.models = collected_models
+            model.weights = weights
+            for child_model in collected_models:
+                child_model.add_dependent(model)
+            ModelCache[name] = model
+        model.touch_timestamp = perf_counter()
+        return model
+
+    cpdef void unload(self):
+        for model in self.models:
+            model.remove_dependent(self)
+        super(Mix, self).unload()
+
+    cpdef bint is_smooth(self):
+        return False
+
+    cpdef void check_for_changes(self):
+        cdef Model model
+        for model in self.models:
+            model.check_for_changes()
+
+    @cython.cdivision(True)
+    cpdef double signed_distance(self, double x, double y, double z) noexcept:
+        cdef double distance=0, weight=0, d, w
+        cdef int64_t i
+        cdef Model model
+        for i in range(len(self.models)):
+            model = self.models[i]
+            d = model.signed_distance(x, y, z)
+            w = self.weights.numbers[i % self.weights.length]
+            distance += d * w
+            weight += w
+        return distance / weight
+
+    cpdef object build_trimesh(self):
+        logger.warning("Cannot use !mix node outside of !sdf")
+        return None
+
+    cpdef object build_manifold(self):
+        logger.warning("Cannot use !mix node outside of !sdf")
+        return None
