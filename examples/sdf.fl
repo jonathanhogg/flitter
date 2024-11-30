@@ -12,7 +12,7 @@
                                 !transform rotate_y=i/4 translate=0;0;0.7 scale=0.3;0.3;0.6
                                     !cone
                             for i in ..2
-                                !transform rotate_x=0.25+i/2 translate=0;0;0.5 scale=0.45;0.45;1
+                                !transform rotate_x=0.25+i/2 translate=0;0;0.7 scale=0.3;0.3;0.6
                                     !cone
                         !trim normal=0;1;0 origin=0;0.25;0 smooth=0.1
                             !difference chamfer=0.05
