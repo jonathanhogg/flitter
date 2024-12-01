@@ -56,7 +56,7 @@ isn't working (on Windows, for example, you may need to have checked a box
 during install) then you can also run **Flitter** as a Python package with:
 
 ```console
-$ pip3 install --user flitter-lang
+$ python3 -m flitter.engine path/to/some/flitter/script.fl
 ```
 
 ### macOS and sRGB
