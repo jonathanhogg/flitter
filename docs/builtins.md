@@ -140,19 +140,19 @@ to `y*x + (1-y)*z` (including in n-vector semantics).
 Quaternions are 4-vectors, *w;x;y;z*, that can be used to describe an arbitrary
 rotation in 3-dimensional Cartesian space. The identity quaternion is `1;0;0;0`.
 
-`quaternion(` *axis*, *turns* `)`
+`quaternion(` *axis* `,` *turns* `)`
 : Return a Euler-rotation unit-quaternion representing a *turns* rotation
 around the *axis* vector (clockwise looking in the direction of the vector).
 
-`qmul(` *p*, *q* `)`
+`qmul(` *p* `,` *q* `)`
 : Return the product of the quaternion *p* and the quaternion *q*, which is
 equivalent to the rotation *q* **followed by** the rotation *p*.
 
-`qbetween(` *u*, *v* `)`
+`qbetween(` *u* `,` *v* `)`
 : Return the quaternion representing a rotation of the vector *u* to point
 in the direction of the vector *v*.
 
-`slerp(` *t*, *p*, *q* `)`
+`slerp(` *t* `,` *p* `,` *q* `)`
 : Return the [quaternion spherical linear
 interpolation](https://en.wikipedia.org/wiki/Slerp) between *p* and *q* with
 *t=0* representing *p* and *t=1* representing *q*. Values of *t* in the range
@@ -160,6 +160,21 @@ interpolation](https://en.wikipedia.org/wiki/Slerp) between *p* and *q* with
 to sweeping the arc between the points *p* and *q* on a sphere. Values of *t*
 outside of this range will continue along this arc beyond *p* and *q*,
 eventually circling round to rejoin the arc from the other side.
+
+## Matrix functions
+
+Matrices are either 9- or 16-vectors, in column-major order, representing a 3x3
+or 4x4 matrix. There are a few places where matrices are supported, such as
+the `matrix` attribute of a [3D `!transform` node](canvas,md#transforms).
+
+`point_towards(` *direction*`,` *up* `)`
+: Returns a 4x4 matrix representing a rotation making the Z-axis point towards
+*direction* and the Y-axis point towards *up*, where both of these are
+3-vectors. If *up* is not orthogonal to *direction* then the Z-axis takes
+precedence and the Y-axis will be aligned as closely to *up* as possible.
+
+`inverse(` *M* `)`
+: Returns the matrix inverse of a 3x3 or 4x4 matrix.
 
 ## Waveform functions
 

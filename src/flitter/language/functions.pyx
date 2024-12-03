@@ -1040,6 +1040,15 @@ def point_towards(Vector direction, Vector up):
     return null_
 
 
+def inverse(Vector matrix):
+    if matrix.numbers != NULL:
+        if matrix.length == 9:
+            return Matrix33(matrix).inverse()
+        if matrix.length == 16:
+            return Matrix44(matrix).inverse()
+    return null_
+
+
 STATIC_FUNCTIONS = {
     'abs': Vector(absv),
     'accumulate': Vector(accumulate),
@@ -1064,6 +1073,7 @@ STATIC_FUNCTIONS = {
     'hsv': Vector(hsv),
     'hypot': Vector(hypot),
     'impulse': Vector(impulse),
+    'inverse': Vector(inverse),
     'len': Vector(lenv),
     'length': Vector(length),
     'linear': Vector(linear),
