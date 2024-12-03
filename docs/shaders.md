@@ -469,12 +469,21 @@ difference to GPU load – particularly if the filter `size` is large.
 
 The `!edges` node applies a simple edge-detection filter by blurring the input
 and then blending this with the original image with a *difference* blend
-function. It supports the same attributes as [`!blur`](#blur) and, again,
-`radius` must be greater than zero or the output will be blank.
+function.
+
+`!edges` supports the same `radius` and `sigma` attributes as [`!blur`](#blur)
+and, again, `radius` must be greater than zero or the output will be blank. In
+addition, `!edges` also supports the attribute:
+
+`mixer=`*RATIO*
+: Defines how much of the original image to mix into the output. Default is `0`,
+which means only the edge-detection output is produced. A value of `0.5` will
+produce an even mix of the original image and the edge-detector output.
 
 The blur phases of this filter are run as down-sampled phases. By default
 this frame-buffer will be half the width and height of `size`, but this can
-be controlled with the `downsample` attribute.
+be controlled with the `downsample` attribute. For crisper edges, set
+`downsample=1`.
 
 ### `!feedback`
 

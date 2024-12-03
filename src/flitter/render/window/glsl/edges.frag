@@ -8,6 +8,7 @@ uniform int pass;
 uniform int downsample;
 uniform ivec2 radius;
 uniform vec2 sigma;
+uniform float mixer;
 % if passes == 4:
 uniform sampler2D first;
 % endif
@@ -48,8 +49,9 @@ void main() {
             break;
         }
         case ${passes - 1}: {
-            vec4 merged = composite_difference(texture(${'first' if passes == 4 else 'texture0'}, coord), texture(last, coord));
-            color = merged * alpha;
+            vec4 original = texture(${'first' if passes == 4 else 'texture0'}, coord);
+            vec4 merged = composite_difference(original, texture(last, coord));
+            color = composite_over(original * mixer, merged) * alpha;
             break;
         }
     }

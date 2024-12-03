@@ -102,7 +102,7 @@ class Edges(Shader):
             passes = 1
             downsample_passes = ()
         super().render(node, references, passes=passes, downsample_passes=downsample_passes,
-                       radius=0, sigma=0.3, repeat=(False, False), **kwargs)
+                       radius=0, sigma=0.3, mixer=0.0, repeat=(False, False), **kwargs)
 
 
 class Feedback(Shader):
