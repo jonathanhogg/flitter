@@ -1096,6 +1096,9 @@ class TestImport(SimplifierTestCase):
         self.test_module = Path(tempfile.mktemp('.fl'))
         self.test_module.write_text("""
 let x=5 y=10
+
+func f(x)
+    x*2
 """, encoding='utf8')
         self.circular_module_a = Path(tempfile.mktemp('.fl'))
         self.circular_module_b = Path(tempfile.mktemp('.fl'))
@@ -1136,6 +1139,12 @@ let y=10+(x or 3)
             self.assertSimplifiesTo(Import(('x', 'y'), Literal(str(self.circular_module_b)), Add(Name('x'), Name('y'))), Literal(20),
                                     with_errors={f"Circular import of '{self.circular_module_b}'"},
                                     with_dependencies={self.circular_module_a, self.circular_module_b})
+
+    def test_import_inlining(self):
+        self.assertSimplifiesTo(Import(('f',), Literal(str(self.test_module)), Call(Name('f'), (Name('y'),), ())),
+                                Let((PolyBinding(('f',), Function('f', (Binding('x', None),), Multiply(Name('x'), Literal(2)), (), True, False)),),
+                                    Multiply(Name('y'), Literal(2))),
+                                dynamic={'y'}, with_dependencies={self.test_module})
 
 
 class TestFunction(SimplifierTestCase):
