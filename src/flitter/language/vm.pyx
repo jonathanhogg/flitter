@@ -484,7 +484,6 @@ cdef class Function:
     cdef readonly tuple defaults
     cdef readonly Program program
     cdef readonly int64_t address
-    cdef readonly object root_path
     cdef readonly bint record_stats
     cdef readonly tuple captures
     cdef readonly int64_t call_depth
@@ -501,7 +500,6 @@ cdef class Function:
             return null_
         cdef int64_t i, lnames_top, stack_top, k=PyTuple_GET_SIZE(self.captures), m=PyTuple_GET_SIZE(self.parameters), n=PyTuple_GET_SIZE(args)
         cdef PyObject* objptr
-        cdef object saved_path
         if context.state is None:
             context.state = StateDict()
         cdef VectorStack lnames = context.lnames
@@ -522,8 +520,6 @@ cdef class Function:
                 push(lnames, <Vector>objptr)
             else:
                 push(lnames, <Vector>PyTuple_GET_ITEM(self.defaults, i))
-        saved_path = context.path
-        context.path = self.root_path
         self.call_depth += 1
         try:
             self.program._execute(context, self.address, self.record_stats)
@@ -533,7 +529,6 @@ cdef class Function:
         cdef Vector result = pop(stack)
         assert stack.top == stack_top, "Bad function return stack"
         assert lnames.top == lnames_top, "Bad function return lnames"
-        context.path = saved_path
         return result
 
 
@@ -1386,7 +1381,6 @@ cdef class Program:
                     function.parameters = (<InstructionFunc>instruction).parameters
                     function.program = self
                     function.address = (<InstructionFunc>instruction).offset + pc
-                    function.root_path = context.path
                     function.record_stats = record_stats
                     n = PyTuple_GET_SIZE(function.parameters)
                     function.defaults = pop_tuple(stack, n)

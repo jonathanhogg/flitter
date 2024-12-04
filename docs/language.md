@@ -948,9 +948,12 @@ names](builtins.md) will be defined in a module, but not runtime names (such as
 values in an imported function they must be passed in as arguments. However,
 called functions *do* have access to the current [state](#state).
 
-If a function in a module is called from the main program, and this function
-makes use of any file built-ins – such as `read()` – then these will load files
-relative to the *module* file.
+During execution of an imported module, any calls to [file
+built-ins](builtins.md#file-functions) – such as `read()` – will resolve
+filenames relative to the path of the module. However, if a function in a module
+is called from the main program, and that function calls any file built-ins,
+then these will resolve filenames relative to the path of the main program, not
+the module.
 
 Modules may import from other modules, provided that a cycle is not created: if
 a module attempts to import a module further up the current import chain, then
