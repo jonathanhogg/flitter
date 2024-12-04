@@ -206,13 +206,13 @@ cdef class Import(Expression):
                     import_static_names = import_context.exports
                     context.errors.update(import_context.errors)
                     context.dependencies.update(import_context.dependencies)
+                    context.dependencies.add(path)
         cdef dict let_names = {}
         cdef dict saved = dict(context.names)
         cdef list remaining = []
         for name in self.names:
             if import_static_names is not None and name in import_static_names:
                 let_names[name] = import_static_names[name]
-                context.dependencies.add(path)
             else:
                 context.names[name] = None
                 remaining.append(name)
