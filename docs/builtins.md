@@ -42,6 +42,10 @@ should be the result of calling `uniform(...)`).
 *w*-element groups of *xs*, i.e., `xs[0..w]` + `xs[w..2*w]` + `xs[2*w..3*w]` +
 ... up to the end of *xs* with the final group truncated if necessary.
 
+`mean(` *xs* [ `,` *w=1* ] `)`
+: Similar to `sum()` but returning the length *w* mean – roughly equivalent to
+`sum(xs, w) / (len(xs) // w)`.
+
 `zip(` *xs* `,` *ys* [ `,` ... ] `)`
 : Return a vector formed by interleaving values from each argument vector; for
 *m* arguments the resulting vector will be *n * m* elements long, where *n* is
