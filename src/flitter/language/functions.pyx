@@ -636,6 +636,28 @@ def accumulate(Vector xs not None, Vector zs=true_):
     return ys
 
 
+def mean(Vector xs not None, Vector zs=true_):
+    cdef int64_t i, n = xs.length
+    if n == 0 or xs.objects is not None or zs.length != 1 or zs.objects is not None:
+        return null_
+    cdef int64_t m = <int>(zs.numbers[0])
+    if m < 1:
+        return null_
+    cdef Vector ys = Vector.__new__(Vector)
+    cdef Vector ds = Vector.__new__(Vector)
+    ys.allocate_numbers(m)
+    ds.allocate_numbers(m)
+    for i in range(m):
+        ys.numbers[i] = 0
+        ds.numbers[i] = 0
+    for i in range(n):
+        ys.numbers[i % m] = ys.numbers[i % m] + xs.numbers[i]
+        ds.numbers[i % m] = ds.numbers[i % m] + 1
+    for i in range(m):
+        ys.numbers[i] = ys.numbers[i] / ds.numbers[i]
+    return ys
+
+
 def minv(Vector xs not None, *args):
     cdef Vector ys = null_
     cdef double f
@@ -1083,6 +1105,7 @@ STATIC_FUNCTIONS = {
     'map': Vector(mapv),
     'max': Vector(maxv),
     'maxindex': Vector(maxindex),
+    'mean': Vector(mean),
     'min': Vector(minv),
     'minindex': Vector(minindex),
     'normal': Vector(normal),

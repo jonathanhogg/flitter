@@ -11,7 +11,7 @@ import numpy as np
 
 from flitter.model import Vector, Quaternion, null, Context
 from flitter.language.functions import (uniform, normal, beta,
-                                        lenv, sumv, accumulate, minv, maxv, minindex, maxindex, mapv, clamp, zipv, count,
+                                        lenv, sumv, accumulate, mean, minv, maxv, minindex, maxindex, mapv, clamp, zipv, count,
                                         roundv, absv, expv, sqrtv, logv, log2v, log10v, ceilv, floorv, fract,
                                         cosv, acosv, sinv, asinv, tanv, hypot, normalize, polar, angle, length, cross, dot,
                                         quaternion, qmul, qbetween, slerp,
@@ -346,6 +346,18 @@ class TestBasicVectorFunctions(utils.TestCase):
         self.assertEqual(accumulate(xs, Vector(0)), null)
         self.assertEqual(accumulate(xs), Vector([0, 1, 3, 6, 10, 15, 21, 28, 36, 45]))
         self.assertEqual(accumulate(xs, Vector(2)), Vector([0, 1, 2, 4, 6, 9, 12, 16, 20, 25]))
+
+    def test_mean(self):
+        xs = Vector.range(10)
+        self.assertEqual(mean(null), null)
+        self.assertEqual(mean(Vector('hello')), null)
+        self.assertEqual(mean(xs, null), null)
+        self.assertEqual(mean(xs, Vector('hello')), null)
+        self.assertEqual(mean(xs, xs), null)
+        self.assertEqual(mean(xs, Vector(0)), null)
+        self.assertEqual(mean(xs), Vector(4.5))
+        self.assertEqual(mean(xs, Vector(2)), Vector([4, 5]))
+        self.assertEqual(mean(xs, Vector(3)), Vector([4.5, 4, 5]))
 
     def test_min(self):
         xs = Vector([10, 4, 9.5, -3, -3.01, 10.01, 3])
