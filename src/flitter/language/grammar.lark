@@ -37,7 +37,7 @@ let_expression : "let" multiline_bindings sequence -> let
             | "if" conditions ["else" _NL _INDENT sequence _DEDENT] -> if_else
             | _EOF -> export
 
-iterators : name_list "in" conditional ("," name_list "in" conditional)* -> tuple
+iterators : name_list "in" composition ("," name_list "in" composition)* -> tuple
 
 function : "func" NAME _LPAREN parameters _RPAREN _NL _INDENT sequence _DEDENT
 

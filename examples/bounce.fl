@@ -65,5 +65,5 @@ let SIZE=1080;1080
                             !light position=0 falloff=1;0;1;0 color=color radius=RADII[i]
                     -- These additional directional lights are just here to create some
                     -- reflections on the glass box that lend it more presence
-                    for x in (-1;1), y in (-1;1)
+                    for x in -1;1, y in -1;1
                         !light color=0.01 direction=x;y;0.5+0.1*y-0.05*x
