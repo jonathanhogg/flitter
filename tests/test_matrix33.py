@@ -91,6 +91,12 @@ class TestMatrix33(utils.TestCase):
         self.assertAllAlmostEqual((((b.inverse() @ a.inverse()) @ a) @ b) @ c, c)
         self.assertAllAlmostEqual(Matrix33([1, 3, -1, 2, 4, 2, 1, 1, -1]).inverse(), [-0.75, 0.25, 1.25, 0.5, 0, -0.5, -0.25, 0.25, -0.25])
 
+    def test_cofactor(self):
+        m = Matrix33.scale([2, -3]) @ \
+            Matrix33.rotate(1/3) @ \
+            Matrix33.translate([7, 9])
+        self.assertAllAlmostEqual(m @ m.cofactor().transpose(), Matrix33(m.det()))
+
     def test_transpose(self):
         self.assertEqual(Matrix33().transpose(), Matrix33())
         self.assertEqual(Matrix33(range(9)).transpose(), [0, 3, 6, 1, 4, 7, 2, 5, 8])

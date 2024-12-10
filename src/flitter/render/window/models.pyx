@@ -669,7 +669,7 @@ cdef class Trim(UnaryOperation):
 
     cdef Model _transform(self, Matrix44 transform_matrix):
         return self.original._transform(transform_matrix)._trim(transform_matrix.vmul(self.origin),
-                                                                transform_matrix.inverse_transpose_matrix33().vmul(self.normal),
+                                                                transform_matrix.matrix33_cofactor().vmul(self.normal).normalize(),
                                                                 self.smooth, self.fillet, self.chamfer)
 
     cpdef double signed_distance(self, double x, double y, double z) noexcept:

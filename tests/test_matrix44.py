@@ -216,6 +216,14 @@ class TestMatrix44(utils.TestCase):
             Matrix44.scale([5, 6, -3])
         self.assertAllAlmostEqual(m.inverse_transpose_matrix33(), m.inverse().transpose().matrix33())
 
+    def test_matrix33_cofactor(self):
+        m = Matrix44.look([1, 3, 3], [1, 2, 3], [-1, 0, 0]) @ \
+            Matrix44.scale([5, 6, -3])
+        self.assertAllAlmostEqual(m.matrix33_cofactor(), m.matrix33().cofactor())
+        self.assertAllAlmostEqual((m.matrix33_cofactor() @ [1, 0, 0]).normalize(), [0, 1, 0])
+        self.assertAllAlmostEqual((m.matrix33_cofactor() @ [0, 1, 0]).normalize(), [0, 0, -1])
+        self.assertAllAlmostEqual((m.matrix33_cofactor() @ [0, 0, 1]).normalize(), [-1, 0, 0])
+
     def test_repr(self):
         self.assertEqual(repr(Matrix44()), """|   1.000   0.000   0.000   0.000 |
 |   0.000   1.000   0.000   0.000 |

@@ -1322,21 +1322,42 @@ cdef class Matrix33(Vector):
     @cython.cdivision(True)
     cpdef Matrix33 inverse(self):
         cdef double* numbers = self.numbers
-        cdef double s0 = numbers[0] * (numbers[4]*numbers[8] - numbers[7]*numbers[5])
-        cdef double s1 = numbers[3] * (numbers[7]*numbers[2] - numbers[1]*numbers[8])
-        cdef double s2 = numbers[6] * (numbers[1]*numbers[5] - numbers[4]*numbers[2])
-        cdef double invdet = 1 / (s0 + s1 + s2)
+        cdef double invdet = 1 / self.det()
         cdef Matrix33 result = Matrix33.__new__(Matrix33)
         cdef double* result_numbers = result._numbers
-        result_numbers[0] = (numbers[4]*numbers[8] - numbers[7]*numbers[5]) * invdet
+        result_numbers[0] = (numbers[4]*numbers[8] - numbers[5]*numbers[7]) * invdet
         result_numbers[1] = (numbers[2]*numbers[7] - numbers[1]*numbers[8]) * invdet
         result_numbers[2] = (numbers[1]*numbers[5] - numbers[2]*numbers[4]) * invdet
         result_numbers[3] = (numbers[5]*numbers[6] - numbers[3]*numbers[8]) * invdet
         result_numbers[4] = (numbers[0]*numbers[8] - numbers[2]*numbers[6]) * invdet
-        result_numbers[5] = (numbers[3]*numbers[2] - numbers[0]*numbers[5]) * invdet
-        result_numbers[6] = (numbers[3]*numbers[7] - numbers[6]*numbers[4]) * invdet
-        result_numbers[7] = (numbers[6]*numbers[1] - numbers[0]*numbers[7]) * invdet
-        result_numbers[8] = (numbers[0]*numbers[4] - numbers[3]*numbers[1]) * invdet
+        result_numbers[5] = (numbers[2]*numbers[3] - numbers[0]*numbers[5]) * invdet
+        result_numbers[6] = (numbers[3]*numbers[7] - numbers[4]*numbers[6]) * invdet
+        result_numbers[7] = (numbers[1]*numbers[6] - numbers[0]*numbers[7]) * invdet
+        result_numbers[8] = (numbers[0]*numbers[4] - numbers[1]*numbers[3]) * invdet
+        result.numbers = result_numbers
+        result.length = 9
+        return result
+
+    cpdef double det(self):
+        cdef double* numbers = self.numbers
+        cdef double s0 = numbers[0] * (numbers[4]*numbers[8] - numbers[7]*numbers[5])
+        cdef double s1 = numbers[3] * (numbers[7]*numbers[2] - numbers[1]*numbers[8])
+        cdef double s2 = numbers[6] * (numbers[1]*numbers[5] - numbers[4]*numbers[2])
+        return s0 + s1 + s2
+
+    cpdef Matrix33 cofactor(self):
+        cdef double* numbers = self.numbers
+        cdef Matrix33 result = Matrix33.__new__(Matrix33)
+        cdef double* result_numbers = result._numbers
+        result_numbers[0] = numbers[4]*numbers[8] - numbers[5]*numbers[7]
+        result_numbers[1] = numbers[5]*numbers[6] - numbers[3]*numbers[8]
+        result_numbers[2] = numbers[3]*numbers[7] - numbers[4]*numbers[6]
+        result_numbers[3] = numbers[2]*numbers[7] - numbers[1]*numbers[8]
+        result_numbers[4] = numbers[0]*numbers[8] - numbers[2]*numbers[6]
+        result_numbers[5] = numbers[1]*numbers[6] - numbers[0]*numbers[7]
+        result_numbers[6] = numbers[1]*numbers[5] - numbers[2]*numbers[4]
+        result_numbers[7] = numbers[2]*numbers[3] - numbers[0]*numbers[5]
+        result_numbers[8] = numbers[0]*numbers[4] - numbers[1]*numbers[3]
         result.numbers = result_numbers
         result.length = 9
         return result
@@ -1921,6 +1942,23 @@ cdef class Matrix44(Vector):
         result_numbers[2] = (numbers[4]*c4 - numbers[5]*c2 + numbers[7]*c0) * invdet
         result_numbers[5] = (-numbers[0]*c4 + numbers[1]*c2 - numbers[3]*c0) * invdet
         result_numbers[8] = (numbers[12]*s4 - numbers[13]*s2 + numbers[15]*s0) * invdet
+        result.numbers = result_numbers
+        result.length = 9
+        return result
+
+    cpdef Matrix33 matrix33_cofactor(self):
+        cdef double* numbers = self.numbers
+        cdef Matrix33 result = Matrix33.__new__(Matrix33)
+        cdef double* result_numbers = result._numbers
+        result_numbers[0] = numbers[5]*numbers[10] - numbers[6]*numbers[9]
+        result_numbers[1] = numbers[6]*numbers[8] - numbers[4]*numbers[10]
+        result_numbers[2] = numbers[4]*numbers[9] - numbers[5]*numbers[8]
+        result_numbers[3] = numbers[2]*numbers[9] - numbers[1]*numbers[10]
+        result_numbers[4] = numbers[0]*numbers[10] - numbers[2]*numbers[8]
+        result_numbers[5] = numbers[1]*numbers[8] - numbers[0]*numbers[9]
+        result_numbers[6] = numbers[1]*numbers[6] - numbers[2]*numbers[5]
+        result_numbers[7] = numbers[2]*numbers[4] - numbers[0]*numbers[6]
+        result_numbers[8] = numbers[0]*numbers[5] - numbers[1]*numbers[4]
         result.numbers = result_numbers
         result.length = 9
         return result

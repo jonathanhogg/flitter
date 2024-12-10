@@ -381,7 +381,7 @@ class TestStructuring(utils.TestCase):
         self.assertEqual(Model.box().trim(self.P, self.N).invert().name, f'invert(trim(!box, {self.PN_hash}))')
         self.assertEqual(Model.box().trim(self.P, self.N).repair().name, f'trim(repair(!box), {self.PN_hash})')
         self.assertEqual(Model.box().trim(self.P, self.N).snap_edges().name, f'snap_edges(trim(!box, {self.PN_hash}))')
-        MPN_hash = hex((self.M @ self.P).hash(False) ^ (self.M.inverse_transpose_matrix33() @ self.N).hash(False))[2:]
+        MPN_hash = hex((self.M @ self.P).hash(False) ^ ((self.M.matrix33_cofactor() @ self.N).normalize()).hash(False))[2:]
         self.assertEqual(Model.box().trim(self.P, self.N).transform(self.M).name, f'trim(!box@{self.M_hash}, {MPN_hash})')
         self.assertEqual(Model.box().trim(self.P, self.N).uv_remap('sphere').name, f'uv_remap(trim(!box, {self.PN_hash}), sphere)')
         self.assertEqual(Model.box().trim(self.P, self.N).trim(self.P, self.N).name, f'trim(trim(!box, {self.PN_hash}), {self.PN_hash})')

@@ -313,7 +313,7 @@ cdef class Camera:
         if up is None:
             camera.up = self.up
         else:
-            camera.up = transform_matrix.inverse_transpose_matrix33().vmul(up).normalize()
+            camera.up = transform_matrix.matrix33_cofactor().vmul(up).normalize()
         camera.fov = node.get_float('fov', self.fov)
         camera.fov_ref = node.get_str('fov_ref', self.fov_ref)
         camera.monochrome = node.get_bool('monochrome', self.monochrome)
@@ -555,7 +555,7 @@ cdef void collect(Node node, Matrix44 transform_matrix, Material material, Rende
                 light.inner_cone = cos(inner * Pi)
                 light.outer_cone = cos(outer * Pi)
                 light.position = transform_matrix.vmul(position)
-                light.direction = transform_matrix.inverse_transpose_matrix33().vmul(direction).normalize()
+                light.direction = transform_matrix.matrix33_cofactor().vmul(direction).normalize()
             elif position.length:
                 light.type = LightType.Point
                 light.outer_cone = node.get_float('radius', 0)
@@ -564,7 +564,7 @@ cdef void collect(Node node, Matrix44 transform_matrix, Material material, Rende
             elif direction.as_bool():
                 light.type = LightType.Directional
                 light.position = None
-                light.direction = transform_matrix.inverse_transpose_matrix33().vmul(direction).normalize()
+                light.direction = transform_matrix.matrix33_cofactor().vmul(direction).normalize()
             else:
                 light.type = LightType.Ambient
                 light.position = None
@@ -804,7 +804,7 @@ cdef void render(render_target, RenderGroup render_group, Camera camera, glctx, 
                 dest = &instances_data[k, 0]
                 for j in range(16):
                     dest[j] = src[j]
-                normal_matrix = instance.model_matrix.inverse_transpose_matrix33()
+                normal_matrix = instance.model_matrix.matrix33_cofactor()
                 src = normal_matrix.numbers
                 dest = &instances_data[k, 16]
                 for j in range(9):
@@ -853,7 +853,7 @@ cdef void render(render_target, RenderGroup render_group, Camera camera, glctx, 
                 dest = &instances_data[k, 0]
                 for j in range(16):
                     dest[j] = src[j]
-                normal_matrix = instance.model_matrix.inverse_transpose_matrix33()
+                normal_matrix = instance.model_matrix.matrix33_cofactor()
                 src = normal_matrix.numbers
                 dest = &instances_data[k, 16]
                 for j in range(9):
@@ -905,7 +905,7 @@ cdef void render(render_target, RenderGroup render_group, Camera camera, glctx, 
             dest = &instances_data[k, 0]
             for j in range(16):
                 dest[j] = src[j]
-            normal_matrix = instance.model_matrix.inverse_transpose_matrix33()
+            normal_matrix = instance.model_matrix.matrix33_cofactor()
             src = normal_matrix.numbers
             dest = &instances_data[k, 16]
             for j in range(9):

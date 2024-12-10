@@ -120,7 +120,9 @@ cdef class Matrix33(Vector):
     cpdef Matrix33 copy(self)
     cdef Matrix33 mmul(self, Matrix33 b)
     cdef Vector vmul(self, Vector b)
+    cpdef double det(self)
     cpdef Matrix33 inverse(self)
+    cpdef Matrix33 cofactor(self)
     cpdef Matrix33 transpose(self)
     cpdef Matrix44 matrix44(self)
 
@@ -172,6 +174,7 @@ cdef class Matrix44(Vector):
     cpdef Matrix44 inverse(self)
     cpdef Matrix44 transpose(self)
     cpdef Matrix33 inverse_transpose_matrix33(self)
+    cpdef Matrix33 matrix33_cofactor(self)
     cpdef Matrix33 matrix33(self)
 
 
