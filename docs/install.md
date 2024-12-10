@@ -178,15 +178,23 @@ during a live performance. Thankfully, **Flitter** is pretty resilient to
 crashes, but there are still some edge-cases where a code change can confuse
 the engine.
 
-`--autoreset` *SECONDS*
-: Throws away the internal system state after a period of it not changing. This
-was designed to be used as a demo mode, enabling users to interact with a
-running program via a controller and then have their fiddlings discarded after
-they walk away.
+`--resetonswitch`
+: Throws away the internal system state when switching between different pages.
+Normally state is saved and restored when switching pages. Throwing the last
+state away can be useful if running in a *kiosk* mode where each page should
+begin again fresh.
 
 `--simplifystate` *SECONDS*
-: Calls the [language simplifier](language.md#simplification) after a period of
-state idleness. The default is 10 seconds.
+: Sets the period after which the [language
+simplifier](language.md#simplification) will simplify on static state values.
+The default is 10 seconds. Set this to `0` to disable simplifying on state.
+
+`--nosimplify`
+: Completely disable the language simplifier. Generally there is no reason to
+do this, but running the simplifier is the slowest part of loading **Flitter**
+code and so it may be useful if very fast switching is required – particularly
+if a program has very large loops that are being unrolled and there is
+insufficient gain from doing the unrolling.
 
 `--lockstep`
 : Turns on *non-realtime mode*. In this mode, the engine will generate frames
@@ -215,18 +223,17 @@ can use this on devices that do not support the full OpenGL API, or that are
 using a compatibility layer like ANGLE.
 
 `--profile`
-: Runs the Python profiler around the main loop. This will slow down **Flitter**
-significantly. If you exit with an interrupt (ctrl-C) then a summary of the
-internal functions called will be shown. This won't be a great deal of use to
-you unless you are hacking on the **Flitter** code. A couple of the key (Cython)
-modules have profiling turned off for speed. You should also know that Cython
-and the Python 3.12 profiler aren't currently getting along.
+: Runs the Python profiler around the main loop. See [Profiling](#profiling)
+below for details.
 
 `--vmstats`
 : Turns on logging of **Flitter** virtual machine statistics. This will slow
 down the interpreter by quite a lot. The statistics are written out on program
 interrupt at the `INFO` logging level, which means you will also need to on
-at least `--verbose` logging to see the results.
+at least `--verbose` logging to see the results. Be wary of interpreting these
+statistics: the overhead of doing the logging can make very simple instructions
+that are executed millions of times appear to be a larger source of execution
+cost than they really are.
 
 `--gamma` *GAMMA*
 : This option specifies a gamma correction to apply as the final step of
@@ -329,7 +336,7 @@ tests.
 Recompiling all Cython modules with profiling enabled may not be the best thing
 to do as the overhead of adding profiling support to Cython is quite high and
 the results will be skewed by the cost of the profiling. It is probably better
-to *only* compile the module(s) that you are considering with profiling support.
+to *only* compile profiling support into the module(s) that you are considering.
 This can be done with `cythonize`:
 
 ```console
