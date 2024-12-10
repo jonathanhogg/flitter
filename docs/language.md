@@ -1026,9 +1026,13 @@ loop unrolling and function inlining, "simpler" most often doesn't mean
 machine. These instructions are interpreted to run the program.
 
 The simplifier and compiler can run again incorporating any state that has been
-stable for a period of time (configurable with the `--evalstate` command-line
-option). If any of these state keys then changes (i.e., a pad or encoder is
-touched) the engine will immediately return to the original compiled program.
+stable for a period of time (configurable with the [`--simplifystate`
+command-line option](install.md#running-flitter)). If any of these state keys
+then changes (i.e., a pad or encoder is touched) the engine will immediately
+return to the original compiled program. Programs that involve large static
+loops may take a noticeable amount of time to re-simplify and so it may be
+necessary to turn off simplification on state in programs that involve
+unpredictable state changes (`--simplifystate=0`).
 
 ## Run-time Error Behaviour
 
