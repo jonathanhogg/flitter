@@ -110,7 +110,7 @@ cdef class Barrier:
         self.restitution = min(max(0, node.get_float('restitution', 1)), 1)
         self.strength = strength
         self.power = max(0, node.get_float('power', 1))
-        self.minimum = node.get_float('min', 0)
+        self.minimum = node.get_float('minimum', node.get_float('min', 0))
 
     @cython.profile(False)
     cdef void apply_distance(self, Particle particle) noexcept nogil:
@@ -578,8 +578,8 @@ cdef class PhysicsSystem:
                         distance_force.minimum = fixed
                         distance_force.maximum = fixed
                     else:
-                        distance_force.minimum = child.get_float('min', 0)
-                        distance_force.maximum = child.get_float('max', 0)
+                        distance_force.minimum = child.get_float('minimum', child.get_float('min', 0))
+                        distance_force.maximum = child.get_float('maximum', child.get_float('max', 0))
                     group.distance_forces.append(distance_force)
                 elif child.kind is 'drag':
                     group.particle_forces.append(DragForceApplier.__new__(DragForceApplier, child, strength, zero))

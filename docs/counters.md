@@ -23,11 +23,11 @@ to `0` if not specified.
 : An optional attribute that specifies the time value used for counter
 calculations. This defaults to the frame time if not specified.
 
-`minimum=`*minimum*
+`minimum=`*minimum* (or `min=`*minimum*)
 : An optional minimum value for the counter. If not specified, no minimum is
 enforced.
 
-`maximum=`*maximum*
+`maximum=`*maximum* (or `max=`*minimum*)
 : An optional maximum value for the counter. If not specified, no maximum is
 enforced.
 

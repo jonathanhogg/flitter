@@ -463,8 +463,8 @@ cdef Model get_model(Node node, bint top):
         if model is not None and node.get_bool('repair', False):
             model = model.repair()
     elif node.kind is 'sdf':
-        maximum = node.get_fvec('maximum', 3, One3)
-        minimum = node.get_fvec('minimum', 3, maximum.neg())
+        maximum = node.get_fvec('maximum', 3, node.get_fvec('max', 3, One3))
+        minimum = node.get_fvec('minimum', 3, node.get_fvec('min', 3, maximum.neg()))
         resolution = node.get_float('resolution', (maximum.maximum() - minimum.minimum()) / 100)
         if 'function' in node and (function := node['function']) and function.length == 1 and \
                 function.objects is not None and callable(f := function.objects[0]):

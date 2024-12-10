@@ -33,8 +33,8 @@ class Counter:
         cdef Vector timev = node.get_fvec('time', 0, Vector(time))
         cdef Vector rate = node.get_fvec('rate', 0, false_)
         cdef Vector initial = node.get_fvec('initial', 0, false_)
-        cdef Vector minimum = node.get_fvec('minimum', 0, null_)
-        cdef Vector maximum = node.get_fvec('maximum', 0, null_)
+        cdef Vector minimum = node.get_fvec('minimum', 0, node.get_fvec('min', 0, null_))
+        cdef Vector maximum = node.get_fvec('maximum', 0, node.get_fvec('max', 0, null_))
         cdef Vector current = state.get_item(current_key)
         cdef Vector last_time = state.get_item(last_time_key)
         if current.length == 0:

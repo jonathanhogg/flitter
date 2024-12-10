@@ -233,8 +233,8 @@ various tethers, rubber bands and springs.
 
 - `from` - the `id` of the first particle
 - `to` - the `id` of the second particle
-- `min` - a minimum distance that the two objects can be apart
-- `max` - a maximum distance that the two objects can be apart
+- `minimum` (or `min`) - a minimum distance that the two objects can be apart
+- `maximum` (or `max`) - a maximum distance that the two objects can be apart
 - `fixed` - a shortcut for setting both `min` and `max` to the same value
 - `power` - the power to which the displacement will be raised (default is `1`)
 - `strength` - force magnitude coefficient (default is `1`)
@@ -493,7 +493,8 @@ constraint on all particles with respect to the barrier. This can be used to
 create a "soft" boundary. The "hard" bounce condition is still applied if the
 particle crosses the barrier.
 
-- `min` - a minimum distance that particles must be from the barrier
+- `minimum` (or `min`) - a minimum distance that particles must be from the
+barrier
 - `power` - the power to which the displacement will be raised (default is `1`)
 - `strength` - force magnitude coefficient (default is `1`)
 - `ease` - specifies an amount of simulation time over which to ramp up

@@ -1038,11 +1038,11 @@ sets.
 A surface is created with an `!sdf` node. This node supports the following
 attributes:
 
-`maximum=` *MAX*
+`maximum=` *MAX* (or `max=` *MAX*)
 : A 3-vector of the axis-oriented upper bounds of the surface, in the model
 coordinate space. Default is `1`.
 
-`minimum=` *MIN*
+`minimum=` *MIN* (or `min=` *MIN*)
 : A 3-vector of the axis-oriented lower bounds of the surface. Default is
 negative *MAX*.
 
