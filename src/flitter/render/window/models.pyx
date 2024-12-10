@@ -686,7 +686,7 @@ cdef class Trim(UnaryOperation):
             h = max(0, self.fillet+d)
             distance = min(-self.fillet, max(distance, d)) + sqrt(g*g + h*h)
         elif self.chamfer:
-            distance = max(max(distance, d), (distance + self.chamfer + d)*sqrt(0.5))
+            distance = max(max(distance, d), (distance + self.chamfer + d)*RootHalf)
         else:
             distance = max(distance, d)
         return distance
@@ -815,38 +815,41 @@ cdef class BooleanOperation(Model):
             d = (<Model>self.models[i]).signed_distance(x, y, z)
             if self.operation is 'union':
                 if self.smooth:
-                    h = min(max(0, 0.5+0.5*(d-distance)/self.smooth), 1)
-                    distance = h*distance + (1-h)*d - self.smooth*h*(1-h)
+                    g = min(max(0, 0.5+0.5*(d-distance)/self.smooth), 1)
+                    h = 1-g
+                    distance = g*distance + h*d - self.smooth*g*h
                 elif self.fillet:
                     g = max(0, self.fillet-distance)
                     h = max(0, self.fillet-d)
                     distance = max(self.fillet, min(distance, d)) - sqrt(g*g + h*h)
                 elif self.chamfer:
-                    distance = min(min(distance, d), (distance - self.chamfer + d)*sqrt(0.5))
+                    distance = min(min(distance, d), (distance - self.chamfer + d)*RootHalf)
                 else:
                     distance = min(distance, d)
             elif self.operation is 'intersect':
                 if self.smooth:
-                    h = min(max(0, 0.5+0.5*(d-distance)/self.smooth), 1)
-                    distance = h*d + (1-h)*distance + self.smooth*h*(1-h)
+                    g = min(max(0, 0.5+0.5*(d-distance)/self.smooth), 1)
+                    h = 1-g
+                    distance = g*d + h*distance + self.smooth*g*h
                 if self.fillet:
                     g = max(0, self.fillet+distance)
                     h = max(0, self.fillet+d)
                     distance = min(-self.fillet, max(distance, d)) + sqrt(g*g + h*h)
                 elif self.chamfer:
-                    distance = max(max(distance, d), (distance + self.chamfer + d)*sqrt(0.5))
+                    distance = max(max(distance, d), (distance + self.chamfer + d)*RootHalf)
                 else:
                     distance = max(distance, d)
             elif self.operation is 'difference':
                 if self.smooth:
-                    h = min(max(0, 0.5+0.5*(-d-distance)/self.smooth), 1)
-                    distance = -h*d + (1-h)*distance + self.smooth*h*(1-h)
+                    g = min(max(0, 0.5+0.5*(-d-distance)/self.smooth), 1)
+                    h = 1-g
+                    distance = -g*d + h*distance + self.smooth*g*h
                 if self.fillet:
                     g = max(0, self.fillet+distance)
                     h = max(0, self.fillet-d)
                     distance = min(-self.fillet, max(distance, -d)) + sqrt(g*g + h*h)
                 elif self.chamfer:
-                    distance = max(max(distance, -d), (distance + self.chamfer - d)*sqrt(0.5))
+                    distance = max(max(distance, -d), (distance + self.chamfer - d)*RootHalf)
                 else:
                     distance = max(distance, -d)
         return distance
