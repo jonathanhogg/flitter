@@ -703,6 +703,23 @@ There is actually a more convenient `polar(theta)` function that does the same
 thing as `zip(cos(theta), sin(theta))`. Arguably, it would be even neater to
 implement a clock face using `!transform rotate=` instead.
 
+Some syntactic sugar is provided to make directly nested loops more readable.
+For example:
+
+```flitter
+for x in ..N
+    for y in ..N
+        for z in ..N
+            !sphere position=x;y;z size=0.5
+```
+
+may be written as the more concise:
+
+```flitter
+for x in ..N, y in ..N, z in ..N
+    !sphere position=x;y;z size=0.5
+```
+
 Again, loops may also be used in-line in non-sequence expressions with syntax
 borrowed from Python:
 
@@ -715,6 +732,23 @@ This will evaluate to:
 ```flitter
 !line points=0;0;1;5;2;10;3;15;4;20
 ```
+
+There is no special syntax for nested in-line loops as these can already be
+simply written as:
+
+```flitter
+let grid = (x;y) for x in ..N for y in ..N
+```
+
+It is worth noting that – following the reversed notation – these loops operate
+in the *reverse* order to nested non-inline loops, in that this example is
+equivalent to:
+
+```flitter
+let grid = ((x;y) for x in ..N) for y in ..N
+```
+
+and therefore the *last* loop is outermost.
 
 ## Function calling
 

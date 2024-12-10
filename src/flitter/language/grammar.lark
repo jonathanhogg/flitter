@@ -33,9 +33,11 @@ let_expression : "let" multiline_bindings sequence -> let
 ?expression : node _NL
             | node _NL _INDENT sequence _DEDENT -> append
             | "@" atom [attribute_bindings] _NL [_INDENT sequence _DEDENT] -> template_call
-            | "for" name_list "in" conditional _NL _INDENT sequence _DEDENT -> loop
+            | "for" iterators _NL _INDENT sequence _DEDENT -> loop
             | "if" conditions ["else" _NL _INDENT sequence _DEDENT] -> if_else
             | _EOF -> export
+
+iterators : name_list "in" conditional ("," name_list "in" conditional)* -> tuple
 
 function : "func" NAME _LPAREN parameters _RPAREN _NL _INDENT sequence _DEDENT
 

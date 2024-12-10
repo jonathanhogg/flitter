@@ -77,6 +77,12 @@ class FlitterTransformer(Transformer):
     def inline_loop(self, body, names, source):
         return tree.For(names, source, body)
 
+    def loop(self, iterators, expr):
+        while iterators:
+            expr = tree.For(iterators[-2], iterators[-1], expr)
+            iterators = iterators[:-2]
+        return expr
+
     def call(self, function, args):
         args = list(args)
         bindings = []
@@ -120,7 +126,6 @@ class FlitterTransformer(Transformer):
     logical_or = tree.Or
     logical_xor = tree.Xor
     lookup = tree.Lookup
-    loop = tree.For
     lt = tree.LessThan
     modulo = tree.Modulo
     multiply = tree.Multiply
