@@ -37,19 +37,30 @@ of `time` (or the frame time) and the last value. The counter will then be
 incremented by *rate* multiplied by this delta.
 
 The `time` value does not need to be a monotonically increasing clock. There
-is nothing to stop `time` stopping or going backwards. In fact, it is perfectly
-valid to use another counter as the value for `time`.
+is nothing to stop `time` stopping or going backwards.
 
-All of the numeric vectors, *initial*, *rate*, *time*, *minimum* and *maximum*
-may be n-vectors. In this case, the normal piece-wise rules for vector
-mathematics apply.
+The exact algorithm used is:
+
+```{math}
+{value}_{0} = \textbf{clamp}({initial}_{0}, {minimum}_{0}, {maximum}_{0})
+```
+```{math}
+{value}_{t} = \textbf{clamp}({value}_{t-1} + ({time}_{t} - {time}_{t-1})
+    \cdot {rate}_{t}, {minimum}_{t}, {maximum}_{t})
+```
+
+The value of *initial* is only used on first use of the counter. However, the
+current values of *time*, *rate*, *minimum* and *maximum* are always taken from
+the attributes, and so these values may change over the lifetime of the counter.
+The previous values of *value* and *time* are read from the state mapping (see
+below).
 
 :::{note}
-The `minimum` and `maximum` values also apply piece-wise. This means that if
-the counter is an n-vector and `minimum` and/or `maximum` are 1-vectors, then
-*each* element of the counter n-vector will be limited by these values
-individually. The behaviour is simulat to that of the [`clamp()` built-in
-function](builtins.md#mathematical-functions).
+All of the numeric vectors, *initial*, *rate*, *time*, *minimum* and *maximum*
+may be $n$-vectors - in which case, the normal piece-wise rules for vector
+mathematics apply. In this way, a single counter can be used to maintain a
+multi-dimensional value – such as a cartesian velocity. An $n$-vector counter
+is significantly more performant than $n$ separate counter objects.
 :::
 
 ## Counter State
@@ -82,7 +93,7 @@ let N=10
 
 This creates a counter that tracks 10 independent values, initialised to
 uniformly-distributed random numbers in the range $[0,100]$. A noise function is
-used to move each of these values at a constantly changing rate. The counter is
+used to move each of these values at a constantly changing rate. Each value is
 limited to a minimum of $0$ and a maximum of $100$. The frame time is used as
 the default clock for calculating the change of these values.
 
