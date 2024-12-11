@@ -669,6 +669,7 @@ class TestStringFuncs(utils.TestCase):
         self.assertEqual(chrv(Vector('A')), null)
         self.assertEqual(chrv(Vector([65])), Vector(['A']))
         self.assertEqual(chrv(Vector([65, 66])), Vector(['AB']))
+        self.assertEqual(chrv(Vector.range(65, 67, 0.25)), Vector(['AAAABBBB']))
 
     def test_split(self):
         self.assertEqual(split(null), null)
@@ -677,6 +678,10 @@ class TestStringFuncs(utils.TestCase):
         self.assertEqual(split(Vector(['Hello\nworld!'])), Vector(['Hello', 'world!']))
         self.assertEqual(split(Vector(['Hello\nworld!\n'])), Vector(['Hello', 'world!']))
         self.assertEqual(split(Vector(['Hello\n\nworld!\n'])), Vector(['Hello', '', 'world!']))
+        self.assertEqual(split(Vector(['Hello world!']), Vector(' ')), Vector(['Hello', 'world!']))
+        self.assertEqual(split(Vector(['Hello world!\n']), Vector(' ')), Vector(['Hello', 'world!\n']))
+        self.assertEqual(split(Vector(['Hello world!\n']), Vector('o')), Vector(['Hell', ' w', 'rld!\n']))
+        self.assertEqual(split(Vector(['Hello world! oo ']), Vector('o ')), Vector(['Hell', 'world! o']))
 
 
 class TestColorFuncs(utils.TestCase):

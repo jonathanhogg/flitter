@@ -240,7 +240,9 @@ streams of pseudo-random numbers.
 : A *Beta(2,2)* distribution pseudo-random source.
 
 `normal(` [ *seed* ] `)`
-: A *Normal(0,1)* distribution pseudo-random source.
+: A *Normal(0,1)* distribution pseudo-random source. The output range is
+notionally unbounded, but in practice limited by the resolution of the
+algorithm to $\pm 9.4193$.
 
 `uniform(` [ *seed* ] `)`
 : A *Uniform(0,1)* distribution pseudo-random source.
@@ -255,12 +257,15 @@ create a new stream of pseudo-random numbers for each beat of the main clock.
 Multiplying or dividing this seed value then allows for different intervals,
 e.g., four times a beat: `uniform(:foo;beat*4)`.
 
-The pseudo-random streams can be indexed with a range vector to generate a
-vector of numbers, e.g.: `uniform(:some_seed)[..100]` will generate a 100-vector
-of uniformly distributed numbers. The streams are arbitrarily long and are
-unit-cost to call, so indexing the billionth number takes the same amount of
-time as the 0th. Negative indices wrap around to the end of the 64-bit unsigned
-integer index range.
+Pseudo-random streams can be indexed with a range vector to generate a vector
+of numbers, e.g.: `uniform(:some_seed)[..100]` will generate a 100-vector of
+uniformly distributed numbers. Streams are *very* long (see note below) and are
+unit-cost to index – so indexing the billionth number takes the same amount of
+time as the first. Negative indices wrap around to the end of the stream.
+
+Streams are considered to be `true` in conditional expressions (`if`, `and`,
+etc.). In all other aspects, they behave like the `null` vector, e.g., attempts
+to use them in mathematical expressions will evaluate to `null`.
 
 For example:
 
@@ -294,9 +299,40 @@ pick off the first few values, e.g.:
 let x;y;z = uniform(:position)
 ```
 
-Streams are considered to be `true` in conditional expressions (`if`, `and`,
-etc.). In all other aspects, they behave like the `null` vector, e.g., attempts
-to use them in mathematical expressions will evaluate to `null`.
+There is little difference in pseudo-randomness between selecting a new seed
+and selecting a different index. The example above could be written
+equivalently as:
+
+```flitter
+let SIZE=1280;720
+
+!window size=SIZE
+    !canvas
+        for i in ..10
+            let x;y;h=uniform(:x;i;beat)
+                r=2*beta(:r;beat)[i]
+            !path
+                !ellipse point=(x;y)*SIZE radius=r*50
+                !fill color=hsv(h;1;1)
+```
+
+This creates a new uniform distribution for each circle and beat, and then pulls
+three values from it. Note that `r` is still set by indexing a single stream
+per beat, as a single name let will bind the whole sequence rather than an
+item from it. There is a slight performance benefit in reading large numbers
+of values from a single sequence over reading a small number of values from a
+large number of sequences.
+
+:::{note}
+The `uniform()` and `normal()` streams have an internal index range of
+$[0, 2^{64})$ and `beta()` streams have an internal index range of
+$[0, 2^{62})$. However, as all numbers in **Flitter** are double-precision
+floating points, the actual index range is in practice limited by the safe
+integer range of double-precision: $(-2^{53}, 2^{53})$. As the internal range
+is significantly larger than this, the negative portion of the safe range
+(which maps to the end of the internal range) does not overlap with the
+positive portion.
+:::
 
 ## Noise functions
 
@@ -424,17 +460,21 @@ coordinates *L*, *C* and *h*. Hue *h* is in *turns*, i.e., is in the range
 ## Text functions
 
 `chr(` *o* `)`
-: Return the unicode character identified by the ordinal number *o*. If *o* is
-a multi-element
+: Return the Unicode character identified by the ordinal number *o*. If *o* is
+a multi-element vector then the result will be the Unicode string formed by
+concatenating each character. The value(s) of *o* is/are rounded *down* if not
+integer.
 
 `ord(` *c* `)`
-: Return the ordinal number of unicode character *c* (interpreted as a string).
+: Return the ordinal number of Unicode character *c* (interpreted as a string).
 If *c* evaluates to a multi-character string then a vector of the ordinal number
 of each character will be returned.
 
-`split(` *text* `)`
-: Return a vector formed by splitting the string *text* at newlines (not
-included).
+`split(` *text* `,` [ `separator="\n"` ] `)`
+: Return a vector formed by splitting the string *text* at each instance of
+*separator*, which may be a multiple character Unicode string and which is not
+included in the result strings. Empty values are stripped from the end (i.e.,
+trailing sequences of *separator* are ignored).
 
 `ord()` and `chr()` can be used together with indexing to isolate a specific
 character range from a string. For example:
@@ -454,20 +494,25 @@ shell "glob" pattern. Files are matched relative to the directory containing
 the running program.
 
 `csv(` *filename* `,` *row* `)`
-: Return a vector of values obtained by reading a
-specific *row* (indexed from *0*) from the CSV file with the given *filename*;
-this function intelligently caches and will convert numeric-looking columns in
-the row into numeric values.
+: Return a vector of values obtained by reading a specific *row* (indexed from
+*0*) from the Unicode CSV file with the given *filename*; numeric-looking
+columns in the row will be converted into numeric values, anything else will be
+a Unicode string.
 
 `read(` *filename* `)`
-: Returns a single string value containing the entire text of *filename* (this
-function intelligently caches).
+: Returns a single string value containing the entire text of *filename*.
 
 `read_bytes(` *filename* `)`
-: Returns a numeric vector value containing the entire text of *filename* (this
-function intelligently caches) as a sequence of bytes. This is a *very*
-memory-inefficient function as each byte will be represented by a
-double-precision floating point value.
+: Returns a numeric vector value containing the entire byte contents of
+*filename* as a vector of numbers in the range $[0,255]$. This is a *very*
+memory-inefficient function as each byte will be inflated to a double-precision
+floating point value (8 bytes).
+
+:::{note}
+The `csv`, `read` and `read_bytes` functions intelligently cache the results of
+the read for performance, but will respond immediately to the file changing (as
+detected by a change to the file modification time).
+:::
 
 ## Texture sampling
 
@@ -475,7 +520,7 @@ The `sample` function allows reading colors from the *previous* rendered image
 of a referenced window node. See the explanation of the
 [`!reference`](windows.md#reference) node for more information on references.
 
-`sample(` *id* `,` *coordinate(s)* [ `,` *default* ] `)`
+`sample(` *id* `,` *coordinates* [ `,` *default* ] `)`
 : Given the `id` of a [window node](windows.md) and a *2n*-vector of X/Y
 coordinates in the *[0,1)* range, return a *4n*-vector of RGBA color values.
 These color values *may* be outside of the normal *[0,1)* range if the
@@ -483,6 +528,8 @@ These color values *may* be outside of the normal *[0,1)* range if the
 are outside of the *[0,1)* range then the returned color will either be
 `0;0;0;0` or `default` if specified (and a 4-vector).
 
-Note that use of this function *may* cause a significant slow-down in the
-execution of the engine as rendering will need to be completed before the
-texture can be read, causing a GPU pipeline stall.
+:::{warning}
+Use of the `sample` function can cause a significant slow-down in the execution
+of the engine, as reading from a texture stalls execution until the GPU has
+completed rendering the previous pipeline.
+:::

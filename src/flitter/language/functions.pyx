@@ -211,17 +211,21 @@ def chrv(Vector ordinals):
     cdef str text = ""
     cdef int64_t i
     for i in range(ordinals.length):
-        text += chr(<int>ordinals.numbers[i])
+        text += chr(<int>floor(ordinals.numbers[i]))
     cdef Vector result = Vector.__new__(Vector)
     result.objects = (text,)
     result.length = 1
     return result
 
 
-def split(Vector text):
-    if text.length == 0:
+def split(Vector text, Vector separator=Vector('\n')):
+    if text.length == 0 or separator.length == 0:
         return null_
-    return Vector._coerce(text.as_string().rstrip('\n').split('\n'))
+    cdef str sep = separator.as_string()
+    cdef list values = text.as_string().split(sep)
+    while values[-1] == '':
+        values.pop()
+    return Vector._coerce(values)
 
 
 def lenv(Vector xs not None):
