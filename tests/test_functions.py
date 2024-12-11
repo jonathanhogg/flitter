@@ -327,7 +327,7 @@ class TestBasicVectorFunctions(utils.TestCase):
 
     def test_sum(self):
         xs = Vector.range(10)
-        self.assertEqual(sumv(null), null)
+        self.assertEqual(sumv(null), Vector(0))
         self.assertEqual(sumv(Vector('hello')), null)
         self.assertEqual(sumv(xs, null), null)
         self.assertEqual(sumv(xs, Vector('hello')), null)
@@ -349,7 +349,7 @@ class TestBasicVectorFunctions(utils.TestCase):
 
     def test_mean(self):
         xs = Vector.range(10)
-        self.assertEqual(mean(null), null)
+        self.assertEqual(mean(null), 0)
         self.assertEqual(mean(Vector('hello')), null)
         self.assertEqual(mean(xs, null), null)
         self.assertEqual(mean(xs, Vector('hello')), null)

@@ -607,7 +607,7 @@ def fract(Vector xs not None):
 
 def sumv(Vector xs not None, Vector w=true_):
     cdef int64_t i, j, n = xs.length
-    if n == 0 or xs.objects is not None or w.length != 1 or w.objects is not None:
+    if xs.objects is not None or w.length != 1 or w.objects is not None:
         return null_
     cdef Vector ys = Vector.__new__(Vector)
     cdef int64_t m = <int>(w.numbers[0])
@@ -640,9 +640,10 @@ def accumulate(Vector xs not None, Vector zs=true_):
     return ys
 
 
+@cython.cdivision(True)
 def mean(Vector xs not None, Vector zs=true_):
     cdef int64_t i, n = xs.length
-    if n == 0 or xs.objects is not None or zs.length != 1 or zs.objects is not None:
+    if xs.objects is not None or zs.length != 1 or zs.objects is not None:
         return null_
     cdef int64_t m = <int>(zs.numbers[0])
     if m < 1:
@@ -658,7 +659,8 @@ def mean(Vector xs not None, Vector zs=true_):
         ys.numbers[i % m] = ys.numbers[i % m] + xs.numbers[i]
         ds.numbers[i % m] = ds.numbers[i % m] + 1
     for i in range(m):
-        ys.numbers[i] = ys.numbers[i] / ds.numbers[i]
+        if ds.numbers[i]:
+            ys.numbers[i] = ys.numbers[i] / ds.numbers[i]
     return ys
 
 

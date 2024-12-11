@@ -40,11 +40,13 @@ should be the result of calling `uniform(...)`).
 `sum(` *xs* [ `,` *w=1* ] `)`
 : Return a numeric value, of length *w*, obtained by summing together
 *w*-element groups of *xs*, i.e., `xs[0..w]` + `xs[w..2*w]` + `xs[2*w..3*w]` +
-... up to the end of *xs* with the final group truncated if necessary.
+... up to the end of *xs* with the final group truncated if necessary. `sum()`
+of an empty vector is *w* zeros. `sum()` of a non-numeric vector, or with `w`
+not specified as a single-item numeric vector, is `null`.
 
 `mean(` *xs* [ `,` *w=1* ] `)`
-: Similar to `sum()` but returning the length *w* mean – roughly equivalent to
-`sum(xs, w) / (len(xs) // w)`.
+: Similar to `sum()` but returning the length *w* mean - equivalent to
+`sum(xs, w) / sum(1[..len(xs)], w)`.
 
 `zip(` *xs* `,` *ys* [ `,` ... ] `)`
 : Return a vector formed by interleaving values from each argument vector; for
