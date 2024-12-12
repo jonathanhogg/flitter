@@ -235,18 +235,6 @@ statistics: the overhead of doing the logging can make very simple instructions
 that are executed millions of times appear to be a larger source of execution
 cost than they really are.
 
-`--gamma` *GAMMA*
-: This option specifies a gamma correction to apply as the final step of
-compositing window contents. It should not be necessary on a decently-configured
-desktop environment, but is available in case the output device is less well set
-up (perhaps some random dodgy projector in a venue) and the visual output has a
-bad gamma curve. Numbers smaller than 1 will brighten the image and numbers
-greater than 1 will darken it. In particular, if the output looks way too dark
-then it's possible that the standard sRGB transfer function is being applied
-twice, you can undo this with `--gamma 0.45`. Too bright and you might want to
-start with `--gamma 2.2`. As usual, you can control this per-window with the
-`gamma=N` attribute of `!window`.
-
 ## Developing Flitter
 
 If you want to edit the **Flitter** code – or just want to keep up-to-date with
