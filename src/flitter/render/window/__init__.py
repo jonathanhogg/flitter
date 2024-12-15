@@ -278,6 +278,8 @@ class ProgramNode(WindowNode):
             sampler_args = {'repeat_x': repeat[0], 'repeat_y': repeat[1]}
         else:
             sampler_args = {'border_color': (0, 0, 0, 0)}
+        if node.get('nearest', 1, bool, False):
+            sampler_args = {'filter': (moderngl.NEAREST, moderngl.NEAREST)}
         child_textures = self.child_textures
         samplers = []
         self.glctx.extra['zero'].use(0)

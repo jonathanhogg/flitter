@@ -54,6 +54,13 @@ the image, if *RY* or *RX* is `false`.
 If neither `border` nor `repeat` is specified, then the default is for
 out-of-range samples to return transparent (`vec4(0.0)`).
 
+By default linear interpolation is used when sampling a child with a different
+size to the shader (for both minification and magnification). This can be
+turned off with the attribute:
+
+`nearest=` *BOOLEAN*
+: Use `nearest=false` to turn off interpolation on child nodes.
+
 ### Shader programs
 
 Shader programs are executed with the following assumptions:
