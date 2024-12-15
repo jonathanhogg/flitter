@@ -59,7 +59,8 @@ size to the shader (for both minification and magnification). This can be
 turned off with the attribute:
 
 `nearest=` *BOOLEAN*
-: Use `nearest=false` to turn off interpolation on child nodes.
+: Specify `nearest=true` to use nearest pixel sampling instead of linear
+interpolation.
 
 ### Shader programs
 
