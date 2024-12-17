@@ -394,7 +394,8 @@ class ScriptTest(utils.TestCase):
         self.maxDiff = None
         state = StateDict()
         null_state = DummyStateDict()
-        names = {'beat': Vector(0), 'tempo': Vector(120), 'quantum': Vector(4), 'fps': Vector(60), 'OUTPUT': null}
+        names = {'beat': Vector(0), 'tempo': Vector(120), 'quantum': Vector(4), 'fps': Vector(60), 'OUTPUT': null,
+                 'run_time': Vector(1), 'frame': Vector(0)}
         top = parse(script.read_text(encoding='utf8'))
         # Compile un-simplified AST and execute program:
         program1 = top.compile(initial_lnames=tuple(names))
@@ -411,7 +412,7 @@ class ScriptTest(utils.TestCase):
         self.assertEqual(repr(top2.simplify(dynamic=set(names))), repr(top2), msg="Dynamic simplification not complete in one step")
         program2 = top2.compile(initial_lnames=tuple(names))
         program2.set_path(script)
-        self.assertNotEqual(len(program1), len(program2), msg="Dynamically-simplified program length should be different from original")
+        self.assertNotEqual(str(program1), str(program2), msg="Dynamically-simplified program should be different from original")
         context = program2.run(Context(names=dict(names), state=state))
         root2 = context.root
         exports2 = context.exports

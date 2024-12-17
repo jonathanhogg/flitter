@@ -1170,7 +1170,7 @@ class TestFunction(SimplifierTestCase):
         """A function that references an external name will have that noted in its captures and won't be inlineable"""
         start_func = Function('func', (Binding('x', Literal(null)),), Add(Name('x'), Name('y')))
         simpl_func = Function('func', (Binding('x', Literal(null)),), Add(Name('x'), Name('y')), captures=('y',))
-        self.assertSimplifiesTo(start_func, simpl_func)
+        self.assertSimplifiesTo(start_func, simpl_func, dynamic={'y'})
 
     def test_simple_recursive(self):
         """A function that references only itself will be marked as recursive and will be inlineable"""
