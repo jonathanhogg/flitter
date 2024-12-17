@@ -21,10 +21,37 @@ from flitter.language.tree import (Literal, Name, Sequence,
 
 
 class SimplifierTestCase(unittest.TestCase):
-    def assertSimplifiesTo(self, x, y, state=None, dynamic=None, static=None, with_errors=None, with_dependencies=None):
+    def assertSimplifiesTo(self, x, y, state=None, dynamic=None, static=None, with_errors=None, with_dependencies=None, unbound=None):
+        aliases = set()
+        if static:
+            for key, value in static.items():
+                if isinstance(value, Name):
+                    aliases.add(value.name)
+        if unbound is None:
+            unbound = set()
+            if dynamic:
+                unbound.update(dynamic)
+            if static:
+                unbound.update(static)
+                for key, value in static.items():
+                    if isinstance(value, Name):
+                        unbound.discard(value.name)
+            if with_errors:
+                for error in with_errors:
+                    if error.startswith("Unbound name '"):
+                        unbound.add(error[14:-1])
+        x_unbound = x.unbound_names()
+        if not isinstance(x, Export):
+            self.assertEqual(x_unbound, unbound, msg="Mismatch of expected unbound names")
         xx, context = x.simplify(state=state, dynamic=dynamic, static=static, path='test.fl', return_context=True)
         xxx = xx.simplify(state=state, dynamic=dynamic, static=static)
         self.assertIs(xxx, xx, msg="Simplification not complete in one step")
+        xx_unbound = xx.unbound_names(aliases)
+        self.assertTrue(xx_unbound.issubset(x_unbound), msg=f"Unexpected new unbound names: {xx_unbound - x_unbound}")
+        if static:
+            for name, value in static.items():
+                if not isinstance(value, Function):
+                    self.assertNotIn(name, xx_unbound, msg=f"Static name should have been simplified away: {name}")
         self.assertEqual(repr(xx), repr(y))
         self.assertEqual(context.errors, set() if with_errors is None else with_errors)
         if with_errors:
@@ -900,7 +927,7 @@ class TestLet(SimplifierTestCase):
         """Rename of a local that is shadowed by a later binding to an expression"""
         self.assertSimplifiesTo(Let((PolyBinding(('y',), Add(Name('y'), Literal(5))),), Add(Name('x'), Name('y'))),
                                 Let((PolyBinding(('x',), Name('y')), PolyBinding(('y',), Add(Name('y'), Literal(5)))), Add(Name('x'), Name('y'))),
-                                static={'x': Name('y')}, dynamic={'y'})
+                                static={'x': Name('y')}, dynamic={'y'}, unbound={'x', 'y'})
 
     def test_expr_shadowed_rename_subexpr(self):
         """Rename of a local that is shadowed by a binding to an expression in a sub-expression"""
@@ -1019,9 +1046,9 @@ class TestFor(SimplifierTestCase):
 
     def test_recursive(self):
         """Source and body simplified"""
-        self.assertSimplifiesTo(For(('x',), Name('y'), Add(Name('x'), Name('z'))),
-                                For(('x',), Name('z'), Add(Name('x'), Name('z'))),
-                                static={'y': Name('z')}, dynamic={'z'})
+        self.assertSimplifiesTo(For(('x',), Name('y'), Add(Name('x'), Name('w'))),
+                                For(('x',), Name('z'), Add(Name('x'), Name('w'))),
+                                static={'y': Name('z')}, dynamic={'z', 'w'})
         self.assertSimplifiesTo(For(('x',), Name('y'), Add(Name('x'), Name('z'))),
                                 For(('x',), Name('y'), Add(Name('x'), Name('w'))),
                                 static={'z': Name('w')}, dynamic={'y', 'w'})
@@ -1170,7 +1197,7 @@ class TestFunction(SimplifierTestCase):
         """A function that references an external name will have that noted in its captures and won't be inlineable"""
         start_func = Function('func', (Binding('x', Literal(null)),), Add(Name('x'), Name('y')))
         simpl_func = Function('func', (Binding('x', Literal(null)),), Add(Name('x'), Name('y')), captures=('y',))
-        self.assertSimplifiesTo(start_func, simpl_func)
+        self.assertSimplifiesTo(start_func, simpl_func, dynamic={'y'})
 
     def test_simple_recursive(self):
         """A function that references only itself will be marked as recursive and will be inlineable"""
