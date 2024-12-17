@@ -233,7 +233,6 @@ cdef class StateDict:
 
 cdef class Context:
     cdef readonly dict names
-    cdef readonly set captures
     cdef readonly StateDict state
     cdef readonly Node root
     cdef readonly object path

@@ -88,6 +88,9 @@ cdef class Expression:
     cdef Expression _simplify(self, Context context):
         raise NotImplementedError()
 
+    cdef set _unbound_names(self, set names):
+        raise NotImplementedError()
+
 
 cdef class Top(Expression):
     cdef readonly tuple pragmas
@@ -118,6 +121,9 @@ cdef class Top(Expression):
         if body is self.body and context.dependencies == self.dependencies:
             return self
         return Top(self.pragmas, body, self.dependencies ^ context.dependencies)
+
+    cdef set _unbound_names(self, set names):
+        return self.body._unbound_names(names)
 
     def __repr__(self):
         return f'Top({self.pragmas!r}, {self.body!r}, {self.dependencies!r})'
@@ -158,6 +164,9 @@ cdef class Export(Expression):
         if touched:
             return Export(static_exports)
         return self
+
+    cdef set _unbound_names(self, set names):
+        return set()
 
     def __repr__(self):
         return f'Export({self.static_exports!r})'
@@ -227,6 +236,9 @@ cdef class Import(Expression):
             return self
         return Import(tuple(remaining), filename, expr)
 
+    cdef set _unbound_names(self, set names):
+        return self.filename._unbound_names(names) | self.expr._unbound_names(names | set(self.names))
+
     def __repr__(self):
         return f'Import({self.names!r}, {self.filename!r}, {self.expr!r})'
 
@@ -269,6 +281,13 @@ cdef class Sequence(Expression):
             return self
         return Sequence(tuple(expressions))
 
+    cdef set _unbound_names(self, set names):
+        cdef set unbound = set()
+        cdef Expression expr
+        for expr in self.expressions:
+            unbound |= expr._unbound_names(names)
+        return unbound
+
     def __repr__(self):
         return f'Sequence({self.expressions!r})'
 
@@ -284,6 +303,9 @@ cdef class Literal(Expression):
 
     cdef Expression _simplify(self, Context context):
         return self
+
+    cdef set _unbound_names(self, set names):
+        return set()
 
     def __repr__(self):
         return f'Literal({self.value!r})'
@@ -324,12 +346,15 @@ cdef class Name(Expression):
         elif (value := static_builtins.get(self.name)) is not None:
             return Literal(value)
         elif self.name not in dynamic_builtins:
-            if context.captures is not None:
-                context.captures.add(self.name)
-            else:
-                context.errors.add(f"Unbound name '{self.name}'")
-                return NoOp
+            context.errors.add(f"Unbound name '{self.name}'")
+            return NoOp
         return self
+
+    cdef set _unbound_names(self, set names):
+        cdef set unbound = set()
+        if self.name not in names and self.name not in static_builtins and self.name not in dynamic_builtins:
+            unbound.add(self.name)
+        return unbound
 
     def __repr__(self):
         return f'Name({self.name!r})'
@@ -358,6 +383,9 @@ cdef class Lookup(Expression):
         if key is self.key:
             return self
         return Lookup(key)
+
+    cdef set _unbound_names(self, set names):
+        return self.key._unbound_names(names)
 
     def __repr__(self):
         return f'Lookup({self.key!r})'
@@ -392,6 +420,9 @@ cdef class Range(Expression):
             return self
         return Range(start, stop, step)
 
+    cdef set _unbound_names(self, set names):
+        return self.start._unbound_names(names) | self.stop._unbound_names(names) | self.step._unbound_names(names)
+
     def __repr__(self):
         return f'Range({self.start!r}, {self.stop!r}, {self.step!r})'
 
@@ -408,6 +439,9 @@ cdef class UnaryOperation(Expression):
 
     cdef void _compile_op(self, Program program):
         raise NotImplementedError()
+
+    cdef set _unbound_names(self, set names):
+        return self.expr._unbound_names(names)
 
     def __repr__(self):
         return f'{self.__class__.__name__}({self.expr!r})'
@@ -562,6 +596,9 @@ cdef class BinaryOperation(Expression):
 
     cdef Expression additional_rules(self, Expression left, Expression right):
         return None
+
+    cdef set _unbound_names(self, set names):
+        return self.left._unbound_names(names) | self.right._unbound_names(names)
 
     def __repr__(self):
         return f'{self.__class__.__name__}({self.left!r}, {self.right!r})'
@@ -860,6 +897,9 @@ cdef class Slice(Expression):
             return self
         return Slice(expr, index)
 
+    cdef set _unbound_names(self, set names):
+        return self.expr._unbound_names(names) | self.index._unbound_names(names)
+
     def __repr__(self):
         return f'Slice({self.expr!r}, {self.index!r})'
 
@@ -968,6 +1008,19 @@ cdef class Call(Expression):
             return self
         return Call(function, tuple(args), tuple(keyword_args) if keyword_args else None)
 
+    cdef set _unbound_names(self, set names):
+        cdef set unbound = set()
+        unbound.update(self.function._unbound_names(names))
+        cdef Expression arg
+        if self.args:
+            for arg in self.args:
+                unbound.update(arg._unbound_names(names))
+        cdef Binding binding
+        if self.keyword_args:
+            for binding in self.keyword_args:
+                unbound.update(binding.expr._unbound_names(names))
+        return unbound
+
     def __repr__(self):
         return f'Call({self.function!r}, {self.args!r}, {self.keyword_args!r})'
 
@@ -1010,6 +1063,9 @@ cdef class Tag(NodeModifier):
         if node is self.node:
             return self
         return Tag(node, self.tag)
+
+    cdef set _unbound_names(self, set names):
+        return self.node._unbound_names(names)
 
     def __repr__(self):
         return f'Tag({self.node!r}, {self.tag!r})'
@@ -1072,6 +1128,14 @@ cdef class Attributes(NodeModifier):
             node = Attributes(node, tuple(bindings))
         return node
 
+    cdef set _unbound_names(self, set names):
+        cdef set unbound = set()
+        unbound.update(self.node._unbound_names(names))
+        cdef Binding binding
+        for binding in self.bindings:
+            unbound.update(binding.expr._unbound_names(names))
+        return unbound
+
     def __repr__(self):
         return f'{self.__class__.__name__}({self.node!r}, {self.bindings!r})'
 
@@ -1127,6 +1191,9 @@ cdef class Append(NodeModifier):
         if node is self.node and children is self.children:
             return self
         return Append(node, children)
+
+    cdef set _unbound_names(self, set names):
+        return self.node._unbound_names(names) | self.children._unbound_names(names)
 
     def __repr__(self):
         return f'{self.__class__.__name__}({self.node!r}, {self.children!r})'
@@ -1268,6 +1335,16 @@ cdef class Let(Expression):
             return sbody._simplify(context)
         return sbody
 
+    cdef set _unbound_names(self, set names):
+        cdef set bound = set(names)
+        cdef set unbound = set()
+        cdef PolyBinding binding
+        for binding in self.bindings:
+            unbound.update(binding.expr._unbound_names(bound))
+            bound.update(binding.names)
+        unbound.update(self.body._unbound_names(bound))
+        return unbound
+
     def __repr__(self):
         return f'Let({self.bindings!r}, {self.body!r})'
 
@@ -1327,6 +1404,12 @@ cdef class For(Expression):
         if len(remaining) == 1:
             return remaining[0]
         return Sequence(tuple(remaining))
+
+    cdef set _unbound_names(self, set names):
+        cdef set unbound = set()
+        unbound.update(self.source._unbound_names(names))
+        unbound.update(self.body._unbound_names(names | set(self.names)))
+        return unbound
 
     def __repr__(self):
         return f'For({self.names!r}, {self.source!r}, {self.body!r})'
@@ -1396,6 +1479,16 @@ cdef class IfElse(Expression):
             return IfElse(tuple(remaining), else_)
         return NoOp if else_ is None else else_
 
+    cdef set _unbound_names(self, set names):
+        cdef set unbound = set()
+        cdef IfCondition test
+        for test in self.tests:
+            unbound.update(test.condition._unbound_names(names))
+            unbound.update(test.then._unbound_names(names))
+        if self.else_:
+            unbound.update(self.else_._unbound_names(names))
+        return unbound
+
     def __repr__(self):
         return f'IfElse({self.tests!r}, {self.else_!r})'
 
@@ -1462,33 +1555,42 @@ cdef class Function(Expression):
             parameters.append(Binding(parameter.name, expr))
             touched |= expr is not parameter.expr
         cdef dict saved = context.names
-        cdef str key
-        cdef set captures = context.captures
-        context.captures = set()
-        context.names = {}
-        for key, value in saved.items():
-            if value is not None and key != self.name:
-                context.names[key] = value
+        context.names = dict(saved)
+        context.names[self.name] = None
+        cdef set bound_names = set()
+        bound_names.update(dynamic_builtins)
+        bound_names.update(static_builtins)
+        bound_names.difference_update(context.names)
         for parameter in parameters:
             context.names[parameter.name] = None
+            bound_names.add(parameter.name)
         body = self.body._simplify(context)
+        cdef set captures = body._unbound_names(bound_names)
         touched |= body is not self.body
-        cdef recursive = self.name in context.captures
+        cdef recursive = self.name in captures
         if recursive:
-            context.captures.discard(self.name)
+            captures.discard(self.name)
         touched |= recursive != self.recursive
-        cdef tuple captures_t = tuple(context.captures)
+        cdef tuple captures_t = tuple(captures)
         cdef bint inlineable = literal and not captures_t
         touched |= inlineable != self.inlineable
-        context.names = dict(saved)
-        if captures is not None:
-            context.captures.difference_update(saved)
-            captures.update(context.captures)
-        context.captures = captures
+        context.names = saved
         touched |= captures_t != self.captures
         if not touched:
             return self
         return Function(self.name, tuple(parameters), body, captures_t, inlineable, recursive)
+
+    cdef set _unbound_names(self, set names):
+        cdef set bound = set(names)
+        cdef set unbound = set()
+        bound.add(self.name)
+        cdef Binding parameter
+        for parameter in self.parameters:
+            if parameter.expr is not None:
+                unbound.update(parameter.expr._unbound_names(names))
+            bound.add(parameter.name)
+        unbound.update(self.body._unbound_names(bound))
+        return unbound
 
     def __repr__(self):
         return f'Function({self.name!r}, {self.parameters!r}, {self.body!r}, {self.captures!r}, {self.inlineable!r}, {self.recursive!r})'
