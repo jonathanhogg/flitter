@@ -814,10 +814,13 @@ bottom quarter spaces is excluded from the map.
 UV space are wrapped around the sides of the cone and the sides also use
 triangular slices of the UV space and therefore exclude one half of the map.
 
-### External Models
+### Custom Models
 
-External mesh models are loaded with the `!model` node, which takes the
-additional attributes:
+Custom mesh models may be created with the `!model` node. These can be
+specified either as an external file containing vertices and faces or directly
+as vectors.
+
+To load an external model use the attributes:
 
 `filename=` *FILENAME*
 : Specifies the model file to load, relative to the program path. The model
@@ -835,6 +838,22 @@ Meshes are loaded using the [**trimesh**](https://trimesh.org) library and so
 OBJ and STL files. No material properties are loaded, just the triangular mesh,
 so you will need to re-specify the material properties using a `!material`
 node or with material attributes on the `!model` node itself.
+
+To create a mesh from scratch use the attributes:
+
+`vertices=` *VERTICES*
+: Provides a *3n*-vector of *x*, *y* and *z* model coordinates for *n* vertices.
+
+`faces=` *FACES*
+: Provides a *3m*-vector of vertex numbers in the range *[0,n)* giving the
+corner vertices of *m* triangular faces.
+
+Note that face vertices should be specified in an anti-clockwise direction as
+viewed from outside the model for the surface normals to be computed correctly.
+
+Custom vertex models are cached and so, while it is possible to animate a model
+by constantly changing the vertices or faces, it will result in fairly poor
+memory performance.
 
 ### Controlling Model Shading
 

@@ -5,6 +5,7 @@ Tests of flitter 3D models
 import math
 import unittest.mock
 
+import numpy as np
 import trimesh
 
 from flitter.model import Vector, Matrix44
@@ -144,6 +145,30 @@ class TestSubclassing(utils.TestCase):
             manifold = model.get_manifold()
             mock_logger.error.assert_called_with("Mesh is not a volume: {}", model.name)
         self.assertIsNone(manifold)
+
+
+class TestVector(utils.TestCase):
+    def test_bad(self):
+        self.assertIsNone(Model.vector(None, None))
+        self.assertIsNone(Model.vector('hello', 1))
+        self.assertIsNone(Model.vector(1, 'hello'))
+
+    def test_basic(self):
+        vertices = [0, 0, 0,  1, 0, 0,  0, 1, 0,  0, 0, 1,  1, 0, 1,  0, 1, 1]
+        faces = [0, 1, 2,  3, 4, 5,  0, 1, 4,  4, 3, 0,  1, 2, 5,  5, 4, 1,  2, 0, 3,  3, 5, 2]
+        model = Model.vector(vertices, faces)
+        self.assertIs(model, Model.vector(vertices, faces))
+        self.assertIsNot(model, Model.vector(vertices, reversed(faces)))
+        mesh = model.get_trimesh()
+        self.assertEqual(mesh.bounds.tolist(), [[0, 0, 0], [1, 1, 1]])
+        self.assertAllAlmostEqual(mesh.vertices, np.array(vertices).reshape((-1, 3)))
+        self.assertAllAlmostEqual(mesh.faces, np.array(faces).reshape((-1, 3)))
+        self.assertAlmostEqual(mesh.area, 3+math.sqrt(2))
+        self.assertAlmostEqual(mesh.volume, 0.5)
+
+    def test_invalid(self):
+        self.assertIsNone(Model.vector([0, 0, 0, 0, 0, 1, 0, 1], [0, 1, 2]).get_trimesh())
+        self.assertIsNone(Model.vector([0, 0, 0, 0, 0, 1, 0, 1, 0], [0, 1]).get_trimesh())
 
 
 class TestManifoldPrimitives(utils.TestCase):

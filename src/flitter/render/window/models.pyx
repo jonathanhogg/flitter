@@ -315,6 +315,14 @@ cdef class Model:
         return ExternalModel._get(str(filename))
 
     @staticmethod
+    cdef Model _vector(Vector vertices, Vector faces):
+        return VectorModel._get(vertices, faces)
+
+    @staticmethod
+    def vector(vertices, faces):
+        return VectorModel._get(Vector._coerce(vertices), Vector._coerce(faces))
+
+    @staticmethod
     cdef Model _sdf(function, Model original, Vector minimum, Vector maximum, double resolution):
         return SignedDistanceFunction._get(function, original, minimum, maximum, resolution)
 
@@ -1250,6 +1258,58 @@ cdef class ExternalModel(Model):
 
     cpdef object build_trimesh(self):
         return self.cache_path.read_trimesh_model()
+
+
+cdef class VectorModel(Model):
+    cdef Vector vertices
+    cdef Vector faces
+
+    @staticmethod
+    cdef VectorModel _get(Vector vertices, Vector faces):
+        if vertices is None or vertices.numbers == NULL or faces is None or faces.numbers == NULL:
+            return None
+        cdef str name = f'vector({hex(vertices.hash(False))}, {hex(faces.hash(False))})'
+        cdef VectorModel model = <VectorModel>ModelCache.get(name, None)
+        if model is None:
+            model = VectorModel.__new__(VectorModel)
+            model.name = name
+            model.vertices = vertices
+            model.faces = faces
+            ModelCache[name] = model
+        model.touch_timestamp = perf_counter()
+        return model
+
+    cpdef bint is_smooth(self):
+        return False
+
+    cpdef void check_for_changes(self):
+        pass
+
+    cpdef double signed_distance(self, double x, double y, double z) noexcept:
+        if self.cache is None:
+            self.cache = {}
+        try:
+            if 'proximity_query' not in self.cache:
+                mesh = self.get_trimesh()
+                proximity_query = trimesh.proximity.ProximityQuery(mesh) if mesh else None
+                self.cache['proximity_query'] = proximity_query
+            else:
+                proximity_query = self.cache['proximity_query']
+            if proximity_query is not None:
+                return -(proximity_query.signed_distance([(x, y, z)])[0])
+        except Exception:
+            logger.exception("Unable to do SDF proximity query of mesh: {}", self.name)
+            self.cache['proximity_query'] = None
+        return NaN
+
+    cpdef object build_trimesh(self):
+        if self.vertices.length % 3 != 0:
+            return None
+        vertices_array = np.array(self.vertices, dtype='f4').reshape((-1, 3))
+        if self.faces.length % 3 != 0:
+            return None
+        faces_array = np.array(self.faces, dtype='i4').reshape((-1, 3))
+        return trimesh.base.Trimesh(vertices=vertices_array, faces=faces_array, process=False)
 
 
 cdef class SignedDistanceFunction(UnaryOperation):

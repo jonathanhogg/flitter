@@ -447,9 +447,9 @@ cdef inline Matrix44 get_model_transform(Node node, Matrix44 transform_matrix):
 cdef Model get_model(Node node, bint top):
     cdef Node child
     cdef Model model = None
-    cdef Vector origin, normal, function, minimum, maximum
+    cdef Vector origin, normal, function, minimum, maximum, vertices, faces
     cdef double snap_angle, resolution
-    cdef str mapping
+    cdef str mapping, filename
     if node.kind is 'box':
         model = Model._box(node.get_str('uv_map', 'standard'))
     elif node.kind is 'sphere':
@@ -459,7 +459,13 @@ cdef Model get_model(Node node, bint top):
     elif node.kind is 'cone':
         model = Model._cone(node.get_int('segments', DefaultSegments))
     elif node.kind is 'model':
-        model = Model._external(node.get_str('filename', None))
+        filename = node.get_str('filename', None)
+        vertices = node.get_fvec('vertices', 0, None)
+        faces = node.get_fvec('faces', 0, None)
+        if filename:
+            model = Model._external(filename)
+        elif vertices is not None and faces is not None:
+            model = Model._vector(vertices, faces)
         if model is not None and node.get_bool('repair', False):
             model = model.repair()
     elif node.kind is 'sdf':
