@@ -82,6 +82,9 @@ cdef class Expression:
                 logger.warning("Simplifier error: {}", error)
         return expr
 
+    def unbound_names(self, bound_names=None):
+        return self._unbound_names(set(bound_names) if bound_names is not None else set())
+
     cdef void _compile(self, Program program, list lnames):
         raise NotImplementedError()
 
