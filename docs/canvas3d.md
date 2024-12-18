@@ -1100,8 +1100,12 @@ to alter the boundaries between the combined surfaces (or with trim plane):
 `chamfer=` *DISTANCE*
 : An inset/outset distance for a 45° chamfer.
 
-The `!sdf` node also supports providing a custom SDF function with the following
-attribute:
+An `!sdf` node with multiple children represents an implicit `!union` operation
+and so supports the same `smooth`, `fillet` and `chamfer` attributes.
+
+Instead of providing a tree of primitive models and operations, an `!sdf` node
+may also be specified as a custom signed distance field function by providing
+the following attribute:
 
 `function=` *FUNCTION*
 : A **Flitter** function taking a 3-vector position (in pre-transform model

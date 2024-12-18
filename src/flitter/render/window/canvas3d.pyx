@@ -476,7 +476,10 @@ cdef Model get_model(Node node, bint top):
                 function.objects is not None and callable(f := function.objects[0]):
             model = Model._sdf(f, None, minimum, maximum, resolution)
         else:
-            model = Model._boolean('union', [get_model(child, False) for child in node._children], 0, 0, 0)
+            model = Model._boolean('union', [get_model(child, False) for child in node._children],
+                                   node.get_float('smooth', 0),
+                                   node.get_float('fillet', 0),
+                                   node.get_float('chamfer', 0))
             model = Model._sdf(None, model, minimum, maximum, resolution)
     elif node.kind is 'mix':
         model = Model._mix([get_model(child, False) for child in node._children], node.get_fvec('weights', 0, true_))
