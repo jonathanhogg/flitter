@@ -19,7 +19,7 @@ class Record(ProgramNode):
                 limit = node.get('limit', 1, float)
                 options = {}
                 for key, value in node.items():
-                    if key not in {'filename', 'codec', 'pixfmt', 'limit'}:
+                    if key not in {'filename', 'codec', 'pixfmt', 'limit', 'hidden'}:
                         options[key.replace('__', '-')] = str(value)
                 path.write_video_frame(self._target.video_frame, time, fps=int(fps), realtime=realtime, codec=codec,
                                        pixfmt=pixfmt, options=options, limit=limit, alpha=keep_alpha)
