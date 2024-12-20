@@ -630,6 +630,8 @@ cdef class Add(MathsBinaryOperation):
             program.add()
 
     cdef Expression constant_left(self, Vector left, Expression right):
+        if left.eq(null_):
+            return NoOp
         if left.eq(false_):
             return Positive(right)
 
@@ -653,6 +655,8 @@ cdef class Subtract(MathsBinaryOperation):
         program.sub()
 
     cdef Expression constant_left(self, Vector left, Expression right):
+        if left.eq(null_):
+            return NoOp
         if left.eq(false_):
             return Negative(right)
 
@@ -674,6 +678,8 @@ cdef class Multiply(MathsBinaryOperation):
         program.mul()
 
     cdef Expression constant_left(self, Vector left, Expression right):
+        if left.eq(null_):
+            return NoOp
         if left.eq(true_):
             return Positive(right)
         if left.eq(minusone_):
@@ -707,7 +713,13 @@ cdef class Divide(MathsBinaryOperation):
     cdef void _compile_op(self, Program program):
         program.truediv()
 
+    cdef Expression constant_left(self, Vector left, Expression right):
+        if left.eq(null_):
+            return NoOp
+
     cdef Expression constant_right(self, Expression left, Vector right):
+        if right.eq(null_):
+            return NoOp
         if right.eq(true_):
             return Positive(left)
         return Multiply(Literal(true_.truediv(right)), left)
@@ -720,7 +732,13 @@ cdef class FloorDivide(MathsBinaryOperation):
     cdef void _compile_op(self, Program program):
         program.floordiv()
 
+    cdef Expression constant_left(self, Vector left, Expression right):
+        if left.eq(null_):
+            return NoOp
+
     cdef Expression constant_right(self, Expression left, Vector right):
+        if right.eq(null_):
+            return NoOp
         if right.eq(true_):
             return Floor(left)
 
@@ -732,7 +750,13 @@ cdef class Modulo(MathsBinaryOperation):
     cdef void _compile_op(self, Program program):
         program.mod()
 
+    cdef Expression constant_left(self, Vector left, Expression right):
+        if left.eq(null_):
+            return NoOp
+
     cdef Expression constant_right(self, Expression left, Vector right):
+        if right.eq(null_):
+            return NoOp
         if right.eq(true_):
             return Fract(left)
 
@@ -750,7 +774,13 @@ cdef class Power(MathsBinaryOperation):
         else:
             program.pow()
 
+    cdef Expression constant_left(self, Vector left, Expression right):
+        if left.eq(null_):
+            return NoOp
+
     cdef Expression constant_right(self, Expression left, Vector right):
+        if right.eq(null_):
+            return NoOp
         if right.eq(true_):
             return Positive(left)
 

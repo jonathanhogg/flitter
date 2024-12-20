@@ -281,6 +281,11 @@ class TestAdd(SimplifierTestCase):
         """Literal left and right is evaluated"""
         self.assertSimplifiesTo(Add(Literal(5), Literal(10)), Literal(15))
 
+    def test_null(self):
+        """Literal null on either side simplifies to null"""
+        self.assertSimplifiesTo(Add(Name('x'), Literal(null)), Literal(null), dynamic={'x'})
+        self.assertSimplifiesTo(Add(Literal(null), Name('x')), Literal(null), dynamic={'x'})
+
     def test_zero(self):
         """Adding literal zero becomes Positive"""
         self.assertSimplifiesTo(Add(Literal(0), Name('x')), Positive(Name('x')), dynamic={'x'})
@@ -312,6 +317,11 @@ class TestSubtract(SimplifierTestCase):
         """Literal left and right is evaluated"""
         self.assertSimplifiesTo(Subtract(Literal(5), Literal(10)), Literal(-5))
 
+    def test_null(self):
+        """Literal null on either side simplifies to null"""
+        self.assertSimplifiesTo(Subtract(Name('x'), Literal(null)), Literal(null), dynamic={'x'})
+        self.assertSimplifiesTo(Subtract(Literal(null), Name('x')), Literal(null), dynamic={'x'})
+
     def test_subtract_zero(self):
         """Subtracting literal zero becomes Positive"""
         self.assertSimplifiesTo(Subtract(Name('x'), Literal(0)), Positive(Name('x')), dynamic={'x'})
@@ -338,6 +348,11 @@ class TestMultiply(SimplifierTestCase):
     def test_literal(self):
         """Literal left and right is evaluated"""
         self.assertSimplifiesTo(Multiply(Literal(5), Literal(10)), Literal(50))
+
+    def test_null(self):
+        """Literal null on either side simplifies to null"""
+        self.assertSimplifiesTo(Multiply(Name('x'), Literal(null)), Literal(null), dynamic={'x'})
+        self.assertSimplifiesTo(Multiply(Literal(null), Name('x')), Literal(null), dynamic={'x'})
 
     def test_multiply_one(self):
         """Multiplying by literal 1 becomes Positive"""
@@ -394,6 +409,11 @@ class TestDivide(SimplifierTestCase):
         """Literal left and right is evaluated"""
         self.assertSimplifiesTo(Divide(Literal(5), Literal(10)), Literal(0.5))
 
+    def test_null(self):
+        """Literal null on either side simplifies to null"""
+        self.assertSimplifiesTo(Divide(Name('x'), Literal(null)), Literal(null), dynamic={'x'})
+        self.assertSimplifiesTo(Divide(Literal(null), Name('x')), Literal(null), dynamic={'x'})
+
     def test_divide_by_one(self):
         """Dividing by literal 1 becomes Positive"""
         self.assertSimplifiesTo(Divide(Name('x'), Literal(1)), Positive(Name('x')), dynamic={'x'})
@@ -417,6 +437,11 @@ class TestFloorDivide(SimplifierTestCase):
         """Literal left and right is evaluated"""
         self.assertSimplifiesTo(FloorDivide(Literal(5), Literal(10)), Literal(0))
 
+    def test_null(self):
+        """Literal null on either side simplifies to null"""
+        self.assertSimplifiesTo(FloorDivide(Name('x'), Literal(null)), Literal(null), dynamic={'x'})
+        self.assertSimplifiesTo(FloorDivide(Literal(null), Name('x')), Literal(null), dynamic={'x'})
+
     def test_divide_by_one(self):
         """Dividing by literal 1 becomes Floor"""
         self.assertSimplifiesTo(FloorDivide(Name('x'), Literal(1)), Floor(Name('x')), dynamic={'x'})
@@ -436,6 +461,11 @@ class TestModulo(SimplifierTestCase):
         """Literal left and right is evaluated"""
         self.assertSimplifiesTo(Modulo(Literal(5), Literal(10)), Literal(5))
 
+    def test_null(self):
+        """Literal null on either side simplifies to null"""
+        self.assertSimplifiesTo(Modulo(Name('x'), Literal(null)), Literal(null), dynamic={'x'})
+        self.assertSimplifiesTo(Modulo(Literal(null), Name('x')), Literal(null), dynamic={'x'})
+
     def test_modulo_one(self):
         """Modulo literal 1 becomes Fract"""
         self.assertSimplifiesTo(Modulo(Name('x'), Literal(1)), Fract(Name('x')), dynamic={'x'})
@@ -454,6 +484,11 @@ class TestPower(SimplifierTestCase):
     def test_literal(self):
         """Literal left and right is evaluated"""
         self.assertSimplifiesTo(Power(Literal(5), Literal(2)), Literal(25))
+
+    def test_null(self):
+        """Literal null on either side simplifies to null"""
+        self.assertSimplifiesTo(Power(Name('x'), Literal(null)), Literal(null), dynamic={'x'})
+        self.assertSimplifiesTo(Power(Literal(null), Name('x')), Literal(null), dynamic={'x'})
 
     def test_raise_to_power_of_one(self):
         """Power to literal 1 becomes Positive"""
