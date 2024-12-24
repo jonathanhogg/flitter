@@ -744,6 +744,31 @@ cdef class Vector:
     def __round__(self, ndigits=None):
         return self.round(ndigits=ndigits if ndigits is not None else 0)
 
+    cpdef Vector contains(self, Vector other):
+        if other.length == 0:
+            return true_
+        if other.length > self.length:
+            return false_
+        cdef int64_t i, j
+        if other.objects is not None and self.objects is not None:
+            for i in range(self.length+1 - other.length):
+                for j in range(other.length):
+                    if other.objects[j] != self.objects[i+j]:
+                        break
+                else:
+                    return true_
+        elif other.numbers != NULL and self.numbers != NULL:
+            for i in range(self.length+1 - other.length):
+                for j in range(other.length):
+                    if other.numbers[j] != self.numbers[i+j]:
+                        break
+                else:
+                    return true_
+        return false_
+
+    def __contains__(self, other):
+        return self.contains(Vector._coerce(other)) is true_
+
     def __add__(self, other):
         return self.add(Vector._coerce(other))
 
