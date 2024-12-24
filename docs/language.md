@@ -1012,7 +1012,7 @@ code that will parse and run:
 let let=..10
 
 for in in let
-    !let in=in
+    !let let=in
 ```
 
 This is convenient in allowing things like `from` to be used as a keyword in an
