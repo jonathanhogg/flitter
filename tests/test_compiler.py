@@ -10,7 +10,7 @@ from flitter.language import functions
 from flitter.language.tree import (Literal, Name, Sequence,
                                    Positive, Negative, Ceil, Floor, Fract, Power,
                                    Add, Subtract, Multiply, Divide, FloorDivide, Modulo,
-                                   EqualTo, NotEqualTo, LessThan, GreaterThan, LessThanOrEqualTo, GreaterThanOrEqualTo,
+                                   Contains, EqualTo, NotEqualTo, LessThan, GreaterThan, LessThanOrEqualTo, GreaterThanOrEqualTo,
                                    Not, And, Or, Xor, Range, Slice, Lookup,
                                    Tag, Attributes, Append,
                                    Let, Call, For, IfElse,
@@ -115,6 +115,9 @@ class TestBinaryExpressions(CompilerTestCase):
 
     def test_power(self):
         self.assertCompilesTo(Power(Name('x'), Name('y')), Program().local_load(1).local_load(0).pow(), lnames=('x', 'y'))
+
+    def test_contains(self):
+        self.assertCompilesTo(Contains(Name('x'), Name('y')), Program().local_load(1).local_load(0).contains(), lnames=('x', 'y'))
 
     def test_equal_to(self):
         self.assertCompilesTo(EqualTo(Name('x'), Name('y')), Program().local_load(1).local_load(0).eq(), lnames=('x', 'y'))
