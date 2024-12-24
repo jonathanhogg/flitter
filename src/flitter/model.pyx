@@ -764,6 +764,13 @@ cdef class Vector:
                         break
                 else:
                     return true_
+        elif other.numbers != NULL and self.objects is not None:
+            for i in range(self.length+1 - other.length):
+                for j in range(other.length):
+                    if other.numbers[j] != self.objects[i+j]:
+                        break
+                else:
+                    return true_
         return false_
 
     def __contains__(self, other):

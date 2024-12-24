@@ -488,6 +488,7 @@ class TestVector(utils.TestCase):
         self.assertTrue(Vector(["world"]) in Vector(["Hello", "world"]))
         self.assertTrue(Vector(["Hello", "world"]) in Vector(["Hello", "world"]))
         self.assertFalse(Vector(["Hello", "Dave"]) in Vector(["Hello", "world"]))
+        self.assertTrue(Vector([1, 2]) in Vector(["Hello", 1, 2, "world"]))
 
     def test_add(self):
         x = Vector([1, 0.1, -5, 1e6, math.inf])
