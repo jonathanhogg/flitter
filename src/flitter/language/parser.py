@@ -109,6 +109,7 @@ class FlitterTransformer(Transformer):
     binding = tree.Binding
     bool = tree.Literal
     condition = tree.IfCondition
+    contains = tree.Contains
     divide = tree.Divide
     export = tree.Export
     eq = tree.EqualTo

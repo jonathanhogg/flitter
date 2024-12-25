@@ -42,6 +42,7 @@ cdef enum OpCode:
     CallFast
     Ceil
     Compose
+    Contains
     Drop
     Dup
     EndFor
@@ -183,6 +184,7 @@ cdef class Program:
     cpdef Program floordiv(self)
     cpdef Program mod(self)
     cpdef Program pow(self)
+    cpdef Program contains(self)
     cpdef Program eq(self)
     cpdef Program ne(self)
     cpdef Program gt(self)

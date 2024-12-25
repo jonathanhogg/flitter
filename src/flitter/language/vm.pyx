@@ -69,6 +69,7 @@ cdef dict OpCodeNames = {
     OpCode.CallFast: 'CallFast',
     OpCode.Ceil: 'Ceil',
     OpCode.Compose: 'Compose',
+    OpCode.Contains: 'Contains',
     OpCode.Drop: 'Drop',
     OpCode.Dup: 'Dup',
     OpCode.EndFor: 'EndFor',
@@ -1002,6 +1003,10 @@ cdef class Program:
         self.instructions.append(Instruction(OpCode.Pow))
         return self
 
+    cpdef Program contains(self):
+        self.instructions.append(Instruction(OpCode.Contains))
+        return self
+
     cpdef Program eq(self):
         self.instructions.append(Instruction(OpCode.Eq))
         return self
@@ -1280,6 +1285,11 @@ cdef class Program:
                 elif instruction.code == OpCode.Pow:
                     r1 = pop(stack)
                     poke(stack, peek(stack).pow(r1))
+                    r1 = None
+
+                elif instruction.code == OpCode.Contains:
+                    r1 = pop(stack)
+                    poke(stack, r1.contains(peek(stack)))
                     r1 = None
 
                 elif instruction.code == OpCode.Eq:

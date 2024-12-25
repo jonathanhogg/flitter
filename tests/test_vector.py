@@ -464,6 +464,32 @@ class TestVector(utils.TestCase):
         self.assertAllAlmostEqual(Vector(-3.5).fract(), Vector(0.5))
         self.assertAllAlmostEqual(Vector([0, 0.1, 3.5, -99.5, 1e-99, math.inf]).fract(), Vector([0, 0.1, 0.5, 0.5, 1e-99, math.nan]))
 
+    def test_round(self):
+        self.assertEqual(round(null), null)
+        self.assertEqual(round(Vector("Hello world!")), null)
+        self.assertAllAlmostEqual(round(Vector(-3.5)), Vector(-4))
+        self.assertAllAlmostEqual(round(Vector([0, 0.1, 3.4, -99.5, 1e-99, math.inf])), Vector([0, 0, 3, -100, 0, math.inf]))
+
+    def test_contains(self):
+        self.assertTrue(null in null)
+        self.assertFalse(Vector(4) in null)
+        self.assertTrue(null in Vector(4))
+        self.assertTrue(null in Vector('hello'))
+        self.assertFalse(-1 in Vector.range(10))
+        self.assertTrue(0 in Vector.range(10))
+        self.assertTrue(9 in Vector.range(10))
+        self.assertFalse(10 in Vector.range(10))
+        self.assertTrue(Vector([0, 1, 2]) in Vector.range(10))
+        self.assertFalse(Vector([0, 1, 3]) in Vector.range(10))
+        self.assertTrue(Vector([7, 8, 9]) in Vector.range(10))
+        self.assertFalse(Vector([8, 9, 10]) in Vector.range(10))
+        self.assertTrue(Vector.range(10) in Vector.range(10))
+        self.assertTrue(Vector("Hello") in Vector(["Hello", "world"]))
+        self.assertTrue(Vector(["world"]) in Vector(["Hello", "world"]))
+        self.assertTrue(Vector(["Hello", "world"]) in Vector(["Hello", "world"]))
+        self.assertFalse(Vector(["Hello", "Dave"]) in Vector(["Hello", "world"]))
+        self.assertTrue(Vector([1, 2]) in Vector(["Hello", 1, 2, "world"]))
+
     def test_add(self):
         x = Vector([1, 0.1, -5, 1e6, math.inf])
         self.assertEqual(x + null, null)

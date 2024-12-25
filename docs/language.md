@@ -466,6 +466,14 @@ lesser. If an element pair cannot be compared because they are not of the same
 type, e.g., an attempt to compare a Unicode string with a number, then the
 result of the operator is the `null` vector.
 
+Additionally, a vector can be tested to see if it contains a sub-vector with
+the *contains* operator:
+
+- *x* `in` *y* - returns `true` if any sub-vector of `y` equals `x`
+
+This operator will always return `true` if *x* is the null vector, regardless
+of what *y* is.
+
 ### Logical operators
 
 Flitter also supports the usual short-cutting logical operators:
@@ -1004,7 +1012,7 @@ code that will parse and run:
 let let=..10
 
 for in in let
-    !let in=in
+    !let let=in
 ```
 
 This is convenient in allowing things like `from` to be used as a keyword in an

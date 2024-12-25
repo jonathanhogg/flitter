@@ -837,6 +837,18 @@ cdef class GreaterThanOrEqualTo(Comparison):
         program.ge()
 
 
+cdef class Contains(BinaryOperation):
+    cdef Vector op(self, Vector left, Vector right):
+        return right.contains(left)
+
+    cdef void _compile_op(self, Program program):
+        program.contains()
+
+    cdef Expression constant_left(self, Vector left, Expression right):
+        if left.length == 0:
+            return Literal(true_)
+
+
 cdef class And(BinaryOperation):
     cdef void _compile(self, Program program, list lnames):
         end_label = program.new_label()

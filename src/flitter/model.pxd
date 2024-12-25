@@ -69,6 +69,7 @@ cdef class Vector:
     cdef Vector floor(self)
     cpdef Vector fract(self)
     cdef Vector round(self, int64_t ndigits)
+    cpdef Vector contains(self, Vector other)
     cdef Vector add(self, Vector other)
     cpdef Vector mul_add(self, Vector left, Vector right)
     cdef Vector sub(self, Vector other)

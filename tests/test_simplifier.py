@@ -12,7 +12,7 @@ from flitter.language import functions
 from flitter.language.tree import (Literal, Name, Sequence,
                                    Positive, Negative, Ceil, Floor, Fract, Power,
                                    Add, Subtract, Multiply, Divide, FloorDivide, Modulo,
-                                   EqualTo, NotEqualTo, LessThan, GreaterThan, LessThanOrEqualTo, GreaterThanOrEqualTo,
+                                   Contains, EqualTo, NotEqualTo, LessThan, GreaterThan, LessThanOrEqualTo, GreaterThanOrEqualTo,
                                    Not, And, Or, Xor, Range, Slice, Lookup,
                                    Tag, Attributes, Append,
                                    Let, Call, For, IfElse,
@@ -493,6 +493,28 @@ class TestPower(SimplifierTestCase):
     def test_raise_to_power_of_one(self):
         """Power to literal 1 becomes Positive"""
         self.assertSimplifiesTo(Power(Name('x'), Literal(1)), Positive(Name('x')), dynamic={'x'})
+
+
+class TestContains(SimplifierTestCase):
+    def test_dynamic(self):
+        self.assertSimplifiesTo(Contains(Name('x'), Name('y')), Contains(Name('x'), Name('y')), dynamic={'x', 'y'})
+        self.assertSimplifiesTo(Contains(Literal(5), Name('y')), Contains(Literal(5), Name('y')), dynamic={'y'})
+        self.assertSimplifiesTo(Contains(Name('x'), Literal(5)), Contains(Name('x'), Literal(5)), dynamic={'x'})
+
+    def test_recursive(self):
+        """Left and right are simplified"""
+        self.assertSimplifiesTo(Contains(Name('x'), Name('y')), Contains(Name('x'), Name('z')), dynamic={'x', 'z'}, static={'y': Name('z')})
+        self.assertSimplifiesTo(Contains(Name('x'), Name('y')), Contains(Name('z'), Name('y')), dynamic={'y', 'z'}, static={'x': Name('z')})
+
+    def test_left_null(self):
+        """Literal null on left evaluates to true"""
+        self.assertSimplifiesTo(Contains(Literal(null), Name('y')), Literal(true), dynamic={'y'})
+
+    def test_literal(self):
+        """Literal left and right is evaluated"""
+        self.assertSimplifiesTo(Contains(Literal(5), Literal((4, 5, 6))), Literal(true))
+        self.assertSimplifiesTo(Contains(Literal((4, 5)), Literal((4, 5, 6))), Literal(true))
+        self.assertSimplifiesTo(Contains(Literal(5), Literal((7, 8, 9))), Literal(false))
 
 
 class TestEqualTo(SimplifierTestCase):

@@ -160,11 +160,11 @@ let y=1 y''=y+1 y'''=y''+1
     def test_contextual_parser(self):
         self.assertCodeOutput(
             """
-let let=import + 1
-!foo in=let
+let in=import + 1
+!foo let=in
             """,
             """
-!foo in=6
+!foo let=6
             """, **{'import': 5})
 
     def test_names(self):
@@ -362,6 +362,15 @@ func map(f, xs)
             """
 !foo
             """, with_errors={'Error calling hsv: hsv() takes exactly 1 positional argument (0 given)'})
+
+    def test_contains(self):
+        self.assertCodeOutput(
+            """
+!foo x=(x in y) y=(y in y) z=(y in x)
+            """,
+            """
+!foo x=1 y=1 z=0
+            """, x=Vector((4, 5, 6)), y=Vector.range(10))
 
 
 class ScriptTest(utils.TestCase):

@@ -99,6 +99,7 @@ name_list : NAME (";" NAME)* -> tuple
             | comparison ">" range -> gt
             | comparison "<=" range -> le
             | comparison ">=" range -> ge
+            | comparison "in" range -> contains
 
 ?range : sum
        | [sum] ".." sum ["|" sum] -> range
