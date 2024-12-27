@@ -559,6 +559,25 @@ ignored. If the vector is shorter, then the the additional names will be bound
 to items wrapped around from the start again. If the vector is `null` then all
 names will be bound to `null`.
 
+A let binding may also bind one or more names to the result of evaluating an
+indented "body" sequence of expressions. For example:
+
+```flitter
+let foo=
+    !foo bar=12
+        !baz
+```
+
+A let binding of this form may only have one name (or semicolon-separated list
+of names for an unpacked vector binding) followed by an `=`, a newline and then
+an indented sequence of expressions. This *sequence let* may contain any
+multi-line sequence expressions, the same as the body of a function or a loop.
+This is particularly useful for binding nested node structures to a name.
+
+If a semicolon-separated name list is provided in a sequence let, then the
+names will be bound to values following the unpacking logic described above,
+with the vector formed from the indented body being the source vector.
+
 Names introduced with a `let` can redefine engine-supplied values, like `beat`,
 and built-ins, like `sin`.
 

@@ -98,6 +98,9 @@ class FlitterTransformer(Transformer):
     def let_function(self, function, sequence):
         return tree.Let((tree.PolyBinding((function.name,), function),), sequence)
 
+    def sequence_let(self, names, value, sequence):
+        return tree.Let((tree.PolyBinding(names, value),), sequence)
+
     def anonymous_function(self, parameters, body):
         return tree.Function('<anon>', parameters, body)
 

@@ -372,6 +372,27 @@ func map(f, xs)
 !foo x=1 y=1 z=0
             """, x=Vector((4, 5, 6)), y=Vector.range(10))
 
+    def test_sequence_let(self):
+        self.assertCodeOutput(
+            """
+let foo;bar =
+    !foo x=1
+        !bar
+        !baz
+    !bar b=2
+
+!frob
+    bar
+    foo
+            """,
+            """
+!frob
+ !bar b=2
+ !foo x=1
+  !bar
+  !baz
+            """)
+
 
 class ScriptTest(utils.TestCase):
     """

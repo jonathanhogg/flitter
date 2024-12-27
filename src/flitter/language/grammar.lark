@@ -27,6 +27,7 @@ sequence : expressions
 expressions : expression* let_expression? -> tuple
 
 let_expression : "let" multiline_bindings sequence -> let
+               | "let" name_list "=" _NL _INDENT sequence _DEDENT sequence -> sequence_let
                | function sequence -> let_function
                | "import" name_list "from" composition _NL sequence ->  let_import
 
