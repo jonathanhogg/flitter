@@ -1041,6 +1041,8 @@ cdef class Call(Expression):
                         results.append(func(*vector_args, **kwargs))
                     except Exception as exc:
                         context.errors.add(f"Error calling {func.__name__}: {str(exc)}")
+                else:
+                    context.errors.add(f"{func!r} is not callable")
             return Literal(Vector._compose(results))
         if isinstance(function, Literal) and len(args) == 1:
             if (<Literal>function).value == static_builtins['ceil']:

@@ -64,15 +64,17 @@ bindings : binding+ -> tuple
 
 binding : name_list "=" composition -> poly_binding
 
-?composition : comprehension
+?composition : anonymous
              | compositions -> sequence
 
-compositions : comprehension (";" comprehension)+ -> tuple
+compositions : anonymous (";" anonymous)+ -> tuple
+
+?anonymous : comprehension
+           | "func" _LPAREN parameters _RPAREN comprehension -> anonymous_function
 
 ?comprehension : conditional
                | comprehension "for" name_list "in" conditional -> inline_loop
                | comprehension "where" inline_bindings -> inline_let
-               | "func" _LPAREN parameters _RPAREN conditional -> anonymous_function
 
 inline_bindings: inline_binding+ -> tuple
 

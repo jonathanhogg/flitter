@@ -589,6 +589,10 @@ cdef inline void call_helper(Context context, VectorStack stack, object function
             Py_INCREF(<object>obj)
             PyTuple_SET_ITEM(context_args, i+1, <object>obj)
         args = context_args
+    elif not callable(function):
+        PySet_Add(context.errors, f"{function!r} is not callable")
+        push(stack, null_)
+        return
     if record_stats:
         call_duration = -perf_counter()
     try:

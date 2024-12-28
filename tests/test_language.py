@@ -94,7 +94,7 @@ class TestLanguageFeatures(unittest.TestCase):
     It is assumed that all of the examples can be fully reduced to a literal by the simplifier.
     """
 
-    def assertCodeOutput(self, code, output, with_errors=None, **names):
+    def assertCodeOutput(self, code, output, with_errors=None, skip_simplifier=False, **names):
         top = parse(code.strip())
         output = output.strip()
         if with_errors is None:
@@ -103,6 +103,8 @@ class TestLanguageFeatures(unittest.TestCase):
         vm_output = '\n'.join(repr(node) for node in top.compile(initial_lnames=tuple(names)).run(vm_context).root.children)
         self.assertEqual(vm_output, output, msg="VM output is incorrect")
         self.assertEqual(vm_context.errors, with_errors)
+        if skip_simplifier:
+            return
         simplified_top, simplifier_context = top.simplify(static=names, return_context=True)
         self.assertEqual(simplifier_context.errors, with_errors)
         expr = simplified_top.body
@@ -328,7 +330,7 @@ func fib(n)
 !fib x=55
             """)
 
-    def test_anonymous_functions(self):
+    def test_anonymous_function(self):
         """Note that this is statically reducible because `map` is inlined and so the
            anonymous function is bound to `f`, which therefore becomes a function name"""
         self.assertCodeOutput(
@@ -342,6 +344,41 @@ func map(f, xs)
             """
 !doubled x=0;2;4;6;8;10;12;14;16;18
             """)
+
+    def test_anonymous_function_with_where(self):
+        self.assertCodeOutput(
+            """
+let f = func(x) x+y where y=x*x
+!foo bar=f(10)
+            """,
+            """
+!foo bar=110
+            """
+        )
+
+    def test_anonymous_function_returning_anonymous_function(self):
+        self.assertCodeOutput(
+            """
+let f = func(x) (func(y) x + y)
+!foo bar=f(10)(5)
+            """,
+            """
+!foo bar=15
+            """
+        )
+
+    def test_accidental_anonymous_vector(self):
+        self.assertCodeOutput(
+            """
+let f = func(x) x;1;2
+!foo bar=f(0)
+            """,
+            """
+!foo bar=0
+            """,
+            with_errors={'1.0 is not callable', '2.0 is not callable'},
+            skip_simplifier=True
+        )
 
     def test_some_deliberately_obtuse_behaviour(self):
         self.assertCodeOutput(

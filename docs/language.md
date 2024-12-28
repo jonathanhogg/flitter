@@ -872,24 +872,37 @@ with the syntax:
 func (parameter《=default》《, parameter…》) body
 ```
 
-In the grammar rules, anonymous functions sit above inline `if`/`else`
-expressions, but below inline `for` and `where` expressions. Therefore, the
-following creates a vector of 10 anonymous functions, each of which multiplies
-by a different value, not a single function that does 10 multiplications in
-a loop:
+The body of an anonymous function may only contain *in-line* expressions. In
+the grammar, anonymous functions have higher precedence than `;` composition
+but lower than inline `for` and `where` expressions. Therefore, the following
+defines a function containing a for loop, as might be expected:
 
 ```flitter
 let f = func(x) x*y for y in ..10
 ```
 
-Note that as function calls are allowed to accept a vector of functions, it is
-valid to call `f`. So `f(3)` will still evaluate to `0;3;6;9;12;15;18;21;24;27`.
+However, the following binds `f` to a vector consisting of an anonymous
+function that returns its argument as-is, and the numbers *1* and *2*:
 
-It is wise to use parentheses to make the precedence explicit.
+```flitter
+let f = func(x) x;1;2
+```
+
+Note that calling `f` is *not* itself an error, as a call to a vector is valid.
+The anonymous function will be evaluated and the attempted calls to the two
+numbers will log evaluation errors and return `null`. So `f(0)` will evaluate
+to `0`.
+
+An anonymous function being returned by another anonymous function must be
+parenthesised, e.g.:
+
+```flitter
+let f = func(x) (func(y) x + y)
+```
 
 As with regular functions, any captured names are bound at the point of
-definition. An anonymous function cannot be recursive as it has no function
-name to use within the body.
+definition. An anonymous function cannot call itself recursively as there is
+no bound function name to use within the body.
 
 ## Template function calls
 
