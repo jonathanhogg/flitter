@@ -359,7 +359,7 @@ let f = func(x) x+y where y=x*x
     def test_anonymous_function_returning_anonymous_function(self):
         self.assertCodeOutput(
             """
-let f = func(x) (func(y) x + y)
+let f = func(x) func(y) x + y
 !foo bar=f(10)(5)
             """,
             """

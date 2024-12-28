@@ -70,7 +70,7 @@ binding : name_list "=" composition -> poly_binding
 compositions : anonymous (";" anonymous)+ -> tuple
 
 ?anonymous : comprehension
-           | "func" _LPAREN parameters _RPAREN comprehension -> anonymous_function
+           | "func" _LPAREN parameters _RPAREN anonymous -> anonymous_function
 
 ?comprehension : conditional
                | comprehension "for" name_list "in" conditional -> inline_loop

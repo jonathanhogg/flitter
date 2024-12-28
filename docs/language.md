@@ -881,27 +881,21 @@ defines a function containing a for loop, as might be expected:
 let f = func(x) x*y for y in ..10
 ```
 
-However, the following binds `f` to a vector consisting of an anonymous
-function that returns its argument as-is, and the numbers *1* and *2*:
+However, the following binds `f` to a 3-vector consisting of an anonymous
+function, and the numbers *1* and *2*:
 
 ```flitter
 let f = func(x) x;1;2
 ```
 
-Note that calling `f` is *not* itself an error, as a call to a vector is valid.
-The anonymous function will be evaluated and the attempted calls to the two
-numbers will log evaluation errors and return `null`. So `f(0)` will evaluate
-to `0`.
+Note that calling `f` is *not* in itself an error, as a call to a vector is
+valid - as explained in [Function calling](#function-calling) above. The
+anonymous function will be called and the attempted calls to the two numbers
+will log evaluation errors and otherwise be ignored. So `f(0)` will evaluate
+to just `0`.
 
-An anonymous function being returned by another anonymous function must be
-parenthesised, e.g.:
-
-```flitter
-let f = func(x) (func(y) x + y)
-```
-
-Similarly, any node expression (other than a simple `!kind`) must be
-parenthesised. The following superficially sensible code is incorrect:
+Any node expression (other than a simple `!kind`) must be parenthesised. The
+following superficially sensible code is incorrect:
 
 ```flitter
 let f = func(c) !light color=c
@@ -914,9 +908,18 @@ let f = func(c) !light
 let color = c
 ```
 
+An anonymous function may return another anonymous function, e.g.:
+
+```flitter
+let f = func(x) func(y) x + y
+```
+
 As with regular functions, any captured names are bound at the point of
-definition. An anonymous function cannot call itself recursively as there is
-no bound function name to use within the body.
+definition and so the value of `x` passed into the first function call will be
+bound into the returned anonymous function
+
+An anonymous function cannot call itself recursively as there is no bound
+function name to use within the body.
 
 ## Template function calls
 
