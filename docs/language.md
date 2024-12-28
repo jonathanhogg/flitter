@@ -900,6 +900,20 @@ parenthesised, e.g.:
 let f = func(x) (func(y) x + y)
 ```
 
+Similarly, any node expression (other than a simple `!kind`) must be
+parenthesised. The following superficially sensible code is incorrect:
+
+```flitter
+let f = func(c) !light color=c
+```
+
+As it is parsed as:
+
+```flitter
+let f = func(c) !light
+let color = c
+```
+
 As with regular functions, any captured names are bound at the point of
 definition. An anonymous function cannot call itself recursively as there is
 no bound function name to use within the body.
