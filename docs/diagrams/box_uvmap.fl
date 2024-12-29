@@ -37,7 +37,7 @@ import axes from '../../examples/common/axes.fl'
                         !rect point=(i+0.05;0.05)*w size=0.9*w stroke=true stroke_width=0.05*w
                         !text point=(i+0.5;0.5)*w text=i
         !transform translate=SIZE*(0;-0.25) scale=CUBES/SIZE
-            !canvas3d size=CUBES orthographic=true width=600
+            !canvas3d samples=4 size=CUBES orthographic=true width=600
                 !transform translate=-150;0;0 rotate_x=1/10 rotate_y=-1/8
                     @axes size=150 thickness=4
                     !box size=100 emissive_id=:texture
