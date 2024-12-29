@@ -95,14 +95,17 @@ class FlitterTransformer(Transformer):
             return tree.Call(function, (sequence,), bindings)
         return tree.Call(function, (tree.Literal(model.null),), bindings or None)
 
-    def let_function(self, function, sequence):
-        return tree.Let((tree.PolyBinding((function.name,), function),), sequence)
+    def function(self, name, parameters, body, sequence):
+        return tree.Let((tree.PolyBinding((name,), tree.Function(name, parameters, body)),), sequence)
 
     def sequence_let(self, names, value, sequence):
         return tree.Let((tree.PolyBinding(names, value),), sequence)
 
     def anonymous_function(self, parameters, body):
         return tree.Function('<anon>', parameters, body)
+
+    def sequence(self, *expressions):
+        return tree.Sequence(expressions)
 
     tuple = v_args(inline=False)(tuple)
 
@@ -116,7 +119,6 @@ class FlitterTransformer(Transformer):
     divide = tree.Divide
     export = tree.Export
     eq = tree.EqualTo
-    function = tree.Function
     floor_divide = tree.FloorDivide
     ge = tree.GreaterThanOrEqualTo
     gt = tree.GreaterThan
@@ -139,7 +141,6 @@ class FlitterTransformer(Transformer):
     poly_binding = tree.PolyBinding
     pos = tree.Positive
     power = tree.Power
-    sequence = tree.Sequence
     slice = tree.Slice
     subtract = tree.Subtract
     tag = tree.Tag

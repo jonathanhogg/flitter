@@ -22,14 +22,16 @@ pragmas : pragma* -> tuple
 
 pragma : "%pragma" NAME literal _NL -> binding
 
-sequence : expressions
-
-expressions : expression* let_expression? -> tuple
+sequence : expression* let_expression?
 
 let_expression : "let" multiline_bindings sequence -> let
                | "let" name_list "=" _NL _INDENT sequence _DEDENT sequence -> sequence_let
-               | function sequence -> let_function
+               | "func" NAME _LPAREN parameters _RPAREN _NL _INDENT sequence _DEDENT sequence -> function
                | "import" name_list "from" composition _NL sequence ->  let_import
+
+parameters : (parameter ("," parameter)*)? -> tuple
+
+parameter : NAME ["=" node] -> binding
 
 ?expression : node _NL
             | node _NL _INDENT sequence _DEDENT -> append
@@ -39,12 +41,6 @@ let_expression : "let" multiline_bindings sequence -> let
             | _EOF -> export
 
 iterators : name_list "in" composition ("," name_list "in" composition)* -> tuple
-
-function : "func" NAME _LPAREN parameters _RPAREN _NL _INDENT sequence _DEDENT
-
-parameters : (parameter ("," parameter)*)? -> tuple
-
-parameter : NAME ["=" node] -> binding
 
 conditions : condition ("elif" condition)* -> tuple
 
@@ -65,9 +61,7 @@ bindings : binding+ -> tuple
 binding : name_list "=" composition -> poly_binding
 
 ?composition : anonymous
-             | compositions -> sequence
-
-compositions : anonymous (";" anonymous)+ -> tuple
+             | anonymous (";" anonymous)+ -> sequence
 
 ?anonymous : comprehension
            | "func" _LPAREN parameters _RPAREN anonymous -> anonymous_function
@@ -96,13 +90,13 @@ name_list : NAME (";" NAME)* -> tuple
      | "not" not -> logical_not
 
 ?comparison : range
-            | comparison "==" range -> eq
-            | comparison "!=" range -> ne
-            | comparison "<" range -> lt
-            | comparison ">" range -> gt
-            | comparison "<=" range -> le
-            | comparison ">=" range -> ge
-            | comparison "in" range -> contains
+            | range "==" range -> eq
+            | range "!=" range -> ne
+            | range "<" range -> lt
+            | range ">" range -> gt
+            | range "<=" range -> le
+            | range ">=" range -> ge
+            | range "in" range -> contains
 
 ?range : sum
        | [sum] ".." sum ["|" sum] -> range
