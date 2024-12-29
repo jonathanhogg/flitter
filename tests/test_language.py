@@ -502,7 +502,7 @@ class ScriptTest(utils.TestCase):
 
 class TestDocumentationDiagrams(ScriptTest):
     """
-    Recreate the documentation diagrams and check them against the pre-calculated ones.
+    Run all documentation diagrams with and without simplification.
     """
 
     DIAGRAMS = Path(__file__).parent.parent / 'docs/diagrams'
@@ -528,7 +528,7 @@ class TestDocumentationDiagrams(ScriptTest):
 
 class TestDocumentationTutorial(ScriptTest):
     """
-    Recreate the tutorial images and check them against the pre-calculated ones.
+    Run all tutorial images with and without simplification.
     """
 
     TUTORIAL_IMAGES = Path(__file__).parent.parent / 'docs/tutorial_images'
@@ -554,7 +554,7 @@ class TestDocumentationTutorial(ScriptTest):
 
 class TestExamples(ScriptTest):
     """
-    Recreate the examples and check them against the pre-calculated ones.
+    Run all examples with and without simplification.
     """
 
     EXAMPLES = Path(__file__).parent.parent / 'examples'
