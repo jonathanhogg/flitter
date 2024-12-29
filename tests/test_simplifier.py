@@ -1089,10 +1089,17 @@ class TestCall(SimplifierTestCase):
         )
         self.assertSimplifiesTo(Call(Name('func'), (Literal(5),)), Literal(15), static={'func': func})
 
-    def test_fast_functions(self):
-        """Calls to ceil/floor/fract are replaced with the matching unary operation node"""
+
+class TestFastFunctions(SimplifierTestCase):
+    """Calls to specific built-in functions will be simplified to special unary nodes"""
+
+    def test_ceil(self):
         self.assertSimplifiesTo(Call(Name('ceil'), (Name('x'),), ()), Ceil(Name('x')), dynamic={'x'})
+
+    def test_floor(self):
         self.assertSimplifiesTo(Call(Name('floor'), (Name('x'),), ()), Floor(Name('x')), dynamic={'x'})
+
+    def test_fract(self):
         self.assertSimplifiesTo(Call(Name('fract'), (Name('x'),), ()), Fract(Name('x')), dynamic={'x'})
 
 
