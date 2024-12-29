@@ -7,7 +7,6 @@ import unittest
 from flitter.language.tree import (
     Literal, Name, Top, Export, Sequence,
     Positive, Negative, Power, Add, Subtract, Multiply, Divide, FloorDivide, Modulo,
-    # Ceil, Floor, Fract,
     # Contains, EqualTo, NotEqualTo, LessThan, GreaterThan, LessThanOrEqualTo, GreaterThanOrEqualTo,
     # Not, And, Or, Xor,
     # Range, Slice, Lookup,
@@ -16,6 +15,7 @@ from flitter.language.tree import (
     # Import, Function,
     # Binding, PolyBinding, IfCondition
 )
+from flitter.model import Vector, Node
 from flitter.language.parser import parse
 
 
@@ -31,6 +31,60 @@ class ParserTestCase(unittest.TestCase):
         self.assertEqual(repr(parse(code)), repr(expression))
 
 
+class TestLiterals(ParserTestCase):
+    def test_numbers(self):
+        self.assertParsesTo("0", Literal(0))
+        self.assertParsesTo("1234567890", Literal(1234567890))
+        self.assertParsesTo("0123456789", Literal(123456789))
+        self.assertParsesTo("1_234_567_890", Literal(1234567890))
+        self.assertParsesTo("1.234567890", Literal(1.23456789))
+        self.assertParsesTo("1.234_567_890", Literal(1.23456789))
+        self.assertParsesTo("1e9", Literal(1000000000))
+        self.assertParsesTo("1.23456789e9", Literal(1234567890))
+        self.assertParsesTo("1.234_567_890e9", Literal(1234567890))
+        self.assertParsesTo("123.456_789e9", Literal(123456789000))
+        self.assertParsesTo("1.23456789e-9", Literal(1.23456789e-9))
+        self.assertParsesTo("1.23456789E-99", Literal(1.23456789e-99))
+        self.assertParsesTo("1.2_3_4_5_6_7_8_9E1_0_0_0", Literal(1.23456789e1000))
+
+    def test_si_prefixes(self):
+        self.assertParsesTo('1T', Literal(1e12))
+        self.assertParsesTo('1G', Literal(1e9))
+        self.assertParsesTo('1M', Literal(1e6))
+        self.assertParsesTo('1k', Literal(1e3))
+        self.assertParsesTo('1m', Literal(1e-3))
+        self.assertParsesTo('1u', Literal(1e-6))
+        self.assertParsesTo('1µ', Literal(1e-6))
+        self.assertParsesTo('1n', Literal(1e-9))
+        self.assertParsesTo('1p', Literal(1e-12))
+
+    def test_strings(self):
+        self.assertParsesTo('"Hello world!"', Literal("Hello world!"))
+        self.assertParsesTo("'Hello world!'", Literal("Hello world!"))
+        self.assertParsesTo('''"Hello 'world!'"''', Literal("Hello 'world!'"))
+        self.assertParsesTo("""'Hello "world!"'""", Literal('Hello "world!"'))
+        self.assertParsesTo('''"""Hello
+world!"""''', Literal("Hello\nworld!"))
+        self.assertParsesTo("""'''Hello
+world!'''""", Literal("Hello\nworld!"))
+        self.assertParsesTo("'Hello\\nworld!'", Literal("Hello\nworld!"))
+        self.assertParsesTo("'Hello Hafnarfjörður!'", Literal("Hello Hafnarfjörður!"))
+
+    def test_symbols(self):
+        self.assertParsesTo(":hello", Literal(Vector.symbol("hello")))
+        self.assertParsesTo(":_world", Literal(Vector.symbol("_world")))
+        self.assertParsesTo(":hello_world", Literal(Vector.symbol("hello_world")))
+        self.assertParsesTo(":Hafnarfjörður", Literal(Vector.symbol("Hafnarfjörður")))
+        self.assertParsesTo(":hello123", Literal(Vector.symbol("hello123")))
+
+    def test_nodes(self):
+        self.assertParsesTo("!hello", Literal(Node("hello")))
+        self.assertParsesTo("!_world", Literal(Node("_world")))
+        self.assertParsesTo("!hello_world", Literal(Node("hello_world")))
+        self.assertParsesTo("!Hafnarfjörður", Literal(Node("Hafnarfjörður")))
+        self.assertParsesTo("!hello123", Literal(Node("hello123")))
+
+
 class TestPrecedence(ParserTestCase):
     def test_maths_literals(self):
         self.assertParsesTo("0-1//2%3++4*-5**6/7",
@@ -41,3 +95,8 @@ class TestPrecedence(ParserTestCase):
         self.assertParsesTo("a-b//c%d++e*-f**g/h",
                             Add(Subtract(Name('a'), Modulo(FloorDivide(Name('b'), Name('c')), Name('d'))),
                                 Divide(Multiply(Positive(Name('e')), Negative(Power(Name('f'), Name('g')))), Name('h'))))
+
+    def test_maths_parenthesised(self):
+        self.assertParsesTo("(a-b)//c%d++e*(-f)**(g/h)",
+                            Add(Modulo(FloorDivide(Subtract(Name('a'), Name('b')), Name('c')), Name('d')),
+                                Multiply(Positive(Name('e')), Power(Negative(Name('f')), Divide(Name('g'), Name('h'))))))
