@@ -299,12 +299,15 @@ applied from the rightmost attribute (last) to the leftmost (first).
 
 ### `!vignette`
 
-A *very* simple vignette filter that (alpha-) fades out the edges of its output.
-It is controlled with the single attribute:
+A *very* simple vignette filter that composites its input nodes and then fades
+the edges of the output to transparent. It is controlled with the attributes:
 
 `inset=` *(0,0.5)*
 : Specifies the inset as a proportion of the height and width at which the
 fade-out will occur, default `0.25`.
+
+`fade=` [ `:linear` | `:quad` | `:cubic` ]
+: Specifies the function to use for the fade at the edges. Default is `:linear`.
 
 ### `!adjust`
 
