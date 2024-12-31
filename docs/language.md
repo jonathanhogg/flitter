@@ -107,6 +107,12 @@ only Latin characters and are generally English words or abbreviations (using US
 spelling). Therefore, **Flitter** programs can be written using only ASCII
 characters, but feel free to use hieroglyphs if you wish.
 
+## Comments
+
+Everything following a pair of sequential dash characters (`--`) up to the end
+of that line is a comment. There is no multi-line comment sequence in
+**Flitter**, use `--` at the beginning of each line.
+
 ## Values
 
 All values are vectors of either floating point numbers, Unicode strings, nodes
@@ -128,8 +134,8 @@ the same length as the longer of the two vectors. The shorter vector will be
 repeated as necessary. This means that:
 
 ```flitter
-(1;2;3;4;5;6;7;8;9) + 1       == (2;3;4;5;6;7;8;9;10)
-(1;2;3;4;5;6;7;8;9) + (1;2;3) == (2;4;6;5;7;9;8;10;12)
+(1;2;3;4;5;6;7;8;9) + 1       -- evals to: (2;3;4;5;6;7;8;9;10)
+(1;2;3;4;5;6;7;8;9) + (1;2;3) -- evals to: (2;4;6;5;7;9;8;10;12)
 ```
 
 Note that the vector composition operator `;` has a *very* low precedence and so
@@ -137,8 +143,8 @@ composed vectors will generally have to be wrapped in parentheses when used with
 operators:
 
 ```flitter
-x;y+1 == x;(y+1)
-(x;y)+1 == (x+1);(y+1)
+x;y + 1 -- is equivalent to: x;(y+1)
+(x;y)+1 -- is equivalent to: (x+1);(y+1)
 ```
 
 ### Named values
