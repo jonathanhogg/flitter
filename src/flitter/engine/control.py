@@ -183,6 +183,8 @@ class EngineController:
                            'clock': time.time()}
                 names = dict(static)
                 names.update(dynamic)
+                if self.disable_simplifier:
+                    dynamic.update(static)
 
                 program = self.current_path.read_flitter_program(static=static, dynamic=dynamic, simplify=not self.disable_simplifier)
                 if program is not current_program:
