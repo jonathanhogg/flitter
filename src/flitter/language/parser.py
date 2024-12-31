@@ -92,8 +92,8 @@ class FlitterTransformer(Transformer):
 
     def template_call(self, function, bindings, sequence):
         if sequence is not None:
-            return tree.Call(function, (sequence,), bindings)
-        return tree.Call(function, (tree.Literal(model.null),), bindings or None)
+            return tree.Call(function, (sequence,), bindings or None)
+        return tree.Call(function, None, bindings or None)
 
     def function(self, name, parameters, body, sequence):
         return tree.Let((tree.PolyBinding((name,), tree.Function(name, parameters, body)),), sequence)
