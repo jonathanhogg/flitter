@@ -31,7 +31,7 @@ class ParserTestCase(unittest.TestCase):
         self.assertEqual(repr(parse(code)), repr(expression))
 
 
-class TestLiterals(ParserTestCase):
+class TestAtoms(ParserTestCase):
     def test_numbers(self):
         self.assertParsesTo("0", Literal(0))
         self.assertParsesTo("1234567890", Literal(1234567890))
@@ -74,6 +74,7 @@ world!'''""", Literal("Hello\nworld!"))
         self.assertParsesTo(":hello", Literal(Vector.symbol("hello")))
         self.assertParsesTo(":_world", Literal(Vector.symbol("_world")))
         self.assertParsesTo(":hello_world", Literal(Vector.symbol("hello_world")))
+        self.assertParsesTo(":_", Literal(Vector.symbol("_")))
         self.assertParsesTo(":Hafnarfjörður", Literal(Vector.symbol("Hafnarfjörður")))
         self.assertParsesTo(":hello123", Literal(Vector.symbol("hello123")))
 
@@ -81,8 +82,17 @@ world!'''""", Literal("Hello\nworld!"))
         self.assertParsesTo("!hello", Literal(Node("hello")))
         self.assertParsesTo("!_world", Literal(Node("_world")))
         self.assertParsesTo("!hello_world", Literal(Node("hello_world")))
+        self.assertParsesTo("!_", Literal(Node("_")))
         self.assertParsesTo("!Hafnarfjörður", Literal(Node("Hafnarfjörður")))
         self.assertParsesTo("!hello123", Literal(Node("hello123")))
+
+    def test_names(self):
+        self.assertParsesTo("hello", Name("hello"))
+        self.assertParsesTo("_world", Name("_world"))
+        self.assertParsesTo("hello_world", Name("hello_world"))
+        self.assertParsesTo("_", Name("_"))
+        self.assertParsesTo("Hafnarfjörður", Name("Hafnarfjörður"))
+        self.assertParsesTo("hello123", Name("hello123"))
 
 
 class TestPrecedence(ParserTestCase):
