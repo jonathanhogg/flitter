@@ -48,7 +48,7 @@ cdef dict static_builtins = {
 static_builtins.update(STATIC_FUNCTIONS)
 static_builtins.update(NOISE_FUNCTIONS)
 
-cdef dict all_builtins = {}
+all_builtins = {}
 all_builtins.update(dynamic_builtins)
 all_builtins.update(static_builtins)
 

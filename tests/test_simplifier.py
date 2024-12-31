@@ -19,6 +19,7 @@ from flitter.language.tree import (Literal, Name, Sequence,
                                    Let, Call, For, IfElse,
                                    Import, Function, Top, Export,
                                    Binding, PolyBinding, IfCondition)
+from flitter.language.vm import all_builtins
 
 
 configure_logger('ERROR')
@@ -44,13 +45,14 @@ class SimplifierTestCase(unittest.TestCase):
                 for error in with_errors:
                     if error.startswith("Unbound name '"):
                         unbound.add(error[14:-1])
-        x_unbound = x.unbound_names()
+        builtins = set(all_builtins)
+        x_unbound = x.unbound_names(builtins)
         if not isinstance(x, Export):
             self.assertEqual(x_unbound, unbound, msg="Mismatch of expected unbound names")
         xx, context = x.simplify(state=state, dynamic=dynamic, static=static, path='test.fl', return_context=True)
         xxx = xx.simplify(state=state, dynamic=dynamic, static=static)
         self.assertIs(xxx, xx, msg="Simplification not complete in one step")
-        xx_unbound = xx.unbound_names(aliases)
+        xx_unbound = xx.unbound_names(builtins | aliases)
         self.assertTrue(xx_unbound.issubset(x_unbound), msg=f"Unexpected new unbound names: {xx_unbound - x_unbound}")
         if static:
             for name, value in static.items():
@@ -1014,6 +1016,17 @@ class TestLet(SimplifierTestCase):
         """Let of a name to that name"""
         self.assertSimplifiesTo(Let((PolyBinding(('x',), Name('x')),), Add(Name('x'), Name('y'))), Add(Name('x'), Name('y')), dynamic={'x', 'y'})
 
+    def test_unused_let(self):
+        """Let of a name that is not free in the body is removed"""
+        self.assertSimplifiesTo(Let((PolyBinding(('x',), Add(Name('z'), Literal(1))), PolyBinding(('y',), Add(Name('z'), Literal(2)))), Name('y')),
+                                Let((PolyBinding(('y',), Add(Name('z'), Literal(2))),), Name('y')), dynamic={'z'})
+
+    def test_unused_let_export(self):
+        """Let of a name that is not free in the body will not be removed if it will be exported"""
+        self.assertSimplifiesTo(Let((PolyBinding(('x',), Add(Name('z'), Literal(1))),), Export()),
+                                Let((PolyBinding(('x',), Add(Name('z'), Literal(1))),), Export()),
+                                dynamic={'z'}, unbound={'z', None})
+
 
 class TestCall(SimplifierTestCase):
     def test_dynamic(self):
@@ -1255,8 +1268,7 @@ let y=10+(x or 3)
 
     def test_import_inlining(self):
         self.assertSimplifiesTo(Import(('f',), Literal(str(self.test_module)), Call(Name('f'), (Name('y'),), ())),
-                                Let((PolyBinding(('f',), Function('f', (Binding('x', None),), Multiply(Name('x'), Literal(2)), (), True, False)),),
-                                    Multiply(Name('y'), Literal(2))),
+                                Multiply(Name('y'), Literal(2)),
                                 dynamic={'y'}, with_dependencies={self.test_module})
 
 
@@ -1309,7 +1321,7 @@ class TestExport(SimplifierTestCase):
         self.assertSimplifiesTo(Export(), Export({'x': Vector(5)}), static={'x': 5})
 
     def test_let_explicit(self):
-        self.assertSimplifiesTo(Let((PolyBinding(('x',), Literal(5)),), Export()), Export({'x': Vector(5)}))
+        self.assertSimplifiesTo(Let((PolyBinding(('x',), Literal(5)),), Export()), Export({'x': Vector(5)}), unbound=set([None]))
 
 
 class TestTop(SimplifierTestCase):

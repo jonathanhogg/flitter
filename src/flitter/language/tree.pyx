@@ -170,7 +170,7 @@ cdef class Export(Expression):
         return self
 
     cdef set _unbound_names(self, set names):
-        return set()
+        return set([None])
 
     def __repr__(self):
         return f'Export({self.static_exports!r})'
@@ -358,7 +358,7 @@ cdef class Name(Expression):
 
     cdef set _unbound_names(self, set names):
         cdef set unbound = set()
-        if self.name not in names and self.name not in static_builtins and self.name not in dynamic_builtins:
+        if self.name not in names:
             unbound.add(self.name)
         return unbound
 
@@ -1394,6 +1394,19 @@ cdef class Let(Expression):
             context.names = saved
         if isinstance(sbody, Literal):
             return sbody
+        cdef set unbound = sbody._unbound_names(set())
+        cdef list original
+        if None not in unbound:
+            original = remaining
+            remaining = []
+            for binding in reversed(original):
+                for name in binding.names:
+                    if name in unbound:
+                        remaining.insert(0, binding)
+                        unbound |= binding.expr.unbound_names(set())
+                        break
+                else:
+                    touched = True
         if isinstance(sbody, Let):
             remaining.extend((<Let>sbody).bindings)
             sbody = (<Let>sbody).body
