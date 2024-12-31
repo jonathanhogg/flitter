@@ -927,7 +927,7 @@ cdef class Slice(Expression):
     cdef void _compile(self, Program program, list lnames):
         self.expr._compile(program, lnames)
         if isinstance(self.index, Literal):
-            program.slice_literal((<Literal>self.index).value)
+            program.slice_literal((<Literal>self.index).value.intern())
         else:
             self.index._compile(program, lnames)
             program.slice()

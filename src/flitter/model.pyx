@@ -1167,12 +1167,12 @@ cdef class Vector:
         return result
 
 
-cdef Vector null_ = Vector()
-cdef Vector true_ = Vector(1)
-cdef Vector false_ = Vector(0)
-cdef Vector minusone_ = Vector(-1)
-cdef Vector inf_ = Vector(np.inf)
-cdef Vector nan_ = Vector(np.nan)
+cdef Vector null_ = Vector().intern()
+cdef Vector true_ = Vector(1).intern()
+cdef Vector false_ = Vector(0).intern()
+cdef Vector minusone_ = Vector(-1).intern()
+cdef Vector inf_ = Vector(np.inf).intern()
+cdef Vector nan_ = Vector(np.nan).intern()
 
 null = null_
 true = true_
