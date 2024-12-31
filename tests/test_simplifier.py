@@ -1021,6 +1021,17 @@ class TestLet(SimplifierTestCase):
         self.assertSimplifiesTo(Let((PolyBinding(('x',), Add(Name('z'), Literal(1))), PolyBinding(('y',), Add(Name('z'), Literal(2)))), Name('y')),
                                 Let((PolyBinding(('y',), Add(Name('z'), Literal(2))),), Name('y')), dynamic={'z'})
 
+    def test_let_chained(self):
+        """Let of a name used in another let binding that is retained must also be retained"""
+        self.assertSimplifiesTo(Let((PolyBinding(('x',), Add(Name('z'), Literal(1))), PolyBinding(('y',), Add(Name('x'), Literal(2)))), Name('y')),
+                                Let((PolyBinding(('x',), Add(Name('z'), Literal(1))), PolyBinding(('y',), Add(Name('x'), Literal(2)))), Name('y')),
+                                dynamic={'z'})
+
+    def test_unused_let_chained(self):
+        """Let of a name used in another let binding that is discarded may also be discarded"""
+        self.assertSimplifiesTo(Let((PolyBinding(('x',), Add(Name('z'), Literal(1))), PolyBinding(('y',), Add(Name('x'), Literal(2)))), Name('z')),
+                                Name('z'), dynamic={'z'})
+
     def test_unused_let_export(self):
         """Let of a name that is not free in the body will not be removed if it will be exported"""
         self.assertSimplifiesTo(Let((PolyBinding(('x',), Add(Name('z'), Literal(1))),), Export()),
