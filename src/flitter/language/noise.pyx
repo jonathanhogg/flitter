@@ -1595,34 +1595,31 @@ cdef Vector _noise(Vector perm, list args):
         xx = args[0]
         if xx.numbers != NULL:
             result.allocate_numbers(xx.length)
-            with nogil:
-                for i in range(xx.length):
-                    result.numbers[i] = noise2(perm, xx.numbers[i], 0)
+            for i in range(xx.length):
+                result.numbers[i] = noise2(perm, xx.numbers[i], 0)
     elif n == 2:
         xx = args[0]
         yy = args[1]
         if xx.numbers != NULL and yy.numbers != NULL:
             result.allocate_numbers(xx.length * yy.length)
-            with nogil:
-                for i in range(xx.length):
-                    x = xx.numbers[i]
-                    for j in range(yy.length):
-                        result.numbers[count] = noise2(perm, x, yy.numbers[j])
-                        count += 1
+            for i in range(xx.length):
+                x = xx.numbers[i]
+                for j in range(yy.length):
+                    result.numbers[count] = noise2(perm, x, yy.numbers[j])
+                    count += 1
     elif n == 3:
         xx = args[0]
         yy = args[1]
         zz = args[2]
         if xx.numbers != NULL and yy.numbers != NULL and zz.numbers != NULL:
             result.allocate_numbers(xx.length * yy.length * zz.length)
-            with nogil:
-                for i in range(xx.length):
-                    x = xx.numbers[i]
-                    for j in range(yy.length):
-                        y = yy.numbers[j]
-                        for k in range(zz.length):
-                            result.numbers[count] = noise3(perm, x, y, zz.numbers[k])
-                            count += 1
+            for i in range(xx.length):
+                x = xx.numbers[i]
+                for j in range(yy.length):
+                    y = yy.numbers[j]
+                    for k in range(zz.length):
+                        result.numbers[count] = noise3(perm, x, y, zz.numbers[k])
+                        count += 1
     elif n == 4:
         xx = args[0]
         yy = args[1]
@@ -1630,16 +1627,15 @@ cdef Vector _noise(Vector perm, list args):
         ww = args[3]
         if xx.numbers != NULL and yy.numbers != NULL and zz.numbers != NULL and ww.numbers != NULL:
             result.allocate_numbers(xx.length * yy.length * zz.length * ww.length)
-            with nogil:
-                for i in range(xx.length):
-                    x = xx.numbers[i]
-                    for j in range(yy.length):
-                        y = yy.numbers[j]
-                        for k in range(zz.length):
-                            z = zz.numbers[k]
-                            for m in range(ww.length):
-                                result.numbers[count] = noise4(perm, x, y, z, ww.numbers[m])
-                                count += 1
+            for i in range(xx.length):
+                x = xx.numbers[i]
+                for j in range(yy.length):
+                    y = yy.numbers[j]
+                    for k in range(zz.length):
+                        z = zz.numbers[k]
+                        for m in range(ww.length):
+                            result.numbers[count] = noise4(perm, x, y, z, ww.numbers[m])
+                            count += 1
     return result
 
 
