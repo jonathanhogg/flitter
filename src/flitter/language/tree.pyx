@@ -20,6 +20,7 @@ from .vm cimport Program, Instruction, InstructionInt, InstructionVector, OpCode
 logger = name_patch(logger, __name__)
 
 cdef Literal NoOp = Literal(null_)
+cdef int64_t MAX_RECURSIVE_CALL_DEPTH = 500
 
 
 cdef bint sequence_pack(list expressions):
@@ -231,8 +232,10 @@ cdef class Import(Expression):
         cdef Expression expr = self.expr
         if let_names:
             expr = Let(tuple(PolyBinding((name,), value if isinstance(value, Function) else Literal(value)) for name, value in let_names.items()), expr)
-        expr = expr._simplify(context)
-        context.names = saved
+        try:
+            expr = expr._simplify(context)
+        finally:
+            context.names = saved
         if not remaining:
             return expr
         if filename is self.filename and expr is self.expr:
@@ -992,7 +995,7 @@ cdef class Call(Expression):
         cdef bint literal_func = isinstance(function, Literal)
         if literal_func and not (<Literal>function).value.objects:
             return NoOp
-        cdef bint literal_args = True
+        cdef bint all_literal_args=True, all_dynamic_args=True
         cdef Expression arg, sarg, expr
         cdef list args = []
         if self.args:
@@ -1000,8 +1003,10 @@ cdef class Call(Expression):
                 sarg = arg._simplify(context)
                 touched |= sarg is not arg
                 args.append(sarg)
-                if not isinstance(sarg, Literal):
-                    literal_args = False
+                if isinstance(sarg, Literal):
+                    all_dynamic_args = False
+                else:
+                    all_literal_args = False
         cdef list keyword_args = []
         cdef Binding binding
         if self.keyword_args:
@@ -1009,12 +1014,14 @@ cdef class Call(Expression):
                 arg = binding.expr._simplify(context)
                 touched |= arg is not binding.expr
                 keyword_args.append(Binding(binding.name, arg))
-                if not isinstance(arg, Literal):
-                    literal_args = False
+                if isinstance(arg, Literal):
+                    all_dynamic_args = False
+                else:
+                    all_literal_args = False
         cdef list bindings
         cdef dict kwargs
         cdef int64_t i
-        if func_expr is not None and not func_expr.captures and (not func_expr.recursive or literal_args):
+        if func_expr is not None and not func_expr.captures and not (func_expr.recursive and all_dynamic_args):
             kwargs = {binding.name: binding.expr for binding in keyword_args}
             bindings = []
             for i, binding in enumerate(func_expr.parameters):
@@ -1026,11 +1033,26 @@ cdef class Call(Expression):
                     bindings.append(PolyBinding((binding.name,), binding.expr))
                 else:
                     bindings.append(PolyBinding((binding.name,), Literal(null_)))
-            expr = Let(tuple(bindings), func_expr.body)._simplify(context)
-            return expr
+            if func_expr.recursive:
+                if context.call_depth == 0:
+                    context.call_depth = 1
+                    try:
+                        return Let(tuple(bindings), func_expr.body)._simplify(context)
+                    except RecursionError:
+                        pass
+                    context.call_depth = 0
+                elif context.call_depth == MAX_RECURSIVE_CALL_DEPTH:
+                    raise RecursionError()
+                else:
+                    context.call_depth += 1
+                    expr = Let(tuple(bindings), func_expr.body)._simplify(context)
+                    context.call_depth -= 1
+                    return expr
+            else:
+                return Let(tuple(bindings), func_expr.body)._simplify(context)
         cdef list vector_args, results
         cdef Literal literal_arg
-        if literal_func and literal_args:
+        if literal_func and all_literal_args:
             vector_args = [literal_arg.value for literal_arg in args]
             kwargs = {binding.name: (<Literal>binding.expr).value for binding in keyword_args}
             results = []
@@ -1364,9 +1386,12 @@ cdef class Let(Expression):
                 context.names[name] = None
             remaining.append(PolyBinding(binding.names, expr))
         cdef bint resimplify = shadowed and shadowed & discarded
-        cdef Expression sbody = body._simplify(context)
-        touched |= sbody is not body
-        context.names = saved
+        cdef Expression sbody
+        try:
+            sbody = body._simplify(context)
+            touched |= sbody is not body
+        finally:
+            context.names = saved
         if isinstance(sbody, Literal):
             return sbody
         if isinstance(sbody, Let):
@@ -1432,19 +1457,23 @@ cdef class For(Expression):
         if not isinstance(source, Literal):
             for name in self.names:
                 context.names[name] = None
-            body = self.body._simplify(context)
-            context.names = saved
+            try:
+                body = self.body._simplify(context)
+            finally:
+                context.names = saved
             if source is self.source and body is self.body:
                 return self
             return For(self.names, source, body)
         values = (<Literal>source).value
         cdef int64_t i=0, n=values.length
-        while i < n:
-            for name in self.names:
-                context.names[name] = values.item(i) if i < n else null_
-                i += 1
-            remaining.append(self.body._simplify(context))
-        context.names = saved
+        try:
+            while i < n:
+                for name in self.names:
+                    context.names[name] = values.item(i) if i < n else null_
+                    i += 1
+                remaining.append(self.body._simplify(context))
+        finally:
+            context.names = saved
         sequence_pack(remaining)
         if not remaining:
             return NoOp
@@ -1611,7 +1640,10 @@ cdef class Function(Expression):
         for parameter in parameters:
             context.names[parameter.name] = None
             bound_names.add(parameter.name)
-        body = self.body._simplify(context)
+        try:
+            body = self.body._simplify(context)
+        finally:
+            context.names = saved
         cdef set captures = body._unbound_names(bound_names)
         touched |= body is not self.body
         cdef recursive = self.name in captures
@@ -1621,7 +1653,6 @@ cdef class Function(Expression):
         cdef tuple captures_t = tuple(captures)
         cdef bint inlineable = literal and not captures_t
         touched |= inlineable != self.inlineable
-        context.names = saved
         touched |= captures_t != self.captures
         if not touched:
             return self

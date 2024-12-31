@@ -7,6 +7,7 @@ import tempfile
 import unittest
 import unittest.mock
 
+from flitter import configure_logger
 from flitter.model import Vector, Node, StateDict, null, true, false
 from flitter.language import functions
 from flitter.language.tree import (Literal, Name, Sequence,
@@ -18,6 +19,9 @@ from flitter.language.tree import (Literal, Name, Sequence,
                                    Let, Call, For, IfElse,
                                    Import, Function, Top, Export,
                                    Binding, PolyBinding, IfCondition)
+
+
+configure_logger('ERROR')
 
 
 class SimplifierTestCase(unittest.TestCase):
@@ -1036,58 +1040,76 @@ class TestCall(SimplifierTestCase):
 
     def test_simple_named_inlining(self):
         """Calls to names that resolve to Function objects are inlined as let expressions"""
-        func = Function('func', (Binding('x', Literal(null)),), Add(Name('x'), Literal(5)), captures=(), inlineable=True)
-        self.assertSimplifiesTo(Call(Name('func'), (Add(Literal(1), Name('y')),), ()),
+        f = Function('f', (Binding('x', Literal(null)),), Add(Name('x'), Literal(5)), captures=(), inlineable=True)
+        self.assertSimplifiesTo(Call(Name('f'), (Add(Literal(1), Name('y')),), ()),
                                 Let((PolyBinding(('x',), Add(Literal(1), Name('y'))),), Add(Name('x'), Literal(5))),
-                                static={'func': func}, dynamic={'y'})
+                                static={'f': f}, dynamic={'y'})
 
     def test_simple_anonymous_inlining(self):
         """Direct calls to anonymous functions are inlined as let expressions"""
-        func = Function('<anon>', (Binding('x', Literal(null)),), Add(Name('x'), Literal(5)), captures=(), inlineable=True)
-        self.assertSimplifiesTo(Call(func, (Add(Literal(1), Name('y')),), ()),
+        f = Function('<anon>', (Binding('x', Literal(null)),), Add(Name('x'), Literal(5)), captures=(), inlineable=True)
+        self.assertSimplifiesTo(Call(f, (Add(Literal(1), Name('y')),), ()),
                                 Let((PolyBinding(('x',), Add(Literal(1), Name('y'))),), Add(Name('x'), Literal(5))),
                                 dynamic={'y'})
 
     def test_simple_inlined_missing_parameter_default(self):
         """An inlined function with a default parameter value used"""
-        func = Function('func', (Binding('x', None), Binding('y', Literal(1))), Add(Name('x'), Name('y')), captures=(), inlineable=True)
-        self.assertSimplifiesTo(Call(Name('func'), (Literal(5),), ()),
+        f = Function('f', (Binding('x', None), Binding('y', Literal(1))), Add(Name('x'), Name('y')), captures=(), inlineable=True)
+        self.assertSimplifiesTo(Call(Name('f'), (Literal(5),), ()),
                                 Literal(6),
-                                static={'func': func})
+                                static={'f': f})
 
     def test_simple_inlined_keyword_argument(self):
         """An inlined function with a keyword argument given"""
-        func = Function('func', (Binding('x', None), Binding('y', Literal(1))), Add(Name('x'), Name('y')), captures=(), inlineable=True)
-        self.assertSimplifiesTo(Call(Name('func'), (Literal(1),), (Binding('y', Literal(2)),)),
+        f = Function('f', (Binding('x', None), Binding('y', Literal(1))), Add(Name('x'), Name('y')), captures=(), inlineable=True)
+        self.assertSimplifiesTo(Call(Name('f'), (Literal(1),), (Binding('y', Literal(2)),)),
                                 Literal(3),
-                                static={'func': func})
+                                static={'f': f})
 
     def test_simple_inlined_missing_default_parameter_used(self):
         """An inlined function with a keyword argument given"""
-        func = Function('func', (Binding('x', None), Binding('y', Literal(1))), Add(Name('x'), Name('y')), captures=(), inlineable=True)
-        self.assertSimplifiesTo(Call(Name('func'), (), ()),
+        f = Function('f', (Binding('x', None), Binding('y', Literal(1))), Add(Name('x'), Name('y')), captures=(), inlineable=True)
+        self.assertSimplifiesTo(Call(Name('f'), (), ()),
                                 Literal(null),
-                                static={'func': func})
+                                static={'f': f})
 
-    def test_inlineable_recursive_non_literal(self):
-        """Calls to inlineable, recursive functions are *not* inlined if arguments are not all literal"""
-        func = Function(
-            'func',
-            (Binding('x', Literal(null)),),
-            IfElse((IfCondition(GreaterThan(Name('x'), Literal(0)), Add(Name('x'), Call(Name('func'), (Subtract(Name('x'), Literal(1)),)))),), Literal(0)),
+
+class TestRecursiveCall(SimplifierTestCase):
+    def setUp(self):
+        self.f = Function(
+            'f',
+            (Binding('x', Literal(null)), Binding('y', Literal(null))),
+            IfElse((IfCondition(GreaterThan(Name('x'), Literal(0)),
+                                Add(Name('y'), Call(Name('f'), (Subtract(Name('x'), Literal(1)), Divide(Name('y'), Literal(2)))))),),
+                   Literal(0)),
             captures=(), inlineable=True, recursive=True
         )
-        self.assertSimplifiesTo(Call(Name('func'), (Name('y'),)), Call(Name('func'), (Name('y'),)), static={'func': func}, dynamic={'y'})
 
-    def test_inlineable_recursive_literal(self):
-        """Calls to inlineable, recursive functions *are* inlined if arguments are all literal"""
-        func = Function(
-            'func',
-            (Binding('x', Literal(null)),),
-            IfElse((IfCondition(GreaterThan(Name('x'), Literal(0)), Add(Name('x'), Call(Name('func'), (Subtract(Name('x'), Literal(1)),)))),), Literal(0)),
-            captures=(), inlineable=True, recursive=True
-        )
-        self.assertSimplifiesTo(Call(Name('func'), (Literal(5),)), Literal(15), static={'func': func})
+    def test_inlineable_recursive_all_non_literal(self):
+        """A call to a recursive function with no literal arguments will not be inlined"""
+        self.assertSimplifiesTo(Call(Name('f'), (Name('z'), Name('w'))),
+                                Call(Name('f'), (Name('z'), Name('w'))),
+                                static={'f': self.f}, dynamic={'z', 'w'})
+
+    def test_inlineable_recursive_literal_bound(self):
+        """A call to a recursive function with at least literal arguments will cause an inline attempt.
+           In this case the literal argument determines the bounds and so recursive inlining will succeed."""
+        self.assertSimplifiesTo(Call(Name('f'), (Literal(2), Name('w'))),
+                                Add(Name('w'), Let((PolyBinding(('y',), Multiply(Literal(0.5), Name('w'))),), Positive(Name('y')))),
+                                static={'f': self.f}, dynamic={'w'})
+
+    def test_inlineable_recursive_dynamic_bound(self):
+        """A call to a recursive function with at least literal arguments will cause an inline attempt.
+           In this case the literal argument does not determine the bounds and so recursive inlining will fail."""
+        self.assertSimplifiesTo(Call(Name('f'), (Name('z'), Literal(1))),
+                                Call(Name('f'), (Name('z'), Literal(1))),
+                                static={'f': self.f}, dynamic={'z'})
+
+    def test_inlineable_recursive_all_literal(self):
+        """A call to a recursive function with all literal arguments should be fully simplified"""
+        self.assertSimplifiesTo(Call(Name('f'), (Literal(4), Literal(32))),
+                                Literal(32+16+8+4+0),
+                                static={'f': self.f})
 
 
 class TestFastFunctions(SimplifierTestCase):
