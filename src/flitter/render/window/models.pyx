@@ -527,7 +527,7 @@ cdef class Transform(UnaryOperation):
 
     @staticmethod
     cdef Model _get(Model original, Matrix44 transform_matrix):
-        cdef str name = f'{original.name}@{hex(transform_matrix.hash(False))[2:]}'
+        cdef str name = f'{original.name}@{transform_matrix.hash(False):x}'
         cdef Transform model = <Transform>ModelCache.get(name, None)
         if model is None:
             model = Transform.__new__(Transform)
@@ -646,7 +646,7 @@ cdef class Trim(UnaryOperation):
     cdef Trim _get(Model original, Vector origin, Vector normal, double smooth, double fillet, double chamfer):
         if origin.numbers == NULL or origin.length != 3 or normal.numbers == NULL or normal.length != 3:
             return None
-        cdef str name = f'trim({original.name}, {hex(origin.hash(False) ^ normal.hash(False))[2:]}'
+        cdef str name = f'trim({original.name}, {origin.hash(False) ^ normal.hash(False):x}'
         if smooth:
             name += f', smooth={smooth}'
         elif fillet:
@@ -956,7 +956,7 @@ cdef class Box(PrimitiveModel):
     @staticmethod
     cdef Box _get(str uv_map):
         uv_map = uv_map if uv_map in Box.VertexUV else 'standard'
-        cdef str name = '!box' if uv_map == 'standard' else f'!box({uv_map})'
+        cdef str name = '!box' if uv_map is 'standard' else f'!box-{uv_map}'
         cdef Box model = <Box>ModelCache.get(name, None)
         if model is None:
             model = Box.__new__(Box)

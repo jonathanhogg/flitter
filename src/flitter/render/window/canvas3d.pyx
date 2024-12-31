@@ -468,6 +468,26 @@ cdef Model get_model(Node node, bint top):
             model = Model._vector(vertices, faces)
         if model is not None and node.get_bool('repair', False):
             model = model.repair()
+    elif not top and node.kind is 'transform':
+        transform_matrix = update_transform_matrix(node, IdentityTransform)
+        model = Model._boolean('union', [get_model(child, False)._transform(transform_matrix) for child in node._children], 0, 0, 0)
+    elif node.kind is 'trim' or node.kind is 'slice':
+        normal = node.get_fvec('normal', 3, null_)
+        origin = node.get_fvec('origin', 3, Zero3)
+        if len(node._children) == 1:
+            model = get_model(node._children[0], False)
+        else:
+            model = Model._boolean('union', [get_model(child, False) for child in node._children], 0, 0, 0)
+        if model is not None and normal.as_bool():
+            model = model._trim(origin, normal,
+                                node.get_float('smooth', 0),
+                                node.get_float('fillet', 0),
+                                node.get_float('chamfer', 0))
+    elif node.kind in ('union', 'intersect', 'difference'):
+        model = Model._boolean(node.kind, [get_model(child, False) for child in node._children],
+                               node.get_float('smooth', 0),
+                               node.get_float('fillet', 0),
+                               node.get_float('chamfer', 0))
     elif node.kind is 'sdf':
         maximum = node.get_fvec('maximum', 3, node.get_fvec('max', 3, One3))
         minimum = node.get_fvec('minimum', 3, node.get_fvec('min', 3, maximum.neg()))
@@ -483,23 +503,6 @@ cdef Model get_model(Node node, bint top):
             model = Model._sdf(None, model, minimum, maximum, resolution)
     elif node.kind is 'mix':
         model = Model._mix([get_model(child, False) for child in node._children], node.get_fvec('weights', 0, true_))
-    elif not top and node.kind is 'transform':
-        transform_matrix = update_transform_matrix(node, IdentityTransform)
-        model = Model._boolean('union', [get_model(child, False)._transform(transform_matrix) for child in node._children], 0, 0, 0)
-    elif node.kind in ('union', 'intersect', 'difference'):
-        model = Model._boolean(node.kind, [get_model(child, False) for child in node._children],
-                               node.get_float('smooth', 0),
-                               node.get_float('fillet', 0),
-                               node.get_float('chamfer', 0))
-    elif node.kind is 'trim' or node.kind is 'slice':
-        normal = node.get_fvec('normal', 3, null_)
-        origin = node.get_fvec('origin', 3, Zero3)
-        model = Model._boolean('union', [get_model(child, False) for child in node._children], 0, 0, 0)
-        if model is not None and normal.as_bool():
-            model = model._trim(origin, normal,
-                                node.get_float('smooth', 0),
-                                node.get_float('fillet', 0),
-                                node.get_float('chamfer', 0))
     elif (cls := get_plugin('flitter.render.window.models', node.kind)) is not None:
         model = cls.from_node(node)
     if model is not None:
