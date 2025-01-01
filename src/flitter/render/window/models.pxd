@@ -1,7 +1,7 @@
 
 from ...model cimport Node, Vector, Matrix44
 
-from libc.stdint cimport int64_t
+from libc.stdint cimport int64_t, uint64_t
 
 
 cdef double DefaultSnapAngle
@@ -9,7 +9,7 @@ cdef int64_t DefaultSegments
 
 
 cdef class Model:
-    cdef readonly str name
+    cdef readonly uint64_t id
     cdef readonly double touch_timestamp
     cdef readonly double cache_timestamp
     cdef readonly dict cache

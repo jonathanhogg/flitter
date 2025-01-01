@@ -11,7 +11,7 @@ from libc.stdint cimport int32_t, int64_t
 
 from ... import name_patch
 from ...cache import SharedCache
-from ...model cimport true_, Context, Vector
+from ...model cimport true_, Context, Vector, HASH_UPDATE, HASH_STRING, double_long
 from ...timer cimport perf_counter
 
 
@@ -24,6 +24,23 @@ cdef double DefaultSnapAngle = 0.05
 cdef int64_t DefaultSegments = 64
 cdef Matrix44 IdentityTransform = Matrix44._identity()
 cdef double NaN = float("nan")
+
+
+cdef uint64_t FLATTEN = HASH_STRING('flatten')
+cdef uint64_t INVERT = HASH_STRING('invert')
+cdef uint64_t REPAIR = HASH_STRING('repair')
+cdef uint64_t SNAP_EDGES = HASH_STRING('snap_edges')
+cdef uint64_t TRANSFORM = HASH_STRING('transform')
+cdef uint64_t UV_REMAP = HASH_STRING('uv_remap')
+cdef uint64_t TRIM = HASH_STRING('trim')
+cdef uint64_t BOX = HASH_STRING('box')
+cdef uint64_t SPHERE = HASH_STRING('sphere')
+cdef uint64_t CYLINDER = HASH_STRING('cylinder')
+cdef uint64_t CONE = HASH_STRING('cone')
+cdef uint64_t EXTERNAL = HASH_STRING('external')
+cdef uint64_t VECTOR = HASH_STRING('vector')
+cdef uint64_t SDF = HASH_STRING('sdf')
+cdef uint64_t MIX = HASH_STRING('mix')
 
 
 cdef class Model:
@@ -41,7 +58,7 @@ cdef class Model:
                 break
             while unloaded:
                 model = unloaded.pop()
-                del ModelCache[model.name]
+                del ModelCache[model.id]
                 model.unload()
                 unload_count += 1
         for model in ModelCache.values():
@@ -54,33 +71,32 @@ cdef class Model:
             logger.trace("Unloaded {} models from cache, {} remaining", unload_count, len(ModelCache))
 
     @staticmethod
-    def by_name(str name):
-        return ModelCache.get(name)
+    def by_id(uint64_t id):
+        return ModelCache.get(id)
 
     @staticmethod
     def from_node(Node node):
         raise NotImplementedError()
 
-    def __init__(self, name=None):
-        if name is None:
-            raise ValueError("Name cannot be None")
-        name = str(name)
-        if name in ModelCache:
-            raise ValueError(f"Model already exists with name: '{name}'")
-        self.name = name
-        ModelCache[name] = self
+    def __init__(self, id=None):
+        if id is None:
+            raise ValueError("id cannot be None")
+        if id in ModelCache:
+            raise ValueError(f"Model already exists with id: '{id}'")
+        self.id = id
+        ModelCache[id] = self
 
     def __hash__(self):
-        return <Py_hash_t>(<void*>self)
+        return <Py_hash_t>(self.id)
 
     def __eq__(self, other):
         return self is other
 
     def __str__(self):
-        return self.name
+        return f'{self.__class__.__name__}#{self.id:x}'
 
     def __repr__(self):
-        return f'<Model: {self.name}>'
+        return f'<{self.__class__.__name__}(0x{self.id:x})>'
 
     cpdef void unload(self):
         assert not self.dependents
@@ -88,8 +104,8 @@ cdef class Model:
         self.cache = None
         if self.buffer_caches is not None:
             for cache in self.buffer_caches:
-                if self.name in cache:
-                    del cache[self.name]
+                if self.id in cache:
+                    del cache[self.id]
             self.buffer_caches = None
 
     cpdef bint is_smooth(self):
@@ -123,14 +139,14 @@ cdef class Model:
                     trimesh_model = trimesh_model.convex_hull
                     hull = True
         if not trimesh_model.is_volume:
-            logger.error("Mesh is not a volume: {}", self.name)
+            logger.error("Mesh is not a volume: {}", self)
             return None
         elif hull:
-            logger.warning("Computed convex hull of non-manifold mesh: {}", self.name)
+            logger.warning("Computed convex hull of non-manifold mesh: {}", self)
         elif filled:
-            logger.debug("Filled holes in non-manifold mesh: {}", self.name)
+            logger.debug("Filled holes in non-manifold mesh: {}", self)
         elif merged:
-            logger.trace("Merged vertices of non-manifold mesh: {}", self.name)
+            logger.trace("Merged vertices of non-manifold mesh: {}", self)
         return manifold3d.Manifold(mesh=manifold3d.Mesh(vert_properties=np.array(trimesh_model.vertices, dtype='f4'),
                                                         tri_verts=np.array(trimesh_model.faces, dtype=np.uint32)))
 
@@ -152,8 +168,8 @@ cdef class Model:
                 model.invalidate()
         if self.buffer_caches is not None:
             for cache in self.buffer_caches:
-                if self.name in cache:
-                    del cache[self.name]
+                if self.id in cache:
+                    del cache[self.id]
             self.buffer_caches = None
 
     cpdef object get_trimesh(self):
@@ -197,7 +213,7 @@ cdef class Model:
 
     cpdef tuple get_buffers(self, object glctx, dict objects):
         self.cache_timestamp = perf_counter()
-        cdef str name = self.name
+        cdef str name = str(self)
         if name in objects:
             return objects[name]
         cdef trimesh_model = self.get_trimesh()
@@ -217,7 +233,7 @@ cdef class Model:
         vertex_data = np.hstack((trimesh_model.vertices, trimesh_model.vertex_normals, vertex_uvs)).astype('f4', copy=False)
         index_data = trimesh_model.faces.astype('i4', copy=False)
         buffers = (glctx.buffer(vertex_data), glctx.buffer(index_data))
-        logger.trace("Constructed model {} with {} vertices and {} faces", name, len(vertex_data), len(index_data))
+        logger.trace("Constructed model {} with {} vertices and {} faces", self.id, len(vertex_data), len(index_data))
         objects[name] = buffers
         return buffers
 
@@ -361,14 +377,15 @@ cdef class UnaryOperation(Model):
 cdef class Flatten(UnaryOperation):
     @staticmethod
     cdef Flatten _get(Model original):
-        cdef str name = f'flatten({original.name})'
-        cdef Flatten model = <Flatten>ModelCache.get(name, None)
+        cdef uint64_t id = FLATTEN
+        id = HASH_UPDATE(id, original.id)
+        cdef Flatten model = <Flatten>ModelCache.get(id, None)
         if model is None:
             model = Flatten.__new__(Flatten)
-            model.name = name
+            model.id = id
             model.original = original
             model.original.add_dependent(model)
-            ModelCache[name] = model
+            ModelCache[id] = model
         model.touch_timestamp = perf_counter()
         return model
 
@@ -395,14 +412,15 @@ cdef class Flatten(UnaryOperation):
 cdef class Invert(UnaryOperation):
     @staticmethod
     cdef Invert _get(Model original):
-        cdef str name = f'invert({original.name})'
-        cdef Invert model = <Invert>ModelCache.get(name, None)
+        cdef uint64_t id = INVERT
+        id = HASH_UPDATE(id, original.id)
+        cdef Invert model = <Invert>ModelCache.get(id, None)
         if model is None:
             model = Invert.__new__(Invert)
-            model.name = name
+            model.id = id
             model.original = original
             model.original.add_dependent(model)
-            ModelCache[name] = model
+            ModelCache[id] = model
         return model
 
     cpdef Model invert(self):
@@ -437,14 +455,15 @@ cdef class Invert(UnaryOperation):
 cdef class Repair(UnaryOperation):
     @staticmethod
     cdef Repair _get(Model original):
-        cdef str name = f'repair({original.name})'
-        cdef Repair model = <Repair>ModelCache.get(name, None)
+        cdef uint64_t id = REPAIR
+        id = HASH_UPDATE(id, original.id)
+        cdef Repair model = <Repair>ModelCache.get(id, None)
         if model is None:
             model = Repair.__new__(Repair)
-            model.name = name
+            model.id = id
             model.original = original
             model.original.add_dependent(model)
-            ModelCache[name] = model
+            ModelCache[id] = model
         model.touch_timestamp = perf_counter()
         return model
 
@@ -473,21 +492,19 @@ cdef class SnapEdges(UnaryOperation):
     cdef SnapEdges _get(Model original, double snap_angle, double minimum_area):
         snap_angle = min(max(0, snap_angle), 0.5)
         minimum_area = min(max(0, minimum_area), 1)
-        cdef str name = 'snap_edges(' + original.name
-        if minimum_area or snap_angle != DefaultSnapAngle:
-            name += f', {snap_angle:g}'
-        if minimum_area:
-            name += f', {minimum_area:g}'
-        name += ')'
-        cdef SnapEdges model = <SnapEdges>ModelCache.get(name, None)
+        cdef uint64_t id = SNAP_EDGES
+        id = HASH_UPDATE(id, original.id)
+        id = HASH_UPDATE(id, double_long(f=snap_angle).l)
+        id = HASH_UPDATE(id, double_long(f=minimum_area).l)
+        cdef SnapEdges model = <SnapEdges>ModelCache.get(id, None)
         if model is None:
             model = SnapEdges.__new__(SnapEdges)
-            model.name = name
+            model.id = id
             model.original = original
             model.original.add_dependent(model)
             model.snap_angle = snap_angle
             model.minimum_area = minimum_area
-            ModelCache[name] = model
+            ModelCache[id] = model
         model.touch_timestamp = perf_counter()
         return model
 
@@ -527,15 +544,16 @@ cdef class Transform(UnaryOperation):
 
     @staticmethod
     cdef Model _get(Model original, Matrix44 transform_matrix):
-        cdef str name = f'{original.name}@{transform_matrix.hash(False):x}'
-        cdef Transform model = <Transform>ModelCache.get(name, None)
+        cdef uint64_t id = TRANSFORM
+        id = HASH_UPDATE(id, transform_matrix.hash(False))
+        cdef Transform model = <Transform>ModelCache.get(id, None)
         if model is None:
             model = Transform.__new__(Transform)
-            model.name = name
+            model.id = id
             model.original = original
             model.original.add_dependent(model)
             model.transform_matrix = transform_matrix
-            ModelCache[name] = model
+            ModelCache[id] = model
         model.touch_timestamp = perf_counter()
         return model
 
@@ -588,15 +606,17 @@ cdef class UVRemap(UnaryOperation):
 
     @staticmethod
     cdef UVRemap _get(Model original, str mapping):
-        cdef str name = f'uv_remap({original.name}, {mapping})'
-        cdef UVRemap model = <UVRemap>ModelCache.get(name, None)
+        cdef uint64_t id = UV_REMAP
+        id = HASH_UPDATE(id, original.id)
+        id = HASH_UPDATE(id, HASH_STRING(mapping))
+        cdef UVRemap model = <UVRemap>ModelCache.get(id, None)
         if model is None:
             model = UVRemap.__new__(UVRemap)
-            model.name = name
+            model.id = id
             model.original = original
             model.original.add_dependent(model)
             model.mapping = mapping
-            ModelCache[name] = model
+            ModelCache[id] = model
         model.touch_timestamp = perf_counter()
         return model
 
@@ -646,18 +666,16 @@ cdef class Trim(UnaryOperation):
     cdef Trim _get(Model original, Vector origin, Vector normal, double smooth, double fillet, double chamfer):
         if origin.numbers == NULL or origin.length != 3 or normal.numbers == NULL or normal.length != 3:
             return None
-        cdef str name = f'trim({original.name}, {origin.hash(False) ^ normal.hash(False):x}'
-        if smooth:
-            name += f', smooth={smooth}'
-        elif fillet:
-            name += f', fillet={fillet}'
-        elif chamfer:
-            name += f', chamfer={chamfer}'
-        name += ')'
-        cdef Trim model = <Trim>ModelCache.get(name, None)
+        cdef uint64_t id = TRIM
+        id = HASH_UPDATE(id, origin.hash(False))
+        id = HASH_UPDATE(id, normal.hash(False))
+        id = HASH_UPDATE(id, double_long(f=smooth).l)
+        id = HASH_UPDATE(id, double_long(f=fillet).l)
+        id = HASH_UPDATE(id, double_long(f=chamfer).l)
+        cdef Trim model = <Trim>ModelCache.get(id, None)
         if model is None:
             model = Trim.__new__(Trim)
-            model.name = name
+            model.id = id
             model.original = original
             model.original.add_dependent(model)
             model.origin = origin
@@ -665,7 +683,7 @@ cdef class Trim(UnaryOperation):
             model.smooth = smooth
             model.fillet = fillet
             model.chamfer = chamfer
-            ModelCache[name] = model
+            ModelCache[id] = model
         model.touch_timestamp = perf_counter()
         return model
 
@@ -712,7 +730,7 @@ cdef class Trim(UnaryOperation):
             normal = self.normal.neg()
             manifold = manifold.trim_by_plane(normal=tuple(normal), origin_offset=self.origin.dot(normal))
             if manifold.is_empty():
-                logger.warning("Result of trim was empty: {}", self.name)
+                logger.warning("Result of trim was empty: {}", self)
                 manifold = None
         return manifold
 
@@ -731,7 +749,7 @@ cdef class BooleanOperation(Model):
         models = list(models)
         models.reverse()
         cdef list collected_models = []
-        cdef str name = operation + '('
+        cdef uint64_t id = HASH_STRING(operation)
         while models:
             child_model = models.pop()
             if child_model is None:
@@ -750,26 +768,20 @@ cdef class BooleanOperation(Model):
                 return None
             elif child_model in existing:
                 continue
-            else:
-                name += ', '
-            name += child_model.name
+            id = HASH_UPDATE(id, child_model.id)
             existing.add(child_model)
             collected_models.append(child_model)
         if len(collected_models) == 0:
             return None
         if len(collected_models) == 1:
             return collected_models[0]
-        if smooth:
-            name += f', smooth={smooth}'
-        elif fillet:
-            name += f', fillet={fillet}'
-        elif chamfer:
-            name += f', chamfer={chamfer}'
-        name += ')'
-        cdef BooleanOperation model = <BooleanOperation>ModelCache.get(name, None)
+        id = HASH_UPDATE(id, double_long(f=smooth).l)
+        id = HASH_UPDATE(id, double_long(f=fillet).l)
+        id = HASH_UPDATE(id, double_long(f=chamfer).l)
+        cdef BooleanOperation model = <BooleanOperation>ModelCache.get(id, None)
         if model is None:
             model = BooleanOperation.__new__(BooleanOperation)
-            model.name = name
+            model.id = id
             model.operation = operation
             model.models = collected_models
             model.smooth = smooth
@@ -777,7 +789,7 @@ cdef class BooleanOperation(Model):
             model.chamfer = chamfer
             for child_model in collected_models:
                 child_model.add_dependent(model)
-            ModelCache[name] = model
+            ModelCache[id] = model
         model.touch_timestamp = perf_counter()
         return model
 
@@ -894,7 +906,7 @@ cdef class BooleanOperation(Model):
         elif self.operation is 'difference':
             manifold = manifold3d.Manifold.batch_boolean(manifolds, manifold3d.OpType.Subtract)
         if manifold.is_empty():
-            logger.warning("Result of {} was empty: {}", self.operation, self.name)
+            logger.warning("Result of {} was empty: {}", self.operation, self)
             manifold = None
         return manifold
 
@@ -956,13 +968,14 @@ cdef class Box(PrimitiveModel):
     @staticmethod
     cdef Box _get(str uv_map):
         uv_map = uv_map if uv_map in Box.VertexUV else 'standard'
-        cdef str name = '!box' if uv_map is 'standard' else f'!box-{uv_map}'
-        cdef Box model = <Box>ModelCache.get(name, None)
+        cdef uint64_t id = BOX
+        id = HASH_UPDATE(id, HASH_STRING(uv_map))
+        cdef Box model = <Box>ModelCache.get(id, None)
         if model is None:
             model = Box.__new__(Box)
-            model.name = name
+            model.id = id
             model.uv_map = uv_map
-            ModelCache[name] = model
+            ModelCache[id] = model
         model.touch_timestamp = perf_counter()
         return model
 
@@ -983,13 +996,14 @@ cdef class Sphere(PrimitiveModel):
     @staticmethod
     cdef Sphere _get(int64_t segments):
         segments = max(4, <int64_t>ceil(<double>segments / 4.0) * 4)
-        cdef str name = f'!sphere-{segments}' if segments != DefaultSegments else '!sphere'
-        cdef Sphere model = <Sphere>ModelCache.get(name, None)
+        cdef uint64_t id = SPHERE
+        id = HASH_UPDATE(id, segments)
+        cdef Sphere model = <Sphere>ModelCache.get(id, None)
         if model is None:
             model = Sphere.__new__(Sphere)
-            model.name = name
+            model.id = id
             model.segments = segments
-            ModelCache[name] = model
+            ModelCache[id] = model
         model.touch_timestamp = perf_counter()
         return model
 
@@ -1062,13 +1076,14 @@ cdef class Cylinder(PrimitiveModel):
     @staticmethod
     cdef Cylinder _get(int64_t segments):
         segments = max(2, segments)
-        cdef str name = f'!cylinder-{segments}' if segments != DefaultSegments else '!cylinder'
-        cdef Cylinder model = <Cylinder>ModelCache.get(name, None)
+        cdef uint64_t id = CYLINDER
+        id = HASH_UPDATE(id, segments)
+        cdef Cylinder model = <Cylinder>ModelCache.get(id, None)
         if model is None:
             model = Cylinder.__new__(Cylinder)
-            model.name = name
+            model.id = id
             model.segments = segments
-            ModelCache[name] = model
+            ModelCache[id] = model
         model.touch_timestamp = perf_counter()
         return model
 
@@ -1150,13 +1165,14 @@ cdef class Cone(PrimitiveModel):
     @staticmethod
     cdef Cone _get(int64_t segments):
         segments = max(2, segments)
-        cdef str name = f'!cone-{segments}' if segments != DefaultSegments else '!cone'
-        cdef Cone model = <Cone>ModelCache.get(name, None)
+        cdef uint64_t id = CONE
+        id = HASH_UPDATE(id, segments)
+        cdef Cone model = <Cone>ModelCache.get(id, None)
         if model is None:
             model = Cone.__new__(Cone)
-            model.name = name
+            model.id = id
             model.segments = segments
-            ModelCache[name] = model
+            ModelCache[id] = model
         model.touch_timestamp = perf_counter()
         return model
 
@@ -1223,12 +1239,14 @@ cdef class ExternalModel(Model):
     cdef ExternalModel _get(str filename):
         if filename is None:
             return None
-        cdef ExternalModel model = <ExternalModel>ModelCache.get(filename, None)
+        cdef uint64_t id = EXTERNAL
+        id = HASH_UPDATE(id, HASH_STRING(filename))
+        cdef ExternalModel model = <ExternalModel>ModelCache.get(id, None)
         if model is None:
             model = ExternalModel.__new__(ExternalModel)
-            model.name = filename
+            model.id = id
             model.cache_path = SharedCache[filename]
-            ModelCache[filename] = model
+            ModelCache[id] = model
         model.touch_timestamp = perf_counter()
         return model
 
@@ -1252,7 +1270,7 @@ cdef class ExternalModel(Model):
             if proximity_query is not None:
                 return -(proximity_query.signed_distance([(x, y, z)])[0])
         except Exception:
-            logger.exception("Unable to do SDF proximity query of mesh: {}", self.name)
+            logger.exception("Unable to do SDF proximity query of mesh: {}", self)
             self.cache['proximity_query'] = None
         return NaN
 
@@ -1268,14 +1286,16 @@ cdef class VectorModel(Model):
     cdef VectorModel _get(Vector vertices, Vector faces):
         if vertices is None or vertices.numbers == NULL or faces is None or faces.numbers == NULL:
             return None
-        cdef str name = f'vector({hex(vertices.hash(False))}, {hex(faces.hash(False))})'
-        cdef VectorModel model = <VectorModel>ModelCache.get(name, None)
+        cdef uint64_t id = VECTOR
+        id = HASH_UPDATE(id, vertices.hash(False))
+        id = HASH_UPDATE(id, faces.hash(False))
+        cdef VectorModel model = <VectorModel>ModelCache.get(id, None)
         if model is None:
             model = VectorModel.__new__(VectorModel)
-            model.name = name
+            model.id = id
             model.vertices = vertices
             model.faces = faces
-            ModelCache[name] = model
+            ModelCache[id] = model
         model.touch_timestamp = perf_counter()
         return model
 
@@ -1298,7 +1318,7 @@ cdef class VectorModel(Model):
             if proximity_query is not None:
                 return -(proximity_query.signed_distance([(x, y, z)])[0])
         except Exception:
-            logger.exception("Unable to do SDF proximity query of mesh: {}", self.name)
+            logger.exception("Unable to do SDF proximity query of mesh: {}", self)
             self.cache['proximity_query'] = None
         return NaN
 
@@ -1323,18 +1343,24 @@ cdef class SignedDistanceFunction(UnaryOperation):
     cdef SignedDistanceFunction _get(function, Model original, Vector minimum, Vector maximum, double resolution):
         if function is None and original is None:
             return None
-        cdef str name = f'!sdf({hash(function)}, {minimum!r}, {maximum!r}, {resolution})' if function is not None \
-                        else f'!sdf({original.name}, {minimum!r}, {maximum!r}, {resolution})'
-        cdef SignedDistanceFunction model = <SignedDistanceFunction>ModelCache.get(name, None)
+        cdef uint64_t id = SDF
+        if function is not None:
+            id = HASH_UPDATE(id, hash(function))
+        else:
+            id = HASH_UPDATE(id, original.id)
+        id = HASH_UPDATE(id, minimum.hash(False))
+        id = HASH_UPDATE(id, maximum.hash(False))
+        id = HASH_UPDATE(id, double_long(f=resolution).l)
+        cdef SignedDistanceFunction model = <SignedDistanceFunction>ModelCache.get(id, None)
         if model is None:
             model = SignedDistanceFunction.__new__(SignedDistanceFunction)
-            model.name = name
+            model.id = id
             model.function = function
             model.original = original
             model.minimum = minimum
             model.maximum = maximum
             model.resolution = resolution
-            ModelCache[name] = model
+            ModelCache[id] = model
             if original is not None:
                 original.add_dependent(model)
         model.touch_timestamp = perf_counter()
@@ -1371,7 +1397,7 @@ cdef class SignedDistanceFunction(UnaryOperation):
         else:
             manifold = manifold3d.Manifold.level_set(self.inverse_signed_distance, box, self.resolution)
         if manifold.is_empty():
-            logger.warning("Result of SDF was empty: {}", self.name)
+            logger.warning("Result of SDF was empty: {}", self)
             manifold = None
         return manifold
 
@@ -1384,25 +1410,25 @@ cdef class Mix(Model):
     cdef Model _get(list models, Vector weights):
         cdef Model child_model
         cdef list collected_models = []
-        cdef str name = 'mix()'
+        cdef uint64_t id = MIX
         for child_model in models:
             if child_model is not None:
                 collected_models.append(child_model)
-                name += f'{child_model.name}, '
-        name += f'{weights}!r)'
+                id = HASH_UPDATE(id, child_model.id)
+        id = HASH_UPDATE(id, weights.hash(False))
         if len(collected_models) == 0:
             return None
         if len(collected_models) == 1:
             return collected_models[0]
-        cdef Mix model = <Mix>ModelCache.get(name, None)
+        cdef Mix model = <Mix>ModelCache.get(id, None)
         if model is None:
             model = Mix.__new__(Mix)
-            model.name = name
+            model.id = id
             model.models = collected_models
             model.weights = weights
             for child_model in collected_models:
                 child_model.add_dependent(model)
-            ModelCache[name] = model
+            ModelCache[id] = model
         model.touch_timestamp = perf_counter()
         return model
 

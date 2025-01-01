@@ -32,6 +32,11 @@ cdef inline uint64_t HASH_STRING(str value):
     return y
 
 
+cdef union double_long:
+    double f
+    uint64_t l
+
+
 cdef class Vector:
     cdef int64_t length
     cdef tuple objects
