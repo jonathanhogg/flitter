@@ -23,6 +23,7 @@ from ...model cimport Node, Vector, Matrix44, Matrix33, Quaternion, null_, true_
 from .models cimport Model, DefaultSegments, DefaultSnapAngle
 from .target import RenderTarget, COLOR_FORMATS
 from ...plugins import get_plugin
+from ...language.vm import Function
 
 
 logger = name_patch(logger, __name__)
@@ -493,7 +494,7 @@ cdef Model get_model(Node node, bint top):
         minimum = node.get_fvec('minimum', 3, node.get_fvec('min', 3, maximum.neg()))
         resolution = node.get_float('resolution', (maximum.maximum() - minimum.minimum()) / 100)
         if 'function' in node and (function := node['function']) and function.length == 1 and \
-                function.objects is not None and callable(f := function.objects[0]):
+                function.objects is not None and isinstance(f := function.objects[0], Function):
             model = Model._sdf(f, None, minimum, maximum, resolution)
         else:
             model = Model._boolean('union', [get_model(child, False) for child in node._children],

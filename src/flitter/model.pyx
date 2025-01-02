@@ -30,11 +30,6 @@ cdef dict SymbolTable = {}
 cdef dict ReverseSymbolTable = {}
 
 
-cdef union double_long:
-    double f
-    uint64_t l
-
-
 cdef inline int64_t vector_compare(Vector left, Vector right) noexcept:
     if left is right:
         return 0

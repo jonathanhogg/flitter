@@ -21,7 +21,7 @@ cdef inline uint64_t HASH_UPDATE(uint64_t _hash, uint64_t y) noexcept:
 
 
 # FNV-1a hash algorithm [https://en.wikipedia.org/wiki/Fowler–Noll–Vo_hash_function#FNV-1a_hash]
-cdef inline uint64_t HASH_STRING(str value):
+cdef inline uint64_t HASH_STRING(str value) noexcept:
     cdef void* data = PyUnicode_DATA(value)
     cdef uint64_t i, n=PyUnicode_GET_LENGTH(value), kind=PyUnicode_KIND(value)
     cdef Py_UCS4 c
@@ -30,6 +30,11 @@ cdef inline uint64_t HASH_STRING(str value):
         c = PyUnicode_READ(kind, data, i)
         y = (y ^ <uint64_t>c) * <uint64_t>(0x100000001b3)
     return y
+
+
+cdef union double_long:
+    double f
+    uint64_t l
 
 
 cdef class Vector:

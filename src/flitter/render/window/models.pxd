@@ -1,7 +1,8 @@
 
 from ...model cimport Node, Vector, Matrix44
+from ...language.vm cimport Function
 
-from libc.stdint cimport int64_t
+from libc.stdint cimport int64_t, uint64_t
 
 
 cdef double DefaultSnapAngle
@@ -9,7 +10,7 @@ cdef int64_t DefaultSegments
 
 
 cdef class Model:
-    cdef readonly str name
+    cdef readonly uint64_t id
     cdef readonly double touch_timestamp
     cdef readonly double cache_timestamp
     cdef readonly dict cache
@@ -61,7 +62,7 @@ cdef class Model:
     cdef Model _vector(Vector vertices, Vector faces)
 
     @staticmethod
-    cdef Model _sdf(function, Model original, Vector minimum, Vector maximum, double resolution)
+    cdef Model _sdf(Function function, Model original, Vector minimum, Vector maximum, double resolution)
 
     @staticmethod
     cdef Model _mix(list models, Vector weights)

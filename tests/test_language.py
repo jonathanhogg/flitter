@@ -519,6 +519,12 @@ class TestDocumentationDiagrams(ScriptTest):
     def test_pseudorandoms(self):
         self.assertSimplifierDoesntChangeBehaviour(self.DIAGRAMS / 'pseudorandoms.fl')
 
+    def test_spheroidbox(self):
+        self.assertSimplifierDoesntChangeBehaviour(self.DIAGRAMS / 'spheroidbox.fl')
+
+    def test_torus(self):
+        self.assertSimplifierDoesntChangeBehaviour(self.DIAGRAMS / 'torus.fl')
+
     def test_waveforms(self):
         self.assertSimplifierDoesntChangeBehaviour(self.DIAGRAMS / 'waveforms.fl')
 
