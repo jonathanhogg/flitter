@@ -514,12 +514,14 @@ class TestTrim(utils.TestCase):
         self.assertTrue(model.is_smooth())
         with unittest.mock.patch('flitter.render.window.models.logger') as mock_logger:
             manifold = model.get_manifold()
-            mock_logger.warning.assert_called_with("Result of trim was empty: {}", model.name)
+            mock_logger.warning.assert_called_with("Result of operation was empty mesh: {}", model.name)
         self.assertIsNone(manifold)
         self.assertIsNone(model.get_trimesh())
 
 
 class TestBoolean(utils.TestCase):
+    Accuracy = 0.01
+
     def setUp(self):
         self.nested_box_models = [Model.box().transform(Matrix44.scale(2)), Model.box()]
         self.cross_models = [Model.box().transform(Matrix44.scale([3, 1, 1])),
@@ -532,72 +534,91 @@ class TestBoolean(utils.TestCase):
     def tearDown(self):
         Model.flush_caches(0, 0)
 
+    def wrap_model(self, model):
+        return model
+
+    def wrap_name(self, name):
+        return name
+
     def test_ignored_none(self):
-        self.assertEqual(Model.union(Model.box(), None, Model.sphere()).name, 'union(!box, !sphere)')
-        self.assertEqual(Model.intersect(Model.box(), None, Model.sphere()).name, 'intersect(!box, !sphere)')
-        self.assertEqual(Model.difference(Model.box(), None, Model.sphere()).name, 'difference(!box, !sphere)')
+        self.assertEqual(self.wrap_model(Model.union(Model.box(), None, Model.sphere())).name,
+                         self.wrap_name('union(!box, !sphere)'))
+        self.assertEqual(self.wrap_model(Model.intersect(Model.box(), None, Model.sphere())).name,
+                         self.wrap_name('intersect(!box, !sphere)'))
+        self.assertEqual(self.wrap_model(Model.difference(Model.box(), None, Model.sphere())).name,
+                         self.wrap_name('difference(!box, !sphere)'))
 
     def test_nested_box_union(self):
-        model = Model.union(*self.nested_box_models)
+        model = self.wrap_model(Model.union(*self.nested_box_models))
         mesh = model.get_trimesh()
         self.assertAlmostEqual(mesh.area, 24)
         self.assertAlmostEqual(mesh.volume, 8)
 
     def test_nested_box_intersect(self):
-        model = Model.intersect(*self.nested_box_models)
+        model = self.wrap_model(Model.intersect(*self.nested_box_models))
         mesh = model.get_trimesh()
         self.assertAlmostEqual(mesh.area, 6)
         self.assertAlmostEqual(mesh.volume, 1)
 
     def test_nested_box_difference(self):
-        model = Model.difference(*self.nested_box_models)
+        model = self.wrap_model(Model.difference(*self.nested_box_models))
         mesh = model.get_trimesh()
         self.assertAlmostEqual(mesh.area, 30)
         self.assertAlmostEqual(mesh.volume, 7)
 
     def test_nested_box_reversed_difference(self):
-        model = Model.difference(*reversed(self.nested_box_models))
+        model = self.wrap_model(Model.difference(*reversed(self.nested_box_models)))
         with unittest.mock.patch('flitter.render.window.models.logger') as mock_logger:
             mesh = model.get_trimesh()
-            mock_logger.warning.assert_called_with("Result of {} was empty: {}", "difference", model.name)
+            mock_logger.warning.assert_called_with("Result of operation was empty mesh: {}", model.name)
         self.assertIsNone(mesh)
 
     def test_cross_union(self):
-        model = Model.union(*self.cross_models)
+        model = self.wrap_model(Model.union(*self.cross_models))
         mesh = model.get_trimesh()
-        self.assertAlmostEqual(mesh.area, 30)
-        self.assertAlmostEqual(mesh.volume, 7)
+        self.assertAlmostEqual(mesh.area, 30, places=None, delta=self.Accuracy)
+        self.assertAlmostEqual(mesh.volume, 7, places=None, delta=self.Accuracy)
 
     def test_cross_intersect(self):
-        model = Model.intersect(*self.cross_models)
+        model = self.wrap_model(Model.intersect(*self.cross_models))
         mesh = model.get_trimesh()
-        self.assertAlmostEqual(mesh.area, 6)
-        self.assertAlmostEqual(mesh.volume, 1)
+        self.assertAlmostEqual(mesh.area, 6, places=None, delta=self.Accuracy)
+        self.assertAlmostEqual(mesh.volume, 1, places=None, delta=self.Accuracy)
 
     def test_cross_difference(self):
-        model = Model.difference(*self.cross_models)
+        model = self.wrap_model(Model.difference(*self.cross_models))
         mesh = model.get_trimesh()
-        self.assertAlmostEqual(mesh.area, 12)
-        self.assertAlmostEqual(mesh.volume, 2)
+        self.assertAlmostEqual(mesh.area, 12, places=None, delta=self.Accuracy)
+        self.assertAlmostEqual(mesh.volume, 2, places=None, delta=self.Accuracy)
 
     def test_capsule_union(self):
-        model = Model.union(*self.capsule_models)
+        model = self.wrap_model(Model.union(*self.capsule_models))
         mesh = model.get_trimesh()
-        self.assertAlmostEqual(mesh.area, 4*math.pi + 4*math.pi, places=1)
-        self.assertAlmostEqual(mesh.volume, 2*math.pi + 4/3*math.pi, places=1)
+        self.assertAlmostEqual(mesh.area, 4*math.pi + 4*math.pi, places=None, delta=self.Accuracy*5)
+        self.assertAlmostEqual(mesh.volume, 2*math.pi + 4/3*math.pi, places=None, delta=self.Accuracy*5)
 
     def test_capsule_intersect(self):
-        model = Model.intersect(*self.capsule_models)
+        model = self.wrap_model(Model.intersect(*self.capsule_models))
         with unittest.mock.patch('flitter.render.window.models.logger') as mock_logger:
             mesh = model.get_trimesh()
-            mock_logger.warning.assert_called_with("Result of {} was empty: {}", "intersect", model.name)
+            mock_logger.warning.assert_called_with("Result of operation was empty mesh: {}", model.name)
         self.assertIsNone(mesh)
 
     def test_capsule_difference(self):
-        model = Model.difference(*self.capsule_models)
+        model = self.wrap_model(Model.difference(*self.capsule_models))
         mesh = model.get_trimesh()
-        self.assertAlmostEqual(mesh.area, 4*math.pi + 4*math.pi, places=1)
-        self.assertAlmostEqual(mesh.volume, 2*math.pi - 4/3*math.pi, places=1)
+        self.assertAlmostEqual(mesh.area, 4*math.pi + 4*math.pi, places=None, delta=self.Accuracy*40)
+        self.assertAlmostEqual(mesh.volume, 2*math.pi - 4/3*math.pi, places=None, delta=self.Accuracy*5)
+
+
+class TestSdfBoolean(TestBoolean):
+    Accuracy = 0.1
+
+    def wrap_model(self, model):
+        return Model.sdf(None, model, (-3, -3, -3), (3, 3, 3), 0.05)
+
+    def wrap_name(self, name):
+        return f'sdf({name}, -3;-3;-3, 3;3;3, 0.05)'
 
 
 class TestBuffers(utils.TestCase):

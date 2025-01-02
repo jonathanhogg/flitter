@@ -348,11 +348,11 @@ cdef class Model:
 
     @staticmethod
     cdef Model _sdf(Function function, Model original, Vector minimum, Vector maximum, double resolution):
-        return SignedDistanceFunction._get(function, original, minimum, maximum, resolution)
+        return SignedDistanceField._get(function, original, minimum, maximum, resolution)
 
     @staticmethod
     def sdf(Function function, Model original, minimum, maximum, resolution):
-        return SignedDistanceFunction._get(function, original, Vector._coerce(minimum), Vector._coerce(maximum), float(resolution))
+        return SignedDistanceField._get(function, original, Vector._coerce(minimum), Vector._coerce(maximum), float(resolution))
 
     @staticmethod
     cdef Model _mix(list models, Vector weights):
@@ -798,7 +798,7 @@ cdef class Trim(UnaryOperation):
             normal = self.normal.neg()
             manifold = manifold.trim_by_plane(normal=tuple(normal), origin_offset=self.origin.dot(normal))
             if manifold.is_empty():
-                logger.warning("Result of trim was empty: {}", self.name)
+                logger.warning("Result of operation was empty mesh: {}", self.name)
                 manifold = None
         return manifold
 
@@ -995,7 +995,7 @@ cdef class BooleanOperation(Model):
         elif self.operation is 'difference':
             manifold = manifold3d.Manifold.batch_boolean(manifolds, manifold3d.OpType.Subtract)
         if manifold.is_empty():
-            logger.warning("Result of {} was empty: {}", self.operation, self.name)
+            logger.warning("Result of operation was empty mesh: {}", self.name)
             manifold = None
         return manifold
 
@@ -1467,7 +1467,7 @@ cdef class VectorModel(Model):
         return trimesh.base.Trimesh(vertices=vertices_array, faces=faces_array, process=False)
 
 
-cdef class SignedDistanceFunction(UnaryOperation):
+cdef class SignedDistanceField(UnaryOperation):
     cdef Function function
     cdef Vector minimum
     cdef Vector maximum
@@ -1475,7 +1475,7 @@ cdef class SignedDistanceFunction(UnaryOperation):
     cdef Context context
 
     @staticmethod
-    cdef SignedDistanceFunction _get(Function function, Model original, Vector minimum, Vector maximum, double resolution):
+    cdef SignedDistanceField _get(Function function, Model original, Vector minimum, Vector maximum, double resolution):
         if function is None and original is None:
             return None
         cdef uint64_t id = SDF
@@ -1486,10 +1486,10 @@ cdef class SignedDistanceFunction(UnaryOperation):
         id = HASH_UPDATE(id, minimum.hash(False))
         id = HASH_UPDATE(id, maximum.hash(False))
         id = HASH_UPDATE(id, double_long(f=resolution).l)
-        cdef SignedDistanceFunction model
+        cdef SignedDistanceField model
         cdef PyObject* objptr = PyDict_GetItem(ModelCache, id)
         if objptr == NULL:
-            model = SignedDistanceFunction.__new__(SignedDistanceFunction)
+            model = SignedDistanceField.__new__(SignedDistanceField)
             model.id = id
             model.function = function
             model.original = original
@@ -1500,14 +1500,14 @@ cdef class SignedDistanceFunction(UnaryOperation):
             if original is not None:
                 original.add_dependent(model)
         else:
-            model = <SignedDistanceFunction>objptr
+            model = <SignedDistanceField>objptr
             model.touch_timestamp = 0
         return model
 
     @property
     def name(self):
         if self.function is not None:
-            return f'sdf({self.function}, {self.minimum!r}, {self.maximum!r}, {self.resolution})'
+            return f'sdf(func {self.function}, {self.minimum!r}, {self.maximum!r}, {self.resolution})'
         return f'sdf({self.original.name}, {self.minimum!r}, {self.maximum!r}, {self.resolution:g})'
 
     cpdef bint is_smooth(self):
@@ -1544,7 +1544,7 @@ cdef class SignedDistanceFunction(UnaryOperation):
         else:
             manifold = manifold3d.Manifold.level_set(self.inverse_signed_distance, box, self.resolution)
         if manifold.is_empty():
-            logger.warning("Result of SDF was empty: {}", self.name)
+            logger.warning("Result of operation was empty mesh: {}", self.name)
             manifold = None
         return manifold
 
