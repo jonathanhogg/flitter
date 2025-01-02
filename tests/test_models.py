@@ -602,13 +602,13 @@ class TestBuffers(utils.TestCase):
         glctx = unittest.mock.Mock()
         objects = {}
         buffers = model.get_buffers(glctx, objects)
-        self.assertIn(model.name, objects)
-        self.assertIs(objects[model.name], buffers)
-        vertex_data = glctx.buffer.mock_calls[0].args[0]
+        self.assertIn(model.id, objects)
+        self.assertIs(objects[model.id], buffers)
+        vertex_data, = glctx.buffer.mock_calls[0].args
         self.assertEqual(vertex_data.dtype.name, 'float32')
         self.assertEqual(vertex_data.shape, (24, 8))
-        index_data = glctx.buffer.mock_calls[1].args[0]
+        index_data, = glctx.buffer.mock_calls[1].args
         self.assertEqual(index_data.dtype.name, 'int32')
         self.assertEqual(index_data.shape, (12, 3))
         model.invalidate()
-        self.assertNotIn(model.name, objects)
+        self.assertNotIn(model.id, objects)

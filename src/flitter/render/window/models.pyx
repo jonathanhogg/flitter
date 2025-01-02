@@ -170,12 +170,11 @@ cdef class Model:
         if self.dependents is not None:
             for model in self.dependents:
                 model.invalidate()
-        cdef str name
+        cdef object model_id
         if self.buffer_caches is not None:
-            name = str(self)
+            model_id = self.id
             for cache in self.buffer_caches:
-                if name in cache:
-                    del cache[name]
+                cache.pop(model_id)
             self.buffer_caches = None
 
     cpdef object get_trimesh(self):
@@ -219,9 +218,9 @@ cdef class Model:
 
     cpdef tuple get_buffers(self, object glctx, dict objects):
         self.cache_timestamp = perf_counter()
-        cdef str name = str(self)
-        if name in objects:
-            return objects[name]
+        cdef object model_id = self.id
+        if model_id in objects:
+            return objects[model_id]
         cdef trimesh_model = self.get_trimesh()
         cdef tuple buffers
         if self.buffer_caches is None:
@@ -229,7 +228,7 @@ cdef class Model:
         self.buffer_caches.append(objects)
         if trimesh_model is None:
             buffers = None, None
-            objects[name] = buffers
+            objects[model_id] = buffers
             return buffers
         if (visual := trimesh_model.visual) is not None and isinstance(visual, trimesh.visual.texture.TextureVisuals) \
                 and visual.uv is not None and len(visual.uv) == len(trimesh_model.vertices):
@@ -240,7 +239,7 @@ cdef class Model:
         index_data = trimesh_model.faces.astype('i4', copy=False)
         buffers = (glctx.buffer(vertex_data), glctx.buffer(index_data))
         logger.trace("Constructed model {} with {} vertices and {} faces", self.name, len(vertex_data), len(index_data))
-        objects[name] = buffers
+        objects[model_id] = buffers
         return buffers
 
     cpdef Model flatten(self):
