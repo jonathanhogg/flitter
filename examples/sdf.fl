@@ -1,4 +1,8 @@
 
+-- This is the same as the internal SDF function for !cone, but slower
+func cone(p)
+    max(hypot(p[..2])+p[2], abs(p[2]))-0.5
+
 !window size=1080
     !record filename=(OUTPUT if frame == run_time * fps - 1)
         !canvas3d samples=4
@@ -13,7 +17,7 @@
                                     !cone
                             for i in ..2
                                 !transform rotate_x=0.25+i/2 translate=0;0;0.7 scale=0.3;0.3;0.6
-                                    !cone
+                                    !sdf function=cone
                         !trim normal=0;1;0 origin=0;0.25;0 smooth=0.1
                             !difference chamfer=0.05
                                 !intersect fillet=0.1
