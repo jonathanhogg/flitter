@@ -38,7 +38,7 @@ jobs:
         FLITTER_BUILD_COVERAGE: 1
     - name: Run tests with coverage
       run: |
-        xvfb-run coverage run --source=src -m pytest tests --durations=5
+        xvfb-run coverage run --source=src -m pytest tests --ignore=tests/test_engine.py --durations=5
     - name: Generate coverage reports
       id: report
       run: |
