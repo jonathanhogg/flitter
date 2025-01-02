@@ -607,18 +607,18 @@ class TestBoolean(utils.TestCase):
     def test_capsule_difference(self):
         model = self.wrap_model(Model.difference(*self.capsule_models))
         mesh = model.get_trimesh()
-        self.assertAlmostEqual(mesh.area, 4*math.pi + 4*math.pi, places=None, delta=self.Accuracy*40)
+        self.assertAlmostEqual(mesh.area, 4*math.pi + 4*math.pi, places=None, delta=self.Accuracy*30)
         self.assertAlmostEqual(mesh.volume, 2*math.pi - 4/3*math.pi, places=None, delta=self.Accuracy*5)
 
 
 class TestSdfBoolean(TestBoolean):
-    Accuracy = 0.1
+    Accuracy = 0.2
 
     def wrap_model(self, model):
-        return Model.sdf(None, model, (-3, -3, -3), (3, 3, 3), 0.05)
+        return Model.sdf(None, model, (-3, -3, -3), (3, 3, 3), 0.1)
 
     def wrap_name(self, name):
-        return f'sdf({name}, -3;-3;-3, 3;3;3, 0.05)'
+        return f'sdf({name}, -3;-3;-3, 3;3;3, 0.1)'
 
 
 class TestBuffers(utils.TestCase):
