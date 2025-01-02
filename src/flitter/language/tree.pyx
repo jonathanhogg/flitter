@@ -993,7 +993,7 @@ cdef class Call(Expression):
             if isinstance(value, Function):
                 func_expr = <Function>value
         cdef bint literal_func = isinstance(function, Literal)
-        if literal_func and not (<Literal>function).value.objects:
+        if literal_func and (<Literal>function).value.length == 0:
             return NoOp
         cdef bint all_literal_args=True, all_dynamic_args=True
         cdef Expression arg, sarg, expr
@@ -1056,15 +1056,19 @@ cdef class Call(Expression):
             vector_args = [literal_arg.value for literal_arg in args]
             kwargs = {binding.name: (<Literal>binding.expr).value for binding in keyword_args}
             results = []
-            for func in (<Literal>function).value.objects:
-                if callable(func):
-                    try:
-                        assert not hasattr(func, 'context_func')
-                        results.append(func(*vector_args, **kwargs))
-                    except Exception as exc:
-                        context.errors.add(f"Error calling {func.__name__}: {str(exc)}")
-                else:
-                    context.errors.add(f"{func!r} is not callable")
+            if (<Literal>function).value.objects is not None:
+                for func in (<Literal>function).value.objects:
+                    if callable(func):
+                        try:
+                            assert not hasattr(func, 'context_func')
+                            results.append(func(*vector_args, **kwargs))
+                        except Exception as exc:
+                            context.errors.add(f"Error calling {func.__name__}: {str(exc)}")
+                    else:
+                        context.errors.add(f"{func!r} is not callable")
+            elif (<Literal>function).value.numbers != NULL:
+                for i in range((<Literal>function).value.length):
+                    context.errors.add(f"{(<Literal>function).value.numbers[i]!r} is not callable")
             return Literal(Vector._compose(results))
         if isinstance(function, Literal) and len(args) == 1:
             if (<Literal>function).value == static_builtins['ceil']:

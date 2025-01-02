@@ -321,9 +321,10 @@ class TestVector(utils.TestCase):
             (Vector([1 / 3]), "0.333333333"),
             (Vector("Hello world!"), "Hello world!"),
             (Vector(["Hello ", "world!"]), "Hello world!"),
-            (Vector(["testing", "testing", 1, 2.2, 3.0]), "testingtesting12.23"),
+            (Vector(["testing", "testing", 0, 1, 2.2, 3.0]), "testingtesting012.23"),
             (Vector.symbol('foo'), "foo"),
             (Vector.symbol('foo').concat(Vector.symbol('bar')), "foobar"),
+            (Vector.symbol('foo').concat(Vector([0, 1, 2.2, 3.0])), "foo012.23"),
             (Vector(Node('foo', {'bar'}, {'baz': Vector(2)})), "foo"),
             (Vector(self.test_as_string), "test_as_string"),
         ]

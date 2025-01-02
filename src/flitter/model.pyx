@@ -492,10 +492,7 @@ cdef class Vector:
             return SymbolTable.get(self.numbers[0], f'{self.numbers[0]:.9g}')
         elif n:
             for i in range(n):
-                if self.numbers[i] == 0:
-                    text += "0"
-                else:
-                    text += SymbolTable.get(self.numbers[i], f'{self.numbers[i]:.9g}')
+                text += SymbolTable.get(self.numbers[i], f'{self.numbers[i]:.9g}')
         return text
 
     def __iter__(self):

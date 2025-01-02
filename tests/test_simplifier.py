@@ -1057,10 +1057,14 @@ class TestCall(SimplifierTestCase):
         self.assertSimplifiesTo(Call(Literal(functions.sqrtv), (), ()), Literal(null),
                                 with_errors={'Error calling sqrtv: sqrtv() takes exactly 1 positional argument (0 given)'})
 
-    def test_non_callable_literal(self):
-        """Calls to literals that are definitely not callable (i.e., empty or numeric) are replaced with null"""
+    def test_null_literal(self):
+        """Calls to null literals are replaced with null"""
         self.assertSimplifiesTo(Call(Literal(null), (Name('x'),), ()), Literal(null), dynamic={'x'})
-        self.assertSimplifiesTo(Call(Literal(5), (Name('x'),), ()), Literal(null), dynamic={'x'})
+
+    def test_non_callable_literals(self):
+        """Literal calls to non-callables will evaluate to null with an error"""
+        self.assertSimplifiesTo(Call(Literal(5), (Literal(10),), ()), Literal(null), with_errors={'5.0 is not callable'})
+        self.assertSimplifiesTo(Call(Literal('Hello'), (Literal(10),), ()), Literal(null), with_errors={"'Hello' is not callable"})
 
     def test_simple_named_inlining(self):
         """Calls to names that resolve to Function objects are inlined as let expressions"""
