@@ -1,5 +1,6 @@
 
 from ...model cimport Node, Vector, Matrix44
+from ...language.vm cimport Function
 
 from libc.stdint cimport int64_t, uint64_t
 
@@ -61,7 +62,7 @@ cdef class Model:
     cdef Model _vector(Vector vertices, Vector faces)
 
     @staticmethod
-    cdef Model _sdf(function, Model original, Vector minimum, Vector maximum, double resolution)
+    cdef Model _sdf(Function function, Model original, Vector minimum, Vector maximum, double resolution)
 
     @staticmethod
     cdef Model _mix(list models, Vector weights)

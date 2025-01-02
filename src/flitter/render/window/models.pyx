@@ -11,8 +11,9 @@ from libc.stdint cimport int32_t, int64_t
 
 from ... import name_patch
 from ...cache import SharedCache
-from ...model cimport true_, Context, Vector, HASH_START, HASH_UPDATE, HASH_STRING, double_long
+from ...model cimport true_, Context, Vector, StateDict, HASH_START, HASH_UPDATE, HASH_STRING, double_long
 from ...timer cimport perf_counter
+from ...language.vm cimport VectorStack
 
 
 logger = name_patch(logger, __name__)
@@ -24,7 +25,6 @@ cdef double DefaultSnapAngle = 0.05
 cdef int64_t DefaultSegments = 64
 cdef Matrix44 IdentityTransform = Matrix44._identity()
 cdef double NaN = float("nan")
-
 
 cdef uint64_t FLATTEN = HASH_UPDATE(HASH_START, HASH_STRING('flatten'))
 cdef uint64_t INVERT = HASH_UPDATE(HASH_START, HASH_STRING('invert'))
@@ -345,7 +345,7 @@ cdef class Model:
         return VectorModel._get(Vector._coerce(vertices), Vector._coerce(faces))
 
     @staticmethod
-    cdef Model _sdf(function, Model original, Vector minimum, Vector maximum, double resolution):
+    cdef Model _sdf(Function function, Model original, Vector minimum, Vector maximum, double resolution):
         return SignedDistanceFunction._get(function, original, minimum, maximum, resolution)
 
     @staticmethod
@@ -662,6 +662,9 @@ cdef class UVRemap(UnaryOperation):
     cpdef Model _uv_remap(self, str mapping):
         return self.original._uv_remap(mapping)
 
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    @cython.cdivision(True)
     cdef object remap_sphere(self, trimesh_model):
         cdef const float[:, :] vertices
         cdef object vertex_uv_array
@@ -746,6 +749,7 @@ cdef class Trim(UnaryOperation):
                                                                 transform_matrix.matrix33_cofactor().vmul(self.normal).normalize(),
                                                                 self.smooth, self.fillet, self.chamfer)
 
+    @cython.cdivision(True)
     cpdef double signed_distance(self, double x, double y, double z) noexcept:
         cdef double distance=self.original.signed_distance(x, y, z)
         x -= self.origin.numbers[0]
@@ -1258,7 +1262,7 @@ cdef class Cone(PrimitiveModel):
         return '!cone' if self.segments == DefaultSegments else f'!cone-{self.segments}'
 
     cpdef double signed_distance(self, double x, double y, double z) noexcept:
-        return max(sqrt(x*x+y*y)-abs(0.5-z), abs(z)-0.5)
+        return max(sqrt(x*x+y*y)+z, abs(z))-0.5
 
     @cython.cdivision(True)
     @cython.boundscheck(False)
@@ -1422,19 +1426,19 @@ cdef class VectorModel(Model):
 
 
 cdef class SignedDistanceFunction(UnaryOperation):
-    cdef object function
+    cdef Function function
     cdef Vector minimum
     cdef Vector maximum
     cdef double resolution
     cdef Context context
 
     @staticmethod
-    cdef SignedDistanceFunction _get(function, Model original, Vector minimum, Vector maximum, double resolution):
+    cdef SignedDistanceFunction _get(Function function, Model original, Vector minimum, Vector maximum, double resolution):
         if function is None and original is None:
             return None
         cdef uint64_t id = SDF
         if function is not None:
-            id = HASH_UPDATE(id, hash(function))
+            id = HASH_UPDATE(id, function.hash())
         else:
             id = HASH_UPDATE(id, original.id)
         id = HASH_UPDATE(id, minimum.hash(False))
@@ -1458,7 +1462,7 @@ cdef class SignedDistanceFunction(UnaryOperation):
     @property
     def name(self):
         if self.function is not None:
-            return f'sdf({hash(self.function):x}, {self.minimum!r}, {self.maximum!r}, {self.resolution})'
+            return f'sdf({self.function}, {self.minimum!r}, {self.maximum!r}, {self.resolution})'
         return f'sdf({self.original.name}, {self.minimum!r}, {self.maximum!r}, {self.resolution:g})'
 
     cpdef bint is_smooth(self):
@@ -1467,12 +1471,15 @@ cdef class SignedDistanceFunction(UnaryOperation):
     cpdef double signed_distance(self, double x, double y, double z) noexcept:
         if self.context is None:
             self.context = Context()
+            self.context.state = StateDict()
+            self.context.stack = VectorStack()
+            self.context.lnames = VectorStack()
         cdef Vector pos = Vector.__new__(Vector)
         pos.allocate_numbers(3)
         pos.numbers[0] = x
         pos.numbers[1] = y
         pos.numbers[2] = z
-        cdef Vector result = self.function(self.context, pos)
+        cdef Vector result = self.function.call_one_fast(self.context, pos)
         if result.length == 1 and result.numbers != NULL:
             return result.numbers[0]
         return NaN
@@ -1557,8 +1564,7 @@ cdef class Mix(Model):
         cdef double distance=0, weight=0, d, w
         cdef int64_t i
         cdef Model model
-        for i in range(len(self.models)):
-            model = self.models[i]
+        for i, model in enumerate(self.models):
             d = model.signed_distance(x, y, z)
             w = self.weights.numbers[i % self.weights.length]
             distance += d * w

@@ -479,21 +479,19 @@ cdef inline void poke_at(VectorStack stack, int64_t offset, Vector vector):
 
 
 cdef class Function:
-    cdef readonly str __name__
-    cdef readonly Vector vself
-    cdef readonly tuple parameters
-    cdef readonly tuple defaults
-    cdef readonly Program program
-    cdef readonly int64_t address
-    cdef readonly bint record_stats
-    cdef readonly tuple captures
-    cdef readonly int64_t call_depth
-    cdef readonly int64_t hash
+    cdef uint64_t hash(self):
+        if self._hash == 0:
+            self._hash = <uint64_t>(id(self.program) ^ self.address ^ hash(self.defaults) ^ hash(self.captures))
+        return self._hash
 
     def __hash__(self):
-        if self.hash == 0:
-            self.hash = id(self.program) ^ self.address ^ hash(self.defaults) ^ hash(self.captures)
-        return self.hash
+        return self.hash()
+
+    def __repr__(self):
+        return f'<Function: {self.__name__}>'
+
+    def __str__(self):
+        return self.__name__
 
     def __call__(self, Context context, *args, **kwargs):
         if self.call_depth == MAX_CALL_DEPTH:
@@ -531,6 +529,21 @@ cdef class Function:
         assert stack.top == stack_top, "Bad function return stack"
         assert lnames.top == lnames_top, "Bad function return lnames"
         return result
+
+    cdef Vector call_one_fast(self, Context context, Vector arg):
+        cdef int64_t i, k=PyTuple_GET_SIZE(self.captures), m=PyTuple_GET_SIZE(self.parameters)
+        cdef VectorStack lnames = context.lnames
+        cdef VectorStack stack = context.stack
+        for i in range(k):
+            push(lnames, <Vector>PyTuple_GET_ITEM(self.captures, i))
+        push(lnames, self.vself)
+        if m:
+            push(lnames, arg)
+            for i in range(1, m):
+                push(lnames, <Vector>PyTuple_GET_ITEM(self.defaults, i))
+        self.program._execute(context, self.address, self.record_stats)
+        drop(lnames, k + 1 + m)
+        return pop(stack)
 
 
 cdef class LoopSource:

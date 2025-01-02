@@ -1,7 +1,7 @@
 
 from cpython cimport PyObject
 
-from libc.stdint cimport int64_t
+from libc.stdint cimport int64_t, uint64_t
 
 from ..model cimport Vector, Node, Context
 
@@ -29,6 +29,22 @@ cdef class VectorStack:
     cpdef Vector peek_at(self, int64_t offset)
     cpdef void poke(self, Vector vector)
     cpdef void poke_at(self, int64_t offset, Vector vector)
+
+
+cdef class Function:
+    cdef readonly str __name__
+    cdef readonly Vector vself
+    cdef readonly tuple parameters
+    cdef readonly tuple defaults
+    cdef readonly Program program
+    cdef readonly int64_t address
+    cdef readonly bint record_stats
+    cdef readonly tuple captures
+    cdef readonly int64_t call_depth
+    cdef readonly uint64_t _hash
+
+    cdef uint64_t hash(self)
+    cdef Vector call_one_fast(self, Context context, Vector arg)
 
 
 cdef enum OpCode:
