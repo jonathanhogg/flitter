@@ -6,8 +6,10 @@ import numpy as np
 import trimesh
 import trimesh.proximity
 
-from libc.math cimport cos, sin, sqrt, atan2, ceil, abs
+from libc.math cimport cos, sin, sqrt, atan2, abs
 from libc.stdint cimport int32_t, int64_t
+from cpython.object cimport PyObject
+from cpython.dict cimport PyDict_GetItem
 
 from ... import name_patch
 from ...cache import SharedCache
@@ -45,7 +47,7 @@ cdef uint64_t MIX = HASH_UPDATE(HASH_START, HASH_STRING('mix'))
 
 cdef class Model:
     @staticmethod
-    def flush_caches(double min_age=30, int64_t min_size=2000):
+    def flush_caches(double min_age=300, int64_t min_size=2000):
         cdef double cutoff = perf_counter() - min_age
         cdef Model model
         cdef int64_t unload_count=0, dump_count=0
@@ -179,30 +181,33 @@ cdef class Model:
 
     cpdef object get_trimesh(self):
         self.cache_timestamp = perf_counter()
+        cdef PyObject* objptr
         if self.cache is None:
             self.cache = {}
-        elif 'trimesh' in self.cache:
-            return self.cache['trimesh']
+        elif (objptr := PyDict_GetItem(self.cache, 'trimesh')) != NULL:
+            return <object>objptr
         trimesh_model = self.build_trimesh()
         self.cache['trimesh'] = trimesh_model
         return trimesh_model
 
     cpdef object get_manifold(self):
         self.cache_timestamp = perf_counter()
+        cdef PyObject* objptr
         if self.cache is None:
             self.cache = {}
-        elif 'manifold' in self.cache:
-            return self.cache['manifold']
+        elif (objptr := PyDict_GetItem(self.cache, 'manifold')) != NULL:
+            return <object>objptr
         manifold = self.build_manifold()
         self.cache['manifold'] = manifold
         return manifold
 
     cpdef Vector get_bounds(self):
         self.cache_timestamp = perf_counter()
+        cdef PyObject* objptr
         if self.cache is None:
             self.cache = {}
-        elif 'bounds' in self.cache:
-            return <Vector>self.cache['bounds']
+        elif (objptr := PyDict_GetItem(self.cache, 'bounds')) != NULL:
+            return <Vector>objptr
         cdef object trimesh_model = self.get_trimesh()
         cdef Vector bounds_vector = Vector.__new__(Vector)
         cdef const double[:, :] bounds
@@ -219,8 +224,9 @@ cdef class Model:
     cpdef tuple get_buffers(self, object glctx, dict objects):
         self.cache_timestamp = perf_counter()
         cdef object model_id = self.id
-        if model_id in objects:
-            return objects[model_id]
+        cdef PyObject* objptr
+        if (objptr := PyDict_GetItem(objects, model_id)) != NULL:
+            return <tuple>objptr
         cdef trimesh_model = self.get_trimesh()
         cdef tuple buffers
         if self.buffer_caches is None:
@@ -348,16 +354,16 @@ cdef class Model:
         return SignedDistanceFunction._get(function, original, minimum, maximum, resolution)
 
     @staticmethod
-    def sdf(function, Model original, Vector minimum, Vector maximum, double resolution):
-        return SignedDistanceFunction._get(function, original, minimum, maximum, resolution)
+    def sdf(Function function, Model original, minimum, maximum, resolution):
+        return SignedDistanceFunction._get(function, original, Vector._coerce(minimum), Vector._coerce(maximum), float(resolution))
 
     @staticmethod
     cdef Model _mix(list models, Vector weights):
         return Mix._get(models, weights)
 
     @staticmethod
-    def mix(list models, Vector weights):
-        return Mix._get(models, weights)
+    def mix(list models, weights):
+        return Mix._get(list(models), Vector._coerce(weights))
 
 
 cdef class UnaryOperation(Model):
@@ -382,15 +388,17 @@ cdef class UnaryOperation(Model):
 cdef class Flatten(UnaryOperation):
     @staticmethod
     cdef Flatten _get(Model original):
-        cdef uint64_t id = FLATTEN
-        id = HASH_UPDATE(id, original.id)
-        cdef Flatten model = <Flatten>ModelCache.get(id, None)
-        if model is None:
+        cdef uint64_t id = HASH_UPDATE(FLATTEN, original.id)
+        cdef Flatten model
+        cdef PyObject* objptr = PyDict_GetItem(ModelCache, id)
+        if objptr == NULL:
             model = Flatten.__new__(Flatten)
             model.id = id
             model.original = original
             model.original.add_dependent(model)
             ModelCache[id] = model
+        else:
+            model = <Flatten>objptr
         model.touch_timestamp = perf_counter()
         return model
 
@@ -421,15 +429,18 @@ cdef class Flatten(UnaryOperation):
 cdef class Invert(UnaryOperation):
     @staticmethod
     cdef Invert _get(Model original):
-        cdef uint64_t id = INVERT
-        id = HASH_UPDATE(id, original.id)
-        cdef Invert model = <Invert>ModelCache.get(id, None)
-        if model is None:
+        cdef uint64_t id = HASH_UPDATE(INVERT, original.id)
+        cdef Invert model
+        cdef PyObject* objptr = PyDict_GetItem(ModelCache, id)
+        if objptr == NULL:
             model = Invert.__new__(Invert)
             model.id = id
             model.original = original
             model.original.add_dependent(model)
             ModelCache[id] = model
+        else:
+            model = <Invert>objptr
+        model.touch_timestamp = perf_counter()
         return model
 
     @property
@@ -468,15 +479,17 @@ cdef class Invert(UnaryOperation):
 cdef class Repair(UnaryOperation):
     @staticmethod
     cdef Repair _get(Model original):
-        cdef uint64_t id = REPAIR
-        id = HASH_UPDATE(id, original.id)
-        cdef Repair model = <Repair>ModelCache.get(id, None)
-        if model is None:
+        cdef uint64_t id = HASH_UPDATE(REPAIR, original.id)
+        cdef Repair model
+        cdef PyObject* objptr = PyDict_GetItem(ModelCache, id)
+        if objptr == NULL:
             model = Repair.__new__(Repair)
             model.id = id
             model.original = original
             model.original.add_dependent(model)
             ModelCache[id] = model
+        else:
+            model = <Repair>objptr
         model.touch_timestamp = perf_counter()
         return model
 
@@ -509,12 +522,12 @@ cdef class SnapEdges(UnaryOperation):
     cdef SnapEdges _get(Model original, double snap_angle, double minimum_area):
         snap_angle = min(max(0, snap_angle), 0.5)
         minimum_area = min(max(0, minimum_area), 1)
-        cdef uint64_t id = SNAP_EDGES
-        id = HASH_UPDATE(id, original.id)
+        cdef uint64_t id = HASH_UPDATE(SNAP_EDGES, original.id)
         id = HASH_UPDATE(id, double_long(f=snap_angle).l)
         id = HASH_UPDATE(id, double_long(f=minimum_area).l)
-        cdef SnapEdges model = <SnapEdges>ModelCache.get(id, None)
-        if model is None:
+        cdef SnapEdges model
+        cdef PyObject* objptr = PyDict_GetItem(ModelCache, id)
+        if objptr == NULL:
             model = SnapEdges.__new__(SnapEdges)
             model.id = id
             model.original = original
@@ -522,6 +535,8 @@ cdef class SnapEdges(UnaryOperation):
             model.snap_angle = snap_angle
             model.minimum_area = minimum_area
             ModelCache[id] = model
+        else:
+            model = <SnapEdges>objptr
         model.touch_timestamp = perf_counter()
         return model
 
@@ -570,17 +585,19 @@ cdef class Transform(UnaryOperation):
 
     @staticmethod
     cdef Model _get(Model original, Matrix44 transform_matrix):
-        cdef uint64_t id = TRANSFORM
-        id = HASH_UPDATE(id, original.id)
+        cdef uint64_t id = HASH_UPDATE(TRANSFORM, original.id)
         id = HASH_UPDATE(id, transform_matrix.hash(False))
-        cdef Transform model = <Transform>ModelCache.get(id, None)
-        if model is None:
+        cdef Transform model
+        cdef PyObject* objptr = PyDict_GetItem(ModelCache, id)
+        if objptr == NULL:
             model = Transform.__new__(Transform)
             model.id = id
             model.original = original
             model.original.add_dependent(model)
             model.transform_matrix = transform_matrix
             ModelCache[id] = model
+        else:
+            model = <Transform>objptr
         model.touch_timestamp = perf_counter()
         return model
 
@@ -637,17 +654,19 @@ cdef class UVRemap(UnaryOperation):
 
     @staticmethod
     cdef UVRemap _get(Model original, str mapping):
-        cdef uint64_t id = UV_REMAP
-        id = HASH_UPDATE(id, original.id)
+        cdef uint64_t id = HASH_UPDATE(UV_REMAP, original.id)
         id = HASH_UPDATE(id, HASH_STRING(mapping))
-        cdef UVRemap model = <UVRemap>ModelCache.get(id, None)
-        if model is None:
+        cdef UVRemap model
+        cdef PyObject* objptr = PyDict_GetItem(ModelCache, id)
+        if objptr == NULL:
             model = UVRemap.__new__(UVRemap)
             model.id = id
             model.original = original
             model.original.add_dependent(model)
             model.mapping = mapping
             ModelCache[id] = model
+        else:
+            model = <UVRemap>objptr
         model.touch_timestamp = perf_counter()
         return model
 
@@ -704,15 +723,15 @@ cdef class Trim(UnaryOperation):
     cdef Trim _get(Model original, Vector origin, Vector normal, double smooth, double fillet, double chamfer):
         if origin.numbers == NULL or origin.length != 3 or normal.numbers == NULL or normal.length != 3:
             return None
-        cdef uint64_t id = TRIM
-        id = HASH_UPDATE(id, original.id)
+        cdef uint64_t id = HASH_UPDATE(TRIM, original.id)
         id = HASH_UPDATE(id, origin.hash(False))
         id = HASH_UPDATE(id, normal.hash(False))
         id = HASH_UPDATE(id, double_long(f=smooth).l)
         id = HASH_UPDATE(id, double_long(f=fillet).l)
         id = HASH_UPDATE(id, double_long(f=chamfer).l)
-        cdef Trim model = <Trim>ModelCache.get(id, None)
-        if model is None:
+        cdef Trim model
+        cdef PyObject* objptr = PyDict_GetItem(ModelCache, id)
+        if objptr == NULL:
             model = Trim.__new__(Trim)
             model.id = id
             model.original = original
@@ -723,6 +742,8 @@ cdef class Trim(UnaryOperation):
             model.fillet = fillet
             model.chamfer = chamfer
             ModelCache[id] = model
+        else:
+            model = <Trim>objptr
         model.touch_timestamp = perf_counter()
         return model
 
@@ -822,15 +843,17 @@ cdef class BooleanOperation(Model):
             id = HASH_UPDATE(id, child_model.id)
             existing.add(child_model)
             collected_models.append(child_model)
-        if len(collected_models) == 0:
+        cdef int64_t n = len(collected_models)
+        if n == 0:
             return None
-        if len(collected_models) == 1:
+        if n == 1:
             return collected_models[0]
         id = HASH_UPDATE(id, double_long(f=smooth).l)
         id = HASH_UPDATE(id, double_long(f=fillet).l)
         id = HASH_UPDATE(id, double_long(f=chamfer).l)
-        cdef BooleanOperation model = <BooleanOperation>ModelCache.get(id, None)
-        if model is None:
+        cdef BooleanOperation model
+        cdef PyObject* objptr = PyDict_GetItem(ModelCache, id)
+        if objptr == NULL:
             model = BooleanOperation.__new__(BooleanOperation)
             model.id = id
             model.operation = operation
@@ -841,6 +864,8 @@ cdef class BooleanOperation(Model):
             for child_model in collected_models:
                 child_model.add_dependent(model)
             ModelCache[id] = model
+        else:
+            model = <BooleanOperation>objptr
         model.touch_timestamp = perf_counter()
         return model
 
@@ -1035,21 +1060,27 @@ cdef class Box(PrimitiveModel):
 
     @staticmethod
     cdef Box _get(str uv_map):
-        uv_map = uv_map if uv_map in Box.VertexUV else 'standard'
         cdef uint64_t id = BOX
-        id = HASH_UPDATE(id, HASH_STRING(uv_map))
-        cdef Box model = <Box>ModelCache.get(id, None)
-        if model is None:
+        if uv_map is not 'standard':
+            if uv_map not in Box.VertexUV:
+                uv_map = 'standard'
+            else:
+                id = HASH_UPDATE(id, HASH_STRING(uv_map))
+        cdef Box model
+        cdef PyObject* objptr = PyDict_GetItem(ModelCache, id)
+        if objptr == NULL:
             model = Box.__new__(Box)
             model.id = id
             model.uv_map = uv_map
             ModelCache[id] = model
+        else:
+            model = <Box>objptr
         model.touch_timestamp = perf_counter()
         return model
 
     @property
     def name(self):
-        return '!box' if self.uv_map == 'standard' else f'!box-{self.uv_map}'
+        return '!box' if self.uv_map is 'standard' else f'!box-{self.uv_map}'
 
     cpdef double signed_distance(self, double x, double y, double z) noexcept:
         cdef double xp=abs(x)-0.5, yp=abs(y)-0.5, zp=abs(z)-0.5
@@ -1067,15 +1098,20 @@ cdef class Sphere(PrimitiveModel):
 
     @staticmethod
     cdef Sphere _get(int64_t segments):
-        segments = max(4, <int64_t>ceil(<double>segments / 4.0) * 4)
-        cdef uint64_t id = SPHERE
-        id = HASH_UPDATE(id, segments)
-        cdef Sphere model = <Sphere>ModelCache.get(id, None)
-        if model is None:
+        if segments < 4:
+            segments = 4
+        elif segments % 4:
+            segments += 4 - segments % 4
+        cdef uint64_t id = HASH_UPDATE(SPHERE, segments)
+        cdef Sphere model
+        cdef PyObject* objptr = PyDict_GetItem(ModelCache, id)
+        if objptr == NULL:
             model = Sphere.__new__(Sphere)
             model.id = id
             model.segments = segments
             ModelCache[id] = model
+        else:
+            model = <Sphere>objptr
         model.touch_timestamp = perf_counter()
         return model
 
@@ -1151,15 +1187,18 @@ cdef class Cylinder(PrimitiveModel):
 
     @staticmethod
     cdef Cylinder _get(int64_t segments):
-        segments = max(2, segments)
-        cdef uint64_t id = CYLINDER
-        id = HASH_UPDATE(id, segments)
-        cdef Cylinder model = <Cylinder>ModelCache.get(id, None)
-        if model is None:
+        if segments < 2:
+            segments = 2
+        cdef uint64_t id = HASH_UPDATE(CYLINDER, segments)
+        cdef Cylinder model
+        cdef PyObject* objptr = PyDict_GetItem(ModelCache, id)
+        if objptr == NULL:
             model = Cylinder.__new__(Cylinder)
             model.id = id
             model.segments = segments
             ModelCache[id] = model
+        else:
+            model = <Cylinder>objptr
         model.touch_timestamp = perf_counter()
         return model
 
@@ -1244,15 +1283,18 @@ cdef class Cone(PrimitiveModel):
 
     @staticmethod
     cdef Cone _get(int64_t segments):
-        segments = max(2, segments)
-        cdef uint64_t id = CONE
-        id = HASH_UPDATE(id, segments)
-        cdef Cone model = <Cone>ModelCache.get(id, None)
-        if model is None:
+        if segments < 2:
+            segments = 2
+        cdef uint64_t id = HASH_UPDATE(CONE, segments)
+        cdef Cone model
+        cdef PyObject* objptr = PyDict_GetItem(ModelCache, id)
+        if objptr == NULL:
             model = Cone.__new__(Cone)
             model.id = id
             model.segments = segments
             ModelCache[id] = model
+        else:
+            model = <Cone>objptr
         model.touch_timestamp = perf_counter()
         return model
 
@@ -1323,14 +1365,16 @@ cdef class ExternalModel(Model):
     cdef ExternalModel _get(str filename):
         if filename is None:
             return None
-        cdef uint64_t id = EXTERNAL
-        id = HASH_UPDATE(id, HASH_STRING(filename))
-        cdef ExternalModel model = <ExternalModel>ModelCache.get(id, None)
-        if model is None:
+        cdef uint64_t id = HASH_UPDATE(EXTERNAL, HASH_STRING(filename))
+        cdef ExternalModel model
+        cdef PyObject* objptr = PyDict_GetItem(ModelCache, id)
+        if objptr == NULL:
             model = ExternalModel.__new__(ExternalModel)
             model.id = id
             model.cache_path = SharedCache[filename]
             ModelCache[id] = model
+        else:
+            model = <ExternalModel>objptr
         model.touch_timestamp = perf_counter()
         return model
 
@@ -1377,13 +1421,16 @@ cdef class VectorModel(Model):
         cdef uint64_t id = VECTOR
         id = HASH_UPDATE(id, vertices.hash(False))
         id = HASH_UPDATE(id, faces.hash(False))
-        cdef VectorModel model = <VectorModel>ModelCache.get(id, None)
-        if model is None:
+        cdef VectorModel model
+        cdef PyObject* objptr = PyDict_GetItem(ModelCache, id)
+        if objptr == NULL:
             model = VectorModel.__new__(VectorModel)
             model.id = id
             model.vertices = vertices
             model.faces = faces
             ModelCache[id] = model
+        else:
+            model = <VectorModel>objptr
         model.touch_timestamp = perf_counter()
         return model
 
@@ -1443,8 +1490,9 @@ cdef class SignedDistanceFunction(UnaryOperation):
         id = HASH_UPDATE(id, minimum.hash(False))
         id = HASH_UPDATE(id, maximum.hash(False))
         id = HASH_UPDATE(id, double_long(f=resolution).l)
-        cdef SignedDistanceFunction model = <SignedDistanceFunction>ModelCache.get(id, None)
-        if model is None:
+        cdef SignedDistanceFunction model
+        cdef PyObject* objptr = PyDict_GetItem(ModelCache, id)
+        if objptr == NULL:
             model = SignedDistanceFunction.__new__(SignedDistanceFunction)
             model.id = id
             model.function = function
@@ -1455,6 +1503,8 @@ cdef class SignedDistanceFunction(UnaryOperation):
             ModelCache[id] = model
             if original is not None:
                 original.add_dependent(model)
+        else:
+            model = <SignedDistanceFunction>objptr
         model.touch_timestamp = perf_counter()
         return model
 
@@ -1521,8 +1571,9 @@ cdef class Mix(Model):
             return None
         if len(collected_models) == 1:
             return collected_models[0]
-        cdef Mix model = <Mix>ModelCache.get(id, None)
-        if model is None:
+        cdef Mix model
+        cdef PyObject* objptr = PyDict_GetItem(ModelCache, id)
+        if objptr == NULL:
             model = Mix.__new__(Mix)
             model.id = id
             model.models = collected_models
@@ -1530,6 +1581,8 @@ cdef class Mix(Model):
             for child_model in collected_models:
                 child_model.add_dependent(model)
             ModelCache[id] = model
+        else:
+            model = <Mix>objptr
         model.touch_timestamp = perf_counter()
         return model
 
