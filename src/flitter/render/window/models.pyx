@@ -48,13 +48,16 @@ cdef uint64_t MIX = HASH_UPDATE(HASH_START, HASH_STRING('mix'))
 cdef class Model:
     @staticmethod
     def flush_caches(double min_age=300, int64_t min_size=2000):
-        cdef double cutoff = perf_counter() - min_age
+        cdef double now = perf_counter()
+        cdef double cutoff = now - min_age
         cdef Model model
-        cdef int64_t unload_count=0, dump_count=0
-        cdef list unloaded=[]
+        cdef int64_t unload_count = 0
+        cdef list unloaded = []
         while len(ModelCache) > min_size:
             for model in ModelCache.values():
-                if model.touch_timestamp < cutoff and not model.dependents:
+                if model.touch_timestamp == 0:
+                    model.touch_timestamp = now
+                if model.touch_timestamp <= cutoff and not model.dependents:
                     unloaded.append(model)
             if not unloaded:
                 break
@@ -63,12 +66,6 @@ cdef class Model:
                 del ModelCache[model.id]
                 model.unload()
                 unload_count += 1
-        for model in ModelCache.values():
-            if model.cache_timestamp < cutoff and model.cache is not None:
-                model.cache = None
-                dump_count += 1
-        if dump_count:
-            logger.trace("Dumped sub-caches on {} models", dump_count)
         if unload_count:
             logger.trace("Unloaded {} models from cache, {} remaining", unload_count, len(ModelCache))
 
@@ -399,7 +396,7 @@ cdef class Flatten(UnaryOperation):
             ModelCache[id] = model
         else:
             model = <Flatten>objptr
-        model.touch_timestamp = perf_counter()
+            model.touch_timestamp = 0
         return model
 
     @property
@@ -440,7 +437,7 @@ cdef class Invert(UnaryOperation):
             ModelCache[id] = model
         else:
             model = <Invert>objptr
-        model.touch_timestamp = perf_counter()
+            model.touch_timestamp = 0
         return model
 
     @property
@@ -490,7 +487,7 @@ cdef class Repair(UnaryOperation):
             ModelCache[id] = model
         else:
             model = <Repair>objptr
-        model.touch_timestamp = perf_counter()
+            model.touch_timestamp = 0
         return model
 
     @property
@@ -537,7 +534,7 @@ cdef class SnapEdges(UnaryOperation):
             ModelCache[id] = model
         else:
             model = <SnapEdges>objptr
-        model.touch_timestamp = perf_counter()
+            model.touch_timestamp = 0
         return model
 
     @property
@@ -598,7 +595,7 @@ cdef class Transform(UnaryOperation):
             ModelCache[id] = model
         else:
             model = <Transform>objptr
-        model.touch_timestamp = perf_counter()
+            model.touch_timestamp = 0
         return model
 
     @property
@@ -667,7 +664,7 @@ cdef class UVRemap(UnaryOperation):
             ModelCache[id] = model
         else:
             model = <UVRemap>objptr
-        model.touch_timestamp = perf_counter()
+            model.touch_timestamp = 0
         return model
 
     @property
@@ -744,7 +741,7 @@ cdef class Trim(UnaryOperation):
             ModelCache[id] = model
         else:
             model = <Trim>objptr
-        model.touch_timestamp = perf_counter()
+            model.touch_timestamp = 0
         return model
 
     @property
@@ -866,7 +863,7 @@ cdef class BooleanOperation(Model):
             ModelCache[id] = model
         else:
             model = <BooleanOperation>objptr
-        model.touch_timestamp = perf_counter()
+            model.touch_timestamp = 0
         return model
 
     @property
@@ -1075,7 +1072,7 @@ cdef class Box(PrimitiveModel):
             ModelCache[id] = model
         else:
             model = <Box>objptr
-        model.touch_timestamp = perf_counter()
+            model.touch_timestamp = 0
         return model
 
     @property
@@ -1112,7 +1109,7 @@ cdef class Sphere(PrimitiveModel):
             ModelCache[id] = model
         else:
             model = <Sphere>objptr
-        model.touch_timestamp = perf_counter()
+            model.touch_timestamp = 0
         return model
 
     @property
@@ -1199,7 +1196,7 @@ cdef class Cylinder(PrimitiveModel):
             ModelCache[id] = model
         else:
             model = <Cylinder>objptr
-        model.touch_timestamp = perf_counter()
+            model.touch_timestamp = 0
         return model
 
     @property
@@ -1295,7 +1292,7 @@ cdef class Cone(PrimitiveModel):
             ModelCache[id] = model
         else:
             model = <Cone>objptr
-        model.touch_timestamp = perf_counter()
+            model.touch_timestamp = 0
         return model
 
     @property
@@ -1375,7 +1372,7 @@ cdef class ExternalModel(Model):
             ModelCache[id] = model
         else:
             model = <ExternalModel>objptr
-        model.touch_timestamp = perf_counter()
+            model.touch_timestamp = 0
         return model
 
     @property
@@ -1431,7 +1428,7 @@ cdef class VectorModel(Model):
             ModelCache[id] = model
         else:
             model = <VectorModel>objptr
-        model.touch_timestamp = perf_counter()
+            model.touch_timestamp = 0
         return model
 
     @property
@@ -1505,7 +1502,7 @@ cdef class SignedDistanceFunction(UnaryOperation):
                 original.add_dependent(model)
         else:
             model = <SignedDistanceFunction>objptr
-        model.touch_timestamp = perf_counter()
+            model.touch_timestamp = 0
         return model
 
     @property
@@ -1583,7 +1580,7 @@ cdef class Mix(Model):
             ModelCache[id] = model
         else:
             model = <Mix>objptr
-        model.touch_timestamp = perf_counter()
+            model.touch_timestamp = 0
         return model
 
     @property
