@@ -805,9 +805,9 @@ cdef class BooleanOperation(Model):
             child_model = models.pop()
             if child_model is None:
                 continue
-            if operation is 'union' \
-                    and isinstance(child_model, BooleanOperation) \
-                    and (<BooleanOperation>child_model).operation is 'union' \
+            if type(child_model) is BooleanOperation \
+                    and operation is not 'difference' \
+                    and (<BooleanOperation>child_model).operation is operation \
                     and (<BooleanOperation>child_model).smooth == smooth \
                     and (<BooleanOperation>child_model).fillet == fillet \
                     and (<BooleanOperation>child_model).chamfer == chamfer:

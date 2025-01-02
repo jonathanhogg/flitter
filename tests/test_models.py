@@ -31,6 +31,8 @@ class TestPrimitives(utils.TestCase):
         self.assertEqual(len(mesh.faces), 12)
         self.assertEqual(mesh.area, 6)
         self.assertEqual(mesh.volume, 1)
+        model = Model.box('repeat')
+        self.assertEqual(model.name, '!box-repeat')
 
     def test_sphere(self):
         for segments in (4, DefaultSegments, 1024):
@@ -49,6 +51,8 @@ class TestPrimitives(utils.TestCase):
                 else:
                     self.assertAlmostEqual(mesh.area, 4*math.pi, places=int(math.log10(segments)))
                     self.assertAlmostEqual(mesh.volume, 4/3*math.pi, places=int(math.log10(segments)))
+        self.assertEqual(Model.sphere(0).name, '!sphere-4')
+        self.assertEqual(Model.sphere(5).name, '!sphere-8')
 
     def test_cylinder(self):
         for segments in (4, DefaultSegments, 1024):
@@ -438,6 +442,7 @@ class TestStructuring(utils.TestCase):
         self.assertEqual(Model.intersect(Model.box(), Model.box()).name, '!box')
         self.assertEqual(Model.intersect(Model.box(), Model.sphere()).name, 'intersect(!box, !sphere)')
         self.assertEqual(Model.intersect(Model.box(), Model.sphere(), Model.box()).name, 'intersect(!box, !sphere)')
+        self.assertEqual(Model.intersect(Model.box(), Model.intersect(Model.sphere(), Model.cylinder())).name, 'intersect(!box, !sphere, !cylinder)')
         self.assertTrue(Model.intersect(Model.box(), Model.sphere()).is_smooth())
         self.assertEqual(Model.intersect(Model.box(), Model.sphere()).flatten().name, 'flatten(intersect(!box, !sphere))')
         self.assertEqual(Model.intersect(Model.box(), Model.sphere()).invert().name, 'invert(intersect(!box, !sphere))')
@@ -453,6 +458,8 @@ class TestStructuring(utils.TestCase):
         self.assertIsNone(Model.difference(Model.box(), Model.box()))
         self.assertEqual(Model.difference(Model.box(), Model.sphere()).name, 'difference(!box, !sphere)')
         self.assertIsNone(Model.difference(Model.box(), Model.sphere(), Model.box()))
+        self.assertEqual(Model.difference(Model.box(), Model.difference(Model.sphere(), Model.cylinder())).name,
+                         'difference(!box, difference(!sphere, !cylinder))')
         self.assertTrue(Model.difference(Model.box(), Model.sphere()).is_smooth())
         self.assertEqual(Model.difference(Model.box(), Model.sphere()).flatten().name, 'flatten(difference(!box, !sphere))')
         self.assertEqual(Model.difference(Model.box(), Model.sphere()).invert().name, 'invert(difference(!box, !sphere))')
