@@ -62,6 +62,12 @@ class TestQuaternion(utils.TestCase):
         self.assertIsNot(q1, q2)
 
     def test_euler(self):
+        with self.assertRaises(ValueError):
+            Quaternion.euler(None, 0.25)
+        with self.assertRaises(ValueError):
+            Quaternion.euler(['hello', 'cruel', 'world'], 0.25)
+        with self.assertRaises(ValueError):
+            Quaternion.euler([1, 0], 0.25)
         self.assertEqual(Quaternion.euler([1, 0, 0], 0), [1, 0, 0, 0])
         self.assertEqual(Quaternion.euler([0, 1, 0], 0), [1, 0, 0, 0])
         self.assertEqual(Quaternion.euler([0, 0, 1], 0), [1, 0, 0, 0])
@@ -82,6 +88,18 @@ class TestQuaternion(utils.TestCase):
         self.assertAllAlmostEqual(Quaternion.euler([1, 1, 1], 1/3), [0.5, 0.5, 0.5, 0.5])
 
     def test_between(self):
+        with self.assertRaises(ValueError):
+            Quaternion.between(None, [0, 1, 0])
+        with self.assertRaises(ValueError):
+            Quaternion.between(['hello', 'cruel', 'world'], [0, 1, 0])
+        with self.assertRaises(ValueError):
+            Quaternion.between([1, 0], [0, 1, 0])
+        with self.assertRaises(ValueError):
+            Quaternion.between([1, 0, 0], None)
+        with self.assertRaises(ValueError):
+            Quaternion.between([1, 0, 0], ['hello', 'cruel', 'world'])
+        with self.assertRaises(ValueError):
+            Quaternion.between([1, 0, 0], [1, 0])
         self.assertAllAlmostEqual(Quaternion.between([1, 0, 0], [0, 1, 0]), Quaternion.euler([0, 0, 1], 0.25))
         self.assertAllAlmostEqual(Quaternion.between([0, 0, 1], [1, 0, 0]), Quaternion.euler([0, 1, 0], 0.25))
         self.assertAllAlmostEqual(Quaternion.between([0, 1, 0], [0, 0, 1]), Quaternion.euler([1, 0, 0], 0.25))

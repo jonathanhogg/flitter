@@ -396,13 +396,18 @@ class TestVector(utils.TestCase):
         self.assertEqual(Vector(["Hello ", "world!"]).match(2, str), ["Hello ", "world!"])
         self.assertEqual(Vector(["Hello ", 3.5]).match(2, str), ["Hello ", "3.5"])
         self.assertEqual(Vector(["Hello ", "world!"]).match(1, str), None)
+        self.assertEqual(Vector(["0"]).match(1, int), 0)
+        self.assertEqual(Vector(["0"]).match(0, int), [0])
         self.assertEqual(true.match(1, float), 1.0)
         self.assertIs(true.match(1, bool), True)
         self.assertEqual(true.match(2, bool), [True, True])
         self.assertEqual(Vector([0, 1]).match(2, bool), [False, True])
         self.assertEqual(Vector.symbol('foo').match(), ['foo'])
         self.assertEqual(Vector.symbol('foo').match(1, float), FOO_SYMBOL_NUMBER)
+        self.assertEqual(Vector.symbol('foo').match(0, str), ['foo'])
         self.assertEqual(Vector.symbol('foo').match(1, str), 'foo')
+        self.assertEqual(Vector.symbol('foo').match(0, int), None)
+        self.assertEqual(Vector.symbol('foo').match(1, int), None)
         self.assertEqual(Vector.symbol('foo').match(2, str), ['foo', 'foo'])
         self.assertEqual(Vector.symbol('foo').concat(Vector.symbol('bar')).match(2, str), ['foo', 'bar'])
         self.assertEqual(Vector.symbol('foo').concat(Vector(1)).match(2), ['foo', 1])
@@ -766,6 +771,16 @@ class TestVector(utils.TestCase):
         self.assertEqual(x.clamp(Vector(1), Vector(8)), [1, 1, 2, 3, 4, 5, 6, 7, 8, 8])
         self.assertEqual(x.clamp(Vector(-1), Vector(8)), [0, 1, 2, 3, 4, 5, 6, 7, 8, 8])
         self.assertEqual(x.clamp(Vector(1), Vector(11)), [1, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+
+    def test_maximum(self):
+        self.assertTrue(math.isnan(null.maximum()))
+        self.assertTrue(math.isnan(Vector('hello').maximum()))
+        self.assertEqual(Vector.range(10).maximum(), 9)
+
+    def test_minimum(self):
+        self.assertTrue(math.isnan(null.minimum()))
+        self.assertTrue(math.isnan(Vector('hello').minimum()))
+        self.assertEqual(Vector.range(10).minimum(), 0)
 
     def test_squared_sum(self):
         self.assertTrue(math.isnan(null.squared_sum()))

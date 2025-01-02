@@ -1096,7 +1096,7 @@ cdef class Vector:
             result.numbers[i] = d
         return result
 
-    cdef double minimum(self) noexcept nogil:
+    cpdef double minimum(self) noexcept:
         if self.numbers == NULL:
             return NaN
         cdef double f, m=self.numbers[0]
@@ -1106,7 +1106,7 @@ cdef class Vector:
                 m = f
         return m
 
-    cdef double maximum(self) noexcept nogil:
+    cpdef double maximum(self) noexcept:
         if self.numbers == NULL:
             return NaN
         cdef double f, m=self.numbers[0]

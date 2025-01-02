@@ -117,6 +117,9 @@ class TestNode(unittest.TestCase):
 
     def test_append_vector(self):
         nodes = Vector([self.node2, self.node3, "Hello world!"])
+        self.node1.append_vector(null)
+        children = list(self.node1.children)
+        self.assertEqual(len(children), 0)
         self.node1.append_vector(nodes)
         children = list(self.node1.children)
         self.assertEqual(len(children), 2)
