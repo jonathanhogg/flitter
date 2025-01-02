@@ -478,7 +478,7 @@ class TestUVRemapping(utils.TestCase):
         model = Model.box()
         mesh = model.uv_remap('sphere').get_trimesh()
         for (x, y, z), uv in zip(mesh.vertices, mesh.visual.uv):
-            u = math.atan2(y, x) / (2*math.pi)
+            u = math.atan2(y, x) / (2*math.pi) % 1
             r = math.sqrt(x*x + y*y)
             v = (math.atan2(z, r) / math.pi + 0.5) % 1
             self.assertAllAlmostEqual(uv, [u, v])

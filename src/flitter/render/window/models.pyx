@@ -679,7 +679,6 @@ cdef class UVRemap(UnaryOperation):
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    @cython.cdivision(True)
     cdef object remap_sphere(self, trimesh_model):
         cdef const float[:, :] vertices
         cdef object vertex_uv_array
