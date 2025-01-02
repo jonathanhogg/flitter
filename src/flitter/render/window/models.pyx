@@ -11,7 +11,7 @@ from libc.stdint cimport int32_t, int64_t
 
 from ... import name_patch
 from ...cache import SharedCache
-from ...model cimport true_, Context, Vector, HASH_UPDATE, HASH_STRING, double_long
+from ...model cimport true_, Context, Vector, HASH_START, HASH_UPDATE, HASH_STRING, double_long
 from ...timer cimport perf_counter
 
 
@@ -26,21 +26,21 @@ cdef Matrix44 IdentityTransform = Matrix44._identity()
 cdef double NaN = float("nan")
 
 
-cdef uint64_t FLATTEN = HASH_STRING('flatten')
-cdef uint64_t INVERT = HASH_STRING('invert')
-cdef uint64_t REPAIR = HASH_STRING('repair')
-cdef uint64_t SNAP_EDGES = HASH_STRING('snap_edges')
-cdef uint64_t TRANSFORM = HASH_STRING('transform')
-cdef uint64_t UV_REMAP = HASH_STRING('uv_remap')
-cdef uint64_t TRIM = HASH_STRING('trim')
-cdef uint64_t BOX = HASH_STRING('box')
-cdef uint64_t SPHERE = HASH_STRING('sphere')
-cdef uint64_t CYLINDER = HASH_STRING('cylinder')
-cdef uint64_t CONE = HASH_STRING('cone')
-cdef uint64_t EXTERNAL = HASH_STRING('external')
-cdef uint64_t VECTOR = HASH_STRING('vector')
-cdef uint64_t SDF = HASH_STRING('sdf')
-cdef uint64_t MIX = HASH_STRING('mix')
+cdef uint64_t FLATTEN = HASH_UPDATE(HASH_START, HASH_STRING('flatten'))
+cdef uint64_t INVERT = HASH_UPDATE(HASH_START, HASH_STRING('invert'))
+cdef uint64_t REPAIR = HASH_UPDATE(HASH_START, HASH_STRING('repair'))
+cdef uint64_t SNAP_EDGES = HASH_UPDATE(HASH_START, HASH_STRING('snap_edges'))
+cdef uint64_t TRANSFORM = HASH_UPDATE(HASH_START, HASH_STRING('transform'))
+cdef uint64_t UV_REMAP = HASH_UPDATE(HASH_START, HASH_STRING('uv_remap'))
+cdef uint64_t TRIM = HASH_UPDATE(HASH_START, HASH_STRING('trim'))
+cdef uint64_t BOX = HASH_UPDATE(HASH_START, HASH_STRING('box'))
+cdef uint64_t SPHERE = HASH_UPDATE(HASH_START, HASH_STRING('sphere'))
+cdef uint64_t CYLINDER = HASH_UPDATE(HASH_START, HASH_STRING('cylinder'))
+cdef uint64_t CONE = HASH_UPDATE(HASH_START, HASH_STRING('cone'))
+cdef uint64_t EXTERNAL = HASH_UPDATE(HASH_START, HASH_STRING('external'))
+cdef uint64_t VECTOR = HASH_UPDATE(HASH_START, HASH_STRING('vector'))
+cdef uint64_t SDF = HASH_UPDATE(HASH_START, HASH_STRING('sdf'))
+cdef uint64_t MIX = HASH_UPDATE(HASH_START, HASH_STRING('mix'))
 
 
 cdef class Model:
@@ -87,16 +87,20 @@ cdef class Model:
         ModelCache[id] = self
 
     def __hash__(self):
-        return <Py_hash_t>(self.id)
+        return self.id
 
     def __eq__(self, other):
         return self is other
 
     def __str__(self):
-        return f'{self.__class__.__name__}#{self.id:x}'
+        return self.name
 
     def __repr__(self):
         return f'<{self.__class__.__name__}(0x{self.id:x})>'
+
+    @property
+    def name(self):
+        raise NotImplementedError()
 
     cpdef void unload(self):
         assert not self.dependents
@@ -139,14 +143,14 @@ cdef class Model:
                     trimesh_model = trimesh_model.convex_hull
                     hull = True
         if not trimesh_model.is_volume:
-            logger.error("Mesh is not a volume: {}", self)
+            logger.error("Mesh is not a volume: {}", self.name)
             return None
         elif hull:
-            logger.warning("Computed convex hull of non-manifold mesh: {}", self)
+            logger.warning("Computed convex hull of non-manifold mesh: {}", self.name)
         elif filled:
-            logger.debug("Filled holes in non-manifold mesh: {}", self)
+            logger.debug("Filled holes in non-manifold mesh: {}", self.name)
         elif merged:
-            logger.trace("Merged vertices of non-manifold mesh: {}", self)
+            logger.trace("Merged vertices of non-manifold mesh: {}", self.name)
         return manifold3d.Manifold(mesh=manifold3d.Mesh(vert_properties=np.array(trimesh_model.vertices, dtype='f4'),
                                                         tri_verts=np.array(trimesh_model.faces, dtype=np.uint32)))
 
@@ -166,10 +170,12 @@ cdef class Model:
         if self.dependents is not None:
             for model in self.dependents:
                 model.invalidate()
+        cdef str name
         if self.buffer_caches is not None:
+            name = str(self)
             for cache in self.buffer_caches:
-                if self.id in cache:
-                    del cache[self.id]
+                if name in cache:
+                    del cache[name]
             self.buffer_caches = None
 
     cpdef object get_trimesh(self):
@@ -233,7 +239,7 @@ cdef class Model:
         vertex_data = np.hstack((trimesh_model.vertices, trimesh_model.vertex_normals, vertex_uvs)).astype('f4', copy=False)
         index_data = trimesh_model.faces.astype('i4', copy=False)
         buffers = (glctx.buffer(vertex_data), glctx.buffer(index_data))
-        logger.trace("Constructed model {} with {} vertices and {} faces", self.id, len(vertex_data), len(index_data))
+        logger.trace("Constructed model {} with {} vertices and {} faces", self.name, len(vertex_data), len(index_data))
         objects[name] = buffers
         return buffers
 
@@ -389,6 +395,10 @@ cdef class Flatten(UnaryOperation):
         model.touch_timestamp = perf_counter()
         return model
 
+    @property
+    def name(self):
+        return f'flatten({self.original.name})'
+
     cpdef bint is_smooth(self):
         return False
 
@@ -422,6 +432,10 @@ cdef class Invert(UnaryOperation):
             model.original.add_dependent(model)
             ModelCache[id] = model
         return model
+
+    @property
+    def name(self):
+        return f'invert({self.original.name})'
 
     cpdef Model invert(self):
         return self.original
@@ -467,6 +481,10 @@ cdef class Repair(UnaryOperation):
         model.touch_timestamp = perf_counter()
         return model
 
+    @property
+    def name(self):
+        return f'repair({self.original.name})'
+
     cpdef bint is_smooth(self):
         return True
 
@@ -508,6 +526,15 @@ cdef class SnapEdges(UnaryOperation):
         model.touch_timestamp = perf_counter()
         return model
 
+    @property
+    def name(self):
+        cdef str name = f'snap_edges({self.original.name}'
+        if self.snap_angle != DefaultSnapAngle or self.minimum_area:
+            name += f', {self.snap_angle:g}'
+            if self.minimum_area:
+                name += f', {self.minimum_area:g}'
+        return name + ')'
+
     cpdef bint is_smooth(self):
         return False
 
@@ -545,6 +572,7 @@ cdef class Transform(UnaryOperation):
     @staticmethod
     cdef Model _get(Model original, Matrix44 transform_matrix):
         cdef uint64_t id = TRANSFORM
+        id = HASH_UPDATE(id, original.id)
         id = HASH_UPDATE(id, transform_matrix.hash(False))
         cdef Transform model = <Transform>ModelCache.get(id, None)
         if model is None:
@@ -556,6 +584,10 @@ cdef class Transform(UnaryOperation):
             ModelCache[id] = model
         model.touch_timestamp = perf_counter()
         return model
+
+    @property
+    def name(self):
+        return f'{self.original.name}@{self.transform_matrix.hash(False):x}'
 
     cpdef Model repair(self):
         return self.original.repair()._transform(self.transform_matrix)
@@ -620,6 +652,10 @@ cdef class UVRemap(UnaryOperation):
         model.touch_timestamp = perf_counter()
         return model
 
+    @property
+    def name(self):
+        return f'uv_remap({self.original.name}, {self.mapping})'
+
     cpdef Model repair(self):
         return self.original.repair()._uv_remap(self.mapping)
 
@@ -667,6 +703,7 @@ cdef class Trim(UnaryOperation):
         if origin.numbers == NULL or origin.length != 3 or normal.numbers == NULL or normal.length != 3:
             return None
         cdef uint64_t id = TRIM
+        id = HASH_UPDATE(id, original.id)
         id = HASH_UPDATE(id, origin.hash(False))
         id = HASH_UPDATE(id, normal.hash(False))
         id = HASH_UPDATE(id, double_long(f=smooth).l)
@@ -686,6 +723,17 @@ cdef class Trim(UnaryOperation):
             ModelCache[id] = model
         model.touch_timestamp = perf_counter()
         return model
+
+    @property
+    def name(self):
+        cdef str name = f'trim({self.original.name}, {self.origin.hash(False) ^ self.normal.hash(False):x}'
+        if self.smooth:
+            name += f', smooth={self.smooth:g}'
+        if self.fillet:
+            name += f', fillet={self.fillet:g}'
+        if self.chamfer:
+            name += f', chamfer={self.chamfer:g}'
+        return name + ')'
 
     cpdef bint is_smooth(self):
         return True
@@ -730,7 +778,7 @@ cdef class Trim(UnaryOperation):
             normal = self.normal.neg()
             manifold = manifold.trim_by_plane(normal=tuple(normal), origin_offset=self.origin.dot(normal))
             if manifold.is_empty():
-                logger.warning("Result of trim was empty: {}", self)
+                logger.warning("Result of trim was empty: {}", self.name)
                 manifold = None
         return manifold
 
@@ -749,7 +797,7 @@ cdef class BooleanOperation(Model):
         models = list(models)
         models.reverse()
         cdef list collected_models = []
-        cdef uint64_t id = HASH_STRING(operation)
+        cdef uint64_t id = HASH_UPDATE(HASH_START, HASH_STRING(operation))
         while models:
             child_model = models.pop()
             if child_model is None:
@@ -792,6 +840,23 @@ cdef class BooleanOperation(Model):
             ModelCache[id] = model
         model.touch_timestamp = perf_counter()
         return model
+
+    @property
+    def name(self):
+        cdef str name = f'{self.operation}('
+        cdef Model model
+        cdef int64_t i
+        for i, model in enumerate(self.models):
+            if i:
+                name += ', '
+            name += model.name
+        if self.smooth:
+            name += f', smooth={self.smooth:g}'
+        if self.fillet:
+            name += f', fillet={self.fillet:g}'
+        if self.chamfer:
+            name += f', chamfer={self.chamfer:g}'
+        return name + ')'
 
     cpdef void unload(self):
         for model in self.models:
@@ -906,7 +971,7 @@ cdef class BooleanOperation(Model):
         elif self.operation is 'difference':
             manifold = manifold3d.Manifold.batch_boolean(manifolds, manifold3d.OpType.Subtract)
         if manifold.is_empty():
-            logger.warning("Result of {} was empty: {}", self.operation, self)
+            logger.warning("Result of {} was empty: {}", self.operation, self.name)
             manifold = None
         return manifold
 
@@ -979,6 +1044,10 @@ cdef class Box(PrimitiveModel):
         model.touch_timestamp = perf_counter()
         return model
 
+    @property
+    def name(self):
+        return '!box' if self.uv_map == 'standard' else f'!box-{self.uv_map}'
+
     cpdef double signed_distance(self, double x, double y, double z) noexcept:
         cdef double xp=abs(x)-0.5, yp=abs(y)-0.5, zp=abs(z)-0.5
         cdef double xm=max(xp, 0), ym=max(yp, 0), zm=max(zp, 0)
@@ -1006,6 +1075,10 @@ cdef class Sphere(PrimitiveModel):
             ModelCache[id] = model
         model.touch_timestamp = perf_counter()
         return model
+
+    @property
+    def name(self):
+        return '!sphere' if self.segments == DefaultSegments else f'!sphere-{self.segments}'
 
     cpdef double signed_distance(self, double x, double y, double z) noexcept:
         return sqrt(x*x + y*y + z*z) - 1
@@ -1086,6 +1159,10 @@ cdef class Cylinder(PrimitiveModel):
             ModelCache[id] = model
         model.touch_timestamp = perf_counter()
         return model
+
+    @property
+    def name(self):
+        return '!cylinder' if self.segments == DefaultSegments else f'!cylinder-{self.segments}'
 
     cpdef double signed_distance(self, double x, double y, double z) noexcept:
         return max(sqrt(x*x+y*y)-1, abs(z)-0.5)
@@ -1176,6 +1253,10 @@ cdef class Cone(PrimitiveModel):
         model.touch_timestamp = perf_counter()
         return model
 
+    @property
+    def name(self):
+        return '!cone' if self.segments == DefaultSegments else f'!cone-{self.segments}'
+
     cpdef double signed_distance(self, double x, double y, double z) noexcept:
         return max(sqrt(x*x+y*y)-abs(0.5-z), abs(z)-0.5)
 
@@ -1250,6 +1331,10 @@ cdef class ExternalModel(Model):
         model.touch_timestamp = perf_counter()
         return model
 
+    @property
+    def name(self):
+        return str(self.cache_path)
+
     cpdef bint is_smooth(self):
         return False
 
@@ -1270,7 +1355,7 @@ cdef class ExternalModel(Model):
             if proximity_query is not None:
                 return -(proximity_query.signed_distance([(x, y, z)])[0])
         except Exception:
-            logger.exception("Unable to do SDF proximity query of mesh: {}", self)
+            logger.exception("Unable to do SDF proximity query of mesh: {}", self.name)
             self.cache['proximity_query'] = None
         return NaN
 
@@ -1299,6 +1384,10 @@ cdef class VectorModel(Model):
         model.touch_timestamp = perf_counter()
         return model
 
+    @property
+    def name(self):
+        return f'vector({self.vertices.hash(False):x}, {self.faces.hash(False):x})'
+
     cpdef bint is_smooth(self):
         return False
 
@@ -1318,7 +1407,7 @@ cdef class VectorModel(Model):
             if proximity_query is not None:
                 return -(proximity_query.signed_distance([(x, y, z)])[0])
         except Exception:
-            logger.exception("Unable to do SDF proximity query of mesh: {}", self)
+            logger.exception("Unable to do SDF proximity query of mesh: {}", self.name)
             self.cache['proximity_query'] = None
         return NaN
 
@@ -1366,6 +1455,12 @@ cdef class SignedDistanceFunction(UnaryOperation):
         model.touch_timestamp = perf_counter()
         return model
 
+    @property
+    def name(self):
+        if self.function is not None:
+            return f'sdf({hash(self.function):x}, {self.minimum!r}, {self.maximum!r}, {self.resolution})'
+        return f'sdf({self.original.name}, {self.minimum!r}, {self.maximum!r}, {self.resolution:g})'
+
     cpdef bint is_smooth(self):
         return False
 
@@ -1397,7 +1492,7 @@ cdef class SignedDistanceFunction(UnaryOperation):
         else:
             manifold = manifold3d.Manifold.level_set(self.inverse_signed_distance, box, self.resolution)
         if manifold.is_empty():
-            logger.warning("Result of SDF was empty: {}", self)
+            logger.warning("Result of SDF was empty: {}", self.name)
             manifold = None
         return manifold
 
@@ -1431,6 +1526,18 @@ cdef class Mix(Model):
             ModelCache[id] = model
         model.touch_timestamp = perf_counter()
         return model
+
+    @property
+    def name(self):
+        cdef str name = 'mix('
+        cdef Model model
+        cdef int64_t i
+        for i, model in enumerate(self.models):
+            if i:
+                name += ', '
+            name += model.name
+        name += f', {self.weights!r})'
+        return name
 
     cpdef void unload(self):
         for model in self.models:

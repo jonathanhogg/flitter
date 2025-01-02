@@ -97,21 +97,25 @@ class TestBasicFunctionality(utils.TestCase):
         self.assertEqual(str(Model.sphere(128)), '!sphere-128')
 
     def test_repr(self):
-        self.assertEqual(repr(Model.sphere(128)), '<Model: !sphere-128>')
+        self.assertEqual(repr(Model.sphere(128)), '<Sphere(0x935c42374d93e335)>')
 
-    def test_by_name(self):
-        self.assertIsNone(Model.by_name('!sphere-104'))
-        model = Model.sphere(104)
-        self.assertIs(Model.by_name('!sphere-104'), model)
+    def test_by_id(self):
+        self.assertIsNone(Model.by_id(0x935c42374d93e335))
+        model = Model.sphere(128)
+        self.assertIs(Model.by_id(0x935c42374d93e335), model)
 
 
 class MyModel(Model):
     @staticmethod
     def get():
-        model = Model.by_name('!mymodel')
+        model = Model.by_id(123)
         if model is None:
-            model = MyModel('!mymodel')
+            model = MyModel(123)
         return model
+
+    @property
+    def name(self):
+        return '!mymodel'
 
     def is_smooth(self):
         return False
@@ -128,10 +132,11 @@ class TestSubclassing(utils.TestCase):
     def tearDown(self):
         Model.flush_caches(0, 0)
 
-    def test_subclass_insantiation(self):
+    def test_subclass_instantiation(self):
         model = MyModel.get()
         self.assertIsInstance(model, MyModel)
         self.assertEqual(model.name, '!mymodel')
+        self.assertEqual(model.id, 123)
         self.assertIs(MyModel.get(), model)
         mesh = model.get_trimesh()
         self.assertIs(model.get_trimesh(), mesh)
