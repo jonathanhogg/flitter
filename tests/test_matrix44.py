@@ -180,6 +180,9 @@ class TestMatrix44(utils.TestCase):
         m = Matrix44.scale(2)
         m @= Matrix44.translate([1, 2, 3])
         self.assertEqual(m, [2, 0, 0, 0, 0, 2, 0, 0, 0, 0, 2, 0, 2, 4, 6, 1])
+        m @= [1, 1, 1]
+        self.assertIsNot(m, m1)
+        self.assertEqual(m, [4, 6, 8])
 
     def test_vmul(self):
         self.assertEqual(Matrix44() @ None, None)

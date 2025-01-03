@@ -53,6 +53,7 @@ class TestPrimitives(utils.TestCase):
                     self.assertAlmostEqual(mesh.volume, 4/3*math.pi, places=int(math.log10(segments)))
         self.assertEqual(Model.sphere(0).name, '!sphere-4')
         self.assertEqual(Model.sphere(5).name, '!sphere-8')
+        self.assertIs(Model.sphere(), Model.sphere(DefaultSegments))
 
     def test_cylinder(self):
         for segments in (4, DefaultSegments, 1024):
@@ -70,6 +71,8 @@ class TestPrimitives(utils.TestCase):
                 else:
                     self.assertAlmostEqual(mesh.area, 4*math.pi, places=int(math.log10(segments)))
                     self.assertAlmostEqual(mesh.volume, math.pi, places=int(math.log10(segments)))
+        self.assertEqual(Model.cylinder(0).name, '!cylinder-2')
+        self.assertIs(Model.cylinder(), Model.cylinder(DefaultSegments))
 
     def test_cone(self):
         for segments in (4, DefaultSegments, 1024):
@@ -87,6 +90,8 @@ class TestPrimitives(utils.TestCase):
                 else:
                     self.assertAlmostEqual(mesh.area, (1+math.sqrt(2))*math.pi, places=int(math.log10(segments)))
                     self.assertAlmostEqual(mesh.volume, math.pi/3, places=int(math.log10(segments)))
+        self.assertEqual(Model.cone(0).name, '!cone-2')
+        self.assertIs(Model.cone(), Model.cone(DefaultSegments))
 
 
 class TestBasicFunctionality(utils.TestCase):
@@ -470,7 +475,7 @@ class TestStructuring(utils.TestCase):
         self.assertEqual(Model.difference(Model.box(), Model.sphere()).trim(self.P, self.N).name, f'difference(trim(!box, {self.PN_hash}), !sphere)')
 
 
-class TestUVRemapping(utils.TestCase):
+class TestUnaryOperations(utils.TestCase):
     def tearDown(self):
         Model.flush_caches(0, 0)
 
@@ -482,6 +487,22 @@ class TestUVRemapping(utils.TestCase):
             r = math.sqrt(x*x + y*y)
             v = (math.atan2(z, r) / math.pi + 0.5) % 1
             self.assertAllAlmostEqual(uv, [u, v])
+
+    def test_flatten(self):
+        model = Model.sphere()
+        nrows = DefaultSegments // 4
+        mesh = model.get_trimesh()
+        self.assertEqual(len(mesh.vertices), 4*(nrows+1)*(nrows+2))
+        self.assertEqual(len(mesh.faces), 8*nrows*nrows)
+        self.assertAlmostEqual(mesh.area, 4*math.pi, places=1)
+        self.assertAlmostEqual(mesh.volume, 4/3*math.pi, places=1)
+        flat_model = model.flatten()
+        self.assertIsNot(flat_model, model)
+        mesh = flat_model.get_trimesh()
+        self.assertEqual(len(mesh.vertices), 3*8*nrows*nrows)
+        self.assertEqual(len(mesh.faces), 8*nrows*nrows)
+        self.assertAlmostEqual(mesh.area, 4*math.pi, places=1)
+        self.assertAlmostEqual(mesh.volume, 4/3*math.pi, places=1)
 
 
 class TestTrim(utils.TestCase):
@@ -619,6 +640,35 @@ class TestSdfBoolean(TestBoolean):
 
     def wrap_name(self, name):
         return f'sdf({name}, -3;-3;-3, 3;3;3, 0.1)'
+
+
+class TestSdfTrim(utils.TestCase):
+    def tearDown(self):
+        Model.flush_caches(0, 0)
+
+    def test_trim_sphere_to_box(self):
+        model = Model.sphere()
+        for x in (-1, 1):
+            model = model.trim((x/2, 0, 0), (x, 0, 0))
+        for y in (-1, 1):
+            model = model.trim((0, y/2, 0), (0, y, 0))
+        for z in (-1, 1):
+            model = model.trim((0, 0, z/2), (0, 0, z))
+        model = Model.sdf(None, model, (-1, -1, -1), (1, 1, 1), 0.05)
+        mesh = model.get_trimesh()
+        self.assertEqual(mesh.bounds.tolist(), [[-0.5, -0.5, -0.5], [0.5, 0.5, 0.5]])
+        self.assertAlmostEqual(mesh.area, 6)
+        self.assertAlmostEqual(mesh.volume, 1)
+
+    def test_trim_to_nothing(self):
+        model = Model.box()
+        model = model.trim((0, 0, -1), (0, 0, 1))
+        model = Model.sdf(None, model, (-1, -1, -1), (1, 1, 1), 0.05)
+        with unittest.mock.patch('flitter.render.window.models.logger') as mock_logger:
+            manifold = model.get_manifold()
+            mock_logger.warning.assert_called_with("Result of operation was empty mesh: {}", model.name)
+        self.assertIsNone(manifold)
+        self.assertIsNone(model.get_trimesh())
 
 
 class TestBuffers(utils.TestCase):

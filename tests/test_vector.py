@@ -412,6 +412,7 @@ class TestVector(utils.TestCase):
         self.assertEqual(Vector.symbol('foo').concat(Vector.symbol('bar')).match(2, str), ['foo', 'bar'])
         self.assertEqual(Vector.symbol('foo').concat(Vector(1)).match(2), ['foo', 1])
         self.assertEqual(Vector.symbol('foo').concat(Vector(1)).match(2, str), None)
+        self.assertEqual(Vector.symbol('foo').concat(Vector(1)).match(2, int), None)
         self.assertEqual(Vector.symbol('foo').concat(Vector(1)).match(2, float), [FOO_SYMBOL_NUMBER, 1])
         self.assertEqual(Vector(FOO_SYMBOL_NUMBER).match(1, str), 'foo')
         self.assertEqual(Vector(FOO_SYMBOL_NUMBER).match(2, None), ['foo', 'foo'])
@@ -780,7 +781,7 @@ class TestVector(utils.TestCase):
     def test_minimum(self):
         self.assertTrue(math.isnan(null.minimum()))
         self.assertTrue(math.isnan(Vector('hello').minimum()))
-        self.assertEqual(Vector.range(10).minimum(), 0)
+        self.assertEqual(Vector.range(9, -1, -1).minimum(), 0)
 
     def test_squared_sum(self):
         self.assertTrue(math.isnan(null.squared_sum()))
