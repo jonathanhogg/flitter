@@ -622,6 +622,23 @@ def sumv(Vector xs not None, Vector w=true_):
     return ys
 
 
+def product(Vector xs not None, Vector w=true_):
+    cdef int64_t i, j, n = xs.length
+    if xs.objects is not None or w.length != 1 or w.objects is not None:
+        return null_
+    cdef Vector ys = Vector.__new__(Vector)
+    cdef int64_t m = <int>(w.numbers[0])
+    if m < 1:
+        return null_
+    ys.allocate_numbers(m)
+    for i in range(m):
+        ys.numbers[i] = 1
+    for i in range(0, n, m):
+        for j in range(min(m, n-i)):
+            ys.numbers[j] *= xs.numbers[i+j]
+    return ys
+
+
 def accumulate(Vector xs not None, Vector zs=true_):
     cdef int64_t i, j, k, n = xs.length
     if n == 0 or xs.objects is not None or zs.length != 1 or zs.objects is not None:
@@ -1121,6 +1138,7 @@ STATIC_FUNCTIONS = {
     'ord': Vector(ordv),
     'point_towards': Vector(point_towards),
     'polar': Vector(polar),
+    'product': Vector(product),
     'qbetween': Vector(qbetween),
     'qmul': Vector(qmul),
     'quad': Vector(quad),

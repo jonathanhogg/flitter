@@ -24,6 +24,15 @@ of the arguments in vector sort order.
 the index of the largest argument in vector sort order (with the 1st argument
 being index *0*).
 
+`mean(` *xs* [ `,` *w=1* ] `)`
+: Return a numeric vector, of length *w*, obtained by summing together
+*w*-element groups of *xs*, i.e., `xs[0..w]` + `xs[w..2*w]` + `xs[2*w..3*w]` +
+..., up to the end of *xs* with the final group truncated if necessary, and then
+dividing by the number of elements contributing to each value. `mean()`
+of an empty vector is *w* `inf` values. `mean()` of a non-numeric vector, or
+with `w` non-numeric or less than 1, is `null`. Equivalent to
+`sum(xs, w) / sum(1[..len(xs)], w)`.
+
 `min(` *x* [ `,` ... ] `)`
 : Return the minimum value in the vector *x* with one argument, or the smallest
 of the arguments in vector sort order.
@@ -33,20 +42,23 @@ of the arguments in vector sort order.
 the index of the smallest argument in vector sort order (with the 1st argument
 being index *0*).
 
+`product(` *xs* [ `,` *w=1* ] `)`
+: Return a numeric vector, of length *w*, obtained by multiplying together
+*w*-element groups of *xs*, i.e., `xs[0..w]` * `xs[w..2*w]` * `xs[2*w..3*w]` *
+..., up to the end of *xs* with the final group truncated if necessary.
+`product()` of an empty vector is *w* ones. `product()` of a non-numeric vector,
+or with `w` non-numeric or less than 1, is `null`.
+
 `shuffle(` *source* `,` *xs* `)`
 : Return the shuffled elements of *xs* using the pseudo-random *source* (which
 should be the result of calling `uniform(...)`).
 
 `sum(` *xs* [ `,` *w=1* ] `)`
-: Return a numeric value, of length *w*, obtained by summing together
+: Return a numeric vector, of length *w*, obtained by summing together
 *w*-element groups of *xs*, i.e., `xs[0..w]` + `xs[w..2*w]` + `xs[2*w..3*w]` +
-... up to the end of *xs* with the final group truncated if necessary. `sum()`
+..., up to the end of *xs* with the final group truncated if necessary. `sum()`
 of an empty vector is *w* zeros. `sum()` of a non-numeric vector, or with `w`
-not specified as a single-item numeric vector, is `null`.
-
-`mean(` *xs* [ `,` *w=1* ] `)`
-: Similar to `sum()` but returning the length *w* mean - equivalent to
-`sum(xs, w) / sum(1[..len(xs)], w)`.
+non-numeric or less than 1, is `null`
 
 `zip(` *xs* `,` *ys* [ `,` ... ] `)`
 : Return a vector formed by interleaving values from each argument vector; for
