@@ -316,6 +316,20 @@ func foo(nodes, x=10, y, z='world')
   !baz #test
             """)
 
+    def test_template_builtin_calls(self):
+        self.assertCodeOutput(
+            """
+func foo(n)
+    @sum
+        for i in ..n
+            2**i
+
+!foo foo=foo(10)
+            """,
+            """
+!foo foo=1023
+            """)
+
     def test_nested_functions(self):
         self.assertCodeOutput(
             """

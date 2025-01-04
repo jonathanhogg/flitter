@@ -988,13 +988,13 @@ Similarly, template function calls can be used in functions to wrap a sequence
 of expressions. For example:
 
 ```flitter
-func onoise(seed, n, k, x, y, z)
+func onoise(seed, n, k, x, y)
     let weights=k**i for i in ..n
         total=sum(weights)
     @sum
         for i in ..n
             let scale=2**i
-            noise(seed, x*scale, y*scale, z*scale) * weights[i] / total
+            noise(seed, x*scale, y*scale) * weights[i] / total
 ```
 
 This function is (almost) equivalent to the built-in function `octnoise()` and
