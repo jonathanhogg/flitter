@@ -679,7 +679,7 @@ cdef class UVRemap(UnaryOperation):
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    cdef object remap_sphere(self, trimesh_model):
+    cdef object remap_sphere(self, trimesh_model, Vector bounds):
         cdef const float[:, :] vertices
         cdef object vertex_uv_array
         cdef float[:, :] vertex_uv
@@ -697,11 +697,35 @@ cdef class UVRemap(UnaryOperation):
         return trimesh.base.Trimesh(vertices=trimesh_model.vertices, vertex_normals=trimesh_model.vertex_normals,
                                     faces=trimesh_model.faces, visual=visual, process=False)
 
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    @cython.cdivision(True)
+    cdef object remap_plane(self, trimesh_model, Vector bounds):
+        cdef const float[:, :] vertices
+        cdef object vertex_uv_array
+        cdef float[:, :] vertex_uv
+        cdef int64_t i, n
+        cdef float x, y, x0=bounds.numbers[0], y0=bounds.numbers[1], width=bounds.numbers[3]-x0, height=bounds.numbers[4]-y0
+        n = len(trimesh_model.vertices)
+        vertices = trimesh_model.vertices.astype('f4', copy=False)
+        vertex_uv_array = np.zeros((n, 2), dtype='f4')
+        vertex_uv = vertex_uv_array
+        for i in range(n):
+            x, y = vertices[i][0], vertices[i][1]
+            vertex_uv[i][0] = (x - x0) / width
+            vertex_uv[i][1] = (y - y0) / height
+        visual = trimesh.visual.texture.TextureVisuals(uv=vertex_uv_array)
+        return trimesh.base.Trimesh(vertices=trimesh_model.vertices, vertex_normals=trimesh_model.vertex_normals,
+                                    faces=trimesh_model.faces, visual=visual, process=False)
+
     cpdef object build_trimesh(self):
         trimesh_model = self.original.get_trimesh()
+        cdef Vector bounds = self.original.get_bounds()
         if trimesh_model is not None:
             if self.mapping is 'sphere':
-                trimesh_model = self.remap_sphere(trimesh_model)
+                trimesh_model = self.remap_sphere(trimesh_model, bounds)
+            elif self.mapping is 'plane':
+                trimesh_model = self.remap_plane(trimesh_model, bounds)
         return trimesh_model
 
     cpdef object build_manifold(self):

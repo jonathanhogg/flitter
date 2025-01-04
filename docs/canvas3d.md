@@ -920,6 +920,16 @@ projection coordinates of that point on the sphere will be used as the UV for
 the vertex. This matches the projection used by the `!sphere` primitive. You
 should not expect this to produce sensible results for a non-convex shape.
 
+`:plane`
+: This maps UV coordinates according to the *x* and *y* coordinates of each
+vertex. The lower and upper, axis-oriented bounds are calculated and the *x*
+and *y* values are mapped into the range $[0,1]$ with the origin being the
+lower left corner (viewed down the *z* axis). This mapping is intended for
+mapping with an orthographic projection, such as drawing a topographical map
+onto the surface of a 3D relief. As this mapping *only* uses the *x* and
+*y* coordinates, the underside will be a flipped version of the top, and the
+sides will be stretched versions of the edge pixels.
+
 :::{note}
 Note that correct spherical mapping requires a seam on the 0 longitude line
 where the texture wraps around from the right to the left side. Any faces that
