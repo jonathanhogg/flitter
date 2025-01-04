@@ -445,13 +445,13 @@ MIT license.
 : Return a 3-vector of *R*, *G* and *B* **linear sRGB** values for an
 approximation of the irradiance of a Planckian (blackbody) radiator at
 temperature *t*, scaled so that `colortemp(6503.5)` (the sRGB whitepoint
-correlated colour temperature) is close to `1;1;1`; the approximation only holds
-within the range *[1667,25000]* and, strictly speaking, values below 1900°K are
-outside the sRGB gamut; irradiance is proportional to the 4th power of the
-temperature, so the values are very small at low temperatures and become
-*significantly* larger at higher temperatures. If the optional *normalize*
-parameter is `true` then the returned color will be normalized by dividing each
-channel by the larger of the 3.
+correlated colour temperature) is close to `1;1;1` (luminance 1). The
+approximation only holds within the range *[1667,25000]* and, strictly speaking,
+values below 1900°K are outside the sRGB gamut. Irradiance is proportional to
+the 4th power of the temperature, so the values are very small at low
+temperatures and become *significantly* larger at higher temperatures; if the
+optional *normalize* parameter is `true` then all returned colors will instead
+be normalized to have luminance 1.
 
 `hsl(` *h* `;` *s* `;` *l* `)`
 : Return a 3-vector of *R*, *G* and *B* in the range *[0,1]* from a 3-vector of

@@ -1023,7 +1023,7 @@ def colortemp(Vector t, Vector normalize=false_):
         return null_
     cdef int64_t i, n = t.length
     cdef bint norm = normalize.as_bool()
-    cdef double T, T2, x, x2, y, X, Y, Z, r, g, b, c
+    cdef double T, T2, x, x2, y, X, Y, Z
     cdef Vector rgb = Vector.__new__(Vector)
     rgb.allocate_numbers(3*n)
     for i in range(n):
@@ -1040,20 +1040,12 @@ def colortemp(Vector t, Vector normalize=false_):
             y = -0.9549476*x*x2 - 1.37418593*x2 + 2.09137015*x - 0.16748867
         else:
             y = +3.0817580*x*x2 - 5.87338670*x2 + 3.75112997*x - 0.37001483
-        Y = (max(0, t.numbers[i]) / 6503.5)**4
+        Y = 1 if norm else (max(0, t.numbers[i]) / 6503.5)**4
         X = Y * x / y
         Z = Y * (1 - x - y) / y
-        r = max(0, 3.2406255*X - 1.537208*Y - 0.4986286*Z)
-        g = max(0, -0.9689307*X + 1.8757561*Y + 0.0415175*Z)
-        b = max(0, 0.0557101*X - 0.2040211*Y + 1.0569959*Z)
-        if norm:
-            c = max(r, g, b)
-            r /= c
-            g /= c
-            b /= c
-        rgb.numbers[3*i] = r
-        rgb.numbers[3*i+1] = g
-        rgb.numbers[3*i+2] = b
+        rgb.numbers[3*i] = max(0, 3.2406255*X - 1.537208*Y - 0.4986286*Z)
+        rgb.numbers[3*i+1] = max(0, -0.9689307*X + 1.8757561*Y + 0.0415175*Z)
+        rgb.numbers[3*i+2] = max(0, 0.0557101*X - 0.2040211*Y + 1.0569959*Z)
     return rgb
 
 
