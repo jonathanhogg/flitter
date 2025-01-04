@@ -687,6 +687,8 @@ class TestStringFuncs(utils.TestCase):
 class TestColorFuncs(utils.TestCase):
     def test_colortemp(self):
         self.assertAllAlmostEqual(colortemp(Vector(6503.5)), Vector([1, 1, 1]), places=None, delta=0.05)
+        self.assertAllAlmostEqual(colortemp(Vector(1900)), Vector([0.0192550289, 0.0044625883, 0]), places=7)
+        self.assertAllAlmostEqual(colortemp(Vector(1900), Vector(1)), Vector([1, 0.0044625883/0.0192550289, 0]), places=7)
 
     def test_oklab(self):
         self.assertAllAlmostEqual(oklab(Vector([0, 0, 0])), Vector([0, 0, 0]), places=2)

@@ -1018,11 +1018,12 @@ def hsv(Vector color):
 
 @cython.cdivision(True)
 @cython.cpow(True)
-def colortemp(Vector t):
+def colortemp(Vector t, Vector normalize=false_):
     if t.numbers == NULL:
         return null_
     cdef int64_t i, n = t.length
-    cdef double T, T2, x, x2, y, X, Y, Z
+    cdef bint norm = normalize.as_bool()
+    cdef double T, T2, x, x2, y, X, Y, Z, r, g, b, c
     cdef Vector rgb = Vector.__new__(Vector)
     rgb.allocate_numbers(3*n)
     for i in range(n):
@@ -1042,9 +1043,17 @@ def colortemp(Vector t):
         Y = (max(0, t.numbers[i]) / 6503.5)**4
         X = Y * x / y
         Z = Y * (1 - x - y) / y
-        rgb.numbers[3*i] = max(0, 3.2406255*X - 1.537208*Y - 0.4986286*Z)
-        rgb.numbers[3*i+1] = max(0, -0.9689307*X + 1.8757561*Y + 0.0415175*Z)
-        rgb.numbers[3*i+2] = max(0, 0.0557101*X - 0.2040211*Y + 1.0569959*Z)
+        r = max(0, 3.2406255*X - 1.537208*Y - 0.4986286*Z)
+        g = max(0, -0.9689307*X + 1.8757561*Y + 0.0415175*Z)
+        b = max(0, 0.0557101*X - 0.2040211*Y + 1.0569959*Z)
+        if norm:
+            c = max(r, g, b)
+            r /= c
+            g /= c
+            b /= c
+        rgb.numbers[3*i] = r
+        rgb.numbers[3*i+1] = g
+        rgb.numbers[3*i+2] = b
     return rgb
 
 
