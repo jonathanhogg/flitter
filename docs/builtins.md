@@ -132,7 +132,9 @@ convert cartesian coordinates into polar coordinates.
 
 `map(` *x* `,` *y* `,` *z* `)`
 : Map a value of *x* in the range *[0,1]* into the range *[y,z]*; equivalent
-to `y*x + (1-y)*z` (including in n-vector semantics).
+to `(1-x)*y + x*z` (including in n-vector semantics). Values of *x* outside of
+the range *[0,1]* will result in values outside of the range *[y,z]*. Use
+`clamp()` or `linear()` on *x* if the range is to be restricted.
 
 `normalize(` *x* `)`
 : Return `x / hypot(x)`.
@@ -158,17 +160,17 @@ to `y*x + (1-y)*z` (including in n-vector semantics).
 Quaternions are 4-vectors, *w;x;y;z*, that can be used to describe an arbitrary
 rotation in 3-dimensional Cartesian space. The identity quaternion is `1;0;0;0`.
 
-`quaternion(` *axis* `,` *turns* `)`
-: Return a Euler-rotation unit-quaternion representing a *turns* rotation
-around the *axis* vector (clockwise looking in the direction of the vector).
+`qbetween(` *u* `,` *v* `)`
+: Return the quaternion representing a rotation of the vector *u* to point
+in the direction of the vector *v*.
 
 `qmul(` *p* `,` *q* `)`
 : Return the product of the quaternion *p* and the quaternion *q*, which is
 equivalent to the rotation *q* **followed by** the rotation *p*.
 
-`qbetween(` *u* `,` *v* `)`
-: Return the quaternion representing a rotation of the vector *u* to point
-in the direction of the vector *v*.
+`quaternion(` *axis* `,` *turns* `)`
+: Return a Euler-rotation unit-quaternion representing a *turns* rotation
+around the *axis* vector (clockwise looking in the direction of the vector).
 
 `slerp(` *t* `,` *p* `,` *q* `)`
 : Return the [quaternion spherical linear
@@ -185,14 +187,14 @@ Matrices are either 9- or 16-vectors, in column-major order, representing a 3x3
 or 4x4 matrix. There are a few places where matrices are supported, such as
 the `matrix` attribute of a [3D `!transform` node](canvas,md#transforms).
 
+`inverse(` *M* `)`
+: Returns the matrix inverse of a 3x3 or 4x4 matrix.
+
 `point_towards(` *direction*`,` *up* `)`
 : Returns a 4x4 matrix representing a rotation making the Z-axis point towards
 *direction* and the Y-axis point towards *up*, where both of these are
 3-vectors. If *up* is not orthogonal to *direction* then the Z-axis takes
 precedence and the Y-axis will be aligned as closely to *up* as possible.
-
-`inverse(` *M* `)`
-: Returns the matrix inverse of a 3x3 or 4x4 matrix.
 
 ## Waveform functions
 
@@ -228,14 +230,14 @@ The "easing" functions map from *x* in the range *[0, 1]* to a *y* in the range
 *[0, 1]*, with values of *x* less than *0* returning *0* and values greater
 than *1* returning *1*.
 
+`cubic(` *x* `)`
+: A cubic easing function.
+
 `linear(` *x* `)`
 : A linear easing function.
 
 `quad(` *x* `)`
 : A quadratic easing function.
-
-`cubic(` *x* `)`
-: A cubic easing function.
 
 `snap(` *x* `)`
 : A square-root easing function (conceptually a quadratic easing function with
@@ -502,16 +504,16 @@ The name `c` will have the value `"o w"`.
 
 ## File functions
 
-`glob(` *pattern* `)`
-: Return an *n*-vector of strings representing file paths matching the given
-shell "glob" pattern. Files are matched relative to the directory containing
-the running program.
-
 `csv(` *filename* `,` *row* `)`
 : Return a vector of values obtained by reading a specific *row* (indexed from
 *0*) from the Unicode CSV file with the given *filename*; numeric-looking
 columns in the row will be converted into numeric values, anything else will be
 a Unicode string.
+
+`glob(` *pattern* `)`
+: Return an *n*-vector of strings representing file paths matching the given
+shell "glob" pattern. Files are matched relative to the directory containing
+the running program.
 
 `read(` *filename* `)`
 : Returns a single string value containing the entire text of *filename*.
