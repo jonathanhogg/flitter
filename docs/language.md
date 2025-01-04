@@ -966,6 +966,42 @@ calls are appended to the `!canvas` node.
 As template function calls convert into regular function calls, templates may
 be used recursively.
 
+### Other ways to use template function calls
+
+Although template function calls are designed to allow custom node-like
+operations to be defined, they can be used in other ways. A particularly useful
+application is debugging node construction by adding a `@debug` call. As the
+`debug()` function logs and returns its first argument, it can be inserted at
+any point in a node tree to see what has been constructed without altering the
+tree. For example:
+
+```flitter
+!window
+    !canvas3d viewpoint=1
+        !light color=1 direction=-1
+        @debug
+            for i in ..10
+                !sphere position=beta(:position;i)[..3]-0.5 size=0.1
+```
+
+Similarly, template function calls can be used in functions to wrap a sequence
+of expressions. For example:
+
+```flitter
+func onoise(seed, n, k, x, y, z)
+    let weights=k**i for i in ..n
+        total=sum(weights)
+    @sum
+        for i in ..n
+            let scale=2**i
+            noise(seed, x*scale, y*scale, z*scale) * weights[i] / total
+```
+
+This function is (almost) equivalent to the built-in function `octnoise()` and
+makes use of `@sum` to add up all of the calls to `noise()`. Although this
+could have been done with `sum()` and an in-line for loop, this code is more
+readable.
+
 ## State
 
 Any interactive component of **Flitter**, such as a MIDI controller,
