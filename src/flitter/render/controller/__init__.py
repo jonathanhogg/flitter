@@ -75,7 +75,7 @@ class Controller:
                 unknown.add(child.kind)
         for kind in unknown.difference(self.unknown):
             logger.warning("Unhandled node in controller: {!r}", child)
-        self.purge()
+        await self.purge()
         self.unknown = unknown
         self.controls = controls
         await self.driver.finish_update()
