@@ -177,7 +177,6 @@ cdef class Model:
             self.buffer_caches = None
 
     cpdef object get_trimesh(self):
-        self.cache_timestamp = perf_counter()
         cdef PyObject* objptr
         if self.cache is None:
             self.cache = {}
@@ -188,7 +187,6 @@ cdef class Model:
         return trimesh_model
 
     cpdef object get_manifold(self):
-        self.cache_timestamp = perf_counter()
         cdef PyObject* objptr
         if self.cache is None:
             self.cache = {}
@@ -199,7 +197,6 @@ cdef class Model:
         return manifold
 
     cpdef Vector get_bounds(self):
-        self.cache_timestamp = perf_counter()
         cdef PyObject* objptr
         if self.cache is None:
             self.cache = {}
@@ -219,7 +216,6 @@ cdef class Model:
         return bounds_vector
 
     cpdef tuple get_buffers(self, object glctx, dict objects):
-        self.cache_timestamp = perf_counter()
         cdef object model_id = self.id
         cdef PyObject* objptr
         if (objptr := PyDict_GetItem(objects, model_id)) != NULL:
