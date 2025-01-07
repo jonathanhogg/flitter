@@ -47,27 +47,37 @@ cdef uint64_t MIX = HASH_UPDATE(HASH_START, HASH_STRING('mix'))
 
 cdef class Model:
     @staticmethod
-    def flush_caches(double min_age=300, int64_t min_size=2000):
+    def flush_caches(double max_age=300, int64_t max_size=2500):
         cdef double now = perf_counter()
-        cdef double cutoff = now - min_age
+        cdef double cutoff = now - max_age
         cdef Model model
-        cdef int64_t unload_count = 0
+        cdef int64_t count=len(ModelCache), unload_count=0, uncache_count=0
         cdef list unloaded = []
-        while len(ModelCache) > min_size:
+        cdef bint aggressive = False
+        while True:
             for model in ModelCache.values():
                 if model.touch_timestamp == 0:
                     model.touch_timestamp = now
-                if model.touch_timestamp <= cutoff and not model.dependents:
+                elif model.uncache(False):
+                    uncache_count += 1
+                if (model.touch_timestamp <= cutoff or aggressive and model.touch_timestamp < now and count > max_size) and model.dependents is None:
                     unloaded.append(model)
+                    count -= 1
             if not unloaded:
-                break
+                if count > max_size and not aggressive:
+                    aggressive = True
+                else:
+                    break
             while unloaded:
                 model = unloaded.pop()
-                del ModelCache[model.id]
                 model.unload()
+                del ModelCache[model.id]
                 unload_count += 1
+        if uncache_count:
+            logger.trace("Cleared object cache for {} models", uncache_count)
         if unload_count:
             logger.trace("Unloaded {} models from cache, {} remaining", unload_count, len(ModelCache))
+        return uncache_count + unload_count
 
     @staticmethod
     def by_id(uint64_t id):
@@ -102,14 +112,24 @@ cdef class Model:
         raise NotImplementedError()
 
     cpdef void unload(self):
-        assert not self.dependents
-        self.dependents = None
-        self.cache = None
-        if self.buffer_caches is not None:
+        self.uncache(True)
+
+    cpdef bint uncache(self, bint all):
+        cdef bint cleaned = False
+        if self.cache is not None:
+            if all or 'bounds' not in self.cache:
+                self.cache = None
+                cleaned = True
+            elif len(self.cache) > 1:
+                self.cache = {'bounds': self.cache['bounds']}
+                cleaned = True
+        cdef dict cache
+        if all and self.buffer_caches is not None:
             for cache in self.buffer_caches:
-                if self.id in cache:
-                    del cache[self.id]
+                del cache[self.id]
             self.buffer_caches = None
+            cleaned = True
+        return cleaned
 
     cpdef bint is_smooth(self):
         raise NotImplementedError()
@@ -160,21 +180,15 @@ cdef class Model:
 
     cpdef void remove_dependent(self, Model model):
         self.dependents.remove(model)
+        if not self.dependents:
+            self.dependents = None
 
     cpdef void invalidate(self):
+        self.uncache(True)
         cdef Model model
-        cdef dict cache
-        if self.cache:
-            self.cache = None
         if self.dependents is not None:
             for model in self.dependents:
                 model.invalidate()
-        cdef object model_id
-        if self.buffer_caches is not None:
-            model_id = self.id
-            for cache in self.buffer_caches:
-                cache.pop(model_id)
-            self.buffer_caches = None
 
     cpdef object get_trimesh(self):
         cdef PyObject* objptr

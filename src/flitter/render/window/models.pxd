@@ -16,6 +16,7 @@ cdef class Model:
     cdef readonly set dependents
     cdef readonly list buffer_caches
 
+    cpdef bint uncache(self, bint buffers)
     cpdef void unload(self)
     cpdef void check_for_changes(self)
     cpdef bint is_smooth(self)
