@@ -120,7 +120,8 @@ or functions (or a mix thereof). The vector implementation is optimised for
 vectors of numbers, particularly short vectors. There are no dedicated integer
 values in **Flitter** and so one should be careful of relying on integer numbers
 outside of the safe integer range of a double-precision floating point
-($-2^{53}$ .. $2^{53}$).
+($-2^{53}$ .. $2^{53}$). Numbers may use exponential `e` notation and may
+contain underscores `_` to separate groups of digits for readability.
 
 Mathematical operators operate only on pure number vectors. Using them on
 anything else will return the empty vector (`null`). Unicode strings can be
@@ -128,24 +129,6 @@ concatenated by vector composition, e.g., `"Hello";" world!"` - the result will
 be a 2-vector, but vectors are implicitly concatenated anywhere that strings
 are used in the language. Numbers will be turned into strings using
 general-purpose formatting and so `"Number ";1` is also a valid string.
-
-Binary mathematical operators on mixed-length vectors will return a vector with
-the same length as the longer of the two vectors. The shorter vector will be
-repeated as necessary. This means that:
-
-```flitter
-(1;2;3;4;5;6;7;8;9) + 1       -- evals to: (2;3;4;5;6;7;8;9;10)
-(1;2;3;4;5;6;7;8;9) + (1;2;3) -- evals to: (2;4;6;5;7;9;8;10;12)
-```
-
-Note that the vector composition operator `;` has a *very* low precedence and so
-composed vectors will generally have to be wrapped in parentheses when used with
-operators:
-
-```flitter
-x;y + 1 -- is equivalent to: x;(y+1)
-(x;y)+1 -- is equivalent to: (x+1);(y+1)
-```
 
 ### Named values
 
@@ -287,8 +270,8 @@ Setting an attribute to `null` will *remove* that attribute from the node if it
 is already present, or do nothing otherwise.
 
 Block indentation below a node is a binary operation that evaluates the
-indented expressions as a sequence and then appends each node in the resulting
-vector to the node (or nodes) above.
+indented expressions as a sequence and then appends each node in the result
+vector to the node above.
 
 For example:
 
@@ -307,9 +290,9 @@ world!".
 
 #### Vector Node Operations
 
-As nodes are values, and thus vectors, tag unary-postfix operations and
-attribute-set binary operations are able to operate on a vector of nodes
-simultaneously. For example:
+As nodes are values, and thus vectors, tag unary-postfix operations,
+attribute-set binary operations and append operations are able to operate on a
+vector of nodes simultaneously. For example:
 
 ```flitter
 let points=10;20;15;25;20;30;25;35
@@ -331,6 +314,16 @@ let points=10;20;15;25;20;30;25;35
         !line_to #segment point=x;y
 ```
 
+One could also write:
+
+```flitter
+(!group translate=x*5;x*10) for x in ..10
+    !ellipse radius=5
+```
+
+to construct a 10-item vector of `!group` nodes and then simultaneously
+append an `!ellipse` node to each one.
+
 ## Ranges
 
 ```flitter
@@ -349,7 +342,7 @@ and increment by 1. Therefore:
 - `1..21|5` evaluates to the vector `1;6;11;16`
 - `1..0|-0.1` evaluates to the vector `1;0.9;0.8;0.7;0.6;0.5;0.4;0.3;0.2;0.1`
 
-Ranges are *not* lazy like they are in Python, so `0..1000000` will create a
+Ranges are *not* lazy as they are in Python, so `..1000000` will create a
 vector with 1 million items.
 
 ## Indexing
@@ -362,14 +355,14 @@ vector using indexing. Indexing uses the familiar syntax:
 As *all* values in **Flitter** are vectors, *index* may
 itself be a multi-element vector.
 
-The rules for indexing/slicing an *n*-element vector, *src*, are:
+The rules for indexing an *n*-element vector, *src*, are:
 
 - If either *index* or *src* is `null`, the operation will evaluate to `null`
 - *index* **must** be an entirely numeric vector or it will be treated as `null`
 - *index* is considered element-at-a-time
 - Non-integer indices are *floor*-ed to the next integer value down
 - Indices are used, modulo the length of *src*, to select an item from *src*
-- All matching elements are composed together into a new vector
+- All selected elements are composed together into a new vector
 
 [Ranges](#ranges) are a convenient way to create indices for slicing a vector,
 e.g., `xs[..5]` will extract the first 5 elements of `xs` (assuming `xs` has
@@ -417,6 +410,15 @@ this meaning `(1;2;3;4) + 1` is equal to `2;3;4;5`, it also means that
 `(1;2;3;4) + (1;-1)` is equal to `2;1;4;3`. The operators are left-associative,
 with `**` having the highest precedence, then `/`, `*`, `//` and `%` at the next
 level, and finally `+` and `-`.
+
+Note that the vector composition operator `;` has a *very* low precedence and so
+composed vectors will generally have to be wrapped in parentheses when used with
+operators:
+
+```flitter
+x;y + 1 -- is equivalent to: x;(y+1)
+(x;y)+1 -- is equivalent to: (x+1);(y+1)
+```
 
 The `%` modulo operator follows the Python convention rather than C style. It
 is best understood as the remainder of a `//` floor division:
@@ -470,7 +472,8 @@ until an element of *x* is less/greater than the corresponding element in *y*.
 If one vector runs out of elements before the other then the shorter one is
 lesser. If an element pair cannot be compared because they are not of the same
 type, e.g., an attempt to compare a Unicode string with a number, then the
-result of the operator is the `null` vector.
+result of the comparison is the `null` vector (which will be interpreted as
+`false` in logical expressions).
 
 Additionally, a vector can be tested to see if it contains a sub-vector with
 the *contains* operator:
@@ -656,8 +659,8 @@ if test
 ```
 
 *test* is any expression and it will be considered *true* if it evaluates to a
-non-empty vector containing something other than 0s or empty strings. So `0` is
-false, as is `null`, `""` and `0;0;0`. The result of evaluating the matching
+non-empty vector containing something other than zeroes or empty strings. So `0`
+is false, as is `null`, `""` and `0;0;0`. The result of evaluating the matching
 indented expressions is the result value of the `if`. In the absence of an
 `else` clause the result of an `if`/`elif` with no true tests is `null`.
 
@@ -783,11 +786,20 @@ let grid = ((x;y) for x in ..N) for y in ..N
 
 and therefore the *last* loop is outermost.
 
+In-line `for` loops can be combined with in-line `if` expressions to filter
+elements from the result vector. As the result of a false inline `if` lacking
+an `else` is `null`, and a `null` composed into a vector is ignored, one can
+use the form:
+
+```flitter
+let xs = x*2 if f(x) > 3 for x in ..100
+```
+
 ## Function calling
 
 Functions are called in the normal way, with the name of the function followed
-by zero or more arguments, separated by commas, within parentheses, e.g.,
-`cos(x)` or `zip(xs, ys)`.
+by zero or more comma-separated arguments within parentheses, e.g., `cos(x)` or
+`zip(xs, ys)`.
 
 Most built-in functions will do something sensible with an n-vector, e.g.,
 `sin(0.1;0.2)` will return a vector equivalent to `sin(0.1);sin(0.2)`, but
@@ -819,14 +831,14 @@ func name(parameter《=default》《, parameter…》)
 `func` will create a new function and bind it to `name`. Default values may be
 given for the parameters and will be used if the function is later called with
 an insufficient number of matching arguments, otherwise any parameters lacking
-matching arguments will be bound to `null`. The result of evaluating all
-body expressions will be returned as a single vector to the caller.
+matching arguments will be bound to `null`. The result of evaluating the body
+sequence will be returned as a vector to the caller.
 
 Functions may be declared anywhere in a program including within another
 function definition. Functions may refer to names defined outside of the
-function definition at the top level. The values of these names will be
-captured at definition time and so rebinding a name later in the same scope
-will be ignored. For example:
+function definition. The values of these names will be captured at definition
+time and so rebinding a name later in the same scope will be ignored. For
+example:
 
 ```flitter
 let x=10
@@ -858,16 +870,17 @@ func multiply_add(x, y=1, z)
 ```
 
 will bind the arguments to parameters with `x` taking the value `2`, `y` taking
-the value `1` and `z` taking the value `3`. Named arguments should be given
-*after* any positional arguments and should not repeat positional arguments.
+its default value `1` and `z` taking the value `3`. Named arguments must be
+given *after* any positional arguments and should not repeat positional
+arguments (they will be ignored if they do).
 
-Functions that have all literal (or unspecified) default parameter values, and
-that do not reference any non-local names within the body, will be inlined by
-the simplifier at each call site. The simplifier is then able to bind the
-parameters to the argument expressions and continue simplifying the body on
-that basis. Therefore, it is often more efficient to pass dynamic values (such
-as `beat`) into the function as parameters than allow them to be captured from
-the environment.
+Functions that that do not reference any non-local dynamic names within the
+body (including recursive functions) are eligible for inlining by the
+simplifier at each call site. The simplifier is able to bind the parameters
+to the argument expressions and continue simplifying the body on that basis.
+Therefore, it is often more performant to pass dynamic values (such as `beat`)
+into the function as parameters than allow them to be captured from the
+environment.
 
 ## Anonymous functions
 
@@ -894,8 +907,8 @@ function, and the numbers *1* and *2*:
 let f = func(x) x;1;2
 ```
 
-Note that calling `f` is *not* in itself an error, as a call to a vector is
-valid - as explained in [Function calling](#function-calling) above. The
+Note that calling this `f` is *not* in itself an error, as a call to a vector
+is valid - as explained in [Function calling](#function-calling) above. The
 anonymous function will be called and the attempted calls to the two numbers
 will log evaluation errors and otherwise be ignored. So `f(0)` will evaluate
 to just `0`.
@@ -924,16 +937,29 @@ As with regular functions, any captured names are bound at the point of
 definition and so the value of `x` passed into the first function call will be
 bound into the returned anonymous function
 
-An anonymous function cannot call itself recursively as there is no bound
-function name to use within the body.
-
 ## Template function calls
 
 The special `@` operator provides syntactic sugar for calling a function using
 syntax similar to constructing a node. The name following `@` should be the
 name of the function to be called, any "attributes" placed after this are
 passed as named arguments. Any indented expressions are evaluated and the
-resulting vector passed as the *first* argument to the function.
+resulting vector passed as the *first* positional argument to the function,
+otherwise the first argument will be `null`.
+
+A template function call like this:
+
+```flitter
+@fname name1=value1 name2=value2 …
+    sequence
+```
+
+roughly translates to:
+
+```flitter
+let nodes=
+    sequence
+fname(nodes, name1=value1, name2=value2, …)
+```
 
 As normal, function parameters that are not bound will take their default value
 if one is given in the function definition or `null` otherwise.
@@ -1004,9 +1030,16 @@ readable.
 
 ## State
 
-Any interactive component of **Flitter**, such as a MIDI controller,
-communicates with a running **Flitter** program via a *state* mapping. This can
-be queried with the `$` operator like so:
+All mutable state in **Flitter**, such as the outputs of MIDI controllers, the
+values of [counters](counters.md) or the properties of [particle physics
+systems](physics.md), is contained within the *state mapping*.
+
+State look-ups are done with the `$` prefix operator, which should be followed
+by a state key. A key is any vector of numbers, symbols and/or strings. As the
+`;` operator binds with lower precedence than `$`, a composed key must be
+surrounded with parentheses, e.g., `$(:circle;:radius)`.
+
+For example:
 
 ```flitter
 let SIZE=1280;720
@@ -1022,24 +1055,14 @@ let SIZE=1280;720
 
 This shows an X-Touch mini MIDI surface being configured with one encoder as a
 knob that changes the radius of a red filled-circle drawn in the middle of the
-window. The `state=:circ_radius` attribute of the `!rotary` node specifies the
+window. The `state=:circle_radius` attribute of the `!rotary` node specifies the
 state key to write values to and the current value is retrieved with
 `$:circle_radius`.
-
-A key is any vector of numbers and/or strings (/symbols). As the `;` operator
-binds with very low precedence, a non-singleton key needs to be surrounded with
-brackets, e.g., `$(:circle;:radius)`.
-
-The state system is also used by the [physics engine](physics.md) to
-communicate particle properties back to the program and by
-[counters](counters.md). Be careful when choosing state keys to avoid collisions
-between these different uses.
 
 ## Pragmas
 
 One or more pragmas may be placed at the top of a source file before any other
-expressions. Pragmas take a name and a value, which must be a literal number
-or string.
+expressions. Pragmas take a name and a single literal number or string.
 
 There are three currently supported pragmas:
 
@@ -1166,6 +1189,8 @@ return to the original compiled program. Programs that involve large static
 loops may take a noticeable amount of time to re-simplify and so it may be
 necessary to turn off simplification on state in programs that involve
 unpredictable state changes (`--simplifystate=0`).
+
+The simplifier can be completely disabled with the `--nosimplify` option.
 
 ## Run-time Error Behaviour
 

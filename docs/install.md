@@ -35,7 +35,7 @@ distribution](#installing-from-the-source-package).
 It is recommended to do the install into a Python [virtual
 environment](https://docs.python.org/3/library/venv.html) as **Flitter** draws
 on quite a few dependencies (see [below](#python-package-dependencies)). This is
-especially important if you are using the latest Python 3.12 as it will simply
+especially important if you are using Python 3.12 or later as it will simply
 refuse to install packages into the system environment. This is generally
 something as simple as:
 
@@ -63,7 +63,7 @@ $ python3 -m flitter.engine path/to/some/flitter/script.fl
 
 **Flitter** assumes that OpenGL windows are in the sRGB colorspace. However,
 modern Macs generally have displays that support the wider Display-P3
-colorspace, and macOS OpenGL windows will default to this where possible.
+colorspace, and macOS OpenGL windows will default to this.
 
 This results in colors on macOS appearing more vivid than on other platforms.
 Colors in windows will not match output saved to image and video files (which
@@ -93,7 +93,7 @@ $ sudo apt install python3-dev
 ```
 
 If you've safely navigated getting a working Python development environment, you
-can do the build from source with exactly the same command(s) as above.
+can do the build from source with exactly the same install command as above.
 
 ### Installing from the repo:
 
@@ -148,7 +148,7 @@ to have stuttering. It's also useful when recording video output. You can also
 control frame-rate via a [pragma](language.md#pragmas).
 
 `--define` *NAME*`=`*VALUE*
-: This allows a name to bound to a constant value in the language interpreter.
+: This allows a name to be bound to a constant value in the language interpreter.
 This is useful for controlling conditional behaviour in a program, such as
 enabling video output or changing the window size. *VALUE* may be either a
 string or a numeric vector, with items separated by semicolons. You will need to
@@ -220,7 +220,8 @@ run just this way), but you should know that the Mesa software rasterizer is
 `--opengles`
 : This tells *Flitter* to request the OpenGL ES API instead of OpenGL Core. You
 can use this on devices that do not support the full OpenGL API, or that are
-using a compatibility layer like ANGLE.
+using a compatibility layer like ANGLE. At the moment, `!canvas` 2D drawing is
+not supported on OpenGL ES.
 
 `--profile`
 : Runs the Python profiler around the main loop. See [Profiling](#profiling)
@@ -228,10 +229,10 @@ below for details.
 
 `--vmstats`
 : Turns on logging of **Flitter** virtual machine statistics. This will slow
-down the interpreter by quite a lot. The statistics are written out on program
-interrupt at the `INFO` logging level, which means you will also need to on
-at least `--verbose` logging to see the results. Be wary of interpreting these
-statistics: the overhead of doing the logging can make very simple instructions
+down the interpreter by quite a lot. The statistics are written out on exit
+at the `INFO` logging level, which means you will also need to have at least
+`--verbose` logging turned on to see the results. Be wary of interpreting these
+statistics: the overhead of doing the timing can make very simple instructions
 that are executed millions of times appear to be a larger source of execution
 cost than they really are.
 
@@ -239,8 +240,9 @@ cost than they really are.
 
 If you want to edit the **Flitter** code – or just want to keep up-to-date with
 current developments – ensure that `cython` and `setuptools` are installed in
-your runtime environment, clone the repo, do an *editable* package deployment
-directly from the clone directory, and then throw away the compiled files:
+your runtime Python environment, clone the repo, do an *editable* package
+deployment directly from the clone directory, and then throw away the compiled
+files:
 
 ```console
 $ pip3 install cython setuptools
@@ -278,11 +280,10 @@ in-place build with coverage enabled (Cython line-tracing):
 $ env FLITTER_BUILD_COVERAGE=1 python3 setup.py build_ext --inplace
 ```
 
-Importantly, this **will not work on Python 3.12**. This version introduced a
-change in the profiling API that Cython is not compatible with. If you are
-using Python 3.12, then you will need to do a parallel install of either 3.11
-or 3.10 and create a second virtual environment in which to do coverage
-analysis.
+Importantly, this **will not work on Python 3.12 or 3.13**. Python 3.12
+introduced a change in the profiling API that Cython is not yet compatible
+with. You will need to do a parallel install of either 3.11 or 3.10 and create
+a second virtual environment in which to do coverage analysis.
 
 Once you have a coverage-enabled build, you can generate a code coverage report
 for the test suite with:
@@ -318,8 +319,8 @@ $ env FLITTER_BUILD_COVERAGE=1 python3 setup.py build_ext --inplace
 ```
 
 As for compiling with code coverage, profiling Cython code is currently **not
-supported on Python 3.12**. You will need to use 3.11 or 3.10 to run profiling
-tests.
+supported on Python 3.12 or 3.13**. You will need to use 3.11 or 3.10 to run
+profiling tests.
 
 Recompiling all Cython modules with profiling enabled may not be the best thing
 to do as the overhead of adding profiling support to Cython is quite high and
@@ -337,12 +338,15 @@ $ cythonize --build --inplace --force -3 --annotate -X profile=True \
 To generate a local HTML copy of the documentation, install `sphinx`,
 `myst_parser` and the separate [`flitter-pygments`
 package](https://github.com/jonathanhogg/flitter-pygments) (which adds syntax
-highlighting support for **Flitter** to `pygments`).
-
-You can generate the docs with:
+highlighting support for **Flitter** to `pygments`):
 
 ```console
 $ pip3 install sphinx myst_parser flitter-pygments
+```
+
+You can then generate the docs with:
+
+```console
 $ sphinx-build docs build/html
 ```
 

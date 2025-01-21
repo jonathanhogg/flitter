@@ -9,7 +9,8 @@ window hierarchy. This means **Flitter** shaders can manipulate the output
 of other render nodes and be used as images or patterns in [2D
 drawing](canvas.md), or as model textures in [3D rendering](canvas3d.md). For
 instance, one might take a running [`!video`](windows.md#video), manipulate it
-with a shader and then map the output onto the surface of a spinning sphere.
+with a shader and then map the output onto the surface of a spinning sphere
+in a [`!canvas3d`](canvas3d.md).
 
 ## `!shader`
 
@@ -44,7 +45,7 @@ outside the $[0,1]$ range can be controlled with either the attribute:
 `border=` *R*`;`*G*`;`*B*`;`*A*
 : Specifies a color that will be returned for any out-of-range coordinates.
 
-Or with the attribute:
+or with the attribute:
 
 `repeat=` *RX*`;`*RY*
 : Specifies whether to wrap around (and therefore repeat) the image on the

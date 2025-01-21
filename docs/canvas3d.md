@@ -29,7 +29,8 @@ The `!canvas3d` node has only one attribute that is unique to it:
 
 `camera_id=` *ID*
 : This specifies the camera to use for the output of this node in the window
-rendering tree. If not specified, then the default canvas camera is used.
+rendering tree. If not specified, then the default canvas render-group camera is
+used.
 
 Beyond this single attribute, the `!canvas3d` node combines the functionality of
 [transforms](#transforms), [render groups](#render-groups), [cameras](#cameras)
@@ -73,10 +74,10 @@ unit quaternion. See [Quaternion functions](builtins.md#quaternion-functions).
 : Add a shear transformation of the $x$-axis in terms of the $y$ and $z$ axes.
 
 `shear_y`=*kX*;*kZ*
-: Add a shear transformation of the $y$-axis in terms of the $y$ and $z$ axes.
+: Add a shear transformation of the $y$-axis in terms of the $x$ and $z$ axes.
 
 `shear_z`=*kX*;*kY*
-: Add a shear transformation of the $z$-axis in terms of the $y$ and $z$ axes.
+: Add a shear transformation of the $z$-axis in terms of the $x$ and $y$ axes.
 
 `matrix=`*M*
 : Multiply the current local transformation matrix by the matrix *M* given as
@@ -108,17 +109,19 @@ applying to everything in the scene or to the contents of that render group.
 
 ## Render Groups
 
-A render `!group` bundles up part of a scene that will be rendered together with
-a specific shader program and set of lights. A default render group is created
-at the same time as the canvas and is configured using these attributes on
-the `!canvas3d` node. However, additional render groups can be created inside
-the canvas, including within nested `!transform` nodes, in which case the local
-transform matrix will apply within the group, or even within another group.
+A render `!group` bundles up part of a scene that will be rendered together,
+optionally with a custom shader program. A default render group is created
+at the same time as the canvas and is configured by adding render-group
+attributes to the `!canvas3d` node. However, additional render groups may be
+created inside the canvas or nested within another group. Groups may be placed
+within `!transform` or `!material` nodes and the local transformation matrix
+and material properties will be inherited by the new group. Transform and
+material attributes may also be provided *on* a group node.
 
-If any lights are defined *inside* the render group, those lights will apply
-*only* to the models inside that group, along with any lights defined in the
-enclosing groups or at the top level of the `!canvas3d` node (which is itself
-a render group).
+If any lights are defined *inside* a render group, those lights will apply
+*only* to the models inside that group and models inside any contained groups.
+As the top-level `!canvas3d` node is itself a render group, any lights defined
+at the top level affect the entire scene.
 
 Pulling models and lights into a `!group` is a useful way to limit lighting
 effects within the scene. As there is no support for shadow-casting in
@@ -130,8 +133,9 @@ The supported attributes are:
 `max_lights=`*N*
 : Set the maximum number of lights that the shader program will support.
 Additional lights beyond this number will be ignored when rendering this group.
-The default is 50. The default shader supports up to a few hundred lights.
-Changing this attribute will cause the program to be recompiled.
+The default is 50. The upper limit is dependent on the GPU and driver, but is
+typically a few hundred. Changing this attribute will cause the shader program
+to be recompiled.
 
 `composite=` [ `:over` | `:dest_over` | `:lighten` | `:darken` | `:add` | `:difference` | `:multiply` ]
 : Control the OpenGL blend function used when rendering models that overlap each
@@ -143,20 +147,20 @@ Setting this to `false` will result in instances of the same model being
 dispatched for rendering in an arbitrary order. The default is `true`.
 
 `depth_test=` [ `true` | `false` ]
-: Turn off OpenGL depth-testing for this render group if set to `true`, the
-default is `false`. Setting `depth_test` to `false` will also disable depth
-sorting. Generally this is only useful when combined with a blend function
-like `:add` or `:lighten`.
+: Turn off OpenGL depth-testing for this render group if set to `false`, the
+default is `true`. Setting `depth_test` to `false` will also disable depth
+sorting (as above). Generally this is only useful when combined with a blend
+function like `:add` or `:lighten`.
 
 `face_cull=` [ `true` | `false` ]
 : Turn off OpenGL face-culling for this render group if set to `false`, the
-default is `true`. Model faces will be fed into the shader program in an
-arbitrary order.
+default is `true`. Model faces are fed into the shader program in an arbitrary
+order.
 
 `cull_face=` [ `:back` | `:front` ]
-: Assuming face-culling is enabled, this specifies which faces of the models to
-cull. The default is `:back`, but specifying `:front` can be useful for special
-effects or for use with custom shaders.
+: Assuming face-culling is enabled (as above), this specifies which faces of the
+models to cull. The default is `:back`, but specifying `:front` can be useful
+for special effects or for use with custom shaders.
 
 :::{note}
 Setting `cull_face=:front` is similar to, but **not** the same as inverting all
@@ -206,18 +210,17 @@ depth order.
 
 Depth-buffer *writing* is turned **off** when rendering instances with
 transparency. This means that all transparent objects will be rendered fully
-even if they intersect with one another, overlap in non-trivial ways or the
-depth-sorting calculation results in an incorrect order. However, the
-depth buffer is still honoured for deciding whether a fragment is to be rendered
-and so instances with transparency occluded by a non-transparent instance will
-be hidden correctly.
+even if they intersect with one another, overlap in non-trivial ways. However,
+the depth buffer is still honoured for deciding whether a fragment is to be
+rendered and so transparent instances occluded by non-transparent instances
+will be hidden.
 
 Instance depth sorting is done by computing a bounding box for the model
-(aligned on the model axes) and then finding the corner nearest to the camera
-for each instance. This will generally work for well-spaced models but may fail
-to derive a correct ordering for close/overlapping models causing transparency
-to render incorrectly. Depth sorting can be controlled for a specific render
-group with the `depth_sort` attribute.
+(aligned on the model axes) and then finding the corner of that box nearest to
+the camera for each instance. This will generally work for well-spaced models
+but may fail to derive a correct ordering for close/overlapping models causing
+transparency to render incorrectly. Depth sorting can be controlled for a
+specific render group with the `depth_sort` attribute.
 
 Turning off depth sorting will cause all instances to be dispatched to the GPU
 in an arbitrary order instead of front-to-back or back-to-front. For
@@ -532,46 +535,48 @@ example).
 
 `color=` *R*`;`*G*`;`*B*
 : Specifies the albedo color of dielectrics or the base reflectivity of metals.
-It defaults to `0;0;0`. These values would not normally be greater than `1`, but
-there is no limit defined and so models can reflect more light than falls on
-them for special-effect purposes.
+The canvas default is `0;0;0`. These values would not normally be greater than
+`1`, but there is no limit defined and so models can reflect more light than
+falls on them for special-effect purposes.
 
 `ior=` *IOR*
 : Specifies the index-of-refraction of the material surface. This alters how
-light is scattered off the surface. The default is `1.5`, which is a reasonable
-value for most solid materials.
+light is scattered off the surface. The canvas default is `1.5`, which is a
+reasonable value for most solid materials. The scene “air” has a value of 1 for
+the purposes of PBR calculations.
 
 `roughness=` `0`…`1`
 : Specifies the roughness of the material, where `0` is a perfectly shiny
 surface and `1` is completely matt. In practice, roughness values below about
-$0.25$ will result in *very* bright reflections.
+$0.25$ will result in *very* bright reflections. The canvas default is `1`.
 
 `ao=` `0`…`1`
 : Specifies an ambient occlusion level for the material. Ambient lights will be
 multiplied by this value when being applied. This is really only useful when
 this property is [texture mapped](#texture-mapping), where it allows for parts
-of a model to be occluded.
+of a model to be occluded. The canvas default is `1`.
 
 `emissive=` *R*`;`*G*`;`*B*
 : Specifies an amount of color that this object emits. This does *not* make the
 model into a [light](#lights), it only affects how the surface of the model
 is rendered. These values may be greater than `1`, and this is not an uncommon
-thing to do if tone-mapping or bloom-filtering is in use.
+thing to do if tone-mapping or bloom-filtering is in use. The canvas default is
+`0;0;0`.
 
 `transparency=` `0`…`1`
-: Specifies how transparent this material is, with `0` (the default) being not
-transparent at all and `1` meaning fully transparent. **Flitter** does **not**
-support refraction, so objects will not appear realistically "glassy". Any
-transparency value greater than `0` will affect the [model render
-order](#instance-ordering). Transparency applies only to diffuse light scattered
-from the surface, emissive lighting and specular reflections will be calculated
-as normal.
+: Specifies how transparent this material is, with `0` being not transparent at
+all and `1` meaning fully transparent. **Flitter** does **not** support
+refraction, so objects will not appear realistically "glassy". Any transparency
+value greater than `0` will affect the [model render order](#instance-ordering).
+Transparency applies only to diffuse light scattered from the surface, emissive
+lighting and specular reflections will be calculated as normal. The canvas
+default is `0`.
 
 `translucency=` *TRANSLUCENCY*
 : Specifies how translucent this material is as a distance (in the world
 coordinate system) over which half of the light falling on the back faces of the
-object will pass through it. The default is `0`, meaning no translucency. At low
-levels of translucency, light will be scattered and will glow through the
+object will pass through it. The canvas default is `0`, meaning no translucency.
+At low levels of translucency, light will be scattered and will glow through the
 edges/thin-parts of objects. At higher levels of translucency light will be
 scattered less and the object will become increasingly transparent. Setting this
 to non-zero both affects the [model render order](#instance-ordering) and forces
@@ -696,19 +701,20 @@ with the transforms applied in this specific order.
 An alternative to `position`/`size`/`rotation` placement is the attributes:
 
 `start=` *X0*`;`*Y0*`;`*Z0*
-: Specifies the position of the point $(0, 0, -0.5)$ of the model.
+: Specifies the local position of the model point $(0, 0, -0.5)$.
 
 `end=` *X1*`;`*Y1*`;`*Z1*
-: Specifies the position of the point $(0, 0, 0.5)$ of the model.
+: Specifies the local position of the model point $(0, 0, 0.5)$.
 
 `radius=` *R*
-: Specifies an $x$ and $y$-axis scale.
+: Specifies a model $x$ and $y$-axis scale.
 
 These attributes are specifically designed to be used with unit-radius and
-unit-length models that have their origin in their centre of mass, which
-conveniently matches the `!cylinder` and `!cone` [primitives](#primitive-models)
-below. They encompass a position, rotation and $z$-axis scaling with `start`
-and `end`, and then a scaling in the other two axes with `radius`.
+unit-length models that have their origin at the centre of their bounding box
+and their length along the $z$-axis, which matches the `!cylinder` and `!cone`
+[primitives](#primitive-models) below. The attributes encompass a position,
+rotation and $z$-axis scaling with `start` and `end`, and then a scaling in
+the other two axes with `radius`.
 
 In addition to these transformation attributes, all models may have
 [material](#materials) attributes that provide material properties specific to
@@ -730,30 +736,30 @@ their origin at the centre of their bounding box.
 `!sphere`
 : This is a unit-radius sphere (strictly speaking, the surface is made up of
 triangular faces with vertices on this sphere). The sphere is constructed from
-eight subdivided octants with overlapping seams.
+eight subdivided octants with overlapping seams at the planes formed by the
+model $x$, $y$ and $z$ axes.
 
 `!cylinder`
 : This is a unit-radius and unit-height cylinder with its axis of rotational
-symmetry in the $z$ direction.
+symmetry along the $z$ axis.
 
 `!cone`
-: This is a unit-radius and unit-height cone with its axis of rotational
-symmetry in the $z$ direction.
+: This is a unit-radius and unit-height cone with its point in the $+z$ axis
+direction.
 
 The model nodes `!sphere`, `!cylinder` and `!cone` all support an additional
 attribute:
 
 `segments=` *N*
-: This specifies the number of segments the model should be generated with. For
-a cylinder this will be the number of rectangular faces making up the sides and
-the number of triangles making up the top and bottom. Cones are similar except
-that the sides are also made up of triangles. For spheres, the value gives the
-number of edges at the equator. The default in all primitives is `64`. The
-minimum number of segments for a `!cylinder` or `!cone` is `2` (resulting in a
-flat double-sided rectangle or triangle respectively) and the minimum for a
-`!sphere` is `4` (resulting in an octahedron). As a `!sphere` is made up of
-octants, `segments` is constrained to be a multiple of 4 and will be rounded
-*up* to the nearest multiple.
+: This specifies the number of segments the model should be generated with. This
+is the number edges around the top and bottom sides of a cylinder, the bottom
+side of a cone or around the equator of a sphere. The default is `64`, which is
+appropriate for most uses but may need to be increased for models being viewed
+at very close distances. The minimum number of segments for a `!cylinder` or
+`!cone` is `2` (resulting in a flat double-sided rectangle or triangle
+respectively) and the minimum for a `!sphere` is `4` (resulting in an
+octahedron). As a `!sphere` is made up of octants, `segments` is constrained to
+be a multiple of 4 and will be rounded *up* to the nearest multiple.
 
 :::{warning}
 The number of model vertices and faces scales linearly, or quadratically in the
@@ -852,8 +858,7 @@ Note that face vertices should be specified in an anti-clockwise direction as
 viewed from outside the model for the surface normals to be computed correctly.
 
 Custom vertex models are cached and so, while it is possible to animate a model
-by constantly changing the vertices or faces, it will result in fairly poor
-memory performance.
+by constantly changing the vertices or faces, this will increase memory usage.
 
 ### Controlling Model Shading
 
@@ -1003,7 +1008,7 @@ the constituent models of a CSG operation are not watertight, they will be
 "fixed" with the following – increasingly intrusive – steps:
 
 - First the model will be processed to merge all duplicate vertices and remove
-any duplicate faces
+any duplicate faces (this is sufficient for all of the primitive models)
 - If the model is still not watertight, then an attempt will be made to cap
 simple holes
 - If this fails then a convex hull will be computed from the model and this used
@@ -1094,12 +1099,11 @@ A surface can be described with the same hierarchy of nodes supported for
 [constructive solid geometry](#constructive-solid-geometry). This includes all
 primitive models and nested `!transform`, `!trim`, `!union`, `!intersect` and
 `!difference` nodes. These are evaluated as mathematical functions rather than
-mesh operations and then the final distance field is used to create a mesh. The
-`!sdf` node is an implicit union operation on its children.
+mesh operations and then the final distance field is used to create a mesh.
 
 When used within an `!sdf` node, `!trim`, `!union`, `!intersect` and
 `!difference` each support use of *one* of the following additional attributes
-to alter the boundaries between the combined surfaces (or with trim plane):
+to alter the boundaries between the combined surfaces (or with the trim plane):
 
 `smooth=` *DISTANCE*
 : A distance over which to apply a linear smoothing between surfaces.
@@ -1136,15 +1140,16 @@ For example, a custom function can be used to create new primitive shapes:
 Note that here `torus()` is a function that *returns an [anonymous
 function](language.md#anonymous-functions)*. This anonymous function is set as
 the `function` attribute of `!sdf` and is repeatedly evaluated to create the
-surface. SDF functions may bind external names – such as `r1` and `r2` in this
-example – but any change to these values will result in a new mesh being
-created. An SDF function has no access to [state](language.md#state).
+surface. The resulting mesh is cached. SDF functions may capture names – such
+as `r1` and `r2` in this example. Any change to captured values will result
+in a new mesh being created. An SDF function cannot access the
+[state mapping](language.md#state).
 
 If the `function` attribute is provided, then any sub-nodes are ignored. An
-`!sdf` node with a custom function can be used nested within another `!sdf`
+`!sdf` node with a custom function can also be used nested within another `!sdf`
 node. If used in this way, the `maximum`, `minimum` and `resolution` attributes
-are ignored. Nested functions can be combined with transform and
-operation nodes.
+are ignored. Nested functions can be combined with transform and operation
+nodes.
 
 Signed distance field model hierarchies may also contain the SDF-only `!mix`
 node. This takes two or more child nodes and the following attribute:

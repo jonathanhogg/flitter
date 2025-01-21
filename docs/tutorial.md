@@ -75,8 +75,8 @@ of *name*`=`*value* pairs, each of which adds an *attribute* to the preceding
 node. Values are *vectors* of any combination of numbers or Unicode strings
 surrounded by single or double quote characters. Semicolons `;` are used to
 separate multiple items in a vector. Here the `size` attribute of `!window` and
-the `point` attribute of `!text` are both two item numeric vectors. All of the
-other values are single item vectors. There are no non-vector values in
+the `point` attribute of `!text` are both two-item numeric vectors. All of the
+other values are single-item vectors. There are no non-vector values in
 **Flitter**.
 
 Nodes form a *tree*, with each allowed to have multiple child nodes. The
@@ -86,9 +86,10 @@ of a specific node must be indented to the same level. Indenting in further,
 as has been done with the `!text` node, causes a new parent/child relationship.
 So the `!canvas` node is a child of `!window` and the `!text` node is a child
 of `!canvas`. There is no specific rule to how many spaces you use for
-indenting, we're using 2 spaces in this tutorial to save space, 4 is probably
-more common. Do not use hard tabs. Or do, but know that your life will be
-miserable.
+indenting as long as it is consistent within a block. We're using 2 spaces in
+this tutorial to save space, 4 is probably more common. You can use hard tabs,
+but it is not recommended unless your editor enforces this and never mixes
+spaces into the indentation.
 
 Names, including node kinds and attributes, may be any Unicode alphabetic
 character or an underscore, followed by any number of Unicode alphanumeric
@@ -142,9 +143,9 @@ from this:
 - The drawing canvas follows the common document convention of the origin being
   at the top left and the *y* axis pointing down. So `370` is lower down in the
   window than `360` and `630` is further left than `640`.
-- Colors can be specified as either 1 or 3 item vectors. If given as a single
+- Colors can be specified as either 1- or 3-item vectors. If given as a single
   value then the number represents a gray level from 0 to 1, if given as three
-  values then the number represents an RGB triplet also in the range 0 to 1.
+  values then the number represents an RGB triplet, also in the range 0 to 1.
 
 !["Hello World!" written in white with a red
 shadow](tutorial_images/tutorial2.png)
@@ -166,7 +167,7 @@ of the new indentation):
 Here we place the two `!text` nodes inside a `!group` node that abstracts out
 the common `font_size`, changes the drawing origin with `translate` and sets
 a default `color`. The first `!text` node overrides this default color and,
-specifies a drawing point offset from this origin 10px to the left and 10px
+specifies a drawing point offset from this origin, 10px to the left and 10px
 down. The second `!text` node doesn't specify a `point` at all, which causes it
 to be drawn at the group origin and, without a `color` attribute, it will be
 drawn with the group color.
@@ -214,8 +215,8 @@ program. Let's try using some of the features we would normally associate with
 a programming language.
 
 The concept of *named values* is common across programming, usually in the form
-of *variables*. **Flitter** has no variables as it is a (largely) [pure
-functional programming
+of *variables*. **Flitter** has no variables as it is a [pure functional
+programming
 language](https://en.wikipedia.org/wiki/Purely_functional_programming). However,
 we can still give names to values. This has benefits in readability and in
 sharing common calculations.
@@ -243,13 +244,13 @@ inside the program. We use this new `SIZE` name to set the size of the window,
 and also to calculate the middle of the canvas when we move the origin in the
 group.
 
-Note that the calculation of `SIZE/2` divides *both* items of the `SIZE`
-vector by `2` at the same time, giving us `640;360` as the resulting value for
-the `translate` attribute. All mathematical operators and functions in
-**Flitter** operate on entire vectors at once. Generally, when one vector is
-smaller than another, the items of the smaller vector are repeated as
-necessary to complete the calculation. So, here, `SIZE/2` is equivalent to
-`(1280;720)/(2;2)` and the division proceeds piecewise.
+The calculation of `SIZE/2` divides *both* items of the `SIZE` vector by `2` at
+the same time, giving us `640;360` as the resulting value for the `translate`
+attribute. All mathematical operators and functions in **Flitter** operate on
+entire vectors at once. Generally, when one vector is smaller than another the
+items of the smaller vector are repeated as necessary to complete the
+calculation. So, here, `SIZE/2` is equivalent to `(1280;720)/(2;2)` and the
+division proceeds piecewise.
 
 ## Functions
 
@@ -289,7 +290,7 @@ another we introduce an implicit *append* operator. Even our original simple
 program consisted of a series of node expressions, vector compositions and node
 append operations. In fact, each attribute set – such as `size=` – is another
 implicit binary operator, taking a node on the left side and an attribute value
-on the right. So there was a great deal more programming happening in our
+on the right. So there was a great deal more execution happening in our
 original code than it appeared.
 
 ## For Loops
@@ -331,7 +332,7 @@ will be taken as `0` if not given. Thus, `..n` is a quick way to get the values
 time. With `offset` equal to `10`, this gives the vector `10;9;8;7;6;5;4;3;2;1`.
 
 The `for` loop iterates across this vector, binding `i` to the next value on
-each iteration. Loops evaluate to a vector composed of the result of each
+each iteration. Loops evaluate to a vector composed from the result of each
 evaluation of the loop body. The result of this loop is a 10-item vector of
 `!text` nodes and these are then composed together with the following `!text`
 node so that the function returns a vector of 11 nodes. These 11 nodes are then

@@ -59,8 +59,9 @@ below).
 All of the numeric vectors, *initial*, *rate*, *time*, *minimum* and *maximum*
 may be $n$-vectors - in which case, the normal piece-wise rules for vector
 mathematics apply. In this way, a single counter can be used to maintain a
-multi-dimensional value – such as a cartesian velocity. An $n$-vector counter
-is significantly more performant than $n$ separate counter objects.
+multi-dimensional value – such as a cartesian velocity - or an arbitrary number
+of independent variables. An $n$-vector counter is significantly more
+performant than $n$ separate counter objects.
 :::
 
 ## Counter State
@@ -68,7 +69,7 @@ is significantly more performant than $n$ separate counter objects.
 Each counter stores two values in the state mapping:
 
 *state*
-: The current value of the counter.
+: The current value of the counter (which may be an $n$-vector).
 
 *state*`;:time`
 : The last value of the `time` attribute (or frame time).
