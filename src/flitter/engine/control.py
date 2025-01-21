@@ -326,7 +326,10 @@ class EngineController:
                     logger.trace("State dictionary size: {} keys", len(self.state))
                     if run_program is not None and run_program.stack is not None:
                         logger.trace("VM stack size: {:d}", run_program.stack.size)
-                    Model.flush_caches()
+                    if Model.flush_caches():
+                        count = gc.collect(2)
+                        if count:
+                            logger.trace("Collected {} objects (full collection)", count)
                 else:
                     gc.collect(0)
 

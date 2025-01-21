@@ -12,11 +12,11 @@ cdef int64_t DefaultSegments
 cdef class Model:
     cdef readonly uint64_t id
     cdef readonly double touch_timestamp
-    cdef readonly double cache_timestamp
     cdef readonly dict cache
     cdef readonly set dependents
     cdef readonly list buffer_caches
 
+    cpdef bint uncache(self, bint buffers)
     cpdef void unload(self)
     cpdef void check_for_changes(self)
     cpdef bint is_smooth(self)

@@ -541,7 +541,7 @@ cdef class Vector:
                     y = double_long(f=self.numbers[i]).l
                 _hash = HASH_UPDATE(_hash, y)
         if not floor_floats:
-            self._hash = <int64_t>_hash
+            self._hash = _hash
         return <int64_t>_hash
 
     cpdef object match(self, int64_t n=0, type t=None, default=None):
