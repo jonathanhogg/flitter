@@ -230,6 +230,7 @@ class EngineController:
 
                 del context
                 SharedCache.clean()
+                Model.update_cache_timestamps()
 
                 self.state['_counter'] = self.counter.tempo, self.counter.quantum, self.counter.start
 

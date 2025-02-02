@@ -6,14 +6,14 @@ import numpy as np
 import trimesh
 import trimesh.proximity
 
-from libc.math cimport cos, sin, sqrt, atan2, abs
+from libc.math cimport cos, sin, sqrt, atan2, abs, floor as c_floor
 from libc.stdint cimport int32_t, int64_t
 from cpython.object cimport PyObject
 from cpython.dict cimport PyDict_GetItem
 
 from ... import name_patch
 from ...cache import SharedCache
-from ...model cimport true_, Context, Vector, StateDict, HASH_START, HASH_UPDATE, HASH_STRING, double_long
+from ...model cimport true_, Context, Vector, StateDict, HASH_START, HASH_UPDATE, HASH_STRING, double_long, Matrix33
 from ...timer cimport perf_counter
 from ...language.vm cimport VectorStack
 
@@ -45,7 +45,73 @@ cdef uint64_t SDF = HASH_UPDATE(HASH_START, HASH_STRING('sdf'))
 cdef uint64_t MIX = HASH_UPDATE(HASH_START, HASH_STRING('mix'))
 
 
+cdef tuple build_arrays_from_trimesh(trimesh_model):
+    if trimesh_model is None:
+        return None
+    if (visual := trimesh_model.visual) is not None and isinstance(visual, trimesh.visual.texture.TextureVisuals) \
+            and visual.uv is not None and len(visual.uv) == len(trimesh_model.vertices):
+        vertex_uvs = visual.uv
+    else:
+        vertex_uvs = np.zeros((len(trimesh_model.vertices), 2))
+    vertex_data = np.hstack((trimesh_model.vertices, trimesh_model.vertex_normals, vertex_uvs)).astype('f4', copy=False)
+    index_data = trimesh_model.faces.astype('i4', copy=False)
+    return vertex_data, index_data
+
+
+cpdef tuple build_arrays_from_manifold(manifold):
+    if manifold is None:
+        return None
+    mesh = manifold.to_mesh()
+    vertices_array = np.zeros((len(mesh.vert_properties), 8), dtype='f4')
+    vertices_array[:, :3] = mesh.vert_properties
+    faces_array = mesh.tri_verts.astype('i4', copy=False)
+    fill_in_normals(vertices_array, faces_array)
+    return vertices_array, faces_array
+
+
+@cython.cdivision(True)
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cdef void fill_in_normals(vertices_array, faces_array):
+    cdef int32_t a, b, c, i, n=len(vertices_array), m=len(faces_array)
+    cdef float[:, :] vertices = vertices_array
+    cdef const int32_t[:, :] faces = faces_array
+    cdef int32_t[:] normal_counts = np.zeros((n,), dtype='i4')
+    cdef float f, Ax, Ay, Az, Bx, By, Bz, Nx, Ny, Nz
+    for i in range(m):
+        a, b, c = faces[i, 0], faces[i, 1], faces[i, 2]
+        Ax, Ay, Az = vertices[c, 0]-vertices[b, 0], vertices[c, 1]-vertices[b, 1], vertices[c, 2]-vertices[b, 2]
+        Bx, By, Bz = vertices[a, 0]-vertices[b, 0], vertices[a, 1]-vertices[b, 1], vertices[a, 2]-vertices[b, 2]
+        Nx, Ny, Nz = Ay*Bz-Az*By, Az*Bx-Ax*Bz, Ax*By-Ay*Bx
+        vertices[a, 3] += Nx
+        vertices[a, 4] += Ny
+        vertices[a, 5] += Nz
+        normal_counts[a] += 1
+        vertices[b, 3] += Nx
+        vertices[b, 4] += Ny
+        vertices[b, 5] += Nz
+        normal_counts[b] += 1
+        vertices[c, 3] += Nx
+        vertices[c, 4] += Ny
+        vertices[c, 5] += Nz
+        normal_counts[c] += 1
+    for i in range(n):
+        if (c := normal_counts[i]) > 1:
+            f = 1.0 / c
+            vertices[i, 3] *= f
+            vertices[i, 4] *= f
+            vertices[i, 5] *= f
+
+
 cdef class Model:
+    @staticmethod
+    def update_cache_timestamps():
+        cdef double now = perf_counter()
+        cdef Model model
+        for model in ModelCache.values():
+            if model.touch_timestamp == 0:
+                model.touch_timestamp = now
+
     @staticmethod
     def flush_caches(double max_age=300, int64_t max_size=2500):
         cdef double now = perf_counter()
@@ -53,12 +119,21 @@ cdef class Model:
         cdef Model model
         cdef int64_t count=len(ModelCache), unload_count=0, uncache_count=0
         cdef list unloaded = []
-        cdef bint aggressive = False
+        cdef bint aggressive=False, force_collect=False
         while True:
             for model in ModelCache.values():
                 if model.touch_timestamp == 0:
                     model.touch_timestamp = now
-                elif model.uncache(False):
+                elif type(model) is VectorModel:
+                    if model.dependents is None:
+                        unloaded.append(model)
+                        count -= 1
+                        continue
+                    else:
+                        force_collect |= model.uncache(True)
+                        uncache_count += 1
+                else:
+                    force_collect |= model.uncache(False)
                     uncache_count += 1
                 if (model.touch_timestamp <= cutoff or aggressive and model.touch_timestamp < now and count > max_size) and model.dependents is None:
                     unloaded.append(model)
@@ -77,7 +152,7 @@ cdef class Model:
             logger.trace("Cleared object cache for {} models", uncache_count)
         if unload_count:
             logger.trace("Unloaded {} models from cache, {} remaining", unload_count, len(ModelCache))
-        return uncache_count + unload_count
+        return force_collect
 
     @staticmethod
     def by_id(uint64_t id):
@@ -115,21 +190,22 @@ cdef class Model:
         self.uncache(True)
 
     cpdef bint uncache(self, bint all):
-        cdef bint cleaned = False
+        cdef bint force_collect = False
         if self.cache is not None:
+            trimesh_model = self.cache.pop('trimesh', None)
+            if trimesh_model is not None:
+                trimesh_model._cache.clear()
+                force_collect = True
             if all or 'bounds' not in self.cache:
                 self.cache = None
-                cleaned = True
             elif len(self.cache) > 1:
                 self.cache = {'bounds': self.cache['bounds']}
-                cleaned = True
         cdef dict cache
         if all and self.buffer_caches is not None:
             for cache in self.buffer_caches:
                 del cache[self.id]
             self.buffer_caches = None
-            cleaned = True
-        return cleaned
+        return force_collect
 
     cpdef bint is_smooth(self):
         raise NotImplementedError()
@@ -143,8 +219,17 @@ cdef class Model:
     cpdef void check_for_changes(self):
         raise NotImplementedError()
 
-    cpdef object build_trimesh(self):
+    cpdef tuple build_arrays(self):
         raise NotImplementedError()
+
+    cpdef object build_trimesh(self):
+        cdef tuple arrays = self.get_arrays()
+        if arrays is None:
+            return None
+        vertices_array, faces_array = arrays
+        visual = trimesh.visual.texture.TextureVisuals(uv=vertices_array[:, 6:8])
+        return trimesh.base.Trimesh(vertices=vertices_array[:, :3], vertex_normals=vertices_array[:, 3:6],
+                                    faces=faces_array, visual=visual, process=False)
 
     cpdef object build_manifold(self):
         cdef bint merged=False, filled=False, hull=False
@@ -190,6 +275,16 @@ cdef class Model:
             for model in self.dependents:
                 model.invalidate()
 
+    cpdef tuple get_arrays(self):
+        cdef PyObject* objptr
+        if self.cache is None:
+            self.cache = {}
+        elif (objptr := PyDict_GetItem(self.cache, 'arrays')) != NULL:
+            return <tuple>objptr
+        arrays = self.build_arrays()
+        self.cache['arrays'] = arrays
+        return arrays
+
     cpdef object get_trimesh(self):
         cdef PyObject* objptr
         if self.cache is None:
@@ -216,16 +311,23 @@ cdef class Model:
             self.cache = {}
         elif (objptr := PyDict_GetItem(self.cache, 'bounds')) != NULL:
             return <Vector>objptr
-        cdef object trimesh_model = self.get_trimesh()
+        cdef tuple arrays = self.get_arrays()
         cdef Vector bounds_vector = Vector.__new__(Vector)
-        cdef const double[:, :] bounds
+        cdef const float[:, :] vertices
         cdef int64_t i, j
-        if trimesh_model is not None:
-            bounds = trimesh_model.bounds
+        cdef float f
+        if arrays is not None:
+            vertices = arrays[0]
             bounds_vector.allocate_numbers(6)
-            for i in range(2):
-                for j in range(3):
-                    bounds_vector.numbers[i*3 + j] = bounds[i, j]
+            for i in range(vertices.shape[0]):
+                if i == 0:
+                    for j in range(3):
+                        bounds_vector.numbers[j] = bounds_vector.numbers[j+3] = vertices[i, j]
+                else:
+                    for j in range(3):
+                        f = vertices[i, j]
+                        bounds_vector.numbers[j] = min(bounds_vector.numbers[j], f)
+                        bounds_vector.numbers[j+3] = max(bounds_vector.numbers[j+3], f)
         self.cache['bounds'] = bounds_vector
         return bounds_vector
 
@@ -234,22 +336,16 @@ cdef class Model:
         cdef PyObject* objptr
         if (objptr := PyDict_GetItem(objects, model_id)) != NULL:
             return <tuple>objptr
-        cdef trimesh_model = self.get_trimesh()
+        cdef tuple arrays = self.get_arrays()
         cdef tuple buffers
         if self.buffer_caches is None:
             self.buffer_caches = []
         self.buffer_caches.append(objects)
-        if trimesh_model is None:
+        if arrays is None:
             buffers = None, None
             objects[model_id] = buffers
             return buffers
-        if (visual := trimesh_model.visual) is not None and isinstance(visual, trimesh.visual.texture.TextureVisuals) \
-                and visual.uv is not None and len(visual.uv) == len(trimesh_model.vertices):
-            vertex_uvs = visual.uv
-        else:
-            vertex_uvs = np.zeros((len(trimesh_model.vertices), 2))
-        vertex_data = np.hstack((trimesh_model.vertices, trimesh_model.vertex_normals, vertex_uvs)).astype('f4', copy=False)
-        index_data = trimesh_model.faces.astype('i4', copy=False)
+        vertex_data, index_data = arrays
         buffers = (glctx.buffer(vertex_data), glctx.buffer(index_data))
         logger.trace("Constructed model {} with {} vertices and {} faces", self.name, len(vertex_data), len(index_data))
         objects[model_id] = buffers
@@ -422,12 +518,16 @@ cdef class Flatten(UnaryOperation):
     cdef Model _snap_edges(self, double snap_angle, double minimum_area):
         return self
 
-    cpdef object build_trimesh(self):
-        trimesh_model = self.original.get_trimesh()
-        if trimesh_model is not None:
-            trimesh_model = trimesh_model.copy()
-            trimesh_model.unmerge_vertices()
-        return trimesh_model
+    cpdef tuple build_arrays(self):
+        arrays = self.original.get_arrays()
+        if arrays is None:
+            return None
+        vertices_array, faces_array = arrays
+        flattened_vertices_array = vertices_array[faces_array.flat]
+        flattened_faces_array = np.arange(3*len(faces_array), dtype='i4').reshape((-1, 3))
+        flattened_vertices_array[:, 3:6] = 0
+        fill_in_normals(flattened_vertices_array, flattened_faces_array)
+        return flattened_vertices_array, flattened_faces_array
 
     cpdef object build_manifold(self):
         return self.original.get_manifold()
@@ -469,15 +569,15 @@ cdef class Invert(UnaryOperation):
     cpdef double signed_distance(self, double x, double y, double z) noexcept:
         return -self.original.signed_distance(x, y, z)
 
-    cpdef object build_trimesh(self):
-        trimesh_model = self.original.get_trimesh()
-        if trimesh_model is not None:
-            trimesh_model = trimesh.base.Trimesh(vertices=trimesh_model.vertices,
-                                                 vertex_normals=-trimesh_model.vertex_normals,
-                                                 faces=trimesh_model.faces[:, ::-1],
-                                                 visual=trimesh_model.visual,
-                                                 process=False)
-        return trimesh_model
+    cpdef tuple build_arrays(self):
+        arrays = self.original.get_arrays()
+        if arrays is None:
+            return None
+        vertices_array, faces_array = arrays
+        inverted_vertices_array = vertices_array.copy()
+        inverted_vertices_array[:, 3:6] *= -1
+        inverted_faces_array = faces_array[:, (0, 2, 1)].copy()
+        return inverted_vertices_array, inverted_faces_array
 
     cpdef object build_manifold(self):
         return self.original.get_manifold()
@@ -509,6 +609,9 @@ cdef class Repair(UnaryOperation):
 
     cpdef Model repair(self):
         return self
+
+    cpdef tuple build_arrays(self):
+        return build_arrays_from_trimesh(self.get_trimesh())
 
     cpdef object build_trimesh(self):
         trimesh_model = self.original.get_trimesh()
@@ -574,6 +677,9 @@ cdef class SnapEdges(UnaryOperation):
     cdef Model _trim(self, Vector origin, Vector normal, double smooth, double fillet, double chamfer):
         return self.original._trim(origin, normal, smooth, fillet, chamfer)
 
+    cpdef tuple build_arrays(self):
+        return build_arrays_from_trimesh(self.get_trimesh())
+
     cpdef object build_trimesh(self):
         trimesh_model = self.original.get_trimesh()
         if trimesh_model is not None:
@@ -587,6 +693,7 @@ cdef class SnapEdges(UnaryOperation):
 
 cdef class Transform(UnaryOperation):
     cdef Matrix44 transform_matrix
+    cdef Matrix33 normal_matrix
     cdef Matrix44 inverse_matrix
     cdef double scale
 
@@ -641,6 +748,34 @@ cdef class Transform(UnaryOperation):
         cdef double distance=self.original.signed_distance(ipos.numbers[0], ipos.numbers[1], ipos.numbers[2])
         return distance * self.scale
 
+    cpdef tuple build_arrays(self):
+        arrays = self.original.get_arrays()
+        if arrays is None:
+            return None
+        if self.normal_matrix is None:
+            self.normal_matrix = self.transform_matrix.matrix33_cofactor()
+        vertex_array, index_array = arrays
+        transformed_vertex_array = vertex_array.copy()
+        cdef float[:, :] vertex_data=vertex_array, transformed_vertex_data=transformed_vertex_array
+        cdef int64_t i
+        cdef float x, y, z
+        cdef double* M = self.transform_matrix.numbers
+        cdef double* N = self.normal_matrix.numbers
+        for i in range(vertex_data.shape[0]):
+            x = vertex_data[i, 0]
+            y = vertex_data[i, 1]
+            z = vertex_data[i, 2]
+            transformed_vertex_data[0] = M[0]*x + M[4]*y + M[8]*z + M[12]
+            transformed_vertex_data[1] = M[1]*x + M[5]*y + M[9]*z + M[13]
+            transformed_vertex_data[2] = M[2]*x + M[6]*y + M[10]*z + M[14]
+            x = vertex_data[i, 3]
+            y = vertex_data[i, 4]
+            z = vertex_data[i, 5]
+            transformed_vertex_data[3] = N[0]*x + N[3]*y + N[6]*z
+            transformed_vertex_data[4] = N[1]*x + N[4]*y + N[7]*z
+            transformed_vertex_data[5] = N[2]*x + N[5]*y + N[8]*z
+        return transformed_vertex_array, index_array
+
     cpdef object build_trimesh(self):
         trimesh_model = self.original.get_trimesh()
         if trimesh_model is not None:
@@ -689,54 +824,43 @@ cdef class UVRemap(UnaryOperation):
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    cdef object remap_sphere(self, trimesh_model, Vector bounds):
-        cdef const float[:, :] vertices
-        cdef object vertex_uv_array
-        cdef float[:, :] vertex_uv
-        cdef int64_t i, n
+    cdef object remap_sphere(self, vertex_array, index_array, Vector bounds):
+        vertex_array = vertex_array.copy()
+        cdef float[:, :] vertex_data = vertex_array
+        cdef int64_t i, n=len(vertex_array)
         cdef float x, y, z
-        n = len(trimesh_model.vertices)
-        vertices = trimesh_model.vertices.astype('f4', copy=False)
-        vertex_uv_array = np.zeros((n, 2), dtype='f4')
-        vertex_uv = vertex_uv_array
         for i in range(n):
-            x, y, z = vertices[i][0], vertices[i][1], vertices[i][2]
-            vertex_uv[i][0] = atan2(y, x) / Tau % 1
-            vertex_uv[i][1] = atan2(z, sqrt(x*x + y*y)) / Tau * 2 + 0.5
-        visual = trimesh.visual.texture.TextureVisuals(uv=vertex_uv_array)
-        return trimesh.base.Trimesh(vertices=trimesh_model.vertices, vertex_normals=trimesh_model.vertex_normals,
-                                    faces=trimesh_model.faces, visual=visual, process=False)
+            x, y, z = vertex_data[i, 0], vertex_data[i, 1], vertex_data[i, 2]
+            vertex_data[i, 6] = atan2(y, x) / Tau % 1
+            vertex_data[i, 7] = atan2(z, sqrt(x*x + y*y)) / Tau * 2 + 0.5
+        return vertex_array
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.cdivision(True)
-    cdef object remap_plane(self, trimesh_model, Vector bounds):
-        cdef const float[:, :] vertices
-        cdef object vertex_uv_array
-        cdef float[:, :] vertex_uv
-        cdef int64_t i, n
-        cdef float x, y, x0=bounds.numbers[0], y0=bounds.numbers[1], width=bounds.numbers[3]-x0, height=bounds.numbers[4]-y0
-        n = len(trimesh_model.vertices)
-        vertices = trimesh_model.vertices.astype('f4', copy=False)
-        vertex_uv_array = np.zeros((n, 2), dtype='f4')
-        vertex_uv = vertex_uv_array
+    cdef object remap_plane(self, vertex_array, index_array, Vector bounds):
+        vertex_array = vertex_array.copy()
+        cdef float[:, :] vertex_data = vertex_array
+        cdef int64_t i, n=len(vertex_array)
+        cdef float x, y
+        cdef float x0=bounds.numbers[0], y0=bounds.numbers[1], width=bounds.numbers[3]-x0, height=bounds.numbers[4]-y0
         for i in range(n):
-            x, y = vertices[i][0], vertices[i][1]
-            vertex_uv[i][0] = (x - x0) / width
-            vertex_uv[i][1] = (y - y0) / height
-        visual = trimesh.visual.texture.TextureVisuals(uv=vertex_uv_array)
-        return trimesh.base.Trimesh(vertices=trimesh_model.vertices, vertex_normals=trimesh_model.vertex_normals,
-                                    faces=trimesh_model.faces, visual=visual, process=False)
+            x, y = vertex_data[i, 0], vertex_data[i, 1]
+            vertex_data[i, 6] = (x - x0) / width
+            vertex_data[i, 7] = (y - y0) / height
+        return vertex_array
 
-    cpdef object build_trimesh(self):
-        trimesh_model = self.original.get_trimesh()
+    cpdef tuple build_arrays(self):
+        cdef tuple arrays = self.original.get_arrays()
+        if arrays is None:
+            return None
         cdef Vector bounds = self.original.get_bounds()
-        if trimesh_model is not None:
-            if self.mapping is 'sphere':
-                trimesh_model = self.remap_sphere(trimesh_model, bounds)
-            elif self.mapping is 'plane':
-                trimesh_model = self.remap_plane(trimesh_model, bounds)
-        return trimesh_model
+        vertex_array, index_array = arrays
+        if self.mapping is 'sphere':
+            vertex_array = self.remap_sphere(vertex_array, index_array, bounds)
+        elif self.mapping is 'plane':
+            vertex_array = self.remap_plane(vertex_array, index_array, bounds)
+        return vertex_array, index_array
 
     cpdef object build_manifold(self):
         return self.original.get_manifold()
@@ -819,12 +943,8 @@ cdef class Trim(UnaryOperation):
             distance = max(distance, d)
         return distance
 
-    cpdef object build_trimesh(self):
-        manifold = self.get_manifold()
-        if manifold is not None:
-            mesh = manifold.to_mesh()
-            return trimesh.base.Trimesh(vertices=mesh.vert_properties, faces=mesh.tri_verts)
-        return None
+    cpdef tuple build_arrays(self):
+        return build_arrays_from_manifold(self.get_manifold())
 
     cpdef object build_manifold(self):
         manifold = self.original.get_manifold()
@@ -997,13 +1117,8 @@ cdef class BooleanOperation(Model):
                     distance = max(distance, -d)
         return distance
 
-    cpdef object build_trimesh(self):
-        manifold = self.get_manifold()
-        if manifold is not None:
-            mesh = manifold.to_mesh()
-            if len(mesh.vert_properties) and len(mesh.tri_verts):
-                return trimesh.base.Trimesh(vertices=mesh.vert_properties, faces=mesh.tri_verts, process=False)
-        return None
+    cpdef tuple build_arrays(self):
+        return build_arrays_from_manifold(self.get_manifold())
 
     cpdef object build_manifold(self):
         cdef list manifolds=[]
@@ -1118,9 +1233,8 @@ cdef class Box(PrimitiveModel):
         cdef double h=xm*xm + ym*ym + zm*zm
         return sqrt(h) + min(0, max(xp, max(yp, zp)))
 
-    cpdef object build_trimesh(self):
-        visual = trimesh.visual.texture.TextureVisuals(uv=Box.VertexUV[self.uv_map])
-        return trimesh.base.Trimesh(vertices=Box.Vertices, vertex_normals=Box.VertexNormals, faces=Box.Faces, visual=visual, process=False)
+    cpdef tuple build_arrays(self):
+        return np.hstack((Box.Vertices, Box.VertexNormals, Box.VertexUV[self.uv_map])), Box.Faces
 
 
 cdef class Sphere(PrimitiveModel):
@@ -1154,12 +1268,10 @@ cdef class Sphere(PrimitiveModel):
 
     @cython.cdivision(True)
     @cython.boundscheck(False)
-    cpdef object build_trimesh(self):
+    cpdef tuple build_arrays(self):
         cdef int64_t nrows = self.segments / 4, nvertices = (nrows + 1) * (nrows + 2) * 4, nfaces = nrows * nrows * 8
-        cdef object vertices_array = np.empty((nvertices, 3), dtype='f4')
+        cdef object vertices_array = np.empty((nvertices, 8), dtype='f4')
         cdef float[:, :] vertices = vertices_array
-        cdef object vertex_uv_array = np.empty((nvertices, 2), dtype='f4')
-        cdef float[:, :] vertex_uv = vertex_uv_array
         cdef object faces_array = np.empty((nfaces, 3), dtype='i4')
         cdef int32_t[:, :] faces = faces_array
         cdef float x, y, z, r, th, u, v
@@ -1192,7 +1304,8 @@ cdef class Sphere(PrimitiveModel):
                             th = Tau * u
                             x, y = r * cos(th), r * sin(th)
                         vertices[i, 0], vertices[i, 1], vertices[i, 2] = x, y, z
-                        vertex_uv[i, 0], vertex_uv[i, 1] = u, v
+                        vertices[i, 3], vertices[i, 4], vertices[i, 5] = x, y, z
+                        vertices[i, 6], vertices[i, 7] = u, v
                         if col:
                             faces[j, 0] = i
                             if hemisphere == -1:
@@ -1208,8 +1321,7 @@ cdef class Sphere(PrimitiveModel):
                                     faces[j, 1], faces[j, 2] = i-row, i-row-1
                                 j += 1
                         i += 1
-        visual = trimesh.visual.texture.TextureVisuals(uv=vertex_uv_array)
-        return trimesh.base.Trimesh(vertices=vertices_array, vertex_normals=vertices_array, faces=faces_array, visual=visual, process=False)
+        return vertices_array, faces_array
 
 
 cdef class Cylinder(PrimitiveModel):
@@ -1242,14 +1354,10 @@ cdef class Cylinder(PrimitiveModel):
     @cython.cdivision(True)
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    cpdef object build_trimesh(self):
+    cpdef tuple build_arrays(self):
         cdef int64_t i, j, k, n = self.segments, m = (n+1)*6
-        cdef object vertices_array = np.empty((m, 3), dtype='f4')
+        cdef object vertices_array = np.empty((m, 8), dtype='f4')
         cdef float[:, :] vertices = vertices_array
-        cdef object vertex_normals_array = np.empty((m, 3), dtype='f4')
-        cdef float[:, :] vertex_normals = vertex_normals_array
-        cdef object vertex_uv_array = np.empty((m, 2), dtype='f4')
-        cdef float[:, :] vertex_uv = vertex_uv_array
         cdef object faces_array = np.empty((n*4, 3), dtype='i4')
         cdef int32_t[:, :] faces = faces_array
         cdef float x, y, th, u, u_
@@ -1264,33 +1372,33 @@ cdef class Cylinder(PrimitiveModel):
                 x, y = cos(th), sin(th)
             # bottom centre (k):
             vertices[j, 0], vertices[j, 1], vertices[j, 2] = 0, 0, -0.5
-            vertex_normals[j, 0], vertex_normals[j, 1], vertex_normals[j, 2] = 0, 0, -1
-            vertex_uv[j, 0], vertex_uv[j, 1] = u_, 0
+            vertices[j, 3], vertices[j, 4], vertices[j, 5] = 0, 0, -1
+            vertices[j, 6], vertices[j, 7] = u_, 0
             j += 1
             # bottom edge (k+1):
             vertices[j, 0], vertices[j, 1], vertices[j, 2] = x, y, -0.5
-            vertex_normals[j, 0], vertex_normals[j, 1], vertex_normals[j, 2] = 0, 0, -1
-            vertex_uv[j, 0], vertex_uv[j, 1] = u, 0.25
+            vertices[j, 3], vertices[j, 4], vertices[j, 5] = 0, 0, -1
+            vertices[j, 6], vertices[j, 7] = u, 0.25
             j += 1
             # side bottom (k+2):
             vertices[j, 0], vertices[j, 1], vertices[j, 2] = x, y, -0.5
-            vertex_normals[j, 0], vertex_normals[j, 1], vertex_normals[j, 2] = x, y, 0
-            vertex_uv[j, 0], vertex_uv[j, 1] = u, 0.25
+            vertices[j, 3], vertices[j, 4], vertices[j, 5] = x, y, 0
+            vertices[j, 6], vertices[j, 7] = u, 0.25
             j += 1
             # side top (k+3):
             vertices[j, 0], vertices[j, 1], vertices[j, 2] = x, y, 0.5
-            vertex_normals[j, 0], vertex_normals[j, 1], vertex_normals[j, 2] = x, y, 0
-            vertex_uv[j, 0], vertex_uv[j, 1] = u, 0.75
+            vertices[j, 3], vertices[j, 4], vertices[j, 5] = x, y, 0
+            vertices[j, 6], vertices[j, 7] = u, 0.75
             j += 1
             # top edge (k+4):
             vertices[j, 0], vertices[j, 1], vertices[j, 2] = x, y, 0.5
-            vertex_normals[j, 0], vertex_normals[j, 1], vertex_normals[j, 2] = 0, 0, 1
-            vertex_uv[j, 0], vertex_uv[j, 1] = u, 0.75
+            vertices[j, 3], vertices[j, 4], vertices[j, 5] = 0, 0, 1
+            vertices[j, 6], vertices[j, 7] = u, 0.75
             j += 1
             # top centre (k+5):
             vertices[j, 0], vertices[j, 1], vertices[j, 2] = 0, 0, 0.5
-            vertex_normals[j, 0], vertex_normals[j, 1], vertex_normals[j, 2] = 0, 0, 1
-            vertex_uv[j, 0], vertex_uv[j, 1] = u_, 1
+            vertices[j, 3], vertices[j, 4], vertices[j, 5] = 0, 0, 1
+            vertices[j, 6], vertices[j, 7] = u_, 1
             if i < n:
                 j = i * 4
                 # bottom face
@@ -1304,8 +1412,7 @@ cdef class Cylinder(PrimitiveModel):
                 j += 1
                 # top face
                 faces[j, 0], faces[j, 1], faces[j, 2] = k+5, k+4, k+4+6
-        visual = trimesh.visual.texture.TextureVisuals(uv=vertex_uv_array)
-        return trimesh.base.Trimesh(vertices=vertices_array, vertex_normals=vertex_normals_array, faces=faces_array, visual=visual, process=False)
+        return vertices_array, faces_array
 
 
 cdef class Cone(PrimitiveModel):
@@ -1337,14 +1444,10 @@ cdef class Cone(PrimitiveModel):
 
     @cython.cdivision(True)
     @cython.boundscheck(False)
-    cpdef object build_trimesh(self):
+    cpdef tuple build_arrays(self):
         cdef int64_t i, j, k, n = self.segments, m = (n+1)*4
-        cdef object vertices_array = np.empty((m, 3), dtype='f4')
+        cdef object vertices_array = np.empty((m, 8), dtype='f4')
         cdef float[:, :] vertices = vertices_array
-        cdef object vertex_normals_array = np.empty((m, 3), dtype='f4')
-        cdef float[:, :] vertex_normals = vertex_normals_array
-        cdef object vertex_uv_array = np.empty((m, 2), dtype='f4')
-        cdef float[:, :] vertex_uv = vertex_uv_array
         cdef object faces_array = np.empty((n*2, 3), dtype='i4')
         cdef int32_t[:, :] faces = faces_array
         cdef float x, y, th, u, u_
@@ -1360,23 +1463,23 @@ cdef class Cone(PrimitiveModel):
                 x, y = cos(th), sin(th)
             # bottom centre (k):
             vertices[j, 0], vertices[j, 1], vertices[j, 2] = 0, 0, -0.5
-            vertex_normals[j, 0], vertex_normals[j, 1], vertex_normals[j, 2] = 0, 0, -1
-            vertex_uv[j, 0], vertex_uv[j, 1] = u_, 0
+            vertices[j, 3], vertices[j, 4], vertices[j, 5] = 0, 0, -1
+            vertices[j, 6], vertices[j, 7] = u_, 0
             j += 1
             # bottom edge (k+1):
             vertices[j, 0], vertices[j, 1], vertices[j, 2] = x, y, -0.5
-            vertex_normals[j, 0], vertex_normals[j, 1], vertex_normals[j, 2] = 0, 0, -1
-            vertex_uv[j, 0], vertex_uv[j, 1] = u, 0.25
+            vertices[j, 3], vertices[j, 4], vertices[j, 5] = 0, 0, -1
+            vertices[j, 6], vertices[j, 7] = u, 0.25
             j += 1
             # side bottom (k+2):
             vertices[j, 0], vertices[j, 1], vertices[j, 2] = x, y, -0.5
-            vertex_normals[j, 0], vertex_normals[j, 1], vertex_normals[j, 2] = x*RootHalf, y*RootHalf, RootHalf
-            vertex_uv[j, 0], vertex_uv[j, 1] = u, 0.25
+            vertices[j, 3], vertices[j, 4], vertices[j, 5] = x*RootHalf, y*RootHalf, RootHalf
+            vertices[j, 6], vertices[j, 7] = u, 0.25
             j += 1
             # side top (k+3):
             vertices[j, 0], vertices[j, 1], vertices[j, 2] = 0, 0, 0.5
-            vertex_normals[j, 0], vertex_normals[j, 1], vertex_normals[j, 2] = cos(th_)*RootHalf, sin(th_)*RootHalf, RootHalf
-            vertex_uv[j, 0], vertex_uv[j, 1] = u_, 1
+            vertices[j, 3], vertices[j, 4], vertices[j, 5] = cos(th_)*RootHalf, sin(th_)*RootHalf, RootHalf
+            vertices[j, 6], vertices[j, 7] = u_, 1
             if i < n:
                 j = i * 2
                 # bottom face
@@ -1384,8 +1487,7 @@ cdef class Cone(PrimitiveModel):
                 j += 1
                 # side face
                 faces[j, 0], faces[j, 1], faces[j, 2] = k+3, k+2, k+2+4
-        visual = trimesh.visual.texture.TextureVisuals(uv=vertex_uv_array)
-        return trimesh.base.Trimesh(vertices=vertices_array, vertex_normals=vertex_normals_array, faces=faces_array, visual=visual, process=False)
+        return vertices_array, faces_array
 
 
 cdef class ExternalModel(Model):
@@ -1435,6 +1537,9 @@ cdef class ExternalModel(Model):
             logger.exception("Unable to do SDF proximity query of mesh: {}", self.name)
             self.cache['proximity_query'] = None
         return NaN
+
+    cpdef tuple build_arrays(self):
+        return build_arrays_from_trimesh(self.get_trimesh())
 
     cpdef object build_trimesh(self):
         return self.cache_path.read_trimesh_model()
@@ -1491,14 +1596,33 @@ cdef class VectorModel(Model):
             self.cache['proximity_query'] = None
         return NaN
 
-    cpdef object build_trimesh(self):
+    cpdef tuple build_arrays(self):
         if self.vertices.length % 3 != 0:
+            logger.error("Bad vertices vector length: {}", self.name)
             return None
-        vertices_array = np.array(self.vertices, dtype='f4').reshape((-1, 3))
         if self.faces.length % 3 != 0:
+            logger.error("Bad faces vector length: {}", self.name)
             return None
-        faces_array = np.array(self.faces, dtype='i4').reshape((-1, 3))
-        return trimesh.base.Trimesh(vertices=vertices_array, faces=faces_array, process=False)
+        cdef int64_t i, n=self.vertices.length // 3, m=self.faces.length // 3
+        vertices_array = np.zeros((n, 8), dtype='f4')
+        cdef float[:, :] vertices = vertices_array
+        for i in range(n):
+            vertices[i, 0] = <float>self.vertices.numbers[i*3]
+            vertices[i, 1] = <float>self.vertices.numbers[i*3+1]
+            vertices[i, 2] = <float>self.vertices.numbers[i*3+2]
+        faces_array = np.zeros((m, 3), dtype='i4')
+        cdef int32_t[:, :] faces = faces_array
+        cdef int32_t a, b, c
+        for i in range(m):
+            a = <int32_t>c_floor(self.faces.numbers[i*3])
+            b = <int32_t>c_floor(self.faces.numbers[i*3+1])
+            c = <int32_t>c_floor(self.faces.numbers[i*3+2])
+            if a < 0 or a >= n or b < 0 or b >= n or c < 0 or c >= n:
+                logger.error("Bad vertex index: {}", self.name)
+                return None
+            faces[i, 0], faces[i, 1], faces[i, 2] = a, b, c
+        fill_in_normals(vertices_array, faces_array)
+        return vertices_array, faces_array
 
 
 cdef class SignedDistanceField(UnaryOperation):
@@ -1563,13 +1687,8 @@ cdef class SignedDistanceField(UnaryOperation):
             return result.numbers[0]
         return NaN
 
-    cpdef object build_trimesh(self):
-        manifold = self.get_manifold()
-        if manifold is not None:
-            mesh = manifold.to_mesh()
-            if len(mesh.vert_properties) and len(mesh.tri_verts):
-                return trimesh.base.Trimesh(vertices=mesh.vert_properties, faces=mesh.tri_verts, process=False)
-        return None
+    cpdef tuple build_arrays(self):
+        return build_arrays_from_manifold(self.get_manifold())
 
     cpdef object build_manifold(self):
         box = (*self.minimum, *self.maximum)
@@ -1652,6 +1771,10 @@ cdef class Mix(Model):
             distance += d * w
             weight += w
         return distance / weight
+
+    cpdef tuple build_arrays(self):
+        logger.warning("Cannot use !mix node outside of !sdf")
+        return None
 
     cpdef object build_trimesh(self):
         logger.warning("Cannot use !mix node outside of !sdf")

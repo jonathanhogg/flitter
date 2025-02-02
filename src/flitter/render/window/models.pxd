@@ -21,6 +21,7 @@ cdef class Model:
     cpdef void check_for_changes(self)
     cpdef bint is_smooth(self)
     cpdef double signed_distance(self, double x, double y, double z) noexcept
+    cpdef tuple build_arrays(self)
     cpdef object build_trimesh(self)
     cpdef object build_manifold(self)
 
@@ -28,6 +29,7 @@ cdef class Model:
     cpdef void remove_dependent(self, Model model)
     cpdef void invalidate(self)
     cpdef Vector get_bounds(self)
+    cpdef tuple get_arrays(self)
     cpdef object get_trimesh(self)
     cpdef object get_manifold(self)
     cpdef tuple get_buffers(self, object glctx, dict objects)
