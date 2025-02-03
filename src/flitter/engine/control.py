@@ -166,15 +166,16 @@ class EngineController:
             execution = render = housekeeping = 0
             slow_frame = False
             performance = 1 if self.realtime else 2
+            gc_pending = False
+            last_gc = None
             run_program = current_program = errors = logs = None
             simplify_state_time = system_clock() + self.state_simplify_wait
             static = dict(self.defined_names)
             static.update({'realtime': self.realtime, 'screen': self.screen, 'fullscreen': self.fullscreen,
                            'vsync': self.vsync, 'offscreen': self.offscreen, 'opengl_es': self.opengl_es, 'run_time': self.run_time})
             gc.disable()
+            housekeeping -= system_clock()
             while self.run_time is None or int(round((frame_time - start_time) * self.target_fps)) < int(round(self.run_time * self.target_fps)):
-                housekeeping -= system_clock()
-
                 beat = self.counter.beat_at_time(frame_time)
                 delta = beat - last
                 last = beat
@@ -227,10 +228,6 @@ class EngineController:
                 now = system_clock()
                 render += now
                 housekeeping -= now
-
-                del context
-                SharedCache.clean()
-                Model.update_cache_timestamps()
 
                 self.state['_counter'] = self.counter.tempo, self.counter.quantum, self.counter.start
 
@@ -295,6 +292,18 @@ class EngineController:
                         for renderer in renderers:
                             await renderer.purge()
 
+                del context
+                SharedCache.clean()
+                gc_pending |= Model.flush_caches()
+                if gc_pending and (last_gc is None or now > last_gc + 1):
+                    count = gc.collect(2)
+                    gc_pending = False
+                    last_gc = now
+                    if count:
+                        logger.trace("Collected {} objects (full collection)", count)
+                else:
+                    gc.collect(0)
+
                 frame_count += 1
                 frames.append(frame_time if self.realtime else now)
                 frame_period = now - frame_time
@@ -314,25 +323,18 @@ class EngineController:
                     await asyncio.sleep(0)
                     frame_time = system_clock()
 
-                now = system_clock()
-                housekeeping += now
-
                 if len(frames) > 1 and frames[-1] - frames[0] > 5:
+                    now = system_clock()
                     nframes = len(frames) - 1
                     fps = nframes / (frames[-1] - frames[0])
                     logger.info("{:4.1f}fps; {:4.1f}/{:4.1f}/{:4.1f}ms (run/render/sys); perf {:.2f}",
-                                fps, 1000 * execution / nframes, 1000 * render / nframes, 1000 * housekeeping / nframes, performance)
+                                fps, 1000 * execution / nframes, 1000 * render / nframes, 1000 * (housekeeping + now) / nframes, performance)
                     frames = frames[-1:]
-                    execution = render = housekeeping = 0
+                    execution = render = 0
+                    housekeeping = -now
                     logger.trace("State dictionary size: {} keys", len(self.state))
                     if run_program is not None and run_program.stack is not None:
                         logger.trace("VM stack size: {:d}", run_program.stack.size)
-                    if Model.flush_caches():
-                        count = gc.collect(2)
-                        if count:
-                            logger.trace("Collected {} objects (full collection)", count)
-                else:
-                    gc.collect(0)
 
         finally:
             self.global_state = {}

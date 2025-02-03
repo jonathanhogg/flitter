@@ -105,21 +105,13 @@ cpdef void fill_in_normals(vertices_array, faces_array):
 
 cdef class Model:
     @staticmethod
-    def update_cache_timestamps():
-        cdef double now = perf_counter()
-        cdef Model model
-        for model in ModelCache.values():
-            if model.touch_timestamp == 0:
-                model.touch_timestamp = now
-
-    @staticmethod
     def flush_caches(double max_age=300, int64_t max_size=2500):
         cdef double now = perf_counter()
         cdef double cutoff = now - max_age
         cdef Model model
-        cdef int64_t count=len(ModelCache), unload_count=0, uncache_count=0
+        cdef int64_t count=len(ModelCache), unload_count=0
         cdef list unloaded = []
-        cdef bint aggressive=False, force_collect=False
+        cdef bint aggressive=False, full_collect=False
         while True:
             for model in ModelCache.values():
                 if model.touch_timestamp == 0:
@@ -130,11 +122,9 @@ cdef class Model:
                         count -= 1
                         continue
                     else:
-                        force_collect |= model.uncache(True)
-                        uncache_count += 1
+                        full_collect |= model.uncache(True)
                 else:
-                    force_collect |= model.uncache(False)
-                    uncache_count += 1
+                    full_collect |= model.uncache(False)
                 if (model.touch_timestamp <= cutoff or aggressive and model.touch_timestamp < now and count > max_size) and model.dependents is None:
                     unloaded.append(model)
                     count -= 1
@@ -145,14 +135,13 @@ cdef class Model:
                     break
             while unloaded:
                 model = unloaded.pop()
+                full_collect |= model.uncache(True)
                 model.unload()
                 del ModelCache[model.id]
                 unload_count += 1
-        if uncache_count:
-            logger.trace("Cleared object cache for {} models", uncache_count)
         if unload_count:
-            logger.trace("Unloaded {} models from cache, {} remaining", unload_count, len(ModelCache))
-        return force_collect
+            logger.trace("Unloaded {} models from cache, {} remaining", unload_count, count)
+        return full_collect
 
     @staticmethod
     def by_id(uint64_t id):
@@ -187,25 +176,25 @@ cdef class Model:
         raise NotImplementedError()
 
     cpdef void unload(self):
-        self.uncache(True)
+        pass
 
     cpdef bint uncache(self, bint all):
-        cdef bint force_collect = False
+        cdef bint full_collect = False
         if self.cache is not None:
             trimesh_model = self.cache.pop('trimesh', None)
             if trimesh_model is not None:
                 trimesh_model._cache.clear()
-                force_collect = True
+                full_collect = True
             if all or 'bounds' not in self.cache:
                 self.cache = None
             elif len(self.cache) > 1:
                 self.cache = {'bounds': self.cache['bounds']}
         cdef dict cache
-        if all and self.buffer_caches is not None:
+        if self.buffer_caches is not None and all:
             for cache in self.buffer_caches:
                 del cache[self.id]
             self.buffer_caches = None
-        return force_collect
+        return full_collect
 
     cpdef bint is_smooth(self):
         raise NotImplementedError()
@@ -477,7 +466,6 @@ cdef class UnaryOperation(Model):
     cpdef void unload(self):
         if self.original is not None:
             self.original.remove_dependent(self)
-        super(UnaryOperation, self).unload()
 
     cpdef bint is_smooth(self):
         return self.original.is_smooth() if self.original is not None else False
@@ -1052,7 +1040,6 @@ cdef class BooleanOperation(Model):
     cpdef void unload(self):
         for model in self.models:
             model.remove_dependent(self)
-        super(BooleanOperation, self).unload()
 
     cpdef bint is_smooth(self):
         return True
@@ -1765,7 +1752,6 @@ cdef class Mix(Model):
     cpdef void unload(self):
         for model in self.models:
             model.remove_dependent(self)
-        super(Mix, self).unload()
 
     cpdef bint is_smooth(self):
         return False
