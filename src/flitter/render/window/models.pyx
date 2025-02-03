@@ -72,35 +72,35 @@ cpdef tuple build_arrays_from_manifold(manifold):
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef void fill_in_normals(vertices_array, faces_array):
+cpdef void fill_in_normals(vertices_array, faces_array):
     cdef int32_t a, b, c, i, n=len(vertices_array), m=len(faces_array)
     cdef float[:, :] vertices = vertices_array
     cdef const int32_t[:, :] faces = faces_array
-    cdef int32_t[:] normal_counts = np.zeros((n,), dtype='i4')
     cdef float f, Ax, Ay, Az, Bx, By, Bz, Nx, Ny, Nz
     for i in range(m):
         a, b, c = faces[i, 0], faces[i, 1], faces[i, 2]
         Ax, Ay, Az = vertices[c, 0]-vertices[b, 0], vertices[c, 1]-vertices[b, 1], vertices[c, 2]-vertices[b, 2]
         Bx, By, Bz = vertices[a, 0]-vertices[b, 0], vertices[a, 1]-vertices[b, 1], vertices[a, 2]-vertices[b, 2]
         Nx, Ny, Nz = Ay*Bz-Az*By, Az*Bx-Ax*Bz, Ax*By-Ay*Bx
+        f = 1.0 / sqrt(Nx*Nx + Ny*Ny + Nz*Nz)
+        Nx *= f
+        Ny *= f
+        Nz *= f
         vertices[a, 3] += Nx
         vertices[a, 4] += Ny
         vertices[a, 5] += Nz
-        normal_counts[a] += 1
         vertices[b, 3] += Nx
         vertices[b, 4] += Ny
         vertices[b, 5] += Nz
-        normal_counts[b] += 1
         vertices[c, 3] += Nx
         vertices[c, 4] += Ny
         vertices[c, 5] += Nz
-        normal_counts[c] += 1
     for i in range(n):
-        if (c := normal_counts[i]) > 1:
-            f = 1.0 / c
-            vertices[i, 3] *= f
-            vertices[i, 4] *= f
-            vertices[i, 5] *= f
+        Nx, Ny, Nz = vertices[i, 3], vertices[i, 4], vertices[i, 5]
+        f = 1.0 / sqrt(Nx*Nx + Ny*Ny + Nz*Nz)
+        vertices[i, 3] *= f
+        vertices[i, 4] *= f
+        vertices[i, 5] *= f
 
 
 cdef class Model:
@@ -305,6 +305,8 @@ cdef class Model:
         self.cache['manifold'] = manifold
         return manifold
 
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
     cpdef Vector get_bounds(self):
         cdef PyObject* objptr
         if self.cache is None:
@@ -748,6 +750,9 @@ cdef class Transform(UnaryOperation):
         cdef double distance=self.original.signed_distance(ipos.numbers[0], ipos.numbers[1], ipos.numbers[2])
         return distance * self.scale
 
+    @cython.cdivision(True)
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
     cpdef tuple build_arrays(self):
         arrays = self.original.get_arrays()
         if arrays is None:
@@ -758,7 +763,7 @@ cdef class Transform(UnaryOperation):
         transformed_vertex_array = vertex_array.copy()
         cdef float[:, :] vertex_data=vertex_array, transformed_vertex_data=transformed_vertex_array
         cdef int64_t i
-        cdef float x, y, z
+        cdef float x, y, z, Nx, Ny, Nz, f
         cdef double* M = self.transform_matrix.numbers
         cdef double* N = self.normal_matrix.numbers
         for i in range(vertex_data.shape[0]):
@@ -771,9 +776,13 @@ cdef class Transform(UnaryOperation):
             x = vertex_data[i, 3]
             y = vertex_data[i, 4]
             z = vertex_data[i, 5]
-            transformed_vertex_data[3] = N[0]*x + N[3]*y + N[6]*z
-            transformed_vertex_data[4] = N[1]*x + N[4]*y + N[7]*z
-            transformed_vertex_data[5] = N[2]*x + N[5]*y + N[8]*z
+            Nx = N[0]*x + N[3]*y + N[6]*z
+            Ny = N[1]*x + N[4]*y + N[7]*z
+            Nz = N[2]*x + N[5]*y + N[8]*z
+            f = 1.0 / sqrt(Nx*Nx + Ny*Ny + Nz*Nz)
+            transformed_vertex_data[3] = Nx * f
+            transformed_vertex_data[4] = Ny * f
+            transformed_vertex_data[5] = Nz * f
         return transformed_vertex_array, index_array
 
     cpdef object build_trimesh(self):
@@ -822,22 +831,26 @@ cdef class UVRemap(UnaryOperation):
     cpdef Model _uv_remap(self, str mapping):
         return self.original._uv_remap(mapping)
 
+    @cython.cdivision(True)
     @cython.boundscheck(False)
     @cython.wraparound(False)
     cdef object remap_sphere(self, vertex_array, index_array, Vector bounds):
         vertex_array = vertex_array.copy()
         cdef float[:, :] vertex_data = vertex_array
         cdef int64_t i, n=len(vertex_array)
-        cdef float x, y, z
+        cdef float x, y, z, u
         for i in range(n):
             x, y, z = vertex_data[i, 0], vertex_data[i, 1], vertex_data[i, 2]
-            vertex_data[i, 6] = atan2(y, x) / Tau % 1
+            u = atan2(y, x) / Tau
+            if u < 0:
+                u += 1
+            vertex_data[i, 6] = u
             vertex_data[i, 7] = atan2(z, sqrt(x*x + y*y)) / Tau * 2 + 0.5
         return vertex_array
 
+    @cython.cdivision(True)
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    @cython.cdivision(True)
     cdef object remap_plane(self, vertex_array, index_array, Vector bounds):
         vertex_array = vertex_array.copy()
         cdef float[:, :] vertex_data = vertex_array
@@ -1596,6 +1609,8 @@ cdef class VectorModel(Model):
             self.cache['proximity_query'] = None
         return NaN
 
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
     cpdef tuple build_arrays(self):
         if self.vertices.length % 3 != 0:
             logger.error("Bad vertices vector length: {}", self.name)

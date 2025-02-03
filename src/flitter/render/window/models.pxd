@@ -9,6 +9,9 @@ cdef double DefaultSnapAngle
 cdef int64_t DefaultSegments
 
 
+cpdef void fill_in_normals(vertices_array, faces_array)
+
+
 cdef class Model:
     cdef readonly uint64_t id
     cdef readonly double touch_timestamp
