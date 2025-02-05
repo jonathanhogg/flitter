@@ -510,8 +510,8 @@ cdef Model get_model(Node node, bint top):
         if top:
             if node.get_bool('flat', False):
                 model = model.flatten()
-            elif (snap_angle := node.get_float('snap_edges', DefaultSnapAngle if model.is_smooth() else 0.5)) < 0.5:
-                model = model._snap_edges(snap_angle, node.get_float('minimum_area', 0))
+            elif (snap_angle := node.get_float('snap_edges', DefaultSnapAngle if model.is_manifold() else 0.5)) < 0.5:
+                model = model._snap_edges(snap_angle)
             if node.get_bool('invert', False):
                 model = model.invert()
             if (mapping := node.get_str('uv_remap', None)) is not None:

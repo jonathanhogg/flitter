@@ -25,18 +25,23 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: "3.11"
-    - name: Install dependencies
+    - name: Upgrade pip
       run: |
-        echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" | sudo debconf-set-selections
-        sudo apt-get install -y mesa-utils xvfb libfontconfig1 ttf-mscorefonts-installer
-        python -m pip install --upgrade pip setuptools
-        python -m pip install cython coverage pytest
-    - name: Build in place with coverage analysis enabled
+        python -m pip install --upgrade pip
+    - name: Build package in-place with coverage analysis enabled
       run: |
         pip3 install --editable .
       env:
         FLITTER_BUILD_COVERAGE: 1
-    - name: Run tests with coverage
+    - name: Install coverage and pytest
+      run: |
+        python -m pip install cython coverage pytest
+    - name: Install Linux Mesa OpenGL drivers and Microsoft fonts
+      run: |
+        sudo apt-get update
+        echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" | sudo debconf-set-selections
+        sudo apt-get install -y mesa-utils xvfb libfontconfig1 ttf-mscorefonts-installer
+    - name: Run all tests with coverage
       run: |
         xvfb-run coverage run --source=src -m pytest tests --ignore=tests/test_engine.py --durations=5
     - name: Generate coverage reports

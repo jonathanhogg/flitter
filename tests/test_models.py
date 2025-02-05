@@ -23,7 +23,7 @@ class TestPrimitives(utils.TestCase):
 
     def test_box(self):
         model = Model.box()
-        self.assertFalse(model.is_smooth())
+        self.assertFalse(model.is_manifold())
         mesh = model.get_trimesh()
         self.assertEqual(model.name, '!box')
         self.assertEqual(mesh.bounds.tolist(), [[-0.5, -0.5, -0.5], [0.5, 0.5, 0.5]])
@@ -38,7 +38,7 @@ class TestPrimitives(utils.TestCase):
         for segments in (4, DefaultSegments, 1024):
             with self.subTest(segments=segments):
                 model = Model.sphere(segments)
-                self.assertFalse(model.is_smooth())
+                self.assertFalse(model.is_manifold())
                 self.assertEqual(model.name, f'!sphere-{segments}' if segments != DefaultSegments else '!sphere')
                 mesh = model.get_trimesh()
                 self.assertEqual(mesh.bounds.tolist(), [[-1, -1, -1], [1, 1, 1]])
@@ -59,7 +59,7 @@ class TestPrimitives(utils.TestCase):
         for segments in (4, DefaultSegments, 1024):
             with self.subTest(segments=segments):
                 model = Model.cylinder(segments)
-                self.assertFalse(model.is_smooth())
+                self.assertFalse(model.is_manifold())
                 self.assertEqual(model.name, f'!cylinder-{segments}' if segments != DefaultSegments else '!cylinder')
                 mesh = model.get_trimesh()
                 self.assertEqual(mesh.bounds.tolist(), [[-1, -1, -0.5], [1, 1, 0.5]])
@@ -78,7 +78,7 @@ class TestPrimitives(utils.TestCase):
         for segments in (4, DefaultSegments, 1024):
             with self.subTest(segments=segments):
                 model = Model.cone(segments)
-                self.assertFalse(model.is_smooth())
+                self.assertFalse(model.is_manifold())
                 self.assertEqual(model.name, f'!cone-{segments}' if segments != DefaultSegments else '!cone')
                 mesh = model.get_trimesh()
                 self.assertEqual(mesh.bounds.tolist(), [[-1, -1, -0.5], [1, 1, 0.5]])
@@ -126,7 +126,7 @@ class MyModel(Model):
     def name(self):
         return '!mymodel'
 
-    def is_smooth(self):
+    def is_manifold(self):
         return False
 
     def check_for_changes(self):
@@ -181,8 +181,18 @@ class TestVector(utils.TestCase):
         self.assertAlmostEqual(mesh.volume, 0.5)
 
     def test_invalid(self):
-        self.assertIsNone(Model.vector([0, 0, 0, 0, 0, 1, 0, 1], [0, 1, 2]).get_trimesh())
-        self.assertIsNone(Model.vector([0, 0, 0, 0, 0, 1, 0, 1, 0], [0, 1]).get_trimesh())
+        with unittest.mock.patch('flitter.render.window.models.logger') as mock_logger:
+            model = Model.vector([0, 0, 0, 0, 0, 1, 0, 1], [0, 1, 2])
+            self.assertIsNone(model.get_trimesh())
+            mock_logger.error.assert_called_with("Bad vertices vector length: {}", model.name)
+        with unittest.mock.patch('flitter.render.window.models.logger') as mock_logger:
+            model = Model.vector([0, 0, 0, 0, 0, 1, 0, 1, 0], [0, 1])
+            self.assertIsNone(model.get_trimesh())
+            mock_logger.error.assert_called_with("Bad faces vector length: {}", model.name)
+        with unittest.mock.patch('flitter.render.window.models.logger') as mock_logger:
+            model = Model.vector([0, 0, 0, 0, 0, 1, 0, 1, 0], [0, 1, 3])
+            self.assertIsNone(model.get_trimesh())
+            mock_logger.error.assert_called_with("Bad vertex index: {}", model.name)
 
 
 class TestManifoldPrimitives(utils.TestCase):
@@ -333,9 +343,9 @@ class TestStructuring(utils.TestCase):
 
     def test_flatten(self):
         self.assertEqual(Model.box().flatten().name, 'flatten(!box)')
-        self.assertFalse(Model.box().flatten().is_smooth())
+        self.assertFalse(Model.box().flatten().is_manifold())
         self.assertIs(Model.box().flatten().get_manifold(), Model.box().get_manifold())
-        self.assertFalse(Model.union(Model.box(), Model.sphere()).flatten().is_smooth())
+        self.assertFalse(Model.union(Model.box(), Model.sphere()).flatten().is_manifold())
         self.assertEqual(Model.box().flatten().flatten().name, 'flatten(!box)')
         self.assertEqual(Model.box().flatten().invert().name, 'invert(flatten(!box))')
         self.assertEqual(Model.box().flatten().repair().name, 'repair(flatten(!box))')
@@ -346,9 +356,9 @@ class TestStructuring(utils.TestCase):
 
     def test_invert(self):
         self.assertEqual(Model.box().invert().name, 'invert(!box)')
-        self.assertFalse(Model.box().invert().is_smooth())
+        self.assertFalse(Model.box().invert().is_manifold())
         self.assertIs(Model.box().invert().get_manifold(), Model.box().get_manifold())
-        self.assertTrue(Model.union(Model.box(), Model.sphere()).invert().is_smooth())
+        self.assertFalse(Model.union(Model.box(), Model.sphere()).invert().is_manifold())
         self.assertEqual(Model.box().invert().flatten().name, 'flatten(invert(!box))')
         self.assertEqual(Model.box().invert().invert().name, '!box')
         self.assertEqual(Model.box().invert().repair().name, 'invert(repair(!box))')
@@ -359,7 +369,7 @@ class TestStructuring(utils.TestCase):
 
     def test_repair(self):
         self.assertEqual(Model.box().repair().name, 'repair(!box)')
-        self.assertTrue(Model.box().repair().is_smooth())
+        self.assertFalse(Model.box().repair().is_manifold())
         self.assertIsNot(Model.box().repair().get_manifold(), Model.box().get_manifold())
         self.assertEqual(Model.box().repair().flatten().name, 'flatten(repair(!box))')
         self.assertEqual(Model.box().repair().invert().name, 'invert(repair(!box))')
@@ -371,14 +381,12 @@ class TestStructuring(utils.TestCase):
 
     def test_snap_edges(self):
         self.assertEqual(Model.box().snap_edges(0).name, 'flatten(!box)')
-        self.assertFalse(Model.box().snap_edges().is_smooth())
-        self.assertIs(Model.box().snap_edges().get_manifold(), Model.box().get_manifold())
-        self.assertFalse(Model.union(Model.box(), Model.sphere()).snap_edges().is_smooth())
+        self.assertFalse(Model.box().snap_edges().is_manifold())
+        self.assertIsNot(Model.box().snap_edges().get_manifold(), Model.box().get_manifold())
+        self.assertFalse(Model.union(Model.box(), Model.sphere()).snap_edges().is_manifold())
         self.assertEqual(Model.box().snap_edges().name, 'snap_edges(!box)')
         self.assertEqual(Model.box().snap_edges(0.05).name, 'snap_edges(!box)')
         self.assertEqual(Model.box().snap_edges(0.25).name, 'snap_edges(!box, 0.25)')
-        self.assertEqual(Model.box().snap_edges(0.05, 0.25).name, 'snap_edges(!box, 0.05, 0.25)')
-        self.assertEqual(Model.box().snap_edges(0.25, 0.25).name, 'snap_edges(!box, 0.25, 0.25)')
         self.assertEqual(Model.box().snap_edges().flatten().name, 'flatten(!box)')
         self.assertEqual(Model.box().snap_edges().invert().name, 'invert(snap_edges(!box))')
         self.assertEqual(Model.box().snap_edges().repair().name, 'snap_edges(repair(!box))')
@@ -389,8 +397,8 @@ class TestStructuring(utils.TestCase):
 
     def test_transform(self):
         self.assertEqual(Model.box().transform(Matrix44()).name, '!box')
-        self.assertFalse(Model.box().transform(self.M).is_smooth())
-        self.assertTrue(Model.union(Model.box(), Model.sphere()).transform(self.M).is_smooth())
+        self.assertFalse(Model.box().transform(self.M).is_manifold())
+        self.assertTrue(Model.union(Model.box(), Model.sphere()).transform(self.M).is_manifold())
         self.assertEqual(Model.box().transform(self.M).name, f'!box@{self.M_hash}')
         self.assertEqual(Model.box().transform(self.M).flatten().name, f'flatten(!box@{self.M_hash})')
         self.assertEqual(Model.box().transform(self.M).invert().name, f'invert(!box@{self.M_hash})')
@@ -402,9 +410,9 @@ class TestStructuring(utils.TestCase):
 
     def test_uvremap(self):
         self.assertEqual(Model.box().uv_remap('sphere').name, 'uv_remap(!box, sphere)')
-        self.assertFalse(Model.box().uv_remap('sphere').is_smooth())
+        self.assertFalse(Model.box().uv_remap('sphere').is_manifold())
         self.assertIs(Model.box().uv_remap('sphere').get_manifold(), Model.box().get_manifold())
-        self.assertTrue(Model.union(Model.box(), Model.sphere()).uv_remap('sphere').is_smooth())
+        self.assertFalse(Model.union(Model.box(), Model.sphere()).uv_remap('sphere').is_manifold())
         self.assertEqual(Model.box().uv_remap('sphere').flatten().name, 'flatten(uv_remap(!box, sphere))')
         self.assertEqual(Model.box().uv_remap('sphere').invert().name, 'invert(uv_remap(!box, sphere))')
         self.assertEqual(Model.box().uv_remap('sphere').repair().name, 'uv_remap(repair(!box), sphere)')
@@ -415,7 +423,7 @@ class TestStructuring(utils.TestCase):
 
     def test_trim(self):
         self.assertEqual(Model.box().trim(self.P, self.N).name, f'trim(!box, {self.PN_hash})')
-        self.assertTrue(Model.box().trim(self.P, self.N).is_smooth())
+        self.assertTrue(Model.box().trim(self.P, self.N).is_manifold())
         self.assertEqual(Model.box().trim(self.P, self.N).flatten().name, f'flatten(trim(!box, {self.PN_hash}))')
         self.assertEqual(Model.box().trim(self.P, self.N).invert().name, f'invert(trim(!box, {self.PN_hash}))')
         self.assertEqual(Model.box().trim(self.P, self.N).repair().name, f'trim(repair(!box), {self.PN_hash})')
@@ -432,7 +440,7 @@ class TestStructuring(utils.TestCase):
         self.assertEqual(Model.union(Model.box(), Model.sphere()).name, 'union(!box, !sphere)')
         self.assertEqual(Model.union(Model.box(), Model.sphere(), Model.box()).name, 'union(!box, !sphere)')
         self.assertEqual(Model.union(Model.box(), Model.union(Model.sphere(), Model.cylinder())).name, 'union(!box, !sphere, !cylinder)')
-        self.assertTrue(Model.union(Model.box(), Model.sphere()).is_smooth())
+        self.assertTrue(Model.union(Model.box(), Model.sphere()).is_manifold())
         self.assertEqual(Model.union(Model.box(), Model.sphere()).flatten().name, 'flatten(union(!box, !sphere))')
         self.assertEqual(Model.union(Model.box(), Model.sphere()).invert().name, 'invert(union(!box, !sphere))')
         self.assertEqual(Model.union(Model.box(), Model.sphere()).repair().name, 'union(!box, !sphere)')
@@ -448,7 +456,7 @@ class TestStructuring(utils.TestCase):
         self.assertEqual(Model.intersect(Model.box(), Model.sphere()).name, 'intersect(!box, !sphere)')
         self.assertEqual(Model.intersect(Model.box(), Model.sphere(), Model.box()).name, 'intersect(!box, !sphere)')
         self.assertEqual(Model.intersect(Model.box(), Model.intersect(Model.sphere(), Model.cylinder())).name, 'intersect(!box, !sphere, !cylinder)')
-        self.assertTrue(Model.intersect(Model.box(), Model.sphere()).is_smooth())
+        self.assertTrue(Model.intersect(Model.box(), Model.sphere()).is_manifold())
         self.assertEqual(Model.intersect(Model.box(), Model.sphere()).flatten().name, 'flatten(intersect(!box, !sphere))')
         self.assertEqual(Model.intersect(Model.box(), Model.sphere()).invert().name, 'invert(intersect(!box, !sphere))')
         self.assertEqual(Model.intersect(Model.box(), Model.sphere()).repair().name, 'intersect(!box, !sphere)')
@@ -465,7 +473,7 @@ class TestStructuring(utils.TestCase):
         self.assertIsNone(Model.difference(Model.box(), Model.sphere(), Model.box()))
         self.assertEqual(Model.difference(Model.box(), Model.difference(Model.sphere(), Model.cylinder())).name,
                          'difference(!box, difference(!sphere, !cylinder))')
-        self.assertTrue(Model.difference(Model.box(), Model.sphere()).is_smooth())
+        self.assertTrue(Model.difference(Model.box(), Model.sphere()).is_manifold())
         self.assertEqual(Model.difference(Model.box(), Model.sphere()).flatten().name, 'flatten(difference(!box, !sphere))')
         self.assertEqual(Model.difference(Model.box(), Model.sphere()).invert().name, 'invert(difference(!box, !sphere))')
         self.assertEqual(Model.difference(Model.box(), Model.sphere()).repair().name, 'difference(!box, !sphere)')
@@ -521,7 +529,7 @@ class TestTrim(utils.TestCase):
             model = model.trim((0, y/2, 0), (0, y, 0))
         for z in (-1, 1):
             model = model.trim((0, 0, z/2), (0, 0, z))
-        self.assertTrue(model.is_smooth())
+        self.assertTrue(model.is_manifold())
         mesh = model.get_trimesh()
         self.assertEqual(mesh.bounds.tolist(), [[-0.5, -0.5, -0.5], [0.5, 0.5, 0.5]])
         self.assertEqual(len(mesh.vertices), 8)
@@ -532,7 +540,7 @@ class TestTrim(utils.TestCase):
     def test_trim_to_nothing(self):
         model = Model.box()
         model = model.trim((0, 0, -1), (0, 0, 1))
-        self.assertTrue(model.is_smooth())
+        self.assertTrue(model.is_manifold())
         with unittest.mock.patch('flitter.render.window.models.logger') as mock_logger:
             manifold = model.get_manifold()
             mock_logger.warning.assert_called_with("Result of operation was empty mesh: {}", model.name)
@@ -568,6 +576,11 @@ class TestBoolean(utils.TestCase):
                          self.wrap_name('intersect(!box, !sphere)'))
         self.assertEqual(self.wrap_model(Model.difference(Model.box(), None, Model.sphere())).name,
                          self.wrap_name('difference(!box, !sphere)'))
+
+    def test_is_manifold(self):
+        self.assertTrue(self.wrap_model(Model.union(Model.box(), Model.sphere())).is_manifold())
+        self.assertTrue(self.wrap_model(Model.intersect(Model.box(), Model.sphere())).is_manifold())
+        self.assertTrue(self.wrap_model(Model.difference(Model.box(), Model.sphere())).is_manifold())
 
     def test_nested_box_union(self):
         model = self.wrap_model(Model.union(*self.nested_box_models))
@@ -645,6 +658,9 @@ class TestSdfBoolean(TestBoolean):
 class TestSdfTrim(utils.TestCase):
     def tearDown(self):
         Model.flush_caches(0, 0)
+
+    def test_is_manifold(self):
+        self.assertTrue(Model.sphere().trim((0, 0, 0), (0, 0, 1)).is_manifold())
 
     def test_trim_sphere_to_box(self):
         model = Model.sphere()

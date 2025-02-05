@@ -9,6 +9,9 @@ cdef double DefaultSnapAngle
 cdef int64_t DefaultSegments
 
 
+cpdef void fill_in_normals(vertices_array, faces_array)
+
+
 cdef class Model:
     cdef readonly uint64_t id
     cdef readonly double touch_timestamp
@@ -19,8 +22,9 @@ cdef class Model:
     cpdef bint uncache(self, bint buffers)
     cpdef void unload(self)
     cpdef void check_for_changes(self)
-    cpdef bint is_smooth(self)
+    cpdef bint is_manifold(self)
     cpdef double signed_distance(self, double x, double y, double z) noexcept
+    cpdef tuple build_arrays(self)
     cpdef object build_trimesh(self)
     cpdef object build_manifold(self)
 
@@ -28,6 +32,7 @@ cdef class Model:
     cpdef void remove_dependent(self, Model model)
     cpdef void invalidate(self)
     cpdef Vector get_bounds(self)
+    cpdef tuple get_arrays(self)
     cpdef object get_trimesh(self)
     cpdef object get_manifold(self)
     cpdef tuple get_buffers(self, object glctx, dict objects)
@@ -35,7 +40,7 @@ cdef class Model:
     cpdef Model flatten(self)
     cpdef Model invert(self)
     cpdef Model repair(self)
-    cdef Model _snap_edges(self, double snap_angle, double minimum_area)
+    cdef Model _snap_edges(self, double snap_angle)
     cdef Model _transform(self, Matrix44 transform_matrix)
     cdef Model _uv_remap(self, str mapping)
     cdef Model _trim(self, Vector origin, Vector normal, double smooth, double fillet, double chamfer)
