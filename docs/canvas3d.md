@@ -833,11 +833,11 @@ To load an external model use the attributes:
 will be automatically reloaded if this file changes.
 
 `repair=` ( `true` | `false` )
-: If set to `true`, attempts to *repair* the mesh by merging vertices and
-removing duplicate or degenerate faces, fixing normal directions and face
-windings, and capping holes. This can be useful if a mesh is rendering
-incorrectly or is failing with [constructive solid
-geometry](#contructive-solid-geometry) operations. Default is `false`.
+: If set to `true`, attempts to *repair* the mesh by merging duplicated vertices
+removing duplicate or degenerate faces, and fixing normal directions and face
+windings. This can be useful if a loaded mesh is rendering incorrectly or is
+failing with [constructive solid geometry](#contructive-solid-geometry)
+operations. Default is `false`.
 
 Meshes are loaded using the [**trimesh**](https://trimesh.org) library and so
 **Flitter** supports all of the file-types supported by that, which includes
@@ -882,7 +882,7 @@ will have the same number of faces, but three distinct vertices per face.
 
 For finer-grained control over shading, there is an edge snapping algorithm
 that will take a smooth-shaded model, find sharp edges and split them into
-seams. This algorithm can be controlled with the following attributes:
+seams. This algorithm can be controlled with the following attribute:
 
 `snap_edges=` `0`…`0.5`
 : This specifies the minimum edge angle (in *turns*) at which to snap. It
@@ -891,11 +891,6 @@ angle of `0` would mean that the two faces are in the same plane, `0.25` would
 mean that they are at right angles to one another. Specifying `0.5` will disable
 the algorithm completely, `0` will cause all edges to be snapped (which is
 equivalent to specifying `flat=true`).
-
-`minimum_area=` `0`…`1`
-: This specifies a minimum area for a face below which it will be ignored by the
-algorithm. This is given as a ratio of face area to total model area. If not
-specified, then all faces will be considered.
 
 A model can also be *inverted* with the attribute:
 

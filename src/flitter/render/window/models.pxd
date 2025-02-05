@@ -22,7 +22,7 @@ cdef class Model:
     cpdef bint uncache(self, bint buffers)
     cpdef void unload(self)
     cpdef void check_for_changes(self)
-    cpdef bint is_smooth(self)
+    cpdef bint is_manifold(self)
     cpdef double signed_distance(self, double x, double y, double z) noexcept
     cpdef tuple build_arrays(self)
     cpdef object build_trimesh(self)
@@ -40,7 +40,7 @@ cdef class Model:
     cpdef Model flatten(self)
     cpdef Model invert(self)
     cpdef Model repair(self)
-    cdef Model _snap_edges(self, double snap_angle, double minimum_area)
+    cdef Model _snap_edges(self, double snap_angle)
     cdef Model _transform(self, Matrix44 transform_matrix)
     cdef Model _uv_remap(self, str mapping)
     cdef Model _trim(self, Vector origin, Vector normal, double smooth, double fillet, double chamfer)

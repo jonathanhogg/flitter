@@ -62,10 +62,13 @@ cpdef tuple build_arrays_from_manifold(manifold):
     if manifold is None:
         return None
     mesh = manifold.to_mesh()
-    vertices_array = np.zeros((len(mesh.vert_properties), 8), dtype='f4')
-    vertices_array[:, :3] = mesh.vert_properties
     faces_array = mesh.tri_verts.astype('i4', copy=False)
-    fill_in_normals(vertices_array, faces_array)
+    vertices_array = np.zeros((len(mesh.vert_properties), 8), dtype='f4')
+    if mesh.vert_properties.shape[1] == 6:
+        vertices_array[:, :6] = mesh.vert_properties
+    else:
+        vertices_array[:, :3] = mesh.vert_properties
+        fill_in_normals(vertices_array, faces_array)
     return vertices_array, faces_array
 
 
@@ -196,8 +199,8 @@ cdef class Model:
             self.buffer_caches = None
         return full_collect
 
-    cpdef bint is_smooth(self):
-        raise NotImplementedError()
+    cpdef bint is_manifold(self):
+        return False
 
     cpdef double signed_distance(self, double x, double y, double z) noexcept:
         raise NotImplementedError()
@@ -351,13 +354,13 @@ cdef class Model:
     cpdef Model repair(self):
         return Repair._get(self)
 
-    cdef Model _snap_edges(self, double snap_angle, double minimum_area):
+    cdef Model _snap_edges(self, double snap_angle):
         if snap_angle <= 0:
             return Flatten._get(self)
-        return SnapEdges._get(self, snap_angle, minimum_area)
+        return SnapEdges._get(self, snap_angle)
 
-    def snap_edges(self, snap_angle=DefaultSnapAngle, minimum_area=0):
-        return self._snap_edges(float(snap_angle), float(minimum_area))
+    def snap_edges(self, snap_angle=DefaultSnapAngle):
+        return self._snap_edges(float(snap_angle))
 
     cdef Model _transform(self, Matrix44 transform_matrix):
         if transform_matrix.eq(IdentityTransform) is true_:
@@ -467,9 +470,6 @@ cdef class UnaryOperation(Model):
         if self.original is not None:
             self.original.remove_dependent(self)
 
-    cpdef bint is_smooth(self):
-        return self.original.is_smooth() if self.original is not None else False
-
     cpdef double signed_distance(self, double x, double y, double z) noexcept:
         return self.original.signed_distance(x, y, z) if self.original is not None else NaN
 
@@ -499,13 +499,10 @@ cdef class Flatten(UnaryOperation):
     def name(self):
         return f'flatten({self.original.name})'
 
-    cpdef bint is_smooth(self):
-        return False
-
     cpdef Model flatten(self):
         return self
 
-    cdef Model _snap_edges(self, double snap_angle, double minimum_area):
+    cdef Model _snap_edges(self, double snap_angle):
         return self
 
     @cython.cdivision(True)
@@ -578,8 +575,8 @@ cdef class Invert(UnaryOperation):
     cpdef Model repair(self):
         return self.original.repair().invert()
 
-    cdef Model _snap_edges(self, double snap_angle, double minimum_area):
-        return self.original._snap_edges(snap_angle, minimum_area).invert()
+    cdef Model _snap_edges(self, double snap_angle):
+        return self.original._snap_edges(snap_angle).invert()
 
     cdef Model _transform(self, Matrix44 transform_matrix):
         return self.original._transform(transform_matrix).invert()
@@ -622,9 +619,6 @@ cdef class Repair(UnaryOperation):
     def name(self):
         return f'repair({self.original.name})'
 
-    cpdef bint is_smooth(self):
-        return True
-
     cpdef Model repair(self):
         return self
 
@@ -635,24 +629,19 @@ cdef class Repair(UnaryOperation):
         trimesh_model = self.original.get_trimesh()
         if trimesh_model is not None:
             trimesh_model = trimesh_model.copy()
-            trimesh_model.process(validate=True, merge_tex=True, merge_norm=True)
+            trimesh_model.process(validate=True, merge_tex=False, merge_norm=False)
             trimesh_model.remove_unreferenced_vertices()
-            trimesh_model.fill_holes()
-            trimesh_model.fix_normals()
         return trimesh_model
 
 
 cdef class SnapEdges(UnaryOperation):
     cdef double snap_angle
-    cdef double minimum_area
 
     @staticmethod
-    cdef SnapEdges _get(Model original, double snap_angle, double minimum_area):
+    cdef SnapEdges _get(Model original, double snap_angle):
         snap_angle = min(max(0, snap_angle), 0.5)
-        minimum_area = min(max(0, minimum_area), 1)
         cdef uint64_t id = HASH_UPDATE(SNAP_EDGES, original.id)
         id = HASH_UPDATE(id, double_long(f=snap_angle).l)
-        id = HASH_UPDATE(id, double_long(f=minimum_area).l)
         cdef SnapEdges model
         cdef PyObject* objptr = PyDict_GetItem(ModelCache, id)
         if objptr == NULL:
@@ -661,7 +650,6 @@ cdef class SnapEdges(UnaryOperation):
             model.original = original
             model.original.add_dependent(model)
             model.snap_angle = snap_angle
-            model.minimum_area = minimum_area
             ModelCache[id] = model
         else:
             model = <SnapEdges>objptr
@@ -671,42 +659,38 @@ cdef class SnapEdges(UnaryOperation):
     @property
     def name(self):
         cdef str name = f'snap_edges({self.original.name}'
-        if self.snap_angle != DefaultSnapAngle or self.minimum_area:
+        if self.snap_angle != DefaultSnapAngle:
             name += f', {self.snap_angle:g}'
-            if self.minimum_area:
-                name += f', {self.minimum_area:g}'
         return name + ')'
-
-    cpdef bint is_smooth(self):
-        return False
 
     cpdef Model flatten(self):
         return self.original.flatten()
 
     cpdef Model repair(self):
-        return self.original.repair()._snap_edges(self.snap_angle, self.minimum_area)
+        return self.original.repair()._snap_edges(self.snap_angle)
 
-    cdef Model _snap_edges(self, double snap_angle, double minimum_area):
-        return self.original._snap_edges(snap_angle, minimum_area)
+    cdef Model _snap_edges(self, double snap_angle):
+        return self.original._snap_edges(snap_angle)
 
     cdef Model _transform(self, Matrix44 transform_matrix):
-        return self.original._transform(transform_matrix).snap_edges(self.snap_angle, self.minimum_area)
+        return self.original._transform(transform_matrix).snap_edges(self.snap_angle)
 
     cdef Model _trim(self, Vector origin, Vector normal, double smooth, double fillet, double chamfer):
         return self.original._trim(origin, normal, smooth, fillet, chamfer)
 
     cpdef tuple build_arrays(self):
+        if self.original.is_manifold():
+            return build_arrays_from_manifold(self.get_manifold())
         return build_arrays_from_trimesh(self.get_trimesh())
 
     cpdef object build_trimesh(self):
         trimesh_model = self.original.get_trimesh()
         if trimesh_model is not None:
-            trimesh_model = trimesh.graph.smooth_shade(trimesh_model, angle=self.snap_angle*Tau,
-                                                       facet_minarea=1/self.minimum_area if self.minimum_area else None)
+            trimesh_model = trimesh.graph.smooth_shade(trimesh_model, angle=self.snap_angle*Tau, facet_minarea=None)
         return trimesh_model
 
     cpdef object build_manifold(self):
-        return self.original.get_manifold()
+        return self.original.get_manifold().calculate_normals(0, 360*self.snap_angle)
 
 
 cdef class Transform(UnaryOperation):
@@ -941,7 +925,7 @@ cdef class Trim(UnaryOperation):
             name += f', chamfer={self.chamfer:g}'
         return name + ')'
 
-    cpdef bint is_smooth(self):
+    cpdef bint is_manifold(self):
         return True
 
     cpdef Model repair(self):
@@ -1069,7 +1053,7 @@ cdef class BooleanOperation(Model):
         for model in self.models:
             model.remove_dependent(self)
 
-    cpdef bint is_smooth(self):
+    cpdef bint is_manifold(self):
         return True
 
     cpdef void check_for_changes(self):
@@ -1180,9 +1164,6 @@ cdef class BooleanOperation(Model):
 cdef class PrimitiveModel(Model):
     cpdef void check_for_changes(self):
         pass
-
-    cpdef bint is_smooth(self):
-        return False
 
 
 cdef class Box(PrimitiveModel):
@@ -1542,9 +1523,6 @@ cdef class ExternalModel(Model):
     def name(self):
         return str(self.cache_path)
 
-    cpdef bint is_smooth(self):
-        return False
-
     cpdef void check_for_changes(self):
         if self.cache and 'trimesh' in self.cache and self.cache['trimesh'] is not self.cache_path.read_trimesh_model():
             self.invalidate()
@@ -1600,9 +1578,6 @@ cdef class VectorModel(Model):
     @property
     def name(self):
         return f'vector({self.vertices.hash(False):x}, {self.faces.hash(False):x})'
-
-    cpdef bint is_smooth(self):
-        return False
 
     cpdef void check_for_changes(self):
         pass
@@ -1698,8 +1673,8 @@ cdef class SignedDistanceField(UnaryOperation):
             return f'sdf(func {self.function}, {self.minimum!r}, {self.maximum!r}, {self.resolution})'
         return f'sdf({self.original.name}, {self.minimum!r}, {self.maximum!r}, {self.resolution:g})'
 
-    cpdef bint is_smooth(self):
-        return False
+    cpdef bint is_manifold(self):
+        return True
 
     cpdef double signed_distance(self, double x, double y, double z) noexcept:
         if self.context is None:
@@ -1781,7 +1756,7 @@ cdef class Mix(Model):
         for model in self.models:
             model.remove_dependent(self)
 
-    cpdef bint is_smooth(self):
+    cpdef bint is_manifold(self):
         return False
 
     cpdef void check_for_changes(self):
