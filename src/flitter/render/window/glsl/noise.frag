@@ -48,18 +48,17 @@ void main() {
     float weight = 0.0;
     for (int i = 0; i < octaves; i++) {
         vec3 p = point / k;
-        vec4 c = default_values;
+        vec4 c = vec4(0.0);
         for (int j = 0; j < components; j++) {
-            float result = opensimplex2s_improvexy(hashes[j], p);
-            c[j] = result * multiplier;
+            c[j] = opensimplex2s_improvexy(hashes[j], p);
         }
-        sum += c;
+        sum += c * k;
         weight += k;
         k *= roughness;
     }
-    vec4 merged = sum / weight;
+    vec4 merged = default_values;
     for (int i = 0; i < components; i++) {
-        merged[i] = merged[i] * multiplier + offset;
+        merged[i] = sum[i] / weight * multiplier + offset;
     }
     color = merged * alpha;
 }
