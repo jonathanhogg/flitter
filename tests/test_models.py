@@ -183,6 +183,7 @@ class TestVector(utils.TestCase):
     def test_invalid(self):
         self.assertIsNone(Model.vector([0, 0, 0, 0, 0, 1, 0, 1], [0, 1, 2]).get_trimesh())
         self.assertIsNone(Model.vector([0, 0, 0, 0, 0, 1, 0, 1, 0], [0, 1]).get_trimesh())
+        self.assertIsNone(Model.vector([0, 0, 0, 0, 0, 1, 0, 1, 0], [0, 1, 3]).get_trimesh())
 
 
 class TestManifoldPrimitives(utils.TestCase):
