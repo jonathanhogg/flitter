@@ -508,15 +508,43 @@ cdef class Flatten(UnaryOperation):
     cdef Model _snap_edges(self, double snap_angle, double minimum_area):
         return self
 
+    @cython.cdivision(True)
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
     cpdef tuple build_arrays(self):
         arrays = self.original.get_arrays()
         if arrays is None:
             return None
         vertices_array, faces_array = arrays
-        flattened_vertices_array = vertices_array[faces_array.flat]
-        flattened_faces_array = np.arange(3*len(faces_array), dtype='i4').reshape((-1, 3))
-        flattened_vertices_array[:, 3:6] = 0
-        fill_in_normals(flattened_vertices_array, flattened_faces_array)
+        cdef int32_t i, j=0, n=len(faces_array), a, b, c
+        flattened_vertices_array = np.empty((n*3, 8), dtype='f4')
+        flattened_faces_array = np.empty((n, 3), dtype='i4')
+        cdef const float[:, :] orig_vertices=vertices_array
+        cdef float[:, :] vertices=flattened_vertices_array
+        cdef const int32_t[:, :] orig_faces=faces_array
+        cdef int32_t[:, :] faces=flattened_faces_array
+        cdef float xa, ya, za, xb, yb, zb, xc, yc, zc
+        cdef float Ax, Ay, Az, Bx, By, Bz, Nx, Ny, Nz, f
+        for i in range(n):
+            a, b, c = orig_faces[i, 0], orig_faces[i, 1], orig_faces[i, 2]
+            faces[i, 0], faces[i, 1], faces[i, 2] = j, j+1, j+2
+            xa, ya, za = orig_vertices[a, 0], orig_vertices[a, 1], orig_vertices[a, 2]
+            vertices[j, 0], vertices[j, 1], vertices[j, 2], vertices[j, 6], vertices[j, 7] = xa, ya, za, orig_vertices[a, 6], orig_vertices[a, 7]
+            xb, yb, zb = orig_vertices[b, 0], orig_vertices[b, 1], orig_vertices[b, 2]
+            vertices[j+1, 0], vertices[j+1, 1], vertices[j+1, 2], vertices[j+1, 6], vertices[j+1, 7] = xb, yb, zb, orig_vertices[b, 6], orig_vertices[b, 7]
+            xc, yc, zc = orig_vertices[c, 0], orig_vertices[c, 1], orig_vertices[c, 2]
+            vertices[j+2, 0], vertices[j+2, 1], vertices[j+2, 2], vertices[j+2, 6], vertices[j+2, 7] = xc, yc, zc, orig_vertices[c, 6], orig_vertices[c, 7]
+            Ax, Ay, Az = xc-xb, yc-yb, zc-zb
+            Bx, By, Bz = xa-xb, ya-yb, za-zb
+            Nx, Ny, Nz = Ay*Bz-Az*By, Az*Bx-Ax*Bz, Ax*By-Ay*Bx
+            f = 1.0 / sqrt(Nx*Nx + Ny*Ny + Nz*Nz)
+            Nx *= f
+            Ny *= f
+            Nz *= f
+            vertices[j, 3], vertices[j, 4], vertices[j, 5] = Nx, Ny, Nz
+            vertices[j+1, 3], vertices[j+1, 4], vertices[j+1, 5] = Nx, Ny, Nz
+            vertices[j+2, 3], vertices[j+2, 4], vertices[j+2, 5] = Nx, Ny, Nz
+            j += 3
         return flattened_vertices_array, flattened_faces_array
 
     cpdef object build_manifold(self):
