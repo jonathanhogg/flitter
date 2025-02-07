@@ -144,7 +144,8 @@ other. The default is `:over`.
 `depth_sort=` [ `true` | `false` ]
 : Controls the depth-sorting phase of [instance ordering](#instance-ordering).
 Setting this to `false` will result in instances of the same model being
-dispatched for rendering in an arbitrary order. The default is `true`.
+dispatched for rendering in an arbitrary order and will disrupt correct handling
+of transparent and translucent objects. The default is `true`.
 
 `depth_test=` [ `true` | `false` ]
 : Turn off OpenGL depth-testing for this render group if set to `false`, the
@@ -223,12 +224,13 @@ transparency to render incorrectly. Depth sorting can be controlled for a
 specific render group with the `depth_sort` attribute.
 
 Turning off depth sorting will cause all instances to be dispatched to the GPU
-in an arbitrary order instead of front-to-back or back-to-front. For
-non-transparent objects this will have no visual effect as the depth buffer
-will resolve overlaps. However, for overlapping transparent objects this may
-result in odd inversions. When rendering large numbers of small, non-transparent
-objects, it may be faster to turn off depth sorting and let the depth buffer
-handle overlaps. If depth buffer testing has been disabled with
+in an arbitrary order instead of front-to-back or back-to-front, regardless
+of whether they have transparency or translucency. For non-transparent objects
+this will have no visual effect as the depth buffer will resolve overlaps.
+However, transparent and translucent objects will likely render incorrectly,
+showing the wrong objects behind. When rendering large numbers of small,
+non-transparent objects, it may be faster to turn off depth sorting and let the
+depth buffer handle overlaps. If depth buffer testing has been disabled with
 `depth_test=false`, then depth sorting is also automatically disabled.
 
 

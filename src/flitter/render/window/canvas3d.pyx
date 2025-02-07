@@ -807,11 +807,11 @@ cdef void render(render_target, RenderGroup render_group, Camera camera, glctx, 
         for i in indices:
             instance = instances[i]
             material = instance.material
-            if material.translucency > 0:
-                translucent_objects.append((zs[i] if depth_sorted else 0, model, instance))
-                transparent_objects.append((-zs[i] if depth_sorted else 0, model, instance))
-            elif (material.transparency > 0 or has_transparency_texture):
-                transparent_objects.append((-zs[i] if depth_sorted else 0, model, instance))
+            if depth_sorted and material.translucency > 0:
+                translucent_objects.append((zs[i], model, instance))
+                transparent_objects.append((-zs[i], model, instance))
+            elif depth_sorted and (material.transparency > 0 or has_transparency_texture):
+                transparent_objects.append((-zs[i], model, instance))
             else:
                 src = instance.model_matrix.numbers
                 dest = &instances_data[k, 0]
