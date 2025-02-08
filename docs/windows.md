@@ -119,6 +119,28 @@ window rendering tree. If not specified, it defaults to `16` bits. The color
 depth of the actual `!window` on-screen frame-buffer cannot be controlled and
 is OS-defined.
 
+The `!window` node also supports the following specific attributes:
+
+`screen=` `0`...
+: Specifies which screen to open the window on. This is OS and configuration
+dependent, but generally screen `0` is the "main" screen and additional screens
+are numbered upwards from that. Default is `0` unless the `--screen`
+[command-line option](install.md#running-flitter) has been provided.
+
+`fullscreen=` [`true` | `false`]
+: Specifies whether to show the window in full-screen mode. If set to `true`,
+the window will be expanded to fill the entire screen. If the window `size`
+does not match the aspect ratio of the screen then black borders will be shown
+at the top/bottom or left/right sides as necessary. This attribute may be
+changed programmatically to switch the window in and out of full-screen mode.
+Default is `false` unless the `--fullscreen` [command-line
+option](install.md#running-flitter) has been provided.
+
+`cursor=` [`true` | `false`]
+: Whether the pointer cursor should be shown within the window. This attribute
+may be changed programmatically to show and hide the cursor. Default is
+`true` unless the window is in full-screen mode.
+
 The default shader program used for `!window` and `!offscreen` nodes is a
 single-pass shader that composites together the output textures of all child
 nodes. It can be controlled with the following additional attributes:

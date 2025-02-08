@@ -445,6 +445,7 @@ class Window(ProgramNode):
         self._visible = not offscreen
         self._screen = None
         self._fullscreen = None
+        self._cursor = None
         self._resizable = None
         self._title = None
         self._beat = None
@@ -476,6 +477,7 @@ class Window(ProgramNode):
         screen = node.get('screen', 1, int, self.default_screen)
         fullscreen = node.get('fullscreen', 1, bool, self.default_fullscreen) if self._visible else False
         resizable = node.get('resizable', 1, bool, True) if self._visible else False
+        cursor = node.get('cursor', 1, bool, not fullscreen)
         title = node.get('title', 1, str, "Flitter")
         if self.window is None:
             self.engine = engine
@@ -519,6 +521,9 @@ class Window(ProgramNode):
         if self._visible and resizable != self._resizable:
             glfw.set_window_attrib(self.window, glfw.RESIZABLE, glfw.TRUE if resizable else glfw.FALSE)
             self._resizable = resizable
+        if cursor != self._cursor:
+            glfw.set_input_mode(self.window, glfw.CURSOR, glfw.CURSOR_NORMAL if cursor else glfw.CURSOR_HIDDEN)
+            self._cursor = cursor
         if self._visible and (resized or screen != self._screen or fullscreen != self._fullscreen):
             monitors = glfw.get_monitors()
             monitor = monitors[screen] if screen < len(monitors) else monitors[0]
