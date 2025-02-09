@@ -1101,6 +1101,16 @@ class TestCall(SimplifierTestCase):
                                 Literal(null),
                                 static={'f': f})
 
+    def test_simple_inlined_shadowed_name(self):
+        """An inlined function parameter must not shadow a bound name in case calculation of an argument
+           value needs it. The parameter will be renamed to a temporary name and the simplifier will
+           push that new name through into the body."""
+        f = Function('f', (Binding('x', None), Binding('y', None)), Add(Name('x'), Name('y')), captures=(), inlineable=True)
+        self.assertSimplifiesTo(Call(Name('f'), (Add(Name('z'), Literal(1)), Add(Name('x'), Literal(1)))),
+                                Let((PolyBinding(('__t0',), Add(Name('z'), Literal(1))),
+                                     PolyBinding(('y',), Add(Name('x'), Literal(1)))), Add(Name('__t0'), Name('y'))),
+                                static={'f': f}, dynamic={'x', 'z'})
+
 
 class TestRecursiveCall(SimplifierTestCase):
     def setUp(self):
@@ -1120,10 +1130,11 @@ class TestRecursiveCall(SimplifierTestCase):
                                 static={'f': self.f}, dynamic={'z', 'w'})
 
     def test_inlineable_recursive_literal_bound(self):
-        """A call to a recursive function with at least literal arguments will cause an inline attempt.
-           In this case the literal argument determines the bounds and so recursive inlining will succeed."""
+        """A call to a recursive function with at least one literal argument will cause an inline attempt.
+           In this case the literal argument determines the bounds and so recursive inlining will succeed.
+           Note that a temporary variable re-naming occurs here because of the inlining."""
         self.assertSimplifiesTo(Call(Name('f'), (Literal(2), Name('w'))),
-                                Add(Name('w'), Let((PolyBinding(('y',), Multiply(Literal(0.5), Name('w'))),), Positive(Name('y')))),
+                                Add(Name('w'), Let((PolyBinding(('__t1',), Multiply(Literal(0.5), Name('w'))),), Positive(Name('__t1')))),
                                 static={'f': self.f}, dynamic={'w'})
 
     def test_inlineable_recursive_dynamic_bound(self):

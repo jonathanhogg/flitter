@@ -1018,21 +1018,34 @@ cdef class Call(Expression):
                     all_dynamic_args = False
                 else:
                     all_literal_args = False
-        cdef list bindings
+        cdef list bindings, renames
         cdef dict kwargs
-        cdef int64_t i
+        cdef int64_t i, j=0
+        cdef str temp_name
         if func_expr is not None and not func_expr.captures and not (func_expr.recursive and all_dynamic_args):
             kwargs = {binding.name: binding.expr for binding in keyword_args}
             bindings = []
+            renames = []
             for i, binding in enumerate(func_expr.parameters):
                 if i < len(args):
-                    bindings.append(PolyBinding((binding.name,), <Expression>args[i]))
+                    expr = <Expression>args[i]
                 elif binding.name in kwargs:
-                    bindings.append(PolyBinding((binding.name,), <Expression>kwargs[binding.name]))
+                    expr = <Expression>kwargs[binding.name]
                 elif binding.expr is not None:
-                    bindings.append(PolyBinding((binding.name,), binding.expr))
+                    expr = binding.expr
                 else:
-                    bindings.append(PolyBinding((binding.name,), Literal(null_)))
+                    expr = Literal(null_)
+                if binding.name in context.names:
+                    temp_name = f'__t{j}'
+                    j += 1
+                    while temp_name in context.names:
+                        temp_name = f'__t{j}'
+                        j += 1
+                    bindings.append(PolyBinding((temp_name,), expr))
+                    renames.append(PolyBinding((binding.name,), Name(temp_name)))
+                else:
+                    bindings.append(PolyBinding((binding.name,), expr))
+            bindings.extend(renames)
             if func_expr.recursive:
                 if context.call_depth == 0:
                     context.call_depth = 1
