@@ -56,6 +56,13 @@ class FlitterTransformer(Transformer):
             token = token[:-1]
         return model.Vector.coerce(float(token) * multiplier)
 
+    def TIMECODE(self, token):
+        parts = token.split(':')
+        seconds = 60*int(parts[-2]) + float(parts[-1])
+        if len(parts) == 3:
+            seconds += 3600*int(parts[-3])
+        return model.Vector.coerce(seconds)
+
     def TAG(self, token):
         return intern(str(token)[1:])
 

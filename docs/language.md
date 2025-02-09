@@ -238,6 +238,23 @@ symbol, then that symbol must be used to retrieve the state value. If a string
 has been used, then a symbol *cannot* be used to retrieve the value.
 :::
 
+### Time codes
+
+In addition to normal literal numbers, as described above, **Flitter** supports
+literal *time codes*, which are given as a sequence of hours, minutes and
+seconds separated with colon characters (`:`), with the hours being optional
+and the seconds having an optional decimal fraction. For example:
+
+```flitter
+!video filename='test.mp4' position=02:05.3
+```
+
+Time codes are converted by the parser into a single-item numeric vector
+representing the total number of seconds (*125.3* in the example above).
+The hours component may be an arbitrarily large integer value, the minutes
+and seconds must be in the range *[0,60)*. Time codes may not be combined with
+exponents or SI prefixes, and do not support `_` separators.
+
 ### Nodes
 
 The purpose of any **Flitter** program is to construct a render tree.

@@ -11,6 +11,7 @@ NODE : /![_\p{alpha}][_\p{alnum}]*'*/i
 TAG : /#[_\p{alpha}][_\p{alnum}]*'*/i
 SYMBOL : /:[_\p{alpha}][_\p{alnum}]*'*/i
 NUMBER : /([0-9][_0-9]*(\.[0-9][_0-9]*)?|\.[0-9][_0-9]*)([eE][-+]?[0-9][_0-9]*)?[pnuµmkMGT]?/
+TIMECODE.2 : /([0-9]+:)?[0-5]?[0-9]:[0-5]?[0-9](\.[0-9]+)?/
 STRING : /('''([^'\\]|\\.|'{1,2}(?!'))*'''|'([^'\n\\]|\\.)*'|"""([^"\\]|\\.|"{1,2}(?!"))*"""|"([^"\n\\]|\\.)*")/
 _HASHBANG : /#!.*\r?\n/
 _LPAREN : "("
@@ -133,6 +134,7 @@ named_arg : NAME "=" node -> binding
       | _LPAREN node _RPAREN
 
 literal : NUMBER
+        | TIMECODE
         | STRING
         | SYMBOL
         | NODE
