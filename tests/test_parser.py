@@ -16,7 +16,7 @@ from flitter.language.tree import (
     # Binding, PolyBinding, IfCondition
 )
 from flitter.model import Vector, Node
-from flitter.language.parser import parse
+from flitter.language.parser import parse, ParseError
 
 
 class ParserTestCase(unittest.TestCase):
@@ -46,6 +46,31 @@ class TestAtoms(ParserTestCase):
         self.assertParsesTo("1.23456789e-9", Literal(1.23456789e-9))
         self.assertParsesTo("1.23456789E-99", Literal(1.23456789e-99))
         self.assertParsesTo("1.2_3_4_5_6_7_8_9E1_0_0_0", Literal(1.23456789e1000))
+
+    def test_timecodes(self):
+        self.assertParsesTo("0:0", Literal(0))
+        self.assertParsesTo("0:0.0", Literal(0))
+        self.assertParsesTo("0:0:0", Literal(0))
+        self.assertParsesTo("0:0:0.0", Literal(0))
+        self.assertParsesTo("000:00:00.000", Literal(0))
+        self.assertParsesTo("0:1", Literal(1))
+        self.assertParsesTo("000:00:01.000", Literal(1))
+        self.assertParsesTo("0:0.1", Literal(0.1))
+        self.assertParsesTo("000:00:00.100", Literal(0.1))
+        self.assertParsesTo("1:0", Literal(60))
+        self.assertParsesTo("000:01:00.000", Literal(60))
+        self.assertParsesTo("1:0:0", Literal(3600))
+        self.assertParsesTo("001:00:00.000", Literal(3600))
+        self.assertParsesTo("1:1:1", Literal(3661))
+        self.assertParsesTo("001:01:01.000", Literal(3661))
+        self.assertParsesTo("001:01:01.100", Literal(3661.1))
+        self.assertParsesTo("999:59:59.999", Literal(3599999.999))
+        with self.assertRaises(ParseError):
+            parse("0:0:0:0")
+        with self.assertRaises(ParseError):
+            parse("0:60")
+        with self.assertRaises(ParseError):
+            parse("60:00")
 
     def test_si_prefixes(self):
         self.assertParsesTo('1T', Literal(1e12))
