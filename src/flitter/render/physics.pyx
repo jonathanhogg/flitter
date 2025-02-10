@@ -467,7 +467,7 @@ cdef class PhysicsSystem:
         cdef dict particles_by_id = {}
         cdef set old_state_keys = self.state_keys
         cdef set new_state_keys = set()
-        self.collect(groups, top_group, node, particles_by_id, old_state_keys, new_state_keys, state, state_prefix, clock, seed)
+        self.collect(iteration, groups, top_group, node, particles_by_id, old_state_keys, new_state_keys, state, state_prefix, clock, seed)
         for state_key in old_state_keys:
             state.set_item(state_key, null_)
         self.state_keys = new_state_keys
@@ -505,7 +505,7 @@ cdef class PhysicsSystem:
         time_vector.numbers[0] = clock
         state.set_item(state_prefix.concat(CLOCK), time_vector)
 
-    cdef void collect(self, list groups, PhysicsGroup group, Node node, dict particles_by_id, set old_state_keys, set new_state_keys,
+    cdef void collect(self, int64_t iteration, list groups, PhysicsGroup group, Node node, dict particles_by_id, set old_state_keys, set new_state_keys,
                       StateDict state, Vector state_prefix, double clock, Vector seed):
         cdef Node child
         cdef Vector particle_id, from_particle_id, to_particle_id
@@ -531,12 +531,12 @@ cdef class PhysicsSystem:
                     particle.velocity_state_key = particle.position_state_key.concat(VELOCITY).intern()
                     particle.non_anchor = child.kind is 'particle'
                     if particle.non_anchor:
-                        position = state.get_item(particle.position_state_key)
+                        position = state.get_item(particle.position_state_key) if iteration else null_
                         if position.length == zero.length and position.numbers != NULL:
                             particle.position = position.copy()
                         else:
                             particle.position = child.get_fvec('position', zero.length, zero).copy()
-                        velocity = state.get_item(particle.velocity_state_key)
+                        velocity = state.get_item(particle.velocity_state_key) if iteration else null_
                         if velocity.length == zero.length and velocity.numbers != NULL:
                             particle.velocity = velocity.copy()
                         else:
@@ -561,7 +561,7 @@ cdef class PhysicsSystem:
                 child_group = PhysicsGroup.__new__(PhysicsGroup)
                 child_group.parent = group
                 groups.append(child_group)
-                self.collect(groups, child_group, child, particles_by_id, old_state_keys, new_state_keys, state, state_prefix, clock, seed)
+                self.collect(iteration, groups, child_group, child, particles_by_id, old_state_keys, new_state_keys, state, state_prefix, clock, seed)
             else:
                 strength = child.get_float('strength', 1)
                 ease = child.get_float('ease', 0)
