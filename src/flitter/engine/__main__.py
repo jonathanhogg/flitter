@@ -9,6 +9,7 @@ from pathlib import Path
 import sys
 
 from flitter import configure_logger, __version__, setproctitle
+from ..language.parser import convert_number_to_float, convert_timecode_to_float
 from .control import EngineController
 
 
@@ -17,7 +18,12 @@ def keyvalue(text):
     values = value.split(';')
     for i in range(len(values)):
         try:
-            values[i] = float(values[i])
+            values[i] = convert_number_to_float(values[i])
+            continue
+        except ValueError:
+            pass
+        try:
+            values[i] = convert_timecode_to_float(values[i])
         except ValueError:
             pass
     return key, values

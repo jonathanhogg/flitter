@@ -41,6 +41,24 @@ class ParseError(Exception):
         self.context = context
 
 
+def convert_timecode_to_float(t):
+    parts = t.split(':')
+    if len(parts) not in (2, 3):
+        raise ValueError("Incorrect format")
+    seconds = 60*int(parts[-2]) + float(parts[-1])
+    if len(parts) == 3:
+        seconds += 3600*int(parts[-3])
+    return seconds
+
+
+def convert_number_to_float(t):
+    multiplier = 1
+    if len(t) > 1 and t[-1] in SI_PREFIXES:
+        multiplier = SI_PREFIXES[t[-1]]
+        t = t[:-1]
+    return float(t) * multiplier
+
+
 @v_args(inline=True)
 class FlitterTransformer(Transformer):
     def NAME(self, token):
@@ -50,18 +68,10 @@ class FlitterTransformer(Transformer):
         return model.Vector(model.Node(intern(str(token)[1:])))
 
     def NUMBER(self, token):
-        multiplier = 1
-        if token[-1] in SI_PREFIXES:
-            multiplier = SI_PREFIXES[token[-1]]
-            token = token[:-1]
-        return model.Vector.coerce(float(token) * multiplier)
+        return model.Vector.coerce(convert_number_to_float(token))
 
     def TIMECODE(self, token):
-        parts = token.split(':')
-        seconds = 60*int(parts[-2]) + float(parts[-1])
-        if len(parts) == 3:
-            seconds += 3600*int(parts[-3])
-        return model.Vector.coerce(seconds)
+        return model.Vector.coerce(convert_timecode_to_float(token))
 
     def TAG(self, token):
         return intern(str(token)[1:])
