@@ -119,7 +119,7 @@ class WindowNode:
                 await result
 
     def similar_to(self, node):
-        return node.tags == self.tags
+        return node.tags == self.tags and node.get('id', 1, str) == self.node_id
 
     def create(self, engine, node, resized, **kwargs):
         pass
@@ -138,13 +138,17 @@ class WindowNode:
                 for i, scene_node in enumerate(existing):
                     if type(scene_node) is cls and scene_node.similar_to(child):
                         scene_node = existing.pop(i)
+                        await scene_node.update(engine, child, references, **kwargs)
                         break
                 else:
                     scene_node = cls(self.glctx)
-                await scene_node.update(engine, child, references, **kwargs)
+                    await scene_node.update(engine, child, references, **kwargs)
+                    logger.trace("New window node: {}", scene_node.name)
                 updated.append(scene_node)
         while existing:
-            await existing.pop().destroy()
+            scene_node = existing.pop()
+            logger.trace("Destroy window node: {}", scene_node.name)
+            await scene_node.destroy()
         self.children = updated
 
     def render(self, node, references, **kwargs):
@@ -155,6 +159,9 @@ class WindowNode:
 
     def handle_node(self, engine, node, **kwargs):
         return False
+
+    def __repr__(self):
+        return f"<{self.name}{' id='+self.node_id if self.node_id else ''}>"
 
 
 class Reference(WindowNode):
@@ -174,8 +181,8 @@ class Reference(WindowNode):
         return self._reference.array if self._reference is not None else None
 
     async def update(self, engine, node, references, **kwargs):
-        node_id = node.get('id', 1, str)
-        self._reference = references.get(node_id) if node_id else None
+        self.node_id = node.get('id', 1, str)
+        self._reference = references.get(self.node_id) if self.node_id else None
 
 
 class ProgramNode(WindowNode):
