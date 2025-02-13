@@ -102,6 +102,7 @@ cdef class Barrier:
     cdef double strength
     cdef double power
     cdef double minimum
+    cdef double maximum
 
     @cython.profile(False)
     def __cinit__(self, Node node, double strength, Vector zero):
@@ -111,6 +112,7 @@ cdef class Barrier:
         self.strength = strength
         self.power = max(0, node.get_float('power', 1))
         self.minimum = node.get_float('minimum', node.get_float('min', 0))
+        self.maximum = node.get_float('maximum', node.get_float('max', 0))
 
     @cython.profile(False)
     cdef void apply_distance(self, Particle particle) noexcept nogil:
@@ -128,6 +130,13 @@ cdef class Barrier:
             k *= self.strength
             for i in range(dimensions):
                 particle.force.numbers[i] = particle.force.numbers[i] + self.normal.numbers[i] * k
+        elif self.maximum and distance > self.maximum:
+            k = distance - self.maximum
+            if self.power != 1:
+                k **= self.power
+            k *= self.strength
+            for i in range(dimensions):
+                particle.force.numbers[i] = particle.force.numbers[i] - self.normal.numbers[i] * k
 
     @cython.profile(False)
     cdef void apply_rebound(self, Particle particle, double speed_of_light, double clock, double delta) noexcept nogil:

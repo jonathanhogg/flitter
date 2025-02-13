@@ -487,13 +487,15 @@ mean all of the particle's velocity is absorbed.
 
 - `restitution` - the coefficient of restitution (default is `1`)
 
-The `!barrier` node also accepts the same `'min`, `power`, `strength` and
-`ease` attributes as `!distance`, which will create a minimum distance
+The `!barrier` node also accepts the same `'minimum`, `maximum`, `power`,
+`strength` and `ease` attributes as `!distance`, which will create a distance
 constraint on all particles with respect to the barrier. This can be used to
 create a "soft" boundary. The "hard" bounce condition is still applied if the
 particle crosses the barrier.
 
-- `minimum` (or `min`) - a minimum distance that particles must be from the
+- `minimum` (or `min`) - a minimum distance that particles may be from the
+barrier
+- `maximum` (or `max`) - a maximum distance that particles may be from the
 barrier
 - `power` - the power to which the displacement will be raised (default is `1`)
 - `strength` - force magnitude coefficient (default is `1`)
