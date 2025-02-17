@@ -307,10 +307,8 @@ class CachePath:
                         if len(frames) >= 2 and timestamp >= frames[0].pts and (frames[-1] is None or timestamp < frames[-1].pts):
                             break
                         if frames and timestamp < frames[0].pts:
-                            logger.trace("Discard {} buffered video frames", len(frames))
                             frames = []
                         if len(frames) >= 2 and frames[-1].key_frame and timestamp > 2*frames[-1].pts - frames[0].pts:
-                            logger.trace("Discard {} buffered video frames", len(frames))
                             frames = []
                         if not frames:
                             if decoder is not None:
@@ -322,14 +320,10 @@ class CachePath:
                             try:
                                 frame = next(decoder)
                                 if frame.key_frame:
-                                    logger.trace("Read video key frame @ {:.2f}s", float(frame.pts * stream.time_base))
                                     for i in range(len(frames)-1, 0, -1):
                                         if frames[i].key_frame:
                                             frames = frames[i:]
-                                            logger.trace("Discard {} buffered video frames", i)
                                             break
-                                else:
-                                    logger.trace("Read video frame @ {:.2f}s", float(frame.pts * stream.time_base))
                                 count += 1
                             except StopIteration:
                                 logger.trace("Hit end of video {}", self._path)
@@ -337,7 +331,6 @@ class CachePath:
                                 frame = None
                             if len(frames) == MAX_CACHE_VIDEO_FRAMES:
                                 frames.pop(0)
-                                logger.trace("Discard one buffered video frame (hit maximum)")
                             frames.append(frame)
                             if len(frames) == 1:
                                 logger.trace("Decoding frames from {:.2f}s", float(frames[0].pts * stream.time_base))
