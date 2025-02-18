@@ -21,6 +21,8 @@ logger = name_patch(logger, __name__)
 
 cdef Literal NoOp = Literal(null_)
 cdef int64_t MAX_RECURSIVE_CALL_DEPTH = 500
+cdef set EmptySet = set()
+cdef Vector Two = Vector(2)
 
 
 cdef bint sequence_pack(list expressions):
@@ -84,7 +86,7 @@ cdef class Expression:
         return expr
 
     def unbound_names(self, bound_names=None):
-        return self._unbound_names(set(bound_names) if bound_names is not None else set())
+        return self._unbound_names(set(bound_names) if bound_names is not None else EmptySet)
 
     cdef void _compile(self, Program program, list lnames):
         raise NotImplementedError()
@@ -170,7 +172,7 @@ cdef class Export(Expression):
         return self
 
     cdef set _unbound_names(self, set names):
-        return set([None])
+        return EmptySet
 
     def __repr__(self):
         return f'Export({self.static_exports!r})'
@@ -243,7 +245,7 @@ cdef class Import(Expression):
         return Import(tuple(remaining), filename, expr)
 
     cdef set _unbound_names(self, set names):
-        return self.filename._unbound_names(names) | self.expr._unbound_names(names | set(self.names))
+        return self.filename._unbound_names(names).union(self.expr._unbound_names(names.union(self.names)))
 
     def __repr__(self):
         return f'Import({self.names!r}, {self.filename!r}, {self.expr!r})'
@@ -291,7 +293,7 @@ cdef class Sequence(Expression):
         cdef set unbound = set()
         cdef Expression expr
         for expr in self.expressions:
-            unbound |= expr._unbound_names(names)
+            unbound.update(expr._unbound_names(names))
         return unbound
 
     def __repr__(self):
@@ -311,7 +313,7 @@ cdef class Literal(Expression):
         return self
 
     cdef set _unbound_names(self, set names):
-        return set()
+        return EmptySet
 
     def __repr__(self):
         return f'Literal({self.value!r})'
@@ -357,10 +359,9 @@ cdef class Name(Expression):
         return self
 
     cdef set _unbound_names(self, set names):
-        cdef set unbound = set()
         if self.name not in names:
-            unbound.add(self.name)
-        return unbound
+            return set([self.name])
+        return EmptySet
 
     def __repr__(self):
         return f'Name({self.name!r})'
@@ -427,7 +428,7 @@ cdef class Range(Expression):
         return Range(start, stop, step)
 
     cdef set _unbound_names(self, set names):
-        return self.start._unbound_names(names) | self.stop._unbound_names(names) | self.step._unbound_names(names)
+        return self.start._unbound_names(names).union(self.stop._unbound_names(names)).union(self.step._unbound_names(names))
 
     def __repr__(self):
         return f'Range({self.start!r}, {self.stop!r}, {self.step!r})'
@@ -574,11 +575,14 @@ cdef class BinaryOperation(Expression):
     cdef Expression _simplify(self, Context context):
         cdef Expression left = self.left._simplify(context)
         cdef Expression right = self.right._simplify(context)
-        cdef bint literal_left = isinstance(left, Literal)
-        cdef bint literal_right = isinstance(right, Literal)
+        cdef bint literal_left = type(left) is Literal
+        cdef bint literal_right = type(right) is Literal
         cdef Expression expr
+        cdef Literal literal
         if literal_left and literal_right:
-            return Literal(self.op((<Literal>left).value, (<Literal>right).value))
+            literal = Literal.__new__(Literal)
+            literal.value = self.op((<Literal>left).value, (<Literal>right).value)
+            return literal
         elif literal_left:
             if (expr := self.constant_left((<Literal>left).value, right)) is not None:
                 return expr._simplify(context)
@@ -589,7 +593,11 @@ cdef class BinaryOperation(Expression):
             return expr._simplify(context)
         if left is self.left and right is self.right:
             return self
-        return type(self)(left, right)
+        cdef type T = type(self)
+        cdef BinaryOperation binary = <BinaryOperation>T.__new__(T)
+        binary.left = left
+        binary.right = right
+        return binary
 
     cdef Vector op(self, Vector left, Vector right):
         raise NotImplementedError()
@@ -604,7 +612,13 @@ cdef class BinaryOperation(Expression):
         return None
 
     cdef set _unbound_names(self, set names):
-        return self.left._unbound_names(names) | self.right._unbound_names(names)
+        cdef set left = self.left._unbound_names(names)
+        cdef set right = self.right._unbound_names(names)
+        if not left:
+            return right
+        if not right:
+            return left
+        return left.union(right)
 
     def __repr__(self):
         return f'{self.__class__.__name__}({self.left!r}, {self.right!r})'
@@ -613,11 +627,13 @@ cdef class BinaryOperation(Expression):
 cdef class MathsBinaryOperation(BinaryOperation):
     cdef Expression _simplify(self, Context context):
         cdef Expression expr=BinaryOperation._simplify(self, context)
+        cdef MathsBinaryOperation binary
         if isinstance(expr, MathsBinaryOperation):
-            if isinstance(expr.left, Positive):
-                return (<Expression>type(expr)(expr.left.expr, expr.right))._simplify(context)
-            elif isinstance(expr.right, Positive):
-                return (<Expression>type(expr)(expr.left, expr.right.expr))._simplify(context)
+            binary = <MathsBinaryOperation>expr
+            if type(binary.left) is Positive:
+                return (<Expression>type(binary)((<Positive>binary.left).expr, binary.right))._simplify(context)
+            elif type(binary.right) is Positive:
+                return (<Expression>type(binary)(binary.left, (<Positive>binary.right).expr))._simplify(context)
         return expr
 
 
@@ -633,9 +649,9 @@ cdef class Add(MathsBinaryOperation):
             program.add()
 
     cdef Expression constant_left(self, Vector left, Expression right):
-        if left.eq(null_):
+        if left.length == 0:
             return NoOp
-        if left.eq(false_):
+        if left.eq(false_) is true_:
             return Positive(right)
 
     cdef Expression constant_right(self, Expression left, Vector right):
@@ -658,13 +674,13 @@ cdef class Subtract(MathsBinaryOperation):
         program.sub()
 
     cdef Expression constant_left(self, Vector left, Expression right):
-        if left.eq(null_):
+        if left.length == 0:
             return NoOp
-        if left.eq(false_):
+        if left.eq(false_) is true_:
             return Negative(right)
 
     cdef Expression constant_right(self, Expression left, Vector right):
-        if right.eq(false_):
+        if right.eq(false_) is true_:
             return Positive(left)
         return Add(left, Literal(right.neg()))
 
@@ -681,11 +697,11 @@ cdef class Multiply(MathsBinaryOperation):
         program.mul()
 
     cdef Expression constant_left(self, Vector left, Expression right):
-        if left.eq(null_):
+        if left.length == 0:
             return NoOp
-        if left.eq(true_):
+        if left.eq(true_) is true_:
             return Positive(right)
-        if left.eq(minusone_):
+        if left.eq(minusone_) is true_:
             return Negative(right)
         cdef MathsBinaryOperation maths
         if isinstance(right, Add) or isinstance(right, Subtract):
@@ -717,13 +733,13 @@ cdef class Divide(MathsBinaryOperation):
         program.truediv()
 
     cdef Expression constant_left(self, Vector left, Expression right):
-        if left.eq(null_):
+        if left.length == 0:
             return NoOp
 
     cdef Expression constant_right(self, Expression left, Vector right):
-        if right.eq(null_):
+        if right.length == 0:
             return NoOp
-        if right.eq(true_):
+        if right.eq(true_) is true_:
             return Positive(left)
         return Multiply(Literal(true_.truediv(right)), left)
 
@@ -736,13 +752,13 @@ cdef class FloorDivide(MathsBinaryOperation):
         program.floordiv()
 
     cdef Expression constant_left(self, Vector left, Expression right):
-        if left.eq(null_):
+        if left.length == 0:
             return NoOp
 
     cdef Expression constant_right(self, Expression left, Vector right):
-        if right.eq(null_):
+        if right.length == 0:
             return NoOp
-        if right.eq(true_):
+        if right.eq(true_) is true_:
             return Floor(left)
 
 
@@ -754,13 +770,13 @@ cdef class Modulo(MathsBinaryOperation):
         program.mod()
 
     cdef Expression constant_left(self, Vector left, Expression right):
-        if left.eq(null_):
+        if left.length == 0:
             return NoOp
 
     cdef Expression constant_right(self, Expression left, Vector right):
-        if right.eq(null_):
+        if right.length == 0:
             return NoOp
-        if right.eq(true_):
+        if right.eq(true_) is true_:
             return Fract(left)
 
 
@@ -770,7 +786,7 @@ cdef class Power(MathsBinaryOperation):
 
     cdef void _compile_op(self, Program program):
         cdef Instruction instr = program.last_instruction()
-        if instr.code == OpCode.Literal and (<InstructionVector>instr).value.eq(Vector(2)):
+        if instr.code == OpCode.Literal and (<InstructionVector>instr).value.eq(Two) is true_:
             program.pop_instruction()
             program.dup()
             program.mul()
@@ -778,13 +794,13 @@ cdef class Power(MathsBinaryOperation):
             program.pow()
 
     cdef Expression constant_left(self, Vector left, Expression right):
-        if left.eq(null_):
+        if left.length == 0:
             return NoOp
 
     cdef Expression constant_right(self, Expression left, Vector right):
-        if right.eq(null_):
+        if right.length == 0:
             return NoOp
-        if right.eq(true_):
+        if right.eq(true_) is true_:
             return Positive(left)
 
 
@@ -946,7 +962,7 @@ cdef class Slice(Expression):
         return Slice(expr, index)
 
     cdef set _unbound_names(self, set names):
-        return self.expr._unbound_names(names) | self.index._unbound_names(names)
+        return self.expr._unbound_names(names).union(self.index._unbound_names(names))
 
     def __repr__(self):
         return f'Slice({self.expr!r}, {self.index!r})'
@@ -1177,15 +1193,18 @@ cdef class Attributes(NodeModifier):
         cdef Expression node = self
         cdef list bindings = []
         cdef Attributes attrs
-        cdef Binding binding
+        cdef Binding binding, simplified
         cdef Expression expr
         cdef bint touched = False
         while isinstance(node, Attributes):
             attrs = <Attributes>node
             for binding in reversed(attrs.bindings):
                 expr = binding.expr._simplify(context)
-                bindings.append(Binding(binding.name, expr))
                 touched |= expr is not binding.expr
+                simplified = Binding.__new__(Binding)
+                simplified.name = binding.name
+                simplified.expr = expr
+                bindings.append(simplified)
             node = attrs.node
         node = node._simplify(context)
         touched |= node is not self.node
@@ -1200,7 +1219,7 @@ cdef class Attributes(NodeModifier):
                 for obj in nodes.objects:
                     objects.append((<Node>obj).copy() if isinstance(obj, Node) else obj)
                 while bindings and isinstance((<Binding>bindings[-1]).expr, Literal):
-                    binding = bindings.pop()
+                    binding = <Binding>bindings.pop()
                     value = (<Literal>binding.expr).value
                     for obj in objects:
                         if isinstance(obj, Node):
@@ -1279,7 +1298,7 @@ cdef class Append(NodeModifier):
         return Append(node, children)
 
     cdef set _unbound_names(self, set names):
-        return self.node._unbound_names(names) | self.children._unbound_names(names)
+        return self.node._unbound_names(names).union(self.children._unbound_names(names))
 
     def __repr__(self):
         return f'{self.__class__.__name__}({self.node!r}, {self.children!r})'
@@ -1349,7 +1368,7 @@ cdef class Let(Expression):
         cdef Vector value
         cdef str name, existing_name
         cdef int64_t i, j, n
-        cdef touched = False
+        cdef bint touched = False
         cdef set shadowed=set(), discarded=set()
         while isinstance(body, Let):
             bindings.extend((<Let>body).bindings)
@@ -1375,7 +1394,7 @@ cdef class Let(Expression):
             if isinstance(expr, Literal):
                 value = (<Literal>expr).value
                 if n == 1:
-                    name = binding.names[0]
+                    name = <str>binding.names[0]
                     context.names[name] = value
                     discarded.add(name)
                 else:
@@ -1385,7 +1404,7 @@ cdef class Let(Expression):
                 touched = True
                 continue
             if n == 1 and isinstance(expr, Name):
-                name = binding.names[0]
+                name = <str>binding.names[0]
                 if (<Name>expr).name == name:
                     touched = True
                     continue
@@ -1411,19 +1430,6 @@ cdef class Let(Expression):
             context.names = saved
         if isinstance(sbody, Literal):
             return sbody
-        cdef set unbound = sbody._unbound_names(set())
-        cdef list original
-        if None not in unbound:
-            original = remaining
-            remaining = []
-            for binding in reversed(original):
-                for name in binding.names:
-                    if name in unbound:
-                        remaining.insert(0, binding)
-                        unbound |= binding.expr.unbound_names(set())
-                        break
-                else:
-                    touched = True
         if isinstance(sbody, Let):
             remaining.extend((<Let>sbody).bindings)
             sbody = (<Let>sbody).body
@@ -1514,7 +1520,7 @@ cdef class For(Expression):
     cdef set _unbound_names(self, set names):
         cdef set unbound = set()
         unbound.update(self.source._unbound_names(names))
-        unbound.update(self.body._unbound_names(names | set(self.names)))
+        unbound.update(self.body._unbound_names(names.union(self.names)))
         return unbound
 
     def __repr__(self):
@@ -1676,14 +1682,14 @@ cdef class Function(Expression):
             context.names = saved
         cdef set captures = body._unbound_names(bound_names)
         touched |= body is not self.body
-        cdef recursive = self.name in captures
+        cdef bint recursive = self.name in captures
         if recursive:
             captures.discard(self.name)
         touched |= recursive != self.recursive
         cdef tuple captures_t = tuple(captures)
         cdef bint inlineable = literal and not captures_t
         touched |= inlineable != self.inlineable
-        touched |= captures_t != self.captures
+        touched |= <bint>(captures_t != self.captures)
         if not touched:
             return self
         return Function(self.name, tuple(parameters), body, captures_t, inlineable, recursive)

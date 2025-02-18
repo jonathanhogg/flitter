@@ -1016,28 +1016,6 @@ class TestLet(SimplifierTestCase):
         """Let of a name to that name"""
         self.assertSimplifiesTo(Let((PolyBinding(('x',), Name('x')),), Add(Name('x'), Name('y'))), Add(Name('x'), Name('y')), dynamic={'x', 'y'})
 
-    def test_unused_let(self):
-        """Let of a name that is not free in the body is removed"""
-        self.assertSimplifiesTo(Let((PolyBinding(('x',), Add(Name('z'), Literal(1))), PolyBinding(('y',), Add(Name('z'), Literal(2)))), Name('y')),
-                                Let((PolyBinding(('y',), Add(Name('z'), Literal(2))),), Name('y')), dynamic={'z'})
-
-    def test_let_chained(self):
-        """Let of a name used in another let binding that is retained must also be retained"""
-        self.assertSimplifiesTo(Let((PolyBinding(('x',), Add(Name('z'), Literal(1))), PolyBinding(('y',), Add(Name('x'), Literal(2)))), Name('y')),
-                                Let((PolyBinding(('x',), Add(Name('z'), Literal(1))), PolyBinding(('y',), Add(Name('x'), Literal(2)))), Name('y')),
-                                dynamic={'z'})
-
-    def test_unused_let_chained(self):
-        """Let of a name used in another let binding that is discarded may also be discarded"""
-        self.assertSimplifiesTo(Let((PolyBinding(('x',), Add(Name('z'), Literal(1))), PolyBinding(('y',), Add(Name('x'), Literal(2)))), Name('z')),
-                                Name('z'), dynamic={'z'})
-
-    def test_unused_let_export(self):
-        """Let of a name that is not free in the body will not be removed if it will be exported"""
-        self.assertSimplifiesTo(Let((PolyBinding(('x',), Add(Name('z'), Literal(1))),), Export()),
-                                Let((PolyBinding(('x',), Add(Name('z'), Literal(1))),), Export()),
-                                dynamic={'z'}, unbound={'z', None})
-
 
 class TestCall(SimplifierTestCase):
     def test_dynamic(self):
@@ -1294,7 +1272,8 @@ let y=10+(x or 3)
 
     def test_import_inlining(self):
         self.assertSimplifiesTo(Import(('f',), Literal(str(self.test_module)), Call(Name('f'), (Name('y'),), ())),
-                                Multiply(Name('y'), Literal(2)),
+                                Let((PolyBinding(('f',), Function('f', (Binding('x', None),), Multiply(Name('x'), Literal(2)), (), True, False)),),
+                                    Multiply(Name('y'), Literal(2))),
                                 dynamic={'y'}, with_dependencies={self.test_module})
 
 
@@ -1347,7 +1326,7 @@ class TestExport(SimplifierTestCase):
         self.assertSimplifiesTo(Export(), Export({'x': Vector(5)}), static={'x': 5})
 
     def test_let_explicit(self):
-        self.assertSimplifiesTo(Let((PolyBinding(('x',), Literal(5)),), Export()), Export({'x': Vector(5)}), unbound=set([None]))
+        self.assertSimplifiesTo(Let((PolyBinding(('x',), Literal(5)),), Export()), Export({'x': Vector(5)}))
 
 
 class TestTop(SimplifierTestCase):
