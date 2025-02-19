@@ -10,6 +10,8 @@ in unrolling loops, simpler does not necessarily mean "smaller."
 from loguru import logger
 
 from libc.stdint cimport int64_t
+from cpython cimport PyObject
+from cpython.dict cimport PyDict_GetItem
 
 from .. import name_patch
 from ..cache import SharedCache
@@ -28,14 +30,14 @@ cdef Vector Two = Vector(2)
 cdef bint sequence_pack(list expressions):
     cdef Expression expr
     cdef bint touched = False
-    cdef list vectors, todo=[]
-    while expressions:
-        todo.append(expressions.pop())
+    cdef list vectors, todo=expressions.copy()
+    todo.reverse()
+    expressions.clear()
     while todo:
         expr = <Expression>todo.pop()
-        if todo and type(expr) is Literal:
+        if type(expr) is Literal:
             vectors = [(<Literal>expr).value]
-            while todo and type(todo[len(todo)-1]) is Literal:
+            while todo and type(todo[-1]) is Literal:
                 vectors.append((<Literal>todo.pop()).value)
             if len(vectors) > 1:
                 expr = Literal(Vector._compose(vectors))
@@ -313,35 +315,48 @@ cdef class Name(Expression):
         self.unbound_names = frozenset([name])
 
     cdef void _compile(self, Program program, list lnames):
-        cdef int64_t i, n=len(lnames)-1
-        for i in range(len(lnames)):
-            if self.name == <str>lnames[n-i]:
+        cdef int64_t i
+        cdef PyObject* ptr
+        for i, name in enumerate(reversed(lnames)):
+            if self.name == <str>name:
                 program.local_load(i)
                 break
         else:
-            if self.name in static_builtins:
-                program.literal(static_builtins[self.name])
-            elif self.name in dynamic_builtins:
-                program.literal(dynamic_builtins[self.name])
+            if (ptr := PyDict_GetItem(static_builtins, self.name)) != NULL:
+                program.literal(<Vector>ptr)
+            elif (ptr := PyDict_GetItem(dynamic_builtins, self.name)) != NULL:
+                program.literal(<Vector>ptr)
             else:
                 program.compiler_errors.add(f"Unbound name '{self.name}'")
                 program.literal(null_)
 
     cdef Expression _simplify(self, Context context):
-        if self.name in context.names:
-            value = context.names[self.name]
+        cdef str name = self.name
+        cdef PyObject* ptr
+        cdef Literal literal
+        if (ptr := PyDict_GetItem(context.names, name)) != NULL:
+            value = <object>ptr
             if value is None or type(value) is Function:
                 return self
             elif type(value) is Name:
                 return (<Name>value)._simplify(context)
             elif type(value) is Vector:
-                return Literal((<Vector>value).copy())
+                literal = Literal.__new__(Literal)
+                literal.value = (<Vector>value).copy()
+                literal.unbound_names = EmptySet
+                return literal
             else:
-                return Literal(value)
-        elif (value := static_builtins.get(self.name)) is not None:
-            return Literal(value)
-        elif self.name not in dynamic_builtins:
-            context.errors.add(f"Unbound name '{self.name}'")
+                literal = Literal.__new__(Literal)
+                literal.value = Vector._coerce(value)
+                literal.unbound_names = EmptySet
+                return literal
+        elif (ptr := PyDict_GetItem(static_builtins, name)) != NULL:
+            literal = Literal.__new__(Literal)
+            literal.value = <Vector>ptr
+            literal.unbound_names = EmptySet
+            return literal
+        elif PyDict_GetItem(dynamic_builtins, name) == NULL:
+            context.errors.add(f"Unbound name '{name}'")
             return NoOp
         return self
 
@@ -957,11 +972,11 @@ cdef class Call(Expression):
         cdef set unbound = set()
         unbound.update(self.function.unbound_names)
         cdef Expression arg
-        if self.args:
+        if self.args is not None:
             for arg in self.args:
                 unbound.update(arg.unbound_names)
         cdef Binding binding
-        if self.keyword_args:
+        if self.keyword_args is not None:
             for binding in self.keyword_args:
                 unbound.update(binding.expr.unbound_names)
         self.unbound_names = frozenset(unbound)
@@ -969,11 +984,11 @@ cdef class Call(Expression):
     cdef void _compile(self, Program program, list lnames):
         cdef Expression expr
         cdef list names = []
-        if self.args:
+        if self.args is not None:
             for expr in self.args:
                 expr._compile(program, lnames)
         cdef Binding keyword_arg
-        if self.keyword_args:
+        if self.keyword_args is not None:
             for keyword_arg in self.keyword_args:
                 names.append(keyword_arg.name)
                 keyword_arg.expr._compile(program, lnames)
@@ -981,10 +996,10 @@ cdef class Call(Expression):
                 and (<Literal>self.function).value.length == 1 \
                 and (<Literal>self.function).value.objects is not None \
                 and not type(function := (<Literal>self.function).value.objects[0]) is Function:
-            program.call_fast(function, len(self.args) if self.args else 0)
+            program.call_fast(function, len(self.args) if self.args is not None else 0)
         else:
             self.function._compile(program, lnames)
-            program.call(len(self.args) if self.args else 0, tuple(names) if names else None)
+            program.call(len(self.args) if self.args is not None else 0, tuple(names) if names else None)
 
     cdef Expression _simplify(self, Context context):
         cdef Expression function = self.function._simplify(context)
@@ -1002,7 +1017,7 @@ cdef class Call(Expression):
         cdef bint all_literal_args=True, all_dynamic_args=True
         cdef Expression arg, sarg, expr
         cdef list args = []
-        if self.args:
+        if self.args is not None:
             for arg in self.args:
                 sarg = arg._simplify(context)
                 touched |= sarg is not arg
@@ -1012,12 +1027,18 @@ cdef class Call(Expression):
                 else:
                     all_literal_args = False
         cdef list keyword_args = []
-        cdef Binding binding
-        if self.keyword_args:
+        cdef Binding binding, sbinding
+        if self.keyword_args is not None:
             for binding in self.keyword_args:
                 arg = binding.expr._simplify(context)
-                touched |= arg is not binding.expr
-                keyword_args.append(Binding(binding.name, arg))
+                if arg is not binding.expr:
+                    sbinding = Binding.__new__(Binding)
+                    sbinding.name = binding.name
+                    sbinding.expr = arg
+                    keyword_args.append(sbinding)
+                    touched = True
+                else:
+                    keyword_args.append(binding)
                 if type(arg) is Literal:
                     all_dynamic_args = False
                 else:
@@ -1025,72 +1046,83 @@ cdef class Call(Expression):
         cdef list bindings, renames
         cdef dict kwargs
         cdef int64_t i, j=0
-        cdef str temp_name
-        if func_expr is not None and not func_expr.captures and not (func_expr.recursive and all_dynamic_args):
-            kwargs = {binding.name: binding.expr for binding in keyword_args}
-            bindings = []
-            renames = []
-            for i, binding in enumerate(func_expr.parameters):
-                if i < len(args):
-                    expr = <Expression>args[i]
-                elif binding.name in kwargs:
-                    expr = <Expression>kwargs[binding.name]
-                elif binding.expr is not None:
-                    expr = binding.expr
-                else:
-                    expr = Literal(null_)
-                if binding.name in context.names:
-                    temp_name = f'__t{j}'
-                    j += 1
-                    while temp_name in context.names:
-                        temp_name = f'__t{j}'
-                        j += 1
-                    bindings.append(PolyBinding((temp_name,), expr))
-                    renames.append(PolyBinding((binding.name,), Name(temp_name)))
-                else:
-                    bindings.append(PolyBinding((binding.name,), expr))
-            bindings.extend(renames)
-            if func_expr.recursive:
-                if context.call_depth == 0:
-                    context.call_depth = 1
-                    try:
-                        return Let(tuple(bindings), func_expr.body)._simplify(context)
-                    except RecursionError:
-                        pass
-                    context.call_depth = 0
-                elif context.call_depth == MAX_RECURSIVE_CALL_DEPTH:
-                    raise RecursionError()
-                else:
-                    context.call_depth += 1
-                    expr = Let(tuple(bindings), func_expr.body)._simplify(context)
-                    context.call_depth -= 1
-                    return expr
-            else:
-                return Let(tuple(bindings), func_expr.body)._simplify(context)
-        cdef list vector_args, results
-        cdef Literal literal_arg
+        cdef str name
+        cdef tuple vector_args
+        cdef Vector result
+        cdef list results
+        cdef Literal literal
+        cdef PolyBinding polybinding
         if literal_func and all_literal_args:
-            vector_args = [literal_arg.value for literal_arg in args]
+            vector_args = tuple([literal.value for literal in args])
             kwargs = {binding.name: (<Literal>binding.expr).value for binding in keyword_args}
             results = []
             if (<Literal>function).value.objects is not None:
                 for func in (<Literal>function).value.objects:
                     if callable(func):
                         try:
-                            assert not hasattr(func, 'context_func')
-                            results.append(func(*vector_args, **kwargs))
+                            result = func(*vector_args, **kwargs)
                         except Exception as exc:
                             context.errors.add(f"Error calling {func.__name__}: {str(exc)}")
+                        else:
+                            results.append(result)
                     else:
                         context.errors.add(f"{func!r} is not callable")
             elif (<Literal>function).value.numbers != NULL:
                 for i in range((<Literal>function).value.length):
                     context.errors.add(f"{(<Literal>function).value.numbers[i]!r} is not callable")
-            return Literal(Vector._compose(results))
+            literal = Literal.__new__(Literal)
+            literal.value = Vector._compose(results)
+            literal.unbound_names = EmptySet
+            return literal
+        if func_expr is not None and not func_expr.captures and not (func_expr.recursive and all_dynamic_args):
+            kwargs = {binding.name: binding.expr for binding in keyword_args}
+            bindings = []
+            renames = []
+            for i, binding in enumerate(func_expr.parameters):
+                name = binding.name
+                if i < len(args):
+                    expr = <Expression>args[i]
+                elif name in kwargs:
+                    expr = <Expression>kwargs[name]
+                elif binding.expr is not None:
+                    expr = binding.expr
+                else:
+                    expr = NoOp
+                while name in context.names:
+                    name = f'__t{j}'
+                    j += 1
+                polybinding = PolyBinding.__new__(PolyBinding)
+                polybinding.names = (name,)
+                polybinding.expr = expr
+                bindings.append(polybinding)
+                if name is not binding.name:
+                    polybinding = PolyBinding.__new__(PolyBinding)
+                    polybinding.names = (binding.name,)
+                    polybinding.expr = Name(name)
+                    renames.append(polybinding)
+            bindings.extend(renames)
+            expr = Let(tuple(bindings), func_expr.body)
+            if func_expr.recursive:
+                if context.call_depth == 0:
+                    context.call_depth = 1
+                    try:
+                        return expr._simplify(context)
+                    except RecursionError:
+                        logger.trace("Abandoned inline attempt of recursive function: {}", func_expr.name)
+                    context.call_depth = 0
+                elif context.call_depth == MAX_RECURSIVE_CALL_DEPTH:
+                    raise RecursionError()
+                else:
+                    context.call_depth += 1
+                    expr = expr._simplify(context)
+                    context.call_depth -= 1
+                    return expr
+            else:
+                return expr._simplify(context)
         if type(function) is Literal and len(args) == 1:
             if (<Literal>function).value == static_builtins['ceil']:
                 return Ceil(args[0])
-            elif (<Literal>function).value == static_builtins['floor']:
+            if (<Literal>function).value == static_builtins['floor']:
                 return Floor(args[0])
             if (<Literal>function).value == static_builtins['fract']:
                 return Fract(args[0])
@@ -1343,7 +1375,7 @@ cdef class Let(Expression):
         cdef PolyBinding binding
         cdef Expression expr, body=self.body
         cdef Vector value
-        cdef str name, existing_name
+        cdef str name, rename
         cdef int64_t i, j, n
         cdef bint touched = False
         cdef set shadowed=set(), discarded=set()
@@ -1352,20 +1384,20 @@ cdef class Let(Expression):
             body = (<Let>body).body
             touched = True
         cdef dict renames = {}
-        for existing_name, existing_value in context.names.items():
-            if type(existing_value) is Name:
-                name = (<Name>existing_value).name
-                if name in renames:
-                    (<list>renames[name]).append(existing_name)
+        for name, name_value in context.names.items():
+            if type(name_value) is Name:
+                rename = (<Name>name_value).name
+                if rename in renames:
+                    (<list>renames[rename]).append(name)
                 else:
-                    renames[name] = [existing_name]
+                    renames[rename] = [name]
         for i, binding in enumerate(bindings):
-            for name in binding.names:
-                if name not in shadowed and name in renames:
-                    for existing_name in <list>renames.pop(name):
-                        context.names[existing_name] = None
-                        remaining.append(PolyBinding((existing_name,), Name(name)))
-                    shadowed.add(name)
+            for rename in binding.names:
+                if rename not in shadowed and rename in renames:
+                    for name in <list>renames.pop(rename):
+                        context.names[name] = None
+                        remaining.append(PolyBinding((name,), Name(rename)))
+                    shadowed.add(rename)
                     touched = True
             n = len(binding.names)
             expr = binding.expr._simplify(context)
@@ -1388,13 +1420,13 @@ cdef class Let(Expression):
                 continue
             if n == 1 and type(expr) is Name:
                 name = <str>binding.names[0]
-                existing_name = (<Name>expr).name
-                if existing_name == name:
+                rename = (<Name>expr).name
+                if name == rename:
                     touched = True
                     continue
                 for j in range(i+1, len(bindings)):
-                    if existing_name in (<Binding>bindings[j]).names:
-                        shadowed.add(existing_name)
+                    if rename in (<Binding>bindings[j]).names:
+                        shadowed.add(rename)
                         break
                 else:
                     context.names[name] = expr
