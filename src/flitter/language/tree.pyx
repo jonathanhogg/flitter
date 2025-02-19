@@ -19,9 +19,9 @@ from .vm cimport Program, Instruction, InstructionInt, InstructionVector, OpCode
 
 logger = name_patch(logger, __name__)
 
+cdef frozenset EmptySet = frozenset()
 cdef Literal NoOp = Literal(null_)
 cdef int64_t MAX_RECURSIVE_CALL_DEPTH = 500
-cdef set EmptySet = set()
 cdef Vector Two = Vector(2)
 
 
@@ -50,6 +50,8 @@ cdef bint sequence_pack(list expressions):
 
 
 cdef class Expression:
+    cdef readonly frozenset unbound_names
+
     def compile(self, tuple initial_lnames=(), set initial_errors=None, bint log_errors=True):
         cdef Program program = Program.__new__(Program, initial_lnames)
         if initial_errors:
@@ -85,16 +87,10 @@ cdef class Expression:
                 logger.warning("Simplifier error: {}", error)
         return expr
 
-    def unbound_names(self, bound_names=None):
-        return self._unbound_names(set(bound_names) if bound_names is not None else EmptySet)
-
     cdef void _compile(self, Program program, list lnames):
         raise NotImplementedError()
 
     cdef Expression _simplify(self, Context context):
-        raise NotImplementedError()
-
-    cdef set _unbound_names(self, set names):
         raise NotImplementedError()
 
 
@@ -107,6 +103,7 @@ cdef class Top(Expression):
         self.pragmas = pragmas
         self.body = body
         self.dependencies = dependencies if dependencies is not None else set()
+        self.unbound_names = self.body.unbound_names
 
     cdef void _compile(self, Program program, list lnames):
         cdef Binding binding
@@ -128,9 +125,6 @@ cdef class Top(Expression):
             return self
         return Top(self.pragmas, body, self.dependencies ^ context.dependencies)
 
-    cdef set _unbound_names(self, set names):
-        return self.body._unbound_names(names)
-
     def __repr__(self):
         return f'Top({self.pragmas!r}, {self.body!r}, {self.dependencies!r})'
 
@@ -140,6 +134,7 @@ cdef class Export(Expression):
 
     def __init__(self, dict static_exports=None):
         self.static_exports = static_exports
+        self.unbound_names = frozenset([None])
 
     cdef void _compile(self, Program program, list lnames):
         cdef str name
@@ -171,9 +166,6 @@ cdef class Export(Expression):
             return Export(static_exports)
         return self
 
-    cdef set _unbound_names(self, set names):
-        return EmptySet
-
     def __repr__(self):
         return f'Export({self.static_exports!r})'
 
@@ -187,6 +179,7 @@ cdef class Import(Expression):
         self.names = names
         self.filename = filename
         self.expr = expr
+        self.unbound_names = self.filename.unbound_names.union(self.expr.unbound_names.difference(self.names))
 
     cdef void _compile(self, Program program, list lnames):
         self.filename._compile(program, lnames)
@@ -244,9 +237,6 @@ cdef class Import(Expression):
             return self
         return Import(tuple(remaining), filename, expr)
 
-    cdef set _unbound_names(self, set names):
-        return self.filename._unbound_names(names).union(self.expr._unbound_names(names.union(self.names)))
-
     def __repr__(self):
         return f'Import({self.names!r}, {self.filename!r}, {self.expr!r})'
 
@@ -256,6 +246,11 @@ cdef class Sequence(Expression):
 
     def __init__(self, tuple expressions):
         self.expressions = expressions
+        cdef set unbound = set()
+        cdef Expression expr
+        for expr in self.expressions:
+            unbound.update(expr.unbound_names)
+        self.unbound_names = frozenset(unbound)
 
     cdef void _compile(self, Program program, list lnames):
         cdef Expression expr
@@ -289,13 +284,6 @@ cdef class Sequence(Expression):
             return self
         return Sequence(tuple(expressions))
 
-    cdef set _unbound_names(self, set names):
-        cdef set unbound = set()
-        cdef Expression expr
-        for expr in self.expressions:
-            unbound.update(expr._unbound_names(names))
-        return unbound
-
     def __repr__(self):
         return f'Sequence({self.expressions!r})'
 
@@ -305,15 +293,13 @@ cdef class Literal(Expression):
 
     def __init__(self, value):
         self.value = Vector._coerce(value)
+        self.unbound_names = EmptySet
 
     cdef void _compile(self, Program program, list lnames):
         program.literal(self.value.intern())
 
     cdef Expression _simplify(self, Context context):
         return self
-
-    cdef set _unbound_names(self, set names):
-        return EmptySet
 
     def __repr__(self):
         return f'Literal({self.value!r})'
@@ -324,6 +310,7 @@ cdef class Name(Expression):
 
     def __init__(self, str name):
         self.name = name
+        self.unbound_names = frozenset([name])
 
     cdef void _compile(self, Program program, list lnames):
         cdef int64_t i, n=len(lnames)-1
@@ -358,11 +345,6 @@ cdef class Name(Expression):
             return NoOp
         return self
 
-    cdef set _unbound_names(self, set names):
-        if self.name not in names:
-            return set([self.name])
-        return EmptySet
-
     def __repr__(self):
         return f'Name({self.name!r})'
 
@@ -372,6 +354,7 @@ cdef class Lookup(Expression):
 
     def __init__(self, Expression key):
         self.key = key
+        self.unbound_names = self.key.unbound_names
 
     cdef void _compile(self, Program program, list lnames):
         if isinstance(self.key, Literal):
@@ -391,9 +374,6 @@ cdef class Lookup(Expression):
             return self
         return Lookup(key)
 
-    cdef set _unbound_names(self, set names):
-        return self.key._unbound_names(names)
-
     def __repr__(self):
         return f'Lookup({self.key!r})'
 
@@ -407,6 +387,7 @@ cdef class Range(Expression):
         self.start = start
         self.stop = stop
         self.step = step
+        self.unbound_names = self.start.unbound_names.union(self.stop.unbound_names).union(self.step.unbound_names)
 
     cdef void _compile(self, Program program, list lnames):
         self.start._compile(program, lnames)
@@ -427,9 +408,6 @@ cdef class Range(Expression):
             return self
         return Range(start, stop, step)
 
-    cdef set _unbound_names(self, set names):
-        return self.start._unbound_names(names).union(self.stop._unbound_names(names)).union(self.step._unbound_names(names))
-
     def __repr__(self):
         return f'Range({self.start!r}, {self.stop!r}, {self.step!r})'
 
@@ -439,6 +417,7 @@ cdef class UnaryOperation(Expression):
 
     def __init__(self, Expression expr):
         self.expr = expr
+        self.unbound_names = self.expr.unbound_names
 
     cdef void _compile(self, Program program, list lnames):
         self.expr._compile(program, lnames)
@@ -446,9 +425,6 @@ cdef class UnaryOperation(Expression):
 
     cdef void _compile_op(self, Program program):
         raise NotImplementedError()
-
-    cdef set _unbound_names(self, set names):
-        return self.expr._unbound_names(names)
 
     def __repr__(self):
         return f'{self.__class__.__name__}({self.expr!r})'
@@ -563,6 +539,7 @@ cdef class BinaryOperation(Expression):
     def __init__(self, Expression left, Expression right):
         self.left = left
         self.right = right
+        self.unbound_names = self.left.unbound_names.union(self.right.unbound_names)
 
     cdef void _compile(self, Program program, list lnames):
         self.left._compile(program, lnames)
@@ -582,6 +559,7 @@ cdef class BinaryOperation(Expression):
         if literal_left and literal_right:
             literal = Literal.__new__(Literal)
             literal.value = self.op((<Literal>left).value, (<Literal>right).value)
+            literal.unbound_names = EmptySet
             return literal
         elif literal_left:
             if (expr := self.constant_left((<Literal>left).value, right)) is not None:
@@ -597,6 +575,7 @@ cdef class BinaryOperation(Expression):
         cdef BinaryOperation binary = <BinaryOperation>T.__new__(T)
         binary.left = left
         binary.right = right
+        binary.unbound_names = left.unbound_names.union(right.unbound_names)
         return binary
 
     cdef Vector op(self, Vector left, Vector right):
@@ -610,15 +589,6 @@ cdef class BinaryOperation(Expression):
 
     cdef Expression additional_rules(self, Expression left, Expression right):
         return None
-
-    cdef set _unbound_names(self, set names):
-        cdef set left = self.left._unbound_names(names)
-        cdef set right = self.right._unbound_names(names)
-        if not left:
-            return right
-        if not right:
-            return left
-        return left.union(right)
 
     def __repr__(self):
         return f'{self.__class__.__name__}({self.left!r}, {self.right!r})'
@@ -939,6 +909,7 @@ cdef class Slice(Expression):
     def __init__(self, Expression expr, Expression index):
         self.expr = expr
         self.index = index
+        self.unbound_names = self.expr.unbound_names.union(self.index.unbound_names)
 
     cdef void _compile(self, Program program, list lnames):
         self.expr._compile(program, lnames)
@@ -961,9 +932,6 @@ cdef class Slice(Expression):
             return self
         return Slice(expr, index)
 
-    cdef set _unbound_names(self, set names):
-        return self.expr._unbound_names(names).union(self.index._unbound_names(names))
-
     def __repr__(self):
         return f'Slice({self.expr!r}, {self.index!r})'
 
@@ -977,6 +945,17 @@ cdef class Call(Expression):
         self.function = function
         self.args = args
         self.keyword_args = keyword_args
+        cdef set unbound = set()
+        unbound.update(self.function.unbound_names)
+        cdef Expression arg
+        if self.args:
+            for arg in self.args:
+                unbound.update(arg.unbound_names)
+        cdef Binding binding
+        if self.keyword_args:
+            for binding in self.keyword_args:
+                unbound.update(binding.expr.unbound_names)
+        self.unbound_names = frozenset(unbound)
 
     cdef void _compile(self, Program program, list lnames):
         cdef Expression expr
@@ -1110,19 +1089,6 @@ cdef class Call(Expression):
             return self
         return Call(function, tuple(args), tuple(keyword_args) if keyword_args else None)
 
-    cdef set _unbound_names(self, set names):
-        cdef set unbound = set()
-        unbound.update(self.function._unbound_names(names))
-        cdef Expression arg
-        if self.args:
-            for arg in self.args:
-                unbound.update(arg._unbound_names(names))
-        cdef Binding binding
-        if self.keyword_args:
-            for binding in self.keyword_args:
-                unbound.update(binding.expr._unbound_names(names))
-        return unbound
-
     def __repr__(self):
         return f'Call({self.function!r}, {self.args!r}, {self.keyword_args!r})'
 
@@ -1137,6 +1103,7 @@ cdef class Tag(NodeModifier):
     def __init__(self, Expression node, str tag):
         self.node = node
         self.tag = tag
+        self.unbound_names = self.node.unbound_names
 
     cdef void _compile(self, Program program, list lnames):
         self.node._compile(program, lnames)
@@ -1166,9 +1133,6 @@ cdef class Tag(NodeModifier):
             return self
         return Tag(node, self.tag)
 
-    cdef set _unbound_names(self, set names):
-        return self.node._unbound_names(names)
-
     def __repr__(self):
         return f'Tag({self.node!r}, {self.tag!r})'
 
@@ -1179,6 +1143,12 @@ cdef class Attributes(NodeModifier):
     def __init__(self, Expression node, tuple bindings):
         self.node = node
         self.bindings = bindings
+        cdef set unbound = set()
+        unbound.update(self.node.unbound_names)
+        cdef Binding binding
+        for binding in self.bindings:
+            unbound.update(binding.expr.unbound_names)
+        self.unbound_names = frozenset(unbound)
 
     cdef void _compile(self, Program program, list lnames):
         self.node._compile(program, lnames)
@@ -1233,14 +1203,6 @@ cdef class Attributes(NodeModifier):
             node = Attributes(node, tuple(bindings))
         return node
 
-    cdef set _unbound_names(self, set names):
-        cdef set unbound = set()
-        unbound.update(self.node._unbound_names(names))
-        cdef Binding binding
-        for binding in self.bindings:
-            unbound.update(binding.expr._unbound_names(names))
-        return unbound
-
     def __repr__(self):
         return f'{self.__class__.__name__}({self.node!r}, {self.bindings!r})'
 
@@ -1251,6 +1213,7 @@ cdef class Append(NodeModifier):
     def __init__(self, Expression node, Expression children):
         self.node = node
         self.children = children
+        self.unbound_names = self.node.unbound_names.union(self.children.unbound_names)
 
     cdef void _compile(self, Program program, list lnames):
         self.node._compile(program, lnames)
@@ -1297,9 +1260,6 @@ cdef class Append(NodeModifier):
             return self
         return Append(node, children)
 
-    cdef set _unbound_names(self, set names):
-        return self.node._unbound_names(names).union(self.children._unbound_names(names))
-
     def __repr__(self):
         return f'{self.__class__.__name__}({self.node!r}, {self.children!r})'
 
@@ -1335,6 +1295,14 @@ cdef class Let(Expression):
     def __init__(self, tuple bindings, Expression body):
         self.bindings = bindings
         self.body = body
+        cdef set bound = set()
+        cdef set unbound = set()
+        cdef PolyBinding binding
+        for binding in self.bindings:
+            unbound.update(binding.expr.unbound_names.difference(bound))
+            bound.update(binding.names)
+        unbound.update(self.body.unbound_names.difference(bound))
+        self.unbound_names = frozenset(unbound)
 
     cdef void _compile(self, Program program, list lnames):
         cdef PolyBinding binding
@@ -1430,6 +1398,20 @@ cdef class Let(Expression):
             context.names = saved
         if isinstance(sbody, Literal):
             return sbody
+        cdef set unbound
+        cdef list original
+        if None not in sbody.unbound_names:
+            unbound = set(sbody.unbound_names)
+            original = remaining
+            remaining = []
+            for binding in reversed(original):
+                for name in binding.names:
+                    if name in unbound:
+                        remaining.insert(0, binding)
+                        unbound.update(binding.expr.unbound_names)
+                        break
+                else:
+                    touched = True
         if isinstance(sbody, Let):
             remaining.extend((<Let>sbody).bindings)
             sbody = (<Let>sbody).body
@@ -1442,16 +1424,6 @@ cdef class Let(Expression):
         if resimplify:
             return sbody._simplify(context)
         return sbody
-
-    cdef set _unbound_names(self, set names):
-        cdef set bound = set(names)
-        cdef set unbound = set()
-        cdef PolyBinding binding
-        for binding in self.bindings:
-            unbound.update(binding.expr._unbound_names(bound))
-            bound.update(binding.names)
-        unbound.update(self.body._unbound_names(bound))
-        return unbound
 
     def __repr__(self):
         return f'Let({self.bindings!r}, {self.body!r})'
@@ -1466,6 +1438,7 @@ cdef class For(Expression):
         self.names = names
         self.source = source
         self.body = body
+        self.unbound_names = self.source.unbound_names.union(self.body.unbound_names.difference(self.names))
 
     cdef void _compile(self, Program program, list lnames):
         self.source._compile(program, lnames)
@@ -1517,12 +1490,6 @@ cdef class For(Expression):
             return remaining[0]
         return Sequence(tuple(remaining))
 
-    cdef set _unbound_names(self, set names):
-        cdef set unbound = set()
-        unbound.update(self.source._unbound_names(names))
-        unbound.update(self.body._unbound_names(names.union(self.names)))
-        return unbound
-
     def __repr__(self):
         return f'For({self.names!r}, {self.source!r}, {self.body!r})'
 
@@ -1546,6 +1513,14 @@ cdef class IfElse(Expression):
     def __init__(self, tuple tests, Expression else_):
         self.tests = tests
         self.else_ = else_
+        cdef set unbound = set()
+        cdef IfCondition test
+        for test in self.tests:
+            unbound.update(test.condition.unbound_names)
+            unbound.update(test.then.unbound_names)
+        if self.else_:
+            unbound.update(self.else_.unbound_names)
+        self.unbound_names = frozenset(unbound)
 
     cdef void _compile(self, Program program, list lnames):
         cdef IfCondition test
@@ -1591,16 +1566,6 @@ cdef class IfElse(Expression):
             return IfElse(tuple(remaining), else_)
         return NoOp if else_ is None else else_
 
-    cdef set _unbound_names(self, set names):
-        cdef set unbound = set()
-        cdef IfCondition test
-        for test in self.tests:
-            unbound.update(test.condition._unbound_names(names))
-            unbound.update(test.then._unbound_names(names))
-        if self.else_:
-            unbound.update(self.else_._unbound_names(names))
-        return unbound
-
     def __repr__(self):
         return f'IfElse({self.tests!r}, {self.else_!r})'
 
@@ -1620,6 +1585,15 @@ cdef class Function(Expression):
         self.captures = captures
         self.inlineable = inlineable
         self.recursive = recursive
+        cdef set bound = set([self.name])
+        cdef set unbound = set()
+        cdef Binding parameter
+        for parameter in self.parameters:
+            if parameter.expr is not None:
+                unbound.update(parameter.expr.unbound_names)
+            bound.add(parameter.name)
+        unbound.update(self.body.unbound_names.difference(bound))
+        self.unbound_names = frozenset(unbound)
 
     cdef void _compile(self, Program program, list lnames):
         cdef str name
@@ -1680,7 +1654,7 @@ cdef class Function(Expression):
             body = self.body._simplify(context)
         finally:
             context.names = saved
-        cdef set captures = body._unbound_names(bound_names)
+        cdef set captures = set(body.unbound_names.difference(bound_names))
         touched |= body is not self.body
         cdef bint recursive = self.name in captures
         if recursive:
@@ -1693,18 +1667,6 @@ cdef class Function(Expression):
         if not touched:
             return self
         return Function(self.name, tuple(parameters), body, captures_t, inlineable, recursive)
-
-    cdef set _unbound_names(self, set names):
-        cdef set bound = set(names)
-        cdef set unbound = set()
-        bound.add(self.name)
-        cdef Binding parameter
-        for parameter in self.parameters:
-            if parameter.expr is not None:
-                unbound.update(parameter.expr._unbound_names(names))
-            bound.add(parameter.name)
-        unbound.update(self.body._unbound_names(bound))
-        return unbound
 
     def __repr__(self):
         return f'Function({self.name!r}, {self.parameters!r}, {self.body!r}, {self.captures!r}, {self.inlineable!r}, {self.recursive!r})'
