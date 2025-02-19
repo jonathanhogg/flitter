@@ -33,14 +33,14 @@ cdef bint sequence_pack(list expressions):
         todo.append(expressions.pop())
     while todo:
         expr = <Expression>todo.pop()
-        if todo and isinstance(expr, Literal):
+        if todo and type(expr) is Literal:
             vectors = [(<Literal>expr).value]
-            while todo and isinstance(todo[len(todo)-1], Literal):
+            while todo and type(todo[len(todo)-1]) is Literal:
                 vectors.append((<Literal>todo.pop()).value)
             if len(vectors) > 1:
                 expr = Literal(Vector._compose(vectors))
                 touched = True
-        elif isinstance(expr, Sequence):
+        elif type(expr) is Sequence:
             for expr in reversed((<Sequence>expr).expressions):
                 todo.append(expr)
             touched = True
@@ -198,7 +198,7 @@ cdef class Import(Expression):
         cdef Top top
         cdef Context import_context
         cdef dict import_static_names = None
-        if isinstance(filename, Literal) and context.path is not None:
+        if type(filename) is Literal and context.path is not None:
             name = (<Literal>filename).value.as_string()
             path = SharedCache.get_with_root(name, context.path)
             import_context = context.parent
@@ -226,7 +226,7 @@ cdef class Import(Expression):
                 remaining.append(name)
         cdef Expression expr = self.expr
         if let_names:
-            expr = Let(tuple(PolyBinding((name,), value if isinstance(value, Function) else Literal(value)) for name, value in let_names.items()), expr)
+            expr = Let(tuple(PolyBinding((name,), value if type(value) is Function else Literal(value)) for name, value in let_names.items()), expr)
         try:
             expr = expr._simplify(context)
         finally:
@@ -330,9 +330,9 @@ cdef class Name(Expression):
     cdef Expression _simplify(self, Context context):
         if self.name in context.names:
             value = context.names[self.name]
-            if value is None or isinstance(value, Function):
+            if value is None or type(value) is Function:
                 return self
-            elif isinstance(value, Name):
+            elif type(value) is Name:
                 return (<Name>value)._simplify(context)
             elif type(value) is Vector:
                 return Literal((<Vector>value).copy())
@@ -357,7 +357,7 @@ cdef class Lookup(Expression):
         self.unbound_names = self.key.unbound_names
 
     cdef void _compile(self, Program program, list lnames):
-        if isinstance(self.key, Literal):
+        if type(self.key) is Literal:
             program.lookup_literal((<Literal>self.key).value.intern())
         else:
             self.key._compile(program, lnames)
@@ -366,7 +366,7 @@ cdef class Lookup(Expression):
     cdef Expression _simplify(self, Context context):
         cdef Expression key = self.key._simplify(context)
         cdef Vector value
-        if isinstance(key, Literal):
+        if type(key) is Literal:
             if context.state is not None and context.state.contains((<Literal>key).value):
                 value = context.state.get_item((<Literal>key).value)
                 return Literal(value)
@@ -400,7 +400,7 @@ cdef class Range(Expression):
         cdef Expression stop = self.stop._simplify(context)
         cdef Expression step = self.step._simplify(context)
         cdef Vector result
-        if isinstance(start, Literal) and isinstance(stop, Literal) and isinstance(step, Literal):
+        if type(start) is Literal and type(stop) is Literal and type(step) is Literal:
             result = Vector.__new__(Vector)
             result.fill_range((<Literal>start).value, (<Literal>stop).value, (<Literal>step).value)
             return Literal(result)
@@ -436,28 +436,28 @@ cdef class Negative(UnaryOperation):
 
     cdef Expression _simplify(self, Context context):
         cdef Expression expr = self.expr._simplify(context)
-        if isinstance(expr, Literal):
+        if type(expr) is Literal:
             return Literal((<Literal>expr).value.neg())
-        if isinstance(expr, Negative):
+        if type(expr) is Negative:
             expr = Positive((<Negative>expr).expr)
             return expr._simplify(context)
         cdef MathsBinaryOperation maths
-        if isinstance(expr, (Multiply, Divide)):
+        if type(expr) is Multiply or type(expr) is Divide:
             maths = expr
-            if isinstance(maths.left, Literal):
+            if type(maths.left) is Literal:
                 expr = type(expr)(Negative(maths.left), maths.right)
                 return expr._simplify(context)
-            if isinstance(maths.right, Literal):
+            if type(maths.right) is Literal:
                 expr = type(expr)(maths.left, Negative(maths.right))
                 return expr._simplify(context)
-        elif isinstance(expr, Add):
+        elif type(expr) is Add:
             maths = expr
-            if isinstance(maths.left, Literal) or isinstance(maths.right, Literal):
+            if type(maths.left) is Literal or type(maths.right) is Literal:
                 expr = Add(Negative(maths.left), Negative(maths.right))
                 return expr._simplify(context)
-        elif isinstance(expr, Subtract):
+        elif type(expr) is Subtract:
             maths = expr
-            if isinstance(maths.left, Literal) or isinstance(maths.right, Literal):
+            if type(maths.left) is Literal or type(maths.right) is Literal:
                 expr = Add(Negative(maths.left), maths.right)
                 return expr._simplify(context)
         if expr is self.expr:
@@ -471,9 +471,9 @@ cdef class Positive(UnaryOperation):
 
     cdef Expression _simplify(self, Context context):
         cdef Expression expr = self.expr._simplify(context)
-        if isinstance(expr, Literal):
+        if type(expr) is Literal:
             return Literal((<Literal>expr).value.pos())
-        if isinstance(expr, (Negative, Positive, MathsBinaryOperation)):
+        if type(expr) is Negative or type(expr) is Positive or isinstance(expr, MathsBinaryOperation):
             return expr._simplify(context)
         if expr is self.expr:
             return self
@@ -486,7 +486,7 @@ cdef class Not(UnaryOperation):
 
     cdef Expression _simplify(self, Context context):
         cdef Expression expr = self.expr._simplify(context)
-        if isinstance(expr, Literal):
+        if type(expr) is Literal:
             return Literal(false_ if (<Literal>expr).value.as_bool() else true_)
         if expr is self.expr:
             return self
@@ -499,7 +499,7 @@ cdef class Ceil(UnaryOperation):
 
     cdef Expression _simplify(self, Context context):
         cdef Expression expr = self.expr._simplify(context)
-        if isinstance(expr, Literal):
+        if type(expr) is Literal:
             return Literal((<Literal>expr).value.ceil())
         if expr is self.expr:
             return self
@@ -512,7 +512,7 @@ cdef class Floor(UnaryOperation):
 
     cdef Expression _simplify(self, Context context):
         cdef Expression expr = self.expr._simplify(context)
-        if isinstance(expr, Literal):
+        if type(expr) is Literal:
             return Literal((<Literal>expr).value.floor())
         if expr is self.expr:
             return self
@@ -525,7 +525,7 @@ cdef class Fract(UnaryOperation):
 
     cdef Expression _simplify(self, Context context):
         cdef Expression expr = self.expr._simplify(context)
-        if isinstance(expr, Literal):
+        if type(expr) is Literal:
             return Literal((<Literal>expr).value.fract())
         if expr is self.expr:
             return self
@@ -539,7 +539,12 @@ cdef class BinaryOperation(Expression):
     def __init__(self, Expression left, Expression right):
         self.left = left
         self.right = right
-        self.unbound_names = self.left.unbound_names.union(self.right.unbound_names)
+        if not self.left.unbound_names:
+            self.unbound_names = self.right.unbound_names
+        elif not self.right.unbound_names:
+            self.unbound_names = self.left.unbound_names
+        else:
+            self.unbound_names = self.left.unbound_names.union(self.right.unbound_names)
 
     cdef void _compile(self, Program program, list lnames):
         self.left._compile(program, lnames)
@@ -575,7 +580,12 @@ cdef class BinaryOperation(Expression):
         cdef BinaryOperation binary = <BinaryOperation>T.__new__(T)
         binary.left = left
         binary.right = right
-        binary.unbound_names = left.unbound_names.union(right.unbound_names)
+        if not left.unbound_names:
+            binary.unbound_names = right.unbound_names
+        elif not right.unbound_names:
+            binary.unbound_names = left.unbound_names
+        else:
+            binary.unbound_names = left.unbound_names.union(right.unbound_names)
         return binary
 
     cdef Vector op(self, Vector left, Vector right):
@@ -595,16 +605,11 @@ cdef class BinaryOperation(Expression):
 
 
 cdef class MathsBinaryOperation(BinaryOperation):
-    cdef Expression _simplify(self, Context context):
-        cdef Expression expr=BinaryOperation._simplify(self, context)
-        cdef MathsBinaryOperation binary
-        if isinstance(expr, MathsBinaryOperation):
-            binary = <MathsBinaryOperation>expr
-            if type(binary.left) is Positive:
-                return (<Expression>type(binary)((<Positive>binary.left).expr, binary.right))._simplify(context)
-            elif type(binary.right) is Positive:
-                return (<Expression>type(binary)(binary.left, (<Positive>binary.right).expr))._simplify(context)
-        return expr
+    cdef Expression additional_rules(self, Expression left, Expression right):
+        if type(left) is Positive:
+            return (<Expression>type(self)((<Positive>left).expr, right))
+        elif type(right) is Positive:
+            return (<Expression>type(self)(left, (<Positive>right).expr))
 
 
 cdef class Add(MathsBinaryOperation):
@@ -619,7 +624,7 @@ cdef class Add(MathsBinaryOperation):
             program.add()
 
     cdef Expression constant_left(self, Vector left, Expression right):
-        if left.length == 0:
+        if left.numbers == NULL:
             return NoOp
         if left.eq(false_) is true_:
             return Positive(right)
@@ -628,11 +633,13 @@ cdef class Add(MathsBinaryOperation):
         return self.constant_left(right, left)
 
     cdef Expression additional_rules(self, Expression left, Expression right):
-        if not isinstance(right, Multiply) and isinstance(left, Multiply):
+        if (expr := MathsBinaryOperation.additional_rules(self, left, right)) is not None:
+            return expr
+        if type(right) is not Multiply and type(left) is Multiply:
             return Add(right, left)
-        if isinstance(right, Negative):
+        if type(right) is Negative:
             return Subtract(left, (<Negative>right).expr)
-        if isinstance(left, Negative):
+        if type(left) is Negative:
             return Subtract(right, (<Negative>left).expr)
 
 
@@ -644,7 +651,7 @@ cdef class Subtract(MathsBinaryOperation):
         program.sub()
 
     cdef Expression constant_left(self, Vector left, Expression right):
-        if left.length == 0:
+        if left.numbers == NULL:
             return NoOp
         if left.eq(false_) is true_:
             return Negative(right)
@@ -655,7 +662,9 @@ cdef class Subtract(MathsBinaryOperation):
         return Add(left, Literal(right.neg()))
 
     cdef Expression additional_rules(self, Expression left, Expression right):
-        if isinstance(right, Negative):
+        if (expr := MathsBinaryOperation.additional_rules(self, left, right)) is not None:
+            return expr
+        if type(right) is Negative:
             return Add(left, (<Negative>right).expr)
 
 
@@ -667,28 +676,28 @@ cdef class Multiply(MathsBinaryOperation):
         program.mul()
 
     cdef Expression constant_left(self, Vector left, Expression right):
-        if left.length == 0:
+        if left.numbers == NULL:
             return NoOp
         if left.eq(true_) is true_:
             return Positive(right)
         if left.eq(minusone_) is true_:
             return Negative(right)
         cdef MathsBinaryOperation maths
-        if isinstance(right, Add) or isinstance(right, Subtract):
+        if type(right) is Add or type(right) is Subtract:
             maths = right
-            if isinstance(maths.left, Literal) or isinstance(maths.right, Literal):
+            if type(maths.left) is Literal or type(maths.right) is Literal:
                 return type(maths)(Multiply(Literal(left), maths.left), Multiply(Literal(left), maths.right))
-        elif isinstance(right, Multiply):
+        elif type(right) is Multiply:
             maths = right
-            if isinstance(maths.left, Literal):
+            if type(maths.left) is Literal:
                 return Multiply(Multiply(Literal(left), maths.left), maths.right)
-            if isinstance(maths.right, Literal):
+            if type(maths.right) is Literal:
                 return Multiply(Multiply(Literal(left), maths.right), maths.left)
-        elif isinstance(right, Divide):
+        elif type(right) is Divide:
             maths = right
-            if isinstance(maths.left, Literal):
+            if type(maths.left) is Literal:
                 return Divide(Multiply(Literal(left), maths.left), maths.right)
-        elif isinstance(right, Negative):
+        elif type(right) is Negative:
             return Multiply(Literal(left.neg()), (<Negative>right).expr)
 
     cdef Expression constant_right(self, Expression left, Vector right):
@@ -703,11 +712,11 @@ cdef class Divide(MathsBinaryOperation):
         program.truediv()
 
     cdef Expression constant_left(self, Vector left, Expression right):
-        if left.length == 0:
+        if left.numbers == NULL:
             return NoOp
 
     cdef Expression constant_right(self, Expression left, Vector right):
-        if right.length == 0:
+        if right.numbers == NULL:
             return NoOp
         if right.eq(true_) is true_:
             return Positive(left)
@@ -722,11 +731,11 @@ cdef class FloorDivide(MathsBinaryOperation):
         program.floordiv()
 
     cdef Expression constant_left(self, Vector left, Expression right):
-        if left.length == 0:
+        if left.numbers == NULL:
             return NoOp
 
     cdef Expression constant_right(self, Expression left, Vector right):
-        if right.length == 0:
+        if right.numbers == NULL:
             return NoOp
         if right.eq(true_) is true_:
             return Floor(left)
@@ -740,11 +749,11 @@ cdef class Modulo(MathsBinaryOperation):
         program.mod()
 
     cdef Expression constant_left(self, Vector left, Expression right):
-        if left.length == 0:
+        if left.numbers == NULL:
             return NoOp
 
     cdef Expression constant_right(self, Expression left, Vector right):
-        if right.length == 0:
+        if right.numbers == NULL:
             return NoOp
         if right.eq(true_) is true_:
             return Fract(left)
@@ -764,11 +773,11 @@ cdef class Power(MathsBinaryOperation):
             program.pow()
 
     cdef Expression constant_left(self, Vector left, Expression right):
-        if left.length == 0:
+        if left.numbers == NULL:
             return NoOp
 
     cdef Expression constant_right(self, Expression left, Vector right):
-        if right.length == 0:
+        if right.numbers == NULL:
             return NoOp
         if right.eq(true_) is true_:
             return Positive(left)
@@ -850,7 +859,7 @@ cdef class And(BinaryOperation):
 
     cdef Expression _simplify(self, Context context):
         cdef Expression left = self.left._simplify(context)
-        if isinstance(left, Literal):
+        if type(left) is Literal:
             if (<Literal>left).value.as_bool():
                 return self.right._simplify(context)
             return left
@@ -872,7 +881,7 @@ cdef class Or(BinaryOperation):
 
     cdef Expression _simplify(self, Context context):
         cdef Expression left = self.left._simplify(context)
-        if isinstance(left, Literal):
+        if type(left) is Literal:
             if not (<Literal>left).value.as_bool():
                 return self.right._simplify(context)
             return left
@@ -889,8 +898,8 @@ cdef class Xor(BinaryOperation):
     cdef Expression _simplify(self, Context context):
         cdef Expression left = self.left._simplify(context)
         cdef Expression right = self.right._simplify(context)
-        cdef bint literal_left = isinstance(left, Literal)
-        cdef bint literal_right = isinstance(right, Literal)
+        cdef bint literal_left = type(left) is Literal
+        cdef bint literal_right = type(right) is Literal
         if literal_left and not (<Literal>left).value.as_bool():
             return right
         if literal_right and not (<Literal>right).value.as_bool():
@@ -913,7 +922,7 @@ cdef class Slice(Expression):
 
     cdef void _compile(self, Program program, list lnames):
         self.expr._compile(program, lnames)
-        if isinstance(self.index, Literal):
+        if type(self.index) is Literal:
             program.slice_literal((<Literal>self.index).value.intern())
         else:
             self.index._compile(program, lnames)
@@ -924,7 +933,7 @@ cdef class Slice(Expression):
         cdef Expression index = self.index._simplify(context)
         cdef Vector expr_value
         cdef Vector index_value
-        if isinstance(expr, Literal) and isinstance(index, Literal):
+        if type(expr) is Literal and type(index) is Literal:
             expr_value = (<Literal>expr).value
             index_value = (<Literal>index).value
             return Literal(expr_value.slice(index_value))
@@ -968,10 +977,10 @@ cdef class Call(Expression):
             for keyword_arg in self.keyword_args:
                 names.append(keyword_arg.name)
                 keyword_arg.expr._compile(program, lnames)
-        if not names and isinstance(self.function, Literal) \
+        if not names and type(self.function) is Literal \
                 and (<Literal>self.function).value.length == 1 \
                 and (<Literal>self.function).value.objects is not None \
-                and not isinstance(function := (<Literal>self.function).value.objects[0], Function):
+                and not type(function := (<Literal>self.function).value.objects[0]) is Function:
             program.call_fast(function, len(self.args) if self.args else 0)
         else:
             self.function._compile(program, lnames)
@@ -981,13 +990,13 @@ cdef class Call(Expression):
         cdef Expression function = self.function._simplify(context)
         cdef bint touched = function is not self.function
         cdef Function func_expr = None
-        if isinstance(function, Function):
+        if type(function) is Function:
             func_expr = <Function>function
-        elif isinstance(function, Name) and (<Name>function).name in context.names:
+        elif type(function) is Name and (<Name>function).name in context.names:
             value = context.names[(<Name>function).name]
-            if isinstance(value, Function):
+            if type(value) is Function:
                 func_expr = <Function>value
-        cdef bint literal_func = isinstance(function, Literal)
+        cdef bint literal_func = type(function) is Literal
         if literal_func and (<Literal>function).value.length == 0:
             return NoOp
         cdef bint all_literal_args=True, all_dynamic_args=True
@@ -998,7 +1007,7 @@ cdef class Call(Expression):
                 sarg = arg._simplify(context)
                 touched |= sarg is not arg
                 args.append(sarg)
-                if isinstance(sarg, Literal):
+                if type(sarg) is Literal:
                     all_dynamic_args = False
                 else:
                     all_literal_args = False
@@ -1009,7 +1018,7 @@ cdef class Call(Expression):
                 arg = binding.expr._simplify(context)
                 touched |= arg is not binding.expr
                 keyword_args.append(Binding(binding.name, arg))
-                if isinstance(arg, Literal):
+                if type(arg) is Literal:
                     all_dynamic_args = False
                 else:
                     all_literal_args = False
@@ -1078,7 +1087,7 @@ cdef class Call(Expression):
                 for i in range((<Literal>function).value.length):
                     context.errors.add(f"{(<Literal>function).value.numbers[i]!r} is not callable")
             return Literal(Vector._compose(results))
-        if isinstance(function, Literal) and len(args) == 1:
+        if type(function) is Literal and len(args) == 1:
             if (<Literal>function).value == static_builtins['ceil']:
                 return Ceil(args[0])
             elif (<Literal>function).value == static_builtins['floor']:
@@ -1115,14 +1124,14 @@ cdef class Tag(NodeModifier):
         cdef list objects
         cdef Node n
         cdef int64_t i
-        if isinstance(node, Literal):
+        if type(node) is Literal:
             nodes = (<Literal>node).value
             if nodes.objects is None:
                 return node
             objects = []
             for i in range(nodes.length):
                 obj = nodes.objects[i]
-                if isinstance(obj, Node):
+                if type(obj) is Node:
                     n = (<Node>obj).copy()
                     n.add_tag(self.tag)
                     objects.append(n)
@@ -1166,7 +1175,7 @@ cdef class Attributes(NodeModifier):
         cdef Binding binding, simplified
         cdef Expression expr
         cdef bint touched = False
-        while isinstance(node, Attributes):
+        while type(node) is Attributes:
             attrs = <Attributes>node
             for binding in reversed(attrs.bindings):
                 expr = binding.expr._simplify(context)
@@ -1180,19 +1189,19 @@ cdef class Attributes(NodeModifier):
         touched |= node is not self.node
         cdef Vector nodes, value
         cdef list objects
-        if isinstance(node, Literal):
+        if type(node) is Literal:
             nodes = (<Literal>node).value
             if nodes.objects is None:
                 return node
-            if bindings and isinstance((<Binding>bindings[-1]).expr, Literal):
+            if bindings and type((<Binding>bindings[-1]).expr) is Literal:
                 objects = []
                 for obj in nodes.objects:
-                    objects.append((<Node>obj).copy() if isinstance(obj, Node) else obj)
-                while bindings and isinstance((<Binding>bindings[-1]).expr, Literal):
+                    objects.append((<Node>obj).copy() if type(obj) is Node else obj)
+                while bindings and type((<Binding>bindings[-1]).expr) is Literal:
                     binding = <Binding>bindings.pop()
                     value = (<Literal>binding.expr).value
                     for obj in objects:
-                        if isinstance(obj, Node):
+                        if type(obj) is Node:
                             (<Node>obj).set_attribute(binding.name, value)
                 node = Literal(objects)
                 touched = True
@@ -1234,27 +1243,27 @@ cdef class Append(NodeModifier):
         cdef int64_t i
         cdef list objects
         cdef tuple node_objects
-        if (isinstance(node, Literal) and (<Literal>node).value.objects is None) or \
-                (isinstance(children, Literal) and (<Literal>children).value.objects is None):
+        if (type(node) is Literal and (<Literal>node).value.objects is None) or \
+                (type(children) is Literal and (<Literal>children).value.objects is None):
             return node
-        if isinstance(node, Literal):
+        if type(node) is Literal:
             nodes = (<Literal>node).value
-            if isinstance(children, Literal):
+            if type(children) is Literal:
                 children_vector = (<Literal>children).value
                 node_objects = nodes.objects
                 objects = []
                 for i in range(nodes.length):
                     obj = node_objects[i]
-                    if isinstance(obj, Node):
+                    if type(obj) is Node:
                         obj = (<Node>obj).copy()
                         (<Node>obj).append_vector(children_vector)
                     objects.append(obj)
                 return Literal(objects)
-            elif isinstance(children, Sequence) and isinstance((<Sequence>children).expressions[0], Literal):
+            elif type(children) is Sequence and type((<Sequence>children).expressions[0]) is Literal:
                 node = Append(node, (<Sequence>children).expressions[0])
                 children = Sequence((<Sequence>children).expressions[1:])
                 return Append(node, children)._simplify(context)
-        elif isinstance(node, Attributes) and isinstance((<Attributes>node).node, Literal):
+        elif type(node) is Attributes and type((<Attributes>node).node) is Literal:
             return Attributes(Append((<Attributes>node).node, children), (<Attributes>node).bindings)._simplify(context)
         if node is self.node and children is self.children:
             return self
@@ -1338,28 +1347,34 @@ cdef class Let(Expression):
         cdef int64_t i, j, n
         cdef bint touched = False
         cdef set shadowed=set(), discarded=set()
-        while isinstance(body, Let):
+        while type(body) is Let:
             bindings.extend((<Let>body).bindings)
             body = (<Let>body).body
             touched = True
+        cdef dict renames = {}
+        for existing_name, existing_value in context.names.items():
+            if type(existing_value) is Name:
+                name = (<Name>existing_value).name
+                if name in renames:
+                    (<list>renames[name]).append(existing_name)
+                else:
+                    renames[name] = [existing_name]
         for i, binding in enumerate(bindings):
-            for existing_name in list(context.names):
-                existing_value = context.names[existing_name]
-                if existing_value is not None and isinstance(existing_value, Name):
-                    for name in binding.names:
-                        if name == (<Name>existing_value).name:
-                            context.names[existing_name] = None
-                            remaining.append(PolyBinding((existing_name,), Name(name)))
-                            shadowed.add(name)
-                            touched = True
+            for name in binding.names:
+                if name not in shadowed and name in renames:
+                    for existing_name in <list>renames.pop(name):
+                        context.names[existing_name] = None
+                        remaining.append(PolyBinding((existing_name,), Name(name)))
+                    shadowed.add(name)
+                    touched = True
             n = len(binding.names)
             expr = binding.expr._simplify(context)
             touched |= expr is not binding.expr
-            if n == 1 and isinstance(expr, Function) and (<Function>expr).inlineable:
+            if n == 1 and type(expr) is Function and (<Function>expr).inlineable:
                 context.names[binding.names[0]] = expr
                 remaining.append(PolyBinding(binding.names, expr))
                 continue
-            if isinstance(expr, Literal):
+            if type(expr) is Literal:
                 value = (<Literal>expr).value
                 if n == 1:
                     name = <str>binding.names[0]
@@ -1371,15 +1386,15 @@ cdef class Let(Expression):
                         discarded.add(name)
                 touched = True
                 continue
-            if n == 1 and isinstance(expr, Name):
+            if n == 1 and type(expr) is Name:
                 name = <str>binding.names[0]
-                if (<Name>expr).name == name:
+                existing_name = (<Name>expr).name
+                if existing_name == name:
                     touched = True
                     continue
                 for j in range(i+1, len(bindings)):
-                    if (<Name>expr).name in (<Binding>bindings[j]).names:
-                        context.names[name] = None
-                        shadowed.add((<Name>expr).name)
+                    if existing_name in (<Binding>bindings[j]).names:
+                        shadowed.add(existing_name)
                         break
                 else:
                     context.names[name] = expr
@@ -1389,14 +1404,14 @@ cdef class Let(Expression):
             for name in binding.names:
                 context.names[name] = None
             remaining.append(PolyBinding(binding.names, expr))
-        cdef bint resimplify = shadowed and shadowed & discarded
+        cdef bint resimplify = not shadowed.isdisjoint(discarded)
         cdef Expression sbody
         try:
             sbody = body._simplify(context)
             touched |= sbody is not body
         finally:
             context.names = saved
-        if isinstance(sbody, Literal):
+        if type(sbody) is Literal:
             return sbody
         cdef set unbound
         cdef list original
@@ -1412,7 +1427,7 @@ cdef class Let(Expression):
                         break
                 else:
                     touched = True
-        if isinstance(sbody, Let):
+        if type(sbody) is Let:
             remaining.extend((<Let>sbody).bindings)
             sbody = (<Let>sbody).body
             resimplify = True
@@ -1463,7 +1478,7 @@ cdef class For(Expression):
         cdef dict saved = context.names
         context.names = saved.copy()
         cdef str name
-        if not isinstance(source, Literal):
+        if not type(source) is Literal:
             for name in self.names:
                 context.names[name] = None
             try:
@@ -1546,7 +1561,7 @@ cdef class IfElse(Expression):
         for test in self.tests:
             condition = test.condition._simplify(context)
             touched |= condition is not test.condition
-            if isinstance(condition, Literal):
+            if type(condition) is Literal:
                 if (<Literal>condition).value.as_bool():
                     then = test.then._simplify(context)
                     if not remaining:
@@ -1636,7 +1651,7 @@ cdef class Function(Expression):
         cdef bint touched = False
         for parameter in self.parameters:
             expr = parameter.expr._simplify(context) if parameter.expr is not None else None
-            if expr is not None and not isinstance(expr, Literal):
+            if expr is not None and not type(expr) is Literal:
                 literal = False
             parameters.append(Binding(parameter.name, expr))
             touched |= expr is not parameter.expr
