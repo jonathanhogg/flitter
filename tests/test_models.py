@@ -132,9 +132,8 @@ class MyModel(Model):
     def check_for_changes(self):
         pass
 
-    def build_trimesh(self):
-        return trimesh.Trimesh(vertices=[[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0]],
-                               faces=[[0, 1, 2], [2, 3, 0]])
+    def build_arrays(self):
+        return np.array([[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0]], dtype='f4'), np.array([[0, 1, 2], [2, 3, 0]], dtype='i4')
 
 
 class TestSubclassing(utils.TestCase):

@@ -48,13 +48,13 @@ cdef uint64_t MIX = HASH_UPDATE(HASH_START, HASH_STRING('mix'))
 cdef tuple build_arrays_from_trimesh(trimesh_model):
     if trimesh_model is None:
         return None
+    vertex_data = np.zeros((len(trimesh_model.vertices), 8), dtype='f4')
+    vertex_data[:, :3] = trimesh_model.vertices
+    vertex_data[:, 3:6] = trimesh_model.vertex_normals
     if (visual := trimesh_model.visual) is not None and isinstance(visual, trimesh.visual.texture.TextureVisuals) \
             and visual.uv is not None and len(visual.uv) == len(trimesh_model.vertices):
-        vertex_uvs = visual.uv
-    else:
-        vertex_uvs = np.zeros((len(trimesh_model.vertices), 2))
-    vertex_data = np.hstack((trimesh_model.vertices, trimesh_model.vertex_normals, vertex_uvs)).astype('f4', copy=False)
-    index_data = trimesh_model.faces.astype('i4', copy=False)
+        vertex_data[:, 6:8] = visual.uv
+    index_data = np.array(trimesh_model.faces, dtype='i4')
     return vertex_data, index_data
 
 
@@ -188,6 +188,7 @@ cdef class Model:
             if trimesh_model is not None:
                 trimesh_model._cache.clear()
                 full_collect = True
+                logger.trace("Discarded trimesh model for {}", self.name)
             if all or 'bounds' not in self.cache:
                 self.cache = None
             elif len(self.cache) > 1:
@@ -224,31 +225,19 @@ cdef class Model:
                                     faces=faces_array, visual=visual, process=False)
 
     cpdef object build_manifold(self):
-        cdef bint merged=False, filled=False, hull=False
-        trimesh_model = self.get_trimesh()
-        if trimesh_model is None:
+        cdef tuple arrays = self.get_arrays()
+        if arrays is None:
             return None
-        if not trimesh_model.is_watertight:
-            trimesh_model = trimesh_model.copy()
-            trimesh_model.merge_vertices(merge_tex=True, merge_norm=True)
-            merged = True
-            if not trimesh_model.is_watertight:
-                if trimesh_model.fill_holes():
-                    filled = True
-                else:
-                    trimesh_model = trimesh_model.convex_hull
-                    hull = True
-        if not trimesh_model.is_volume:
-            logger.error("Mesh is not a volume: {}", self.name)
-            return None
-        elif hull:
-            logger.warning("Computed convex hull of non-manifold mesh: {}", self.name)
-        elif filled:
-            logger.debug("Filled holes in non-manifold mesh: {}", self.name)
-        elif merged:
-            logger.trace("Merged vertices of non-manifold mesh: {}", self.name)
-        return manifold3d.Manifold(mesh=manifold3d.Mesh(vert_properties=np.array(trimesh_model.vertices, dtype='f4'),
-                                                        tri_verts=np.array(trimesh_model.faces, dtype=np.uint32)))
+        vertices_array, faces_array = arrays
+        mesh = manifold3d.Mesh(vert_properties=vertices_array[:, :3].astype('f4'), tri_verts=faces_array.astype('i4'))
+        cdef bint merged = mesh.merge()
+        manifold = manifold3d.Manifold(mesh=mesh)
+        if manifold.status() == manifold3d.Error.NoError:
+            if merged:
+                logger.trace("Merged vertices of non-manifold mesh: {}", self.name)
+            return manifold
+        logger.error("Mesh is not a volume: {}", self.name)
+        return None
 
     cpdef void add_dependent(self, Model model):
         if self.dependents is None:
@@ -1165,6 +1154,13 @@ cdef class PrimitiveModel(Model):
     cpdef void check_for_changes(self):
         pass
 
+    cpdef object build_manifold(self):
+        cdef tuple arrays = self.get_arrays()
+        vertices_array, faces_array = arrays
+        mesh = manifold3d.Mesh(vert_properties=vertices_array[:, :3], tri_verts=faces_array)
+        mesh.merge()
+        return manifold3d.Manifold(mesh=mesh)
+
 
 cdef class Box(PrimitiveModel):
     cdef str uv_map
@@ -1549,6 +1545,33 @@ cdef class ExternalModel(Model):
 
     cpdef object build_trimesh(self):
         return self.cache_path.read_trimesh_model()
+
+    cpdef object build_manifold(self):
+        cdef bint merged=False, filled=False, hull=False
+        trimesh_model = self.get_trimesh()
+        if trimesh_model is None:
+            return None
+        if not trimesh_model.is_watertight:
+            trimesh_model = trimesh_model.copy()
+            trimesh_model.merge_vertices(merge_tex=True, merge_norm=True)
+            merged = True
+            if not trimesh_model.is_watertight:
+                if trimesh_model.fill_holes():
+                    filled = True
+                else:
+                    trimesh_model = trimesh_model.convex_hull
+                    hull = True
+        if not trimesh_model.is_volume:
+            logger.error("Mesh is not a volume: {}", self.name)
+            return None
+        elif hull:
+            logger.warning("Computed convex hull of non-manifold mesh: {}", self.name)
+        elif filled:
+            logger.debug("Filled holes in non-manifold mesh: {}", self.name)
+        elif merged:
+            logger.trace("Merged vertices of non-manifold mesh: {}", self.name)
+        return manifold3d.Manifold(mesh=manifold3d.Mesh(vert_properties=np.array(trimesh_model.vertices, dtype='f4'),
+                                                        tri_verts=np.array(trimesh_model.faces, dtype=np.uint32)))
 
 
 cdef class VectorModel(Model):
