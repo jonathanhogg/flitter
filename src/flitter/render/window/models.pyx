@@ -45,7 +45,7 @@ cdef uint64_t SDF = HASH_UPDATE(HASH_START, HASH_STRING('sdf'))
 cdef uint64_t MIX = HASH_UPDATE(HASH_START, HASH_STRING('mix'))
 
 
-cdef tuple build_arrays_from_trimesh(trimesh_model):
+cpdef tuple build_arrays_from_trimesh(trimesh_model):
     if trimesh_model is None:
         return None
     vertex_data = np.zeros((len(trimesh_model.vertices), 8), dtype='f4')

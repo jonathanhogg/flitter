@@ -9,6 +9,8 @@ cdef double DefaultSnapAngle
 cdef int64_t DefaultSegments
 
 
+cpdef tuple build_arrays_from_trimesh(trimesh_model)
+cpdef tuple build_arrays_from_manifold(manifold)
 cpdef void fill_in_normals(vertices_array, faces_array)
 
 
