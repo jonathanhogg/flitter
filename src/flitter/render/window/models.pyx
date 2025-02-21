@@ -108,11 +108,15 @@ cpdef void fill_in_normals(vertices_array, faces_array):
 
 cdef class Model:
     @staticmethod
-    def flush_caches(double max_age=300, int64_t max_size=2500):
+    def cache_size():
+        return len(ModelCache)
+
+    @staticmethod
+    def flush_caches(double max_age=0, int64_t max_size=-1):
         cdef double now = perf_counter()
         cdef double cutoff = now - max_age
         cdef Model model
-        cdef int64_t count=len(ModelCache), unload_count=0
+        cdef int64_t count=len(ModelCache), unload_count=0, runs=0
         cdef list unloaded = []
         cdef bint aggressive=False, full_collect=False
         while True:
@@ -128,11 +132,12 @@ cdef class Model:
                         full_collect |= model.uncache(True)
                 else:
                     full_collect |= model.uncache(False)
-                if (model.touch_timestamp <= cutoff or aggressive and model.touch_timestamp < now and count > max_size) and model.dependents is None:
+                if (cutoff > 0 and model.touch_timestamp <= cutoff or aggressive and count > max_size) and model.dependents is None:
                     unloaded.append(model)
                     count -= 1
+            runs += 1
             if not unloaded:
-                if count > max_size and not aggressive:
+                if max_size >= 0 and count > max_size and not aggressive:
                     aggressive = True
                 else:
                     break
@@ -143,7 +148,10 @@ cdef class Model:
                 del ModelCache[model.id]
                 unload_count += 1
         if unload_count:
-            logger.trace("Unloaded {} models from cache, {} remaining", unload_count, count)
+            if count:
+                logger.trace("Unloaded {} models from cache in {} run(s), {} remaining", unload_count, runs, count)
+            else:
+                logger.trace("Emptied {} models from cache in {} run(s)", unload_count, runs)
         return full_collect
 
     @staticmethod

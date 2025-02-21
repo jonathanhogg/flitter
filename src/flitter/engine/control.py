@@ -25,7 +25,7 @@ class EngineController:
 
     def __init__(self, target_fps=60, screen=0, fullscreen=False, vsync=False, state_file=None,
                  reset_on_switch=False, state_simplify_wait=0, realtime=True, defined_names=None, vm_stats=False,
-                 run_time=None, offscreen=False, disable_simplifier=False, opengl_es=False):
+                 run_time=None, offscreen=False, disable_simplifier=False, opengl_es=False, model_cache_time=300):
         self.default_fps = target_fps
         self.target_fps = target_fps
         self.realtime = realtime
@@ -34,6 +34,7 @@ class EngineController:
         self.vsync = vsync
         self.offscreen = offscreen
         self.opengl_es = opengl_es
+        self.model_cache_time = model_cache_time
         self.reset_on_switch = reset_on_switch
         self.disable_simplifier = disable_simplifier
         self.state_simplify_wait = 0 if self.disable_simplifier else state_simplify_wait / 2
@@ -295,7 +296,8 @@ class EngineController:
 
                 del context
                 SharedCache.clean()
-                gc_pending |= Model.flush_caches()
+                if self.model_cache_time > 0:
+                    gc_pending |= Model.flush_caches(max_age=self.model_cache_time)
                 if gc_pending and (last_gc is None or now > last_gc + self.MINIMUM_GC_INTERVAL):
                     count = gc.collect(2)
                     gc_pending = False
@@ -336,13 +338,16 @@ class EngineController:
                     logger.trace("State dictionary size: {} keys", len(self.state))
                     if run_program is not None and run_program.stack is not None:
                         logger.trace("VM stack size: {:d}", run_program.stack.size)
+                    count = Model.cache_size()
+                    if count:
+                        logger.trace("Model cache size: {}", count)
 
         finally:
             self.global_state = {}
             self._references = {}
             self.pages = []
             program = run_program = current_program = context = None
-            Model.flush_caches(0, 0)
+            Model.flush_caches(max_size=0)
             SharedCache.clean(0)
             for renderers in self.renderers.values():
                 while renderers:
@@ -350,7 +355,8 @@ class EngineController:
             if self.vm_stats:
                 log_vm_stats()
             count = gc.collect(2)
-            logger.trace("Collected {} objects (full collection)", count)
+            if count:
+                logger.trace("Collected {} objects (full collection)", count)
             counts = numbers_cache_counts()
             if counts:
                 logger.debug("Numbers cache: {}", ", ".join(f"{size}x{count}" for size, count in counts.items()))

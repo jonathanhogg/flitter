@@ -51,6 +51,7 @@ def main():
     parser.add_argument('--define', '-D', action='append', default=[], type=keyvalue, dest='defines', help="Define name for evaluation")
     parser.add_argument('--vmstats', action='store_true', default=False, help="Report VM statistics")
     parser.add_argument('--runtime', type=convert_timecode_to_float, help="Seconds to run for before exiting")
+    parser.add_argument('--modelcache', type=convert_timecode_to_float, default=300, help="Seconds to cache models for")
     parser.add_argument('--offscreen', action='store_true', default=False, help="Swap windows for offscreens")
     parser.add_argument('--opengles', action='store_true', default=False, help="Use OpenGL ES")
     parser.add_argument('program', nargs='+', help="Program(s) to load")
@@ -67,7 +68,7 @@ def main():
                                   state_file=args.state, reset_on_switch=args.resetonswitch, state_simplify_wait=args.simplifystate,
                                   realtime=not args.lockstep, defined_names=dict(args.defines), vm_stats=args.vmstats,
                                   run_time=args.runtime, offscreen=args.offscreen, disable_simplifier=args.nosimplify,
-                                  opengl_es=args.opengles)
+                                  opengl_es=args.opengles, model_cache_time=args.modelcache)
     for program in args.program:
         controller.load_page(program)
 

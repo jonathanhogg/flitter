@@ -197,6 +197,12 @@ code and so it may be useful if very fast switching is required – particularly
 if a program has very large loops that are being unrolled and there is
 insufficient gain from doing the unrolling.
 
+`--modelcache`
+: How long to cache unused 3D models for, in seconds (may be specified as a
+[time-code](language.md#time-codes)). Set this to `0` to disable clearing of the
+model cache completely – this may be a useful performance tweak for long-running
+programs that reference a fixed number of models.
+
 `--lockstep`
 : Turns on *non-realtime mode*. In this mode, the engine will generate frames
 as fast as possible (which may be quite slowly) while maintaining an evenly
