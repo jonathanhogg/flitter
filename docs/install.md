@@ -315,7 +315,7 @@ setting the `FLITTER_BUILD_PROFILE` environment variable to `1` and running
 `setup.py`:
 
 ```console
-$ env FLITTER_BUILD_COVERAGE=1 python3 setup.py build_ext --inplace
+$ env FLITTER_BUILD_PROFILE=1 python3 setup.py build_ext --inplace
 ```
 
 As for compiling with code coverage, profiling Cython code is currently **not
