@@ -271,6 +271,60 @@ $ pip3 install pytest
 $ pytest
 ```
 
+### Profiling
+
+**Flitter** has built-in support for running itself with profiling turned on:
+just add the `--profile` command line option when running it. This is best
+combined with `--lockstep` and `--runtime=N` to run for exactly *N* seconds of
+frame time. At the end of execution (including a keyboard interrupt), the
+standard Python profiler output will be printed, ordered by `tottime`.
+
+By default, the **Flitter** Cython modules are *not* compiled with profiling
+support. This means that only pure Python functions will be listed in the
+profiler, with all time spent inside Cython code aggregated into those
+functions' runtime. This is not particularly useful as much of the work is
+happening in the Cython modules.
+
+Assuming that you are already using an editable install (as described above),
+then all of the Cython modules can be compiled with profiling by setting the
+`FLITTER_BUILD_PROFILE` environment variable to `1` and running `setup.py`:
+
+```console
+$ env FLITTER_BUILD_PROFILE=1 python3 setup.py build_ext --inplace
+```
+
+:::{warning}
+Profiling of the Cython modules **is not supported in Python 3.12** due to
+internal changes in the profiling API.
+
+Profiling *is* supported in Python 3.13 and above if using Cython 3.1, currently
+[in alpha](https://github.com/cython/cython/releases/tag/3.1.0a1) (as of
+2024-11-08). Install that with:
+
+```console
+$ pip3 install 'cython>=3.1.0a1'
+```
+:::
+
+Recompiling all Cython modules with profiling enabled may not be the best thing
+to do as the overhead of adding profiling support to Cython is quite high and
+the results will be skewed by the cost of the profiling. It is probably better
+to *only* compile profiling support into the module(s) that you are considering.
+This can be done with `cythonize`:
+
+```console
+$ cythonize --build --inplace --force -3 --annotate -X profile=True \
+    src/flitter/render/window/canvas3d.pyx
+```
+
+Even then, take the profiler results with a pinch of salt. Because of the
+additional cost of profiling, small functions that are called very frequently
+will show a greater proportion of the runtime cost than they probably actually
+contribute.
+
+Remove the compiled versions of any modules that are not being profiled to allow
+`pyximport` to generate and use an optimized version.
+
 ### Checking code coverage
 
 If you want to run code coverage analysis, then you will need to do a special
@@ -280,10 +334,8 @@ in-place build with coverage enabled (Cython line-tracing):
 $ env FLITTER_BUILD_COVERAGE=1 python3 setup.py build_ext --inplace
 ```
 
-Importantly, this **will not work on Python 3.12 or 3.13**. Python 3.12
-introduced a change in the profiling API that Cython is not yet compatible
-with. You will need to do a parallel install of either 3.11 or 3.10 and create
-a second virtual environment in which to do coverage analysis.
+This also enables (and requires) profiling support, and so the same caveats
+about Python and Cython versions noted above apply.
 
 Once you have a coverage-enabled build, you can generate a code coverage report
 for the test suite with:
@@ -298,40 +350,6 @@ You will need to re-run `setup.py` if you change any of the Cython code. You
 will need to delete all of these object files if you want to go back to using
 the normal `pyximport` automatic recompile (and you will want to do so as the
 coverage-enabled version of the code is *significantly* slower).
-
-### Profiling
-
-**Flitter** has built-in support for running itself with profiling turned on:
-just add the `--profile` command line option when running it. This is best
-combined with `--lockstep` and `--runtime=N` to run for exactly *N* seconds of
-frame time. At the end of execution (including a keyboard interrupt), the
-standard Python profiler output will be printed, ordered by `tottime`.
-
-However, by default, the Cython modules are *not* compiled with profiling
-support. This means that only pure Python functions will be listed in the
-profiler, with all time spent inside Cython code aggregated into those
-functions' runtime. All of the Cython modules can be compiled with profiling by
-setting the `FLITTER_BUILD_PROFILE` environment variable to `1` and running
-`setup.py`:
-
-```console
-$ env FLITTER_BUILD_PROFILE=1 python3 setup.py build_ext --inplace
-```
-
-As for compiling with code coverage, profiling Cython code is currently **not
-supported on Python 3.12 or 3.13**. You will need to use 3.11 or 3.10 to run
-profiling tests.
-
-Recompiling all Cython modules with profiling enabled may not be the best thing
-to do as the overhead of adding profiling support to Cython is quite high and
-the results will be skewed by the cost of the profiling. It is probably better
-to *only* compile profiling support into the module(s) that you are considering.
-This can be done with `cythonize`:
-
-```console
-$ cythonize --build --inplace --force -3 --annotate -X profile=True \
-    src/flitter/render/window/canvas3d.pyx
-```
 
 ### Generating the documentation
 

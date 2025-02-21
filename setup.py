@@ -17,11 +17,12 @@ def find_cython_files(dirpath):
 
 if __name__ == '__main__':
     if int(os.environ.get('FLITTER_BUILD_COVERAGE', '0')):
-        print("Building for coverage testing")
-        define_macros = [("CYTHON_TRACE_NOGIL", "1")]
+        print("** Building for coverage testing **")
+        define_macros = [("CYTHON_TRACE_NOGIL", "1"), ("CYTHON_USE_SYS_MONITORING", "0")]
         compiler_directives = {'linetrace': True}
         annotate = False
     elif int(os.environ.get('FLITTER_BUILD_PROFILE', '0')):
+        print("** Building with profiling support **")
         define_macros = []
         compiler_directives = {'profile': True}
         annotate = True
