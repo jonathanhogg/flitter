@@ -21,6 +21,7 @@ from ..render.window.models import Model
 
 class EngineController:
     STATE_SAVE_PERIOD = 1
+    MINIMUM_GC_INTERVAL = 10
 
     def __init__(self, target_fps=60, screen=0, fullscreen=False, vsync=False, state_file=None,
                  reset_on_switch=False, state_simplify_wait=0, realtime=True, defined_names=None, vm_stats=False,
@@ -295,7 +296,7 @@ class EngineController:
                 del context
                 SharedCache.clean()
                 gc_pending |= Model.flush_caches()
-                if gc_pending and (last_gc is None or now > last_gc + 1):
+                if gc_pending and (last_gc is None or now > last_gc + self.MINIMUM_GC_INTERVAL):
                     count = gc.collect(2)
                     gc_pending = False
                     last_gc = now
