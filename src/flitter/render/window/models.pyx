@@ -151,7 +151,7 @@ cdef class Model:
             if count:
                 logger.trace("Unloaded {} models from cache in {} run(s), {} remaining", unload_count, runs, count)
             else:
-                logger.trace("Emptied {} models from cache in {} run(s)", unload_count, runs)
+                logger.debug("Emptied {} models from cache in {} run(s)", unload_count, runs)
         return full_collect
 
     @staticmethod

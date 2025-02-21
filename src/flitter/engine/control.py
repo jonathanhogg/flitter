@@ -363,7 +363,7 @@ class EngineController:
                 log_vm_stats()
             count = gc.collect(2)
             if count:
-                logger.trace("Collected {} objects (full collection)", count)
+                logger.debug("Collected {} objects (full collection)", count)
             counts = numbers_cache_counts()
             if counts:
                 logger.debug("Numbers cache: {}", ", ".join(f"{size}x{count}" for size, count in counts.items()))
