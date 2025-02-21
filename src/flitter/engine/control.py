@@ -40,15 +40,22 @@ class EngineController:
         self.state_simplify_wait = 0 if self.disable_simplifier else state_simplify_wait / 2
         if defined_names:
             self.defined_names = {key: Vector.coerce(value) for key, value in defined_names.items()}
+            logger.trace("Defined names: {!r}", self.defined_names)
         else:
             self.defined_names = {}
         self.vm_stats = vm_stats
         self.run_time = run_time
         self.state_file = Path(state_file) if state_file is not None else None
         if self.state_file is not None and self.state_file.exists():
-            logger.info("Recover state from state file: {}", self.state_file)
-            with open(self.state_file, 'rb') as file:
-                self.global_state = pickle.load(file)
+            try:
+                with open(self.state_file, 'rb') as file:
+                    self.global_state = pickle.load(file)
+            except Exception:
+                logger.exception("Unable to use state file: {}", self.state_file)
+                self.state_file = None
+                self.global_state = {}
+            else:
+                logger.info("Recovered state from state file: {}", self.state_file)
         else:
             self.global_state = {}
         self.global_state_dirty = False
@@ -96,7 +103,7 @@ class EngineController:
                 logger.info("Restore counter at beat {:.1f}, tempo {:.1f}, quantum {}", self.counter.beat, self.counter.tempo, self.counter.quantum)
             else:
                 self.counter.reset()
-            setproctitle(f'flitter {self.current_path}')
+            setproctitle(f'flitter [{self.current_path}]')
 
     def has_next_page(self):
         return self.current_page < len(self.pages) - 1

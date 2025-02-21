@@ -9,14 +9,18 @@ from pathlib import Path
 import sys
 
 from flitter import configure_logger, __version__, setproctitle
-from ..language.parser import convert_number_to_float, convert_timecode_to_float
 from .control import EngineController
+from ..language.parser import convert_number_to_float, convert_timecode_to_float
+from ..model import Vector
 
 
 def keyvalue(text):
     key, value = text.split('=', 1)
     values = value.split(';')
     for i in range(len(values)):
+        if values[i].startswith(':'):
+            values[i] = float(Vector.symbol(values[i][1:]))
+            continue
         try:
             values[i] = convert_number_to_float(values[i])
             continue
