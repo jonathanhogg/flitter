@@ -43,10 +43,12 @@ class ParseError(Exception):
 
 def convert_timecode_to_float(t):
     parts = t.split(':')
-    if len(parts) not in (2, 3):
+    if not 1 <= len(parts) <= 3:
         raise ValueError("Incorrect format")
-    seconds = 60*int(parts[-2]) + float(parts[-1])
-    if len(parts) == 3:
+    seconds = float(parts[-1])
+    if len(parts) > 1:
+        seconds += 60*int(parts[-2])
+    if len(parts) > 2:
         seconds += 3600*int(parts[-3])
     return seconds
 

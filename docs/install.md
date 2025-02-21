@@ -186,8 +186,9 @@ begin again fresh.
 
 `--simplifystate` *SECONDS*
 : Sets the period after which the [language
-simplifier](language.md#simplification) will simplify on static state values.
-The default is 10 seconds. Set this to `0` to disable simplifying on state.
+simplifier](language.md#simplification) will simplify on static state values, in
+seconds (may be specified as a [time-code](language.md#time-codes)). The default
+is 10 seconds. Set this to `0` to disable simplifying on state.
 
 `--nosimplify`
 : Completely disable the language simplifier. Generally there is no reason to
@@ -204,7 +205,8 @@ output from non-interactive programs. It also has a specific [effect on how the
 physics system runs](physics.md#non-realtime-mode).
 
 `--runtime` *SECONDS*
-: Run for a specific period of time and then exit automatically. This is
+: Run for a specific period of time and then exit automatically, in seconds
+(may be specified as a [time-code](language.md#time-codes)). This is
 particularly useful for capturing videos of a specific length unattended. In
 `--lockstep` mode, this is a period of the internal frame clock not the wall
 clock.
