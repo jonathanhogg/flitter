@@ -439,7 +439,7 @@ class GLFWLoader:
 
 class Window(ProgramNode):
     WINDOW_FRAGMENT_SOURCE = TemplateLoader.get_template('window.frag')
-    Windows = []
+    Windows = None
 
     def __init__(self, screen=0, fullscreen=False, vsync=False, offscreen=False, **kwargs):
         super().__init__(None)
@@ -470,8 +470,6 @@ class Window(ProgramNode):
         if self.window is not None:
             glfw.destroy_window(self.window)
             Window.Windows.remove(self)
-            if not Window.Windows:
-                glfw.terminate()
             logger.debug("{} closed", self.name)
             self.window = None
         self.engine = None
@@ -488,11 +486,12 @@ class Window(ProgramNode):
         title = node.get('title', 1, str, "Flitter")
         if self.window is None:
             self.engine = engine
-            if not Window.Windows:
+            if Window.Windows is None:
                 ok = glfw.init()
                 if not ok:
                     raise RuntimeError("Unable to initialize GLFW")
                 logger.debug("GLFW version: {}", glfw.get_version_string().decode('utf8'))
+                Window.Windows = []
             glfw.window_hint(glfw.CONTEXT_CREATION_API, glfw.EGL_CONTEXT_API if opengl_es else glfw.NATIVE_CONTEXT_API)
             glfw.window_hint(glfw.CLIENT_API, glfw.OPENGL_ES_API if opengl_es else glfw.OPENGL_API)
             glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
