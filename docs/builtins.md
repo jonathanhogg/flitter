@@ -115,7 +115,7 @@ for the 1st, 2nd, etc., element of each of the argument vectors.
 
 `length(` *x* `;` *y* `)` (or `length(` *x* `,` *y* `)`)
 : Return the length of the cartesian vector *x,y*. This is similar to `hypot()`
-but restricted to cartesian vectors. The difference is that it will accept
+but restricted to two-dimensional vectors. The difference is that it will accept
 an n-vector of *x,y* pairs in the first form and return a sequence composed of
 the length of each pair, while `hypot()` will return the length of a single
 n-dimensional vector. This function is designed to be used with `angle()` to
