@@ -554,12 +554,7 @@ cdef class BinaryOperation(Expression):
     def __init__(self, Expression left, Expression right):
         self.left = left
         self.right = right
-        if not self.left.unbound_names:
-            self.unbound_names = self.right.unbound_names
-        elif not self.right.unbound_names:
-            self.unbound_names = self.left.unbound_names
-        else:
-            self.unbound_names = self.left.unbound_names.union(self.right.unbound_names)
+        self.unbound_names = self.left.unbound_names.union(self.right.unbound_names)
 
     cdef void _compile(self, Program program, list lnames):
         self.left._compile(program, lnames)
@@ -595,12 +590,7 @@ cdef class BinaryOperation(Expression):
         cdef BinaryOperation binary = <BinaryOperation>T.__new__(T)
         binary.left = left
         binary.right = right
-        if not left.unbound_names:
-            binary.unbound_names = right.unbound_names
-        elif not right.unbound_names:
-            binary.unbound_names = left.unbound_names
-        else:
-            binary.unbound_names = left.unbound_names.union(right.unbound_names)
+        binary.unbound_names = left.unbound_names.union(right.unbound_names)
         return binary
 
     cdef Vector op(self, Vector left, Vector right):
