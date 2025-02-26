@@ -102,7 +102,7 @@ class EngineController:
                 self.counter.reset(tempo, int(quantum), start)
                 logger.info("Restore counter at beat {:.1f}, tempo {:.1f}, quantum {}", self.counter.beat, self.counter.tempo, self.counter.quantum)
             else:
-                self.counter.reset()
+                self.counter.reset(start=system_clock() if self.realtime else 0)
             setproctitle(f'flitter [{self.current_path}]')
 
     def has_next_page(self):
@@ -169,7 +169,7 @@ class EngineController:
         try:
             frame_count = 0
             frames = []
-            start_time = frame_time = system_clock() if self.realtime else self.counter.start
+            start_time = frame_time = system_clock() if self.realtime else 0
             last = self.counter.beat_at_time(frame_time)
             save_state_time = system_clock() + self.STATE_SAVE_PERIOD
             execution = render = housekeeping = 0

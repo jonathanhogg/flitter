@@ -108,6 +108,12 @@ The internal simulation clock can be read from the state and used to track the
 actual amount of simulation time that has passed (see [State
 interaction](#state-interaction) below).
 
+A physics system is entirely deterministic *iff* it uses fixed starting
+conditions *and* **Flitter** is run in non-realtime mode. When run in realtime
+mode, small numerical differences in how time advances will introduce tiny
+variations that compound quickly in any non-trivial system to produce chaotic
+results.
+
 ### `!particle`
 
 A `!particle` node specifies a point/spherical object to be simulated. At each

@@ -75,8 +75,9 @@ The engine-supplied global values are:
 - `quantum` - the beats per quantum (usually 4)
 - `delta` - the difference between the current value of `beat` and the value
     at the last display frame
-- `time` - the current frame time (derived from Python's `perf_counter()`
-    usually, though increasing by exactly `1/fps` per frame in non-realtime
+- `time` - the time that the current frame began execution (either the value
+    of the high-resolution Python `perf_counter()` timer or a counter beginning
+    at `0` and incrementing by exactly `1/fps` on each frame in non-realtime
     mode)
 - `clock` - the current UTC time as a seconds-since-UNIX-epoch value
 - `frame` - the current frame number, counting from 0 and increasing by one
