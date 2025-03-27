@@ -43,7 +43,7 @@ class Vignette(Shader):
 
 class Adjust(Shader):
     DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('adjust.frag')
-    TONEMAP_FUNCTIONS = {'reinhard', 'aces'}
+    TONEMAP_FUNCTIONS = {'reinhard', 'aces', 'agx', 'agx_punchy'}
 
     def render(self, node, references, **kwargs):
         tonemap = node.get('tonemap', 1, str)
@@ -51,7 +51,7 @@ class Adjust(Shader):
             tonemap = None
         super().render(node, references, exposure=0, contrast=1, brightness=0, shadows=0, highlights=0,
                        hue=0, saturation=1, color_matrix=(1, 0, 0, 0, 1, 0, 0, 0, 1),
-                       gamma=1, tonemap_function=tonemap, **kwargs)
+                       gamma=1, tonemap_function=tonemap, whitepoint=0, **kwargs)
 
 
 class Blur(Shader):

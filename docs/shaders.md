@@ -361,11 +361,12 @@ image (luminance > $0.5$).
 adjustments, Values less than 1 will lighten the output image and values
 greater than 1 will darken it.
 
-`tonemap=` [ `:reinhard` | `:aces` ]
+`tonemap=` [ `:reinhard` | `:aces` | `:agx` | `:agx_punchy` ]
 : If specified, then a tone-mapping function will be applied to map high
 dynamic range images into the $[0,1]$ range. The supported tone-mapping
-functions are: the Reinhard curve function, and a (close approximation of) the
-ACES filmic function. Default is no tone-mapping.
+functions are: the Reinhard curve function, a (close approximation of) the
+ACES filmic function and a (close approximation) of the AGX and AGX "Punchy"
+tone-mapping functions. Default is no tone-mapping.
 
 If `tonemap=:reinhard` then an additional attribute is supported:
 
