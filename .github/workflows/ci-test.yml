@@ -3,30 +3,30 @@ name: CI test
 
 on:
   push:
-    branches: ["main"]
+    branches: [main]
     paths:
-    - ".github/workflows/ci-test.yml"
-    - "pyproject.toml"
-    - "setup.py"
-    - "src/**/*"
-    - "tests/**/*"
-    - "docs/**/*.fl"
-    - "examples/**/*"
+    - .github/workflows/ci-test.yml
+    - pyproject.toml
+    - setup.py
+    - src/**/*
+    - tests/**/*
+    - docs/**/*.fl
+    - examples/**/*
   pull_request:
-    branches: ["main"]
+    branches: [main]
 
 jobs:
   build-and-test:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        python-version: ['3.10', '3.11', '3.12', '3.13']
         os: [ubuntu-latest, windows-latest, macos-13, macos-14]
         include:
         - os: macos-13
-          pytest_options: "--ignore=tests/test_engine.py"
+          pytest_options: --ignore=tests/test_engine.py
         - os: macos-14
-          pytest_options: "--ignore=tests/test_engine.py"
+          pytest_options: --ignore=tests/test_engine.py
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v4
@@ -51,14 +51,16 @@ jobs:
     - name: Install Linux Mesa OpenGL drivers and Microsoft fonts
       if: matrix.os == 'ubuntu-latest'
       run: |
-        echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" | sudo debconf-set-selections
+        echo 'ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true' |
+          sudo debconf-set-selections
         sudo apt-get install -y mesa-utils xvfb libfontconfig1 ttf-mscorefonts-installer
         python -m pip install pytest-xvfb
     - name: Install Windows Mesa OpenGL drivers
       if: matrix.os == 'windows-latest'
       shell: cmd
       run: |
-        curl -L --output mesa.7z --url https://github.com/pal1000/mesa-dist-win/releases/download/24.3.4/mesa3d-24.3.4-release-msvc.7z
+        curl -L --output mesa.7z --url \
+          https://github.com/pal1000/mesa-dist-win/releases/download/24.3.4/mesa3d-24.3.4-release-msvc.7z
         "C:\Program Files\7-Zip\7z.exe" x mesa.7z
         .\systemwidedeploy.cmd 1
       working-directory: build
