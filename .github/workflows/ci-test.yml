@@ -51,8 +51,7 @@ jobs:
     - name: Install Linux Mesa OpenGL drivers and Microsoft fonts
       if: matrix.os == 'ubuntu-latest'
       run: |
-        echo 'ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true' |
-          sudo debconf-set-selections
+        echo 'ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true' | sudo debconf-set-selections
         sudo apt-get install -y mesa-utils xvfb libfontconfig1 ttf-mscorefonts-installer
         python -m pip install pytest-xvfb
     - name: Install Windows Mesa OpenGL drivers

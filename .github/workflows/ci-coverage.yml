@@ -39,8 +39,7 @@ jobs:
     - name: Install Linux Mesa OpenGL drivers and Microsoft fonts
       run: |
         sudo apt-get update
-        echo 'ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select truer' |
-          sudo debconf-set-selections
+        echo 'ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select truer' | sudo debconf-set-selections
         sudo apt-get install -y mesa-utils xvfb libfontconfig1 ttf-mscorefonts-installer
     - name: Run all tests with coverage
       run:
