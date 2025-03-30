@@ -12,7 +12,6 @@ PluginObjectCache = {}
 
 
 def get_plugin(group, name, quiet=False):
-    global PluginEntryPoints, PluginObjectCache
     if group in PluginObjectCache:
         cache = PluginObjectCache[group]
         if name in cache:
@@ -42,7 +41,6 @@ def get_plugin(group, name, quiet=False):
 
 
 def get_plugin_names(group):
-    global PluginEntryPoints
     if group in PluginEntryPoints:
         entry_points = PluginEntryPoints[group]
     else:
