@@ -7,7 +7,7 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'Flitter'
-copyright = '2024, Jonathan Hogg'
+copyright = '2025, Jonathan Hogg'
 author = 'Jonathan Hogg'
 
 # -- General configuration ---------------------------------------------------

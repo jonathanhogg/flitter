@@ -306,11 +306,11 @@ Profiling of the Cython modules **is not supported in Python 3.12** due to
 internal changes in the profiling API.
 
 Profiling *is* supported in Python 3.13 and above if using Cython 3.1, currently
-[in alpha](https://github.com/cython/cython/releases/tag/3.1.0a1) (as of
-2024-11-08). Install that with:
+[in beta](https://github.com/cython/cython/releases/tag/3.1.0b1) (as of
+2025-04-03). Install that with:
 
 ```console
-$ pip3 install 'cython>=3.1.0a1'
+$ pip3 install 'cython>=3.1.0b1'
 ```
 :::
 
