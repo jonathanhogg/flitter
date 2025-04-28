@@ -58,8 +58,7 @@ jobs:
       if: matrix.os == 'windows-latest'
       shell: cmd
       run: |
-        curl -L --output mesa.7z --url \
-          https://github.com/pal1000/mesa-dist-win/releases/download/24.3.4/mesa3d-24.3.4-release-msvc.7z
+        curl -L --output mesa.7z --url https://github.com/pal1000/mesa-dist-win/releases/download/24.3.4/mesa3d-24.3.4-release-msvc.7z
         "C:\Program Files\7-Zip\7z.exe" x mesa.7z
         .\systemwidedeploy.cmd 1
       working-directory: build
