@@ -37,6 +37,7 @@ class CachePath:
         return self._path.exists()
 
     def cleanup(self):
+        full_collect = False
         while self._cache:
             key, value = self._cache.popitem()
             if key[0] == 'video':
@@ -46,11 +47,13 @@ class CachePath:
                 if container is not None:
                     container.close()
                     logger.debug("Closing video: {}", self._path)
+                full_collect = True
             elif key[0] == 'video_output':
                 writer, queue, start = value
                 if queue is not None:
                     queue.put(None)
                     writer.join()
+        return full_collect
 
     def check_unmodified(self):
         self._touched = system_clock()
@@ -479,13 +482,15 @@ class FileCache:
         self._root = Path('.')
 
     def clean(self, max_age=DEFAULT_CLEAN_TIME):
+        full_collect = False
         cutoff = system_clock() - max_age
         for path in list(self._cache):
             cache_path = self._cache[path]
             if cache_path._touched < cutoff:
-                cache_path.cleanup()
+                full_collect |= cache_path.cleanup()
                 del self._cache[path]
                 logger.trace("Discarded {}", path)
+        return full_collect
 
     def set_root(self, path):
         if isinstance(path, CachePath):

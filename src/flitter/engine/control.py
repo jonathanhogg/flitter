@@ -302,7 +302,7 @@ class EngineController:
                             await renderer.purge()
 
                 del context
-                SharedCache.clean()
+                gc_pending |= SharedCache.clean()
                 if self.model_cache_time > 0:
                     gc_pending |= Model.flush_caches(max_age=self.model_cache_time)
                 if gc_pending and (last_gc is None or now > last_gc + self.MINIMUM_GC_INTERVAL):
