@@ -80,3 +80,14 @@ vec3 hsv_to_rgb(vec3 color) {
     vec3 p = abs(fract(color.xxx + K.xyz) * 6.0 - K.www);
     return color.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), color.y);
 }
+
+vec3 hsl_to_rgb(vec3 color) {
+    vec3 hsl = clamp(color, vec3(0.0), vec3(1.0));
+    if (hsl.y == 0.0) {
+        return hsv_to_rgb(hsl);
+    } else {
+        float v = min(1.0, hsl.z / (1.0 - hsl.y / 2.0));
+        float s = (hsl.z == 0 || hsl.z == 1.0) ? 0.0 : (v - hsl.z) / min(hsl.z / 2.0, 1.0 - hsl.z / 2.0);
+        return hsv_to_rgb(vec3(hsl.x, s, v));
+    }
+}
