@@ -87,7 +87,7 @@ vec3 hsl_to_rgb(vec3 color) {
         return hsv_to_rgb(hsl);
     } else {
         float v = min(1.0, hsl.z / (1.0 - hsl.y / 2.0));
-        float s = (hsl.z == 0 || hsl.z == 1.0) ? 0.0 : (v - hsl.z) / min(hsl.z / 2.0, 1.0 - hsl.z / 2.0);
+        float s = (hsl.z == 0.0 || hsl.z == 1.0) ? 0.0 : (v - hsl.z) / min(hsl.z / 2.0, 1.0 - hsl.z / 2.0);
         return hsv_to_rgb(vec3(hsl.x, s, v));
     }
 }
