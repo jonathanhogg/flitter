@@ -305,6 +305,7 @@ $ env FLITTER_BUILD_PROFILE=1 python3 setup.py build_ext --inplace
 Profiling of the Cython modules **is not supported in Python 3.12** due to
 internal changes in the profiling API. Profiling *is* supported in Python 3.13
 and above as long as you have Cython 3.1 or later.
+:::
 
 Recompiling all Cython modules with profiling enabled may not be the best thing
 to do as the overhead of adding profiling support to Cython is quite high and
