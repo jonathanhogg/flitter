@@ -229,8 +229,8 @@ class TestManifoldPrimitives(utils.TestCase):
                 mesh = Model.cylinder(segments).get_manifold().to_mesh()
                 mesh = trimesh.Trimesh(vertices=mesh.vert_properties, faces=mesh.tri_verts, process=False)
                 self.assertEqual(mesh.bounds.tolist(), [[-1, -1, -0.5], [1, 1, 0.5]])
-                self.assertEqual(len(mesh.vertices), 2*segments)
-                self.assertEqual(len(mesh.faces), 4*(segments-1))
+                self.assertEqual(len(mesh.vertices), 2*segments+2)
+                self.assertEqual(len(mesh.faces), 4*segments)
                 if segments == 4:
                     self.assertAlmostEqual(mesh.area, 4*(1+math.sqrt(2)))
                     self.assertAlmostEqual(mesh.volume, 2)
@@ -244,8 +244,8 @@ class TestManifoldPrimitives(utils.TestCase):
                 mesh = Model.cone(segments).get_manifold().to_mesh()
                 mesh = trimesh.Trimesh(vertices=mesh.vert_properties, faces=mesh.tri_verts, process=False)
                 self.assertEqual(mesh.bounds.tolist(), [[-1, -1, -0.5], [1, 1, 0.5]])
-                self.assertEqual(len(mesh.vertices), segments+1)
-                self.assertEqual(len(mesh.faces), 2*(segments-1))
+                self.assertEqual(len(mesh.vertices), segments+2)
+                self.assertEqual(len(mesh.faces), 2*segments)
                 if segments == 4:
                     self.assertAlmostEqual(mesh.area, 2*(1+math.sqrt(3)))
                     self.assertAlmostEqual(mesh.volume, 2/3)
