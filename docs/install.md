@@ -5,15 +5,14 @@
 OpenGL 3.3 (Core Profile) or OpenGL ES 3.0. At least Python 3.10 is also
 required as the code uses `match`/`case` syntax. It is supported and tested on
 Apple Silicon macOS, Intel macOS, x86_64 Linux and x86_64 Windows. It is also
-known to build and run on AArch64 Linux, but no pre-built packages exist. It
-will probably work on AArch64 Windows, but this has never been tested.
+known to build and run on AArch64 Linux, but no pre-built packages exist.
 
 **Flitter** is a command-line tool. It is assumed that you are comfortable using
 the command line on your OS of choice. You will also obviously need to be able
-to ensure that you have a recent Python install. Sadly, even on macOS Sonoma
+to ensure that you have a recent Python install. Sadly, even on macOS Sequoia
 the system installed Python is only at version 3.9. You can normally download
 Python for your OS from the [Python website](https://www.python.org/downloads/).
-However, you may want to explore a package manager that can manage this sort of
+On a Mac you may want to explore a package manager that can manage this sort of
 thing for you, like [Homebrew](https://brew.sh) or
 [MacPorts](https://www.macports.org/install.php).
 
