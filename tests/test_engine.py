@@ -251,46 +251,8 @@ class TestExamples(ScriptTest):
     def test_video(self):
         self.assertScriptOutputMatchesImage(self.EXAMPLES / 'video.fl')
 
-    @unittest.skipIf(sys.platform != 'linux', 'OpenGL ES only available on Linux')
-    def test_bauble_opengl_es(self):
-        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'bauble.fl', opengl_es=True, suffix='.es.png')
 
-    @unittest.skipIf(sys.platform != 'linux', 'OpenGL ES only available on Linux')
-    def test_bounce_opengl_es(self):
-        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'bounce.fl', target_fps=10, opengl_es=True, suffix='.es.png')
-
-    @unittest.skipIf(sys.platform != 'linux', 'OpenGL ES only available on Linux')
-    def test_canvas3d_opengl_es(self):
-        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'canvas3d.fl', opengl_es=True, suffix='.es.png')
-
-    @unittest.skipIf(sys.platform != 'linux', 'OpenGL ES only available on Linux')
-    def test_linelight_opengl_es(self):
-        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'linelight.fl', opengl_es=True, suffix='.es.png')
-
-    @unittest.skipIf(sys.platform != 'linux', 'OpenGL ES only available on Linux')
-    def test_oklch_opengl_es(self):
-        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'oklch.fl', opengl_es=True, suffix='.es.png')
-
-    @unittest.skipIf(sys.platform != 'linux', 'OpenGL ES only available on Linux')
-    def test_physics_opengl_es(self):
-        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'physics.fl', target_fps=10, opengl_es=True, suffix='.es.png')
-
-    @unittest.skipIf(sys.platform != 'linux', 'OpenGL ES only available on Linux')
-    def test_sdf_opengl_es(self):
-        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'sdf.fl', opengl_es=True, suffix='.es.png')
-
-    @unittest.skipIf(sys.platform != 'linux', 'OpenGL ES only available on Linux')
-    def test_solidgeometry_opengl_es(self):
-        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'solidgeometry.fl', opengl_es=True, suffix='.es.png')
-
-    @unittest.skipIf(sys.platform != 'linux', 'OpenGL ES only available on Linux')
-    def test_teaset_opengl_es(self):
-        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'teaset.fl', opengl_es=True, suffix='.es.png')
-
-    @unittest.skipIf(sys.platform != 'linux', 'OpenGL ES only available on Linux')
-    def test_textures_opengl_es(self):
-        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'textures.fl', target_fps=2, opengl_es=True, suffix='.es.png')
-
-    @unittest.skipIf(sys.platform != 'linux', 'OpenGL ES only available on Linux')
-    def test_translucency_opengl_es(self):
-        self.assertScriptOutputMatchesImage(self.EXAMPLES / 'translucency.fl', opengl_es=True, suffix='.es.png')
+@unittest.skipIf(sys.platform != 'linux', 'OpenGL ES only available on Linux')
+class TestExamplesOpenGLES(TestExamples):
+    def assertScriptOutputMatchesImage(self, script, suffix='.es.png', target_fps=1, run_time=1, **kwargs):
+        super().assertScriptOutputMatchesImage(script, suffix, target_fps, run_time, opengl_es=True, **kwargs)

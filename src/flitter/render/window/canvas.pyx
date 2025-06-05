@@ -878,7 +878,7 @@ class Canvas(WindowNode):
         if self._target is not None:
             self._target.release()
 
-    def create(self, engine, node, resized, **kwargs):
+    def create(self, engine, node, resized, opengl_es=False, **kwargs):
         colorbits = node.get('colorbits', 1, int, 8)
         srgb = not node.get('linear', 1, bool, False)
         if srgb or colorbits not in COLOR_FORMATS:
@@ -889,7 +889,10 @@ class Canvas(WindowNode):
                 self._target.release()
             self._target = RenderTarget.get(self.glctx, self.width, self.height, colorbits, srgb=srgb)
             if self._graphics_context is None:
-                self._graphics_context = skia.GrDirectContext.MakeGL()
+                if opengl_es:
+                    self._graphics_context = skia.GrDirectContext.MakeGL(skia.GrGLInterface.MakeEGL())
+                else:
+                    self._graphics_context = skia.GrDirectContext.MakeGL()
                 if self._graphics_context is None:
                     logger.error("Failed to create GL context for Skia (is this OpenGL ES?)")
                     self._surface = None
