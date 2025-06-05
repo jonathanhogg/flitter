@@ -4,8 +4,8 @@
 **Flitter** is implemented in a mix of Python and Cython and requires at least
 OpenGL 3.3 (Core Profile) or OpenGL ES 3.0. At least Python 3.10 is also
 required as the code uses `match`/`case` syntax. It is supported and tested on
-Apple Silicon macOS, Intel macOS, x86_64 Linux and x86_64 Windows. It is also
-known to build and run on AArch64 Linux, but no pre-built packages exist.
+Apple Silicon macOS, Intel macOS, x86_64 Linux, AArch64 Linux and x86_64
+Windows.
 
 **Flitter** is a command-line tool. It is assumed that you are comfortable using
 the command line on your OS of choice. You will also obviously need to be able
