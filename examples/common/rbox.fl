@@ -4,7 +4,7 @@ func rbox(_, position=0, size=1, rotation=null, radius=null, segments=null)
     let radius=clamp(radius/size if radius != null else 0.25, 0, 0.5)
         inner=1-radius*2
         segments=max(1, segments//8)*8 if segments != null
-    !union position=position size=size rotation=rotation
+    !union position=position size=size rotation=rotation snap_edges=(0.5 if radius[0] and radius[1] and radius[2] else 0.05)
         if inner[1] and inner[2]
             !box size=1;inner[1];inner[2]
         if inner[0] and inner[1]
