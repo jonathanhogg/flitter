@@ -155,6 +155,8 @@ cdef class Export(Expression):
         program.literal(null_)
 
     cdef Expression _simplify(self, Context context):
+        if context.is_include:
+            return NoOp
         cdef str name
         cdef dict static_exports = dict(self.static_exports) if self.static_exports else {}
         cdef bint touched = False
@@ -170,6 +172,47 @@ cdef class Export(Expression):
 
     def __repr__(self):
         return f'Export({self.static_exports!r})'
+
+
+cdef class Include(Expression):
+    cdef readonly Expression filename
+
+    def __init__(self, Expression filename):
+        self.filename = filename
+        self.unbound_names = self.filename.unbound_names
+
+    cdef void _compile(self, Program program, list lnames):
+        program.compiler_errors.add("Dynamic include detected; is simplifier disabled?")
+        program.literal(null_)
+
+    cdef Expression _simplify(self, Context context):
+        cdef str name
+        cdef Expression filename = self.filename._simplify(context)
+        cdef Top top
+        cdef Expression expr = self
+        if type(filename) is Literal and context.path is not None:
+            if (<Literal>filename).value.length:
+                name = (<Literal>filename).value.as_string()
+                path = SharedCache.get_with_root(name, context.path)
+                if path in context.dependencies:
+                    context.errors.add(f"Cannot include path '{name}' multiple times")
+                    expr = NoOp
+                elif (top := path.read_flitter_top()) is not None:
+                    original_path = context.path
+                    context.dependencies.add(path)
+                    context.path = path
+                    context.is_include = True
+                    expr = top.body._simplify(context)
+                    context.is_include = False
+                    context.path = original_path
+            else:
+                expr = NoOp
+        elif filename is not self.filename:
+            expr = Include(filename)
+        return expr
+
+    def __repr__(self):
+        return f'Include({self.filename!r})'
 
 
 cdef class Import(Expression):

@@ -1134,6 +1134,49 @@ a module attempts to import a module further up the current import chain, then
 an error will be output to the console and all of the names for the failing
 import will be bound to `null`.
 
+## Includes
+
+As well as the [module system described above](#imports), **Flitter** provides
+a lower-level mechanism for including code from one file in another. The
+`%include` directive will parse a secondary source file and include the
+top-level expressions from it as a sequence of expressions at the current
+position, including indentation level.
+
+For example, given the file `contents.fl` containing:
+
+```flitter
+!canvas3d
+    !light color=1
+    !sphere size=RADIUS
+```
+
+The following source will insert the `!canvas` node as if it had been indented
+inside the `!window` node.
+
+```flitter
+let SIZE=1920;1080
+    RADIUS=500
+
+!window size=SIZE
+    %include 'contents.fl'
+```
+
+This operation happens at the level of the abstract syntax tree, not the text.
+This allows it to include code at the correct indentation level and means that
+all names defined at the point of the directive will be defined within the
+included expressions. However, it also means that names defined inside included
+source are not visible in the including code below the directive. Any
+[pragmas](#pragmas) in the included source will be silently discarded.
+
+Source inclusion is processed as part of the [simplifier](#simplification) and
+the filename expression must simplify to a literal. If the filename expression
+is `null`, then the directive is silently ignored. An attempt to use an include
+with a dynamic filename expression, or with the simplifier disabled, will log a
+compiler error and be ignored. Filenames are relative to the path of the file
+containing the `%include` and included files may include further files, but a
+specific source file may only be included once in any program to avoid
+parsing loops.
+
 ## Parsing
 
 **Flitter** uses an LALR(1) parser with a contextual lexer. This means that, in

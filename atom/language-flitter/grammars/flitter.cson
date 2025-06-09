@@ -56,6 +56,10 @@ patterns: [
                 name: "constant.pragma.flitter"
     }
     {
+        match: "\\b(include)\\s"
+        name: "keyword.control.flow.flitter"
+    }
+    {
         match: "\\b(import)\\s+([_\\p{alpha}][_\\p{alnum}]*'*\\s*(?:\\s*;\\s*[_\\p{alpha}][_\\p{alnum}]*'*)*)\\s+(from)"
         captures:
             '1':

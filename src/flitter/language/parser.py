@@ -142,6 +142,7 @@ class FlitterTransformer(Transformer):
     ge = tree.GreaterThanOrEqualTo
     gt = tree.GreaterThan
     if_else = tree.IfElse
+    include = tree.Include
     le = tree.LessThanOrEqualTo
     let = tree.Let
     let_import = tree.Import

@@ -39,6 +39,7 @@ parameter : NAME ["=" node] -> binding
             | "@" atom [attribute_bindings] _NL [_INDENT sequence _DEDENT] -> template_call
             | "for" iterators _NL _INDENT sequence _DEDENT -> loop
             | "if" conditions ["else" _NL _INDENT sequence _DEDENT] -> if_else
+            | "%include" composition _NL -> include
             | _EOF -> export
 
 iterators : name_list "in" composition ("," name_list "in" composition)* -> tuple

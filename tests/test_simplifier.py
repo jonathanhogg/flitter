@@ -17,7 +17,7 @@ from flitter.language.tree import (Literal, Name, Sequence,
                                    Not, And, Or, Xor, Range, Slice, Lookup,
                                    Tag, Attributes, Append,
                                    Let, Call, For, IfElse,
-                                   Import, Function, Top, Export,
+                                   Import, Include, Function, Top, Export,
                                    Binding, PolyBinding, IfCondition)
 from flitter.language.vm import all_builtins
 
@@ -1296,6 +1296,26 @@ let y=10+(x or 3)
         self.assertSimplifiesTo(Import(('f',), Literal(str(self.test_module)), Call(Name('f'), (Name('y'),), ())),
                                 Multiply(Name('y'), Literal(2)),
                                 dynamic={'y'}, with_dependencies={self.test_module})
+
+
+class TestInclude(SimplifierTestCase):
+    def setUp(self):
+        self.test_include = Path(tempfile.mktemp('.fl'))
+        self.test_include.write_text("""
+let x=5 y=10
+x+y+z
+""", encoding='utf8')
+
+    def tearDown(self):
+        if self.test_include.exists():
+            self.test_include.unlink()
+
+    def test_dynamic(self):
+        self.assertSimplifiesTo(Include(Name('z')), Include(Name('w')), static={'z': Name('w')}, dynamic={'w'})
+
+    def test_static(self):
+        self.assertSimplifiesTo(Include(Literal(str(self.test_include))), Literal(30), static={'z': 15}, unbound=set(),
+                                with_dependencies={self.test_include})
 
 
 class TestFunction(SimplifierTestCase):
