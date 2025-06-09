@@ -49,7 +49,7 @@ dependencies = [
     "regex",
     "rtmidi2",
     "scipy",
-    "skia-python>=138.0rc1",
+    "skia-python>=138.0",
     "trimesh",
 ]
 
