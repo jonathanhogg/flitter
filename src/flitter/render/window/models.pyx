@@ -85,10 +85,6 @@ cpdef void fill_in_normals(vertices_array, faces_array):
         Ax, Ay, Az = vertices[c, 0]-vertices[b, 0], vertices[c, 1]-vertices[b, 1], vertices[c, 2]-vertices[b, 2]
         Bx, By, Bz = vertices[a, 0]-vertices[b, 0], vertices[a, 1]-vertices[b, 1], vertices[a, 2]-vertices[b, 2]
         Nx, Ny, Nz = Ay*Bz-Az*By, Az*Bx-Ax*Bz, Ax*By-Ay*Bx
-        f = 1.0 / sqrt(Nx*Nx + Ny*Ny + Nz*Nz)
-        Nx *= f
-        Ny *= f
-        Nz *= f
         vertices[a, 3] += Nx
         vertices[a, 4] += Ny
         vertices[a, 5] += Nz
