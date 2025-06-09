@@ -767,9 +767,9 @@ cdef class Transform(UnaryOperation):
             x = vertex_data[i, 0]
             y = vertex_data[i, 1]
             z = vertex_data[i, 2]
-            transformed_vertex_data[0] = M[0]*x + M[4]*y + M[8]*z + M[12]
-            transformed_vertex_data[1] = M[1]*x + M[5]*y + M[9]*z + M[13]
-            transformed_vertex_data[2] = M[2]*x + M[6]*y + M[10]*z + M[14]
+            transformed_vertex_data[i, 0] = M[0]*x + M[4]*y + M[8]*z + M[12]
+            transformed_vertex_data[i, 1] = M[1]*x + M[5]*y + M[9]*z + M[13]
+            transformed_vertex_data[i, 2] = M[2]*x + M[6]*y + M[10]*z + M[14]
             x = vertex_data[i, 3]
             y = vertex_data[i, 4]
             z = vertex_data[i, 5]
@@ -777,9 +777,9 @@ cdef class Transform(UnaryOperation):
             Ny = N[1]*x + N[4]*y + N[7]*z
             Nz = N[2]*x + N[5]*y + N[8]*z
             f = 1.0 / sqrt(Nx*Nx + Ny*Ny + Nz*Nz)
-            transformed_vertex_data[3] = Nx * f
-            transformed_vertex_data[4] = Ny * f
-            transformed_vertex_data[5] = Nz * f
+            transformed_vertex_data[i, 3] = Nx * f
+            transformed_vertex_data[i, 4] = Ny * f
+            transformed_vertex_data[i, 5] = Nz * f
         return transformed_vertex_array, index_array
 
     cpdef object build_trimesh(self):
