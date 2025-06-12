@@ -6,14 +6,14 @@ Flitter language functions
 
 import cython
 
-from libc.math cimport floor, sin, cos, tan, asin, acos, sqrt, exp, atan2, log, log2, log10
+from libc.math cimport floor, sin, tan, asin, acos, sqrt, exp, atan2, log, log2, log10
 from libc.stdint cimport int64_t, uint64_t
 from cpython.object cimport PyObject
 from cpython.ref cimport Py_INCREF
 from cpython.tuple cimport PyTuple_New, PyTuple_GET_ITEM, PyTuple_SET_ITEM
 
 from ..cache import SharedCache
-from ..model cimport Vector, Matrix33, Matrix44, Quaternion, Context, null_, true_, false_
+from ..model cimport Vector, Matrix33, Matrix44, Quaternion, Context, null_, true_, false_, cost, sint
 
 
 cdef double Pi = 3.141592653589793115997963468544185161590576171875
@@ -162,12 +162,12 @@ cdef class normal(uniform):
             if u1 == 0:
                 u1, u2 = u2, u1
             self.R = sqrt(-2 * log(u1))
-            self.th = Tau * u2
+            self.th = u2
             self.i = i
             self.cached = True
         if odd:
-            return self.R * sin(self.th)
-        return self.R * cos(self.th)
+            return self.R * sint(self.th)
+        return self.R * cost(self.th)
 
 
 @context_func
@@ -241,7 +241,7 @@ def sinv(Vector theta not None):
     cdef Vector ys = Vector.__new__(Vector)
     cdef int64_t i, n = theta.length
     for i in range(ys.allocate_numbers(n)):
-        ys.numbers[i] = sin(theta.numbers[i] * Tau)
+        ys.numbers[i] = sint(theta.numbers[i])
     return ys
 
 
@@ -251,7 +251,7 @@ def cosv(Vector theta not None):
     cdef Vector ys = Vector.__new__(Vector)
     cdef int64_t i, n = theta.length
     for i in range(ys.allocate_numbers(n)):
-        ys.numbers[i] = cos(theta.numbers[i] * Tau)
+        ys.numbers[i] = cost(theta.numbers[i])
     return ys
 
 
@@ -292,8 +292,8 @@ def polar(Vector theta not None):
     cdef int64_t i, n = theta.length
     ys.allocate_numbers(n*2)
     for i in range(0, n):
-        ys.numbers[i*2] = cos(theta.numbers[i] * Tau)
-        ys.numbers[i*2+1] = sin(theta.numbers[i] * Tau)
+        ys.numbers[i*2] = cost(theta.numbers[i])
+        ys.numbers[i*2+1] = sint(theta.numbers[i])
     return ys
 
 
@@ -403,7 +403,7 @@ def sine(Vector xs not None):
         return null_
     cdef Vector ys = Vector.__new__(Vector)
     for i in range(ys.allocate_numbers(xs.length)):
-        ys.numbers[i] = (1 - cos(Tau * xs.numbers[i])) / 2
+        ys.numbers[i] = (1 - cost(xs.numbers[i])) / 2
     return ys
 
 
@@ -1071,11 +1071,11 @@ def oklch(Vector lch):
     if lch.length != 3 or lch.objects is not None:
         return null_
     cdef Vector lab = Vector.__new__(Vector)
-    cdef double L=lch.numbers[0], C=lch.numbers[1], h=lch.numbers[2]*Tau
+    cdef double L=lch.numbers[0], C=lch.numbers[1], h=lch.numbers[2]
     lab.allocate_numbers(3)
     lab.numbers[0] = L
-    lab.numbers[1] = C * cos(h)
-    lab.numbers[2] = C * sin(h)
+    lab.numbers[1] = C * cost(h)
+    lab.numbers[2] = C * sint(h)
     return XYZ_to_sRGB.vmul(OKLab_M1_inv.vmul(OKLab_M2_inv.vmul(lab).pow(Three)))
 
 

@@ -128,18 +128,18 @@ class TestQuaternion(utils.TestCase):
         self.assertAllAlmostEqual(q @ q @ q @ q @ q @ q, Quaternion(1))
 
     def test_inverse(self):
-        self.assertAlmostEqual(Quaternion.euler([1, 0, 0], 0.125).inverse(), Quaternion.euler([1, 0, 0], -0.125))
-        self.assertAlmostEqual(Quaternion.euler([0, 1, 0], 0.125).inverse(), Quaternion.euler([0, 1, 0], -0.125))
-        self.assertAlmostEqual(Quaternion.euler([0, 0, 1], 0.125).inverse(), Quaternion.euler([0, 0, 1], -0.125))
+        self.assertAllAlmostEqual(Quaternion.euler([1, 0, 0], 0.125).inverse(), Quaternion.euler([1, 0, 0], -0.125))
+        self.assertAllAlmostEqual(Quaternion.euler([0, 1, 0], 0.125).inverse(), Quaternion.euler([0, 1, 0], -0.125))
+        self.assertAllAlmostEqual(Quaternion.euler([0, 0, 1], 0.125).inverse(), Quaternion.euler([0, 0, 1], -0.125))
         q = Quaternion.euler([1, 1, 1], 1/3)
-        self.assertAlmostEqual(q @ q.inverse(), Quaternion())
-        self.assertAlmostEqual(q.inverse() @ q, Quaternion())
-        self.assertAlmostEqual(q @ q.inverse() @ q, q)
+        self.assertAllAlmostEqual(q @ q.inverse(), Quaternion())
+        self.assertAllAlmostEqual(q.inverse() @ q, Quaternion())
+        self.assertAllAlmostEqual(q @ q.inverse() @ q, q)
 
     def test_normalize(self):
-        self.assertAlmostEqual(Quaternion([0.5, 0.5, 0.5, 0.5]).normalize(), [0.5, 0.5, 0.5, 0.5])
-        self.assertAlmostEqual(Quaternion([1, 1, 1, 1]).normalize(), [0.5, 0.5, 0.5, 0.5])
-        self.assertAlmostEqual(Quaternion(10).normalize(), Quaternion(1))
+        self.assertAllAlmostEqual(Quaternion([0.5, 0.5, 0.5, 0.5]).normalize(), [0.5, 0.5, 0.5, 0.5])
+        self.assertAllAlmostEqual(Quaternion([1, 1, 1, 1]).normalize(), [0.5, 0.5, 0.5, 0.5])
+        self.assertAllAlmostEqual(Quaternion(10).normalize(), Quaternion(1))
 
     def test_conjugate(self):
         qx = Quaternion.euler([1, 0, 0], 0.25)

@@ -495,7 +495,8 @@ class TestTrig(utils.TestCase):
     def test_cos(self):
         self.assertEqual(cosv(null), null)
         self.assertEqual(cosv(Vector('hello')), null)
-        theta = Vector.range(0, 1, 0.01)
+        self.assertEqual(cosv(Vector([0, 0.25, 0.5, 0.75, 1])), Vector([1, 0, -1, 0, 1]))
+        theta = Vector.range(0.001, 1, 0.01)
         values = [math.cos(th) for th in theta*Tau]
         for i in range(len(values)):
             self.assertEqual(cosv(theta.item(i)), values[i])
@@ -513,7 +514,8 @@ class TestTrig(utils.TestCase):
     def test_sin(self):
         self.assertEqual(sinv(null), null)
         self.assertEqual(sinv(Vector('hello')), null)
-        theta = Vector.range(0, 1, 0.01)
+        self.assertEqual(sinv(Vector([0, 0.25, 0.5, 0.75, 1])), Vector([0, 1, 0, -1, 0]))
+        theta = Vector.range(0.001, 1, 0.01)
         values = [math.sin(th) for th in theta*Tau]
         for i in range(len(values)):
             self.assertEqual(sinv(theta.item(i)), values[i])
@@ -571,7 +573,8 @@ class TestTrig(utils.TestCase):
     def test_polar(self):
         self.assertEqual(polar(null), null)
         self.assertEqual(polar(Vector('hello')), null)
-        theta = Vector.range(0, 1, 0.01)
+        self.assertEqual(polar(Vector([0, 0.25, 0.5, 0.75, 1])), Vector([1, 0, 0, 1, -1, 0, 0, -1, 1, 0]))
+        theta = Vector.range(0.001, 1, 0.01)
         values = [(math.cos(th), math.sin(th)) for th in theta*Tau]
         for i in range(len(values)):
             self.assertEqual(polar(theta.item(i)), values[i])

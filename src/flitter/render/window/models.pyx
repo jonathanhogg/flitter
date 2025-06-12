@@ -6,14 +6,14 @@ import numpy as np
 import trimesh
 import trimesh.proximity
 
-from libc.math cimport cos, sin, sqrt, atan2, abs, floor as c_floor
+from libc.math cimport sqrt, atan2, abs, floor as c_floor
 from libc.stdint cimport int32_t, int64_t
 from cpython.object cimport PyObject
 from cpython.dict cimport PyDict_GetItem
 
 from ... import name_patch
 from ...cache import SharedCache
-from ...model cimport true_, Context, Vector, StateDict, HASH_START, HASH_UPDATE, HASH_STRING, double_long, Matrix33
+from ...model cimport true_, Context, Vector, StateDict, HASH_START, HASH_UPDATE, HASH_STRING, double_long, Matrix33, sint, cost
 from ...timer cimport perf_counter
 from ...language.vm cimport VectorStack
 
@@ -1294,8 +1294,8 @@ cdef class Sphere(PrimitiveModel):
                         r, z, v = 1, 0, 0.5
                     else:
                         th = hemisphere * (1 - <float>row / nrows) / 4
-                        v, th = 2 * th + 0.5, th * Tau
-                        r, z = cos(th), sin(th)
+                        v = 2 * th + 0.5
+                        r, z = cost(th), sint(th)
                     for col in range(row + 1):
                         if row == 0:
                             u = (side + 0.5) / 4
@@ -1310,8 +1310,7 @@ cdef class Sphere(PrimitiveModel):
                             y = r if side == 0 else -r if side == 2 else 0
                         else:
                             u = (side + (<float>col / row)) / 4
-                            th = Tau * u
-                            x, y = r * cos(th), r * sin(th)
+                            x, y = r * cost(u), r * sint(u)
                         vertices[i, 0], vertices[i, 1], vertices[i, 2] = x, y, z
                         vertices[i, 3], vertices[i, 4], vertices[i, 5] = x, y, z
                         vertices[i, 6], vertices[i, 7] = u, v
@@ -1369,7 +1368,7 @@ cdef class Cylinder(PrimitiveModel):
         cdef float[:, :] vertices = vertices_array
         cdef object faces_array = np.empty((n*4, 3), dtype='i4')
         cdef int32_t[:, :] faces = faces_array
-        cdef float x, y, th, u, u_
+        cdef float x, y, u, u_
         for i in range(n+1):
             j = k = i * 6
             u = <float>i / n
@@ -1377,8 +1376,7 @@ cdef class Cylinder(PrimitiveModel):
             if i == 0 or i == n:
                 x, y = 1, 0
             else:
-                th = Tau * u
-                x, y = cos(th), sin(th)
+                x, y = cost(u), sint(u)
             # bottom centre (k):
             vertices[j, 0], vertices[j, 1], vertices[j, 2] = 0, 0, -0.5
             vertices[j, 3], vertices[j, 4], vertices[j, 5] = 0, 0, -1
@@ -1459,17 +1457,15 @@ cdef class Cone(PrimitiveModel):
         cdef float[:, :] vertices = vertices_array
         cdef object faces_array = np.empty((n*2, 3), dtype='i4')
         cdef int32_t[:, :] faces = faces_array
-        cdef float x, y, th, u, u_
+        cdef float x, y, u, u_
         for i in range(n+1):
             j = k = i * 4
             u = <double>i / n
             u_ = (i+0.5) / n
-            th_ = Tau * u_
             if i == 0 or i == n:
                 x, y = 1, 0
             else:
-                th = Tau * u
-                x, y = cos(th), sin(th)
+                x, y = cost(u), sint(u)
             # bottom centre (k):
             vertices[j, 0], vertices[j, 1], vertices[j, 2] = 0, 0, -0.5
             vertices[j, 3], vertices[j, 4], vertices[j, 5] = 0, 0, -1
@@ -1487,7 +1483,7 @@ cdef class Cone(PrimitiveModel):
             j += 1
             # side top (k+3):
             vertices[j, 0], vertices[j, 1], vertices[j, 2] = 0, 0, 0.5
-            vertices[j, 3], vertices[j, 4], vertices[j, 5] = cos(th_)*RootHalf, sin(th_)*RootHalf, RootHalf
+            vertices[j, 3], vertices[j, 4], vertices[j, 5] = cost(u_)*RootHalf, sint(u_)*RootHalf, RootHalf
             vertices[j, 6], vertices[j, 7] = u_, 1
             if i < n:
                 j = i * 2

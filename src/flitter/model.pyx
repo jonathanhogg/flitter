@@ -30,6 +30,32 @@ cdef dict SymbolTable = {}
 cdef dict ReverseSymbolTable = {}
 
 
+cdef double sint(double t) noexcept nogil:
+    t = t - c_floor(t)
+    if t == 0:
+        return 0
+    if t == 0.25:
+        return 1
+    if t == 0.5:
+        return 0
+    if t == 0.75:
+        return -1
+    return sin(Tau * t)
+
+
+cdef double cost(double t) noexcept nogil:
+    t = t - c_floor(t)
+    if t == 0:
+        return 1
+    if t == 0.25:
+        return 0
+    if t == 0.5:
+        return -1
+    if t == 0.75:
+        return 0
+    return cos(Tau * t)
+
+
 cdef inline int64_t vector_compare(Vector left, Vector right) noexcept:
     if left is right:
         return 0
@@ -1241,7 +1267,7 @@ cdef class Matrix33(Vector):
     cdef Matrix33 _rotate(double turns):
         if isnan(turns):
             return None
-        cdef double theta = turns*Tau, cth = cos(theta), sth = sin(theta)
+        cdef double cth = cost(turns), sth = sint(turns)
         cdef Matrix33 result = Matrix33.__new__(Matrix33)
         cdef double* numbers = result._numbers
         numbers[0] = cth
@@ -1573,7 +1599,7 @@ cdef class Matrix44(Vector):
     cdef Matrix44 _rotate_x(double turns):
         if isnan(turns):
             return None
-        cdef double theta = turns*Tau, cth = cos(theta), sth = sin(theta)
+        cdef double cth = cost(turns), sth = sint(turns)
         cdef Matrix44 result = Matrix44.__new__(Matrix44)
         cdef double* numbers = result._numbers
         numbers[0] = 1
@@ -1597,7 +1623,7 @@ cdef class Matrix44(Vector):
     cdef Matrix44 _rotate_y(double turns):
         if isnan(turns):
             return None
-        cdef double theta = turns*Tau, cth = cos(theta), sth = sin(theta)
+        cdef double cth = cost(turns), sth = sint(turns)
         cdef Matrix44 result = Matrix44.__new__(Matrix44)
         cdef double* numbers = result._numbers
         numbers[0] = cth
@@ -1623,7 +1649,7 @@ cdef class Matrix44(Vector):
     cdef Matrix44 _rotate_z(double turns):
         if isnan(turns):
             return None
-        cdef double theta = turns*Tau, cth = cos(theta), sth = sin(theta)
+        cdef double cth = cost(turns), sth = sint(turns)
         cdef Matrix44 result = Matrix44.__new__(Matrix44)
         cdef double* numbers = result._numbers
         numbers[0] = cth
@@ -2013,11 +2039,11 @@ cdef class Quaternion(Vector):
         if axis is None or axis.numbers == NULL or axis.length != 3:
             raise ValueError("Axis must be a numeric 3-vector")
         cdef double x=axis.numbers[0], y=axis.numbers[1], z=axis.numbers[2]
-        cdef double half_theta = rotation * Pi
-        cdef double k = sin(half_theta) / sqrt(x*x + y*y + z*z)
+        cdef double half_rotation = rotation / 2
+        cdef double k = sint(half_rotation) / sqrt(x*x + y*y + z*z)
         cdef Quaternion result = Quaternion.__new__(Quaternion)
         cdef double* numbers = result._numbers
-        numbers[0] = cos(half_theta)
+        numbers[0] = cost(half_rotation)
         numbers[1] = k * x
         numbers[2] = k * y
         numbers[3] = k * z

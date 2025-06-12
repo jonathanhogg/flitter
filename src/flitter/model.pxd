@@ -5,6 +5,10 @@ from libc.stdint cimport int64_t, uint64_t
 from cpython.unicode cimport PyUnicode_DATA, PyUnicode_GET_LENGTH, PyUnicode_KIND, PyUnicode_READ
 
 
+cdef double sint(double t) noexcept nogil
+cdef double cost(double t) noexcept nogil
+
+
 # SplitMix64 algorithm [http://xoshiro.di.unimi.it/splitmix64.c]
 #
 cdef uint64_t HASH_START
