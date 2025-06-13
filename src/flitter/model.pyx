@@ -3,7 +3,7 @@
 import cython
 import numpy as np
 
-from libc.math cimport isnan, isinf, floor as c_floor, ceil as c_ceil, abs as c_abs, round as c_round, sqrt, sin, cos, acos, isnan
+from libc.math cimport isnan, isinf, floor as c_floor, ceil as c_ceil, abs as c_abs, round as c_round, sqrt, sin, cos, acos, isnan, remquo
 from cpython.object cimport PyObject
 from cpython.ref cimport Py_INCREF
 from cpython.bool cimport PyBool_FromLong
@@ -18,8 +18,7 @@ from cpython.tuple cimport PyTuple_New, PyTuple_GET_SIZE, PyTuple_GET_ITEM, PyTu
 
 
 cdef uint64_t HASH_START = 0xe220a8397b1dcdaf
-cdef double Pi = 3.141592653589793115997963468544185161590576171875
-cdef double Tau = 6.283185307179586231995926937088370323181152343750
+cdef double HalfPi = 1.5707963267948965579989817342720925807952880859375
 cdef double NaN = float("nan")
 cdef uint64_t SymbolPrefix = <uint64_t>(0xffe0_0000_0000_0000)
 cdef frozenset EmptySet = frozenset()
@@ -30,30 +29,21 @@ cdef dict SymbolTable = {}
 cdef dict ReverseSymbolTable = {}
 
 
+@cython.cdivision(True)
 cdef double sint(double t) noexcept nogil:
-    t = t - c_floor(t)
-    if t == 0:
-        return 0
-    if t == 0.25:
-        return 1
-    if t == 0.5:
-        return 0
-    if t == 0.75:
-        return -1
-    return sin(Tau * t)
-
-
-cdef double cost(double t) noexcept nogil:
-    t = t - c_floor(t)
-    if t == 0:
-        return 1
-    if t == 0.25:
-        return 0
-    if t == 0.5:
-        return -1
-    if t == 0.75:
-        return 0
-    return cos(Tau * t)
+    if t < 0:
+        return -sint(-t)
+    cdef int q
+    cdef double r = remquo(t * 4.0, 1.0, &q) * HalfPi
+    q = q & 0x3
+    if q == 0:
+        return sin(r)
+    elif q == 1:
+        return cos(r)
+    elif q == 2:
+        return -sin(r)
+    else:
+        return -cos(r)
 
 
 cdef inline int64_t vector_compare(Vector left, Vector right) noexcept:

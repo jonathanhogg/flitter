@@ -496,11 +496,11 @@ class TestTrig(utils.TestCase):
         self.assertEqual(cosv(null), null)
         self.assertEqual(cosv(Vector('hello')), null)
         self.assertEqual(cosv(Vector([0, 0.25, 0.5, 0.75, 1])), Vector([1, 0, -1, 0, 1]))
-        theta = Vector.range(0.001, 1, 0.01)
+        theta = Vector.range(0, 1, 0.01)
         values = [math.cos(th) for th in theta*Tau]
         for i in range(len(values)):
-            self.assertEqual(cosv(theta.item(i)), values[i])
-        self.assertEqual(cosv(theta), values)
+            self.assertAlmostEqual(cosv(theta.item(i)), values[i])
+        self.assertAllAlmostEqual(cosv(theta), values)
 
     def test_acos(self):
         self.assertEqual(acosv(null), null)
@@ -515,11 +515,11 @@ class TestTrig(utils.TestCase):
         self.assertEqual(sinv(null), null)
         self.assertEqual(sinv(Vector('hello')), null)
         self.assertEqual(sinv(Vector([0, 0.25, 0.5, 0.75, 1])), Vector([0, 1, 0, -1, 0]))
-        theta = Vector.range(0.001, 1, 0.01)
+        theta = Vector.range(0, 1, 0.01)
         values = [math.sin(th) for th in theta*Tau]
         for i in range(len(values)):
-            self.assertEqual(sinv(theta.item(i)), values[i])
-        self.assertEqual(sinv(theta), values)
+            self.assertAlmostEqual(sinv(theta.item(i)), values[i])
+        self.assertAllAlmostEqual(sinv(theta), values)
 
     def test_asin(self):
         self.assertEqual(asinv(null), null)
@@ -574,11 +574,11 @@ class TestTrig(utils.TestCase):
         self.assertEqual(polar(null), null)
         self.assertEqual(polar(Vector('hello')), null)
         self.assertEqual(polar(Vector([0, 0.25, 0.5, 0.75, 1])), Vector([1, 0, 0, 1, -1, 0, 0, -1, 1, 0]))
-        theta = Vector.range(0.001, 1, 0.01)
+        theta = Vector.range(0, 1, 0.01)
         values = [(math.cos(th), math.sin(th)) for th in theta*Tau]
         for i in range(len(values)):
-            self.assertEqual(polar(theta.item(i)), values[i])
-        self.assertEqual(polar(theta), Vector.compose(values))
+            self.assertAllAlmostEqual(polar(theta.item(i)), values[i])
+        self.assertAllAlmostEqual(polar(theta), Vector.compose(values))
 
     def test_angle(self):
         self.assertEqual(angle(null), null)
@@ -607,16 +607,16 @@ class TestQuaternions(utils.TestCase):
         self.assertEqual(quaternion(Vector([0, 1, 0]), Vector(0)), [1, 0, 0, 0])
         self.assertEqual(quaternion(Vector([0, 0, 1]), Vector(0)), [1, 0, 0, 0])
         c, s = math.cos(math.pi*0.25), math.sin(math.pi*0.25)
-        self.assertEqual(quaternion(Vector([1, 0, 0]), Vector(0.25)), [c, s, 0, 0])
-        self.assertEqual(quaternion(Vector([0, 1, 0]), Vector(0.25)), [c, 0, s, 0])
-        self.assertEqual(quaternion(Vector([0, 0, 1]), Vector(0.25)), [c, 0, 0, s])
+        self.assertAllAlmostEqual(quaternion(Vector([1, 0, 0]), Vector(0.25)), [c, s, 0, 0])
+        self.assertAllAlmostEqual(quaternion(Vector([0, 1, 0]), Vector(0.25)), [c, 0, s, 0])
+        self.assertAllAlmostEqual(quaternion(Vector([0, 0, 1]), Vector(0.25)), [c, 0, 0, s])
         self.assertAllAlmostEqual(quaternion(Vector([1, 0, 0]), Vector(0.5)), [0, 1, 0, 0])
         self.assertAllAlmostEqual(quaternion(Vector([0, 1, 0]), Vector(0.5)), [0, 0, 1, 0])
         self.assertAllAlmostEqual(quaternion(Vector([0, 0, 1]), Vector(0.5)), [0, 0, 0, 1])
         c, s = math.cos(math.pi/3), math.sin(math.pi/3)
-        self.assertEqual(quaternion(Vector([1, 0, 0]), Vector(1/3)), [c, s, 0, 0])
-        self.assertEqual(quaternion(Vector([0, 1, 0]), Vector(1/3)), [c, 0, s, 0])
-        self.assertEqual(quaternion(Vector([0, 0, 1]), Vector(1/3)), [c, 0, 0, s])
+        self.assertAllAlmostEqual(quaternion(Vector([1, 0, 0]), Vector(1/3)), [c, s, 0, 0])
+        self.assertAllAlmostEqual(quaternion(Vector([0, 1, 0]), Vector(1/3)), [c, 0, s, 0])
+        self.assertAllAlmostEqual(quaternion(Vector([0, 0, 1]), Vector(1/3)), [c, 0, 0, s])
         self.assertAllAlmostEqual(quaternion(Vector([1, 0, 0]), Vector(1)), Vector([-1, 0, 0, 0]))
         self.assertAllAlmostEqual(quaternion(Vector([0, 1, 0]), Vector(1)), Vector([-1, 0, 0, 0]))
         self.assertAllAlmostEqual(quaternion(Vector([0, 0, 1]), Vector(1)), Vector([-1, 0, 0, 0]))

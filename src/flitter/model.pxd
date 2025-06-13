@@ -6,7 +6,9 @@ from cpython.unicode cimport PyUnicode_DATA, PyUnicode_GET_LENGTH, PyUnicode_KIN
 
 
 cdef double sint(double t) noexcept nogil
-cdef double cost(double t) noexcept nogil
+
+cdef inline double cost(double t) noexcept nogil:
+    return sint(t + 0.25)
 
 
 # SplitMix64 algorithm [http://xoshiro.di.unimi.it/splitmix64.c]
