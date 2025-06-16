@@ -235,6 +235,10 @@ running **Flitter** program.
 : If specified, then the image will be resized to this size with bilinear
 interpolation.
 
+`flip=` [`:horizontal` | `:vertical` | `:both`]
+: If specified, then the image will be flipped in this direction, i.e.,
+left-to-right for `:horizontal` and top-to-bottom for `:vertical`.
+
 Unlike the rest of the window rendering nodes, `!image` does not inherit its
 size from its parent. If `size` is not specified, then the output texture size
 will match the pixel dimensions of the loaded image.
@@ -242,7 +246,7 @@ will match the pixel dimensions of the loaded image.
 The `!image` output texture is only changed if the underlying file changes, or
 the `filename` or `size` attributes are changed. This makes it a very cheap
 node to render compared to, say, creating a `!canvas` node and drawing an image
-into it. `!image` can load all image file types [supported by the **Pillow**
+into it. `!image` can load all [image file types supported by the **Pillow**
 image library](https://pillow.readthedocs.io/en/stable/handbook/image-file-formats.html).
 
 ## `!video`

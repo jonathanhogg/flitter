@@ -912,6 +912,15 @@ used to render specular reflections on the back faces of transparent objects
 (by rendering the object twice: normal and inverted) or to create environments
 (e.g., by texture-mapping a large inverted sphere that encloses the scene).
 
+:::{note}
+Note that inverting a model will not affect the UV coordinates and so these
+may end up being incorrect for texture-mapping. For instance, an inverted
+sphere will, from the inside, appear to have the texture wrapped right-to-left.
+When mapping an Equirectangular 360° photograph, this will need to be flipped
+horizontally to look correct – for instance, by adding the `flip=:horizontal`
+attribute to an [`!image` node](windows.md#image).
+:::
+
 If the texture-mapping UV coordinates for a model are missing or incorrect,
 then a new set can be calculated automatically.
 
