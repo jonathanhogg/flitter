@@ -856,11 +856,17 @@ To create a mesh from scratch use the attributes:
 : Provides a *3m*-vector of vertex numbers in the range *[0,n)* giving the
 corner vertices of *m* triangular faces.
 
-Note that face vertices should be specified in an anti-clockwise direction as
-viewed from outside the model for the surface normals to be computed correctly.
+:::{note}
+Face vertices should be specified in an anti-clockwise direction – as viewed
+from outside the model – for the surface normals to be computed correctly.
+:::
 
-Custom vertex models are cached and so, while it is possible to animate a model
-by constantly changing the vertices or faces, this will increase memory usage.
+Models created from `vertices` and `faces` are cached according to the specific
+values provided. This means that, as long as the attribute values do not change,
+the model will be constructed once and reused. However, these models are cached
+less aggressively than other models and will be immediately unloaded if not
+used. This allows animated surfaces to be created by continuously varying the
+`vertices` (and `faces`) attributes without using huge amounts of memory.
 
 ### Controlling Model Shading
 
