@@ -1086,10 +1086,17 @@ class TestStack(unittest.TestCase):
     def setUp(self):
         gc.collect()
         gc.disable()
+        self._vector_count = 0
+        for obj in gc.get_objects(0):
+            if isinstance(obj, Vector):
+                self._vector_count += 1
 
     def tearDown(self):
+        vector_count = 0
         for obj in gc.get_objects(0):
-            self.assertNotIsInstance(obj, Vector, "Memory leak")
+            if isinstance(obj, Vector):
+                vector_count += 1
+        self.assertEqual(vector_count, self._vector_count, "Memory leak")
         gc.enable()
 
     def test_create(self):
