@@ -21,6 +21,7 @@ from cpython.float cimport PyFloat_FromDouble
 from cpython.list cimport PyList_New, PyList_GET_ITEM, PyList_SET_ITEM
 from cpython.mem cimport PyMem_Malloc, PyMem_Free, PyMem_Realloc
 from cpython.object cimport PyObject_Call, PyObject_CallObject, PyObject_HasAttrString
+from cpython.ref cimport Py_REFCNT
 from cpython.set cimport PySet_Add
 from cpython.tuple cimport PyTuple_New, PyTuple_GET_ITEM, PyTuple_SET_ITEM, PyTuple_GET_SIZE, PyTuple_GetSlice
 
@@ -676,7 +677,7 @@ cdef inline void execute_append(VectorStack stack, int64_t count):
             nodeptr = PyTuple_GET_ITEM(nodes, i)
             if type(<object>nodeptr) is not Node:
                 continue
-            if nodeptr.ob_refcnt > 1:
+            if Py_REFCNT(<Node>nodeptr) > 1:
                 node = (<Node>nodeptr).copy()
                 Py_DECREF(<Node>nodeptr)
                 Py_INCREF(node)
@@ -732,7 +733,7 @@ cdef inline execute_attributes(VectorStack stack, tuple names):
         nodeptr = PyTuple_GET_ITEM(nodes, i)
         if type(<object>nodeptr) is not Node:
             continue
-        if nodeptr.ob_refcnt > 1:
+        if Py_REFCNT(<Node>nodeptr) > 1:
             copy = (<Node>nodeptr).copy()
             Py_INCREF(copy)
             PyTuple_SET_ITEM(nodes, i, copy)
@@ -768,7 +769,7 @@ cdef inline execute_tag(VectorStack stack, str name):
             objptr = PyTuple_GET_ITEM(nodes, i)
             if type(<object>objptr) is not Node:
                 continue
-            if objptr.ob_refcnt > 1:
+            if Py_REFCNT(<Node>objptr) > 1:
                 node = (<Node>objptr).copy()
                 Py_DECREF(<Node>objptr)
                 Py_INCREF(node)
