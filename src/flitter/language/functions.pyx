@@ -34,10 +34,12 @@ def debug(Context context, Vector value):
 @context_func
 @cython.boundscheck(False)
 def sample(Context context, Vector texture_id, Vector coord, Vector default=null_):
-    cdef const float[:, :, :] data
-    if coord.numbers == NULL \
-            or (scene_node := context.references.get(texture_id.as_string())) is None \
-            or not hasattr(scene_node, 'array') or (data := scene_node.array) is None:
+    cdef const float[:, :, :] data = None
+    if coord.numbers != NULL \
+            and (scene_node := context.references.get(texture_id.as_string())) is not None \
+            and hasattr(scene_node, 'array'):
+        data = scene_node.array
+    if data is None:
         return default
     cdef int64_t x, y, height=data.shape[0], width=data.shape[1]
     cdef const float[:] color
@@ -231,7 +233,7 @@ def split(Vector text, Vector separator=Vector('\n')):
 def lenv(Vector xs not None):
     cdef Vector ys = Vector.__new__(Vector)
     ys.allocate_numbers(1)
-    ys.numbers[0] = xs.length
+    ys.numbers[0] = <double>(xs.length)
     return ys
 
 
@@ -745,7 +747,7 @@ def minindex(Vector xs not None, *args):
                 return null_
     ys = Vector.__new__(Vector)
     ys.allocate_numbers(1)
-    ys.numbers[0] = j
+    ys.numbers[0] = <double>(j)
     return ys
 
 
@@ -813,7 +815,7 @@ def maxindex(Vector xs not None, *args):
                 return null_
     ys = Vector.__new__(Vector)
     ys.allocate_numbers(1)
-    ys.numbers[0] = j
+    ys.numbers[0] = <double>(j)
     return ys
 
 
