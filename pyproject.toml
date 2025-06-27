@@ -13,12 +13,12 @@ maintainers = [
   {name = "Jonathan Hogg", email = "me@jonathanhogg.com"},
 ]
 readme = "README.md"
-license = {file="LICENSE"}
+license = "BSD-2-Clause"
+license-files = ["LICENSE"]
 keywords = ["language", "opengl", "live-coding", "live-visuals"]
 classifiers = [
   "Development Status :: 4 - Beta",
   "Intended Audience :: Developers",
-  "License :: OSI Approved :: BSD License",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
