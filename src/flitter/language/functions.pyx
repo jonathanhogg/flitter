@@ -969,7 +969,7 @@ def count(Vector xs not None, Vector ys not None):
                     k += 1
             elif ys.objects[j] == xs.objects[i]:
                 k += 1
-        zs.numbers[i] = k
+        zs.numbers[i] = <double>(k)
     return zs
 
 
