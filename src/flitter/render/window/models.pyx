@@ -829,8 +829,10 @@ cdef class UVRemap(UnaryOperation):
     @cython.wraparound(False)
     cdef object remap_sphere(self, vertex_array, index_array, Vector bounds):
         vertex_array = vertex_array.copy()
+        index_array = index_array.copy()
         cdef float[:, :] vertex_data = vertex_array
-        cdef int64_t i, n=len(vertex_array)
+        cdef int32_t[:, :] index_data = index_array
+        cdef int64_t i, n=len(vertex_data), m=len(index_data)
         cdef float x, y, z, u
         for i in range(n):
             x, y, z = vertex_data[i, 0], vertex_data[i, 1], vertex_data[i, 2]
@@ -839,7 +841,39 @@ cdef class UVRemap(UnaryOperation):
                 u += 1
             vertex_data[i, 6] = u
             vertex_data[i, 7] = atan2(z, sqrt(x*x + y*y)) / Tau * 2 + 0.5
-        return vertex_array
+        cdef float u0, u1, u2, u_max
+        cdef int32_t a, b, c, j=n
+        cdef list extra_vertices = []
+        for i in range(m):
+            a = index_data[i, 0]
+            b = index_data[i, 1]
+            c = index_data[i, 2]
+            u0 = vertex_data[a, 6]
+            u1 = vertex_data[b, 6]
+            u2 = vertex_data[c, 6]
+            u_max = max(u0, u1, u2)
+            if u_max > 0.75:
+                if u0 < 0.25:
+                    index_data[i, 0] = j
+                    extra_vertices.append([vertex_data[a, 0], vertex_data[a, 1], vertex_data[a, 2],
+                                           vertex_data[a, 3], vertex_data[a, 4], vertex_data[a, 5],
+                                           u0 + 1, vertex_data[a, 7]])
+                    j += 1
+                if u1 < 0.25:
+                    index_data[i, 1] = j
+                    extra_vertices.append([vertex_data[b, 0], vertex_data[b, 1], vertex_data[b, 2],
+                                           vertex_data[b, 3], vertex_data[b, 4], vertex_data[b, 5],
+                                           u1 + 1, vertex_data[b, 7]])
+                    j += 1
+                if u2 < 0.25:
+                    index_data[i, 2] = j
+                    extra_vertices.append([vertex_data[c, 0], vertex_data[c, 1], vertex_data[c, 2],
+                                           vertex_data[c, 3], vertex_data[c, 4], vertex_data[c, 5],
+                                           u2 + 1, vertex_data[c, 7]])
+                    j += 1
+        if extra_vertices:
+            vertex_array = np.vstack((vertex_array, extra_vertices), dtype='f4')
+        return vertex_array, index_array
 
     @cython.cdivision(True)
     @cython.boundscheck(False)
@@ -854,7 +888,7 @@ cdef class UVRemap(UnaryOperation):
             x, y = vertex_data[i, 0], vertex_data[i, 1]
             vertex_data[i, 6] = (x - x0) / width
             vertex_data[i, 7] = (y - y0) / height
-        return vertex_array
+        return vertex_array, index_array
 
     cpdef tuple build_arrays(self):
         cdef tuple arrays = self.original.get_arrays()
@@ -863,9 +897,9 @@ cdef class UVRemap(UnaryOperation):
         cdef Vector bounds = self.original.get_bounds()
         vertex_array, index_array = arrays
         if self.mapping is 'sphere':
-            vertex_array = self.remap_sphere(vertex_array, index_array, bounds)
+            vertex_array, index_array = self.remap_sphere(vertex_array, index_array, bounds)
         elif self.mapping is 'plane':
-            vertex_array = self.remap_plane(vertex_array, index_array, bounds)
+            vertex_array, index_array = self.remap_plane(vertex_array, index_array, bounds)
         return vertex_array, index_array
 
     cpdef object build_manifold(self):
