@@ -58,8 +58,6 @@ vec3 filter_lens_ghost(sampler2D tex, vec2 coord, vec2 size, float distort, floa
 }
 
 vec3 filter_lens_flare(sampler2D tex, vec2 coord, vec2 size, float upright_length, float diagonal_length, float threshold, float attenuation) {
-    vec2 p = (coord - 0.5) * size;
-    float th = atan(p.y, p.x);
     float l = min(size.x, size.y) * 0.5;
     vec3 upright_color = vec3(0.0);
     float n = upright_length * l;
