@@ -97,3 +97,19 @@ vec3 filter_lens_flare(sampler2D tex, vec2 coord, vec2 size, float upright_lengt
     }
     return max(upright_color, diagonal_color) * pow(0.5, attenuation);
 }
+
+vec3 filter_lens_halo(sampler2D tex, vec2 coord, vec2 size, float radius, float threshold, float attenuation) {
+    const float Tau = 6.283185307179586231995926937088370323181152343750;
+    float l = min(size.x, size.y) * 0.5;
+    vec3 color = vec3(0.0);
+    float r = radius * l;
+    float n = Tau * r;
+    vec2 s = r / size;
+    if (n > 0.0) {
+        for (float i = 0.0; i < n; i += 1.0) {
+            vec3 col = texture(tex, coord + s * vec2(cos(i / n * Tau), sin(i / n * Tau))).rgb;
+            color = max(color, col * smoothstep(0.0, 1.0, srgb_luminance(col) - threshold));
+        }
+    }
+    return color * pow(0.5, attenuation);
+}

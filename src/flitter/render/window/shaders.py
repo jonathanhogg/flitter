@@ -129,7 +129,8 @@ class Flare(Shader):
             passes = 1
             downsample_passes = ()
         super().render(node, references, passes=passes, downsample_passes=downsample_passes,
-                       upright_length=0.25, diagonal_length=0.125, ghosts=6, threshold=1, attenuation=2, aberration=1, **kwargs)
+                       upright_length=1/4, diagonal_length=1/8, ghosts=6, threshold=1, attenuation=2, aberration=1,
+                       halo_radius=1/16, halo_attenuation=3, **kwargs)
 
 
 class Noise(Shader):

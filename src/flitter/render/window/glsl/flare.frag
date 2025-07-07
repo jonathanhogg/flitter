@@ -8,6 +8,8 @@ uniform int pass;
 uniform int ghosts;
 uniform float upright_length;
 uniform float diagonal_length;
+uniform float halo_radius;
+uniform float halo_attenuation;
 uniform float threshold;
 uniform float attenuation;
 uniform float aberration;
@@ -60,6 +62,7 @@ void main() {
 % if ghosts > 5:
             col += filter_lens_ghost(${'last' if passes == 5 else 'texture0'}, coord, size, 1.0, -0.75, threshold, attenuation + 1.0, aberration);
 % endif
+            col += filter_lens_halo(${'last' if passes == 5 else 'texture0'}, coord, size, halo_radius, threshold, attenuation + halo_attenuation);
             color = vec4(col, 1.0);
             break;
         }

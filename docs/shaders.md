@@ -436,9 +436,9 @@ be controlled with the `downsample` attribute.
 ### `!flare`
 
 A `!flare` filter attempts to emulate the tendency of optical lenses to produce
-artefacts in the image, including "starbursts" and "ghosts". The filter requires
-a high dynamic range input (such as output by `!canvas3d`). The filter accepts
-the following attributes:
+artefacts in the image, including "starbursts", "halos" and "ghosts". The filter
+requires a high dynamic range input (such as output by `!canvas3d`). The filter
+accepts the following attributes:
 
 `threshold=` *L*
 : A luminosity threshold over which a pixel is deemed to be "bright". Default is
@@ -452,12 +452,23 @@ means one-quarter the luminosity. Default is `2`.
 `upright_length=` *LENGTH*
 : The length of the vertical/horizontal starburst lines, expressed as a
 multiple of the shorter of the filter width or height. Larger values are more
-expensive to compute. Default is `0.25`.
+expensive to compute. Default is `0.25`. Setting this to `0` disables the
+horizontal/vertical starburst lines.
 
 `diagonal_length=` *LENGTH*
 : The length of the diagonal starburst lines, expressed as a multiple of the
 shorter of the filter width or height. Larger values are more expensive to
-compute. Default is `0.125`.
+compute. Default is `0.125`. Setting this to `0` disables the diagonal starburst
+lines.
+
+`halo_radius=` *RADIUS*
+: The radius of the halo added on bright spots, expressed as a multiple of the
+shorter of the filter width or height. Larger values are more expensive to
+compute. Default is `0.0625`. Setting this to `0` disables the halo.
+
+`halo_attenuation=` *ATTENUATION*
+: An additional attenuation to apply to the halo, expressed as a power-of-2.
+Default is `3`.
 
 `ghosts=` *N*
 : The number of lens ghosts to add, between `0` and `6`. The size, location and
@@ -477,6 +488,13 @@ this frame-buffer will be half the width and height of `size`, but this can
 be controlled with the `downsample` attribute. As this filter is very expensive
 to compute, setting `downsample=3` or `downsample=4` can make a significant
 difference to GPU load – particularly if the filter `size` is large.
+
+:::{note}
+Generally, you will want to combine this filter with a [`!bloom`](#bloom) as the
+thresholding and attenuation makes flares localised to the brightest spots. The
+order in which these filters are applied will result in subtly different
+outputs.
+:::
 
 ### `!edges`
 
