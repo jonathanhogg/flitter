@@ -28,11 +28,11 @@ vec3 filter_adjust(vec3 color, float exposure, float contrast, float brightness,
 }
 
 const int SpectrumSize = 6;
-const vec3[SpectrumSize] SpectrumWeights = vec3[](vec3(0.05, 0.0, 0.3),
+const vec3[SpectrumSize] SpectrumWeights = vec3[](vec3(0.1, 0.0, 0.3),
                                                   vec3(0.0, 0.0, 0.5),
                                                   vec3(0.0, 0.25, 0.2),
                                                   vec3(0.0, 0.5, 0.0),
-                                                  vec3(0.25, 0.25, 0.0),
+                                                  vec3(0.4, 0.25, 0.0),
                                                   vec3(0.5, 0.0, 0.0));
 
 vec3 filter_lens_ghost(sampler2D tex, vec2 coord, vec2 size, float distort, float scale, float threshold, float attenuation, float aberration) {
@@ -48,13 +48,15 @@ vec3 filter_lens_ghost(sampler2D tex, vec2 coord, vec2 size, float distort, floa
     vec3 color = vec3(0.0);
     if (aberration > 0.0) {
         for (int j = 0; j < SpectrumSize; j++) {
-            vec2 qq = q * (1.0 + (float(j) - 2.5) * 0.05 * aberration);
-            color += texture(tex, qq / size + 0.5).rgb * SpectrumWeights[j];
+            vec2 qq = q * (1.0 + (float(j)/float(SpectrumSize - 1) - 0.5) * 0.25 * aberration);
+            vec3 col = texture(tex, qq / size + 0.5).rgb;
+            color += col * smoothstep(0.0, 1.0, srgb_luminance(col) - threshold) * SpectrumWeights[j];
         }
     } else {
-        color += texture(tex, q / size + 0.5).rgb;
+        vec3 col = texture(tex, q / size + 0.5).rgb;
+        color += col * smoothstep(0.0, 1.0, srgb_luminance(col) - threshold);
     }
-    return color * smoothstep(0.0, 1.0, srgb_luminance(color) - threshold) * pow(0.5, attenuation) * w;
+    return color * pow(0.5, attenuation) * w;
 }
 
 vec3 filter_lens_flare(sampler2D tex, vec2 coord, vec2 size, float upright_length, float diagonal_length, float threshold, float attenuation) {
@@ -104,12 +106,14 @@ vec3 filter_lens_halo(sampler2D tex, vec2 coord, vec2 size, float radius, float 
     vec3 color = vec3(0.0);
     float r = radius * l;
     float n = Tau * r;
-    vec2 s = r / size;
     if (n > 0.0) {
+        vec2 s = r / size;
         for (float i = 0.0; i < n; i += 1.0) {
-            vec3 col = texture(tex, coord + s * vec2(cos(i / n * Tau), sin(i / n * Tau))).rgb;
-            color = max(color, col * smoothstep(0.0, 1.0, srgb_luminance(col) - threshold));
+            float th = i / n * Tau;
+            vec3 col = texture(tex, coord + s * vec2(cos(th), sin(th))).rgb;
+            color += col * smoothstep(0.0, 1.0, srgb_luminance(col) - threshold);
         }
+        color /= n;
     }
     return color * pow(0.5, attenuation);
 }

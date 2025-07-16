@@ -464,11 +464,11 @@ lines.
 `halo_radius=` *RADIUS*
 : The radius of the halo added on bright spots, expressed as a multiple of the
 shorter of the filter width or height. Larger values are more expensive to
-compute. Default is `0.0625`. Setting this to `0` disables the halo.
+compute. Default is `0.0625`. Setting this to `0` disables halos.
 
 `halo_attenuation=` *ATTENUATION*
-: An additional attenuation to apply to the halo, expressed as a power-of-2.
-Default is `3`.
+: An additional attenuation to apply to the halo, expressed as a power-of-2
+Default is `0`. Using negative attenuation accentuates halos.
 
 `ghosts=` *N*
 : The number of lens ghosts to add, between `0` and `6`. The size, location and
@@ -478,10 +478,10 @@ Reducing the number of ghosts has a slight performance benefit.
 `aberration=` *RATIO*
 : How much chromatic aberration (separation into spectrum lines) the ghosts will
 exhibit. This is expressed as a multiple of an internally-defined reasonable
-value. The default is `1`. Values below `1` will result in tighter ghosts and
-`0` will turn off aberration completely (which has a slight performance
-benefit). Values above `1` may cause gaps to form between the 6 color
-separations used to emulate true chromatic aberration.
+value. The default is `0.5`. Lower values will result in tighter ghosts and `0`
+will turn off aberration completely (which has a slight performance benefit).
+Values above `1` may cause gaps to form between the 6 color separations used to
+emulate true chromatic aberration.
 
 The lens flare phases of this filter are run as down-sampled phases. By default
 this frame-buffer will be half the width and height of `size`, but this can

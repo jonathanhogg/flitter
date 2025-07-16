@@ -62,7 +62,7 @@ void main() {
 % if ghosts > 5:
             col += filter_lens_ghost(${'last' if passes == 5 else 'texture0'}, coord, size, 1.0, -0.75, threshold, attenuation + 1.0, aberration);
 % endif
-            col += filter_lens_halo(${'last' if passes == 5 else 'texture0'}, coord, size, halo_radius, threshold, attenuation + halo_attenuation);
+            col += filter_lens_halo(${'last' if passes == 5 else 'texture0'}, coord, size, halo_radius, threshold, attenuation - 0.5 + halo_attenuation);
             color = vec4(col, 1.0);
             break;
         }

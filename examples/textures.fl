@@ -22,7 +22,7 @@ let SIZE=1920;1080
 !offscreen
     !adjust id=:stars size=2048;1024 exposure=2 highlights=4 composite=:multiply
         !image filename='assets/stars.jpg' flip=:horizontal
-        !noise scale=0.02 z=beat components=1 default=0.5;0.5;0.5;1
+        !noise scale=0.02 z=beat components=1 multiplier=0.25 default=0.5;0.5;0.5;1
     !adjust id=:earth size=2048;1024 exposure=1 shadows=2
         !image filename='assets/earth.jpg'
     !adjust id=:earth_night size=2048;1024 exposure=1
