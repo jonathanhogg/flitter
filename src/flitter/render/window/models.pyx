@@ -683,7 +683,10 @@ cdef class SnapEdges(UnaryOperation):
         return trimesh_model
 
     cpdef object build_manifold(self):
-        return self.original.get_manifold().calculate_normals(0, 360*self.snap_angle)
+        manifold = self.original.get_manifold()
+        if manifold is not None:
+            manifold = manifold.calculate_normals(0, 360*self.snap_angle)
+        return manifold
 
 
 cdef class Transform(UnaryOperation):
