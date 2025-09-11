@@ -451,6 +451,7 @@ cdef Model get_model(Node node, bint top):
     cdef Vector origin, normal, function, minimum, maximum, vertices, faces
     cdef double snap_angle, resolution
     cdef str mapping, filename
+    cdef list models
     if node.kind is 'box':
         model = Model._box(node.get_str('uv_map', 'standard'))
     elif node.kind is 'sphere':
@@ -471,7 +472,15 @@ cdef Model get_model(Node node, bint top):
             model = model.repair()
     elif not top and node.kind is 'transform':
         transform_matrix = update_transform_matrix(node, IdentityTransform)
-        model = Model._boolean('union', [get_model(child, False)._transform(transform_matrix) for child in node._children], 0, 0, 0)
+        models = []
+        for child in node._children:
+            model = get_model(child, False)
+            if model is not None:
+                models.append(model._transform(transform_matrix))
+        if models:
+            model = Model._boolean('union', models, 0, 0, 0)
+        else:
+            model = None
     elif node.kind is 'trim' or node.kind is 'slice':
         normal = node.get_fvec('normal', 3, null_)
         origin = node.get_fvec('origin', 3, Zero3)
