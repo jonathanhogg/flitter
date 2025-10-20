@@ -466,7 +466,7 @@ cdef Model get_model(Node node, bint top):
         faces = node.get_fvec('faces', 0, None)
         if filename:
             model = Model._external(filename)
-        elif vertices is not None and faces is not None:
+        elif vertices is not None:
             model = Model._vector(vertices, faces)
         if model is not None and node.get_bool('repair', False):
             model = model.repair()

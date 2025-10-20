@@ -853,12 +853,17 @@ To create a mesh from scratch use the attributes:
 : Provides a *3n*-vector of *x*, *y* and *z* model coordinates for *n* vertices.
 
 `faces=` *FACES*
-: Provides a *3m*-vector of vertex numbers in the range *[0,n)* giving the
-corner vertices of *m* triangular faces.
+: Optional attribute providing a *3m*-vector of vertex numbers in the range
+*[0,n)*, representing the corner vertices of *m* triangular faces.
+
+If the `faces` attribute is not provided, then a convex hull will be computed
+around the given vertices. This provides a quick way of describing simple
+geometric forms.
 
 :::{note}
-Face vertices should be specified in an anti-clockwise direction – as viewed
-from outside the model – for the surface normals to be computed correctly.
+If `faces` is provided, then the face vertices should be given in an
+anti-clockwise  direction – as viewed from outside the model – for the surface
+normals to be computed correctly.
 :::
 
 Models created from `vertices` and `faces` are cached according to the specific

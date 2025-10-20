@@ -4,6 +4,7 @@ from loguru import logger
 import manifold3d
 import numpy as np
 import trimesh
+import trimesh.points
 import trimesh.proximity
 
 from libc.math cimport sqrt, atan2, abs, floor as c_floor
@@ -1617,11 +1618,12 @@ cdef class VectorModel(Model):
 
     @staticmethod
     cdef VectorModel _get(Vector vertices, Vector faces):
-        if vertices is None or vertices.numbers == NULL or faces is None or faces.numbers == NULL:
+        if vertices is None or vertices.numbers == NULL:
             return None
         cdef uint64_t id = VECTOR
         id = HASH_UPDATE(id, vertices.hash(False))
-        id = HASH_UPDATE(id, faces.hash(False))
+        if faces is not None:
+            id = HASH_UPDATE(id, faces.hash(False))
         cdef VectorModel model
         cdef PyObject* objptr = PyDict_GetItem(ModelCache, id)
         if objptr == NULL:
@@ -1637,7 +1639,9 @@ cdef class VectorModel(Model):
 
     @property
     def name(self):
-        return f'vector({self.vertices.hash(False):x}, {self.faces.hash(False):x})'
+        if self.faces is not None:
+            return f'vector({self.vertices.hash(False):x}, {self.faces.hash(False):x})'
+        return f'vector({self.vertices.hash(False):x})'
 
     cpdef void check_for_changes(self):
         pass
@@ -1665,16 +1669,22 @@ cdef class VectorModel(Model):
         if self.vertices.length % 3 != 0:
             logger.error("Bad vertices vector length: {}", self.name)
             return None
-        if self.faces.length % 3 != 0:
-            logger.error("Bad faces vector length: {}", self.name)
-            return None
-        cdef int64_t i, n=self.vertices.length // 3, m=self.faces.length // 3
+        cdef int64_t i, n=self.vertices.length // 3
         vertices_array = np.zeros((n, 8), dtype='f4')
         cdef float[:, :] vertices = vertices_array
         for i in range(n):
             vertices[i, 0] = <float>self.vertices.numbers[i*3]
             vertices[i, 1] = <float>self.vertices.numbers[i*3+1]
             vertices[i, 2] = <float>self.vertices.numbers[i*3+2]
+        if self.faces is None:
+            points = trimesh.points.PointCloud(vertices=vertices_array[:, :3]).convex_hull
+            faces_array = np.array(points.faces, dtype='i4')
+            fill_in_normals(vertices_array, faces_array)
+            return vertices_array, faces_array
+        elif self.faces.length % 3 != 0:
+            logger.error("Bad faces vector length: {}", self.name)
+            return None
+        cdef int64_t m = self.faces.length // 3
         faces_array = np.zeros((m, 3), dtype='i4')
         cdef int32_t[:, :] faces = faces_array
         cdef int32_t a, b, c
