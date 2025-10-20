@@ -429,7 +429,7 @@ or as an absolute position `focus`. `focus` can **only** be used if `position`
 has also been specified (i.e., for spotlights). `direction` respects any local
 rotations and `focus` respects the full local transformation matrix.
 
-`outer=` `0`…`0.5`
+`outer=` `0`…`1.0`
 : Specifies the angle of the *cone* of a spotlight beam, in *turns*. Defaults to
 `0.25`, i.e., 90°, which means the light will shine out 45° all around from
 the central direction line.

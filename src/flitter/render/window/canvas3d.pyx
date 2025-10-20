@@ -572,7 +572,7 @@ cdef void collect(Node node, Matrix44 transform_matrix, Material material, Rende
                 light.direction = transform_matrix.vmul(end) - light.position
             elif position.length and direction.as_bool():
                 light.type = LightType.Spot
-                outer = min(max(0, node.get_float('outer', 0.25)), 0.5)
+                outer = min(max(0, node.get_float('outer', 0.25)), 1)
                 inner = min(max(0, node.get_float('inner', 0)), outer)
                 light.inner_cone = cos(inner * Pi)
                 light.outer_cone = cos(outer * Pi)
