@@ -74,7 +74,7 @@ def sawtooth(Vector xs not None):
     return ys
 
 
-def triangle(Vector xs not None):
+def triwave(Vector xs not None):
     if xs.numbers == NULL:
         return null_
     cdef Vector ys = Vector.__new__(Vector)
