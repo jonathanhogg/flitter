@@ -7,12 +7,12 @@ Flitter language functions
 import cython
 
 from libc.stdint cimport int64_t
-from libc.math cimport floor, sin, sqrt
+from libc.math cimport floor, sqrt
 from cpython.ref cimport Py_INCREF
 from cpython.tuple cimport PyTuple_New, PyTuple_GET_ITEM, PyTuple_SET_ITEM
 
 from ...cache import SharedCache
-from ...model cimport Vector, Matrix33, Matrix44, Quaternion, Context, null_, cost
+from ...model cimport Vector, Matrix33, Matrix44, Quaternion, Context, null_
 
 
 cdef double Pi = 3.141592653589793115997963468544185161590576171875
@@ -139,155 +139,6 @@ def lenv(Vector xs not None):
 
 def sort(Vector xs not None):
     return Vector(sorted(xs))
-
-
-def sine(Vector xs not None):
-    if xs.numbers == NULL:
-        return null_
-    cdef Vector ys = Vector.__new__(Vector)
-    for i in range(ys.allocate_numbers(xs.length)):
-        ys.numbers[i] = (1 - cost(xs.numbers[i])) / 2
-    return ys
-
-
-def bounce(Vector xs not None):
-    if xs.numbers == NULL:
-        return null_
-    cdef Vector ys = Vector.__new__(Vector)
-    cdef double x
-    for i in range(ys.allocate_numbers(xs.length)):
-        x = xs.numbers[i]
-        ys.numbers[i] = sin(Pi * (x-floor(x)))
-    return ys
-
-
-def impulse(Vector xs not None, Vector cs=None):
-    if xs.numbers == NULL or (cs is not None and cs.numbers == NULL):
-        return null_
-    cdef Vector ys = Vector.__new__(Vector)
-    cdef int64_t n=cs.length
-    cdef double x, c, y, yy
-    for i in range(ys.allocate_numbers(xs.length)):
-        x = xs.numbers[i]
-        x -= floor(x)
-        c = cs.numbers[i % n] if cs is not None else 0.25
-        if x < c:
-            y = 1 - x/c
-            yy = y * y
-            y = 1 - yy*y
-        else:
-            y = 1 - (x-c)/(1-c)
-            yy = y * y
-            y = yy*y
-        ys.numbers[i] = y
-    return ys
-
-
-def sharkfin(Vector xs not None):
-    if xs.numbers == NULL:
-        return null_
-    cdef Vector ys = Vector.__new__(Vector)
-    cdef double x, y
-    for i in range(ys.allocate_numbers(xs.length)):
-        x = xs.numbers[i]
-        x -= floor(x)
-        y = sin(Pi * x) if x < 0.5 else 1 - sin(Pi * (x - 0.5))
-        ys.numbers[i] = y
-    return ys
-
-
-def sawtooth(Vector xs not None):
-    if xs.numbers == NULL:
-        return null_
-    cdef Vector ys = Vector.__new__(Vector)
-    cdef double x
-    for i in range(ys.allocate_numbers(xs.length)):
-        x = xs.numbers[i]
-        ys.numbers[i] = x - floor(x)
-    return ys
-
-
-def triangle(Vector xs not None):
-    if xs.numbers == NULL:
-        return null_
-    cdef Vector ys = Vector.__new__(Vector)
-    cdef double x, y
-    for i in range(ys.allocate_numbers(xs.length)):
-        x = xs.numbers[i]
-        x -= floor(x)
-        y = 1 - abs(x - 0.5) * 2
-        ys.numbers[i] = y
-    return ys
-
-
-def square(Vector xs not None):
-    if xs.numbers == NULL:
-        return null_
-    cdef Vector ys = Vector.__new__(Vector)
-    cdef double x, y
-    for i in range(ys.allocate_numbers(xs.length)):
-        x = xs.numbers[i]
-        x -= floor(x)
-        y = 0 if x < 0.5 else 1
-        ys.numbers[i] = y
-    return ys
-
-
-def linear(Vector xs not None):
-    if xs.numbers == NULL:
-        return null_
-    cdef Vector ys = Vector.__new__(Vector)
-    cdef double x
-    for i in range(ys.allocate_numbers(xs.length)):
-        x = xs.numbers[i]
-        if x < 0:
-            x = 0
-        elif x > 1:
-            x = 1
-        ys.numbers[i] = x
-    return ys
-
-
-def quad(Vector xs not None):
-    if xs.numbers == NULL:
-        return null_
-    cdef Vector ys = Vector.__new__(Vector)
-    cdef double x, y, x_
-    for i in range(ys.allocate_numbers(xs.length)):
-        x = xs.numbers[i]
-        if x < 0:
-            y = 0
-        elif x > 1:
-            y = 1
-        elif x < 0.5:
-            x_ = x * 2
-            y = x_*x_ / 2
-        else:
-            x_ = (1 - x) * 2
-            y = 1 - x_*x_ / 2
-        ys.numbers[i] = y
-    return ys
-
-
-def cubic(Vector xs not None):
-    if xs.numbers == NULL:
-        return null_
-    cdef Vector ys = Vector.__new__(Vector)
-    cdef double x, y, x_
-    for i in range(ys.allocate_numbers(xs.length)):
-        x = xs.numbers[i]
-        if x < 0:
-            y = 0
-        elif x > 1:
-            y = 1
-        elif x < 0.5:
-            x_ = x * 2
-            y = x_*x_*x_ / 2
-        else:
-            x_ = (1 - x) * 2
-            y = 1 - x_*x_*x_ / 2
-        ys.numbers[i] = y
-    return ys
 
 
 def snap(Vector xs not None):
