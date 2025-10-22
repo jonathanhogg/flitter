@@ -778,7 +778,7 @@ class TestFileFunctions(utils.TestCase):
     def test_read_text(self):
         path = 'world'
         context = Context(path=path)
-        with unittest.mock.patch('flitter.language.functions.SharedCache') as cache:
+        with unittest.mock.patch('flitter.language.functions.misc.SharedCache') as cache:
             cache_path = unittest.mock.Mock()
             cache_path.read_text.return_value = 'Hello world!\n'
             cache.get_with_root.return_value = cache_path
@@ -789,7 +789,7 @@ class TestFileFunctions(utils.TestCase):
     def test_read_bytes(self):
         path = 'world'
         context = Context(path=path)
-        with unittest.mock.patch('flitter.language.functions.SharedCache') as cache:
+        with unittest.mock.patch('flitter.language.functions.misc.SharedCache') as cache:
             cache_path = unittest.mock.Mock()
             cache_path.read_bytes.return_value = b'Hello world!\n'
             cache.get_with_root.return_value = cache_path
@@ -800,7 +800,7 @@ class TestFileFunctions(utils.TestCase):
     def test_read_csv(self):
         path = 'world'
         context = Context(path=path)
-        with unittest.mock.patch('flitter.language.functions.SharedCache') as cache:
+        with unittest.mock.patch('flitter.language.functions.misc.SharedCache') as cache:
             cache_path = unittest.mock.Mock()
             cache_path.read_csv_vector.return_value = Vector(['Hello', 10])
             cache.get_with_root.return_value = cache_path

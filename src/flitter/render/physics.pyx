@@ -9,7 +9,7 @@ from loguru import logger
 
 from .. import name_patch
 from ..model cimport Vector, Node, StateDict, null_, false_
-from ..language.functions cimport normal
+from ..language.functions.random cimport normal
 
 import cython
 from libc.math cimport sqrt, isinf, isnan, abs, floor

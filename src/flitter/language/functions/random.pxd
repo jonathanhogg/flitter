@@ -1,5 +1,5 @@
 
-from ..model cimport Vector
+from ...model cimport Vector
 
 
 cdef class uniform(Vector):

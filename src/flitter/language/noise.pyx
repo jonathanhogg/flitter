@@ -35,7 +35,7 @@ import cython
 from libc.math cimport floor
 from libc.stdint cimport int64_t, uint64_t
 
-from .functions cimport uniform, shuffle
+from .functions.random cimport uniform, shuffle
 from ..model cimport Vector, null_
 
 
