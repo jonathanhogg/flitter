@@ -38,10 +38,10 @@ const vec3[SpectrumSize] SpectrumWeights = vec3[](vec3(0.1, 0.0, 0.3),
 vec3 filter_lens_ghost(sampler2D tex, vec2 coord, vec2 size, float distort, float scale, float threshold, float attenuation, float aberration) {
     vec2 p = (coord - 0.5) * size;
     float r = length(p);
-    float th = atan(p.y, p.x);
-    float rmax = max(size.x, size.y) / 2.0;
+    p /= r;
+    float rmax = length(size) / 2.0;
     r = (1.0 - pow(1.0 - r / rmax, distort)) * rmax / scale;
-    vec2 q = r * vec2(cos(th), sin(th));
+    vec2 q = r * p;
     float w = clamp(r / rmax, 0.0, 1.0);
     w *= w;
     w = 1.0 - w;
