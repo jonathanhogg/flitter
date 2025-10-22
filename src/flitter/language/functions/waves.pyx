@@ -8,15 +8,6 @@ from ...model cimport Vector, null_, cost
 cdef double Pi = 3.141592653589793115997963468544185161590576171875
 
 
-def sine(Vector xs not None):
-    if xs.numbers == NULL:
-        return null_
-    cdef Vector ys = Vector.__new__(Vector)
-    for i in range(ys.allocate_numbers(xs.length)):
-        ys.numbers[i] = (1 - cost(xs.numbers[i])) / 2
-    return ys
-
-
 def bounce(Vector xs not None):
     if xs.numbers == NULL:
         return null_
@@ -50,6 +41,26 @@ def impulse(Vector xs not None, Vector cs=None):
     return ys
 
 
+def sawtooth(Vector xs not None):
+    if xs.numbers == NULL:
+        return null_
+    cdef Vector ys = Vector.__new__(Vector)
+    cdef double x
+    for i in range(ys.allocate_numbers(xs.length)):
+        x = xs.numbers[i]
+        ys.numbers[i] = x - floor(x)
+    return ys
+
+
+def sine(Vector xs not None):
+    if xs.numbers == NULL:
+        return null_
+    cdef Vector ys = Vector.__new__(Vector)
+    for i in range(ys.allocate_numbers(xs.length)):
+        ys.numbers[i] = (1 - cost(xs.numbers[i])) / 2
+    return ys
+
+
 def sharkfin(Vector xs not None):
     if xs.numbers == NULL:
         return null_
@@ -63,30 +74,6 @@ def sharkfin(Vector xs not None):
     return ys
 
 
-def sawtooth(Vector xs not None):
-    if xs.numbers == NULL:
-        return null_
-    cdef Vector ys = Vector.__new__(Vector)
-    cdef double x
-    for i in range(ys.allocate_numbers(xs.length)):
-        x = xs.numbers[i]
-        ys.numbers[i] = x - floor(x)
-    return ys
-
-
-def triwave(Vector xs not None):
-    if xs.numbers == NULL:
-        return null_
-    cdef Vector ys = Vector.__new__(Vector)
-    cdef double x, y
-    for i in range(ys.allocate_numbers(xs.length)):
-        x = xs.numbers[i]
-        x -= floor(x)
-        y = 1 - abs(x - 0.5) * 2
-        ys.numbers[i] = y
-    return ys
-
-
 def square(Vector xs not None):
     if xs.numbers == NULL:
         return null_
@@ -96,5 +83,18 @@ def square(Vector xs not None):
         x = xs.numbers[i]
         x -= floor(x)
         y = 0 if x < 0.5 else 1
+        ys.numbers[i] = y
+    return ys
+
+
+def triangle(Vector xs not None):
+    if xs.numbers == NULL:
+        return null_
+    cdef Vector ys = Vector.__new__(Vector)
+    cdef double x, y
+    for i in range(ys.allocate_numbers(xs.length)):
+        x = xs.numbers[i]
+        x -= floor(x)
+        y = 1 - abs(x - 0.5) * 2
         ys.numbers[i] = y
     return ys

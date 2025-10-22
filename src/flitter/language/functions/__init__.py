@@ -9,7 +9,7 @@ from .misc import (chrv, clamp, count, cross, debug, dot, glob, hypot, inverse, 
                    maxindex, maxv, minindex, minv, normalize, ordv, point_towards, qbetween, qmul, quaternion,
                    read_bytes, read_csv, read_text, sample, slerp, snap, sort, split, zipv)
 from .random import beta, normal, shuffle, uniform
-from .waves import bounce, impulse, sawtooth, sharkfin, sine, square, triwave
+from .waves import bounce, impulse, sawtooth, sharkfin, sine, square, triangle
 
 
 STATIC_FUNCTIONS = {
@@ -75,7 +75,7 @@ STATIC_FUNCTIONS = {
     'square': Vector(square),
     'sum': Vector(sumv),
     'tan': Vector(tanv),
-    'triangle': Vector(triwave),
+    'triangle': Vector(triangle),
     'uniform': Vector(uniform),
     'zip': Vector(zipv),
 }
