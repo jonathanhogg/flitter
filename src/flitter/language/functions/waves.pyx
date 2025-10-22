@@ -87,14 +87,12 @@ def square(Vector xs not None):
     return ys
 
 
-def triangle(Vector xs not None):
-    if xs.numbers == NULL:
+def triangle(Vector xs):
+    if xs is None or xs.numbers == NULL:
         return null_
     cdef Vector ys = Vector.__new__(Vector)
-    cdef double x, y
+    cdef double x
     for i in range(ys.allocate_numbers(xs.length)):
         x = xs.numbers[i]
-        x -= floor(x)
-        y = 1 - abs(x - 0.5) * 2
-        ys.numbers[i] = y
+        ys.numbers[i] = 1 - abs((x - floor(x))*2 - 1)
     return ys
