@@ -428,7 +428,7 @@ class CachePath:
                     options.setdefault('alpha_quality', '1')
                 self._path.parent.mkdir(parents=True, exist_ok=True)
                 container = av.open(str(self._path), mode='w')
-                stream = container.add_stream(av_codec, rate=fps, options=options)
+                stream = container.add_stream(codec, rate=fps, options=options)
             except Exception as exc:
                 logger.opt(exception=exc).error("Unable to open video output: {}", self._path)
                 self._cache[key] = False, None, timestamp
