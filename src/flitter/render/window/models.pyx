@@ -437,7 +437,7 @@ cdef class Model:
         return VectorModel._get(vertices, faces)
 
     @staticmethod
-    def vector(vertices, faces):
+    def vector(vertices, faces=None):
         return VectorModel._get(Vector._coerce(vertices), Vector._coerce(faces))
 
     @staticmethod
@@ -1620,6 +1620,8 @@ cdef class VectorModel(Model):
     cdef VectorModel _get(Vector vertices, Vector faces):
         if vertices is None or vertices.numbers == NULL:
             return None
+        if faces is not None and faces.numbers == NULL:
+            faces = None
         cdef uint64_t id = VECTOR
         id = HASH_UPDATE(id, vertices.hash(False))
         if faces is not None:

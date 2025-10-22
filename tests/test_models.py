@@ -163,8 +163,7 @@ class TestSubclassing(utils.TestCase):
 class TestVector(utils.TestCase):
     def test_bad(self):
         self.assertIsNone(Model.vector(None, None))
-        self.assertIsNone(Model.vector('hello', 1))
-        self.assertIsNone(Model.vector(1, 'hello'))
+        self.assertIsNone(Model.vector(None, 1))
 
     def test_basic(self):
         vertices = [0, 0, 0,  1, 0, 0,  0, 1, 0,  0, 0, 1,  1, 0, 1,  0, 1, 1]
@@ -178,6 +177,15 @@ class TestVector(utils.TestCase):
         self.assertAllAlmostEqual(mesh.faces, np.array(faces).reshape((-1, 3)))
         self.assertAlmostEqual(mesh.area, 3+math.sqrt(2))
         self.assertAlmostEqual(mesh.volume, 0.5)
+
+    def test_convex(self):
+        vertices = [-1, -1, -1,  1, -1, -1,  -1, 1, -1,  1, 1, -1,  -1, -1, 1,  1, -1, 1,  -1, 1, 1,  1, 1, 1]
+        model = Model.vector(vertices)
+        self.assertIs(model, Model.vector(vertices))
+        mesh = model.get_trimesh()
+        self.assertEqual(mesh.bounds.tolist(), [[-1, -1, -1], [1, 1, 1]])
+        self.assertAlmostEqual(mesh.area, 24)
+        self.assertAlmostEqual(mesh.volume, 8)
 
     def test_invalid(self):
         with unittest.mock.patch('flitter.render.window.models.logger') as mock_logger:
