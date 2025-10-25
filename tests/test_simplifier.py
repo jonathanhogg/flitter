@@ -1038,6 +1038,14 @@ class TestLet(SimplifierTestCase):
                                 Let((PolyBinding(('x',), Add(Name('z'), Literal(1))),), Export()),
                                 dynamic={'z'}, unbound={'z', None})
 
+    def test_sequence_literal(self):
+        """Literals at head of a sequence body are pushed out of the let"""
+        self.assertSimplifiesTo(Let((PolyBinding(('x',), Add(Name('y'), Literal(1))),), Sequence((Literal(1), Name('x')))),
+                                Sequence((Literal(1), Let((PolyBinding(('x',), Add(Name('y'), Literal(1))),), Name('x')))), dynamic={'y'})
+        self.assertSimplifiesTo(Let((PolyBinding(('x',), Add(Name('y'), Literal(1))),), Sequence((Literal(1), Name('x'), Name('y')))),
+                                Sequence((Literal(1), Let((PolyBinding(('x',), Add(Name('y'), Literal(1))),), Sequence((Name('x'), Name('y')))))),
+                                dynamic={'y'})
+
 
 class TestCall(SimplifierTestCase):
     def test_dynamic(self):

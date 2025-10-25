@@ -111,8 +111,13 @@ class TestLanguageFeatures(unittest.TestCase):
         while not isinstance(expr, Literal):
             if isinstance(expr, Let):
                 expr = expr.body
-            elif isinstance(expr, Sequence) and len(expr.expressions) == 2 and isinstance(expr.expressions[1], Export):
-                expr = expr.expressions[0]
+            elif isinstance(expr, Sequence) and len(expr.expressions) == 2:
+                if isinstance(expr.expressions[1], Export):
+                    expr = expr.expressions[0]
+                elif isinstance(expr.expressions[1], Let) and isinstance(expr.expressions[1].body, Export):
+                    expr = expr.expressions[0]
+                else:
+                    break
             else:
                 break
         if isinstance(expr, Export):

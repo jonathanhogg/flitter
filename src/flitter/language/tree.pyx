@@ -1497,10 +1497,18 @@ cdef class Let(Expression):
             sbody = (<Let>sbody).body
             resimplify = True
             touched = True
-        if not touched:
-            return self
         if remaining:
-            sbody = Let(tuple(remaining), sbody)
+            if type(sbody) is Sequence and type((<Sequence>sbody).expressions[0]) is Literal:
+                if len((<Sequence>sbody).expressions) > 2:
+                    sbody = Sequence(((<Sequence>sbody).expressions[0], Let(tuple(remaining), Sequence((<Sequence>sbody).expressions[1:]))))
+                else:
+                    if type((<Sequence>sbody).expressions[1]) is Let:
+                        resimplify = True
+                    sbody = Sequence(((<Sequence>sbody).expressions[0], Let(tuple(remaining), (<Sequence>sbody).expressions[1])))
+            elif touched:
+                sbody = Let(tuple(remaining), sbody)
+            else:
+                return self
         if resimplify:
             return sbody._simplify(context)
         return sbody
