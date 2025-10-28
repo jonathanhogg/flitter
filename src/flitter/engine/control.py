@@ -171,14 +171,14 @@ class EngineController:
             frames = []
             start_time = frame_time = system_clock() if self.realtime else 0
             last = self.counter.beat_at_time(frame_time)
-            save_state_time = system_clock() + self.STATE_SAVE_PERIOD
+            save_state_time = frame_time + self.STATE_SAVE_PERIOD
             execution = render = housekeeping = 0
             slow_frame = False
             performance = 1 if self.realtime else 2
             gc_pending = False
             last_gc = None
             run_program = current_program = errors = logs = None
-            simplify_state_time = system_clock() + self.state_simplify_wait
+            simplify_state_time = frame_time + self.state_simplify_wait
             static = dict(self.defined_names)
             static.update({'realtime': self.realtime, 'screen': self.screen, 'fullscreen': self.fullscreen,
                            'vsync': self.vsync, 'offscreen': self.offscreen, 'opengl_es': self.opengl_es, 'run_time': self.run_time})
@@ -206,7 +206,7 @@ class EngineController:
                     self.state_generation0 ^= self.state_generation1
                     self.state_generation1 = self.state_generation2
                     self.state_generation2 = set()
-                    simplify_state_time = system_clock() + self.state_simplify_wait
+                    simplify_state_time = frame_time + self.state_simplify_wait
 
                 now = system_clock()
                 housekeeping += now
@@ -256,12 +256,12 @@ class EngineController:
                                     logger.debug("Undo simplification on state; original program with {} instructions", len(run_program))
                                 self.state_generation1 ^= self.state_generation2 - generation2to0
                                 self.state_generation2 = set()
-                                simplify_state_time = system_clock() + self.state_simplify_wait
+                                simplify_state_time = frame_time + self.state_simplify_wait
                     self.global_state_dirty = True
-                    self.state_timestamp = system_clock()
+                    self.state_timestamp = frame_time
                     self.state.clear_changed()
 
-                if self.state_simplify_wait and system_clock() > simplify_state_time:
+                if self.state_simplify_wait and frame_time > simplify_state_time:
                     if current_program is not None and self.state_generation1:
                         if self.state_generation1:
                             self.state_generation2 ^= self.state_generation1
@@ -283,14 +283,14 @@ class EngineController:
                                              len(self.state_generation2), len(run_program), simplify_time*1000, compile_time*1000)
                     self.state_generation1 = self.state_generation0
                     self.state_generation0 = set()
-                    simplify_state_time = system_clock() + self.state_simplify_wait
+                    simplify_state_time = frame_time + self.state_simplify_wait
 
-                if self.global_state_dirty and self.state_file is not None and system_clock() > save_state_time:
+                if self.global_state_dirty and self.state_file is not None and frame_time > save_state_time:
                     logger.trace("Saving state")
                     with open(self.state_file, 'wb') as file:
                         pickle.dump(self.global_state, file)
                     self.global_state_dirty = False
-                    save_state_time = system_clock() + self.STATE_SAVE_PERIOD
+                    save_state_time = frame_time + self.STATE_SAVE_PERIOD
 
                 if self.switch_page is not None:
                     self.switch_to_page(self.switch_page)
