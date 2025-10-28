@@ -64,7 +64,7 @@ multiline_bindings : binding+ _NL (_INDENT (binding+ _NL)+ _DEDENT)? -> tuple
 
 bindings : binding+ -> tuple
 
-binding : name_list "=" inline_append -> poly_binding
+binding : name_list "=" composition -> poly_binding
 
 ?composition : anonymous
              | anonymous (";" anonymous)+ -> sequence

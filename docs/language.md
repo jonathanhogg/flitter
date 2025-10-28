@@ -315,13 +315,13 @@ world!".
 
 Although the usual, and most readable, way to indicate appending child nodes
 to a parent node is through indentation, there is also an inline append
-operator: `<<`. This can be used  in `let` bindings, arguments to function
-calls, and within parentheses.
+operator: `<<`. This can be used within parentheses and in arguments to
+function calls.
 
 For example:
 
 ```flitter
-let tree = !a << !b << !c
+let tree = (!a << !b << !c)
 ```
 
 binds `tree` to an `!a` node containing a `!b` node containing a `!c` node
@@ -332,20 +332,20 @@ Note that the `<<` operator evaluates to the *parent* node. Therefore, the
 above example is equivalent to:
 
 ```flitter
-let tree = !a << (!b << !c)
+let tree = (!a << (!b << !c))
 ```
 
 By contrast, the following:
 
 ```flitter
-let tree = (!a << !b) << !c
+let tree = ((!a << !b) << !c)
 ```
 
 results in the `!c` node being appended to the `!a` node, and is therefore
 equivalent to:
 
 ```flitter
-let tree = !a << (!b; !c)
+let tree = (!a << (!b; !c))
 ```
 
 The inline append operator may also be combined with an indented append block
