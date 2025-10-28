@@ -210,11 +210,10 @@ output from non-interactive programs. It also has a specific [effect on how the
 physics system runs](physics.md#non-realtime-mode).
 
 `--runtime` *SECONDS*
-: Run for a specific period of time and then exit automatically, in seconds
-(may be specified as a [time-code](language.md#time-codes)). This is
-particularly useful for capturing videos of a specific length unattended. In
-`--lockstep` mode, this is a period of the internal frame clock not the wall
-clock.
+: Run for a specific number of seconds and then exit automatically (may be
+specified as a [time-code](language.md#time-codes)). This is particularly
+useful for capturing videos of a specific length unattended. In `--lockstep`
+mode, this is a period of the internal frame clock not the wall clock.
 
 `--offscreen`
 : Requests that all `!window` nodes actually be silently interpreted as
@@ -227,8 +226,7 @@ run just this way), but you should know that the Mesa software rasterizer is
 `--opengles`
 : This tells *Flitter* to request the OpenGL ES API instead of OpenGL Core. You
 can use this on devices that do not support the full OpenGL API, or that are
-using a compatibility layer like ANGLE. At the moment, `!canvas` 2D drawing is
-not supported on OpenGL ES.
+using a compatibility layer like ANGLE.
 
 `--profile`
 : Runs the Python profiler around the main loop. See [Profiling](#profiling)
@@ -238,10 +236,12 @@ below for details.
 : Turns on logging of **Flitter** virtual machine statistics. This will slow
 down the interpreter by quite a lot. The statistics are written out on exit
 at the `INFO` logging level, which means you will also need to have at least
-`--verbose` logging turned on to see the results. Be wary of interpreting these
-statistics: the overhead of doing the timing can make very simple instructions
-that are executed millions of times appear to be a larger source of execution
-cost than they really are.
+`--verbose` logging turned on to see the results. Be wary when interpreting
+these statistics: the overhead of doing the timing can make very simple
+instructions that are executed millions of times appear to be a larger source
+of execution cost than they really are. It is probably most usefully used in
+conjunction with `--lockstep` and `--runtime` (see above) to run for a specific
+number of frames and compare the statistics of different versions of a program.
 
 ## Developing Flitter
 

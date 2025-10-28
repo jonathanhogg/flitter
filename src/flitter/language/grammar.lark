@@ -35,6 +35,7 @@ parameters : (parameter ("," parameter)*)? -> tuple
 parameter : NAME ["=" node] -> binding
 
 ?expression : node _NL
+            | node "<<" _NL? expression -> append
             | node _NL _INDENT sequence _DEDENT -> append
             | "@" atom [attribute_bindings] _NL [_INDENT sequence _DEDENT] -> template_call
             | "for" iterators _NL _INDENT sequence _DEDENT -> loop
@@ -48,6 +49,9 @@ conditions : condition ("elif" condition)* -> tuple
 
 condition : composition _NL _INDENT sequence _DEDENT
 
+?inline_append : node
+               | node "<<" inline_append -> append
+
 ?node : composition
       | node TAG -> tag
       | node attribute_bindings -> attributes
@@ -60,7 +64,7 @@ multiline_bindings : binding+ _NL (_INDENT (binding+ _NL)+ _DEDENT)? -> tuple
 
 bindings : binding+ -> tuple
 
-binding : name_list "=" composition -> poly_binding
+binding : name_list "=" inline_append -> poly_binding
 
 ?composition : anonymous
              | anonymous (";" anonymous)+ -> sequence
@@ -122,17 +126,17 @@ name_list : NAME (";" NAME)* -> tuple
 
 ?call : atom
       | call _LPAREN args _RPAREN -> call
-      | call "[" node "]" -> slice
+      | call "[" inline_append "]" -> slice
 
-args : node ("," node)* ("," named_arg)* -> tuple
+args : inline_append ("," inline_append)* ("," named_arg)* -> tuple
      | (named_arg ("," named_arg)*)? -> tuple
 
-named_arg : NAME "=" node -> binding
+named_arg : NAME "=" inline_append -> binding
 
 ?atom : literal
       | NAME -> name
       | "$" atom -> lookup
-      | _LPAREN node _RPAREN
+      | _LPAREN inline_append _RPAREN
 
 literal : NUMBER
         | TIMECODE

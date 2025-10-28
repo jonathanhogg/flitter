@@ -34,20 +34,18 @@ let SIZE=1920;1080
 
 !window size=SIZE
     !record filename=(OUTPUT if frame == run_time * fps - 1)
-        !adjust tonemap=:aces
-            !bloom radius=hypot(SIZE)/100
-                !flare
-                    !canvas3d samples=4 viewpoint=0;-25;0 up=0;0;1 near=1 far=100 rotate_y=0.025
-                        !sphere size=20 invert=true emissive_id=:stars rotation=0;0;days/365.256
-                        !group
-                            !light color=0.05
-                            !transform rotate_z=days/365.256
-                                !light color=3 direction=1;0;0
-                            !transform rotate_y=23.44/360 rotate_z=days
-                                !material color_id=:earth emissive_id=:earth_night roughness_id=:earth_reflection
-                                    !sphere size=6.371 rotation=0;0;0.25
-                                !material color_id=:earth_cloudmap transparency_id=:earth_cloudmap_transparency
-                                    !sphere size=6.421 rotation=0;0;days/14 roughness=0.5
-                            !transform rotate_y=-5.14/360 rotate_z=days/27.322 translate=20;0;0
-                                !material color_id=:moon roughness=0.5
-                                    !sphere size=1.7375 rotation=0;(5.14-6.68)/360;0
+        !adjust tonemap=:aces << !bloom radius=hypot(SIZE)/100 << !flare
+            !canvas3d samples=4 viewpoint=0;-25;0 up=0;0;1 near=1 far=100 rotate_y=0.025
+                !sphere size=20 invert=true emissive_id=:stars rotation=0;0;days/365.256
+                !group
+                    !light color=0.05
+                    !transform rotate_z=days/365.256
+                        !light color=3 direction=1;0;0
+                    !transform rotate_y=23.44/360 rotate_z=days
+                        !material color_id=:earth emissive_id=:earth_night roughness_id=:earth_reflection
+                            !sphere size=6.371 rotation=0;0;0.25
+                        !material color_id=:earth_cloudmap transparency_id=:earth_cloudmap_transparency
+                            !sphere size=6.421 rotation=0;0;days/14 roughness=0.5
+                    !transform rotate_y=-5.14/360 rotate_z=days/27.322 translate=20;0;0
+                        !material color_id=:moon roughness=0.5
+                            !sphere size=1.7375 rotation=0;(5.14-6.68)/360;0

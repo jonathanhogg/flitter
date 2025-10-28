@@ -75,19 +75,23 @@ The engine-supplied global values are:
 - `quantum` - the beats per quantum (usually 4)
 - `delta` - the difference between the current value of `beat` and the value
     at the last display frame
-- `time` - the time that the current frame began execution (either the value
-    of the high-resolution Python `perf_counter()` timer or a counter beginning
-    at `0` and incrementing by exactly `1/fps` on each frame in non-realtime
-    mode)
-- `clock` - the current UTC time as a seconds-since-UNIX-epoch value
+- `time` - a monotonically increasing timer in seconds; in realtime mode this
+    is the value of the high-resolution Python `perf_counter()` timer, in
+    non-realtime mode it is a counter beginning at `0` on the first frame and
+    incrementing by exactly `1/fps` on each frame
+- `clock` - the current UTC time as a seconds-since-UNIX-epoch value; this
+    value is not guaranteed to be monotonically increasing and will run fast
+    from the program perspective in non-realtime mode
 - `frame` - the current frame number, counting from 0 and increasing by one
-    for each rendered frame (this will increase by exactly 1 on each program
-    execution when running in non-realtime mode)
-- `fps` - the current target frame-rate of the engine (the `--fps` option)
-- `performance` - a value in the range [0.5 .. 2.0] that increases fractionally
-    if the engine has time to spare and decreases fractionally if it is missing
-    the target frame rate; this value can be multiplied into variable loads
-    in the code – e.g., number of things on screen – to maintain frame rate
+    for each rendered frame
+- `fps` - the current target frame-rate of the engine (either set with the
+    `--fps` option or `%pragma fps`)
+- `performance` - a value in the range $[0.5 .. 2.0]$ that increases
+    fractionally if the engine has time to spare and decreases fractionally if
+    it is missing the target frame rate; this value can be multiplied into
+    variable loads in the code – e.g., number of things on screen – to
+    dynamically increase or reduce the complexity of the scene to match the
+    target frame rate; in non-realtime mode this value is always `2.0`.
 - `realtime` - a `true`/`false` value indicating whether the engine is running
     in realtime mode (the default) or not (with the `--lockstep` option)
 - `run_time` - the number of seconds that the engine will run for before
@@ -148,21 +152,21 @@ general-purpose formatting and so `"Number ";1` is also a valid string.
 `nan`
 : The IEEE-754 floating-point "not a number" value
 
-### SI Prefixes
+### SI Metric Multipliers ###
 
-**Flitter** supports adding an SI prefix to the end of a number. This is
-confusing terminology, but an SI prefix is a prefix to a units suffix.
-**Flitter** does *not* support units, so you just end up with the SI prefix
-as a suffix. (Confused yet?)
+**Flitter** supports adding an SI metric multiplier prefix to the end of a
+number. This is slightly confusing terminology, but an SI metric prefix is a
+prefix to an SI units suffix. As **Flitter** does *not* support units, you just
+end up with the bare SI multiplier as a suffix.
 
-The allowed SI prefixes are:
+The supported SI multipliers are:
 
 - `T` – $\times 10^{12}$
 - `G` – $\times 10^{9}$
 - `M` – $\times 10^{6}$
 - `k` – $\times 10^{3}$
 - `m` – $\times 10^{-3}$
-- `u` – $\times 10^{-6}$ (also `µ`)
+- `u` – $\times 10^{-6}$ (also the Unicode `µ` symbol)
 - `n` – $\times 10^{-9}$
 - `p` – $\times 10^{-12}$
 
@@ -242,8 +246,8 @@ has been used, then a symbol *cannot* be used to retrieve the value.
 ### Time codes
 
 In addition to normal literal numbers, as described above, **Flitter** supports
-literal *time codes*, which are given as a sequence of hours, minutes and
-seconds separated with colon characters (`:`), with the hours being optional
+literal *time codes*, which are given as a sequence of integer hours, minutes
+and seconds separated with colon characters (`:`), with the hours being optional
 and the seconds having an optional decimal fraction. For example:
 
 ```flitter
@@ -253,8 +257,9 @@ and the seconds having an optional decimal fraction. For example:
 Time codes are converted by the parser into a single-item numeric vector
 representing the total number of seconds (*125.3* in the example above).
 The hours component may be an arbitrarily large integer value, the minutes
-and seconds must be in the range *[0,60)*. Time codes may not be combined with
-exponents or SI prefixes, and do not support `_` separators.
+and seconds must be in the range *[0,60)*. Leading zeroes are optional. Time
+codes may not be combined with exponents or [SI
+multipliers](#si-metric-multipliers), and do not support `_` separators.
 
 ### Nodes
 
@@ -305,6 +310,84 @@ constructs a `!canvas` node and appends these to it. The resulting tree is
 appended to a `!window` node, which is the final value of this expression.
 Running this program as-is will result in a red window with the title "Hello
 world!".
+
+#### Inline append
+
+Although the usual, and most readable, way to indicate appending child nodes
+to a parent node is through indentation, there is also an inline append
+operator: `<<`. This can be used  in `let` bindings, arguments to function
+calls, and within parentheses.
+
+For example:
+
+```flitter
+let tree = !a << !b << !c
+```
+
+binds `tree` to an `!a` node containing a `!b` node containing a `!c` node
+(see [Sequence lets](#sequence-let) below for an alternative, probably more
+readable, way of achieving this).
+
+Note that the `<<` operator evaluates to the *parent* node. Therefore, the
+above example is equivalent to:
+
+```flitter
+let tree = !a << (!b << !c)
+```
+
+By contrast, the following:
+
+```flitter
+let tree = (!a << !b) << !c
+```
+
+results in the `!c` node being appended to the `!a` node, and is therefore
+equivalent to:
+
+```flitter
+let tree = !a << (!b; !c)
+```
+
+The inline append operator may also be combined with an indented append block
+to collapse chains of nested nodes. The indented block will be appended to the
+final node in the chain.
+
+For example:
+
+```flitter
+!window size=1920;1080
+    !adjust tonemap=:aces
+        !bloom radius=20
+            !canvas3d
+                !light color=1 direction=0;0;-1
+                …
+```
+
+could be collapsed to:
+
+```flitter
+!window size=1920;1080
+    !adjust tonemap=:aces << !bloom radius=20
+        !canvas3d
+            !light color=1 direction=0;0;-1
+            …
+```
+
+which removes one level of indentation and helps to make clear that the
+`!adjust` and `!bloom` nodes are a pair of chained filter operations between the
+3D canvas and the window. This is particularly useful where three or more
+filters are used together and the indentation begins to become unhelpful.
+
+While this example *could* be collapsed even further to:
+
+```flitter
+!window size=1920;1080 << !adjust tonemap=:aces << !bloom radius=20 << !canvas3d
+    !light color=1 direction=0;0;-1
+    …
+```
+
+this is not recommended usage, as it begins to obscure the structure rather than
+clarifying it.
 
 #### Vector Node Operations
 
@@ -586,6 +669,8 @@ ignored. If the vector is shorter, then the the additional names will be bound
 to items wrapped around from the start again. If the vector is `null` then all
 names will be bound to `null`.
 
+### Sequence let
+
 A let binding may also bind one or more names to the result of evaluating an
 indented "body" sequence of expressions. For example:
 
@@ -598,8 +683,9 @@ let foo=
 A let binding of this form may only have one name (or semicolon-separated list
 of names for an unpacked vector binding) followed by an `=`, a newline and then
 an indented sequence of expressions. This *sequence let* may contain any
-multi-line sequence expressions, the same as the body of a function or a loop.
-This is particularly useful for binding nested node structures to a name.
+multi-line sequence expressions, the same as the body of a function. This
+includes [conditionals](#conditionals) and [for loops](#for-loops), and is
+particularly useful for binding complex nested node structures to a name.
 
 If a semicolon-separated name list is provided in a sequence let, then the
 names will be bound to values following the unpacking logic described above,
@@ -629,9 +715,9 @@ be bound within a non-sequence expression, e.g.:
 !foo x=(x*x where x=10)
 ```
 
-It is good practice, although not always necessary, to surround `where`
-expressions with parentheses to make the scope clear. However, note that `where`
-has higher precedence than `;` vector composition and so `(x;x*x where x=10)` is
+It is good practice – although not always necessary – to surround `where`
+expressions with parentheses to make the scope clear. Note that `where` has
+higher precedence than `;` vector composition and so `(x;x*x where x=10)` is
 equivalent to `x;(x*x where x=10)`.
 
 ## Sequences
