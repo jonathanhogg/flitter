@@ -706,6 +706,32 @@ let x' = x + 1
 All identifiers may contain any number of single quote characters at the end.
 :::
 
+### Stable let
+
+The `let` keyword may be followed by the optional `stable` keyword to
+indicate bindings that are expected to be unchanging for long periods of time.
+When a stable let binding evaluates to the same value as it did in the last
+frame, the engine will re-simplify the program with the assumption that this
+value is now static. A run-time check will also be compiled in that verifies
+the value remains static. In the event that this check fails, execution will
+be abandoned and restarted with the original program.
+
+For example:
+
+```flitter
+let static SEED=time//30
+           THINGS_COUNT=$:things_knob
+```
+
+In cases where a value controls large portions of the program but changes
+infrequently, use of `let stable` can result in significant speed-ups. As the
+evaluated binding is always compared to the previous value, it is fine for the
+value to change continuously for short periods – for example, while turning a
+knob – as long as it then settles to a value that remains stable for a long
+period. Avoid using `let stable` for values that are stable for only short
+periods of time as the overhead of continuously re-simplifying the program
+may result in worse performance instead of better.
+
 ## Where
 
 There is also an inline version of `let` known as `where`. This allows names to

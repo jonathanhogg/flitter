@@ -146,6 +146,7 @@ class FlitterTransformer(Transformer):
     le = tree.LessThanOrEqualTo
     let = tree.Let
     let_import = tree.Import
+    let_stable = tree.LetStable
     literal = tree.Literal
     logical_and = tree.And
     logical_not = tree.Not

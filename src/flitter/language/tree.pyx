@@ -54,8 +54,8 @@ cdef bint sequence_pack(list expressions):
 cdef class Expression:
     cdef readonly frozenset unbound_names
 
-    def compile(self, tuple initial_lnames=(), set initial_errors=None, bint log_errors=True):
-        cdef Program program = Program.__new__(Program, initial_lnames)
+    def compile(self, tuple initial_lnames=(), set initial_errors=None, bint log_errors=True, set stables=None):
+        cdef Program program = Program.__new__(Program, initial_lnames, stables)
         if initial_errors:
             program.compiler_errors.update(initial_errors)
         self._compile(program, list(initial_lnames))
@@ -65,7 +65,8 @@ cdef class Expression:
                 logger.warning("Compiler error: {}", error)
         return program
 
-    def simplify(self, StateDict state=None, dict static=None, dynamic=None, Context parent=None, path=None, bint return_context=False):
+    def simplify(self, StateDict state=None, dict static=None, dynamic=None, Context parent=None, path=None, bint return_context=False,
+                 set stables=None, dict stable_cache=None):
         cdef dict context_vars = {}
         cdef str key
         if static is not None:
@@ -74,7 +75,7 @@ cdef class Expression:
         if dynamic is not None:
             for key in dynamic:
                 context_vars[key] = None
-        cdef Context context = Context(state=state, names=context_vars)
+        cdef Context context = Context(state=state, names=context_vars, stables=stables, stable_cache=stable_cache)
         context.path = path
         context.parent = parent
         cdef Expression expr = self
@@ -1412,7 +1413,7 @@ cdef class Let(Expression):
         cdef int64_t i, j, n
         cdef bint touched = False
         cdef set shadowed=set(), discarded=set()
-        while type(body) is Let:
+        while type(body) is type(self):
             bindings.extend((<Let>body).bindings)
             body = (<Let>body).body
             touched = True
@@ -1492,7 +1493,7 @@ cdef class Let(Expression):
                         break
                 else:
                     touched = True
-        if type(sbody) is Let:
+        if type(sbody) is type(self):
             remaining.extend((<Let>sbody).bindings)
             sbody = (<Let>sbody).body
             resimplify = True
@@ -1500,13 +1501,13 @@ cdef class Let(Expression):
         if remaining:
             if type(sbody) is Sequence and type((<Sequence>sbody).expressions[0]) is Literal:
                 if len((<Sequence>sbody).expressions) > 2:
-                    sbody = Sequence(((<Sequence>sbody).expressions[0], Let(tuple(remaining), Sequence((<Sequence>sbody).expressions[1:]))))
+                    sbody = Sequence(((<Sequence>sbody).expressions[0], type(self)(tuple(remaining), Sequence((<Sequence>sbody).expressions[1:]))))
                 else:
-                    if type((<Sequence>sbody).expressions[1]) is Let:
+                    if type((<Sequence>sbody).expressions[1]) is type(self):
                         resimplify = True
-                    sbody = Sequence(((<Sequence>sbody).expressions[0], Let(tuple(remaining), (<Sequence>sbody).expressions[1])))
+                    sbody = Sequence(((<Sequence>sbody).expressions[0], type(self)(tuple(remaining), (<Sequence>sbody).expressions[1])))
             elif touched:
-                sbody = Let(tuple(remaining), sbody)
+                sbody = type(self)(tuple(remaining), sbody)
             else:
                 return self
         if resimplify:
@@ -1514,7 +1515,77 @@ cdef class Let(Expression):
         return sbody
 
     def __repr__(self):
-        return f'Let({self.bindings!r}, {self.body!r})'
+        return f'{type(self).__name__}({self.bindings!r}, {self.body!r})'
+
+
+cdef int StableId = 0
+
+cdef class LetStable(Let):
+    cdef readonly int id
+
+    def __init__(self, tuple bindings, Expression body):
+        global StableId
+        Let.__init__(self, bindings, body)
+        self.id = StableId
+        StableId += 1
+
+    cdef void _compile(self, Program program, list lnames):
+        cdef PolyBinding binding
+        cdef int64_t n=len(lnames)
+        cdef tuple key
+        for i, binding in enumerate(self.bindings):
+            key = (self.id, i)
+            binding.expr._compile(program, lnames)
+            if key in program.stables:
+                program.stable_assert(key)
+            else:
+                program.stable_test(key)
+                program.local_push(len(binding.names))
+                lnames.extend(binding.names)
+        self.body._compile(program, lnames)
+        cdef Instruction instr, compose=None
+        if len(lnames) > n:
+            if program.last_instruction().code == OpCode.Compose:
+                compose = program.pop_instruction()
+            instr = program.last_instruction()
+            if instr.code == OpCode.LocalDrop:
+                program.pop_instruction()
+                program.local_drop((<InstructionInt>instr).value + len(lnames) - n)
+            else:
+                program.local_drop(len(lnames) - n)
+            if compose is not None:
+                program.push_instruction(compose)
+            while len(lnames) > n:
+                lnames.pop()
+
+    cdef Expression _simplify(self, Context context):
+        cdef Expression body, expr = Let._simplify(self, context)
+        if type(expr) is not LetStable:
+            return expr
+        cdef LetStable stable = <LetStable>expr
+        cdef Vector value
+        cdef tuple key
+        cdef bint resimplify = False
+        cdef dict saved = context.names
+        context.names = saved.copy()
+        for i, binding in enumerate(stable.bindings):
+            key = (self.id, i)
+            if key in context.stables:
+                resimplify = True
+                value = context.stable_cache[key]
+                if len(binding.names) == 1:
+                    name = <str>binding.names[0]
+                    context.names[name] = value
+                else:
+                    for j, name in enumerate(binding.names):
+                        context.names[name] = value.item(j)
+        if resimplify:
+            body = stable.body._simplify(context)
+            if body is not stable.body:
+                stable = LetStable(stable.bindings, body)
+        context.names = saved
+        stable.id = self.id
+        return stable
 
 
 cdef class For(Expression):

@@ -258,3 +258,6 @@ cdef class Context:
     cdef readonly set dependencies
     cdef readonly int64_t call_depth
     cdef readonly bint is_include
+    cdef readonly set stables
+    cdef readonly dict stable_cache
+    cdef readonly bint stables_changed

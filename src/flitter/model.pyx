@@ -2626,7 +2626,7 @@ cdef class Context:
     def __init__(self, dict names=None, StateDict state=None, Node root=None,
                  object path=None, Context parent=None, dict references=None,
                  dict exports=None, set errors=None, set logs=None, stack=None, lnames=None,
-                 set dependencies=None):
+                 set dependencies=None, dict stable_cache=None, set stables=None):
         self.names = names if names is not None else {}
         self.state = state
         self.root = root if root is not None else Node('root')
@@ -2639,3 +2639,6 @@ cdef class Context:
         self.stack = stack
         self.lnames = lnames
         self.dependencies = dependencies if dependencies is not None else set()
+        self.stables = stables if stables is not None else set()
+        self.stable_cache = stable_cache if stable_cache is not None else {}
+        self.stables_changed = False

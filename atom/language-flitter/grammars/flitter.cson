@@ -79,7 +79,7 @@ patterns: [
                 name: "keyword.control.flow.flitter"
     }
     {
-        match: "\\b(if|elif|else|let|where)\\b"
+        match: "\\b(if|elif|else|let|stable|where)\\b"
         name: "keyword.control.flow.flitter"
     }
     {

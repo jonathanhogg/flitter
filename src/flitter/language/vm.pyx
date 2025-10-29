@@ -106,6 +106,8 @@ cdef dict OpCodeNames = {
     OpCode.Pos: 'Pos',
     OpCode.Pow: 'Pow',
     OpCode.Range: 'Range',
+    OpCode.StableAssert: 'StableAssert',
+    OpCode.StableTest: 'StableTest',
     OpCode.Slice: 'Slice',
     OpCode.SliceLiteral: 'SliceLiteral',
     OpCode.Export: 'Export',
@@ -242,6 +244,10 @@ class StackUnderflow(StackError):
 
 
 class StackOverflow(StackError):
+    pass
+
+
+class ProgramInvalid(Exception):
     pass
 
 
@@ -782,7 +788,7 @@ cdef inline execute_tag(VectorStack stack, str name):
 
 
 cdef class Program:
-    def __cinit__(self, lnames=()):
+    def __cinit__(self, lnames=(), stables=None):
         self.pragmas = {}
         self.instructions = []
         self.initial_lnames = lnames
@@ -790,6 +796,7 @@ cdef class Program:
         self.next_label = 1
         self.simplify = True
         self.compiler_errors = set()
+        self.stables = stables if stables is not None else set()
 
     def __len__(self):
         return len(self.instructions)
@@ -858,8 +865,6 @@ cdef class Program:
             self._execute(context, 0, record_stats)
         except StackOverflow:
             context.errors.add("Stack overflow in program")
-            drop(context.lnames, len(context.lnames) - n)
-            drop(context.stack, len(context.stack) - 1)
             return context
         assert (<VectorStack>context.lnames).top == n-1, "Bad lnames"
         drop(context.lnames, n)
@@ -1112,6 +1117,14 @@ cdef class Program:
         self.instructions.append(Instruction(OpCode.Exit))
         return self
 
+    cpdef Program stable_assert(self, tuple key):
+        self.instructions.append(InstructionTuple(OpCode.StableAssert, key))
+        return self
+
+    cpdef Program stable_test(self, tuple key):
+        self.instructions.append(InstructionTuple(OpCode.StableTest, key))
+        return self
+
     cdef void _execute(self, Context context, int64_t pc, bint record_stats):
         global CallOutCount, CallOutDuration
         cdef VectorStack stack=context.stack, lnames=context.lnames
@@ -1124,7 +1137,7 @@ cdef class Program:
         cdef list instructions=self.instructions
         cdef Instruction instruction=None
         cdef str filename
-        cdef tuple names, args, nodes
+        cdef tuple names, args, nodes, key
         cdef Vector r1, r2, r3
         cdef dict import_names, kwargs
         cdef Function function
@@ -1465,6 +1478,25 @@ cdef class Program:
                 elif instruction.code == OpCode.Export:
                     PyDict_SetItem(exports, (<InstructionStr>instruction).value, pop(stack))
 
+                elif instruction.code == OpCode.StableAssert:
+                    r1 = pop(stack)
+                    key = (<InstructionTuple>instruction).value
+                    objptr = PyDict_GetItem(context.stable_cache, key)
+                    if objptr == NULL or r1.eq(<Vector>objptr) is false_:
+                        PyDict_SetItem(context.stable_cache, key, r1)
+                        context.stables.remove(key)
+                        raise ProgramInvalid("Stable assertion failed")
+
+                elif instruction.code == OpCode.StableTest:
+                    r1 = peek(stack)
+                    key = (<InstructionTuple>instruction).value
+                    objptr = PyDict_GetItem(context.stable_cache, key)
+                    if objptr != NULL and r1.eq(<Vector>objptr) is true_:
+                        context.stables.add(key)
+                        context.stables_changed = True
+                    else:
+                        PyDict_SetItem(context.stable_cache, key, r1)
+
                 else:
                     raise AssertionError(f"Unrecognised instruction: {instruction}")
 
@@ -1473,7 +1505,9 @@ cdef class Program:
                     StatsCount[<int64_t>instruction.code] += 1
                     StatsDuration[<int64_t>instruction.code] += duration
 
-        except StackOverflow:
+        except (StackOverflow, ProgramInvalid):
+            drop(lnames, len(lnames))
+            drop(stack, len(stack))
             raise
 
         except Exception:

@@ -94,6 +94,8 @@ cdef enum OpCode:
     Pos
     Pow
     Range
+    StableAssert
+    StableTest
     Slice
     SliceLiteral
     Export
@@ -164,6 +166,7 @@ cdef class Program:
     cdef readonly VectorStack lnames
     cdef readonly set compiler_errors
     cdef readonly bint simplify
+    cdef readonly set stables
     cdef int64_t next_label
 
     cdef Instruction last_instruction(self)
@@ -210,6 +213,8 @@ cdef class Program:
     cpdef Program xor(self)
     cpdef Program slice(self)
     cpdef Program slice_literal(self, Vector value)
+    cpdef Program stable_assert(self, tuple key)
+    cpdef Program stable_test(self, tuple key)
     cpdef Program call(self, int64_t count, tuple names=?)
     cpdef Program call_fast(self, function, int64_t count)
     cpdef Program tag(self, str name)

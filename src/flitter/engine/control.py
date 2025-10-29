@@ -13,7 +13,7 @@ from loguru import logger
 from .. import setproctitle
 from ..cache import SharedCache
 from ..clock import BeatCounter, system_clock
-from ..language.vm import log_vm_stats
+from ..language.vm import log_vm_stats, ProgramInvalid
 from ..model import Vector, StateDict, Context, null, numbers_cache_counts, empty_numbers_cache
 from ..plugins import get_plugin
 from ..render.window.models import Model
@@ -24,7 +24,7 @@ class EngineController:
     MINIMUM_GC_INTERVAL = 10
 
     def __init__(self, target_fps=60, screen=0, fullscreen=False, vsync=False, state_file=None,
-                 reset_on_switch=False, state_simplify_wait=0, realtime=True, defined_names=None, vm_stats=False,
+                 reset_on_switch=False, realtime=True, defined_names=None, vm_stats=False,
                  run_time=None, offscreen=False, disable_simplifier=False, opengl_es=False, model_cache_time=300):
         self.default_fps = target_fps
         self.target_fps = target_fps
@@ -37,7 +37,6 @@ class EngineController:
         self.model_cache_time = model_cache_time
         self.reset_on_switch = reset_on_switch
         self.disable_simplifier = disable_simplifier
-        self.state_simplify_wait = 0 if self.disable_simplifier else state_simplify_wait / 2
         if defined_names:
             self.defined_names = {key: Vector.coerce(value) for key, value in defined_names.items()}
             logger.trace("Defined names: {!r}", self.defined_names)
@@ -60,10 +59,6 @@ class EngineController:
             self.global_state = {}
         self.global_state_dirty = False
         self.state = None
-        self.state_timestamp = None
-        self.state_generation0 = None
-        self.state_generation1 = None
-        self.state_generation2 = None
         self.renderers = {}
         self.counter = BeatCounter()
         self.pages = []
@@ -89,10 +84,6 @@ class EngineController:
                 self.state.clear_changed()
             path, state = self.pages[page_number]
             self.state = state
-            self.state_timestamp = system_clock()
-            self.state_generation0 = set()
-            self.state_generation1 = set()
-            self.state_generation2 = set()
             self.current_path = path
             self.current_page = page_number
             SharedCache.set_root(self.current_path)
@@ -178,7 +169,8 @@ class EngineController:
             gc_pending = False
             last_gc = None
             run_program = current_program = errors = logs = None
-            simplify_state_time = frame_time + self.state_simplify_wait
+            stables = set()
+            stable_cache = {}
             static = dict(self.defined_names)
             static.update({'realtime': self.realtime, 'screen': self.screen, 'fullscreen': self.fullscreen,
                            'vsync': self.vsync, 'offscreen': self.offscreen, 'opengl_es': self.opengl_es, 'run_time': self.run_time})
@@ -203,10 +195,6 @@ class EngineController:
                     run_program = current_program = program
                     self.handle_pragmas(program.pragmas, frame_time)
                     errors = logs = None
-                    self.state_generation0 ^= self.state_generation1
-                    self.state_generation1 = self.state_generation2
-                    self.state_generation2 = set()
-                    simplify_state_time = frame_time + self.state_simplify_wait
 
                 now = system_clock()
                 housekeeping += now
@@ -214,8 +202,13 @@ class EngineController:
 
                 if run_program is not None:
                     context = Context(names={key: Vector.coerce(value) for key, value in dynamic.items()},
-                                      state=self.state, references=self._references)
-                    run_program.run(context, record_stats=self.vm_stats)
+                                      state=self.state, references=self._references, stables=stables, stable_cache=stable_cache)
+                    try:
+                        run_program.run(context, record_stats=self.vm_stats)
+                    except ProgramInvalid:
+                        logger.debug("Simplified program invalidated due to change of stable value")
+                        run_program = current_program
+                        run_program.run(context, record_stats=self.vm_stats)
                 else:
                     context = Context()
 
@@ -240,50 +233,21 @@ class EngineController:
 
                 self.state['_counter'] = self.counter.tempo, self.counter.quantum, self.counter.start
 
-                if self.state.changed:
-                    if self.state_simplify_wait:
-                        changed_keys = self.state.changed_keys - self.state_generation0
-                        self.state_generation0 ^= changed_keys
-                        self.state_generation0 &= self.state.keys()
-                        if changed_keys:
-                            generation1to0 = self.state_generation1 & changed_keys
-                            changed_keys -= generation1to0
-                            self.state_generation1 -= generation1to0
-                            generation2to0 = self.state_generation2 & changed_keys
-                            if generation2to0:
-                                if run_program is not current_program:
-                                    run_program = current_program
-                                    logger.debug("Undo simplification on state; original program with {} instructions", len(run_program))
-                                self.state_generation1 ^= self.state_generation2 - generation2to0
-                                self.state_generation2 = set()
-                                simplify_state_time = frame_time + self.state_simplify_wait
-                    self.global_state_dirty = True
-                    self.state_timestamp = frame_time
-                    self.state.clear_changed()
-
-                if self.state_simplify_wait and frame_time > simplify_state_time:
-                    if current_program is not None and self.state_generation1:
-                        if self.state_generation1:
-                            self.state_generation2 ^= self.state_generation1
-                            simplify_state = self.state.with_keys(self.state_generation2)
-                            simplify_time = -system_clock()
-                            top = current_program.top.simplify(state=simplify_state, dynamic=dynamic, path=current_program.path)
-                            now = system_clock()
-                            simplify_time += now
-                            if top is current_program.top:
-                                logger.trace("Program unchanged after simplification on {} static state keys in {:.1f}ms",
-                                             len(self.state_generation2), simplify_time*1000)
-                            else:
-                                compile_time = -now
-                                run_program = top.compile(initial_lnames=tuple(dynamic))
-                                run_program.set_path(current_program.path)
-                                run_program.set_top(top)
-                                compile_time += system_clock()
-                                logger.debug("Simplified on {} static state keys to {} instructions in {:.1f}/{:.1f}ms",
-                                             len(self.state_generation2), len(run_program), simplify_time*1000, compile_time*1000)
-                    self.state_generation1 = self.state_generation0
-                    self.state_generation0 = set()
-                    simplify_state_time = frame_time + self.state_simplify_wait
+                if not self.disable_simplifier and context.stables_changed and current_program is not None:
+                    simplify_time = -system_clock()
+                    top = current_program.top.simplify(dynamic=dynamic, path=current_program.path, stables=stables, stable_cache=stable_cache)
+                    now = system_clock()
+                    simplify_time += now
+                    if top is current_program.top:
+                        logger.trace("Program unchanged after simplification on stable values in {:.1f}ms", simplify_time*1000)
+                    else:
+                        compile_time = -now
+                        run_program = top.compile(initial_lnames=tuple(dynamic), stables=stables)
+                        run_program.set_path(current_program.path)
+                        run_program.set_top(top)
+                        compile_time += system_clock()
+                        logger.debug("Resimplified on stable values to {} instructions in {:.1f}/{:.1f}ms",
+                                     len(run_program), simplify_time*1000, compile_time*1000)
 
                 if self.global_state_dirty and self.state_file is not None and frame_time > save_state_time:
                     logger.trace("Saving state")
