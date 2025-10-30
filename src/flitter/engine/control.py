@@ -13,7 +13,7 @@ from loguru import logger
 from .. import setproctitle
 from ..cache import SharedCache
 from ..clock import BeatCounter, system_clock
-from ..language.vm import log_vm_stats, ProgramInvalid
+from ..language.vm import log_vm_stats, StableChanged
 from ..model import Vector, StateDict, Context, null, numbers_cache_counts, empty_numbers_cache
 from ..plugins import get_plugin
 from ..render.window.models import Model
@@ -195,20 +195,27 @@ class EngineController:
                     run_program = current_program = program
                     self.handle_pragmas(program.pragmas, frame_time)
                     errors = logs = None
+                    stables = set()
+                    stable_cache = {}
 
                 now = system_clock()
                 housekeeping += now
                 execution -= now
 
                 if run_program is not None:
-                    context = Context(names={key: Vector.coerce(value) for key, value in dynamic.items()},
-                                      state=self.state, references=self._references, stables=stables, stable_cache=stable_cache)
-                    try:
-                        run_program.run(context, record_stats=self.vm_stats)
-                    except ProgramInvalid:
-                        logger.debug("Simplified program invalidated due to change of stable value")
-                        run_program = current_program
-                        run_program.run(context, record_stats=self.vm_stats)
+                    while True:
+                        context = Context(names={key: Vector.coerce(value) for key, value in dynamic.items()},
+                                          state=self.state, references=self._references, stables=stables, stable_cache=stable_cache)
+                        try:
+                            run_program.run(context, record_stats=self.vm_stats)
+                        except StableChanged as exc:
+                            if run_program is not current_program:
+                                logger.debug("Simplified program invalidated due to change of stable value")
+                                run_program = current_program
+                            else:
+                                raise RuntimeError("Compiled program contains unexpected StableAssert") from exc
+                        else:
+                            break
                 else:
                     context = Context()
 

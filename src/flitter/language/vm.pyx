@@ -251,6 +251,10 @@ class ProgramInvalid(Exception):
     pass
 
 
+class StableChanged(ProgramInvalid):
+    pass
+
+
 cdef class VectorStack:
     def __cinit__(self, int64_t size=DEFAULT_STACK_SIZE, int64_t max_size=MAX_STACK_SIZE):
         self.vectors = <PyObject**>PyMem_Malloc(sizeof(PyObject*) * size)
@@ -1485,7 +1489,7 @@ cdef class Program:
                     if objptr == NULL or r1.eq(<Vector>objptr) is false_:
                         PyDict_SetItem(context.stable_cache, key, r1)
                         context.stables.remove(key)
-                        raise ProgramInvalid("Stable assertion failed")
+                        raise StableChanged(key)
 
                 elif instruction.code == OpCode.StableTest:
                     r1 = peek(stack)
