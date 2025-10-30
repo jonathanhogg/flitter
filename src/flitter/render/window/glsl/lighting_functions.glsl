@@ -30,6 +30,11 @@ void compute_emissive_lighting(vec3 world_normal, vec3 view_direction, vec3 emis
 }
 
 
+float max3(vec3 v) {
+    return max(v.x, max(v.y, v.z));
+}
+
+
 void compute_pbr_lighting(vec3 world_position, vec3 world_normal, vec3 view_direction,
                           float ior, float roughness, float metal, float ao, vec3 albedo,
                           inout vec3 transmission_color, inout vec3 diffuse_color, inout vec3 specular_color) {
@@ -47,19 +52,21 @@ void compute_pbr_lighting(vec3 world_position, vec3 world_normal, vec3 view_dire
         mat4 light = lights[i];
         int light_type = int(light[0].w);
         vec3 light_color = light[0].xyz;
+        vec3 light_position = light[1].xyz;
+        vec3 light_direction = light[2].xyz;
+        vec4 light_falloff = light[3];
         int passes = 1;
         for (int pass = 0; pass < passes; pass++) {
             vec3 L;
-            float attenuation = 1.0;
-            float light_distance = 1.0;
+            float brightness;
+            float light_distance;
             if (light_type == ${Point}) {
-                vec3 light_position = light[1].xyz;
                 float light_radius = light[2].w;
                 L = light_position - world_position;
                 light_distance = length(L);
                 if (light_radius > 0.0) {
                     passes = 2;
-                    attenuation = clamp(1.0 - (light_radius / light_distance), 0.005, 1.0);
+                    brightness = clamp(1.0 - (light_radius / light_distance), 0.005, 1.0);
                     if (pass == 0) {
                         light_distance -= min(light_radius, light_distance*0.99);
                     } else {
@@ -68,78 +75,85 @@ void compute_pbr_lighting(vec3 world_position, vec3 world_normal, vec3 view_dire
                         L += l * min(0.99, light_radius/length(l));
                         light_distance = length(L);
                     }
+                } else {
+                    brightness = 1.0;
                 }
                 L = normalize(L);
             } else if (light_type == ${Spot}) {
-                vec3 light_position = light[1].xyz;
-                vec3 light_direction = light[2].xyz;
                 float inner_cone = light[1].w;
                 float outer_cone = light[2].w;
                 L = light_position - world_position;
                 light_distance = length(L);
                 L /= light_distance;
                 float spot_cosine = dot(L, -light_direction);
-                attenuation = 1.0 - clamp((inner_cone-spot_cosine) / (inner_cone-outer_cone), 0.0, 1.0);
+                brightness = 1.0 - clamp((inner_cone-spot_cosine) / (inner_cone-outer_cone), 0.0, 1.0);
             } else if (light_type == ${Line}) {
                 passes = 2;
-                vec3 light_position = light[1].xyz;
-                float light_length = length(light[2].xyz);
-                vec3 light_direction = light[2].xyz / light_length;
+                float light_length = length(light_direction);
+                vec3 light_axis = light_direction / light_length;
                 float light_radius = light[2].w;
                 L = light_position - world_position;
+                vec3 light_end = L + light_direction;
                 if (pass == 0) {
                     float LdotN = dot(L, N);
-                    float cp = clamp(dot(-L, light_direction), 0.0, light_length);
-                    float ip = clamp(-LdotN / dot(light_direction, N), 0.0, light_length);
+                    float cp = clamp(dot(-L, light_axis), 0.0, light_length);
+                    float ip = clamp(-LdotN / dot(light_axis, N), 0.0, light_length);
                     float m = light_length / 2.0;
                     if (LdotN < 0.0) {
                         m = (ip + light_length) / 2.0;
                         cp = max(cp, ip);
-                    } else if (dot(L + light_direction*light_length, N) < 0.0) {
+                    } else if (dot(light_end, N) < 0.0) {
                         m = ip / 2.0;
                         cp = min(cp, ip);
                     }
-                    L += light_direction * (cp*3.0 + m) / 4.0;
+                    L += light_axis * (cp*3.0 + m) / 4.0;
                     light_distance = length(L);
                     L /= light_distance;
-                    attenuation = clamp(1.0 - (light_radius / light_distance), 0.0, 1.0);
+                    brightness = clamp(1.0 - (light_radius / light_distance), 0.0, 1.0);
                     light_distance -= min(light_radius, light_distance*0.99);
                 } else {
                     vec3 R = reflect(V, N);
-                    mat3 M = mat3(R, light_direction, cross(R, light_direction));
-                    L += clamp(-(inverse(M) * L).y, 0.0, light_length) * light_direction;
+                    mat3 M = mat3(R, light_axis, cross(R, light_axis));
+                    L += clamp(-(inverse(M) * L).y, 0.0, light_length) * light_axis;
                     vec3 l = dot(L, R) * R - L;
                     light_distance = length(L);
                     L += l * min(0.99, light_radius/light_distance);
-                    attenuation = clamp(1.0 - (light_radius / light_distance), 0.0, 1.0);
+                    brightness = clamp(1.0 - (light_radius / light_distance), 0.0, 1.0);
                     light_distance = length(L);
                     L /= light_distance;
                 }
             } else if (light_type == ${Directional}) {
-                vec3 light_direction = light[2].xyz;
+                brightness = 1.0;
+                light_distance = 1.0;
                 L = -light_direction;
             } else { // (light_type == ${Ambient})
                 diffuse_color += (1.0 - F0) * (1.0 - metal) * albedo * light_color * ao;
                 break;
             }
-            vec4 light_falloff = light[3];
+            float NdotL = clamp(dot(N, L), 0.0, 1.0);
+            if (NdotL == 0.0) {
+                continue;
+            }
             float ld2 = light_distance * light_distance;
             vec4 ds = vec4(1.0, light_distance, ld2, light_distance * ld2);
-            attenuation /= dot(ds, light_falloff);
-            vec3 H = normalize(V + L);
-            float NdotL = clamp(dot(N, L), 0.0, 1.0);
-            float NdotH = clamp(dot(N, H), 0.0, 1.0);
-            float HdotV = clamp(dot(H, V), 0.0, 1.0);
-            float denom = NdotH * NdotH * (a2-1.0) + 1.0;
-            float NDF = a2 / (denom * denom);
-            float G = Gnom * (NdotL / (NdotL * (1.0 - k) + k));
-            vec3 F = F0 + (1.0 - F0) * pow(1.0 - HdotV, 5.0);
-            vec3 radiance = light_color * attenuation * NdotL;
+            brightness /= dot(ds, light_falloff);
+            vec3 radiance = light_color * brightness * NdotL;
+            if (max3(abs(radiance)) < (pass == passes-1 ? 1e-3*a2 : 1e-3)) {
+                continue;
+            }
             if (pass == 0) {
-                transmission_color += radiance * (1.0 - F0) * (1.0 - metal) * (1.0 + albedo) * 0.5;
-                diffuse_color += radiance * (1.0 - F) * (1.0 - metal) * albedo;
+                vec3 R = radiance * (1.0 - F0) * (1.0 - metal);
+                transmission_color += R * (1.0 + albedo) * 0.5;
+                diffuse_color += R * albedo;
             }
             if (pass == passes-1) {
+                vec3 H = normalize(V + L);
+                float HdotV = clamp(dot(H, V), 0.0, 1.0);
+                vec3 F = F0 + (1.0 - F0) * pow(1.0 - HdotV, 5.0);
+                float NdotH = clamp(dot(N, H), 0.0, 1.0);
+                float denom = NdotH * NdotH * (a2-1.0) + 1.0;
+                float NDF = a2 / (denom * denom);
+                float G = Gnom * (NdotL / (NdotL * (1.0 - k) + k));
                 specular_color += radiance * (NDF * G * F) / (4.0 * NdotV * NdotL + 1e-6);
             }
         }
