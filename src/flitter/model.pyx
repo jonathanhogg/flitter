@@ -912,6 +912,8 @@ cdef class Vector:
     cdef Vector eq(self, Vector other):
         if self is other:
             return true_
+        if self._hash and other._hash and self._hash != other._hash:
+            return false_
         cdef int64_t i, n = self.length, m = other.length
         cdef tuple left = self.objects, right = other.objects
         if n != m or (left is None) != (right is None):
