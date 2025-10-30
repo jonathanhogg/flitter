@@ -894,7 +894,7 @@ class Canvas(WindowNode):
                 else:
                     self._graphics_context = skia.GrDirectContext.MakeGL()
                 if self._graphics_context is None:
-                    logger.error("Failed to create GL context for Skia (is this OpenGL ES?)")
+                    logger.error("Failed to create GL context for Skia")
                     self._surface = None
                     self._canvas = None
                     return
