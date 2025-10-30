@@ -79,7 +79,7 @@ patterns: [
                 name: "keyword.control.flow.flitter"
     }
     {
-        match: "\\b(if|elif|else|let|stable|where)\\b"
+        match: "\\b(for|if|elif|else|let|stable|where)\\b"
         name: "keyword.control.flow.flitter"
     }
     {
@@ -116,7 +116,7 @@ patterns: [
                 name: "keyword.operator.assignment.flitter"
     }
     {
-        match: "(for)\\s+([_\\p{alpha}][_\\p{alnum}]*'*\\s*(?:;\\s*[_\\p{alpha}][_\\p{alnum}]*'*)*)\\s+(in)"
+        match: "(,)?\\s*([_\\p{alpha}][_\\p{alnum}]*'*\\s*(?:;\\s*[_\\p{alpha}][_\\p{alnum}]*'*)*)\\s+(in)"
         captures:
             '1':
                 name: "keyword.control.flow.flitter"
@@ -158,10 +158,6 @@ patterns: [
                 include: '$self'
             }
         ]
-    }
-    {
-        match: "[_\\p{alpha}][_\\p{alnum}]*'*"
-        name: "variable.name.flitter"
     }
     {
         begin: "(\"\"\")"
