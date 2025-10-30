@@ -1486,8 +1486,10 @@ cdef class Program:
                     r1 = pop(stack)
                     key = (<InstructionTuple>instruction).value
                     objptr = PyDict_GetItem(context.stable_cache, key)
-                    if objptr == NULL or r1.eq(<Vector>objptr) is false_:
-                        PyDict_SetItem(context.stable_cache, key, r1)
+                    if objptr == NULL:
+                        raise ProgramInvalid("Bad stable assert/cache")
+                    if r1.eq(<Vector>objptr) is false_:
+                        PyDict_DelItem(context.stable_cache, key)
                         context.stables.remove(key)
                         raise StableChanged(key)
 
