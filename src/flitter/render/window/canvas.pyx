@@ -11,6 +11,7 @@ from cpython cimport array, PyObject
 from cpython.dict cimport PyDict_GetItem, PyDict_SetItem
 from libc.math cimport acos, sqrt
 from libc.stdint cimport uint32_t
+import glfw
 from loguru import logger
 import skia
 
@@ -889,8 +890,12 @@ class Canvas(WindowNode):
                 self._target.release()
             self._target = RenderTarget.get(self.glctx, self.width, self.height, colorbits, srgb=srgb)
             if self._graphics_context is None:
-                if opengl_es:
-                    self._graphics_context = skia.GrDirectContext.MakeGL(skia.GrGLInterface.MakeEGL())
+                if opengl_es or glfw.get_platform() == glfw.PLATFORM_WAYLAND:
+                    if hasattr(skia.GrGLInterface, 'MakeEGL'):
+                        self._graphics_context = skia.GrDirectContext.MakeGL(skia.GrGLInterface.MakeEGL())
+                    else:
+                        logger.error("Missing EGL context API support in Skia")
+                        self._graphics_context = None
                 else:
                     self._graphics_context = skia.GrDirectContext.MakeGL()
                 if self._graphics_context is None:
