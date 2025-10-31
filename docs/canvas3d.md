@@ -835,10 +835,10 @@ To load an external model use the attributes:
 will be automatically reloaded if this file changes.
 
 `repair=` ( `true` | `false` )
-: If set to `true`, attempts to *repair* the mesh by merging duplicated vertices
-removing duplicate or degenerate faces, and fixing normal directions and face
-windings. This can be useful if a loaded mesh is rendering incorrectly or is
-failing with [constructive solid geometry](#contructive-solid-geometry)
+: If set to `true`, attempts to *repair* the mesh by merging duplicated
+vertices, removing duplicate or degenerate faces, and fixing normal directions
+and face windings. This can be useful if a loaded mesh is rendering incorrectly
+or is failing with [constructive solid geometry](#constructive-solid-geometry)
 operations. Default is `false`.
 
 Meshes are loaded using the [**trimesh**](https://trimesh.org) library and so
