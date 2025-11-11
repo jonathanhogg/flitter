@@ -719,7 +719,7 @@ be abandoned and restarted with the original program.
 For example:
 
 ```flitter
-let static SEED=time//30
+let stable SEED=time//30
            THINGS_COUNT=$:things_knob
 ```
 
