@@ -271,7 +271,13 @@ $ flake8 src tests scripts
 $ cython-lint src
 ```
 
-And the test suite can be run with `pytest`:
+And the test suite can be run with the Python `unittest` framework:
+
+```console
+$ python3 -m unittest
+```
+
+or with `pytest` if you want something fancier:
 
 ```console
 $ pip3 install pytest
@@ -342,7 +348,7 @@ for the test suite with:
 
 ```console
 $ pip3 install coverage
-$ coverage run -m pytest
+$ coverage run -m unittest
 $ coverage report
 ```
 
