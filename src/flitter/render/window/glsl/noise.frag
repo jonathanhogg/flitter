@@ -25,19 +25,35 @@ uniform sampler2D ${name};
 <%include file="noise_functions.glsl"/>
 
 
+const float Pi = 3.141592653589793115997963468544185161590576171875;
+const float Tau = 6.283185307179586231995926937088370323181152343750;
+
+
 void main() {
+% if noise_shape == 'cylinder':
+    float th = Tau * coord.x;
+    float r = size.x / Tau;
+    vec3 point = vec3(vec2(cos(th), sin(th))*r, coord.y*size.y);
+% elif noise_shape == 'sphere':
+    float th = Tau * coord.x;
+    float r = size.x / Tau;
+    float lat = Pi * (coord.y - 0.5);
+    vec3 point = vec3(vec2(cos(th), sin(th))*cos(lat)*r, sin(lat)*r);
+% else:
+    vec3 point = vec3(coord*size, 0);
+% endif
+    point += vec3(origin, z);
 % if child_textures:
 %     for name in child_textures:
 %         if loop.index == 0:
-    vec4 c = texture(${name}, coord);
+    vec4 s = texture(${name}, coord);
 %         else:
-    c = composite_${composite}(texture(${name}, coord), c);
+    s = composite_${composite}(texture(${name}, coord), s);
 %         endif
 %     endfor
-% else:
-    vec4 c = vec4(0.0);
+    point += s * tscale;
 % endif
-    vec3 point = (vec3(coord*size + origin, z) + c.xyz*tscale) * scale;
+    point *= scale;
     mat4 hashes;
     hashes[0] = vec4(seed_hash);
     hashes[1] = opensimplex2s_permute(hashes[0] + 1.0);
@@ -50,7 +66,11 @@ void main() {
         vec3 p = point / k;
         vec4 c = vec4(0.0);
         for (int j = 0; j < components; j++) {
+% if noise_shape in ('cylinder', 'sphere'):
+            c[j] = opensimplex2s(hashes[j], p);
+% else:
             c[j] = opensimplex2s_improvexy(hashes[j], p);
+% endif
         }
         sum += c * k;
         weight += k;

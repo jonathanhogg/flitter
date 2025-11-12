@@ -137,7 +137,8 @@ class Noise(Shader):
     DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('noise.frag')
 
     def render(self, node, references, **kwargs):
+        noise_shape = node.get('shape', 1, str, 'plane').lower()
         seed_hash = hash(node['seed'] if 'seed' in node else null) / (1 << 48)
         default_values = node.get('default', 4, float, (1, 1, 1, 1))
-        super().render(node, references, seed_hash=seed_hash, components=1, octaves=1, roughness=0.5, origin=0, z=0,
+        super().render(node, references, noise_shape=noise_shape, seed_hash=seed_hash, components=1, octaves=1, roughness=0.5, origin=0, z=0,
                        scale=1, tscale=1, multiplier=0.5, offset=0.5, default_values=default_values, **kwargs)

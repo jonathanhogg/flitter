@@ -554,9 +554,28 @@ with the `border` and `repeat` attributes as described above for
 
 ### `!noise`
 
-The `!noise` node is primarily an image generator that generates 2D slices
-through [OpenSimplex 2S](https://github.com/KdotJPG/OpenSimplex2) 3D ("improved
-XY") noise. It is controlled with the following attributes:
+The `!noise` node is primarily an image generator that generates slices through
+[OpenSimplex 2S](https://github.com/KdotJPG/OpenSimplex2) 3D ("improved XY")
+noise. The shape of the slice is controlled with the `shape` attribute, as
+follows:
+
+`shape=:plane` (the default)
+: The image is constructed from an XY plane of the 'ImproveXY' variant of the
+OpenSimplex 2S noise function.
+
+`shape=:cylinder`
+: The image is constructed from a cylinder aligned along the Z axis of the
+conventional OpenSimplex 2S noise function. This will result in an evenly
+distributed noise image that seamlessly wraps on the left and right edges.
+
+`shape=:sphere`
+: The image is constructed from a sphere aligned with its poles along the Z
+axis of the conventional noise function. The image will appear distorted at the
+top and bottom edges, but will seamlessly texture-map onto a shape using
+Equirectangular UV coordinates.
+
+All of these noise shapes support the following additional attributes for
+controlling the noise function:
 
 `seed=` *SEED*
 : `!noise` generates reproducible output with the same input values. Supply a
@@ -580,11 +599,15 @@ passed into the noise function, default `1`.
 
 `origin=` *X*`;`*Y*
 : Specifies an offset for the *pre-scaled* X and Y input values, default `0`.
-The pre-scaled X and Y coordinates are in pixels from the top left.
 
 `z=` *Z*
-: Specifies a *pre-scaled* Z coordinate for the plane to be calculated,
-default `0`.
+: Specifies an offset for the *pre-scaled* Z input value, default `0`.
+
+:::{note}
+The `origin` and `z` attributes are designed primarily for animating the default
+`shape=:plane` noise form. Results will be more complicated for cylindrical
+and spherical noise.
+:::
 
 `multiplier=` *MULTIPLIER*
 : Specifies a multiplier for the final noise value, default `0.5`.
