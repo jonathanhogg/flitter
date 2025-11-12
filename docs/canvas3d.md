@@ -940,7 +940,10 @@ The supported mappings are:
 and intersects this ray with a sphere at the model origin. The Equirectangular
 projection coordinates of that point on the sphere will be used as the UV for
 the vertex. This matches the projection used by the `!sphere` primitive. You
-should not expect this to produce sensible results for a non-convex shape.
+should not expect this to produce sensible results for a non-convex shape. The
+spherical remapping will duplicate vertices for faces that straddle the 0°
+longitude line to ensure correct texture-mapping. Use the `repeat=` material
+attribute to set U axis wrapping (See [Texture Mapping](#texture-mapping)).
 
 `:plane`
 : This maps UV coordinates according to the *x* and *y* coordinates of each
@@ -951,13 +954,6 @@ mapping with an orthographic projection, such as drawing a topographical map
 onto the surface of a 3D relief. As this mapping *only* uses the *x* and
 *y* coordinates, the underside will be a flipped version of the top, and the
 sides will be stretched versions of the edge pixels.
-
-:::{note}
-Note that correct spherical mapping requires a seam on the 0 longitude line
-where the texture wraps around from the right to the left side. Any faces that
-span this line will show clear visual distortions as the `:sphere` mapping
-algorithm will *not* create this seam.
-:::
 
 ## Constructive Solid Geometry
 
