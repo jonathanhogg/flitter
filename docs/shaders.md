@@ -554,22 +554,22 @@ with the `border` and `repeat` attributes as described above for
 
 ### `!noise`
 
-The `!noise` node is primarily an image generator that generates slices through
-[OpenSimplex 2S](https://github.com/KdotJPG/OpenSimplex2) 3D ("improved XY")
-noise. The shape of the slice is controlled with the `shape` attribute, as
-follows:
+The `!noise` node is primarily an image generator that outputs slices through
+[OpenSimplex 2S](https://github.com/KdotJPG/OpenSimplex2) 3D noise. The shape
+of the slice is controlled with the `shape` attribute, as follows:
 
 `shape=:plane` (the default)
-: The image is constructed from an XY plane of the 'ImproveXY' variant of the
-OpenSimplex 2S noise function.
+: The image is constructed from a rectangle in the XY plane of the *Improved
+XY* variant of the OpenSimplex 2S noise function.
 
 `shape=:cylinder`
-: The image is constructed from a cylinder aligned along the Z axis of the
-conventional OpenSimplex 2S noise function. This will result in an evenly
-distributed noise image that seamlessly wraps on the left and right edges.
+: The image is constructed from the outer surface of a cylinder aligned along
+the Z axis of the conventional OpenSimplex 2S noise function. This will result
+in an evenly distributed noise image that seamlessly wraps on the left and
+right edges.
 
 `shape=:sphere`
-: The image is constructed from a sphere aligned with its poles along the Z
+: The image is constructed from the surface of a sphere with its poles on the Z
 axis of the conventional noise function. The image will appear distorted at the
 top and bottom edges, but will seamlessly texture-map onto a shape using
 Equirectangular UV coordinates.
@@ -605,8 +605,7 @@ passed into the noise function, default `1`.
 
 :::{note}
 The `origin` and `z` attributes are designed primarily for animating the default
-`shape=:plane` noise form. Results will be more complicated for cylindrical
-and spherical noise.
+`shape=:plane` noise.
 :::
 
 `multiplier=` *MULTIPLIER*
@@ -636,4 +635,7 @@ the noise function as X, Y and Z offsets, controlled with the attribute:
 
 `tscale=` *TX*`;`*TY*`;`*TZ*
 : Specifies a scaling factor for the RGB values read from the input image into
-offsets that will be added to the pre-`scale`d noise coordinates, default `1`.
+offsets that will be added to the *pre-scaled* noise coordinates, default `1`.
+
+This allows per-pixel variation of the inputs to the noise function, including
+nesting one `!noise` generator within another.
