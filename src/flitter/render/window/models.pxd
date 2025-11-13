@@ -66,7 +66,7 @@ cdef class Model:
     cdef Model _external(str filename)
 
     @staticmethod
-    cdef Model _vector(Vector vertices, Vector faces)
+    cdef Model _vector(Vector vertices, Vector faces, Vector uv)
 
     @staticmethod
     cdef Model _sdf(Function function, Model original, Vector minimum, Vector maximum, double resolution)

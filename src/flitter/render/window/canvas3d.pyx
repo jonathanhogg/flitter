@@ -448,7 +448,7 @@ cdef inline Matrix44 get_model_transform(Node node, Matrix44 transform_matrix):
 cdef Model get_model(Node node, bint top):
     cdef Node child
     cdef Model model = None
-    cdef Vector origin, normal, function, minimum, maximum, vertices, faces
+    cdef Vector origin, normal, function, minimum, maximum, vertices, faces, uv
     cdef double snap_angle, resolution
     cdef str mapping, filename
     cdef list models
@@ -464,10 +464,11 @@ cdef Model get_model(Node node, bint top):
         filename = node.get_str('filename', None)
         vertices = node.get_fvec('vertices', 0, None)
         faces = node.get_fvec('faces', 0, None)
+        uv = node.get_fvec('uv', 0, None)
         if filename:
             model = Model._external(filename)
         elif vertices is not None:
-            model = Model._vector(vertices, faces)
+            model = Model._vector(vertices, faces, uv)
         if model is not None and node.get_bool('repair', False):
             model = model.repair()
     elif not top and node.kind is 'transform':

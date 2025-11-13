@@ -433,12 +433,12 @@ cdef class Model:
         return ExternalModel._get(str(filename))
 
     @staticmethod
-    cdef Model _vector(Vector vertices, Vector faces):
-        return VectorModel._get(vertices, faces)
+    cdef Model _vector(Vector vertices, Vector faces, Vector uv):
+        return VectorModel._get(vertices, faces, uv)
 
     @staticmethod
-    def vector(vertices, faces=None):
-        return VectorModel._get(Vector._coerce(vertices), Vector._coerce(faces))
+    def vector(vertices, faces=None, uv=None):
+        return VectorModel._get(Vector._coerce(vertices), Vector._coerce(faces), Vector._coerce(uv))
 
     @staticmethod
     cdef Model _sdf(Function function, Model original, Vector minimum, Vector maximum, double resolution):
@@ -1615,17 +1615,22 @@ cdef class ExternalModel(Model):
 cdef class VectorModel(Model):
     cdef Vector vertices
     cdef Vector faces
+    cdef Vector uv
 
     @staticmethod
-    cdef VectorModel _get(Vector vertices, Vector faces):
+    cdef VectorModel _get(Vector vertices, Vector faces, Vector uv):
         if vertices is None or vertices.numbers == NULL:
             return None
         if faces is not None and faces.numbers == NULL:
             faces = None
+        if uv is not None and uv.numbers == NULL:
+            uv = None
         cdef uint64_t id = VECTOR
         id = HASH_UPDATE(id, vertices.hash(False))
         if faces is not None:
             id = HASH_UPDATE(id, faces.hash(False))
+        if uv is not None:
+            id = HASH_UPDATE(id, uv.hash(False))
         cdef VectorModel model
         cdef PyObject* objptr = PyDict_GetItem(ModelCache, id)
         if objptr == NULL:
@@ -1633,6 +1638,7 @@ cdef class VectorModel(Model):
             model.id = id
             model.vertices = vertices
             model.faces = faces
+            model.uv = uv
             ModelCache[id] = model
         else:
             model = <VectorModel>objptr
@@ -1641,9 +1647,13 @@ cdef class VectorModel(Model):
 
     @property
     def name(self):
+        cdef str name = f'vector({self.vertices.hash(False):x}'
         if self.faces is not None:
-            return f'vector({self.vertices.hash(False):x}, {self.faces.hash(False):x})'
-        return f'vector({self.vertices.hash(False):x})'
+            name += f', faces={self.faces.hash(False):x}'
+        if self.uv is not None:
+            name += f', uv={self.uv.hash(False):x}'
+        name += ')'
+        return name
 
     cpdef void check_for_changes(self):
         pass
@@ -1678,6 +1688,13 @@ cdef class VectorModel(Model):
             vertices[i, 0] = <float>self.vertices.numbers[i*3]
             vertices[i, 1] = <float>self.vertices.numbers[i*3+1]
             vertices[i, 2] = <float>self.vertices.numbers[i*3+2]
+        if self.uv is not None:
+            if self.uv.length != n*2:
+                logger.error("Bad uv vector length: {}", self.name)
+                return None
+            for i in range(n):
+                vertices[i, 6] = <float>self.uv.numbers[i*2]
+                vertices[i, 7] = <float>self.uv.numbers[i*2+1]
         if self.faces is None:
             points = trimesh.points.PointCloud(vertices=vertices_array[:, :3]).convex_hull
             faces_array = np.array(points.faces, dtype='i4')

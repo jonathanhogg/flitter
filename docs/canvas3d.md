@@ -856,6 +856,10 @@ To create a mesh from scratch use the attributes:
 : Optional attribute providing a *3m*-vector of vertex numbers in the range
 *[0,n)*, representing the corner vertices of *m* triangular faces.
 
+`uv=` *UV*
+: Optional attribute providing a *2n*-vector of *u* and *v* texture-mapping
+coordinates for *n* vertices.
+
 If the `faces` attribute is not provided, then a convex hull will be computed
 around the given vertices. This provides a quick way of describing simple
 geometric forms.
@@ -866,12 +870,12 @@ anti-clockwise  direction – as viewed from outside the model – for the surfa
 normals to be computed correctly.
 :::
 
-Models created from `vertices` and `faces` are cached according to the specific
+Models created from `vertices`/`faces`/`uv` are cached according to the specific
 values provided. This means that, as long as the attribute values do not change,
 the model will be constructed once and reused. However, these models are cached
 less aggressively than other models and will be immediately unloaded if not
 used. This allows animated surfaces to be created by continuously varying the
-`vertices` (and `faces`) attributes without using huge amounts of memory.
+attributes without using huge amounts of memory.
 
 ### Controlling Model Shading
 
