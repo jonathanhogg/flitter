@@ -114,6 +114,13 @@ in the main repository. However, there is also a separate repo containing [many
 more interesting examples](https://github.com/jonathanhogg/flitter-examples)
 that are worth checking out.
 
+There is [a paper discussing the background and design of
+Flitter](https://2025.algorithmicpattern.org/proceedings/BG8MYU/paper.html)
+that was presented at the Alpaca 2025 conference. You can also [watch a video of
+the accompanying talk](https://www.youtube.com/watch?v=D9khHD9sB7M&list=PLxqmZjMvoVzw773-Fo9ajkujFfOThuFOP&index=9),
+which demonstrates writing a simple Flitter program from scratch to generate
+some animated 3D visuals.
+
 ## License
 
 **Flitter** is copyright © Jonathan Hogg and licensed under a [2-clause
