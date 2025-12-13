@@ -1661,13 +1661,15 @@ def noise(Vector seed, *args):
 def octnoise(Vector seed, Vector octaves, Vector roughness, *args):
     if octaves.numbers == NULL or octaves.length != 1 or roughness.numbers == NULL or roughness.length != 1:
         return null_
+    cdef int64_t i, j, n = <int64_t>octaves.numbers[0]
+    if n == 1:
+        return _noise(get_perm(seed, 0), list(args))
     cdef Vector arg
     cdef list coords = []
     for arg in args:
         if arg.numbers == NULL:
             return null_
         coords.append(arg.copy())
-    cdef int64_t i, j, n = <int64_t>octaves.numbers[0]
     cdef double weight_sum = 0, weight = 1, k = roughness.numbers[0]
     cdef Vector single, result = null_
     for i in range(n):
