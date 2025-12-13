@@ -28,6 +28,7 @@ sequence : expression* let_expression?
 let_expression : "let" multiline_bindings sequence -> let
                | "let" "stable" multiline_bindings sequence -> let_stable
                | "let" name_list "=" _NL _INDENT sequence _DEDENT sequence -> sequence_let
+               | "func" _LPAREN parameters _RPAREN _NL _INDENT sequence _DEDENT sequence -> sequence_anonymous_function
                | "func" NAME _LPAREN parameters _RPAREN _NL _INDENT sequence _DEDENT sequence -> function
                | "import" name_list "from" composition _NL sequence ->  let_import
 

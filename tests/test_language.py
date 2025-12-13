@@ -349,6 +349,19 @@ func fib(n)
 !fib x=55
             """)
 
+    def test_nested_anonymous_function(self):
+        self.assertCodeOutput(
+            """
+func f(x)
+    func (y)
+        x + y
+
+!foo bar=f(10)(5)
+            """,
+            """
+!foo bar=15
+            """)
+
     def test_anonymous_function(self):
         """Note that this is statically reducible because `map` is inlined and so the
            anonymous function is bound to `f`, which therefore becomes a function name"""

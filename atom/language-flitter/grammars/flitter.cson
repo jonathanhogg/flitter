@@ -135,7 +135,7 @@ patterns: [
                 name: "keyword.control.flow.flitter"
     }
     {
-        match: "\\b(func)\\s+([_\\p{alpha}][_\\p{alnum}]*'*)"
+        match: "\\b(func)(\\s+([_\\p{alpha}][_\\p{alnum}]*'*))?"
         captures:
             '1':
                 name: "keyword.control.flow.flitter"

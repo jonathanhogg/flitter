@@ -952,17 +952,20 @@ The **Flitter** [built-in functions](builtins.md) are documented separately.
 
 ## Function Definitions
 
+Functions may be defined in a [sequence context](#sequences) with:
+
 ```flitter
 func name(parameter《=default》《, parameter…》)
     expression
     …
 ```
 
-`func` will create a new function and bind it to `name`. Default values may be
-given for the parameters and will be used if the function is later called with
-an insufficient number of matching arguments, otherwise any parameters lacking
-matching arguments will be bound to `null`. The result of evaluating the body
-sequence will be returned as a vector to the caller.
+This will create a new function and bind it to `name` for the remainder of the
+sequence context. Default values may be given for the parameters and will be
+used if the function is later called with an insufficient number of matching
+arguments, otherwise any parameters lacking matching arguments will be bound to
+`null`. The result of evaluating the body sequence will be returned as a vector
+to the caller.
 
 Functions may be declared anywhere in a program including within another
 function definition. Functions may refer to names defined outside of the
@@ -1012,19 +1015,45 @@ Therefore, it is often more performant to pass dynamic values (such as `beat`)
 into the function as parameters than allow them to be captured from the
 environment.
 
-## Anonymous functions
+### Anonymous functions
 
-**Flitter** also allows anonymous functions to be defined and used as values
-with the syntax:
+If the name of the function in a definition is left out, then the result is an
+*anonymous* function as a *value* in the current sequence. Thus, the
+`multiply_add` function definition shown above is largely equivalent to the
+[sequence let](#sequence-let) expression:
+
+```flitter
+let multiply_add=
+    func (x, y=1, z)
+        x*y + z
+```
+
+Anonymous functions of this form are primarily useful where a function is to
+return another function, e.g.:
+
+```flitter
+func make_add(x)
+    func (y)
+        x + y
+```
+
+Here the value of the `x` argument is captured within the returned anonymous
+function.
+
+### In-line anonymous functions
+
+**Flitter** also allows in-line anonymous functions to be defined and used as
+values with the syntax:
 
 ```flitter
 func (parameter《=default》《, parameter…》) body
 ```
 
-The body of an anonymous function may only contain *in-line* expressions. In
-the grammar, anonymous functions have higher precedence than `;` composition
-but lower than inline `for` and `where` expressions. Therefore, the following
-defines a function containing a for loop, as might be expected:
+The body of an in-line anonymous function may only contain *in-line*
+expressions. In the grammar, in-line anonymous functions have higher precedence
+than `;` composition but lower than inline `for` and `where` expressions.
+Therefore, the following defines a function containing a for loop, as might be
+expected:
 
 ```flitter
 let f = func(x) x*y for y in ..10

@@ -123,6 +123,9 @@ class FlitterTransformer(Transformer):
     def anonymous_function(self, parameters, body):
         return tree.Function('<anon>', parameters, body)
 
+    def sequence_anonymous_function(self, parameters, body, sequence):
+        return tree.Sequence((tree.Function('<anon>', parameters, body), sequence))
+
     def sequence(self, *expressions):
         return tree.Sequence(expressions)
 
