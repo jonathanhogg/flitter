@@ -42,6 +42,9 @@ cdef bint sequence_pack(list expressions):
             if len(vectors) > 1:
                 expr = Literal(Vector._compose(vectors))
                 touched = True
+            if (<Literal>expr).value.length == 0:
+                touched = True
+                continue
         elif type(expr) is Sequence:
             for expr in reversed((<Sequence>expr).expressions):
                 todo.append(expr)
