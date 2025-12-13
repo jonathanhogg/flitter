@@ -41,9 +41,9 @@ cdef class Function:
     cdef readonly bint record_stats
     cdef readonly tuple captures
     cdef readonly int64_t call_depth
-    cdef readonly uint64_t _hash
+    cdef readonly int64_t _hash
 
-    cdef uint64_t hash(self)
+    cdef int64_t hash(self)
     cdef Vector call_one_fast(self, Context context, Vector arg)
 
 

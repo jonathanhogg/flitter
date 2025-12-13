@@ -490,9 +490,9 @@ cdef inline void poke_at(VectorStack stack, int64_t offset, Vector vector):
 
 
 cdef class Function:
-    cdef uint64_t hash(self):
+    cdef int64_t hash(self):
         if self._hash == 0:
-            self._hash = <uint64_t>(id(self.program) ^ self.address ^ hash(self.defaults) ^ hash(self.captures))
+            self._hash = id(self.program) ^ self.address ^ hash(self.defaults) ^ hash(self.captures)
         return self._hash
 
     def __hash__(self):
