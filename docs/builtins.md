@@ -494,6 +494,12 @@ of each character will be returned.
 included in the result strings. Empty values are stripped from the end (i.e.,
 trailing sequences of *separator* are ignored).
 
+`concat(` *v* `)`
+: Return a single string value from an arbitrary vector. In general, this is
+done automatically whenever a string value is required – in particular, the
+`ord()` and `split()` functions above will do this automatically. However, it
+can be useful to force conversion.
+
 `ord()` and `chr()` can be used together with indexing to isolate a specific
 character range from a string. For example:
 

@@ -15,7 +15,7 @@ from flitter.language.functions import (uniform, normal, beta,
                                         roundv, absv, expv, sqrtv, logv, log2v, log10v, ceilv, floorv, fract,
                                         cosv, acosv, sinv, asinv, tanv, hypot, normalize, polar, angle, length, cross, dot,
                                         quaternion, qmul, qbetween, slerp,
-                                        split, ordv, chrv,
+                                        split, ordv, chrv, concat,
                                         colortemp, oklab, oklch,
                                         sample, glob, read_text, read_csv, read_bytes)
 from flitter.language.noise import noise, octnoise
@@ -685,6 +685,12 @@ class TestStringFuncs(utils.TestCase):
         self.assertEqual(split(Vector(['Hello world!\n']), Vector(' ')), Vector(['Hello', 'world!\n']))
         self.assertEqual(split(Vector(['Hello world!\n']), Vector('o')), Vector(['Hell', ' w', 'rld!\n']))
         self.assertEqual(split(Vector(['Hello world! oo ']), Vector('o ')), Vector(['Hell', 'world! o']))
+
+    def test_concat(self):
+        self.assertEqual(concat(null), null)
+        self.assertEqual(concat(Vector(['Hello world!'])), Vector(['Hello world!']))
+        self.assertEqual(concat(Vector(['Hello ', 'world!'])), Vector(['Hello world!']))
+        self.assertEqual(concat(Vector(['Hello ', 3])), Vector(['Hello 3']))
 
 
 class TestColorFuncs(utils.TestCase):

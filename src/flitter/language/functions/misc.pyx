@@ -130,6 +130,13 @@ def split(Vector text, Vector separator=Vector('\n')):
     return Vector._coerce(values)
 
 
+def concat(Vector text):
+    if text.length == 0:
+        return null_
+    cdef str string = text.as_string()
+    return Vector._coerce(string)
+
+
 def lenv(Vector xs not None):
     cdef Vector ys = Vector.__new__(Vector)
     ys.allocate_numbers(1)

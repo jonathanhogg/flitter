@@ -5,7 +5,7 @@ from .color import colortemp, hsl, hsv, oklab, oklch
 from .easing import cubic, linear, quad
 from .maths import (absv, accumulate, acosv, angle, asinv, ceilv, cosv, expv, floorv, fract, length, log10v, log2v, logv,
                     mean, polar, product, roundv, sinv, sqrtv, sumv, tanv)
-from .misc import (chrv, clamp, count, cross, debug, dot, glob, hypot, inverse, lenv, mapv,
+from .misc import (chrv, clamp, concat, count, cross, debug, dot, glob, hypot, inverse, lenv, mapv,
                    maxindex, maxv, minindex, minv, normalize, ordv, point_towards, qbetween, qmul, quaternion,
                    read_bytes, read_csv, read_text, sample, slerp, snap, sort, split, zipv)
 from .random import beta, normal, shuffle, uniform
@@ -24,6 +24,7 @@ STATIC_FUNCTIONS = {
     'chr': Vector(chrv),
     'clamp': Vector(clamp),
     'colortemp': Vector(colortemp),
+    'concat': Vector(concat),
     'cos': Vector(cosv),
     'count': Vector(count),
     'cross': Vector(cross),
