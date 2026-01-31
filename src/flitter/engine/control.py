@@ -308,8 +308,13 @@ class EngineController:
                     now = system_clock()
                     nframes = len(frames) - 1
                     fps = nframes / (frames[-1] - frames[0])
-                    logger.info("{:4.1f}fps; {:4.1f}/{:4.1f}/{:4.1f}ms (run/render/sys); perf {:.2f}",
-                                fps, 1000 * execution / nframes, 1000 * render / nframes, 1000 * (housekeeping + now) / nframes, performance)
+                    if self.run_time is None:
+                        logger.info("{:4.1f}fps; {:4.1f}/{:4.1f}/{:4.1f}ms (run/render/sys); perf {:.2f}",
+                                    fps, 1000 * execution / nframes, 1000 * render / nframes, 1000 * (housekeeping + now) / nframes, performance)
+                    else:
+                        logger.info("{:4.1f}fps; {:4.1f}/{:4.1f}/{:4.1f}ms (run/render/sys); perf {:.2f}; run {:.0f}%",
+                                    fps, 1000 * execution / nframes, 1000 * render / nframes, 1000 * (housekeeping + now) / nframes, performance,
+                                    100 * frame_time / self.run_time)
                     frames = frames[-1:]
                     execution = render = 0
                     housekeeping = -now
