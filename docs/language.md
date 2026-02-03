@@ -124,7 +124,7 @@ All values are vectors of either floating point numbers, Unicode strings, nodes
 or functions (or a mix thereof). The vector implementation is optimised for
 vectors of numbers, particularly short vectors. There are no dedicated integer
 values in **Flitter** and so one should be careful of relying on integer numbers
-outside of the safe integer range of a double-precision floating point
+outside of the safe integer range of an IEEE-754 double-precision floating point
 ($-2^{53}$ .. $2^{53}$). Numbers may use exponential `e` notation and may
 contain underscores `_` to separate groups of digits for readability.
 
@@ -147,15 +147,15 @@ general-purpose formatting and so `"Number ";1` is also a valid string.
 : The value `0`
 
 `inf`
-: The IEEE-754 floating-point infinity value
+: The IEEE-754 floating-point positive infinity value
 
 `nan`
-: The IEEE-754 floating-point "not a number" value
+: An IEEE-754 floating-point "not a number" value
 
 `pi` or `π`
 : The π mathematical constant
 
-`tau`or `𝜏`
+`tau` or `𝜏`
 : The 𝜏 mathematical constant (equal to 2π)
 
 ### SI Metric Multipliers ###
