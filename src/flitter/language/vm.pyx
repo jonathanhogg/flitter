@@ -4,6 +4,7 @@
 Flitter language stack-based virtual machine
 """
 
+import math
 from loguru import logger
 
 from .. import name_patch
@@ -40,11 +41,15 @@ cdef int64_t MAX_CALL_DEPTH = 500
 
 cdef dict dynamic_builtins = DYNAMIC_FUNCTIONS
 cdef dict static_builtins = {
-    'true': true_,
     'false': false_,
-    'null': null_,
     'inf': inf_,
     'nan': nan_,
+    'null': null_,
+    'pi': Vector(math.pi),
+    'π': Vector(math.pi),
+    'tau': Vector(2*math.pi),
+    '𝜏': Vector(2*math.pi),
+    'true': true_,
 }
 static_builtins.update(STATIC_FUNCTIONS)
 static_builtins.update(NOISE_FUNCTIONS)

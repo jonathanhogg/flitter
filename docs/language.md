@@ -152,6 +152,12 @@ general-purpose formatting and so `"Number ";1` is also a valid string.
 `nan`
 : The IEEE-754 floating-point "not a number" value
 
+`pi` or `π`
+: The π mathematical constant
+
+`tau`or `𝜏`
+: The 𝜏 mathematical constant (equal to 2π)
+
 ### SI Metric Multipliers ###
 
 **Flitter** supports adding an SI metric multiplier prefix to the end of a
@@ -668,6 +674,14 @@ source vector is longer than the number of names given then additional items are
 ignored. If the vector is shorter, then the the additional names will be bound
 to items wrapped around from the start again. If the vector is `null` then all
 names will be bound to `null`.
+
+:::{note}
+No names in Flitter are *reserved* and therefore all predefined
+[named values](#named-values) and [builtin functions](/builtins.md) can be
+redefined with `let`. Where the results are unambiguously parseable, this
+includes defining names that overlap with syntax features, such as `for`, `if`
+and even `let` itself.
+:::
 
 ### Sequence let
 
