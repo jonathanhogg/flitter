@@ -23,7 +23,7 @@ logger = name_patch(logger, __name__)
 
 cdef frozenset EmptySet = frozenset()
 cdef Literal NoOp = Literal(null_)
-cdef int64_t MAX_RECURSIVE_CALL_DEPTH = 500
+cdef int64_t MAX_RECURSIVE_INLINE_DEPTH = 50
 cdef Vector Two = Vector(2)
 
 
@@ -1053,7 +1053,7 @@ cdef class Call(Expression):
         cdef bint literal_func = type(function) is Literal
         if literal_func and (<Literal>function).value.length == 0:
             return NoOp
-        cdef bint all_literal_args=True, all_dynamic_args=True
+        cdef bint all_literal_args=True
         cdef Expression arg, sarg, expr
         cdef list args = []
         if self.args is not None:
@@ -1061,9 +1061,7 @@ cdef class Call(Expression):
                 sarg = arg._simplify(context)
                 touched |= sarg is not arg
                 args.append(sarg)
-                if type(sarg) is Literal:
-                    all_dynamic_args = False
-                else:
+                if type(sarg) is not Literal:
                     all_literal_args = False
         cdef list keyword_args = []
         cdef Binding binding, sbinding
@@ -1078,9 +1076,7 @@ cdef class Call(Expression):
                     touched = True
                 else:
                     keyword_args.append(binding)
-                if type(arg) is Literal:
-                    all_dynamic_args = False
-                else:
+                if type(arg) is not Literal:
                     all_literal_args = False
         cdef list bindings, renames
         cdef dict kwargs
@@ -1113,7 +1109,7 @@ cdef class Call(Expression):
             literal.value = Vector._compose(results)
             literal.unbound_names = EmptySet
             return literal
-        if func_expr is not None and not func_expr.captures and not (func_expr.recursive and all_dynamic_args):
+        if func_expr is not None and not func_expr.captures:
             kwargs = {binding.name: binding.expr for binding in keyword_args}
             bindings = []
             renames = []
@@ -1149,7 +1145,7 @@ cdef class Call(Expression):
                     except RecursionError:
                         logger.trace("Abandoned inline attempt of recursive function: {}", func_expr.name)
                     context.call_depth = 0
-                elif context.call_depth == MAX_RECURSIVE_CALL_DEPTH:
+                elif context.call_depth == MAX_RECURSIVE_INLINE_DEPTH:
                     raise RecursionError()
                 else:
                     context.call_depth += 1
