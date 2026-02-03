@@ -69,7 +69,7 @@ cdef class Expression:
         return program
 
     def simplify(self, StateDict state=None, dict static=None, dynamic=None, Context parent=None, path=None, bint return_context=False,
-                 set stables=None, dict stable_cache=None):
+                 set stables=None, dict stable_cache=None, bint is_module=True):
         cdef dict context_vars = {}
         cdef str key
         if static is not None:
@@ -81,6 +81,7 @@ cdef class Expression:
         cdef Context context = Context(state=state, names=context_vars, stables=stables, stable_cache=stable_cache)
         context.path = path
         context.parent = parent
+        context.is_module = is_module
         cdef Expression expr = self
         try:
             expr = expr._simplify(context)
@@ -159,7 +160,7 @@ cdef class Export(Expression):
         program.literal(null_)
 
     cdef Expression _simplify(self, Context context):
-        if context.is_include:
+        if not context.is_module:
             return NoOp
         cdef str name
         cdef dict static_exports = dict(self.static_exports) if self.static_exports else {}
@@ -203,12 +204,13 @@ cdef class Include(Expression):
                     expr = NoOp
                 elif (top := path.read_flitter_top()) is not None:
                     original_path = context.path
+                    original_is_module = context.is_module
                     context.dependencies.add(path)
                     context.path = path
-                    context.is_include = True
+                    context.is_module = False
                     expr = top.body._simplify(context)
-                    context.is_include = False
                     context.path = original_path
+                    context.is_module = original_is_module
             else:
                 expr = NoOp
         elif filename is not self.filename:

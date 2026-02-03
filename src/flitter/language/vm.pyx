@@ -643,7 +643,7 @@ cdef inline void call_helper(Context context, VectorStack stack, object function
 
 
 cdef inline dict import_module(Context context, str filename, bint record_stats, double* duration, bint simplify):
-    cdef Program program = SharedCache.get_with_root(filename, context.path).read_flitter_program(simplify=simplify)
+    cdef Program program = SharedCache.get_with_root(filename, context.path).read_flitter_program(simplify=simplify, is_module=True)
     if program is None:
         PySet_Add(context.errors, f"Unable to import from '{filename}'")
         return None

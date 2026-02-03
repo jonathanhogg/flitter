@@ -257,7 +257,7 @@ cdef class Context:
     cdef readonly object lnames
     cdef readonly set dependencies
     cdef readonly int64_t call_depth
-    cdef readonly bint is_include
+    cdef readonly bint is_module
     cdef readonly set stables
     cdef readonly dict stable_cache
     cdef readonly bint stables_changed

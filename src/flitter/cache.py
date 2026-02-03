@@ -130,7 +130,7 @@ class CachePath:
         self._cache[key] = top
         return top
 
-    def read_flitter_program(self, static=None, dynamic=None, simplify=True):
+    def read_flitter_program(self, static=None, dynamic=None, simplify=True, is_module=False):
         key = 'flitter_program', tuple(sorted(static.items())) if static else None, tuple(dynamic) if dynamic else (), simplify
         current_program = self._cache.get(key, False)
         if self.check_unmodified() and current_program is not False:
@@ -157,7 +157,8 @@ class CachePath:
                 now = system_clock()
                 parse_time += now
                 simplify_time = -now
-                top, context = initial_top.simplify(static=static, dynamic=dynamic, path=self, return_context=True) if simplify else (initial_top, None)
+                top, context = initial_top.simplify(static=static, dynamic=dynamic, path=self, return_context=True,
+                                                    is_module=is_module) if simplify else (initial_top, None)
                 now = system_clock()
                 simplify_time += now
                 compile_time = -now
