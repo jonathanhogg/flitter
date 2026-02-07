@@ -725,7 +725,7 @@ All identifiers may contain any number of single quote characters at the end.
 The `let` keyword may be followed by the optional `stable` keyword to
 indicate bindings that are expected to be unchanging for long periods of time.
 When a stable let binding evaluates to the same value as it did in the last
-frame, the engine will re-simplify the program with the assumption that this
+frame, the [simplifier](#simplification) can be re-run with the assumption that this
 value is now static. A run-time check will also be compiled in that verifies
 the value remains static. In the event that this check fails, execution will
 be abandoned and restarted with the original program.
@@ -1396,15 +1396,6 @@ After the simplifier has partially-evaluated the tree (and note that thanks to
 loop unrolling and function inlining, "simpler" most often doesn't mean
 "smaller"), the tree is compiled into instructions for a stack-based virtual
 machine. These instructions are interpreted to run the program.
-
-The simplifier and compiler can run again incorporating any state that has been
-stable for a period of time (configurable with the [`--simplifystate`
-command-line option](install.md#running-flitter)). If any of these state keys
-then changes (i.e., a pad or encoder is touched) the engine will immediately
-return to the original compiled program. Programs that involve large static
-loops may take a noticeable amount of time to re-simplify and so it may be
-necessary to turn off simplification on state in programs that involve
-unpredictable state changes (`--simplifystate=0`).
 
 The simplifier can be completely disabled with the `--nosimplify` option.
 
