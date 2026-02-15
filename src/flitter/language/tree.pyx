@@ -23,8 +23,12 @@ logger = name_patch(logger, __name__)
 
 cdef frozenset EmptySet = frozenset()
 cdef Literal NoOp = Literal(null_)
-cdef int64_t MAX_RECURSIVE_INLINE_DEPTH = 50
+cdef int64_t MAX_INLINE_DEPTH = 20
 cdef Vector Two = Vector(2)
+
+
+class InlineDepthError(Exception):
+    pass
 
 
 cdef bint sequence_pack(list expressions):
@@ -1137,23 +1141,20 @@ cdef class Call(Expression):
                     renames.append(polybinding)
             bindings.extend(renames)
             expr = Let(tuple(bindings), func_expr.body)
-            if func_expr.recursive:
-                if context.call_depth == 0:
-                    context.call_depth = 1
-                    try:
-                        return expr._simplify(context)
-                    except RecursionError:
-                        logger.trace("Abandoned inline attempt of recursive function: {}", func_expr.name)
-                    context.call_depth = 0
-                elif context.call_depth == MAX_RECURSIVE_INLINE_DEPTH:
-                    raise RecursionError()
+            if context.call_depth == MAX_INLINE_DEPTH:
+                raise InlineDepthError()
+            context.call_depth += 1
+            try:
+                expr = expr._simplify(context)
+            except InlineDepthError:
+                if context.call_depth == 1:
+                    logger.trace("Inlining depth exceeded for function: {}", func_expr.name)
                 else:
-                    context.call_depth += 1
-                    expr = expr._simplify(context)
-                    context.call_depth -= 1
-                    return expr
+                    raise
             else:
-                return expr._simplify(context)
+                return expr
+            finally:
+                context.call_depth -= 1
         if type(function) is Literal and len(args) == 1:
             if (<Literal>function).value == static_builtins['ceil']:
                 return Ceil(args[0])

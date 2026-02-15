@@ -1132,28 +1132,26 @@ class TestRecursiveCall(SimplifierTestCase):
         )
 
     def test_inlineable_recursive_all_non_literal(self):
-        """A call to a recursive function with no literal arguments will not be inlined"""
+        """This call to a recursive function with no literal arguments will fail inlining and be left dynamic"""
         self.assertSimplifiesTo(Call(Name('f'), (Name('z'), Name('w'))),
                                 Call(Name('f'), (Name('z'), Name('w'))),
                                 static={'f': self.f}, dynamic={'z', 'w'})
 
     def test_inlineable_recursive_literal_bound(self):
-        """A call to a recursive function with at least one literal argument will cause an inline attempt.
-           In this case the literal argument determines the bounds and so recursive inlining will succeed.
-           Note that a temporary variable re-naming occurs here because of the inlining."""
+        """In this case the literal argument determines the bounds and so recursive inlining will succeed
+           (note that a temporary variable re-naming occurs here because of the inlining)"""
         self.assertSimplifiesTo(Call(Name('f'), (Literal(2), Name('w'))),
                                 Add(Name('w'), Let((PolyBinding(('__t1',), Multiply(Literal(0.5), Name('w'))),), Positive(Name('__t1')))),
                                 static={'f': self.f}, dynamic={'w'})
 
     def test_inlineable_recursive_dynamic_bound(self):
-        """A call to a recursive function with at least literal arguments will cause an inline attempt.
-           In this case the literal argument does not determine the bounds and so recursive inlining will fail."""
+        """In this case the literal argument does not determine the bounds and so recursive inlining will fail"""
         self.assertSimplifiesTo(Call(Name('f'), (Name('z'), Literal(1))),
                                 Call(Name('f'), (Name('z'), Literal(1))),
                                 static={'f': self.f}, dynamic={'z'})
 
     def test_inlineable_recursive_all_literal(self):
-        """A call to a recursive function with all literal arguments should be fully simplified"""
+        """A call to a recursive function with all literal arguments should be fully simplified to a literal"""
         self.assertSimplifiesTo(Call(Name('f'), (Literal(4), Literal(32))),
                                 Literal(32+16+8+4+0),
                                 static={'f': self.f})
