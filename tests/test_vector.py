@@ -134,7 +134,7 @@ class TestVector(utils.TestCase):
         self.assertIsInstance(foo_2, Vector)
         self.assertEqual(len(foo_2), 3)
         self.assertIs(foo_2[0], value[0])
-        self.assertIs(foo_2[1], value[1])
+        self.assertEqual(foo_2[1], value[1])
         self.assertIs(foo_2[2], value[2])
 
     def test_copy(self):
@@ -189,6 +189,16 @@ class TestVector(utils.TestCase):
                 self.assertEqual(numbers[r], r % 10)
                 self.assertEqual(objects[r], [str(int(i) % 10) for i in r])
                 self.assertEqual(null[r], null)
+        mixed = Vector([1, 2, 'three', 4, 'five'])
+        numbers = mixed[(0, 1, 3)]
+        self.assertTrue(numbers.numeric)
+        self.assertEqual(numbers, Vector([1, 2, 4]))
+        objects = mixed[(2, 4)]
+        self.assertTrue(objects.non_numeric)
+        self.assertEqual(objects, Vector(['three', 'five']))
+        objects = mixed[(2, 3, 4)]
+        self.assertTrue(objects.non_numeric)
+        self.assertEqual(objects, Vector(['three', 4, 'five']))
 
     def test_range(self):
         self.assertEqual(Vector.range(0), null)

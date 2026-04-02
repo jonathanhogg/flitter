@@ -1004,14 +1004,18 @@ cdef class Vector:
         cdef Vector result = Vector.__new__(Vector)
         cdef tuple src = self.objects, dest
         cdef PyObject* objptr
+        cdef bint all_numeric = True
         if src is not None:
             result.objects = dest = PyTuple_New(m)
             for i in range(m):
                 j = (<int>c_floor(index.numbers[i])) % n
                 objptr = PyTuple_GET_ITEM(src, j)
+                all_numeric = all_numeric and type(<object>objptr) in (float, int)
                 Py_INCREF(<object>objptr)
                 PyTuple_SET_ITEM(dest, i, <object>objptr)
             result.length = m
+            if all_numeric:
+                result = Vector(dest)
         elif m:
             result.allocate_numbers(m)
             for i in range(m):
