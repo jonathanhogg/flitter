@@ -487,10 +487,10 @@ cdef object make_image_filter(Node node, paint, colorspace):
         if len(sub_filters) <= 1 and (radius := node.get('radius', 2, float)) is not None:
             input_filter = sub_filters[0] if len(sub_filters) == 1 else None
             offset = node.get('offset', 2, float, (0, 0))
-            color = get_color(node, paint.getColor())
+            color = get_color(node, paint.getColor4f()).toColor()
             if node.get('shadow_only', 1, bool, False):
-                return skia.ImageFilters.DropShadowOnly(*offset, *radius, color.toColor(), input=input_filter)
-            return skia.ImageFilters.DropShadow(*offset, *radius, color.toColor(), input=input_filter)
+                return skia.ImageFilters.DropShadowOnly(*offset, *radius, color, input=input_filter)
+            return skia.ImageFilters.DropShadow(*offset, *radius, color, input=input_filter)
 
     elif kind is 'offset':
         if len(sub_filters) <= 1 and (offset := node.get('offset', 2, float)) is not None:
