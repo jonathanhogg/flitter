@@ -432,6 +432,8 @@ cdef object make_shader(ctx, Node node, paint, dict references, colorspace):
                 return skia.PerlinNoiseShader.MakeImprovedNoise(*frequency, octaves, seed)
 
     elif kind is 'blend':
+        if len(shaders) == 1:
+            return shaders[0]
         if len(shaders) == 2:
             if (ratio := node.get('ratio', 1, float)) is not None:
                 return skia.Shaders.Lerp(min(max(0, ratio), 1), *shaders)
