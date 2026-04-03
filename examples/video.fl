@@ -11,7 +11,7 @@ let t=60*beat/tempo + (10 if OUTPUT else 0)
         !video filename="assets/badapple.m4v" size=640;480 position=t loop=true hidden=true id=:badapple
         !canvas antialias=false
             !blend ratio=0.25
-                !pattern texture_id=:badapple scale=0.5 rotate=-1/8
+                !pattern image_id=:badapple scale=0.5 rotate=-1/8
                 !color color=0;0;0;0
             !path
                 !ellipse radius=min(SIZE)/2 point=SIZE/2

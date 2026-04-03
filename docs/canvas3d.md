@@ -211,9 +211,9 @@ depth order.
 
 Depth-buffer *writing* is turned **off** when rendering instances with
 transparency. This means that all transparent objects will be rendered fully
-even if they intersect with one another, overlap in non-trivial ways. However,
+even if they intersect with one another or overlap in non-trivial ways. However,
 the depth buffer is still honoured for deciding whether a fragment is to be
-rendered and so transparent instances occluded by non-transparent instances
+rendered, and so transparent instances occluded by non-transparent instances
 will be hidden.
 
 Instance depth sorting is done by computing a bounding box for the model
@@ -261,10 +261,11 @@ rendering tree.
 `secondary=` [ `true` | `false` ]
 : If set to `true`, this camera will be rendered regardless of whether it is
 the current primary camera and the resulting output will be made available
-as a texture for referencing, either with a `!reference` node within the
-window rendering tree, with a `texture_id` attribute on an `!image`, or even
-as a [texture mapped on a model](#texture-mapping). This defaults to `false`
-and is **not** inherited from the default camera.
+as a texture for referencing, either with a
+[`!reference`](/windows.md#reference) node within the window rendering tree,
+with the `image_id` attribute on [2D `!canvas`](/canvas.md) `!image` or
+`!pattern` nodes, or as a [texture mapped on a model](#texture-mapping). This
+defaults to `false` and is **not** inherited from the default camera.
 
 `position=` *X*`;`*Y*`;`*Z* | `viewpoint=` *X*`;`*Y*`;`*Z*
 : The position of this camera, respecting any local transformation matrix.
@@ -311,10 +312,10 @@ if the camera `size` might change between portrait and landscape aspects and a
 minimum or maximum field-of-view is desired.
 
 `width=` *WIDTH*
-: Specifies the *width* of the camera view in the *world* coordinate system. An
-orthographic camera is effectively a rectangle that projects in the camera
-view direction. The aspect ratio of that rectangle is taken from the `size`
-attribute, this attribute gives the actual width of the rectangle.
+: Specifies the *width* of an orthographic camera view in the *world* coordinate
+system. An orthographic camera is effectively a rectangle that projects in the
+camera view direction. The aspect ratio of that rectangle is taken from the
+`size` attribute, this attribute gives the actual width of the rectangle.
 
 `near=` *NEAR*
 : Specifies the near clip plane of the camera. Anything on the near side of
@@ -558,6 +559,27 @@ multiplied by this value when being applied. This is really only useful when
 this property is [texture mapped](#texture-mapping), where it allows for parts
 of a model to be occluded. The canvas default is `1`.
 
+:::{note}
+For `emissive=`$c$, surface normal $\vec{N}$ and viewer direction $\vec{V}$,
+the surface emissive lighting color $e$ will be calculated with the formula:
+
+```{math}
+L = \textbf{luminosity}(c)
+```
+
+```{math}
+e = \begin{cases}
+c & L \le 1 \\
+{c \over L} + \left( {\vec{N} \cdot \vec{V}} \right)
+\left( {c - {c \over L}} \right) & L > 1
+\end{cases}
+```
+
+The intent is to introduce a directional component to emissive lighting that
+ensures bright surfaces retain some definition – rather than being uniformly
+lit – while still coloring the entire surface.
+:::
+
 `emissive=` *R*`;`*G*`;`*B*
 : Specifies an amount of color that this object emits. This does *not* make the
 model into a [light](#lights), it only affects how the surface of the model
@@ -586,24 +608,9 @@ an additional render pass to determine the thickness of the object and the light
 falling on the back faces.
 
 :::{note}
-For `emissive=`$c$, surface normal $\vec{N}$ and viewer direction $\vec{V}$,
-the surface emissive lighting color $e$ will be calculated with the formula:
-
-```{math}
-L = \textbf{luminosity}(c)
-```
-
-```{math}
-e = \begin{cases}
-c & L \le 1 \\
-{c \over L} + \left( {\vec{N} \cdot \vec{V}} \right)
-\left( {c - {c \over L}} \right) & L > 1
-\end{cases}
-```
-
-The intent is to introduce a directional component to emissive lighting that
-ensures bright surfaces retain some definition – rather than being uniformly
-lit – while still coloring the entire surface.
+Translucency is a very loose approximation and is quite expensive to calculate,
+so it should be used fairly judiciously. The results are generally not as good
+as one would hope for.
 :::
 
 ### Texture Mapping
@@ -658,14 +665,14 @@ multiple instances of a model with different base `color`s.
 
 The behaviour of the texture samplers can be controlled with the attributes:
 
-`border=` *COLOR*
+`border=` *R*`;`*G*`;`*B*`;`*A*
 : Specifies a 4-vector color to be returned for texture coordinates outside of
 the $[0,1)$ range.
 
-`repeat=` *REPEAT*
-: Specifies a 2-vector of boolean values (i.e., `false`/`0` or `true`/`1`) for
-whether to repeat the texture on the $U$ or $V$ axis (respectively) or to clamp
-to the edge color of the texture.
+`repeat=` *rU*`;`*rV*
+: Specifies a 2-vector of boolean values (i.e., `false` or `true`) for whether
+to repeat the texture on the $U$ or $V$ axis (respectively) or to clamp to the
+edge color of the texture.
 
 The default is to clamp to the edge color, i.e., `repeat=false`. Specifying
 the `border` attribute will override any setting for `repeat`.
@@ -682,8 +689,8 @@ if not specified. This allows models to be easily positioned using an enclosing
 `!transform` node instead.
 
 `size=` *sX*`;`*sY*`;`*sZ*
-: Specifies a "size" for the model, which is just a scaling factor. Makes most
-sense when the model is unit-sized. The default is `1;1;1`.
+: Specifies a "size" for the model, which is just a scaling factor. This makes
+most sense when the model is unit-sized. The default is `1;1;1`.
 
 `rotation=` *tX*`;`*tY*`;`*tZ*
 : Specifies rotation (in *turns*) around the respective axes. The default is
