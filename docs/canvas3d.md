@@ -1099,7 +1099,7 @@ negative *MAX*.
 
 `resolution=` *RESOLUTION*
 : A value representing the density that the field should be sampled at. Default
-is the largest axis bounds divided by 100 (i.e., `(max(MAX) - min(MIN)) / 100`).
+is the largest axis bounds divided by 64 (i.e., `max(MAX - MIN) / 64`).
 
 The `minimum` and `maximum` attributes define an axis-oriented box, which will
 be subdivided into cubes with a side length of `resolution`. Each of these
