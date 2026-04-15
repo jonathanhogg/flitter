@@ -966,6 +966,13 @@ onto the surface of a 3D relief. As this mapping *only* uses the *x* and
 *y* coordinates, the underside will be a flipped version of the top, and the
 sides will be stretched versions of the edge pixels.
 
+`:book`
+: This mapping is similar to `:plane` except that the upper surface
+(positive-*z* normals) is mapped to the *u* range $[0.5,1]$ and the lower
+surface is mapped in reverse to the *u* range $[0,0.5), so that the model is
+wrapped as if with a book cover. As with `:plane`, this mapping is mainly
+useful for flat, box-like models. Behaviour is unpredictable on the edges.
+
 ## Constructive Solid Geometry
 
 **Flitter** supports [Constructive Solid

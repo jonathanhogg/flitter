@@ -894,6 +894,21 @@ cdef class UVRemap(UnaryOperation):
             vertex_data[i, 7] = (y - y0) / height
         return vertex_array, index_array
 
+    @cython.cdivision(True)
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    cdef object remap_book(self, vertex_array, index_array, Vector bounds):
+        vertex_array = vertex_array.copy()
+        cdef float[:, :] vertex_data = vertex_array
+        cdef int64_t i, n=len(vertex_array)
+        cdef float x, y, z
+        cdef float x0=bounds.numbers[0], y0=bounds.numbers[1], width=bounds.numbers[3]-x0, height=bounds.numbers[4]-y0
+        for i in range(n):
+            x, y, z = vertex_data[i, 0], vertex_data[i, 1], vertex_data[i, 5]
+            vertex_data[i, 6] = (x - x0) / width / 2 + 0.5 if z >= 0 else 0.5 - (x - x0) / width / 2
+            vertex_data[i, 7] = (y - y0) / height
+        return vertex_array, index_array
+
     cpdef tuple build_arrays(self):
         cdef tuple arrays = self.original.get_arrays()
         if arrays is None:
@@ -904,6 +919,8 @@ cdef class UVRemap(UnaryOperation):
             vertex_array, index_array = self.remap_sphere(vertex_array, index_array, bounds)
         elif self.mapping is 'plane':
             vertex_array, index_array = self.remap_plane(vertex_array, index_array, bounds)
+        elif self.mapping is 'book':
+            vertex_array, index_array = self.remap_book(vertex_array, index_array, bounds)
         return vertex_array, index_array
 
     cpdef object build_manifold(self):
