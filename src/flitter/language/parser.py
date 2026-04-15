@@ -16,7 +16,7 @@ from .. import model
 from . import tree
 
 
-SI_PREFIXES = {'p': 1e-12, 'n': 1e-9, 'u': 1e-6, 'µ': 1e-6, 'm': 1e-3, 'k': 1e3, 'M': 1e6, 'G': 1e9, 'T': 1e12}
+MULTIPLIER_SUFFIXES = {'°': 1/360, 'deg': 1/360, 'p': 1e-12, 'n': 1e-9, 'u': 1e-6, 'µ': 1e-6, 'm': 1e-3, 'k': 1e3, 'M': 1e6, 'G': 1e9, 'T': 1e12}
 
 
 class FlitterIndenter(Indenter):
@@ -54,11 +54,10 @@ def convert_timecode_to_float(t):
 
 
 def convert_number_to_float(t):
-    multiplier = 1
-    if len(t) > 1 and t[-1] in SI_PREFIXES:
-        multiplier = SI_PREFIXES[t[-1]]
-        t = t[:-1]
-    return float(t) * multiplier
+    for suffix, multiplier in MULTIPLIER_SUFFIXES.items():
+        if t.endswith(suffix):
+            return float(t[:-len(suffix)]) * multiplier
+    return float(t)
 
 
 @v_args(inline=True)

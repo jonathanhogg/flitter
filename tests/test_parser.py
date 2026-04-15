@@ -83,6 +83,10 @@ class TestAtoms(ParserTestCase):
         self.assertParsesTo('1n', Literal(1e-9))
         self.assertParsesTo('1p', Literal(1e-12))
 
+    def test_degrees(self):
+        self.assertParsesTo('180deg', Literal(0.5))
+        self.assertParsesTo('90°', Literal(0.25))
+
     def test_strings(self):
         self.assertParsesTo('"Hello world!"', Literal("Hello world!"))
         self.assertParsesTo("'Hello world!'", Literal("Hello world!"))

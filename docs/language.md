@@ -184,6 +184,12 @@ of zeros, for example, when specifying the brightness of point and spot lights:
 !light position=0 color=1M
 ```
 
+### Angle multipliers
+
+In addition to the SI multipliers, the `deg` or `°` suffix is supported to
+divide by `360`. This is a useful shortcut for specifying angles, which are
+normally expressed in *turns*, in degrees.
+
 ### Unicode Strings
 
 All **Flitter** source code files must be UTF-8 encoded and all Unicode
