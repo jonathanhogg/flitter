@@ -43,38 +43,30 @@ class Image(WindowNode):
         self.hidden = node.get('hidden', 1, bool, False)
         self.tags = node.tags
         filename = node.get('filename', 1, str)
-        if self._image is not None:
-            default_size = [self._image.width, self._image.height]
-        else:
-            default_size = None
-        size = node.get('size', 2, int, default_size)
+        image = SharedCache[filename].read_pil_image() if filename is not None else None
+        width, height = node.get('size', 2, int, [image.width, image.height]) if image is not None else [None, None]
         flip = node.get('flip', 1, str)
-        if flip not in {'horizontal', 'vertical', 'both'}:
-            flip = None
-        if filename != self._filename or (size and size != [self.width, self.height]) or flip != self._flip:
+        if filename != self._filename or image is not self._image or width != self.width or height != self.height or flip != self._flip:
             self.release()
             self._filename = filename
+            self._image = image
+            self.width = width
+            self.height = height
             self._flip = flip
-        if self._filename is not None:
-            image = SharedCache[filename].read_pil_image()
-            if image is not self._image:
-                self._image = image
-                if self._target is not None:
-                    self._target.release()
-                    self._target = None
-                if image is not None:
-                    if size and size != [image.width, image.height]:
-                        image = image.resize(size, PIL.Image.Resampling.BILINEAR)
-                        logger.debug("Resized {} to {}x{}", self._filename, *size)
-                    self.width = image.width
-                    self.height = image.height
-                    if self._flip in {'horizontal', 'both'}:
-                        image = image.transpose(PIL.Image.FLIP_LEFT_RIGHT)
-                    if self._flip not in {'vertical', 'both'}:
-                        image = image.transpose(PIL.Image.FLIP_TOP_BOTTOM)
-                    image = image.convert('RGBA').convert('RGBa')
-                    self._target = RenderTarget.get(self.glctx, self.width, self.height, 8, srgb=True)
-                    self._target.texture.write(image.tobytes())
+            if image is not None:
+                if image.width != width or image.height != height:
+                    image = image.resize((width, height), PIL.Image.Resampling.BILINEAR)
+                    logger.trace("Resized {} to {}x{}", self._filename, width, height)
+                if flip in {'horizontal', 'both'}:
+                    image = image.transpose(PIL.Image.FLIP_LEFT_RIGHT)
+                    logger.trace("Flipped {} horizontally", self._filename)
+                if flip not in {'vertical', 'both'}:
+                    image = image.transpose(PIL.Image.FLIP_TOP_BOTTOM)
+                else:
+                    logger.trace("Flipped {} vertically", self._filename)
+                image = image.convert('RGBA').convert('RGBa')
+                self._target = RenderTarget.get(self.glctx, width, height, 8, srgb=True)
+                self._target.texture.write(image.tobytes())
 
     async def descend(self, engine, node, references, **kwargs):
         # An image is a leaf node from the perspective of the OpenGL world
