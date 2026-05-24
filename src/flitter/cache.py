@@ -399,7 +399,7 @@ class CachePath:
             except Exception as exc:
                 logger.opt(exception=exc).error("Unable to save image to: {}", self._path)
             else:
-                logger.success("Saved image to file: {}", self._path)
+                logger.debug("Saved image to file: {}", self._path)
         self._cache[key] = True
 
     def write_video_frame(self, frame, timestamp, codec='h264', pixfmt='yuv420p', fps=60, realtime=False,
@@ -471,7 +471,7 @@ class CachePath:
         except Exception as exc:
             logger.opt(exception=exc).error("Error encoding video frame")
         container.close()
-        logger.success("Flushed and closed video output file: {}", self._path)
+        logger.debug("Flushed and closed video output file: {}", self._path)
 
     def __str__(self):
         return str(self._path)
