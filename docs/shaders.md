@@ -388,6 +388,34 @@ increase the value of `radius` and decrease the value of `sigma`. However, note
 that the larger the value of `radius`, the greater the GPU computational
 resource required to compute the blur.
 
+### `!chromakey`
+
+Removes a color range from the composited input and replaces it with
+transparency; this would generally be used around a video shot against a
+"green screen". It is controlled with the attributes:
+
+`hue=` $(0, 1)$
+: Specifies the centre of the hue range to mask out. This defaults to `0.333`,
+i.e., green.
+
+`range=` $(0, 0.5)$
+: Specifies the size of the range around this centre hue. This defaults to
+`0.1`.
+
+`saturation=` $[0, 1)$
+: Specifies a *minimum* saturation level. This defaults to `0.75`.
+
+`brightness=` $[0, 1)$
+: Specifies a *minimum* brightness level. This defaults to `0.1`.
+
+The edges of the mask are blurred with a Gaussian filter controlled, as per
+[`!blur`](#blur) with `radius=` and `sigma=`. The mask is then thresholded with
+the attribute:
+
+`hard=` *HARD*
+: Specifies how hard the edges should be as a power to raise the mask to
+before applying. This defaults to `4`.
+
 ### `!edges`
 
 The `!edges` node applies a simple edge-detection filter by blurring the input

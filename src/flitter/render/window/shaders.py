@@ -11,36 +11,6 @@ class Shader(ProgramNode):
     pass
 
 
-class Transform(Shader):
-    DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('transform.frag')
-
-    def render(self, node, references, **kwargs):
-        transform_matrix = Matrix33.identity()
-        for name, value in node.items():
-            if name == 'scale' and (matrix := Matrix33.scale(value)) is not None:
-                transform_matrix @= matrix
-            elif name == 'translate' and (matrix := Matrix33.translate(value)) is not None:
-                transform_matrix @= matrix
-            elif name == 'rotate' and (matrix := Matrix33.rotate(value)) is not None:
-                transform_matrix @= matrix
-            elif name == 'keystone':
-                key_x, key_y = value.match(2, float, (0, 0))
-                matrix = Matrix33([1, 0, key_x/self.width, 0, 1, key_y/self.height, 0, 0, 1])
-                transform_matrix @= matrix
-        super().render(node, references, transform_matrix=transform_matrix.inverse(), **kwargs)
-
-
-class Vignette(Shader):
-    DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('vignette.frag')
-    EASE_FUNCTIONS = {'linear', 'quad', 'cubic'}
-
-    def render(self, node, references, **kwargs):
-        ease = node.get('fade', 1, str)
-        if ease not in self.EASE_FUNCTIONS:
-            ease = 'linear'
-        super().render(node, references, inset=0.25, ease=ease, **kwargs)
-
-
 class Adjust(Shader):
     DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('adjust.frag')
     TONEMAP_FUNCTIONS = {'reinhard', 'aces', 'agx', 'agx_punchy'}
@@ -52,20 +22,6 @@ class Adjust(Shader):
         super().render(node, references, exposure=0, contrast=1, brightness=0, shadows=0, highlights=0,
                        hue=0, saturation=1, color_matrix=(1, 0, 0, 0, 1, 0, 0, 0, 1),
                        gamma=1, tonemap_function=tonemap, whitepoint=0, **kwargs)
-
-
-class Blur(Shader):
-    DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('blur.frag')
-
-    def render(self, node, references, **kwargs):
-        child_textures = self.child_textures
-        if len(child_textures) > 1:
-            passes = 3
-        elif child_textures:
-            passes = 2
-        else:
-            passes = 1
-        super().render(node, references, passes=passes, radius=0, sigma=0.3, repeat=(False, False), **kwargs)
 
 
 class Bloom(Shader):
@@ -84,6 +40,39 @@ class Bloom(Shader):
             downsample_passes = ()
         super().render(node, references, passes=passes, downsample_passes=downsample_passes,
                        radius=0, sigma=0.3, exposure=-1, contrast=1, brightness=0, shadows=0, highlights=0,
+                       repeat=(False, False), **kwargs)
+
+
+class Blur(Shader):
+    DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('blur.frag')
+
+    def render(self, node, references, **kwargs):
+        child_textures = self.child_textures
+        if len(child_textures) > 1:
+            passes = 3
+        elif child_textures:
+            passes = 2
+        else:
+            passes = 1
+        super().render(node, references, passes=passes, radius=0, sigma=0.3, repeat=(False, False), **kwargs)
+
+
+class Chromakey(Shader):
+    DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('chromakey.frag')
+
+    def render(self, node, references, **kwargs):
+        child_textures = self.child_textures
+        if len(child_textures) > 1:
+            passes = 5
+            downsample_passes = {1, 2, 3}
+        elif child_textures:
+            passes = 4
+            downsample_passes = {0, 1, 2}
+        else:
+            passes = 1
+            downsample_passes = ()
+        super().render(node, references, passes=passes, downsample_passes=downsample_passes,
+                       radius=10, sigma=0.3, hard=4, hue=1/3, range=0.1, saturation=0.75, brightness=0.1,
                        repeat=(False, False), **kwargs)
 
 
@@ -142,3 +131,33 @@ class Noise(Shader):
         default_values = node.get('default', 4, float, (1, 1, 1, 1))
         super().render(node, references, noise_shape=noise_shape, seed_hash=seed_hash, components=1, octaves=1, roughness=0.5, origin=0, z=0,
                        scale=1, tscale=1, multiplier=0.5, offset=0.5, default_values=default_values, **kwargs)
+
+
+class Transform(Shader):
+    DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('transform.frag')
+
+    def render(self, node, references, **kwargs):
+        transform_matrix = Matrix33.identity()
+        for name, value in node.items():
+            if name == 'scale' and (matrix := Matrix33.scale(value)) is not None:
+                transform_matrix @= matrix
+            elif name == 'translate' and (matrix := Matrix33.translate(value)) is not None:
+                transform_matrix @= matrix
+            elif name == 'rotate' and (matrix := Matrix33.rotate(value)) is not None:
+                transform_matrix @= matrix
+            elif name == 'keystone':
+                key_x, key_y = value.match(2, float, (0, 0))
+                matrix = Matrix33([1, 0, key_x/self.width, 0, 1, key_y/self.height, 0, 0, 1])
+                transform_matrix @= matrix
+        super().render(node, references, transform_matrix=transform_matrix.inverse(), **kwargs)
+
+
+class Vignette(Shader):
+    DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('vignette.frag')
+    EASE_FUNCTIONS = {'linear', 'quad', 'cubic'}
+
+    def render(self, node, references, **kwargs):
+        ease = node.get('fade', 1, str)
+        if ease not in self.EASE_FUNCTIONS:
+            ease = 'linear'
+        super().render(node, references, inset=0.25, ease=ease, **kwargs)
