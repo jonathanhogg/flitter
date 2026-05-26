@@ -265,51 +265,6 @@ which will be composited together with the blend function controlled with
 the `composite` attribute (default `:over`). All of the filters also support
 the standard shader `alpha` attribute.
 
-### `!transform`
-
-Composites its input nodes and then scales, rotates and translates its output.
-This is similar to the `!translate` node in `!canvas` and `!canvas3d`. The
-origin for all of these operations is the *centre* of the image.
-
-`scale=` *SX*`;`*SY*
-: Specifies an amount to scale the image on the X and Y axes, default `1`.
-Negative scales will flip the image on the X and/or Y axis.
-
-`rotate=` *TURNS*
-: Specifies a clockwise rotation in *turns*, default `0`.
-
-`translate=` *X*`;`*Y*
-: Specifies an amount to translate the image on the X and Y axes specified in
-*pixels*, with the Y axis pointing up, default `0`.
-
-`keystone=` *KX*`;`*KY*
-: Specifies a "keystone" adjustment to the image, as a scaling factor along the
-$x$ and $y$ axes. A positive (small) value of *KX* will expand the left side of
-the image and compress the right side; a negative value will do the reverse.
-Similarly, a positive value of *KY* will expand the bottom of the image and
-compress the top; a negative value will do the reverse. Together these can be
-used to adjust for projection onto a tilted surface. They will normally have to
-be used with `scale=` to avoid clipping of the image.
-
-Areas "outside" the transformed image will be transparent by default. This can
-be controlled with the `border` and `repeat` attributes described above for
-[`!shader`](#shader).
-
-The order that the attributes are specified is important. Transforms are
-applied from the rightmost attribute (last) to the leftmost (first).
-
-### `!vignette`
-
-A *very* simple vignette filter that composites its input nodes and then fades
-the edges of the output to transparent. It is controlled with the attributes:
-
-`inset=` *(0,0.5)*
-: Specifies the inset as a proportion of the height and width at which the
-fade-out will occur, default `0.25`.
-
-`fade=` [ `:linear` | `:quad` | `:cubic` ]
-: Specifies the function to use for the fade at the edges. Default is `:linear`.
-
 ### `!adjust`
 
 The `!adjust` node applies color and luminance adjustments to the composited
@@ -390,26 +345,6 @@ The `!adjust` filter works in the following order:
 - apply `tonemap`
 - pre-multiply alpha
 
-### `!blur`
-
-The `!blur` node applies a blur using a 2-pass (horizontal and vertical), 1D,
-normalized Gaussian filter. It is controlled with the attributes:
-
-`radius=` *PIXELS*
-: Specifies the size of the blur to be applied as a number of pixels in each
-direction. A value of `0` will result in no blur being applied, which is the
-default if `radius` is not specified.
-
-`sigma=` *SIGMA*
-: Specifies the sigma value for the Gaussian filter as a multiple of the
-`radius`. This defaults to `0.3` and controls how quickly the blur will fall
-off.
-
-If visible square edges form around bright spots then it may be necessary to
-increase the value of `radius` and decrease the value of `sigma`. However, note
-that the larger the value of `radius`, the greater the GPU computational
-resource required to compute the blur.
-
 ### `!bloom`
 
 A `!bloom` filter creates a soft glow around bright parts of the image to
@@ -432,6 +367,82 @@ than *1* instead.
 The blur phases of this filter are run as down-sampled phases. By default
 this frame-buffer will be half the width and height of `size`, but this can
 be controlled with the `downsample` attribute.
+
+### `!blur`
+
+The `!blur` node applies a blur using a 2-pass (horizontal and vertical), 1D,
+normalized Gaussian filter. It is controlled with the attributes:
+
+`radius=` *PIXELS*
+: Specifies the size of the blur to be applied as a number of pixels in each
+direction. A value of `0` will result in no blur being applied, which is the
+default if `radius` is not specified.
+
+`sigma=` *SIGMA*
+: Specifies the sigma value for the Gaussian filter as a multiple of the
+`radius`. This defaults to `0.3` and controls how quickly the blur will fall
+off.
+
+If visible square edges form around bright spots then it may be necessary to
+increase the value of `radius` and decrease the value of `sigma`. However, note
+that the larger the value of `radius`, the greater the GPU computational
+resource required to compute the blur.
+
+### `!edges`
+
+The `!edges` node applies a simple edge-detection filter by blurring the input
+and then blending this with the original image with a *difference* blend
+function.
+
+`!edges` supports the same `radius` and `sigma` attributes as [`!blur`](#blur)
+and, again, `radius` must be greater than zero or the output will be blank. In
+addition, `!edges` also supports the attribute:
+
+`mixer=`*RATIO*
+: Defines how much of the original image to mix into the output. Default is `0`,
+which means only the edge-detection output is produced. A value of `0.5` will
+produce an even mix of the original image and the edge-detector output.
+
+The blur phases of this filter are run as down-sampled phases. By default
+this frame-buffer will be half the width and height of `size`, but this can
+be controlled with the `downsample` attribute. For crisper edges, set
+`downsample=1`.
+
+### `!feedback`
+
+The `!feedback` node simulates the effect of the analogue video feedback loop
+formed by pointing a camera at a screen and mixing this with this input signal.
+The following attributes control this mixing and the transformation applied to
+the feedback signal:
+
+`timebase=` *BEATS*
+: Specifies a number of ticks of the beat counter that controls the application
+of the other attributes. This defaults to `1` beat.
+
+`mixer=` *AMOUNT*
+: Specifies the mix between the feedback signal and the input signal over
+`timebase` beats.
+
+`translate=` *X*`;`*Y*
+: Specifies how far the decaying feedback signal will move in pixels per
+`timebase` beats using the canvas coordinate system (i.e., origin in the top
+left). Defaults to `0`.
+
+`scale=` *SX*`;`*SY*
+: Specifies how much the decaying feedback signal will be scaled as a multiple
+over `timebase` beats. Defaults to `1`.
+
+`rotate=` *TURNS*
+: Specifies how much the decaying feedback signal will be rotated clockwise as
+a number of full turns per `timebase` beats. Defaults to `0`.
+
+:::{note}
+The `!blur`, `!bloom`, `!edges` and `!feedback` shader programs use samplers
+that default to sampling the edge color for pixels beyond the edge of the image
+as this produces the best results for those programs. This can be controlled
+with the `border` and `repeat` attributes as described above for
+[the `!shader` node](#shader).
+:::
 
 ### `!flare`
 
@@ -494,62 +505,6 @@ Generally, you will want to combine this filter with a [`!bloom`](#bloom) as the
 thresholding and attenuation makes flares localised to the brightest spots. The
 order in which these filters are applied will result in subtly different
 outputs.
-:::
-
-### `!edges`
-
-The `!edges` node applies a simple edge-detection filter by blurring the input
-and then blending this with the original image with a *difference* blend
-function.
-
-`!edges` supports the same `radius` and `sigma` attributes as [`!blur`](#blur)
-and, again, `radius` must be greater than zero or the output will be blank. In
-addition, `!edges` also supports the attribute:
-
-`mixer=`*RATIO*
-: Defines how much of the original image to mix into the output. Default is `0`,
-which means only the edge-detection output is produced. A value of `0.5` will
-produce an even mix of the original image and the edge-detector output.
-
-The blur phases of this filter are run as down-sampled phases. By default
-this frame-buffer will be half the width and height of `size`, but this can
-be controlled with the `downsample` attribute. For crisper edges, set
-`downsample=1`.
-
-### `!feedback`
-
-The `!feedback` node simulates the effect of the analogue video feedback loop
-formed by pointing a camera at a screen and mixing this with this input signal.
-The following attributes control this mixing and the transformation applied to
-the feedback signal:
-
-`timebase=` *BEATS*
-: Specifies a number of ticks of the beat counter that controls the application
-of the other attributes. This defaults to `1` beat.
-
-`mixer=` *AMOUNT*
-: Specifies the mix between the feedback signal and the input signal over
-`timebase` beats.
-
-`translate=` *X*`;`*Y*
-: Specifies how far the decaying feedback signal will move in pixels per
-`timebase` beats using the canvas coordinate system (i.e., origin in the top
-left). Defaults to `0`.
-
-`scale=` *SX*`;`*SY*
-: Specifies how much the decaying feedback signal will be scaled as a multiple
-over `timebase` beats. Defaults to `1`.
-
-`rotate=` *TURNS*
-: Specifies how much the decaying feedback signal will be rotated clockwise as
-a number of full turns per `timebase` beats. Defaults to `0`.
-
-:::{note}
-The `!blur`, `!bloom`, `!edges` and `!feedback` shader programs use samplers
-that default to sampling the edge color for pixels beyond the edge of the image
-as this produces the best results for those programs. This can be controlled
-with the `border` and `repeat` attributes as described above for
-[the `!shader` node](#shader).
 :::
 
 ### `!noise`
@@ -639,3 +594,48 @@ offsets that will be added to the *pre-scaled* noise coordinates, default `1`.
 
 This allows per-pixel variation of the inputs to the noise function, including
 nesting one `!noise` generator within another.
+
+### `!transform`
+
+Composites its input nodes and then scales, rotates and translates its output.
+This is similar to the `!translate` node in `!canvas` and `!canvas3d`. The
+origin for all of these operations is the *centre* of the image.
+
+`scale=` *SX*`;`*SY*
+: Specifies an amount to scale the image on the X and Y axes, default `1`.
+Negative scales will flip the image on the X and/or Y axis.
+
+`rotate=` *TURNS*
+: Specifies a clockwise rotation in *turns*, default `0`.
+
+`translate=` *X*`;`*Y*
+: Specifies an amount to translate the image on the X and Y axes specified in
+*pixels*, with the Y axis pointing up, default `0`.
+
+`keystone=` *KX*`;`*KY*
+: Specifies a "keystone" adjustment to the image, as a scaling factor along the
+$x$ and $y$ axes. A positive (small) value of *KX* will expand the left side of
+the image and compress the right side; a negative value will do the reverse.
+Similarly, a positive value of *KY* will expand the bottom of the image and
+compress the top; a negative value will do the reverse. Together these can be
+used to adjust for projection onto a tilted surface. They will normally have to
+be used with `scale=` to avoid clipping of the image.
+
+Areas "outside" the transformed image will be transparent by default. This can
+be controlled with the `border` and `repeat` attributes described above for
+[`!shader`](#shader).
+
+The order that the attributes are specified is important. Transforms are
+applied from the rightmost attribute (last) to the leftmost (first).
+
+### `!vignette`
+
+A *very* simple vignette filter that composites its input nodes and then fades
+the edges of the output to transparent. It is controlled with the attributes:
+
+`inset=` *(0,0.5)*
+: Specifies the inset as a proportion of the height and width at which the
+fade-out will occur, default `0.25`.
+
+`fade=` [ `:linear` | `:quad` | `:cubic` ]
+: Specifies the function to use for the fade at the edges. Default is `:linear`.
