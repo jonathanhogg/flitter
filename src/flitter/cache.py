@@ -17,6 +17,19 @@ DEFAULT_CLEAN_TIME = 30
 MAX_CACHE_VIDEO_FRAMES = 100
 
 
+def decode_timestamp(timestamp):
+    if ',' in timestamp:
+        timestamp, milliseconds = timestamp.split(',', 1)
+        seconds = int(milliseconds) / 1000
+    else:
+        seconds = 0
+    multiplier = 1
+    for part in reversed(timestamp.split(':')):
+        seconds += int(part) * multiplier
+        multiplier *= 60
+    return seconds
+
+
 class CachePath:
     def __init__(self, path, absolute):
         self._path = path
@@ -225,6 +238,29 @@ class CachePath:
         if 0 <= row_number < len(rows):
             return rows[row_number]
         return null
+
+    def read_srt(self, encoding=None, errors=None):
+        key = 'srt', encoding, errors
+        if self.check_unmodified() and (subtitles := self._cache.get(key, False)) is not False:
+            return subtitles
+        if self._mtime is None:
+            logger.warning("File not found: {}", self._path)
+            subtitles = None
+        else:
+            try:
+                text = self._path.read_text(encoding, errors)
+                subtitles = []
+                for section in text.split('\n\n'):
+                    index, timecodes, *lines = section.splitlines()
+                    start, end = map(decode_timestamp, timecodes.split(' --> '))
+                    subtitles.append((int(index), start, end, lines))
+            except Exception as exc:
+                logger.opt(exception=exc).warning("Error reading subtitles: {}", self._path)
+                subtitles = None
+            else:
+                logger.debug("Read subtitles: {}", self._path)
+        self._cache[key] = subtitles
+        return subtitles
 
     def read_pil_image(self):
         key = 'pil_image',

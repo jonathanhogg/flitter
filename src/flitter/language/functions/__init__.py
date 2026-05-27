@@ -6,8 +6,8 @@ from .easing import cubic, linear, quad
 from .maths import (absv, accumulate, acosv, angle, asinv, ceilv, cosv, expv, floorv, fract, length, log10v, log2v, logv,
                     mean, polar, product, roundv, sinv, sqrtv, sumv, tanv)
 from .misc import (chrv, clamp, concat, count, cross, debug, dot, glob, hypot, inverse, lenv, mapv,
-                   maxindex, maxv, minindex, minv, normalize, ordv, point_towards, qbetween, qmul, quaternion,
-                   read_bytes, read_csv, read_text, sample, slerp, snap, sort, split, zipv)
+                   maxindex, maxv, measure_text, minindex, minv, normalize, ordv, point_towards, qbetween, qmul, quaternion,
+                   read_bytes, read_csv, read_text, read_srt, sample, slerp, snap, sort, split, zipv)
 from .random import beta, normal, shuffle, uniform
 from .waves import bounce, impulse, sawtooth, sharkfin, sine, square, triangle
 
@@ -48,6 +48,7 @@ STATIC_FUNCTIONS = {
     'max': Vector(maxv),
     'maxindex': Vector(maxindex),
     'mean': Vector(mean),
+    'measure_text': Vector(measure_text),
     'min': Vector(minv),
     'minindex': Vector(minindex),
     'normal': Vector(normal),
@@ -88,4 +89,5 @@ DYNAMIC_FUNCTIONS = {
     'csv': Vector(read_csv),
     'read': Vector(read_text),
     'read_bytes': Vector(read_bytes),
+    'srt': Vector(read_srt),
 }

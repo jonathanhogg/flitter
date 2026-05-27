@@ -510,6 +510,11 @@ let s = "Hello world!"
 
 The name `c` will have the value `"o w"`.
 
+`measure_text(` *text* [ `,` *attribute* `=` *value* … ]
+: Measures the width, in pixels, of a piece of text using the same logic as
+[`!canvas`](canvas.md) text drawing. Takes the same font attributes as the
+[`!font`](canvas.md#Fonts) node without the leading `font_`, e.g., `family=`.
+
 ## File functions
 
 `csv(` *filename* `,` *row* `)`
@@ -532,10 +537,14 @@ the running program.
 memory-inefficient function as each byte will be inflated to a double-precision
 floating point value (8 bytes).
 
+`srt(` *filename* `,` *time* `)`
+: Reads an SRT subtitle file and returns the subtitles matching *time*, in
+seconds, as a vector of strings.
+
 :::{note}
-The `csv`, `read` and `read_bytes` functions intelligently cache the results of
-the read for performance, but will respond immediately to the file changing (as
-detected by a change to the file modification time).
+The `csv`, `read`, `read_bytes` and `srt` functions intelligently cache the
+results of the read for performance, but will respond immediately to the file
+changing (as detected by a change to the file modification time).
 :::
 
 ## Texture sampling

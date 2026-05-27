@@ -348,6 +348,19 @@ cdef object update_paint(Node node, start_paint, colorspace):
     return paint
 
 
+def measure_text(text, family=None, size=None, weight=None, width=None, slant=None):
+    family = str(family) if family is not None else DefaultFontFamily
+    size = float(size) if size is not None else DefaultFontSize
+    weight = FontWeight.get(str(weight).lower()) if weight is not None else None
+    weight = skia.FontStyle.Weight(weight if weight is not None else skia.FontStyle.Weight.kNormal_Weight)
+    width = FontWidth.get(str(width).lower()) if width is not None else None
+    width = skia.FontStyle.Width(width if width is not None else skia.FontStyle.Width.kNormal_Width)
+    slant = FontSlant.get(str(slant).lower()) if slant is not None else None
+    slant = skia.FontStyle.Slant(slant if slant is not None else skia.FontStyle.Slant.kUpright_Slant)
+    font = skia.Font(skia.Typeface(family, skia.FontStyle(weight, width, slant)), size)
+    return font.measureText(str(text))
+
+
 cdef object update_font(Node node, font):
     if node._attributes is not None and ('font_size' in node._attributes or
                                          'font_family' in node._attributes or 'font_weight' in node._attributes or

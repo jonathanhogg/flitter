@@ -102,6 +102,20 @@ def read_csv(Context context, Vector filename, Vector row_number):
     return null_
 
 
+@context_func
+def read_srt(Context context, Vector filename, Vector time):
+    cdef str path = str(filename)
+    cdef list result=[], subtitles
+    t = time.match(1, float)
+    if filename and t is not None:
+        subtitles = SharedCache.get_with_root(path, context.path).read_srt()
+        if subtitles is not None:
+            for (index, start, end, lines) in subtitles:
+                if start <= t < end:
+                    result.extend(lines)
+    return Vector._coerce(result)
+
+
 def ordv(Vector text):
     cdef str string = text.as_string()
     return Vector._coerce([ord(ch) for ch in string])
@@ -135,6 +149,11 @@ def concat(Vector text):
         return null_
     cdef str string = text.as_string()
     return Vector._coerce(string)
+
+
+def measure_text(Vector text, family=None, size=None, weight=None, width=None, slant=None):
+    from flitter.render.window.canvas import measure_text
+    return Vector._coerce(measure_text(text, family=family, size=size, weight=weight, width=width, slant=slant))
 
 
 def lenv(Vector xs not None):
