@@ -106,6 +106,7 @@ cdef class Vector:
     cpdef double minimum(self) noexcept
     cpdef double maximum(self) noexcept
     cpdef Vector concat(self, Vector other)
+    cpdef Vector when(self, Vector left, Vector right)
 
 
 cdef Vector null_
