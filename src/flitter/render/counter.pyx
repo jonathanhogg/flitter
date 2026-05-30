@@ -35,12 +35,13 @@ class Counter:
         cdef Vector initial = node.get_fvec('initial', 0, false_)
         cdef Vector minimum = node.get_fvec('minimum', 0, node.get_fvec('min', 0, null_))
         cdef Vector maximum = node.get_fvec('maximum', 0, node.get_fvec('max', 0, null_))
+        cdef Vector reset = node.get_fvec('reset', 0, false_)
         cdef Vector current = state.get_item(current_key)
         cdef Vector last_time = state.get_item(last_time_key)
         if current.length == 0:
             logger.debug("New counter {}", repr(current_key))
             current = initial
         else:
-            current = timev.sub(last_time).mul(rate).add(current)
+            current = reset.when(initial, timev.sub(last_time).mul(rate).add(current))
         state.set_item(current_key, current.clamp(minimum, maximum))
         state.set_item(last_time_key, timev)

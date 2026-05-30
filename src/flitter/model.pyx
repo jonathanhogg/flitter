@@ -511,6 +511,11 @@ cdef class Vector:
                 text += SymbolTable.get(self.numbers[i], f'{self.numbers[i]:.9g}')
         return text
 
+    def as_symbol(self):
+        if self.numbers != NULL and self.length == 1:
+            return SymbolTable.get(self.numbers[0])
+        return None
+
     def __iter__(self):
         cdef int64_t i
         if self.length:
@@ -1178,6 +1183,14 @@ cdef class Vector:
                     PyTuple_SET_ITEM(dest, n+i, <object>objptr)
             result.objects = dest
             result.length = n + m
+        return result
+
+    cpdef Vector when(self, Vector left, Vector right):
+        cdef int64_t i, n = self.length, a = left.length, b = right.length
+        cdef Vector result = Vector.__new__(Vector)
+        if self.numbers != NULL and left.numbers != NULL and right.numbers != NULL:
+            for i in range(result.allocate_numbers(max(n, a, b))):
+                result.numbers[i] = left.numbers[i % a] if self.numbers[i % n] else right.numbers[i % b]
         return result
 
 

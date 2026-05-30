@@ -31,6 +31,10 @@ enforced.
 : An optional maximum value for the counter. If not specified, no maximum is
 enforced.
 
+`reset=` `true` | `false`
+: When this attribute is `true`, the counter value is reset to, and held at,
+the `initial` value. The default is `false`.
+
 Each counter object keeps track of its current value and the last value of
 `time`. On each frame, the counter calculates the delta between the new value
 of `time` (or the frame time) and the last value. The counter will then be
@@ -49,18 +53,18 @@ The exact algorithm used is:
     \cdot {rate}_{t}, {minimum}_{t}, {maximum}_{t})
 ```
 
-The value of *initial* is only used on first use of the counter. However, the
-current values of *time*, *rate*, *minimum* and *maximum* are always taken from
-the attributes, and so these values may change over the lifetime of the counter.
-The previous values of *value* and *time* are read from the state mapping (see
-below).
+The value of *initial* is only used on first use of the counter (or at reset).
+However, the current values of *time*, *rate*, *minimum* and *maximum* are
+always taken from the attributes, and so these values may change over the
+lifetime of the counter. The previous values of *value* and *time* are read
+from the state mapping (see below).
 
 :::{note}
-All of the numeric vectors, *initial*, *rate*, *time*, *minimum* and *maximum*
-may be $n$-vectors - in which case, the normal piece-wise rules for vector
-mathematics apply. In this way, a single counter can be used to maintain a
-multi-dimensional value – such as a cartesian velocity - or an arbitrary number
-of independent variables. An $n$-vector counter is significantly more
+All of the numeric vectors, *initial*, *rate*, *time*, *minimum*, *maximum*
+and *reset* may be $n$-vectors - in which case, the normal piece-wise rules for
+vector mathematics apply. In this way, a single counter can be used to maintain
+a multi-dimensional value – such as a cartesian velocity - or an arbitrary
+number of independent variables. An $n$-vector counter is significantly more
 performant than $n$ separate counter objects.
 :::
 
