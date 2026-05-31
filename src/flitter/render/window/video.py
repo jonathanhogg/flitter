@@ -27,10 +27,8 @@ class Video(ProgramNode):
         self._frame1_texture = None
 
     def release(self):
-        if self._filename is not None:
-            SharedCache[self._filename].read_video_frames(self, None, threading=self._threading)
-            self._filename = None
-            self._threading = None
+        self._filename = None
+        self._threading = None
         self._frame0_texture = None
         self._frame1_texture = None
         self._frame0 = None
