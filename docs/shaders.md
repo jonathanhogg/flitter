@@ -535,6 +535,22 @@ order in which these filters are applied will result in subtly different
 outputs.
 :::
 
+### `!kaleid`
+
+The `!kaleid` filter applies a kaleidoscope effect to the composited input. It
+is controlled with the following attributes
+
+`segments=` *N*
+: The number of segments that the output is split into. Every other segment
+is mirrored. Default is `6`.
+
+`rotation=` *TURNS*
+: The input window will be rotated by this amount. Default is `0`.
+
+`radius=` *RADIUS*
+: The radius of the segments expressed as a multiple of the minimum of half the
+width or height of the shader. Beyond this radius, the input will be flipped.
+
 ### `!noise`
 
 The `!noise` node is primarily an image generator that outputs slices through

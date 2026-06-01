@@ -122,6 +122,13 @@ class Flare(Shader):
                        halo_radius=1/16, halo_attenuation=0, **kwargs)
 
 
+class Kaleid(Shader):
+    DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('kaleid.frag')
+
+    def render(self, node, references, **kwargs):
+        super().render(node, references, segments=6, rotation=0, radius=1, **kwargs)
+
+
 class Noise(Shader):
     DEFAULT_FRAGMENT_SOURCE = TemplateLoader.get_template('noise.frag')
 
