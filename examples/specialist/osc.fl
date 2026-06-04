@@ -1,0 +1,11 @@
+
+!osc
+    !send host='224.0.0.155'
+        !method address='/beat' arguments=beat//1
+        !method address='/foo' arguments=1;2;3 repeat=5
+
+    !receive host='224.0.0.155'
+        !method address='/beat' state=:beat
+        !method address='/foo' state=:foo
+
+debug($:beat;$(:beat;:time))

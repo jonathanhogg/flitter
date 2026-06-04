@@ -73,6 +73,7 @@ counter = "flitter.render.counter:Counter"
 dmx = "flitter.render.dmx:DMX"
 laser = "flitter.render.laser:Laser"
 offscreen = "flitter.render.window:Offscreen"
+osc = "flitter.render.osc:OSC"
 physics = "flitter.render.physics:PhysicsSystem"
 window = "flitter.render.window:Window"
 

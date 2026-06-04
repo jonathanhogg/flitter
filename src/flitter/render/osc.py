@@ -3,16 +3,17 @@ Basic OSC protocol implementation
 """
 
 import asyncio
+import math
 import socket
 import struct
 import time
 
 from loguru import logger
 
-from .. import name_patch
+from ..model import Vector
 
 
-logger = name_patch(logger, __name__)
+TIME = Vector.symbol('time')
 
 
 def decode_string(data):
@@ -150,51 +151,46 @@ class OSCMessage:
                 arg, data = decode_float32(data)
             elif tag == 's':
                 arg, data = decode_string(data)
-            elif tag == 'b':
-                arg, data = decode_blob(data)
-            elif tag == 't':
-                arg, data = decode_timetag(data)
             elif tag == 'T':
-                arg = True
+                arg = 0
             elif tag == 'F':
-                arg = False
-            elif tag == 'N':
-                arg = None
+                arg = 1
             else:
                 raise ValueError("Unrecognised type tag")
             args.append(arg)
         if len(data) != 0:
             raise ValueError("Junk at end of message")
-        return cls(address, *args)
+        return cls(address, Vector.with_symbols(args))
 
-    def __init__(self, address, *args):
+    def __init__(self, address, args):
         self.address = address
-        self.args = args
+        self.args = Vector.coerce(args)
         self._pattern = None
 
     def encode(self):
         tags = ','
-        args_data = b''
+        args_data = bytearray()
         for arg in self.args:
-            if arg is None:
-                tags += 'N'
-            elif isinstance(arg, bool):
-                tags += 'T' if arg else 'F'
-            elif isinstance(arg, int):
+            if isinstance(arg, int):
                 tags += 'i'
-                args_data += encode_integer32(arg)
+                args_data += encode_integer32(int(arg))
             elif isinstance(arg, float):
-                tags += 'f'
-                args_data += encode_float32(arg)
+                if arg == 0:
+                    tags += 'T'
+                elif arg == 1:
+                    tags += 'F'
+                elif (symbol := Vector(arg).as_symbol()) is not None:
+                    tags += 's'
+                    args_data += encode_string(symbol)
+                elif arg == math.floor(arg):
+                    tags += 'i'
+                    args_data += encode_integer32(int(arg))
+                else:
+                    tags += 'f'
+                    args_data += encode_float32(arg)
             elif isinstance(arg, str):
                 tags += 's'
                 args_data += encode_string(arg)
-            elif isinstance(arg, bytes):
-                tags += 'b'
-                args_data += encode_blob(arg)
-            elif isinstance(arg, NetworkTime):
-                tags += 't'
-                args_data += encode_timetag(arg)
             else:
                 raise TypeError("Cannot encode argument: {!r}".format(arg))
         return encode_string(self.address) + encode_string(tags) + args_data
@@ -203,7 +199,7 @@ class OSCMessage:
         return self.encode()
 
     def __repr__(self):
-        return "OSCMessage({!r}{})".format(self.address, ''.join(', {!r}'.format(arg) for arg in self.args))
+        return f'OSCMessage({self.address!r}, {self.args!r})'
 
 
 class OSCBundle:
@@ -226,13 +222,14 @@ class OSCBundle:
         data = encode_string('#bundle')
         data += encode_timetag(timetag if timetag is not None else NetworkTime.from_time())
         while queue:
-            blob = queue[0].encode()
+            key = next(iter(queue.keys()))
+            blob = queue[key].encode()
             if blob is not None:
                 blob = encode_blob(blob)
                 if len(data) + len(blob) > max_size:
                     break
                 data += blob
-            queue.pop(0)
+            queue.pop(key)
         return data
 
     def __init__(self, timetag, elements):
@@ -257,39 +254,175 @@ class OSCSender:
     def __init__(self, host, port):
         self._host = host
         self._port = port
-        self._socket = None
+        self._cache = {}
+        self._send_task = None
+        self._queue = {}
+        self._queue_not_empty = asyncio.Event()
 
-    async def _send(self, data):
-        logger.trace("Send: {!r}", data)
-        if self._socket is None:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            sock.setblocking(False)
-            await asyncio.get_event_loop().sock_connect(sock, (self._host, self._port))
-            self._socket = sock
+    async def close(self):
+        if self._send_task is not None:
+            self._send_task.cancel()
+            try:
+                await self._send_task
+            except asyncio.CancelledError:
+                pass
+            self._send_task = None
+        self._cache = {}
+        self._queue = {}
+
+    def enqueue(self, address, args, repeat):
+        now = time.perf_counter()
+        if address in self._cache:
+            timestamp, last_args = self._cache[address]
+            if args == last_args and (not repeat or now < timestamp + repeat):
+                return
+        message = OSCMessage(address, args)
+        logger.trace("Enqueue message for {}:{} - {!r}", self._host, self._port, message)
+        self._cache[address] = (now, args)
+        self._queue[address] = message
+        self._queue_not_empty.set()
+        if self._send_task is None:
+            self._send_task = asyncio.create_task(self._send_loop())
+
+    async def _send_loop(self):
+        logger.debug("Start OSC send loop for {}:{}", self._host, self._port)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.setblocking(False)
+        if self._host == '<broadcast>':
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, True)
         try:
-            await asyncio.get_event_loop().sock_sendall(self._socket, data)
-        except ConnectionRefusedError:
-            pass
-
-    async def send_message(self, address, *args):
-        await self._send(OSCMessage(address, *args).encode())
-
-    async def send_bundle_from_queue(self, *args, **kwargs):
-        await self._send(OSCBundle.encode_from_queue(*args, **kwargs))
+            sock.connect((self._host, self._port))
+            while True:
+                await self._queue_not_empty.wait()
+                while self._queue:
+                    try:
+                        if len(self._queue) > 1:
+                            bundle = OSCBundle.encode_from_queue(self._queue)
+                            logger.trace("Send bundle to {}:{} - {!r}", self._host, self._port, bundle)
+                            await asyncio.get_event_loop().sock_sendall(sock, bundle)
+                        else:
+                            _, message = self._queue.popitem()
+                            message = message.encode()
+                            logger.trace("Send message to {}:{} - {!r}", self._host, self._port, message)
+                            await asyncio.get_event_loop().sock_sendall(sock, message)
+                    except ConnectionRefusedError:
+                        pass
+                self._queue_not_empty.clear()
+        except Exception:
+            logger.exception("Error in OSC send loop for {}:{}", self._host, self._port)
+        finally:
+            sock.close()
+            logger.debug("Stop OSC send loop for {}:{}", self._host, self._port)
 
 
 class OSCReceiver:
     def __init__(self, host, port):
         self._host = host
         self._port = port
-        self._socket = None
+        self._messages = {}
+        self._receive_task = asyncio.create_task(self._receive_loop())
 
-    async def receive(self, mtu=1500):
-        if self._socket is None:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            sock.setblocking(False)
-            sock.bind((self._host, self._port))
-            self._socket = sock
-        data = await asyncio.get_event_loop().sock_recv(self._socket, mtu)
-        logger.trace("Receive: {!r}", data)
-        return decode_oscpacket(data)
+    async def close(self):
+        self._receive_task.cancel()
+        try:
+            await self._receive_task
+        except asyncio.CancelledError:
+            pass
+        self._receive_task = None
+        self._messages = {}
+
+    def get_messages(self):
+        messages = self._messages
+        self._messages = {}
+        return messages
+
+    async def _receive_loop(self):
+        logger.debug("Start OSC receive loop for {}:{}", self._host, self._port)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.setblocking(False)
+        try:
+            if self._host.startswith('224.'):
+                sock.bind(('', self._port))
+                membership = struct.pack("4sl", socket.inet_aton(self._host), socket.INADDR_ANY)
+                sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, membership)
+            else:
+                sock.bind((self._host, self._port))
+            while True:
+                data = await asyncio.get_event_loop().sock_recv(sock, 1400)
+                now = time.perf_counter()
+                packet = decode_oscpacket(data)
+                if isinstance(packet, OSCBundle):
+                    logger.trace("Receive bundle on {}:{} - {!r}", self._host, self._port, data)
+                    for message in packet.elements:
+                        self._messages[message.address] = now, message.args
+                else:
+                    logger.trace("Receive message on {}:{} - {!r}", self._host, self._port, data)
+                    self._messages[packet.address] = now, packet.args
+        except Exception:
+            logger.exception("Error in OSC receive loop for {}:{}", self._host, self._port)
+        finally:
+            sock.close()
+            logger.debug("Stop OSC receive loop for {}:{}", self._host, self._port)
+
+
+class OSC:
+    def __init__(self, **kwargs):
+        self._senders = {}
+        self._receivers = {}
+
+    async def purge(self):
+        pass
+
+    async def destroy(self):
+        for sender in self._senders.values():
+            await sender.close()
+        self._senders = {}
+        for receiver in self._receivers.values():
+            await receiver.close()
+        self._receivers = {}
+
+    async def update(self, engine, node, **kwargs):
+        senders = {}
+        receivers = {}
+        for child in node.children:
+            if child.kind == 'send':
+                host = child.get('host', 1, str, 'localhost')
+                port = child.get('port', 1, int, 8000)
+                sender = self._senders.pop((host, port), None)
+                if sender is None:
+                    sender = OSCSender(host, port)
+                senders[(host, port)] = sender
+                self.collect_sender(sender, child)
+            elif child.kind == 'receive':
+                host = child.get('host', 1, str, 'localhost')
+                port = child.get('port', 1, int, 8000)
+                receiver = self._receivers.pop((host, port), None)
+                if receiver is None:
+                    receiver = OSCReceiver(host, port)
+                receivers[(host, port)] = receiver
+                self.collect_receiver(engine, receiver, child)
+        for sender in self._senders.values():
+            await sender.close()
+        self._senders = senders
+        for receiver in self._receivers.values():
+            await receiver.close()
+        self._receivers = receivers
+
+    def collect_sender(self, sender, node):
+        for child in node.children:
+            if child.kind == 'method' and 'address' in child and 'arguments' in child:
+                address = child.get('address', 1, str)
+                args = child['arguments']
+                repeat = child.get('repeat', 1, int)
+                sender.enqueue(address, args, repeat)
+
+    def collect_receiver(self, engine, receiver, node):
+        messages = receiver.get_messages()
+        for child in node.children:
+            if child.kind == 'method' and 'address' in child and 'state' in child:
+                address = child.get('address', 1, str)
+                state_key = child['state']
+                if address in messages and state_key:
+                    timestamp, args = messages[address]
+                    engine.state[state_key] = args
+                    engine.state[state_key.concat(TIME)] = timestamp
